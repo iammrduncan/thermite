@@ -279,8 +279,9 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
       `${JSON.stringify(data, null, 2)}\n`,
     );
   };
-  const say = (run: string | undefined, kind: LiveKind, text: string) =>
-    cfg.live?.({ kind, text, ...(run ? { run } : {}) });
+  /** A line on Live: the supervisor's own, or under an advisor's own source (goal 188). */
+  const say = (run: string | undefined, kind: LiveKind, text: string, source?: string) =>
+    cfg.live?.({ kind, text, ...(run ? { run } : {}), ...(source ? { source } : {}) });
   /**
    * A review try that could not be posted (goal 116): kept with the review, so its Reviews tab and
    * get_run say why. A harness from before it has no route for this; the Live line still says it.

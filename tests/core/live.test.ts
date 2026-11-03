@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { LIVE_TEXT_MAX, LiveLog, liveText } from "../../src/core/live.ts";
+import { LIVE_TEXT_MAX, LiveLog, liveText, summarizeArgs } from "../../src/core/live.ts";
 
 const TRIAL = `trial.${"0a1b".repeat(16)}`;
 const PROXY = `proxy.${"c3d4".repeat(12)}`;
@@ -41,5 +41,20 @@ describe("the live log keeps the rig's credentials out of its lines", () => {
     const log = new LiveLog();
     log.append({ source: "trial:t-1", kind: "result", text: `env: THERMITE_TRIAL_AUTH=${TRIAL}` });
     assert.equal(log.since(0).entries[0]?.text, "env: THERMITE_TRIAL_AUTH=***");
+  });
+});
+
+describe("a tool call's arguments on Live", () => {
+  test("arguments too long have their strings cut, so they stay JSON", () => {
+    const args = {
+      command: `cd /work && ${"make -j8 && ".repeat(60)}echo done`,
+      description: "Build",
+    };
+    const cut = summarizeArgs(args);
+    assert.ok(cut.length <= 300, String(cut.length));
+    const back = JSON.parse(cut) as { command: string; description: string };
+    assert.match(back.command, /^cd \/work && make -j8 && .*…$/);
+    assert.equal(back.description, "Build");
+    assert.equal(summarizeArgs({ path: "a.cu" }), '{"path":"a.cu"}');
   });
 });

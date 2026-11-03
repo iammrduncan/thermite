@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  advisorLabel,
+  agentKind,
   type LiveEntry,
   liveEntryHtml,
   liveLinesHtml,
   resultSummary,
+  runSourceName,
   toolSummary,
+  whoTags,
 } from "../../../src/control/ui/live.ts";
 
 const name = (s: string, lane?: string | null) => (s.startsWith("trial:") ? `Worker · ${lane}` : s);
@@ -45,6 +49,36 @@ describe("the live view's lines", () => {
     assert.equal(toolSummary("<b>odd</b> text").what, "text");
   });
 
+  test("each program's tool calls read as what they did, and arguments a rig cut short still do (goal 188)", () => {
+    const what = (text: string) => toolSummary(text).what;
+    // Cut short by an older rig: the JSON never closes.
+    const cut = toolSummary(
+      'Bash {"command":"cd /work && nvcc -O3 pn-gemm.cu -o pn && ./pn --bench | tail -20 && echo do…',
+    );
+    assert.equal(cut.name, "Bash");
+    assert.match(cut.what, /^<code class="lv-cmd">\$ cd \/work &amp;&amp; nvcc -O3 pn-gemm\.cu/);
+    assert.match(what("shell bash -lc 'rg -n pn_gemm src'"), /\$ rg -n pn_gemm src<\/code>/);
+    assert.match(
+      what('Read {"file_path":"src/a.cu","offset":120,"limit":80}'),
+      /<code>src\/a\.cu<\/code> <span class="muted xs">lines 120–199<\/span>/,
+    );
+    assert.match(
+      what('Edit {"file_path":"a.cu","old_string":"int x;\\nint y;","new_string":"int x = 2;"}'),
+      /edits <code>a\.cu<\/code> <span class="muted xs">−2 \+1 lines<\/span>/,
+    );
+    assert.match(
+      what('Grep {"pattern":"__launch_bounds__","path":"src"}'),
+      /<code>__launch_bounds__<\/code> in <code>src<\/code>/,
+    );
+    const kb = toolSummary('mcp__thermite__kb_search {"query":"wave packing"}');
+    assert.deepEqual([kb.name, kb.what], ["kb_search", "“wave packing”"]);
+    assert.equal(
+      toolSummary('thermite.fetch_url {"url":"https://example.org/a"}').name,
+      "fetch_url",
+    );
+    assert.equal(what('TodoWrite {"todos":[{"content":"a"},{"content":"b"}]}'), "2 to-dos");
+  });
+
   test("a result shows its time, exit code and first line of output; a failure is marked", () => {
     const ok = resultSummary("run (171 ms): exit 0\nok");
     assert.match(ok.hint, /^<span class="lv-res muted">171 ms · exit 0 · ok<\/span>$/);
@@ -79,12 +113,41 @@ describe("the live view's lines", () => {
     assert.doesNotMatch(html, /lv-name">result/);
     assert.match(
       html,
-      /<span class="lv-who">Worker · lane-1 <span class="muted">t-97f3630d<\/span><\/span>/,
+      /<span class="lv-who k-lane">Worker · lane-1 <span class="muted">t-97f3630d<\/span><\/span>/,
     );
     // Text from the rig is escaped.
     assert.match(
       liveEntryHtml(e(5, "text", "<script>x</script>"), { showWho: false, name }),
       /&lt;script&gt;/,
     );
+  });
+
+  test("each advisor's lines carry its chip, its group's and every advisor's, its name and its colour (goal 188)", () => {
+    const line = (source: string): LiveEntry => ({ id: 1, at, source, kind: "text", text: "x" });
+    assert.equal(whoTags(line("advisor:teacher-1")), "advisors teacher-1 teachers");
+    assert.equal(whoTags(line("advisor:merged-by")), "advisors merged-by teachers");
+    assert.equal(whoTags(line("advisor:reviewer-2")), "advisors reviewer-2 review_panel");
+    assert.equal(whoTags(line("advisor:auditor")), "advisors auditor");
+    assert.equal(whoTags(line("supervisor")), "advisors");
+    assert.equal(runSourceName("advisor:merged-by"), "merger");
+    assert.equal(runSourceName("advisor:final-writer"), "final writer");
+    assert.equal(advisorLabel("teacher-2"), "teacher-2");
+    assert.deepEqual(
+      [
+        "trial:t-1",
+        "planner",
+        "judge",
+        "advisor:teacher-1",
+        "advisor:merged-by",
+        "advisor:auditor",
+        "advisor:reviewer-1",
+        "advisor:synthesizer",
+        "supervisor",
+      ].map(agentKind),
+      ["lane", "planner", "judge", "teacher", "merger", "auditor", "reviewer", "writer", "advisor"],
+    );
+    const html = liveEntryHtml(line("advisor:teacher-1"), { showWho: true, name: runSourceName });
+    assert.match(html, /<span class="lv-who k-teacher">teacher-1<\/span>/);
+    assert.doesNotMatch(html, /unsigned/, "the supervisor's advisors are not marked unsigned");
   });
 });

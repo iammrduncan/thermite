@@ -311,6 +311,8 @@ services:
       start_period: 5m
 
   supervisor:
+    # An advisor's model on this machine is at host.docker.internal, as for the harness.
+    extra_hosts: ["host.docker.internal:host-gateway"]
     image: @@SUPERVISOR_IMAGE@@
     environment:
       THERMITE_RIG_ID: local-1
@@ -433,6 +435,8 @@ services:
 
   supervisor-2:
     profiles: [two-rigs]
+    # An advisor's model on this machine is at host.docker.internal, as for the harness.
+    extra_hosts: ["host.docker.internal:host-gateway"]
     image: @@SUPERVISOR_IMAGE@@
     environment:
       THERMITE_RIG_ID: local-2

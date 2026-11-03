@@ -117,6 +117,8 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
       const owner = (pkg.owner_messages ?? []).filter((m) => !told.has(m.id));
       try {
         const r = await auditOne({
+          // Its headless tool calls on Live (goal 188).
+          ...(cfg.live && pkg.run ? { live: { run: pkg.run, line: cfg.live } } : {}),
           // With the campaign's own context settings, when it sets any (goal 070).
           config: await configFor(pkg.run),
           pkg: { ...pkg, owner_messages: owner },

@@ -306,15 +306,30 @@ process.stdin.on("end", async () => {
     );
     chmodSync(bin, 0o755);
     process.env.THERMITE_CLAUDE_BIN = bin;
+    const lines: unknown[] = [];
     const r = await reviewOne({
       runtime: { name: "p1", runtime: "claude-code", model: "m", token: "tok", timeout_s: 30 },
       pkg: { id: 1, run: RUN },
       kb: kbOf([]),
+      // Its tool calls on Live, under its own source (goal 188).
+      live: { run: RUN, line: (l) => lines.push(l) },
     });
     assert.equal(r.error, undefined, r.error);
     assert.equal(
       r.output?.reasons,
       'tools="" strict=true allowed=mcp__thermite__kb_search found=true',
     );
+    // Its first line, its tool call, its last.
+    assert.deepEqual(lines.slice(0, 2), [
+      {
+        source: "advisor:p1",
+        kind: "status",
+        text: "p1 starts, headless in Claude Code",
+        run: RUN,
+      },
+      { source: "advisor:p1", kind: "tool", text: 'kb_search {"query":"aligned"}', run: RUN },
+    ]);
+    assert.match(String((lines[2] as { text?: string })?.text), /^p1 answered after \d+ s$/);
+    assert.equal(lines.length, 3);
   });
 });

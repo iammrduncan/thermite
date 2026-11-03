@@ -85,10 +85,7 @@ export interface EventBodies {
     /** Each guard's status, changes (fractions, positive is better) and values (goal 184). */
     guards?: VerdictGuard[] | undefined;
   };
-  /**
-   * A confirmed win's guards, sent once for a champion whose verdict's event came from a harness
-   * that did not carry them (goal 184): from the ledger's record of the verdict, without values.
-   */
+  /** A confirmed win's guards from its verdict's record, sent once when its event lacked them. */
   verdict_guards: { id: number; guards: VerdictGuard[] };
   /**
    * The owner withdrew evidence (goal 174): the invalidation's id, its subject, the attempts it
@@ -548,6 +545,8 @@ export interface EventBodies {
     change: Record<string, string | number | boolean | null | undefined>;
     settings: RigSettings;
   };
+  /** The harness did not run, `restarted`: found at its start (service/gaps.ts). Not research time. */
+  harness_gap: { since: string; until: string; restarted: boolean };
   /**
    * Control's own, never a ledger's: an event of v0.1.0 that the message bus can't carry as the
    * rig recorded it (a kind a subject can't hold, or more than a message holds), which control

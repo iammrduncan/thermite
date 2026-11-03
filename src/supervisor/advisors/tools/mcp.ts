@@ -85,6 +85,27 @@ export interface AdvisorServers {
  * /mcp/<name>. Claude Code is given them alone, and permission for their tools only. Close it
  * when the call ends.
  */
+/**
+ * Each tool registered on `server` tells `said` of its call, with its arguments, before it
+ * answers (goal 188). The tool's own work and answer are unchanged.
+ */
+function told(server: McpServer, said: (tool: string, args: unknown) => void): void {
+  const register = server.registerTool.bind(server) as (...a: unknown[]) => unknown;
+  (server as unknown as { registerTool: (...a: unknown[]) => unknown }).registerTool = (
+    name: unknown,
+    config: unknown,
+    handler: unknown,
+  ) =>
+    register(name, config, (args: unknown, extra: unknown) => {
+      try {
+        said(String(name), args);
+      } catch {
+        // Live is a view: a line it could not take never fails the tool.
+      }
+      return (handler as (a: unknown, e: unknown) => unknown)(args, extra);
+    });
+}
+
 export async function serveAdvisorTools(o: {
   /** Thermite's knowledge base's tools (goal 175), on the same server. */
   kb?: AdvisorKb | undefined;
@@ -95,6 +116,8 @@ export async function serveAdvisorTools(o: {
   research?: AdvisorResearch | undefined;
   /** The final writer's checks of its paper (goal 112), on the same server. */
   paper?: AdvisorPaper | undefined;
+  /** Told of each tool call the server answers (goal 188): the advisor's work on Live. */
+  said?: ((tool: string, args: unknown) => void) | undefined;
 }): Promise<PastSearchServer> {
   const token = randomBytes(24).toString("hex");
   const kb = o.kb;
@@ -103,6 +126,7 @@ export async function serveAdvisorTools(o: {
   const paper = o.paper;
   const build = () => {
     const server = new McpServer({ name: "thermite-past-research", version: "1.0.0" });
+    if (o.said) told(server, o.said);
     if (code) registerCodeTools(server, code);
     if (research) registerResearchTools(server, research);
     if (paper) registerPaperTools(server, paper);

@@ -5,7 +5,7 @@ import { JOURNAL_FIELD } from "../../agents/tools/index.ts";
 import { CITATION_MAX, CITATIONS_MAX, REASONS_MAX } from "../../core/api/harness/advisors.ts";
 import { LenientNotes } from "../../core/journal.ts";
 import { additionIn, type RunAdditions } from "../../core/role-additions.ts";
-import type { AdvisorKeeper, AdvisorResult, AdvisorTools } from "./call.ts";
+import type { AdvisorKeeper, AdvisorLiveSink, AdvisorResult, AdvisorTools } from "./call.ts";
 import { type AdvisorsConfig, packageFit } from "./config.ts";
 import { OwnerAnswers, OwnerAnswersSchema } from "./owner-answers.ts";
 import { runAdvisor } from "./run.ts";
@@ -49,6 +49,8 @@ const AuditAnswerSchema = Type.Object({
 });
 
 export async function auditOne(input: {
+  /** Where the call's headless tool calls go on Live, under its own source (goal 188). */
+  live?: { run: string; line: AdvisorLiveSink } | undefined;
   config: AdvisorsConfig;
   pkg: unknown;
   tools: AdvisorTools;
@@ -64,6 +66,7 @@ export async function auditOne(input: {
   const auditor = input.config.auditor;
   return runAdvisor({
     runtime: auditor,
+    ...(input.live ? { live: input.live } : {}),
     prompt: (f) =>
       renderAuditor(
         {

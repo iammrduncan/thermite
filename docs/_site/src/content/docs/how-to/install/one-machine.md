@@ -30,7 +30,7 @@ docker compose run --rm init     # or: podman compose run --rm init
 docker compose up -d             # or: podman compose up -d
 ```
 
-- **The release.** Each [release](https://github.com/iammrduncan/thermite/releases) has two files: `compose.yaml` and a short `README.md`. `releases/latest/download/` gets the newest release's; `releases/download/v0.1.1/` gets the files of `v0.1.1`. The compose file's first line names its release, such as `# Thermite 0.1.1`, and it pins each image by its digest, so the same file always runs the same images.
+- **The release.** Each [release](https://github.com/iammrduncan/thermite/releases) has two files: `compose.yaml` and a short `README.md`. `releases/latest/download/` gets the newest release's; `releases/download/v0.1.2/` gets the files of `v0.1.2`. The compose file's first line names its release, such as `# Thermite 0.1.1`, and it pins each image by its digest, so the same file always runs the same images.
 - **Check the file** before `init`. The release's notes, and its `README.md`, give the SHA-256 of its `compose.yaml`, with the command that checks it: `echo "<sha-256>  compose.yaml" | sha256sum -c -` on Linux, or `shasum -a 256 -c -` in place of `sha256sum -c -` on macOS. It prints `compose.yaml: OK`. On `FAILED`, the file is not the one the release published: don't use it, download it again, and if it fails again, report it privately as the [security policy](https://github.com/iammrduncan/thermite/blob/main/SECURITY.md) says.
 - **The tokens.** `run --rm init` runs the `init` container once. It writes local tokens to `.dev/secrets/`, next to `compose.yaml`, and its last line is `local init: .dev ready` with the number of files it made and kept. Before that, lines that start with `rig:` say what the rig can use ([What the rig gets](#what-the-rig-gets)). Run it before the first `up`: `up` stops with an error about a missing secret file until the tokens are there. It keeps every file that exists, so it is safe to run again. It runs as root in its container, with no network. Where root in a container is root on the computer, as with Docker on Linux, it gives what it makes to the owner of your `thermite` folder, so you can read and change the files.
 - **The images.** The first `up` downloads them, which takes a few minutes. Later starts take seconds.
@@ -52,11 +52,11 @@ ssh -L 8800:127.0.0.1:8800 you@host-1
 
 ### The command line
 
-Some steps below use Thermite's command line. It comes with Thermite's source code: build it once, with **Node.js** 22.19 or later and **git**, in a folder beside your `thermite` folder. Take the source of the release you run (`v0.1.1` here), and link your tokens into it:
+Some steps below use Thermite's command line. It comes with Thermite's source code: build it once, with **Node.js** 22.19 or later and **git**, in a folder beside your `thermite` folder. Take the source of the release you run (`v0.1.2` here), and link your tokens into it:
 
 ```sh
 cd ..
-git clone --branch v0.1.1 https://github.com/iammrduncan/thermite.git thermite-source
+git clone --branch v0.1.2 https://github.com/iammrduncan/thermite.git thermite-source
 cd thermite-source
 ln -s ../thermite/.dev .dev
 npm ci

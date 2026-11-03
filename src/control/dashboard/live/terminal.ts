@@ -149,7 +149,16 @@ function inputs(dash: Dashboard, rig: string, run: string, trial: string): TermI
 function terminalPaneOf(
   dash: Dashboard,
   c: Ctx,
-  o: { rig: string; run: string; trial: string; ended: boolean; title?: string | undefined },
+  o: {
+    rig: string;
+    run: string;
+    trial: string;
+    ended: boolean;
+    title?: string | undefined;
+    label?: string | undefined;
+    key?: string | undefined;
+    kind?: string | undefined;
+  },
 ): TerminalPane {
   return {
     stream: `${rigHref(o.rig)}/live/screen?trial=${encodeURIComponent(o.trial)}`,
@@ -163,6 +172,9 @@ function terminalPaneOf(
     inputs: inputs(dash, o.rig, o.run, o.trial),
     error: dash.said(c, "termerror"),
     title: o.title,
+    label: o.label,
+    key: o.key,
+    kind: o.kind,
   };
 }
 
@@ -175,15 +187,17 @@ export function terminalPanel(
   return terminalHtml({ ...terminalPaneOf(dash, c, o), xtermCss: xtermFile("xterm.css") ?? "" });
 }
 
-/** Several trials' terminals side by side: a run's Live (goal 181). */
+/** Several trials' terminals: a run's Live (goals 181, 188), with what its row of tabs carries. */
 export function terminalGrid(
   dash: Dashboard,
   c: Ctx,
   panes: Parameters<typeof terminalPaneOf>[2][],
+  o: Parameters<typeof terminalGridHtml>[2] = {},
 ): string {
   return terminalGridHtml(
     panes.map((p) => terminalPaneOf(dash, c, p)),
     xtermFile("xterm.css") ?? "",
+    o,
   );
 }
 

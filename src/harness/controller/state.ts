@@ -7,7 +7,7 @@ import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
 import type { PromotionPolicy } from "../judge/index.ts";
 import { Ledger } from "../ledger/index.ts";
 import { lanesFromEnv, RigSettingsStore, trialMinutesFromEnv } from "../rig-settings-store.ts";
-import { NOT_BEFORE_FILE, wipeIfRequested } from "../service/index.ts";
+import { gapAtStart, NOT_BEFORE_FILE, wipeIfRequested } from "../service/index.ts";
 import type { ControllerContext } from "./context.ts";
 
 /**
@@ -54,6 +54,10 @@ export function openState(ctx: ControllerContext): {
   if (left.length)
     log("harness", "removed the exports a crash left half written", { left: left.length });
   const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
+  // The time since the harness last ran, before anything this start records hides it: a research
+  // run's clock leaves it out (service/gaps.ts). The service looks again as it starts, and finds
+  // this gap the newest event then.
+  gapAtStart(ledger, Date.now());
   // The guards of champions judged before verdicts carried them, sent once (goal 184).
   const guarded = ledger.verdicts.sendChampionGuards("judge");
   if (guarded) log("harness", "sent the guards of champions judged before", { champions: guarded });

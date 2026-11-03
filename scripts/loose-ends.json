@@ -283,14 +283,7 @@
     "src/control/ui/knowledge/explorer.ts": ["ExplorerHit", "ExplorerRun", "ExplorerPage"],
     "src/control/ui/knowledge/folder.ts": ["GrantForms"],
     "src/control/ui/knowledge/item.ts": ["ReaderItem", "ReaderLinks", "fileHref"],
-    "src/control/ui/live.ts": [
-      "liveTime",
-      "parseTool",
-      "mdLite",
-      "whoTags",
-      "runSourceName",
-      "RunMessages"
-    ],
+    "src/control/ui/live.ts": ["liveTime", "parseTool", "mdLite", "RunMessages"],
     "src/control/ui/operator/proposal.ts": ["proposalAction"],
     "src/control/ui/operator/timeline.ts": ["sentenceHtml"],
     "src/control/ui/prompts.ts": ["roleHref", "promptHref"],

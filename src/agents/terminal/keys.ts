@@ -3,7 +3,8 @@ import type { TerminalKey } from "../programs/index.ts";
 /**
  * What the terminal host writes to a program for a named key and for typed text, as an xterm
  * sends them. Text never sends a key: every control character in it is taken out, Esc among them,
- * but its line breaks and tabs, which go in a bracketed paste when the program has asked for one.
+ * but its line breaks and tabs, which go in a bracketed paste when the program has asked for one,
+ * as does a long text.
  */
 
 /**
@@ -48,15 +49,24 @@ export function keyBytes(key: TerminalKey, applicationCursor: boolean): string {
 }
 
 /**
+ * Text this long or longer goes as a bracketed paste even with no line break: a program reads a
+ * paste in at once, but each character typed as a key on its own (Codex took tens of seconds over
+ * a 16 KB piece of a teacher's brief, one line of JSON, and an Enter meanwhile was a new line).
+ */
+const PASTE_LONG = 256;
+
+/**
  * Text as it is typed into a program: its control characters taken out (C0, DEL and C1), but its
- * line breaks (as LF) and tabs. Text with a line break or a tab goes as a bracketed paste when the
- * program has turned bracketed paste on, so that neither submits or completes anything; otherwise
- * as typed.
+ * line breaks (as LF) and tabs. Text with a line break or a tab, or of PASTE_LONG characters or
+ * more, goes as a bracketed paste when the program has turned bracketed paste on, so that nothing
+ * in it submits or completes anything and the program reads it in at once; otherwise as typed.
  */
 export function typedText(text: string, bracketedPaste: boolean): string {
   const clean = text
     .replace(/\r\n?/g, "\n")
     // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it removes.
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
-  return bracketedPaste && /[\n\t]/.test(clean) ? `\x1b[200~${clean}\x1b[201~` : clean;
+  return bracketedPaste && (/[\n\t]/.test(clean) || clean.length >= PASTE_LONG)
+    ? `\x1b[200~${clean}\x1b[201~`
+    : clean;
 }

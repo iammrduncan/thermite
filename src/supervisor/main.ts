@@ -29,6 +29,7 @@ import {
 } from "../core/api/control/rigs.ts";
 import { COMMAND_CHECK, EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
 import { RIG_SPACE_ASK_MS } from "../core/link/asks.ts";
+import { ReportPlace } from "../core/link/report.ts";
 import { rigInboxPrefix } from "../core/link/users.ts";
 import type { McpConnection, McpUnavailable, McpUse } from "../core/mcp.ts";
 import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
@@ -62,13 +63,7 @@ import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
 import { putKbFiles, relayKbAsks, removeHeldKbFiles } from "./kb/index.ts";
 import { startPodBus } from "./leaf.ts";
-import {
-  LiveCounts,
-  type LiveRelayState,
-  publishLiveOnce,
-  relayScreens,
-  supervisorLive,
-} from "./live/index.ts";
+import { followLive, LiveCounts, relayScreens, supervisorLive } from "./live/index.ts";
 import { onLogLevelTaken } from "./log-level.ts";
 import { ModelDownloads } from "./model-download.ts";
 import { registerKeys } from "./register.ts";
@@ -354,10 +349,20 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));
 
+  // Whether control holds a report of this rig: its answer to the figures names its place in the
+  // rig's reports, past 0 once it took one. Control pins the rig's report key on the first, and
+  // the live view waits for it (issue #27).
+  let controlHasReports = false;
+  const notePlace = (answer: unknown) => {
+    const place = ReportPlace.safeParse((answer as { reports?: unknown } | null)?.reports);
+    if (place.success && place.data.cursor > 0) controlHasReports = true;
+  };
+
   // The supervisor's figures, its regular call on the bus; control's answer names its place in the
   // reports, where the reports go back to after a page control refused.
   const sendFigures = async () => {
     const answer = await ask(onBus, "figures", figures());
+    notePlace(answer);
     const healed = healCursor(state, answer);
     if (healed !== state) {
       state = healed;
@@ -457,6 +462,7 @@ async function main(): Promise<void> {
     body: () => ({ ...figures(), ...busKeyFigure(key) }),
     stopping: () => stopping,
     answered: (answer) => {
+      notePlace(answer);
       state = healCursor(state, answer);
       save(statePath, state);
     },
@@ -562,27 +568,22 @@ async function main(): Promise<void> {
   const advisingDone = advising();
 
   // The live view: the harness's live log (signed) and the supervisor's own lines, every few
-  // seconds, published on the bus. Independent of the 60 s report relay.
+  // seconds, published on the bus, from the moment control holds a report of the rig.
+  // Independent of the 60 s report relay otherwise.
   const liveMs = supervisorMs(env, SUPERVISOR_NUMBERS.liveIntervalMs);
-  const living = async () => {
-    let liveState: LiveRelayState = { cursor: 0, ownCursor: 0 };
-    let failing = false;
-    const on = { rig, harnessUrl, harnessToken, bus, counts: liveCounts, own: supervisorLive };
-    if (liveMs > 0) loops.add("live", liveMs);
-    while (!stopping && liveMs > 0) {
-      try {
-        liveState = await publishLiveOnce(on, liveState);
-        failing = false;
-      } catch (err) {
-        if (!failing) log("supervisor", "live relay error", { error: String(err) }, "error");
-        failing = true;
-      }
-      loops.tick("live");
-      const until = Date.now() + liveMs;
-      while (!stopping && Date.now() < until) await new Promise((r) => setTimeout(r, 250));
-    }
-  };
-  const livingDone = living();
+  if (liveMs > 0) loops.add("live", liveMs);
+  const livingDone =
+    liveMs > 0
+      ? followLive(
+          { rig, harnessUrl, harnessToken, bus, counts: liveCounts, own: supervisorLive },
+          {
+            intervalMs: liveMs,
+            stopped: () => stopping,
+            reported: () => controlHasReports,
+            tick: () => loops.tick("live"),
+          },
+        )
+      : Promise.resolve();
   // The terminal view (goal 169): the screens of the trials someone watches on control.
   const screensDone = relayScreens(
     { harnessUrl, harnessToken, control: onBus, own: advisorConsoles },

@@ -45,3 +45,36 @@ condition = "AND"
 targetRules = ["generic-api-key"]
 paths = ['''^vendor/xterm/xterm\.js$''']
 regexes = ['''^t\.TwoKeyMap=void$''', '''^t\.Sequencer=t\.Throttler=void$''']
+
+# Made-up values in tests that the generic rule reads as keys: each by its file and exact value.
+[[allowlists]]
+description = "A made-up GitHub token the scrubber's test masks"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/common/scrub\.test\.ts$''']
+regexes = ['''^ghp_AbCdEfGh0123456789$''']
+
+[[allowlists]]
+description = "A made-up leaf key (base64 of 'not a key') in the leaf link's test"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/core/link/leaf\.test\.ts$''']
+regexes = ['''^bm90IGEga2V5$''']
+
+[[allowlists]]
+description = "A kit's file name next to the signing key's name in the backup test"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/system/backup\.test\.ts$''']
+regexes = ['''^kits/matmul/HEAD$''']
+
+[[allowlists]]
+description = "Three attempt keys (hashes) in a ledger that v0.1.0 wrote, kept as a test's data"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/helpers/data/ledger-v0\.1\.0\.sql$''']
+regexes = [
+  '''^412b82e3242b0532be20cad57a56ab3accf5d947787bc9a4d1d1c770633aed6a$''',
+  '''^19464f76c542507e3b7ce329a45e50ac97689e204a4daa03360b8e2e2069a0a3$''',
+  '''^753bc26ec4df7d2d13bf26a2e61d5bcfaf56c1eda659618fbbea2c136c6d65ad$''',
+]

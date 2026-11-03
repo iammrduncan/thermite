@@ -7,7 +7,8 @@ import type { ResearchContext } from "./context.ts";
  * Running time against the contract's durations. Paused time does not count, and neither does
  * time the agents could not run (goal 079): while they were stopped (no credits, a refused key,
  * a failing model check), waited for the provider's rate limit or for the run's MCP servers, or
- * the rig drained (goal 136): `blockedSpans`. The minimum is a floor, never
+ * the rig drained (goal 136), or while the harness did not run at all (the host slept, the
+ * harness was stopped or it crashed): `blockedSpans`. The minimum is a floor, never
  * a stop: after it, a run ends when the review panel finds every question answered (goal 112),
  * at its maximum, or when the owner closes it.
  */

@@ -2,6 +2,52 @@
 
 Each release of Thermite, newest first. Version numbers count up by the middle number, 0.2.0, 0.3.0 and so on, with fixes and quick follow-ups as 0.1.1, 0.1.2. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]: v0.1.3
+
+### Fixes
+
+- Under Docker, a rig's supervisor reaches a model server on the same computer at `host.docker.internal`, as control and the harness do: an advisor whose model runs there got no answer through the supervisor's proxy (Podman names the host by itself).
+
+### Checks
+
+- CI's run on a version tag passes the checks it had never run: the secret scan skips six made-up values in tests, each by its file and exact value; the machine check builds its stand-in from its `Containerfile` under Docker; the RunPod and rig image checks pull the message bus's image first; the control check takes its view before control's restart once the judge is idle; and an advisor's schema that names no problems is said not to fit, where it stopped the call. A test of a run past its time gives the program's killed child up to 2 s to be reaped, where it read it at once and sometimes found it still there.
+
+## [0.1.2] 2026-11-03: every agent on Live, and long messages in a terminal
+
+v0.1.2 is the first fix release after v0.1.1. A v0.1.1 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.2), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. It changes no store, setting or secret.
+
+- **Every agent on Live.** **Everything** shows every agent's lines from every run and rig. Each advisor has its own lines and filter, in its colour, with a line when its call starts and when it ends. A headless advisor's tool calls show as it makes them. A run's Live is **Terminals | Lines**, then whose, with each advisor's terminal beside the lanes'. Tool calls read as what they did.
+- **Long messages reach a program in its own terminal.** A teacher's message of 100 KB went in and was never sent: it now goes in as pastes, Enter goes again while the message waits in the input, and a long message has longer to start. An answer written over many lines is found whole.
+- **Two contributors' fixes:** a research run's clock leaves out the time the harness did not run, and a rig's first start loses no live line.
+- **Get started** opens the docs: install, a first campaign, a second machine and a private network, with `llm-setup.txt` for an AI agent to set Thermite up.
+
+### Docs
+
+- The site opens on **Get started**: four steps at the top of its sidebar, Install on one machine, Run your first campaign, Add a second machine (a new tutorial) and Tailscale / WireGuard (a new page that keeps control and its message bus on a private network). Install on one machine shows how to serve the dashboard over Tailscale. The home page's first button goes to step 1.
+- `llm-setup.txt`, at the site's root: instructions for an AI agent to set Thermite up from the latest release and to find the page for what comes next. The home page and Install on one machine give a prompt to copy for it.
+- The site's roadmap page is now its Changelog, written from this file; its old address leads there.
+
+### Live
+
+- **Everything**, at the top of Live's list of runs (`/ui/live/everything`): every agent's lines from every run and rig as they come, each with its run, with **Rig** and **Run** to narrow them and the same filters.
+- Each advisor has its own lines on Live, and its own filter on a run's Live: `teacher-1`, `teacher-2`, **merger** (the merged by model), `auditor`, each reviewer of the review panel, `synthesizer` and **final writer**, beside **Advisors**, which shows them all. Each kind of agent has its colour, on its filter and its lines. The supervisor sends an advisor's lines under `advisor:<name>`, where they all went under `supervisor` with the advisor's name in front. A headless advisor's work shows too: each call of Thermite's tools it makes (the knowledge base, the run's code and research, the run's MCP servers) is a tool line on Live as it happens, as an advisor in its own terminal shows its program's.
+- Each advisor's call has a line when it starts (`teacher-2 starts, in Claude Code's own terminal`) and one when it ends (`teacher-2 answered after 6 min`, or `teacher-2 has no answer after 6 min: …` with why), under its own filter, which shows from the call's start. A teacher's review is under its own filter too.
+- A run's Live has two choices in one row: **Terminals | Lines**, then whose. **Terminals** has **All**, side by side, then a tab for each terminal at work in its agent's colour: each lane, the planner, and each advisor, which had a tab of their own (**Advisors**) before. The agent chosen stays chosen from one to the other.
+- A tool call on Live reads as what it did, for every program: a command as `$ …` (without a shell's `bash -lc` around it), a file it reads with the lines asked for, a file it edits with the lines taken out and put in, what it searches for and where, a page it fetches, a search's words. A rig cuts a long call's arguments by cutting each of their strings, so they stay JSON; Live also reads arguments a rig of v0.1.1 cut short, which it showed as raw JSON.
+
+### Fixes
+
+- An advisor's answer written over many lines (as in a fenced block) is found whole. Before, an object of one line inside it was taken for the answer, which then did not fit its role's, so a teacher in Claude Code's own terminal gave no review. `no valid answer` now names the role's first three problems with the likeliest object, each with its place.
+- A program in its own terminal that keeps its typed message in its input gets Enter again: every 15 s with no turn begun, while its screen still shows part of the message in its input (40 of its characters, inside the input's frame, whichever part a long message shows), Codex's placeholder for a long paste or Claude Code's paste chips, the harness presses Enter once more. A long message has 30 s more to start a turn for each 32 KB, past the 60 s: a program takes a while to read 100 KB in, and an Enter while it does is a new line in it. Before, Codex and Claude Code kept a teacher's long message in their input, and the call failed as not taken. Text of 256 characters or more now goes in as a bracketed paste even with no line break: a teacher's brief is one line of JSON, and Codex took each 16 KB piece of it as keys, one at a time, so each Enter came while it still typed.
+- A research run's clock leaves out the time the harness did not run: the host asleep, its container paused or stopped, or a crash, for 2 minutes or more. The harness records each such gap as a `harness_gap` event, found by a new `awake` loop on a 10-second timer while it runs, and at its start from the time since the ledger's newest event. Before, a run waiting out a provider's limit on a laptop could reach its `max_duration` while the host slept (issue #45; from Mahdi3Bani's pull request #46).
+- A rig's first start loses no live line: the supervisor publishes them from the moment control holds the rig's first report, on which control accepts its key. Before, the lines published first were refused for a key not yet accepted, and lost (issue #27; from Mahdi3Bani's pull request #35).
+
+### Dependencies
+
+- Pi 1.4.0 (was 1.3.0) for the workers, the planner and the advisors in Pi, and pi-tui 1.4.0 for the Pi view, which brings marked-cjk-friendly 0.1.2; the MCP TypeScript SDK 1.32.2 and Hono 4.13.14. Thermite's patch of pi-ai's streaming tool-call parse (past 16 KiB, the arguments are parsed when the call ends) applies to 1.4.0 unchanged: its parser is 1.3.0's. The checks use Biome 2.6.4 (was 2.5.15). The docs site is built with Astro 7.4.4 and Starlight 0.42.7.
+- The workflows use actions/checkout 7, actions/upload-artifact 7, docker/login-action 4 and docker/metadata-action 6, each pinned by its commit.
+- The images start from `node:22.23.4-bookworm-slim` as Docker built it again, pinned by its new digest: the same Node.js, on the base image's newer packages.
+
 ## [0.1.1] 2026-11-03: the message bus, agents in their own terminal, and the knowledge base
 
 v0.1.1 is the first release after v0.1.0, and it breaks from it: a rig and control now talk only on a message bus, many names changed, and the licence is now Apache-2.0. **Install v0.1.1 fresh**, on a new machine or a new compose project, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.1). An update in place of a v0.1.0 stack is not tested; [Upgrading from v0.1.0](#upgrading-from-v010) says what it takes, for a stack you can't start again.

@@ -55,6 +55,8 @@ export async function writeCards(ctx: AdviseContext): Promise<void> {
       try {
         // Each question's `through` stays with the supervisor: it posts it back with the card.
         const r = await synthesizeCards({
+          // Its headless tool calls on Live (goal 188).
+          ...(cfg.live ? { live: { run: run, line: cfg.live } } : {}),
           runtime,
           pkg: { ...pkg, questions: asked.map(({ through: _, ...q }) => q) },
           research: researchFor(run),

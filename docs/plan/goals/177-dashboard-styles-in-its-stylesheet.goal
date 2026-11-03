@@ -2,7 +2,7 @@
 id: "177"
 title: "The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style"
 status: PROPOSED
-version: "0.1.2"
+version: "0.1.3"
 depends_on: []
 created: 2026-10-30
 updated: 2026-10-30
@@ -10,7 +10,7 @@ updated: 2026-10-30
 
 # 177 · The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style
 
-**Status:** `PROPOSED` · **Version:** [v0.1.2](../roadmap.md#v012)
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 

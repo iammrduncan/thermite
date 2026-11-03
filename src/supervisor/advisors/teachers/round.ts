@@ -8,6 +8,7 @@ import type { AdvisorAgent } from "../../../core/usage.ts";
 import type {
   AdvisorCompaction,
   AdvisorKeeper,
+  AdvisorLiveSink,
   AdvisorResult,
   AdvisorTools,
   AdvisorUsage,
@@ -91,6 +92,8 @@ function distinct<T extends { title: string }>(xs: T[]): T[] {
 export async function teacherRound(input: {
   config: AdvisorsConfig;
   run: string;
+  /** Where each teacher's and the merged by model's headless work goes on Live (goal 188). */
+  live?: AdvisorLiveSink | undefined;
   brief: unknown;
   tools: AdvisorTools;
   /** The merged by model's knowledge base tools, in its own slot (goal 175). */
@@ -166,6 +169,7 @@ export async function teacherRound(input: {
         tools: input.tools,
         keeper: input.keeper,
         terminal: input.terminal,
+        ...(input.live ? { live: { run: input.run, line: input.live } } : {}),
       }),
     ),
   );
@@ -237,6 +241,7 @@ export async function teacherRound(input: {
       answerSchema: research ? ResearchDirectiveAnswer : DirectiveAnswer,
       keeper: input.keeper,
       ...(input.mergedKb ? { tools: { kb: input.mergedKb } } : {}),
+      ...(input.live ? { live: { run: input.run, line: input.live } } : {}),
     });
     count(r, "merged_by");
     if (!r.output) {

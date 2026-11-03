@@ -110,6 +110,50 @@ export async function publishLiveOnce(
   return { logId: page.log_id, cursor: page.next, ownCursor: own.next };
 }
 
+/** How the live view's loop runs: its period, when it stops, and when control holds a report. */
+interface LiveLoopOptions {
+  intervalMs: number;
+  stopped: () => boolean;
+  /**
+   * Whether control holds a report of the rig: it pins the rig's report key on the first, and
+   * refuses the harness's live lines until then, with no answer back on the bus.
+   */
+  reported: () => boolean;
+  /** Each round, and while it waits for the first report: the health route's `live` loop. */
+  tick: () => void;
+  pollMs?: number | undefined;
+}
+
+/**
+ * The live view's loop: a round every `intervalMs`, from the moment control holds a report of the
+ * rig. Lines published before it would be refused and lost (issue #27), so a first start waits for
+ * the first report, telling the health route all the while: waiting for it is not being late. A failure is logged
+ * once, until a round goes through again.
+ */
+export async function followLive(cfg: LiveBusConfig, o: LiveLoopOptions): Promise<void> {
+  const nap = () => new Promise((r) => setTimeout(r, o.pollMs ?? 250));
+  if (!o.stopped() && !o.reported())
+    log("supervisor", "the live view waits for control to take the rig's first report");
+  while (!o.stopped() && !o.reported()) {
+    o.tick();
+    await nap();
+  }
+  let state: LiveRelayState = { cursor: 0, ownCursor: 0 };
+  let failing = false;
+  while (!o.stopped()) {
+    try {
+      state = await publishLiveOnce(cfg, state);
+      failing = false;
+    } catch (err) {
+      if (!failing) log("supervisor", "live relay error", { error: String(err) }, "error");
+      failing = true;
+    }
+    o.tick();
+    const until = Date.now() + o.intervalMs;
+    while (!o.stopped() && Date.now() < until) await nap();
+  }
+}
+
 /**
  * One message, to its subject. A run's subject the bus refuses, or no stream takes (a run control
  * does not give this rig yet, such as one the rig made itself, until control has its first report
