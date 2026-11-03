@@ -1067,6 +1067,7 @@ Errors, in the words of **Start a run**:
 - `<rig> has not taken <model> yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that.`
 - `<rig> measures on <type>, and this campaign's kit measures on <type>: choose a rig with that hardware`
 - `<model> is one of OpenCode's free models, which work only inside OpenCode, and <rig>'s agents would run in Pi: a research run there could not work. Set the agents' harness to OpenCode, or give the rig a model Pi can use.`
+- `<model> is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on <rig> could not work. Give <rig>'s agents another provider's model for research, on its Edit rig page or here.`
 - `A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents.`
 - `<campaign> has no run <run>: copy from a run of this campaign.`
 - `An item from past research is not one this campaign may read and start from: search again.`

@@ -10,8 +10,7 @@ import {
   agentsModelMissing,
   giveRigModel,
   harnessKept,
-  opencodeOnlyModel,
-  researchNeedsOpencode,
+  researchModelRefusal,
   sendSplit,
   splitFor,
 } from "../rigs/index.ts";
@@ -255,9 +254,12 @@ export async function startARun(
         | { mode?: string }
         | undefined
     )?.mode;
-  const researchModel =
-    mode === "research" && agents ? opencodeOnlyModel(store, rig, chosen || undefined) : undefined;
-  if (researchModel) return refuse(researchNeedsOpencode(rig.id, researchModel));
+  // A research run on a model it can't use is refused before it starts (goal 190).
+  const researchRefused =
+    mode === "research" && agents
+      ? researchModelRefusal(store, rig, chosen || undefined)
+      : undefined;
+  if (researchRefused) return refuse(researchRefused);
   if (agents && req.model) {
     // The rig gets the model first; it arrives within a minute, and the run starts after that.
     const given = giveRigModel(

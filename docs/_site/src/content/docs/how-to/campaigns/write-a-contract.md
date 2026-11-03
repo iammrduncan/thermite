@@ -185,7 +185,7 @@ The judge first checks which goals the starting point already meets. If it meets
 
 A research campaign needs a model on the rig. Without one, no agent works and the run never ends; the **New campaign** page won't start agents on a rig that has none. Research workers run in Pi or OpenCode v2, never in Claude Code:
 
-- A Claude subscription can't serve them. Nothing stops the start, but every trial ends with `research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code: give this rig another model for research` ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)).
+- A Claude subscription can't serve them. **New campaign**, **Start a run**, `start_run` over MCP, the REST API and `thermite run start` refuse to start a research run with agents on a rig whose agents run on one, with `… is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on rig-1 could not work.` A run started another way, such as with `thermite assign`, ends every trial with `research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code: give this rig another model for research`.
 - On a rig whose agents run in **Codex**, research workers run in Pi, with the same model.
 - OpenCode's own free models work when the rig's agents run in **OpenCode v2**. Where they would run in Pi, the dashboard refuses to start the run and says to set the agents' harness to OpenCode; a run started another way, such as with `thermite assign`, ends every trial with `… is one of OpenCode's own models, which work only inside OpenCode: set this rig's agents' harness to OpenCode on its Edit rig page`.
 

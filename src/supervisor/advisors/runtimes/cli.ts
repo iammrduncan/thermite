@@ -250,7 +250,7 @@ function runHere(c: Command): Promise<Ran> {
       killGroup();
       resolve({ out, err, error });
     };
-    child.on("error", (e) => finish(e.message));
+    child.on("error", (e) => finish(notInImage(c.argv[0] ?? "", e.message)));
     child.on("close", () => finish());
     // A leftover grandchild holding the pipes cannot keep the call open: after the command
     // exits, what it printed within two seconds is its answer.
@@ -279,10 +279,26 @@ async function runAsAdvisor(runner: AdvisorRunner, c: Command): Promise<Ran> {
     });
     // Neither an exit code nor a signal: the command did not start (the runner says why).
     const started = r.exitCode !== null || r.signal !== null || r.timedOut;
-    return { out: r.stdout, err: r.stderr, error: started ? undefined : r.stderr.slice(-300) };
+    return {
+      out: r.stdout,
+      err: r.stderr,
+      error: started ? undefined : notInImage(c.argv[0] ?? "", r.stderr.slice(-300)),
+    };
   } catch (err) {
-    return { out: "", err: "", error: errorText(err) };
+    return { out: "", err: "", error: notInImage(c.argv[0] ?? "", errorText(err)) };
   }
+}
+
+/**
+ * An advisor's program missing from the supervisor's image, in words: Node says only `spawn claude
+ * ENOENT` (issue 25). Claude Code is in an image only when it was built with CLAUDE_CODE_VERSION.
+ */
+export function notInImage(bin: string, error: string): string {
+  if (!/\bENOENT\b/.test(error) || !/spawn|not found|no such file/i.test(error)) return error;
+  const name = bin.split("/").at(-1) ?? bin;
+  return name === "claude"
+    ? `Claude Code is not in this supervisor's image: build the supervisor with CLAUDE_CODE_VERSION, as Use a Claude subscription says (${error})`
+    : `${name} is not in this supervisor's image (${error})`;
 }
 
 /** The call's folder goes, with what its run left: through the runner, which may remove it all. */

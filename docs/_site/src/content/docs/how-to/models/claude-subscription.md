@@ -60,6 +60,8 @@ Claude Code is not open source, so Thermite's images carry it only when you buil
            CLAUDE_CODE_VERSION: "<version>"
    ```
 
+   With the second rig (the `two-rigs` profile), add `harness-2` and `supervisor-2` the same way: a rig whose images lack Claude Code can't run its agents or its advisors on the subscription. An advisor that runs Claude Code on a supervisor without it fails with `Claude Code is not in this supervisor's image: build the supervisor with CLAUDE_CODE_VERSION`.
+
 3. Build the images and start the stack with both files:
 
    ```sh
@@ -157,4 +159,5 @@ Many agents can share one plan, and so can several rigs. On **Edit rig**, a note
 | An advisor on the subscription fails with *EACCES: permission denied, mkdir '/tmp/claude-10001'* | The rig runs the one-container rig image from an older Thermite, which gave Claude Code no temporary folder of its own. Rebuild the image from this version. |
 | The model check fails with "the subscription's usage window is full until" a time | Wait for the reset, or use another model meanwhile. |
 | A trial ends with "Claude Code's usage window is full until" a time, "more than a day away" | A weekly window: the run waits for its reset, and **Needs you** asks: wait, or give the rig another model meanwhile ([A weekly window](#a-weekly-window)). |
-| A research campaign's trials end with "research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code: give this rig another model for research" | Research workers run in Pi or OpenCode v2, never in Claude Code. Give the rig another model for research. |
+| Starting a research campaign is refused: "… is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on … could not work" | Research workers run in Pi or OpenCode v2, never in Claude Code. Give the rig's agents another provider's model for research. A run started with `thermite assign` is not checked first: its trials end with "research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code". |
+| An advisor on the subscription fails with "Claude Code is not in this supervisor's image" | Build the supervisor with `CLAUDE_CODE_VERSION`, as step 2 says; with two rigs, `supervisor-2` too. |

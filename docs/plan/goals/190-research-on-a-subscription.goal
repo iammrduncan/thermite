@@ -1,7 +1,7 @@
 ---
 id: "190"
 title: "Research on a Claude subscription: refused before the run starts, with what to do"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: []
 created: 2026-11-03
@@ -10,7 +10,7 @@ updated: 2026-11-03
 
 # 190 · Research on a Claude subscription: refused before the run starts, with what to do
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 
@@ -40,6 +40,8 @@ The owner learns of the limit only after the run starts, and the way out the err
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Researched and verified on v0.1.3 (3a5171e3): control checked one case of a research model before the start, OpenCode's free models in Pi (rigs/model/agents.ts opencodeOnlyModel, used by campaigns/start-run.ts and dashboard/campaigns/new.ts); a Claude subscription was caught only by the harness at each trial (harness/agents/programs.ts researchRefusal). The issue's comments: Use a Claude subscription's override file named only the first rig's services, and an advisor whose program is missing said `spawn claude ENOENT`.
+- 2026-11-03: Built (no tests run on the Mac). researchModelRefusal (rigs/model/agents.ts) refuses both cases before anything is given or signed, for New campaign, Start a run, REST, MCP and `thermite run start` (they share campaigns/start-run.ts); a Claude subscription is found from the model chosen with the start, control's record, or the rig's report (its agents in Claude Code). `thermite assign` is not checked first, as the pages say. notInImage (supervisor/advisors/runtimes/cli.ts) names a program missing from the supervisor's image. Tests: tests/control/campaigns/start-run.test.ts and tests/supervisor/advisors/runtimes/cli.test.ts. Pages: Write a contract, Start a campaign from the dashboard, the MCP tools, the REST API, Use a Claude subscription (the second rig's services; both errors); changelog. Item 3 stays goal 061's.
 
 ---
 

@@ -453,6 +453,7 @@ Control refuses, in the words of **Start a run**, and signs nothing:
 | 409 | `<rig> has not taken <model> yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that.` |
 | 409 | `<rig> measures on <type>, and this campaign's kit measures on <type>: choose a rig with that hardware` |
 | 409 | `<model> is one of OpenCode's free models, which work only inside OpenCode, and <rig>'s agents would run in Pi: a research run there could not work. …`, for a research campaign |
+| 409 | `<model> is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on <rig> could not work. …`, for a research campaign |
 | 409 | `This campaign sets a context window of <n> tokens. <model>, the model of the <agent> on <rig>, takes at most <m> tokens. Set the campaign's window to <m> or less, or give that agent another model.`: the campaign's window is above what a provider lists for the model control gives one of the rig's agents |
 | 409 | `Not sent: control could not start <rig>'s pod on RunPod for it.` and the reason |
 | 409 | `Control sends no commands to <rig>.` and the reason, for a rig control [refuses](#rig-versions) |

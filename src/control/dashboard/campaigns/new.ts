@@ -12,8 +12,7 @@ import {
   agentsModelMissing,
   giveRigModel,
   harnessKept,
-  opencodeOnlyModel,
-  researchNeedsOpencode,
+  researchModelRefusal,
   sendSplit,
   splitFor,
 } from "../../rigs/index.ts";
@@ -259,13 +258,13 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     let startValue = String(f.start_value ?? "start");
     const chosen = String(f.agents_model ?? "").trim();
     let modelNote = "";
-    // Checked before the rig is given anything: OpenCode's free models work only in OpenCode.
-    const researchModel =
+    // Checked before the rig is given anything: OpenCode's free models work only in OpenCode, and
+    // a Claude subscription only in Claude Code, where no research worker runs (goal 190).
+    const researchRefused =
       draft.mode === "research" && startValue === "start"
-        ? opencodeOnlyModel(store, rig, chosen || undefined, String(f.agents_harness ?? ""))
+        ? researchModelRefusal(store, rig, chosen || undefined, String(f.agents_harness ?? ""))
         : undefined;
-    if (researchModel)
-      return newCampaignPage(c, { draft, errors: [researchNeedsOpencode(rig.id, researchModel)] });
+    if (researchRefused) return newCampaignPage(c, { draft, errors: [researchRefused] });
     if (chosen) {
       const given = giveRigModel(
         store,

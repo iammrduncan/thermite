@@ -14,6 +14,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Fixes
 
+- A research run with agents on a rig whose agents run on a Claude subscription is refused before it starts, with why and what to do: **New campaign**, **Start a run**, `start_run` over MCP, the REST API and `thermite run start` say so, where every trial ended at once after the start. An advisor whose program is missing from the supervisor's image says so (`Claude Code is not in this supervisor's image: build the supervisor with CLAUDE_CODE_VERSION`), where it said `spawn claude ENOENT`. Use a Claude subscription says the second rig's images need Claude Code too ([issue 25](https://github.com/iammrduncan/thermite/issues/25)).
 - OpenCode's own provider with its key runs its paid models: under OpenCode v2 they go through the harness's key proxy, where control dropped the key and OpenCode answered `model unavailable`, and Pi, Codex and the planner and advisors take them too, where **Use** refused them. Its `-free` models, and every model of the provider with no key, still run in OpenCode's own client, with no key ([issue 26](https://github.com/iammrduncan/thermite/issues/26)).
 - Under Docker, a rig's supervisor reaches a model server on the same computer at `host.docker.internal`, as control and the harness do: an advisor whose model runs there got no answer through the supervisor's proxy (Podman names the host by itself).
 

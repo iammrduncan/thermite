@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { issueCommand } from "../../../src/control/issue/index.ts";
+import { researchModelRefusal } from "../../../src/control/rigs/index.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
+import { rigView } from "../../../src/control/views/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
 
@@ -462,6 +464,34 @@ describe("Start a run over REST (goal 029)", () => {
       );
     const started = await s.rest("gemv-speed", { rig: "rig-b" });
     assert.equal(started.status, 201, await started.clone().text());
+  });
+
+  test("a research run on a Claude subscription is refused before it starts, with what to do (goal 190)", async () => {
+    const s = await stack();
+    s.store.modelProviders.put({
+      name: "claude-sub",
+      type: "claude",
+      base_url: "https://api.anthropic.com",
+      key: { sealed: "sealed-for-the-tests", hint: "…test" },
+    });
+    const view = (rig: string) => {
+      const v = rigView(s.store, rig);
+      assert.ok(v, rig);
+      return v;
+    };
+    const words =
+      "sonnet-5.5 is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on rig-b could not work. Give rig-b's agents another provider's model for research, on its Edit rig page or here.";
+    // Chosen with the start (New campaign, Start a run): refused before the rig is given it.
+    assert.equal(researchModelRefusal(s.store, view("rig-b"), "claude-sub|sonnet-5.5"), words);
+    // Given before, on control's record.
+    s.store.agentModels.assignRig("rig-b", {
+      provider: "claude-sub",
+      model: "sonnet-5.5",
+      harness: "claude-code",
+    });
+    assert.equal(researchModelRefusal(s.store, view("rig-b")), words);
+    // Another provider's model, or none chosen on a rig without a subscription: no refusal.
+    assert.equal(researchModelRefusal(s.store, view("rig-a")), undefined);
   });
 
   test("the model the rig has already keeps its harness; another model gets what it needs", async () => {
