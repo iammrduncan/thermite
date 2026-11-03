@@ -1,0 +1,57 @@
+---
+title: "Solo builders: a research team for one computer"
+description: "One computer, a free model or the plan you already pay for, and a project of yours: agents try ideas all night, and you wake up to changes that were measured, not just claimed."
+type: use-case
+sidebar:
+  order: 2
+  label: "Solo builders"
+---
+
+import { LinkCard } from "@astrojs/starlight/components";
+
+You have one project, one computer and not enough hours. An AI coding assistant helps while you sit with it; Thermite keeps going when you stop. Its agents try one idea after another, side by side, and a judge measures each one against the best version so far. In the morning you read what was tried, what won and why, and take the winner home as a patch.
+
+## Use cases
+
+Each of these runs on one computer, most of them without a GPU.
+
+- **Software:** [Make your code faster without breaking it](../software/faster-code.md)
+- **AI and machine learning:** [Train a better small model in the same time](../ai/training.md)
+- **Science:** [Search for better constructions in mathematics](../science/maths.md)
+- **Science:** [Make a simulation faster or more accurate](../science/simulations.md)
+- **Science:** [Find out what is known, with every quote checked](../science/literature.md)
+- **Healthcare and life sciences:** [Speed up a genomics pipeline without losing a variant](../healthcare/genomics.md)
+- **Healthcare and life sciences:** [Review the evidence on a clinical question, every quote checked](../healthcare/evidence-reviews.md)
+- **Agriculture:** [Find irrigation and fertiliser plans in a crop simulator](../agriculture/crop-management.md)
+- **Agriculture:** [Build a yield forecast that holds next season](../agriculture/yield-forecasts.md)
+- **Operations and logistics:** [Plan delivery routes closer to the best known](../operations/routing.md)
+- **Finance:** [Test strategies on years they never saw](../finance/strategies.md)
+
+## Why it fits
+
+- **It runs on the computer you have.** Linux or macOS with Docker or Podman, a few CPU cores and a few gigabytes free. A GPU is optional. Installing takes about twenty minutes, or give your own AI agent one line and let it do the steps ([Install on one machine](../../tutorials/first-run.md)).
+- **Start free.** The first campaign tutorial uses a free model, with no account and no key. Later, use a model server on your own computer, a Claude or ChatGPT plan you already pay for, or an API key ([Choose a model](../../how-to/models/choose-a-model.md)).
+- **No kit to write for a first try.** The **New campaign** page asks what to improve, where the project is and how to run it, and writes a simple kit and contract from your answers ([Your own project](../../tutorials/your-own-project.md)).
+- **You set the spend.** Nothing stops a campaign by default, because good ideas come after long dry spells. Set a stop time, or a limit on devices or spending, when you want one ([Set a budget or a stop time](../../how-to/campaigns/budget-and-stop-time.md)).
+- **You can trust what you wake up to.** An agent never grades its own work. The judge builds each change, runs it, checks its output and times it on the same machine as the best version, and a win must hold up a second time before it counts ([Why agents never judge](../../explanation/why-agents-never-judge.md)).
+- **Steer from anywhere.** Watch on the dashboard over your private network, or let your own AI assistant watch and steer through MCP with a token of its own ([Tailscale / WireGuard](../../how-to/install/private-network.md), [Let an agent run Thermite over MCP](../../how-to/automate/agent-over-mcp.md)).
+- **Nothing is thrown away.** Every attempt is kept with its code and the judge's reasons, so an idea that lost tonight can still be read, and tried again, next week.
+
+## Your first weekend
+
+1. **Friday evening:** [Install on one machine](../../tutorials/first-run.md) and watch the judge's smoke check give a dozen known changes, cheats among them, their expected verdicts.
+2. [Run your first campaign](../../tutorials/agents-with-a-free-model.md) on the sample project, with a free model, and watch the agents work on **Live**.
+3. **Before bed:** start [a campaign on your own project](../../tutorials/your-own-project.md) from **New campaign**, and set a stop time.
+4. **Saturday morning:** read the run's page: its champion, what each lane tried and the judge's reasons. [Take the result](../../how-to/campaigns/take-the-result.md) as a patch, or keep it running.
+
+## What to know first
+
+- The agents run code that a model wrote, on your computer, and under compose that code can reach your local network. Read [Known limits](../../reference/known-limits.md) before you connect a model.
+- With a paid API key, set a stop time and a limit at the provider first.
+- A Claude or ChatGPT plan may serve only its owner's own Thermite.
+
+<LinkCard
+  title="See what a long campaign can do"
+  description="Qwen3.8-27B on a $100 GPU: 131 changes judged in five days, on a Claude plan, a ChatGPT plan and a local model server, with no per-token bill."
+  href="/studies/qwen3-8-27b-on-a-p100/"
+/>

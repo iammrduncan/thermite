@@ -1,0 +1,61 @@
+---
+title: "Local AI enthusiasts: make models fly on the hardware you have"
+description: "Point Thermite at an inference engine, a quantization or a kernel, and let agents tune it for your exact GPU while a judge on that GPU keeps only what is faster and still correct."
+type: use-case
+sidebar:
+  order: 1
+  label: "Local AI enthusiasts"
+---
+
+import { LinkCard } from "@astrojs/starlight/components";
+import Stats from "../../../../components/Stats.astro";
+
+Local AI runs on the cards you can get: a used data-centre GPU, a gaming card, a box of older GPUs. Engines and quantizations are tuned for the newest hardware first, so yours is often left slow. Thermite lets agents tune them for your card, for days, while a judge on that same card times every change and checks that the model still gives the same answers.
+
+<Stats
+  items={[
+    { value: "3.89×", label: "faster decode, Qwen3.8-27B on one Tesla P100", note: "7.74 → 30.06 tokens a second, on a card that sells used for about $100" },
+    { value: "1.14×", label: "the speed of the best standard 3-bit file", note: "on the same card" },
+    { value: "131", label: "changes judged in five days", note: "28 confirmed wins, each with its outputs held" },
+  ]}
+  caption="From the study Qwen3.8-27B on a $100 GPU, run with tensorless."
+/>
+
+## Use cases
+
+Each of these is a campaign you can run on your own GPU, with the agents on a model server of your own.
+
+- **AI and machine learning:** [Run a model faster on the GPU you have](../ai/inference-speed.md)
+- **AI and machine learning:** [Make your LLM feature score higher on your own tests](../ai/llm-quality.md)
+- **AI and machine learning:** [Train a better small model in the same time](../ai/training.md)
+- **Science:** [Search for better constructions in mathematics](../science/maths.md)
+- **Robotics:** [Teach a robot the task, not a loophole](../robotics/rewards.md)
+
+## Why it fits
+
+- **The judge measures on your hardware.** A **rig** is the machine the work runs on. Its judge builds each change and times it against the best version so far, on the same GPU, in alternating blocks, and times the best version against itself every day to learn the card's noise. One GPU is shared in turns; with several, you split them between the judge and the agents ([Sharing a device](../../explanation/sharing-a-device.md), [Give a rig several GPUs](../../how-to/install/several-gpus.md)).
+- **Speed never wins on its own.** Your **kit**, the trusted code that builds, runs and checks the engine, decides what correct means: KL divergence against a reference, bit-identical text from a second model, the whole model in memory. A change that breaks a guard is invalid however fast it is, and a win must hold up again on inputs the agents never saw ([Why agents never judge](../../explanation/why-agents-never-judge.md)).
+- **Big model files, fetched once and checked.** A rig downloads a model by URL, a gated Hugging Face model included, and checks its SHA-256 before any run uses it ([Bring a model's weights to a run](../../how-to/campaigns/model-weights.md)).
+- **The agents can run on a local model too.** Point them at a model server of your own, such as Ollama, vLLM or LiteLLM, and they cost nothing per request. Or use a Claude or ChatGPT plan you already pay for ([Choose a model](../../how-to/models/choose-a-model.md)).
+- **Everything stays on your machines.** Thermite is self-hosted: control, its dashboard and the rigs run where you put them. For a card you don't own, rent one on [RunPod](../../how-to/install/runpod-rig.md) by the hour.
+- **What one campaign learns, the next one reads.** Each campaign's attempts, verdicts and field notes go into its collection of Thermite's knowledge base, and a later campaign can be granted it ([Use past research](../../how-to/campaigns/use-past-research.md)).
+
+## Get started
+
+1. [Install on one machine](../../tutorials/first-run.md): about twenty minutes, and the judge's smoke check shows you a dozen known changes, cheats among them, getting their expected verdicts.
+2. [Add a rig on your GPU machine](../../how-to/install/rig-on-a-machine.md) over SSH, and [split its GPUs](../../how-to/install/several-gpus.md) if it has several.
+3. [Write a kit](../../how-to/campaigns/write-a-kit.md) that builds your engine, runs the model and times it, then [test it](../../how-to/campaigns/test-a-kit.md) before any agent sees it.
+4. [Write a contract](../../how-to/campaigns/write-a-contract.md): the number to push, the guards to hold, and the folders the agents may change. Keep the measuring tools out of them.
+5. Start the campaign and watch it on **Live**. When you are happy, [take the result](../../how-to/campaigns/take-the-result.md) as a patch.
+
+## What to know first
+
+- GPU rigs run Thermite's CUDA harness image, for NVIDIA cards. A rig with no GPU measures on its CPUs.
+- The agents run code that a model wrote, on your machine. Read [Known limits](../../reference/known-limits.md) and [the security model](../../explanation/security-model.md) before you connect a model.
+- A hill climb finds changes that help the cases it measures. Measure the long-context case too, in its own run, before you call the result done.
+
+<LinkCard
+  title="Read the study: Qwen3.8-27B on a $100 GPU"
+  description="Four campaigns, 131 judged changes, 3.89× faster decode, shipped in one command with tensorless."
+  href="/studies/qwen3-8-27b-on-a-p100/"
+/>

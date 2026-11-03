@@ -9,6 +9,7 @@ import mermaid from "astro-mermaid";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 import { fathom } from "./src/analytics.mjs";
+import { fields as useCaseFields } from "./src/data/use-cases.mjs";
 import { pageIndex } from "./src/page-index.mjs";
 import { remarkRelativeLinks } from "./src/plugins/remark-relative-links.mjs";
 
@@ -73,11 +74,20 @@ export default defineConfig({
           ],
         },
         { label: "Start here", link: "/start-here/" },
-        // Who Thermite is for, and what it has done: each overview is one of the site's own pages
-        // (src/pages/), and the full pages are here.
+        // What Thermite can be used for, and what it has done: each overview is one of the site's own
+        // pages (src/pages/), and the full pages are here. The use cases are grouped by field, from
+        // the list the overview reads too.
         {
           label: "Use cases",
-          items: [{ label: "Overview", link: "/use-cases/" }, { autogenerate: { directory: "use-cases" } }],
+          items: [
+            { label: "Overview", link: "/use-cases/" },
+            { label: "Who it's for", items: [{ autogenerate: { directory: "use-cases/for" } }] },
+            ...useCaseFields.map((f) => ({
+              label: f.label,
+              collapsed: true,
+              items: [{ autogenerate: { directory: `use-cases/${f.key}` } }],
+            })),
+          ],
         },
         {
           label: "Studies",
@@ -131,7 +141,8 @@ export default defineConfig({
             {
               label: "Use cases",
               paths: ["use-cases/**"],
-              description: "who Thermite is for: local AI, solo builders and enterprises",
+              description:
+                "what Thermite can be used for, by field (software, AI, science, healthcare, agriculture, energy, operations, robotics, finance), and who it is for",
             },
             {
               label: "Studies",

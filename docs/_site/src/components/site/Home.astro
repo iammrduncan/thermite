@@ -6,12 +6,12 @@ import { Image } from "astro:assets";
 import hero from "../../assets/hero.svg";
 import run from "../../assets/screenshots/run.webp";
 import Site from "../../layouts/Site.astro";
-import Audiences from "./Audiences.astro";
 import ClimbReplay from "./ClimbReplay.astro";
 import Cmd from "./Cmd.astro";
 import Ledger from "./Ledger.astro";
 import Modes from "./Modes.astro";
 import Partners from "./Partners.astro";
+import UseCases from "./UseCases.astro";
 
 // What Thermite is, in plain words, with real metrics and its three modes, under one sharp claim.
 const lede =
@@ -192,13 +192,15 @@ const smoke = [
   <section class="section" id="who">
     <div class="wrap">
       <div class="head" data-reveal>
-        <p class="eyebrow">Who it's for</p>
-        <h2 class="h2">People who run research on machines they control.</h2>
+        <p class="eyebrow">Use cases</p>
+        <h2 class="h2">Anything a program can score.</h2>
         <p class="lede">
-          From one laptop and a free model to a fleet of rigs on your own clusters. <a href="/use-cases/">See every use case</a>.
+          Code and models, simulations and genomes, crops, buildings, fleets and portfolios: if a program can build it,
+          run it and say how good it is, agents can work on it, from one laptop to a fleet of rigs.{" "}
+          <a href="/use-cases/">See every use case</a>.
         </p>
       </div>
-      <Audiences />
+      <UseCases />
     </div>
   </section>
 

@@ -4,12 +4,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fields } from "./data/use-cases.mjs";
 
 const docsRoot = fileURLToPath(new URL("./content/docs/", import.meta.url));
 
 const sections = [
   { dir: "", label: "Start" },
-  { dir: "use-cases", label: "Use cases: who Thermite is for" },
+  { dir: "use-cases/for", label: "Use cases: who Thermite is for" },
+  ...fields.map((f) => ({ dir: `use-cases/${f.key}`, label: `Use cases: ${f.label}` })),
   { dir: "studies", label: "Studies: what Thermite has done" },
   { dir: "tutorials", label: "Tutorials: learn by doing" },
   { dir: "how-to/install", label: "How-to guides: install and rigs" },

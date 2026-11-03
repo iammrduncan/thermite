@@ -18,6 +18,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  fields as useCaseFields,
+  personas as useCasePersonas,
+} from "../../docs/_site/src/data/use-cases.mjs";
 import { agentsPage, agentsPageFile } from "./agents-page.mjs";
 import { changelogFile, changelogPage, changelogPageFile } from "./changelog-page.mjs";
 import { creditsFile, creditsPage, creditsPageFile } from "./credits-page.mjs";
@@ -120,6 +124,46 @@ for (const page of pages) {
       page.file,
       `${tag} outside code is read as an HTML tag and hidden; put it in backticks`,
     );
+}
+
+// --- Use cases and their personas -----------------------------------------------------------
+
+// A use case is a page in use-cases/<field>/, for a field the site lists, with its mode, personas
+// and card under `useCase`. Each persona's page, use-cases/for/<persona>, links every use case
+// that names it, and no other, so the page and the overview's filter show the same list.
+const useCasePersonaLinks = new Map(useCasePersonas.map((p) => [p.key, new Set()]));
+for (const page of pages) {
+  const [section, folder, name] = page.slug.split("/");
+  if (section !== "use-cases" || !name || folder === "for") continue;
+  if (!useCaseFields.some((f) => f.key === folder))
+    problem(page.file, `use-cases/${folder}/ is not a field in docs/_site/src/data/use-cases.mjs`);
+  const block = /^useCase:\n((?:[ \t]+.*\n)+)/m.exec(page.text)?.[1] ?? "";
+  if (!block) {
+    problem(page.file, "a use case needs useCase: its mode, personas, summary and measure");
+    continue;
+  }
+  const listed = /^[ \t]+personas:[ \t]*\[(.*)\]$/m.exec(block)?.[1] ?? "";
+  for (const key of listed
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean))
+    useCasePersonaLinks.get(key)?.add(`${folder}/${name}`);
+}
+for (const [key, wanted] of useCasePersonaLinks) {
+  const page = pages.find((p) => p.slug === `use-cases/for/${key}`);
+  if (!page) {
+    problem(join(docsRoot, "use-cases/for"), `no page for the persona ${key}`);
+    continue;
+  }
+  const linked = new Set(
+    [...page.body.matchAll(/\]\(\.\.\/([a-z-]+\/[a-z0-9-]+)\.mdx?\)/g)].map((m) => m[1]),
+  );
+  for (const uc of wanted)
+    if (!linked.has(uc))
+      problem(page.file, `the use case ${uc} names this persona, but the page doesn't link it`);
+  for (const uc of linked)
+    if (!wanted.has(uc))
+      problem(page.file, `links the use case ${uc}, which doesn't name this persona`);
 }
 
 // --- The agents' names ------------------------------------------------------------------------
