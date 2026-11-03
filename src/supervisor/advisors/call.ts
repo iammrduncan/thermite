@@ -138,15 +138,15 @@ export interface AdvisorKeeper {
   done?(c: AdvisorCompaction): void;
 }
 
-/** Tools an advisor may use: read only, no shell, no files. */
 /** Where an advisor's lines go on Live, under its own source (goal 188). */
 export type AdvisorLiveSink = (l: {
   source: string;
-  kind: "tool";
+  kind: "tool" | "status";
   text: string;
   run: string;
 }) => void;
 
+/** Tools an advisor may use: read only, no shell, no files. */
 export interface AdvisorTools {
   /**
    * Told of each tool call Thermite's tools server answers for the call, with its arguments

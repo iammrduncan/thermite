@@ -176,14 +176,41 @@ export class LiveLog {
   }
 }
 
-/** A short, single-line rendering of a tool call's arguments for the live log. */
+/** Each string in a value cut to `n` characters, an ellipsis marking each one cut. */
+const clipStrings = (v: unknown, n: number): unknown =>
+  typeof v === "string"
+    ? v.length > n
+      ? `${v.slice(0, n)}…`
+      : v
+    : Array.isArray(v)
+      ? v.map((x) => clipStrings(x, n))
+      : v && typeof v === "object"
+        ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clipStrings(x, n)]))
+        : v;
+
+/**
+ * A short, single-line rendering of a tool call's arguments for the live log. Arguments too long
+ * have their strings cut, so they stay JSON that Live can read (a command, a path); only what
+ * cutting cannot bring under `max` is cut as text.
+ */
 export function summarizeArgs(args: unknown, max = 300): string {
-  let s: string;
-  try {
-    s = typeof args === "string" ? args : JSON.stringify(args);
-  } catch {
-    s = String(args);
-  }
-  s = s.replace(/\s+/g, " ");
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+  const one = (v: unknown) => {
+    try {
+      return (typeof v === "string" ? v : JSON.stringify(v)).replace(/\s+/g, " ");
+    } catch {
+      return String(v).replace(/\s+/g, " ");
+    }
+  };
+  const s = one(args);
+  if (s.length <= max) return s;
+  if (args && typeof args === "object")
+    try {
+      for (let n = max; n >= 20; n = Math.floor(n / 2)) {
+        const cut = one(clipStrings(args, n));
+        if (cut.length <= max) return cut;
+      }
+    } catch {
+      // A value JSON cannot hold (one that holds itself): cut as text.
+    }
+  return `${s.slice(0, max)}…`;
 }

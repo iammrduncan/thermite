@@ -1,4 +1,5 @@
 import { BRIEF, DIRECTIVES, RUNS, type RunRow } from "../../../core/api/harness/advisors.ts";
+import { advisorLiveSource } from "../../../core/live.ts";
 import type { AdvisorsConfig } from "../config.ts";
 import { teacherRound } from "../teachers/index.ts";
 import type { AdviseContext } from "./context.ts";
@@ -204,14 +205,16 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
         count({ tokensIn: run.tokens.in, tokensOut: run.tokens.out, usd: run.usd });
         for (const u of run.usage) await usageOut(inst.id, round, u.agent, u);
         await promptsOut(inst.id, round, run.sent);
+        // Each teacher's review under its own source (goal 188); one with none said why when its
+        // call ended (advisors/run.ts).
         for (const r of run.reviews) {
-          const recs = r.review?.recommendations ?? [];
+          if (!r.review) continue;
+          const recs = r.review.recommendations ?? [];
           say(
             inst.id,
-            r.review ? "text" : "status",
-            r.review
-              ? `teacher ${r.teacher}: ${clip(r.review.summary, 400)}${recs.length ? ` Suggests: ${recs.map((x) => `${x.kind}${x.direction ? ` ${x.direction}` : ""}`).join(", ")}.` : ""}`
-              : `teacher ${r.teacher} gave no review: ${clip(r.error ?? "", 300)}`,
+            "text",
+            `${clip(r.review.summary, 400)}${recs.length ? ` Suggests: ${recs.map((x) => `${x.kind}${x.direction ? ` ${x.direction}` : ""}`).join(", ")}.` : ""}`,
+            advisorLiveSource(r.teacher),
           );
         }
         // The teachers that reviewed had the owner's messages in their brief: they read them; and

@@ -27,6 +27,12 @@ export const LIVE = `/* Live, one run at a time: the stream gets the room */
 .lchip:hover { background: var(--accent); text-decoration: none; }
 .lchip.on { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
 .lchip.lfollow.on { background: var(--accent); color: var(--foreground); border-color: var(--input); }
+/* Terminals | Lines (goal 188): what the run's Live shows; the chips beside it choose whose. */
+.lseg { display: inline-flex; flex: none; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; background: var(--card); margin-right: 8px; }
+.lseg a { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 12px; font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+.lseg a + a { border-left: 1px solid var(--input); }
+.lseg a:hover { background: var(--accent); text-decoration: none; }
+.lseg a.on { background: var(--foreground); color: var(--background); }
 .lstream { padding: 10px 18px 16px; gap: 4px; }
 .lstream [hidden] { display: none !important; }
 .lv-div { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; font-size: 12px; color: var(--muted-foreground); }

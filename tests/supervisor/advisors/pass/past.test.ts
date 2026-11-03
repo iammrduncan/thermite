@@ -319,8 +319,17 @@ process.stdin.on("end", async () => {
       r.output?.reasons,
       'tools="" strict=true allowed=mcp__thermite__kb_search found=true',
     );
-    assert.deepEqual(lines, [
+    // Its first line, its tool call, its last.
+    assert.deepEqual(lines.slice(0, 2), [
+      {
+        source: "advisor:p1",
+        kind: "status",
+        text: "p1 starts, headless in Claude Code",
+        run: RUN,
+      },
       { source: "advisor:p1", kind: "tool", text: 'kb_search {"query":"aligned"}', run: RUN },
     ]);
+    assert.match(String((lines[2] as { text?: string })?.text), /^p1 answered after \d+ s$/);
+    assert.equal(lines.length, 3);
   });
 });

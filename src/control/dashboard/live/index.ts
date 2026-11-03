@@ -142,46 +142,61 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
     const calls = (workOf(u.summary)?.terminals ?? []).filter((x) => x.run === r.id);
     const advising = calls.filter((x) => terminalSource(x.id) === "supervisor");
     // Live opens on the agents' terminals while some run in one (goal 181, from the owner's
-    // mockup): each lane's trial at work and the planner's call side by side, each with its own
-    // console; the lines and the advisors' terminals are tabs beside it.
+    // mockup), each with its own console: every lane's trial at work, the planner's call and each
+    // advisor's, in one row with the lines' filters' names and colours (goal 188).
     const terminalMode = u.settings?.program_mode === "terminal" && !sel.earlier;
-    const lanePanes = inTerminals.map(([lane, work]) => ({
-      rig: u.id,
-      run: r.id,
-      trial: work.trial,
-      ended: false,
-      title: `${lane} · ${work.direction}`,
-    }));
     const plannerCall = calls.find((x) => x.role === "planner");
-    const agentPanes = [
-      ...lanePanes,
+    const panes = [
+      ...inTerminals.map(([lane, work]) => ({
+        rig: u.id,
+        run: r.id,
+        trial: work.trial,
+        ended: false,
+        title: `${lane} · ${work.direction}`,
+        label: lane,
+        key: lane,
+        kind: "lane",
+      })),
       ...(plannerCall
-        ? [{ rig: u.id, run: r.id, trial: plannerCall.id, ended: false, title: "planner" }]
+        ? [
+            {
+              rig: u.id,
+              run: r.id,
+              trial: plannerCall.id,
+              ended: false,
+              title: "planner",
+              label: "planner",
+              key: "planner",
+              kind: "planner",
+            },
+          ]
         : []),
+      ...advising.map((x) => ({
+        rig: u.id,
+        run: r.id,
+        trial: x.id,
+        ended: false,
+        title: `${advisorLabel(x.role)} (advisor)`,
+        label: advisorLabel(x.role),
+        key: x.role,
+        kind: agentKind(`advisor:${x.role}`),
+      })),
     ];
-    const advisorPanes = advising.map((x) => ({
-      rig: u.id,
-      run: r.id,
-      trial: x.id,
-      ended: false,
-      title: `${x.role} (advisor)`,
-    }));
+    // Two choices (the owner's, 2026-11-03): Terminals or Lines, then whose. The filter (`w`)
+    // is the same for both, so each opens on the agent the other showed.
     const asked = c.req.query("view");
-    const view =
-      asked === "lines" || asked === "advisors" || asked === "terminals"
+    const view: "terminals" | "lines" = !terminalMode
+      ? "lines"
+      : asked === "lines" || asked === "terminals"
         ? asked
-        : c.req.query("w") || !terminalMode || !agentPanes.length
-          ? "lines"
-          : "terminals";
-    const tab = (v: typeof view, label: string, n?: number) =>
-      `<a class="lchip ltab${view === v ? " on" : ""}" href="${runLiveHref(r, { view: v })}">${esc(label)}${n ? ` <span class="muted">${n}</span>` : ""}</a>`;
+        : asked === "advisors" || (!c.req.query("w") && panes.length)
+          ? "terminals"
+          : "lines";
+    const seg = (v: typeof view, label: string, n?: number) =>
+      `<a class="${view === v ? "on" : ""}" href="${runLiveHref(r, { view: v, ...(w !== "all" ? { w } : {}) })}" data-keep-w${view === v ? ' aria-current="page"' : ""}>${esc(label)}${n ? ` <span class="muted">${n}</span>` : ""}</a>`;
     const tabs = terminalMode
-      ? `<nav class="ltabs" aria-label="Views">${tab("terminals", "Terminals", agentPanes.length)}${tab("lines", "Lines")}${tab("advisors", "Advisors", advisorPanes.length)}</nav>`
+      ? `<nav class="lseg" aria-label="Show">${seg("terminals", "Terminals", panes.length)}${seg("lines", "Lines")}</nav>`
       : "";
-    const grid = (panes: typeof agentPanes, none: string) =>
-      panes.length
-        ? terminalGrid(dash, c, panes)
-        : `<div class="empty" style="margin:auto">${none}</div>`;
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
       ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
@@ -301,17 +316,13 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
         view === "lines"
           ? `<div class="lchips">${tabs}${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
 <div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>`
-          : `<div class="lchips">${tabs}<span class="grow"></span><span data-part="lkept">${keptBox}</span></div>${
-              view === "terminals"
-                ? grid(
-                    agentPanes,
-                    "No agent of this run is at work in its terminal now. A lane's trial and the planner's call show here as they start.",
-                  )
-                : grid(
-                    advisorPanes,
-                    "No advisor of this run is at work now. The teachers, the auditor and the review panel each show here, in their terminal, while they work.",
-                  )
-            }`
+          : panes.length
+            ? terminalGrid(dash, c, panes, {
+                lead: tabs,
+                tail: `<span data-part="lkept">${keptBox}</span>`,
+                shown: w,
+              })
+            : `<div class="lchips">${tabs}<span class="grow"></span><span data-part="lkept">${keptBox}</span></div><div class="empty" style="margin:auto">No agent of this run is at work in its terminal now. A lane's trial, the planner's call and each advisor's show here as they start.</div>`
       }
 <div data-part="lnotice">${notice}</div>${box}</section></div>`,
       vs,

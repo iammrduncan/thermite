@@ -27,19 +27,49 @@ export async function runAdvisor<S extends z.ZodType>(
     later: (p) => sent.push(p),
   };
   // A headless call's tool calls on Live, under the advisor's own source (goal 188); a call in
-  // its terminal shows them from its transcript.
+  // its terminal shows them from its transcript. Either way, a line when it starts and one when
+  // it ends, with its answer or why it has none: its chip shows from its start.
   const live = call.live;
-  if (live && !call.terminal) {
-    const source = advisorLiveSource(call.runtime.name);
+  const source = advisorLiveSource(call.runtime.name);
+  const status = (text: string) =>
+    live?.line({ source, kind: "status", text: `${call.runtime.name} ${text}`, run: live.run });
+  if (live && !call.terminal)
     input.tools = {
       ...input.tools,
       said: (tool, args) =>
         live.line({ source, kind: "tool", text: toolLine(tool, args), run: live.run }),
     };
-  }
+  const started = Date.now();
+  status(`starts, ${whereItRuns(call)}`);
   const r = await dispatch(input);
+  const took = minutes(Date.now() - started);
+  status(
+    r.output !== undefined
+      ? `answered after ${took}`
+      : `has no answer after ${took}: ${(r.error ?? "no output").slice(0, 400)}`,
+  );
   return sent.length ? { ...r, sent } : r;
 }
+
+const PROGRAMS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  opencode: "OpenCode",
+  openai: "Pi",
+};
+
+/** Where a call runs, as its first line on Live says it. */
+function whereItRuns(call: AdvisorCall<z.ZodType>): string {
+  const rt = call.runtime;
+  if (rt.runtime === "cli") return "as its command";
+  const program = PROGRAMS[rt.runtime] ?? rt.runtime;
+  if (call.terminal && rt.runtime === "openai") return "in its Pi view";
+  if (call.terminal && runsInTerminal(rt)) return `in ${program}'s own terminal`;
+  return `headless in ${program}`;
+}
+
+const minutes = (ms: number) =>
+  ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`;
 
 function dispatch<S extends z.ZodType>(input: AdvisorCall<S>): Promise<AdvisorResult<z.infer<S>>> {
   const rt = input.runtime;

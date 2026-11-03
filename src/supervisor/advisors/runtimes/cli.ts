@@ -105,22 +105,86 @@ export function lastJsonObject(out: string): unknown {
 }
 
 /**
- * An advisor's answer in a text: its last JSON object, or the object that object wraps (agents
- * that wrap their answer, `{"result": ...}`), checked against the call's schema.
+ * The JSON objects in a text that could be an answer, the likeliest first: each whole object, the
+ * last first, then each object alone on its line, the last first. An answer written out over many
+ * lines (as in a fenced block) holds objects of one line; the whole one comes before them.
+ */
+function answerObjects(out: string): unknown[] {
+  const whole: unknown[] = [];
+  for (let start = out.indexOf("{"); start >= 0; start = out.indexOf("{", start + 1)) {
+    let depth = 0;
+    let inString = false;
+    for (let i = start; i < out.length; i++) {
+      const ch = out[i];
+      if (inString) {
+        if (ch === "\\") i++;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) {
+        try {
+          whole.push(JSON.parse(out.slice(start, i + 1)));
+          start = i;
+        } catch {
+          // not JSON from here
+        }
+        break;
+      }
+    }
+  }
+  const lines = out
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("{"))
+    .flatMap((l) => {
+      try {
+        return [JSON.parse(l) as unknown];
+      } catch {
+        return [];
+      }
+    });
+  return [...whole.reverse(), ...lines.reverse()];
+}
+
+/** A schema's problems with a value, in a few words: the first three, each with its place. */
+const problemsOf = (e: z.ZodError) =>
+  e.issues
+    .slice(0, 3)
+    .map((i) => `${i.path.join(".") || "the answer"}: ${i.message}`)
+    .join("; ");
+
+/**
+ * An advisor's answer in a text: the first of its JSON objects (answerObjects) that the call's
+ * schema takes, or that one of them wraps (agents that wrap their answer, `{"result": ...}`).
+ * None: the schema's problems with the likeliest, for the call's error.
  */
 export function parseAnswer<S extends z.ZodType>(
   text: string,
   schema: S,
-): { ok: true; value: z.infer<S> } | { ok: false } {
-  let found = lastJsonObject(text);
-  if (found && typeof found === "object" && "result" in found) {
-    const inner = (found as { result: unknown }).result;
+): { ok: true; value: z.infer<S> } | { ok: false; problems: string } {
+  let problems = "";
+  for (const found of answerObjects(text)) {
+    const inner =
+      found && typeof found === "object" && "result" in found
+        ? (found as { result: unknown }).result
+        : undefined;
     const nested = typeof inner === "string" ? lastJsonObject(inner) : inner;
-    if (schema.safeParse(nested).success) found = nested;
+    for (const v of nested === undefined ? [found] : [found, nested]) {
+      const parsed = schema.safeParse(v);
+      if (parsed.success) return { ok: true, value: parsed.data };
+      problems ||= problemsOf(parsed.error);
+    }
   }
-  const parsed = schema.safeParse(found);
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
+  return { ok: false, problems: problems || NO_JSON };
 }
+
+const NO_JSON = "no JSON object in it";
+
+/** A call's error when it gave no valid answer: what was wrong with it, and how its text ended. */
+export const noAnswer = (problems: string, why: string): string =>
+  `no valid answer: ${problems === NO_JSON ? "" : `${problems}. It ended: `}${why.slice(-300)}`;
 
 /** What a command printed, or why it could not run. */
 interface Ran {
@@ -340,7 +404,7 @@ export async function runCli<S extends z.ZodType>(
   const limit = recorded ?? (own ? limitIn(own) : limitIn(err.slice(-2000)));
   return {
     output: undefined,
-    error: `no valid answer: ${why.slice(-300)}`,
+    error: noAnswer(parsed.problems, why),
     tokensIn,
     tokensOut,
     usd: 0,

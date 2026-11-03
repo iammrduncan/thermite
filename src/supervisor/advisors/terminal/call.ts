@@ -18,7 +18,7 @@ import type { AdvisorCall, AdvisorCompaction, AdvisorResult } from "../call.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
 import { limitUntil } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
-import { callId, cliHarnessModel, parseAnswer } from "../runtimes/index.ts";
+import { callId, cliHarnessModel, noAnswer, parseAnswer } from "../runtimes/index.ts";
 import { serveAdvisorTools } from "../tools/index.ts";
 import type { AdvisorConsoles } from "./consoles.ts";
 import { type AdvisorProgramId, advisorProgram } from "./profiles.ts";
@@ -329,7 +329,7 @@ export async function runInTerminal<S extends z.ZodType>(
       : undefined;
     return {
       output: undefined,
-      error: `no valid answer: ${why.slice(-300)}`,
+      error: noAnswer(answer.problems, why),
       ...result,
       ...(limit ? { limit } : {}),
     };

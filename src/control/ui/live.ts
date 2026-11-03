@@ -26,6 +26,28 @@ export function liveTime(at: string, now = Date.now()): string {
   return `<span class="lv-t" title="${esc(at.replace("T", " ").slice(0, 19))} UTC · ${esc(ago(at, now))} ago">${esc(at.slice(11, 19))}</span>`;
 }
 
+/**
+ * The string fields of a JSON object cut short (a rig cuts a long tool call's arguments to a
+ * line's room, so its JSON may not close): each `"key":"value"` whole, and the last one as far as
+ * it goes.
+ */
+function cutObject(raw: string): Record<string, unknown> | null {
+  if (!raw.startsWith("{")) return null;
+  const out: Record<string, unknown> = {};
+  const field = /"([A-Za-z_][\w-]*)"\s*:\s*"((?:[^"\\]|\\.)*)("?)/g;
+  for (let m = field.exec(raw); m; m = field.exec(raw)) {
+    const body = m[3]
+      ? (m[2] ?? "")
+      : (m[2] ?? "").replace(/…$/, "").replace(/\\(u[0-9a-fA-F]{0,3})?$/, "");
+    try {
+      out[m[1] as string] = `${JSON.parse(`"${body}"`)}${m[3] ? "" : "…"}`;
+    } catch {
+      out[m[1] as string] = body;
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /** A tool call's name and arguments, from "name {json}" (or "name text"). */
 export function parseTool(text: string): {
   name: string;
@@ -39,38 +61,100 @@ export function parseTool(text: string): {
     const v = JSON.parse(raw);
     return { name, args: v && typeof v === "object" && !Array.isArray(v) ? v : null, raw };
   } catch {
-    return { name, args: null, raw };
+    return { name, args: cutObject(raw.trim()), raw };
   }
 }
 
-/** What a tool call did, in a few words, and its full input for the details. */
+/** A tool's name as Live shows it: an MCP tool without its server's prefix. */
+const toolName = (name: string) =>
+  name.replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "").replace(/^[a-z0-9_-]+\.(?=[a-z])/i, "");
+
+/** A shell's own wrapper around a command (`bash -lc '…'`), taken off. */
+const unwrapShell = (c: string) =>
+  /^(?:\/(?:usr\/)?bin\/)?(?:ba|z)?sh -l?c (['"])([\s\S]*)\1$/.exec(c.trim())?.[2] ?? c;
+
+const SHELLS = /^(shell|bash|exec|exec_command|run|sh|terminal|local_shell)$/i;
+
+const lines = (s: string) => s.split("\n").length;
+const more = (n: number) => (n > 1 ? ` <span class="muted xs">+${n - 1} lines</span>` : "");
+const code = (s: string, n = 120) => `<code>${esc(clip(s, n))}</code>`;
+const muted = (s: string) => ` <span class="muted xs">${esc(s)}</span>`;
+
+/**
+ * What a tool call did, in a few words, and its full input for the details: a command as `$ …`,
+ * a file it read, wrote or edited, what it searched for and where, a page it fetched, a search's
+ * words; else its arguments as key=value.
+ */
 export function toolSummary(text: string): { name: string; what: string; detail: string } {
-  const { name, args, raw } = parseTool(text);
-  if (!args) return { name, what: esc(clip(firstLine(raw), 140)), detail: raw };
-  const str = (k: string) => (typeof args[k] === "string" ? (args[k] as string) : undefined);
-  const command = str("command") ?? str("cmd") ?? str("script");
-  if (command) {
-    const lines = command.split("\n").length;
+  const parsed = parseTool(text);
+  const { args, raw } = parsed;
+  const name = toolName(parsed.name);
+  const command = (c: string) => {
+    const cmd = unwrapShell(c);
     return {
       name,
-      what: `<code class="lv-cmd">$ ${esc(clip(firstLine(command), 160))}</code>${lines > 1 ? ` <span class="muted xs">+${lines - 1} lines</span>` : ""}`,
-      detail: command,
+      what: `<code class="lv-cmd">$ ${esc(clip(firstLine(cmd), 160))}</code>${more(lines(cmd))}`,
+      detail: cmd,
     };
+  };
+  if (!args) {
+    if (SHELLS.test(name) && raw.trim()) return command(raw);
+    if (/search/i.test(name) && raw.trim() && !raw.trim().startsWith("{"))
+      return { name, what: `“${esc(clip(firstLine(raw), 140))}”`, detail: raw };
+    return { name, what: esc(clip(firstLine(raw), 140)), detail: raw };
   }
-  const path = str("path") ?? str("file") ?? str("filePath") ?? str("file_path");
-  const content = str("content") ?? str("text");
+  const str = (...ks: string[]) => {
+    for (const k of ks) if (typeof args[k] === "string" && args[k]) return args[k] as string;
+    return undefined;
+  };
+  const all = JSON.stringify(args, null, 2);
+  const cmd = str("command", "cmd", "script");
+  if (cmd) return command(cmd);
+  if (Array.isArray(args.command) && args.command.every((x) => typeof x === "string"))
+    return command((args.command as string[]).join(" "));
+  const path = str("file_path", "filePath", "path", "file", "notebook_path");
+  const content = str("content", "text");
+  const before = str("old_string", "oldString", "old_str");
+  const after = str("new_string", "newString", "new_str");
+  if (path && (before !== undefined || after !== undefined))
+    return {
+      name,
+      what: `edits ${code(path)}${muted(`−${before ? lines(before) : 0} +${after ? lines(after) : 0} lines`)}`,
+      detail: `${before ?? ""}\n──── becomes ────\n${after ?? ""}`,
+    };
   if (path && content !== undefined)
     return {
       name,
-      what: `writes <code>${esc(path)}</code> <span class="muted xs">${content.split("\n").length} lines</span>`,
+      what: `writes ${code(path)} <span class="muted xs">${lines(content)} lines</span>`,
       detail: content,
     };
-  if (path)
-    return { name, what: `<code>${esc(path)}</code>`, detail: JSON.stringify(args, null, 2) };
+  const pattern = str("pattern", "regex", "glob");
+  if (pattern)
+    return {
+      name,
+      what: `${code(pattern, 80)}${path ? ` in ${code(path, 80)}` : ""}${str("glob", "include") && str("glob", "include") !== pattern ? muted(String(str("glob", "include"))) : ""}`,
+      detail: all,
+    };
+  if (path) {
+    const from = typeof args.offset === "number" ? args.offset : undefined;
+    const n = typeof args.limit === "number" ? args.limit : undefined;
+    return {
+      name,
+      what: `${code(path)}${from !== undefined || n !== undefined ? muted(`lines ${from ?? 1}${n ? `–${(from ?? 1) + n - 1}` : "–"}`) : ""}`,
+      detail: all,
+    };
+  }
+  const url = str("url", "uri");
+  if (url) return { name, what: code(url, 140), detail: all };
+  const query = str("query", "q", "search", "question");
+  if (query) return { name, what: `“${esc(clip(query, 140))}”`, detail: all };
+  if (Array.isArray(args.todos)) return { name, what: `${args.todos.length} to-dos`, detail: all };
+  const about = str("description", "title", "subject");
+  if (about) return { name, what: esc(clip(about, 140)), detail: all };
   const pairs = Object.entries(args)
     .map(([k, v]) => `${k}=${clip(typeof v === "string" ? v : JSON.stringify(v), 60)}`)
     .join(" · ");
-  return { name, what: esc(clip(pairs, 160)), detail: JSON.stringify(args, null, 2) };
+  return { name, what: esc(clip(pairs, 160)), detail: all };
 }
 
 /** A tool result: how long, whether it worked (exit code), and its first line of output. */

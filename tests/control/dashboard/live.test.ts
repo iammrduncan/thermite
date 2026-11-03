@@ -34,7 +34,7 @@ describe("control dashboard", () => {
           at,
           source: "advisor:teacher-1",
           kind: "tool",
-          text: "rg -n tile src",
+          text: 'Bash {"command":"rg -n tile src"}',
           run: "js-1",
         },
         {
@@ -57,7 +57,7 @@ describe("control dashboard", () => {
     const html = await (await s.get("/ui/live/everything")).text();
     for (const words of [
       "tiling the loop",
-      "rg -n tile src",
+      "$ rg -n tile src",
       "merges 4 ideas into 2",
       "the judge on rig-b is idle",
     ])

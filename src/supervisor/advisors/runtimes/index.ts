@@ -4,5 +4,5 @@
  */
 
 export { runClaudeCode } from "./claude-code.ts";
-export { callId, lastJsonObject, parseAnswer, runCli } from "./cli.ts";
+export { callId, lastJsonObject, noAnswer, parseAnswer, runCli } from "./cli.ts";
 export { cliHarnessModel, runCliHarness } from "./opencode-codex.ts";

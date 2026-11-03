@@ -13,6 +13,16 @@ export const CLIENT_JS = `
   // A form of filters that applies each as it is chosen (Live's Everything, goal 188).
   for (const f of document.querySelectorAll("form[data-autosubmit]"))
     for (const s of f.querySelectorAll("select")) s.addEventListener("change", () => f.requestSubmit());
+  // Terminals | Lines on a run's Live (goal 188): each opens on the agent chosen in the other, as
+  // the page's address has it now.
+  document.addEventListener("click", (ev) => {
+    const a = ev.target instanceof Element ? ev.target.closest("a[data-keep-w]") : null;
+    if (!a) return;
+    const w = new URL(location.href).searchParams.get("w");
+    const to = new URL(a.href, location.href);
+    if (w && w !== "all") to.searchParams.set("w", w); else to.searchParams.delete("w");
+    a.href = to.toString();
+  });
   // ------------------------------------------------ the live view
   const tr = $("#transcript");
   if (tr) {

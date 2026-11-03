@@ -137,7 +137,7 @@ test("an advisor in Pi in its Pi view: an owner's message before its next call, 
   });
   const { r, seen } = runner();
   const consoles = new AdvisorConsoles();
-  const lines: { kind: string; text: string; run: string }[] = [];
+  const lines: { kind: string; text: string; run: string; source?: string }[] = [];
   const terminals: AdvisorTerminals = {
     runner: r,
     root,
@@ -224,9 +224,9 @@ test("an advisor in Pi in its Pi view: an owner's message before its next call, 
   assert.match(seen.env.THERMITE_MODEL_API_KEY ?? "", /^proxy\./);
   assert.ok(!JSON.stringify(seen).includes("the-route-key"));
   assert.ok(seen.argv.includes(VIEW_FLAG));
-  // Its lines in the run's live view, named for it; its console gone, its last screen kept.
+  // Its lines in the run's live view, under its own source (goal 188); its console gone, its last screen kept.
   assert.ok(
-    lines.length > 0 && lines.every((l) => l.run === "js-1" && l.text.startsWith("auditor: ")),
+    lines.length > 0 && lines.every((l) => l.run === "js-1" && l.source === "advisor:auditor"),
   );
   assert.deepEqual(consoles.calls(), []);
   const [last] = await consoles.frames([call.id]);

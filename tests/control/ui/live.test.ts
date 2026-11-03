@@ -49,6 +49,36 @@ describe("the live view's lines", () => {
     assert.equal(toolSummary("<b>odd</b> text").what, "text");
   });
 
+  test("each program's tool calls read as what they did, and arguments a rig cut short still do (goal 188)", () => {
+    const what = (text: string) => toolSummary(text).what;
+    // Cut short by an older rig: the JSON never closes.
+    const cut = toolSummary(
+      'Bash {"command":"cd /work && nvcc -O3 pn-gemm.cu -o pn && ./pn --bench | tail -20 && echo do…',
+    );
+    assert.equal(cut.name, "Bash");
+    assert.match(cut.what, /^<code class="lv-cmd">\$ cd \/work &amp;&amp; nvcc -O3 pn-gemm\.cu/);
+    assert.match(what("shell bash -lc 'rg -n pn_gemm src'"), /\$ rg -n pn_gemm src<\/code>/);
+    assert.match(
+      what('Read {"file_path":"src/a.cu","offset":120,"limit":80}'),
+      /<code>src\/a\.cu<\/code> <span class="muted xs">lines 120–199<\/span>/,
+    );
+    assert.match(
+      what('Edit {"file_path":"a.cu","old_string":"int x;\\nint y;","new_string":"int x = 2;"}'),
+      /edits <code>a\.cu<\/code> <span class="muted xs">−2 \+1 lines<\/span>/,
+    );
+    assert.match(
+      what('Grep {"pattern":"__launch_bounds__","path":"src"}'),
+      /<code>__launch_bounds__<\/code> in <code>src<\/code>/,
+    );
+    const kb = toolSummary('mcp__thermite__kb_search {"query":"wave packing"}');
+    assert.deepEqual([kb.name, kb.what], ["kb_search", "“wave packing”"]);
+    assert.equal(
+      toolSummary('thermite.fetch_url {"url":"https://example.org/a"}').name,
+      "fetch_url",
+    );
+    assert.equal(what('TodoWrite {"todos":[{"content":"a"},{"content":"b"}]}'), "2 to-dos");
+  });
+
   test("a result shows its time, exit code and first line of output; a failure is marked", () => {
     const ok = resultSummary("run (171 ms): exit 0\nok");
     assert.match(ok.hint, /^<span class="lv-res muted">171 ms · exit 0 · ok<\/span>$/);
@@ -83,7 +113,7 @@ describe("the live view's lines", () => {
     assert.doesNotMatch(html, /lv-name">result/);
     assert.match(
       html,
-      /<span class="lv-who">Worker · lane-1 <span class="muted">t-97f3630d<\/span><\/span>/,
+      /<span class="lv-who k-lane">Worker · lane-1 <span class="muted">t-97f3630d<\/span><\/span>/,
     );
     // Text from the rig is escaped.
     assert.match(

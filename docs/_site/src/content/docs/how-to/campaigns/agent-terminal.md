@@ -19,7 +19,7 @@ To tell the agents something without typing into a program, send a message inste
 
 1. Open **Live** in the sidebar, and choose the run in the list on the left.
 
-   The run's Live opens on **Terminals**: a tab for each lane's trial at work, named for its lane and its direction, such as `lane-1 · shared memory tiling`, and **Side by side**, which shows them all at once. The chosen terminal fills the pane, its screen scaled so the whole of it fits; **Side by side** puts them in a grid, each scaled to its part. Typing into it, as in step 2, works as on the trial's own page.
+   The run's Live opens on **Terminals**, beside **Lines**. **All** shows every terminal at work at once, in a grid, each scaled to its part; then each has a tab, named for its agent in its colour: each lane's trial, such as `lane-1` (hover for its direction), the planner while it plans, and each advisor while it works. The chosen terminal fills the pane, its screen scaled so the whole of it fits. Typing into it, as in step 2, works as on the trial's own page.
 
    For one trial alone, open the rig's page, press **Live**, and choose the trial under **Sessions**.
 

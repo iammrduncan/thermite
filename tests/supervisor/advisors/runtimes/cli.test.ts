@@ -18,7 +18,7 @@ import { z } from "zod";
 import { RunAsServer } from "../../../../src/common/run-as/index.ts";
 import { ADVISOR_RUNS_ENV } from "../../../../src/core/advisor-runs.ts";
 import { runAdvisor } from "../../../../src/supervisor/advisors/index.ts";
-import { runCli } from "../../../../src/supervisor/advisors/runtimes/cli.ts";
+import { noAnswer, parseAnswer, runCli } from "../../../../src/supervisor/advisors/runtimes/cli.ts";
 import { testPrompt } from "../../../helpers/advisor-prompt.ts";
 
 /**
@@ -232,5 +232,45 @@ process.exit(1);
       if (before === undefined) delete process.env.THERMITE_CLAUDE_BIN;
       else process.env.THERMITE_CLAUDE_BIN = before;
     }
+  });
+});
+
+describe("an advisor's answer in its text", () => {
+  const Review = z.strictObject({
+    summary: z.string(),
+    portfolio: z.array(z.strictObject({ id: z.string(), why: z.string() })),
+  });
+  test("an answer written over many lines is found whole, not an object of one line inside it", () => {
+    const text = [
+      "Here is my review.",
+      "```json",
+      "{",
+      '  "summary": "two ideas",',
+      '  "portfolio": [',
+      '    {"id": "x-1", "why": "the loads are uncoalesced"},',
+      '    {"id": "x-2", "why": "the tail is serial"}',
+      "  ]",
+      "}",
+      "```",
+    ].join("\n");
+    const r = parseAnswer(text, Review);
+    assert.ok(r.ok);
+    assert.equal(r.ok && r.value.portfolio.length, 2);
+  });
+  test("an answer that does not fit says why, with each problem's place", () => {
+    const r = parseAnswer('{"summary": "one", "portfolio": [{"id": "x-1"}]}', Review);
+    assert.equal(r.ok, false);
+    const problems = r.ok ? "" : r.problems;
+    assert.match(problems, /^portfolio\.0\.why: /);
+    assert.match(
+      noAnswer(problems, "…the end"),
+      /^no valid answer: portfolio\.0\.why: .+\. It ended: …the end$/,
+    );
+    // No JSON at all: the text's end alone, as before.
+    const none = parseAnswer("I could not finish.", Review);
+    assert.equal(
+      noAnswer(none.ok ? "" : none.problems, "I could not finish."),
+      "no valid answer: I could not finish.",
+    );
   });
 });
