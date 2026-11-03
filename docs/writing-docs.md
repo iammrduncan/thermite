@@ -63,7 +63,7 @@ The sidebar follows the folders. `sidebar.order` in the front matter sets a page
 
 ## The site's own pages
 
-Three pages are not Starlight's: the home page (`src/pages/index.astro`), the use cases' overview (`src/pages/use-cases.astro`, at `/use-cases/`) and the studies' overview (`src/pages/studies.astro`, at `/studies/`). They are for readers deciding whether Thermite fits them, in the way of [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh).
+Three pages are not Starlight's: the home page (`src/pages/index.astro`, which renders `src/components/site/Home.astro`), the use cases' overview (`src/pages/use-cases.astro`, at `/use-cases/`) and the studies' overview (`src/pages/studies.astro`, at `/studies/`). They are for readers deciding whether Thermite fits them, in the way of [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh).
 
 - **Content lives in the docs; overviews live here.** Each use case and each study has its full page in `use-cases/` or `studies/`, with its Markdown copy and its place in `llms.txt`. An overview gives each a short card that links there. Write the docs page first, then its card: the audiences' cards are in `src/data/audiences.ts`, and a new study gets a card on `studies.astro`.
 - **The frame** is `src/layouts/Site.astro`: its own header and footer, Fathom (`src/analytics.mjs`), and the theme switch. The theme is the docs' own setting (Starlight's `starlight-theme`), so a reader's choice holds across the site. `src/scripts/site.ts` copies commands, counts numbers up and reveals sections on scroll; motion stops when the reader asks for less.
