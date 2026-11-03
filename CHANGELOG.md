@@ -2,6 +2,19 @@
 
 Each release of Thermite, newest first. Version numbers count up by the middle number, 0.2.0, 0.3.0 and so on, with fixes and quick follow-ups as 0.1.1, 0.1.2. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]: v0.1.2
+
+### Docs
+
+- The site opens on **Get started**: four steps at the top of its sidebar, Install on one machine, Run your first campaign, Add a second machine (a new tutorial) and Tailscale / WireGuard (a new page that keeps control and its message bus on a private network). Install on one machine shows how to serve the dashboard over Tailscale. The home page's first button goes to step 1.
+- `llm-setup.txt`, at the site's root: instructions for an AI agent to set Thermite up from the latest release and to find the page for what comes next. The home page and Install on one machine give a prompt to copy for it.
+- The site's roadmap page is now its Changelog, written from this file; its old address leads there.
+
+### Dependencies
+
+- Pi 1.4.0 (was 1.3.0) for the workers, the planner and the advisors in Pi, and pi-tui 1.4.0 for the Pi view; the MCP TypeScript SDK 1.32.2 and Hono 4.13.14. The checks use Biome 2.6.4 (was 2.5.15). The docs site is built with Astro 7.4.4 and Starlight 0.42.7.
+- The workflows use actions/checkout 7, actions/upload-artifact 7, docker/login-action 4 and docker/metadata-action 6, each pinned by its commit.
+
 ## [0.1.1] 2026-11-03: the message bus, agents in their own terminal, and the knowledge base
 
 v0.1.1 is the first release after v0.1.0, and it breaks from it: a rig and control now talk only on a message bus, many names changed, and the licence is now Apache-2.0. **Install v0.1.1 fresh**, on a new machine or a new compose project, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.1). An update in place of a v0.1.0 stack is not tested; [Upgrading from v0.1.0](#upgrading-from-v010) says what it takes, for a stack you can't start again.
