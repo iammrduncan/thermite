@@ -6,6 +6,7 @@ import type { JobRow } from "../ledger/index.ts";
 import { Reviews } from "../reviews.ts";
 import type { JudgeContext } from "./context.ts";
 import { decideThresholdGoal, type GoalStatus } from "./decide.ts";
+import type { MeasureSpec } from "./device.ts";
 import { runValues, valuesText } from "./goal-values.ts";
 import {
   type HeldOutCell,
@@ -14,7 +15,7 @@ import {
   heldOutResult,
   meetsThreshold,
 } from "./held-out.ts";
-import type { Arm, MeasureContext } from "./measure.ts";
+import type { Arm } from "./measure.ts";
 import { clipReason } from "./reasons.ts";
 
 /**
@@ -41,7 +42,7 @@ export async function verifyGoals(
   judge: JudgeContext,
   job: JobRow,
   contract: GoalContract,
-  ctx: MeasureContext,
+  ctx: MeasureSpec,
   arm: Arm,
   opts: {
     heldOut?: boolean;
@@ -319,7 +320,7 @@ export async function heldOutGoals(
   judge: JudgeContext,
   job: JobRow,
   contract: GoalContract,
-  ctx: MeasureContext,
+  ctx: MeasureSpec,
   arm: Arm,
   goals: string[],
 ): Promise<HeldOutResult & { failed: string[] }> {

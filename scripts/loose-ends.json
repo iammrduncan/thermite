@@ -428,7 +428,6 @@
       "BASELINE_DIR_BYTES",
       "BASELINE_DIR_FILES",
       "BaselineValue",
-      "BaselineFile",
       "StartingPoint",
       "baselineFailure"
     ],

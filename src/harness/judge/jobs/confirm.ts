@@ -7,6 +7,7 @@ import { baselineOf, guardTotals } from "../baseline.ts";
 import { runBlocks } from "../blocks.ts";
 import { type Finish, FixedInfraError, InfraError, type JudgeContext, Stop } from "../context.ts";
 import { decideConfirm, goalDelta, type StartValues } from "../decide.ts";
+import type { MeasureSpec } from "../device.ts";
 import { heldOutGoals, recordGoals, verifyGoals } from "../goals.ts";
 import {
   type HeldOutCell,
@@ -19,7 +20,7 @@ import {
   heldOutResult,
   heldOutWords,
 } from "../held-out.ts";
-import type { Arm, MeasureContext } from "../measure.ts";
+import type { Arm } from "../measure.ts";
 
 /**
  * The confirm job, and what happens to a win it confirms. A hill climb's screened win is measured
@@ -114,7 +115,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
 async function heldOut(
   judge: JudgeContext,
   job: JobRow,
-  ctx: MeasureContext,
+  ctx: MeasureSpec,
   cand: Arm,
   champ: Arm,
   contract: HillClimbContract,

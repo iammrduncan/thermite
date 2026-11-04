@@ -7,10 +7,8 @@ import {
   type BaselineFailure,
   baselineState,
   baselineValue,
-  keepBaselineDir,
   prepareBaselineDir,
   removeBaselineDir,
-  sealBaselineDir,
 } from "../baseline.ts";
 import { runBlocks } from "../blocks.ts";
 import { type Finish, InfraError, type JudgeContext, Stop } from "../context.ts";
@@ -79,9 +77,8 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       runsPerCell: contract.acceptance.runs_per_cell,
     });
     await judge.device.reclaim(written);
-    const sealed = sealBaselineDir(written);
+    const sealed = await judge.device.keepBaseline(written, dir);
     if (!sealed.ok) throw new Stop("invalid", sealed.reason);
-    keepBaselineDir(written, dir);
     const body = baselineBody({
       job,
       run,

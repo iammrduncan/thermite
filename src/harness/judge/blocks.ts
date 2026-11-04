@@ -2,7 +2,8 @@ import type { JobRow } from "../ledger/index.ts";
 import { throttledFraction } from "../targets/index.ts";
 import { InfraError, type JudgeContext } from "./context.ts";
 import type { Block } from "./decide.ts";
-import type { Arm, MeasureContext } from "./measure.ts";
+import type { MeasureSpec } from "./device.ts";
+import type { Arm } from "./measure.ts";
 import { rng } from "./rng.ts";
 
 /**
@@ -39,7 +40,7 @@ export async function runBlocks(
   judge: JudgeContext,
   input: {
     job: JobRow;
-    ctx: MeasureContext;
+    ctx: MeasureSpec;
     arms: [Arm, Arm] | [Arm];
     cells: readonly string[];
     count: number;
@@ -90,7 +91,7 @@ async function runBlock(
   judge: JudgeContext,
   x: {
     job: JobRow;
-    ctx: MeasureContext;
+    ctx: MeasureSpec;
     a: Arm;
     b: Arm | undefined;
     cells: readonly string[];

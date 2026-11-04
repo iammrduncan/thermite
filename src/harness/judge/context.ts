@@ -11,12 +11,12 @@ import type { HarnessService } from "../service/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
 import { BASELINE_BLOCKS, type Baseline, baselineDir, baselineOf } from "./baseline.ts";
 import type { Decision } from "./decide.ts";
-import { type JudgeDevice, LocalDevice, type Measured } from "./device.ts";
+import { type JudgeDevice, LocalDevice, type Measured, type MeasureSpec } from "./device.ts";
 import { recordInfraFailure } from "./failure.ts";
 import { HELD_OUT_INFRA } from "./held-out.ts";
 import { exportKit, loadKit } from "./kits.ts";
 import { whileLeased } from "./lease.ts";
-import type { Arm, ArmRun, MeasureContext } from "./measure.ts";
+import type { Arm, ArmRun } from "./measure.ts";
 import type { PortFound } from "./ports.ts";
 import { clipReason, REASONS_CHARS } from "./reasons.ts";
 
@@ -111,6 +111,14 @@ export interface Finish {
     | undefined;
 }
 
+/** A kit as the judge took it: what it says, its folder, and its repository's mirror and commit. */
+interface KitAt {
+  kit: Kit;
+  dir: string;
+  repo: string;
+  commit: string;
+}
+
 /** A verdict reached before the screen finished (a crash, an invalid output, a bad build). */
 export class Stop extends Error {
   readonly verdict: "invalid" | "crash_candidate";
@@ -181,7 +189,7 @@ export class JudgeContext {
     recordInfraFailure(this.ledger, job, reason, { owner: this.o.owner, spec: this.spec(job) });
   }
 
-  async kitFor(contract: Contract): Promise<{ kit: Kit; dir: string; commit: string }> {
+  async kitFor(contract: Contract): Promise<KitAt> {
     const ref = contract.project.kit;
     if (!ref) throw new InfraError(`contract ${contract.campaign} names no kit`);
     const mirror = this.o.service.mirrorFor(`kit-${ref.repo}`);
@@ -192,10 +200,10 @@ export class JudgeContext {
         `kit ${kit.name} measures ${kit.target}, this rig has ${this.device.driver.type}`,
       );
     }
-    return { kit, dir, commit: ref.commit };
+    return { kit, dir, repo: `kit-${ref.repo}`, commit: ref.commit };
   }
 
-  private async build(run: string, commit: string, k: { kit: Kit; dir: string; commit: string }) {
+  private async build(run: string, commit: string, k: KitAt) {
     const inst = this.ledger.runs.get(run);
     if (!inst) throw new InfraError(`no run ${run}`);
     const started = Date.now();
@@ -220,12 +228,7 @@ export class JudgeContext {
     return b;
   }
 
-  async armFor(
-    name: Arm["name"],
-    run: string,
-    commit: string,
-    k: { kit: Kit; dir: string; commit: string },
-  ): Promise<Arm> {
+  async armFor(name: Arm["name"], run: string, commit: string, k: KitAt): Promise<Arm> {
     const b = await this.build(run, commit, k);
     if (!b.ok) {
       // The starting point's baseline (goal 115) is judged as a candidate is: a build that fails
@@ -254,12 +257,12 @@ export class JudgeContext {
   }
 
   /** One run of an arm on a case, on the job's card. */
-  async run(ctx: MeasureContext, arm: Arm, cell: string): Promise<ArmRun> {
+  async run(ctx: MeasureSpec, arm: Arm, cell: string): Promise<ArmRun> {
     return (await this.device.measure(ctx, arm, cell)).run;
   }
 
   /** One timed run of an arm on a case, with the throttling of the card's machine around it. */
-  measure(ctx: MeasureContext, arm: Arm, cell: string): Promise<Measured> {
+  measure(ctx: MeasureSpec, arm: Arm, cell: string): Promise<Measured> {
     return this.device.measure(ctx, arm, cell);
   }
 
@@ -268,35 +271,33 @@ export class JudgeContext {
    * `baselineDir`, the folder a baseline job writes, or else the sealed folder of the run's
    * baseline, read-only. The job's card gives the users its runs, drivers and checks run as.
    */
-  context(
-    k: { kit: Kit; dir: string },
-    job: JobRow,
-    baselineDirNow?: string | undefined,
-  ): MeasureContext {
+  context(k: KitAt, job: JobRow, baselineDirNow?: string | undefined): MeasureSpec {
     const run = this.jobRun(job);
     // No contract, no held-out mask: the job stops as an infrastructure failure, never measuring
     // on cells it would have hidden (goal 163).
     const contract: Contract | undefined = run ? this.o.service.contractFor(run) : undefined;
     const held = new Set(contract && "held_out_cells" in contract ? contract.held_out_cells : []);
     let heldRuns = 0;
-    const sealed = (() => {
+    const kept = (() => {
       if (baselineDirNow || !run || contract?.mode !== "hill_climb") return undefined;
       const b = baselineOf(this.ledger, run);
       const dir = b ? baselineDir(this.o.service.paths.stateDir, run, b.job) : undefined;
-      return dir && existsSync(dir) ? dir : undefined;
+      return b && dir && existsSync(dir) ? { kept: dir, run, job: b.job } : undefined;
     })();
-    const folder = baselineDirNow ?? sealed;
-    return this.device.context({
+    const baseline = baselineDirNow ? { written: baselineDirNow } : kept;
+    return {
       job: job.id,
       kit: k.kit,
       kitDir: k.dir,
-      ...(folder ? { baselineDir: folder } : {}),
+      kitRepo: k.repo,
+      kitCommit: k.commit,
+      ...(baseline ? { baseline } : {}),
       ...(contract ? { uses: contractMetrics(contract) } : {}),
       note: (arm, cell, outcome) =>
         held.has(cell)
           ? this.note(`held-out run ${++heldRuns} done`, run)
           : this.note(`${arm} · ${cell}: ${outcome}`, run),
-    });
+    };
   }
 
   /**
