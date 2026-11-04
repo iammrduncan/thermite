@@ -14,7 +14,9 @@ export interface AdviseConfig {
   /** Retry spacing for an audit or review whose advisor failed. */
   retryMs?: number | undefined;
   /** A line in the live view (the supervisor's own lines, relayed unsigned). */
-  live?: ((line: { kind: LiveKind; text: string; run?: string | undefined }) => void) | undefined;
+  live?:
+    | ((line: { kind: LiveKind; text: string; run?: string | undefined; source?: string }) => void)
+    | undefined;
   /**
    * The advisors' MCP servers (goal 068): the supervisor's gateway, holding the servers control
    * gave the rig for advisors, and each run's servers as its kit names them (read each round).

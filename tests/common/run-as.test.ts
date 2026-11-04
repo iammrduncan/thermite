@@ -119,6 +119,8 @@ setInterval(() => {}, 1000);`,
       }
     };
     const child = Number(await import("node:fs").then((fs) => fs.readFileSync(pidFile, "utf8")));
+    // Killed, it may still answer as a process for a moment until it is reaped: up to 2 s.
+    for (let i = 0; i < 40 && alive(child); i++) await new Promise((res) => setTimeout(res, 50));
     assert.equal(alive(child), false, "the program's own child went with it");
 
     const stop = new AbortController();

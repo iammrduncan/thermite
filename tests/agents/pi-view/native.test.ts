@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -23,13 +31,18 @@ test("the view draws with a pi-tui that has no native folder, and loads no nativ
     existsSync(join(PKG, "native")),
     "the installed package has the folder an image deletes",
   );
-  // pi-tui as an image has it: the package without native/, beside its two dependencies.
+  // pi-tui as an image has it: the package without native/, beside its dependencies, whichever
+  // its package names (1.4.0 added marked-cjk-friendly).
   const modules = join(scratch, "node_modules");
   const copy = join(modules, "@earendil-works", "pi-tui");
   cpSync(PKG, copy, { recursive: true, filter: (src) => !src.startsWith(join(PKG, "native")) });
   assert.ok(!existsSync(join(copy, "native")));
-  for (const dep of ["marked", "get-east-asian-width"])
-    symlinkSync(join(ROOT, "node_modules", dep), join(modules, dep), "dir");
+  const deps = Object.keys(
+    (JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")) as { dependencies?: object })
+      .dependencies ?? {},
+  );
+  assert.ok(deps.includes("marked"), "pi-tui still draws Markdown with marked");
+  for (const dep of deps) symlinkSync(join(ROOT, "node_modules", dep), join(modules, dep), "dir");
   const hooks = join(scratch, "hooks.mjs");
   writeFileSync(
     hooks,

@@ -190,7 +190,7 @@ function runner() {
 test("an advisor in its terminal: its prompt typed in, an owner's message inside its turn, the owner's input typed, its answer", async () => {
   const { r, seen } = runner();
   const consoles = new AdvisorConsoles();
-  const lines: { kind: string; text: string; run: string }[] = [];
+  const lines: { kind: string; text: string; run: string; source?: string }[] = [];
   // Message 3 is in its prompt already; message 5 comes once the owner has typed into it.
   const waiting = [{ id: 3, text: "Is this real?" }];
   const terminals: AdvisorTerminals = {
@@ -242,8 +242,8 @@ test("an advisor in its terminal: its prompt typed in, an owner's message inside
   // Its hooks reach the call's own turn routes on localhost, with the call's credential.
   assert.match(seen.env.THERMITE_HARNESS_URL ?? "", /^http:\/\/127\.0\.0\.1:\d+$/);
   assert.match(seen.env.THERMITE_TRIAL_AUTH ?? "", /^call\.[0-9a-f]{48}$/);
-  // Its lines in the run's live view, named for it; its console gone, its last screen kept.
-  assert.ok(lines.every((l) => l.run === "js-1" && l.text.startsWith("auditor: ")));
+  // Its lines in the run's live view, under its own source (goal 188); its console gone, its last screen kept.
+  assert.ok(lines.every((l) => l.run === "js-1" && l.source === "advisor:auditor"));
   assert.ok(
     lines.some((l) => /the owner's message #5 went in at the end of its turn/.test(l.text)),
   );

@@ -48,7 +48,7 @@ export type {
   TerminalPlan,
 } from "./program.ts";
 export { setUp, takeUsage } from "./shared.ts";
-export { RoleTerminal, type RoleTerminalDeps, type RunEnd } from "./terminal.ts";
+export { RoleTerminal, type RoleTerminalDeps, type RunEnd, stillTyped } from "./terminal.ts";
 export {
   GO_ON_GRACE_MS,
   TERMINAL_WAIT_MAX_MS,

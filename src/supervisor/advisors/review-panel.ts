@@ -10,7 +10,13 @@ import {
 } from "../../core/api/harness/research.ts";
 import { LenientNotes } from "../../core/journal.ts";
 import { additionIn, type RunAdditions } from "../../core/role-additions.ts";
-import type { AdvisorKeeper, AdvisorMcp, AdvisorResult, AdvisorUsage } from "./call.ts";
+import type {
+  AdvisorKeeper,
+  AdvisorLiveSink,
+  AdvisorMcp,
+  AdvisorResult,
+  AdvisorUsage,
+} from "./call.ts";
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { OwnerAnswers, OwnerAnswersSchema } from "./owner-answers.ts";
 import { runAdvisor } from "./run.ts";
@@ -221,6 +227,8 @@ export const isResearchPackage = (pkg: unknown): boolean =>
   typeof pkg === "object" && pkg !== null && (pkg as { kind?: unknown }).kind === "research";
 
 export async function reviewOne(input: {
+  /** Where the call's headless tool calls go on Live, under its own source (goal 188). */
+  live?: { run: string; line: AdvisorLiveSink } | undefined;
   runtime: AdvisorRuntime;
   pkg: unknown;
   /** Thermite's knowledge base (goal 175): the review panel's tools for it. */
@@ -248,6 +256,7 @@ export async function reviewOne(input: {
     const ask = (o: { pkg: unknown; leftOut?: LeftOut | undefined }) =>
       runAdvisor({
         runtime: input.runtime,
+        ...(input.live ? { live: input.live } : {}),
         prompt: (f) =>
           renderResearchReviewer(
             { ...o, fit, addition: additionIn(input.additions, "research-reviewer") },
@@ -313,6 +322,7 @@ export async function reviewOne(input: {
   }
   return runAdvisor({
     runtime: input.runtime,
+    ...(input.live ? { live: input.live } : {}),
     prompt: (f) =>
       renderReviewer(
         {

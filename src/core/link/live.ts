@@ -24,16 +24,19 @@ export const LIVE_CONSUMER = "control-live";
  */
 export const LIVE_RIG_HEADER = "Thermite-Rig";
 
-/** A source as a subject's last token: a trial's `trial:<id>` becomes `trial-<id>`. */
+/**
+ * A source as a subject's last token: a trial's `trial:<id>` becomes `trial-<id>`, and an
+ * advisor's `advisor:<name>` becomes `advisor-<name>` (goal 188).
+ */
 function sourceToken(source: string): string {
   if (!LiveEntry.shape.source.safeParse(source).success)
     throw new Error(`not a live source for a subject: ${source}`);
-  return source.startsWith("trial:") ? `trial-${source.slice(6)}` : source;
+  return source.replace(/^(trial|advisor):/, "$1-");
 }
 
 /** The source a subject's last token names, or null. */
 function tokenSource(token: string): string | null {
-  const source = token.startsWith("trial-") ? `trial:${token.slice(6)}` : token;
+  const source = token.replace(/^(trial|advisor)-/, "$1:");
   return LiveEntry.shape.source.safeParse(source).success ? source : null;
 }
 

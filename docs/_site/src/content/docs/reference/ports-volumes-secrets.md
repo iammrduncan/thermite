@@ -61,7 +61,7 @@ Two Unix sockets matter too:
 
 Each rig has a way out of its own, so one rig's harness and supervisor share no network with another rig's harness: neither reaches the other's harness API, its health route included. The two supervisors share only `control`, where neither listens.
 
-The harness is not on the `control` network, so it never reaches control or the message bus. Control and the harness also get the host name `host.docker.internal`, so they can reach a model server on the host. A release's compose file also has an `init` service, which makes the local tokens: it has no network at all (`network_mode: none`).
+The harness is not on the `control` network, so it never reaches control or the message bus. Control, the harness and the supervisor also get the host name `host.docker.internal`, so they and the advisors the supervisor runs can reach a model server on the host. A release's compose file also has an `init` service, which makes the local tokens: it has no network at all (`network_mode: none`).
 
 ### Machines
 

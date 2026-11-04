@@ -27,6 +27,12 @@ export const LIVE = `/* Live, one run at a time: the stream gets the room */
 .lchip:hover { background: var(--accent); text-decoration: none; }
 .lchip.on { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
 .lchip.lfollow.on { background: var(--accent); color: var(--foreground); border-color: var(--input); }
+/* Terminals | Lines (goal 188): what the run's Live shows; the chips beside it choose whose. */
+.lseg { display: inline-flex; flex: none; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; background: var(--card); margin-right: 8px; }
+.lseg a { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 12px; font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+.lseg a + a { border-left: 1px solid var(--input); }
+.lseg a:hover { background: var(--accent); text-decoration: none; }
+.lseg a.on { background: var(--foreground); color: var(--background); }
 .lstream { padding: 10px 18px 16px; gap: 4px; }
 .lstream [hidden] { display: none !important; }
 .lv-div { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; font-size: 12px; color: var(--muted-foreground); }
@@ -52,4 +58,24 @@ export const LIVE = `/* Live, one run at a time: the stream gets the room */
 .lpin[hidden] { display: none; }
 .lnotice { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid color-mix(in srgb, var(--warning) 45%, transparent); background: var(--warning-surface); font-size: 13px; }
 .lnotice svg { color: var(--warning-foreground); flex: none; }
-.lnotice.qjudge { border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent); border-radius: 8px; margin: 0 0 12px; }`;
+.lnotice.qjudge { border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent); border-radius: 8px; margin: 0 0 12px; }
+/* Each kind of agent has its colour (goal 188): on its chip's dot and its lines' name. */
+:root { --k-lane: #1d4ed8; --k-planner: #7c3aed; --k-judge: #0f766e; --k-teacher: #c2410c; --k-merger: #a16207; --k-auditor: #be123c; --k-reviewer: #4d7c0f; --k-writer: #0369a1; --k-advisor: #52525b; }
+@media (prefers-color-scheme: dark) { :root { --k-lane: #93c5fd; --k-planner: #c4b5fd; --k-judge: #5eead4; --k-teacher: #fdba74; --k-merger: #fcd34d; --k-auditor: #fda4af; --k-reviewer: #bef264; --k-writer: #7dd3fc; --k-advisor: #d4d4d8; } }
+.kdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--k-advisor); }
+.lchip.on .kdot { box-shadow: 0 0 0 2px var(--background); }
+.lv-who.k-lane { color: var(--k-lane); } .kdot.k-lane { background: var(--k-lane); }
+.lv-who.k-planner { color: var(--k-planner); } .kdot.k-planner { background: var(--k-planner); }
+.lv-who.k-judge { color: var(--k-judge); } .kdot.k-judge { background: var(--k-judge); }
+.lv-who.k-teacher { color: var(--k-teacher); } .kdot.k-teacher { background: var(--k-teacher); }
+.lv-who.k-merger { color: var(--k-merger); } .kdot.k-merger { background: var(--k-merger); }
+.lv-who.k-auditor { color: var(--k-auditor); } .kdot.k-auditor { background: var(--k-auditor); }
+.lv-who.k-reviewer { color: var(--k-reviewer); } .kdot.k-reviewer { background: var(--k-reviewer); }
+.lv-who.k-writer { color: var(--k-writer); } .kdot.k-writer { background: var(--k-writer); }
+.lv-who.k-advisor { color: var(--k-advisor); }
+.lv-who[class*="k-"] { font-weight: 600; }
+/* Everything (goal 188): the facets above the filters, and each line's run before its agent. */
+.lfacets { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 8px 14px 0; font-size: 12.5px; }
+.lfacets label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted-foreground); }
+.lfacets select { height: 28px; font-size: 12.5px; }
+.lv-runtag { display: inline-block; margin-right: 8px; font-size: 11px; color: var(--muted-foreground); max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }`;

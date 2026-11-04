@@ -141,20 +141,16 @@ describe("a trial's terminal on Live", () => {
     // The screen is scaled so all its columns and rows fit the pane.
     assert.match(TERMINAL_JS, /Math\.min\(w \/ screen\.offsetWidth, h \/ screen\.offsetHeight\)/);
     // The run's Live opens on each lane's terminal when the rig runs its programs in them (goals
-    // 181, 187): a tab each and Side by side, the chosen terminal filling the pane; the lines are
-    // a tab of the run's own.
+    // 181, 187, 188): Terminals | Lines, then in the same row a tab for each terminal in its
+    // colour (All first, with two or more), the chosen terminal filling the pane.
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
     assert.match(
       run,
-      /<div class="term-tabs" role="tablist"><button type="button" class="term-tab on" data-term-tab="t-0123456789abcdef">lane-1 · /,
+      /<div class="term-tabs" role="tablist"><nav class="lseg" aria-label="Show"><a class="on" href="\/ui\/campaigns\/js-sum\/runs\/js-1\/live\?view=terminals" data-keep-w aria-current="page">Terminals <span class="muted">1<\/span><\/a><a class="" href="\/ui\/campaigns\/js-sum\/runs\/js-1\/live\?view=lines" data-keep-w>Lines<\/a><\/nav><button type="button" class="term-tab on" data-term-tab="t-0123456789abcdef" data-w="lane-1" title="lane-1 · [^"]*"><span class="kdot k-lane"><\/span>lane-1<\/button>/,
     );
     assert.match(
       run,
       /<div class="term-area" data-term-area><section class="term" data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef" data-trial="t-0123456789abcdef"/,
-    );
-    assert.match(
-      run,
-      /<a class="lchip ltab on" href="\/ui\/campaigns\/js-sum\/runs\/js-1\/live\?view=terminals">Terminals <span class="muted">1<\/span><\/a>/,
     );
     assert.match(
       run,
@@ -384,8 +380,13 @@ describe("a trial's terminal on Live", () => {
     await s.relay();
     const html = await s.owner.page("/ui/rigs/rig-a/live?source=supervisor");
     assert.match(html, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1"/);
-    // The run's Live has the advisors' terminals under their own tab (goal 181).
-    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live?view=advisors");
+    // The run's Live has each advisor's terminal among the run's, in its colour (goal 188), and
+    // opens on the one its filter names.
+    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live?view=terminals&w=auditor");
+    assert.match(
+      run,
+      /<button type="button" class="term-tab on" data-term-tab="advisor-auditor-js-1-1" data-w="auditor" title="auditor \(advisor\)"><span class="kdot k-auditor"><\/span>auditor<\/button>/,
+    );
     assert.match(
       run,
       /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1" data-trial="advisor-auditor-js-1-1">\n<div class="term-bar"><b>auditor \(advisor\)<\/b>/,

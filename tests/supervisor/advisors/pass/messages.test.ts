@@ -72,7 +72,9 @@ function config(env: Env, advisors: AdvisorsConfig, lines: string[]): AdviseConf
     home: mkdtempSync(join(tmpdir(), "thermite-sup-")),
     advisors,
     fetchImpl: harnessFetch(env),
-    live: (l) => lines.push(`${l.run ?? "-"} ${l.kind}: ${l.text}`),
+    // An advisor's own lines name it (goal 188); the supervisor's own name no one.
+    live: (l) =>
+      lines.push(`${l.run ?? "-"} ${l.kind}: ${l.source ? `[${l.source}] ` : ""}${l.text}`),
   };
 }
 
@@ -249,10 +251,13 @@ describe("the owner's messages to the advisors", () => {
     ]);
     const text = lines.join("\n");
     assert.match(text, /js-1 status: the teachers review js-1 now: the owner wrote to them/);
+    // Each teacher's review under its own source, between its call's first and last lines.
+    assert.match(text, /js-1 status: \[advisor:teacher-a\] teacher-a starts, headless in Pi/);
     assert.match(
       text,
-      /js-1 text: teacher teacher-a: tiling looks promising Suggests: try tiling\./,
+      /js-1 text: \[advisor:teacher-a\] tiling looks promising Suggests: try tiling\./,
     );
+    assert.match(text, /js-1 status: \[advisor:teacher-b\] teacher-b answered after \d+ s/);
     assert.match(
       text,
       /js-1 text: directives for the planner: mandate tiling \(why: both reviews cite the paper\)/,

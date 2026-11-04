@@ -48,6 +48,8 @@ const TERM_STYLE = `
 .term-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--muted); min-width: 0; }
 .term-tab { display: block; flex: 0 1 auto; min-width: 0; max-width: 320px; height: auto; border: 0; border-radius: 0; background: none; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--muted-foreground); border-bottom: 2px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .term-tab[data-term-split] { flex: none; }
+.term-tab .kdot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.term-tabs .lseg { align-self: center; margin-right: 10px; }
 .term-tab.on { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
 .term-tabs .grow, .term-bar .grow { flex: 1; }
 .term-area { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); flex: 1; min-height: 0; }
@@ -119,6 +121,13 @@ export interface TerminalPane {
   error?: string | undefined;
   /** Its heading on a page of several terminals (goal 181), such as the lane and its direction. */
   title?: string | undefined;
+  /**
+   * On a run's Live (goal 188): its tab's short name (`lane-1`, `teacher-2`), the filter it is
+   * (the `w` its run's Lines filter by), and its kind of agent, for its colour.
+   */
+  label?: string | undefined;
+  key?: string | undefined;
+  kind?: string | undefined;
 }
 
 /** What every page with a terminal carries once: xterm.js's styles and the console's, the scripts. */
@@ -165,16 +174,28 @@ export function terminalHtml(o: TerminalPane & { xtermCss: string }): string {
 }
 
 /**
- * A run's terminals (goal 187): a tab for each, and Side by side; the chosen one fills the pane.
+ * A run's terminals (goals 187, 188): **All**, side by side, then a tab for each, in its colour;
+ * the chosen one fills the pane. `shown`: the key of the one to show first; none, or one not
+ * here, shows them all. `lead` and `tail` go at the row's start and end (the run's Live puts
+ * Terminals | Lines first).
  */
-export function terminalGridHtml(panes: readonly TerminalPane[], xtermCss: string): string {
+export function terminalGridHtml(
+  panes: readonly TerminalPane[],
+  xtermCss: string,
+  o: { lead?: string; tail?: string; shown?: string | undefined } = {},
+): string {
+  const first = panes.length === 1 ? panes[0] : panes.find((p) => p.key && p.key === o.shown);
   const tabs = panes
     .map(
-      (p, i) =>
-        `<button type="button" class="term-tab${i ? "" : " on"}" data-term-tab="${esc(p.trial)}">${esc(p.title ?? p.trial)}</button>`,
+      (p) =>
+        `<button type="button" class="term-tab${p === first ? " on" : ""}" data-term-tab="${esc(p.trial)}"${p.key ? ` data-w="${esc(p.key)}"` : ""} title="${esc(p.title ?? p.trial)}">${p.kind ? `<span class="kdot k-${esc(p.kind)}"></span>` : ""}${esc(p.label ?? p.title ?? p.trial)}</button>`,
     )
     .join("");
-  return `${terminalAssets(xtermCss)}<div class="term-tabs" role="tablist">${tabs}<span class="grow"></span>${panes.length > 1 ? `<button type="button" class="term-tab" data-term-split>Side by side</button>` : ""}</div><div class="term-area" data-term-area>${panes.map((p) => terminalPaneHtml(p)).join("")}</div>`;
+  const all =
+    panes.length > 1
+      ? `<button type="button" class="term-tab${first ? "" : " on"}" data-term-split title="Every terminal side by side">All</button>`
+      : "";
+  return `${terminalAssets(xtermCss)}<div class="term-tabs" role="tablist">${o.lead ?? ""}${all}${tabs}<span class="grow"></span>${o.tail ?? ""}</div><div class="term-area${first || panes.length < 2 ? "" : " split"}" data-term-area>${panes.map((p) => terminalPaneHtml(p)).join("")}</div>`;
 }
 
 /**
@@ -194,7 +215,15 @@ export const TERMINAL_JS = `
     const tabs = [...document.querySelectorAll("[data-term-tab]")];
     const split = document.querySelector("[data-term-split]");
     area.style.setProperty("--cols", String(Math.ceil(Math.sqrt(panes.length))));
-    let shown = tabs[0] ? tabs[0].dataset.termTab : "";
+    const chosen = tabs.find((t) => t.classList.contains("on")) || tabs[0];
+    let shown = chosen ? chosen.dataset.termTab : "";
+    // The terminal chosen is the page's filter in its address, so Lines opens on the same agent.
+    const keep = (w) => {
+      const u = new URL(location.href);
+      u.searchParams.set("view", "terminals");
+      if (w) u.searchParams.set("w", w); else u.searchParams.delete("w");
+      history.replaceState(null, "", u);
+    };
     const show = (trial) => {
       shown = trial;
       area.classList.remove("split");
@@ -202,17 +231,16 @@ export const TERMINAL_JS = `
       for (const p of panes) p.classList.toggle("on", p.dataset.trial === trial);
       for (const t of tabs) t.classList.toggle("on", t.dataset.termTab === trial);
     };
-    for (const t of tabs) {
-      t.title = t.textContent;
-      t.addEventListener("click", () => show(t.dataset.termTab));
-    }
+    for (const t of tabs)
+      t.addEventListener("click", () => { show(t.dataset.termTab); keep(t.dataset.w || ""); });
     if (split) split.addEventListener("click", () => {
-      const on = !area.classList.contains("split");
-      area.classList.toggle("split", on);
-      split.classList.toggle("on", on);
-      for (const t of tabs) t.classList.toggle("on", !on && t.dataset.termTab === shown);
+      area.classList.add("split");
+      split.classList.add("on");
+      for (const t of tabs) t.classList.remove("on");
+      keep("");
     });
-    if (shown) show(shown);
+    if (area.classList.contains("split")) for (const p of panes) p.classList.toggle("on", p.dataset.trial === shown);
+    else if (shown) show(shown);
   }
   const boxes = document.querySelectorAll("[data-term]");
   if (!boxes.length) return;

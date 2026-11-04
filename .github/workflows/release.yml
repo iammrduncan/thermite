@@ -88,7 +88,7 @@ jobs:
       publish: ${{ env.PUBLISH }}
       release: ${{ env.RELEASE }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: version
         name: Read the version, and check the tag against package.json
         run: |
@@ -187,7 +187,7 @@ jobs:
             description: "Thermite's supervisor: a rig's link to control, its advisors and its git work."
             licenses: "MIT AND Apache-2.0"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The CUDA base is several gigabytes: make room on the runner's disk first.
       - name: Make room for the CUDA image
         if: matrix.cuda
@@ -201,7 +201,7 @@ jobs:
         with:
           # On the host's network, the CUDA job's builder reaches the job's own registry.
           driver-opts: ${{ matrix.cuda && 'network=host' || '' }}
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         if: env.PUBLISH == 'true'
         with:
           registry: ghcr.io
@@ -212,7 +212,7 @@ jobs:
       # and annotations: the source repository, which links each package to this repository, and
       # the version and commit.
       - id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: "12"
           # A multi-platform image is an index, and the registry reads the index's annotations.
@@ -285,7 +285,7 @@ jobs:
       # THERMITE_IMAGE_ID. Tags, labels and annotations as for the other images, under thermite-rig.
       - id: rig-meta
         if: matrix.rig
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: "12"
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
@@ -336,7 +336,7 @@ jobs:
           printf '%s\n' "$DIGEST" > digests/rig-cuda
           echo "rig-cuda: $DIGEST"
       # One file per image: the CUDA 12 job's holds the rig image's too.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: digest-${{ matrix.key }}
           path: digests/
@@ -352,7 +352,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The CUDA images are several gigabytes each: make room on the runner's disk first.
       - name: Make room for the CUDA images
         run: |
@@ -387,7 +387,7 @@ jobs:
       packages: write
     steps:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -425,7 +425,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -447,7 +447,7 @@ jobs:
             --registry "$REGISTRY" \
             --repo-url "$REPO_URL" \
             --digests digests --out bundle
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-bundle
           path: bundle/

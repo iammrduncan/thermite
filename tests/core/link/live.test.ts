@@ -80,6 +80,16 @@ describe("the live stream's contract", () => {
       rig: "rig-a",
       source: "supervisor",
     });
+    // An advisor's own lines (goal 188): `advisor:<name>` on a subject of its own.
+    assert.equal(
+      liveSubject("rig-a", { source: "advisor:teacher-1", run: "sort-3" }),
+      "thermite.run.sort-3.live.advisor-teacher-1",
+    );
+    assert.deepEqual(readLiveSubject("thermite.run.sort-3.live.advisor-merged-by"), {
+      run: "sort-3",
+      source: "advisor:merged-by",
+    });
+    assert.throws(() => liveSubject("rig-a", { source: "advisor:Teacher 1" }), /not a live source/);
     for (const s of [
       "thermite.rig.rig-a.report",
       "thermite.run.sort-3.live",
@@ -89,6 +99,7 @@ describe("the live stream's contract", () => {
       "thermite.rig.-bad-.live.judge",
       "thermite.run.*.live.planner",
       "thermite.run.sort-3.live.trial-",
+      "thermite.run.sort-3.live.advisor-",
     ])
       assert.equal(readLiveSubject(s), null, s);
   });

@@ -42,6 +42,7 @@ export async function runClaudeCode<S extends z.ZodType>(
           code: t.code,
           research: t.research,
           paper: t.paper,
+          said: t.said,
         })
       : undefined;
   // Before each of Claude Code's own compactions, its PreCompact hook copies the conversation

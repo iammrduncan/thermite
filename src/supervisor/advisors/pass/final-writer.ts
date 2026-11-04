@@ -72,6 +72,8 @@ export async function writePapers(ctx: AdviseContext): Promise<void> {
       );
       try {
         const r = await writePaper({
+          // Its headless tool calls on Live (goal 188).
+          ...(cfg.live ? { live: { run: run, line: cfg.live } } : {}),
           runtime,
           pkg,
           keeper: keeperFor(run),

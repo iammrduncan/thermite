@@ -282,6 +282,8 @@ services:
       start_period: 5m
 
   supervisor:
+    # An advisor's model on this machine is at host.docker.internal, as for the harness.
+    extra_hosts: ["host.docker.internal:host-gateway"]
     build: { context: ., dockerfile: containers/Containerfile, target: supervisor, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_RIG_ID: local-1
@@ -404,6 +406,8 @@ services:
 
   supervisor-2:
     profiles: [two-rigs]
+    # An advisor's model on this machine is at host.docker.internal, as for the harness.
+    extra_hosts: ["host.docker.internal:host-gateway"]
     build: { context: ., dockerfile: containers/Containerfile, target: supervisor, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_RIG_ID: local-2

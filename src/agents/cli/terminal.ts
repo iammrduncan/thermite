@@ -66,6 +66,20 @@ const READY_MAX_MS = 20_000;
  * the program never took it, and the run fails (goal 183).
  */
 const TAKE_MS = 60_000;
+/**
+ * A long message has longer: this much more for each TAKE_PER_BYTES of it. A program takes a
+ * message of 100 KB in for tens of seconds (Codex still showed the middle of one in its input
+ * 60 s after it was typed in), and an Enter while it does is a new line in it.
+ */
+const TAKE_MORE_MS = 30_000;
+const TAKE_PER_BYTES = 32_768;
+/**
+ * Every this long without a turn, a message the screen still shows in the program's input is
+ * sent again with one Enter (goal 188's roll: Codex kept a long message in its input box after
+ * its Enter, and Claude Code its seven pastes). A screen that shows anything else, such as a
+ * menu, gets no key.
+ */
+const ENTER_AGAIN_MS = 15_000;
 /** The screen's last lines a message never taken shows in its reason. */
 const SCREEN_SHOWN = 6;
 /** The lines above the screen kept at the end, for the live view after the trial. */
@@ -172,6 +186,8 @@ export interface RoleTerminalDeps<T extends CliTally> {
   tally: T;
   /** How long a turn may take to begin once its message is typed in (tests make it short). */
   takeMs?: number | undefined;
+  /** How long before one more Enter for a message still in its input (tests make it short). */
+  enterAgainMs?: number | undefined;
 }
 
 /** One role's program in its own terminal: one host at a time, for as long as its run lasts. */
@@ -324,7 +340,7 @@ export class RoleTerminal<T extends CliTally> {
       if (!gone) throw err;
       return;
     }
-    await this.took(h);
+    await this.took(h, text);
   }
 
   /**
@@ -367,12 +383,33 @@ export class RoleTerminal<T extends CliTally> {
    * that never begins. No key is sent to try again: its screen may be a menu that takes any key
    * as an answer.
    */
-  private async took(h: Terminal): Promise<void> {
+  private async took(h: Terminal, text: string): Promise<void> {
     const waiting = () =>
       !this.began && !this.stopping && this.host === h && this.ends !== undefined && !this.limit;
-    const takeMs = this.o.takeMs ?? TAKE_MS;
+    const takeMs =
+      this.o.takeMs ??
+      TAKE_MS + Math.floor(Buffer.byteLength(text) / TAKE_PER_BYTES) * TAKE_MORE_MS;
     const until = Date.now() + takeMs;
-    while (waiting() && Date.now() < until) await sleep(Math.min(250, takeMs));
+    const every = Math.min(this.o.enterAgainMs ?? ENTER_AGAIN_MS, takeMs);
+    let again = Date.now() + every;
+    let enters = 0;
+    while (waiting() && Date.now() < until) {
+      await sleep(Math.min(250, takeMs));
+      if (!waiting() || Date.now() < again) continue;
+      again = Date.now() + every;
+      // Still in its input box: one more Enter sends it, once the program has taken it all in.
+      const screen = await h.screen().catch(() => undefined);
+      if (screen && stillTyped(screen.lines, text)) {
+        enters++;
+        log(
+          "agents",
+          `${this.p.name} kept its message in its input: Enter again`,
+          { enters },
+          "warn",
+        );
+        await h.keys(["enter"]).catch(() => undefined);
+      }
+    }
     if (!waiting()) return;
     // What its screen shows then, in the words: what the program put in the message's way.
     const screen = await h.screen().catch(() => undefined);
@@ -666,4 +703,28 @@ export class RoleTerminal<T extends CliTally> {
       });
     }
   }
+}
+
+/** Box-drawing and block characters: an input's frame, never a message's words. */
+const FRAME = /[\u2500-\u259F]/g;
+/** A line's prompt mark, where a program's input starts one. */
+const PROMPT_MARK = /^\s*[›>❯]\s?/;
+
+/**
+ * Whether a screen still shows a message typed in, in the program's input: lines of the screen
+ * that are parts of the message, spaces, the input's frame and its prompt mark aside, 40 of its
+ * characters in all (all of a shorter one), wherever the screen wraps it and whichever part of
+ * a long message the input shows; or the placeholder Codex shows in place of a long paste, or
+ * Claude Code in place of each paste (`[Pasted text #1 +54 lines]`).
+ */
+export function stillTyped(lines: readonly string[], text: string): boolean {
+  if (/\[Pasted (Content \d+ chars|text #\d+[^\]]*)\]/.test(lines.join("\n"))) return true;
+  const flat = (s: string) => s.replace(FRAME, "").replace(/\s+/g, "");
+  const message = flat(text);
+  if (!message) return false;
+  const least = Math.min(12, message.length);
+  const inIt = lines
+    .map((l) => flat(l.replace(FRAME, "").replace(PROMPT_MARK, "")))
+    .filter((l) => l.length >= least && message.includes(l));
+  return inIt.reduce((n, l) => n + l.length, 0) >= Math.min(40, message.length);
 }

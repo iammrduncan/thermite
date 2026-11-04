@@ -29,6 +29,7 @@ import {
   ADVISOR_CALL_TURN,
   ADVISOR_CALL_USAGE,
 } from "../../../core/api/supervisor/advisor-call.ts";
+import { advisorLiveSource } from "../../../core/live.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorCompaction, AdvisorResult } from "../call.ts";
 import { advisorRoute } from "../config.ts";
@@ -156,7 +157,7 @@ export async function runInPiView<S extends z.ZodType>(
   const auth = `call.${randomBytes(24).toString("hex")}`;
   const view = new PiConsole();
   const line = (kind: "text" | "thinking" | "tool" | "result" | "status", text: string) =>
-    t.live({ kind, text: `${rt.name}: ${text}`, run: at.run });
+    t.live({ source: advisorLiveSource(rt.name), kind, text, run: at.run });
   /** What each route does for the call. */
   const route = async (r: Route, c: Context): Promise<unknown> => {
     switch (r.path) {

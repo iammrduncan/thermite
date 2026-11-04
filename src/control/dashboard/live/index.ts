@@ -5,18 +5,10 @@ import { terminalSource } from "../../../core/terminal-input.ts";
 import { commandFollowUrl, commandProgress, notSent } from "../../command-progress.ts";
 import { issueCommand, nobodyReads, panelReviews } from "../../issue/index.ts";
 import { HARNESS_NAMES } from "../../rigs/index.ts";
-import { lastActivity } from "../../ui/campaigns/list.ts";
+import { ago, esc, icon, modeAvatar, num, runState } from "../../ui/components/index.ts";
 import {
-  ago,
-  esc,
-  icon,
-  modeAvatar,
-  modeName,
-  num,
-  runCompleted,
-  runState,
-} from "../../ui/components/index.ts";
-import {
+  advisorLabel,
+  agentKind,
   liveEntryHtml,
   liveLinesHtml,
   resultJoin,
@@ -37,16 +29,15 @@ import {
 import { clip, earlierWords, signed } from "../../ui/words/index.ts";
 import {
   currentChampion,
-  podStopped,
-  type RigView,
   type RunOnRig,
-  type RunView,
   runCampaign,
   runMessages,
   workOf,
 } from "../../views/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
+import { everythingRoutes } from "./everything.ts";
 import { type LiveFeed, type PushedLine, pushLive, pushStart, recheckIds } from "./push.ts";
+import { liveRunsNav } from "./runs.ts";
 import { terminalGrid, terminalPanel, terminalRoutes } from "./terminal.ts";
 
 /**
@@ -57,6 +48,7 @@ import { terminalGrid, terminalPanel, terminalRoutes } from "./terminal.ts";
 export function liveRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, moreMenu, opts, page, pauseMenu, runOf, store, views } = dash;
   terminalRoutes(app, dash);
+  everythingRoutes(app, dash);
   /** The run a route names, under the campaign it names (goal 170). */
   const named = (c: Ctx) => runOf(c.req.param("campaign") ?? "", c.req.param("run") ?? "");
 
@@ -78,18 +70,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       : first
         ? { ...first, earlier: null }
         : undefined;
-    const day = now - 24 * 3600_000;
-    const ended = all
-      .filter((x) => x.r.status !== "running" && Date.parse(lastActivity(x.r)) > day)
-      .sort((a, b) => lastActivity(b.r).localeCompare(lastActivity(a.r)));
-    const idle = vs.filter((u) => !u.runs.some((r) => r.status === "running"));
-    const runLink = (x: { u: RigView; r: RunView }, sub: string, cls = "") =>
-      `<a class="lr${sel && x.u.id === sel.u.id && x.r.id === sel.r.id ? " on" : ""}${cls}" href="${runLiveHref(x.r)}"><span class="t">${x.r.status === "running" ? `<span class="dot ok pulse"></span>` : ""}${esc(x.r.id)}</span><span class="s">${sub}</span></a>`;
-    const nav = `<nav class="lruns" aria-label="Runs" data-part="lruns">
-<div class="hd">At work</div>${atWork.map((x) => runLink(x, `${esc(x.u.id)} · ${esc(modeName(x.r.mode))} · ${Object.keys(x.r.at_work).length} working${waitingOn(x.r, x.u) ? ` · <span class="warn">${waitingOn(x.r, x.u)} wait for you</span>` : ""}`)).join("") || `<div class="lempty">No run is at work.</div>`}
-${idle.length ? `<div class="hd">Idle rigs</div>${idle.map((u) => `<a class="lr idle" href="${rigHref(u.id)}"><span class="t">${esc(u.id)}</span><span class="s">no run at work${podStopped(u) ? " · its pod is stopped" : u.stale ? " · not reporting" : ""}</span></a>`).join("")}` : ""}
-${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? " open" : ""}><summary class="hd">Ended in the last day (${ended.length})</summary>${ended.map((x) => runLink(x, `${esc(x.u.id)} · ${runCompleted(x.r) ? "completed" : x.r.status === "closed" ? "finished" : esc(x.r.status)}`, " idle")).join("")}</details>` : ""}
-</nav>`;
+    const { nav, ended } = liveRunsNav(vs, now, sel ?? undefined);
     if (!sel)
       return page(
         c,
@@ -110,9 +91,20 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const lines = store.liveLines.runTail(u.id, r.id, 600);
     const after = lines.at(-1)?.id ?? 0;
     const w = c.req.query("w") || "all";
-    // The filters: everyone, each lane (working or not), the planner, the judge, the advisors, you.
-    const chip = (key: string, label: string, title = "", working = false) =>
-      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key, view: "lines" })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : ""}${esc(label)}</a>`;
+    // The filters: everyone, each lane (working or not), the planner, the judge, the advisors and
+    // each advisor with lines (goal 188), you. Each kind of agent has its colour.
+    const chip = (key: string, label: string, title = "", working = false, kind = "") =>
+      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key, view: "lines" })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : kind ? `<span class="kdot k-${esc(kind)}"></span>` : ""}${esc(label)}</a>`;
+    const ADVISOR_ORDER = ["teacher", "merger", "auditor", "reviewer", "writer", "advisor"];
+    const advisorChips = [
+      ...new Set(lines.filter((e) => e.source.startsWith("advisor:")).map((e) => e.source)),
+    ]
+      .sort(
+        (a, b) =>
+          ADVISOR_ORDER.indexOf(agentKind(a)) - ADVISOR_ORDER.indexOf(agentKind(b)) ||
+          a.localeCompare(b, undefined, { numeric: true }),
+      )
+      .map((s) => chip(s.slice(8), advisorLabel(s.slice(8)), "", false, agentKind(s)));
     const chips = [
       chip("all", "Everyone"),
       ...lanes.map((l) => {
@@ -122,11 +114,19 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           l,
           work ? `${work.direction}: ${work.focus}` : "between trials",
           Boolean(work) && r.status === "running",
+          "lane",
         );
       }),
-      chip("planner", "Planner"),
-      ...(research ? [] : [chip("judge", "Judge")]),
-      chip("advisors", "Advisors"),
+      chip("planner", "Planner", "", false, "planner"),
+      ...(research ? [] : [chip("judge", "Judge", "", false, "judge")]),
+      chip(
+        "advisors",
+        "Advisors",
+        "every advisor's lines, and the supervisor's own",
+        false,
+        "advisor",
+      ),
+      ...advisorChips,
       chip("you", "You", "your messages, and who read them"),
     ].join("");
     // Each lane's trial at work in its program's own terminal (goal 169), a worker in Pi in its Pi
@@ -142,46 +142,61 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const calls = (workOf(u.summary)?.terminals ?? []).filter((x) => x.run === r.id);
     const advising = calls.filter((x) => terminalSource(x.id) === "supervisor");
     // Live opens on the agents' terminals while some run in one (goal 181, from the owner's
-    // mockup): each lane's trial at work and the planner's call side by side, each with its own
-    // console; the lines and the advisors' terminals are tabs beside it.
+    // mockup), each with its own console: every lane's trial at work, the planner's call and each
+    // advisor's, in one row with the lines' filters' names and colours (goal 188).
     const terminalMode = u.settings?.program_mode === "terminal" && !sel.earlier;
-    const lanePanes = inTerminals.map(([lane, work]) => ({
-      rig: u.id,
-      run: r.id,
-      trial: work.trial,
-      ended: false,
-      title: `${lane} · ${work.direction}`,
-    }));
     const plannerCall = calls.find((x) => x.role === "planner");
-    const agentPanes = [
-      ...lanePanes,
+    const panes = [
+      ...inTerminals.map(([lane, work]) => ({
+        rig: u.id,
+        run: r.id,
+        trial: work.trial,
+        ended: false,
+        title: `${lane} · ${work.direction}`,
+        label: lane,
+        key: lane,
+        kind: "lane",
+      })),
       ...(plannerCall
-        ? [{ rig: u.id, run: r.id, trial: plannerCall.id, ended: false, title: "planner" }]
+        ? [
+            {
+              rig: u.id,
+              run: r.id,
+              trial: plannerCall.id,
+              ended: false,
+              title: "planner",
+              label: "planner",
+              key: "planner",
+              kind: "planner",
+            },
+          ]
         : []),
+      ...advising.map((x) => ({
+        rig: u.id,
+        run: r.id,
+        trial: x.id,
+        ended: false,
+        title: `${advisorLabel(x.role)} (advisor)`,
+        label: advisorLabel(x.role),
+        key: x.role,
+        kind: agentKind(`advisor:${x.role}`),
+      })),
     ];
-    const advisorPanes = advising.map((x) => ({
-      rig: u.id,
-      run: r.id,
-      trial: x.id,
-      ended: false,
-      title: `${x.role} (advisor)`,
-    }));
+    // Two choices (the owner's, 2026-11-03): Terminals or Lines, then whose. The filter (`w`)
+    // is the same for both, so each opens on the agent the other showed.
     const asked = c.req.query("view");
-    const view =
-      asked === "lines" || asked === "advisors" || asked === "terminals"
+    const view: "terminals" | "lines" = !terminalMode
+      ? "lines"
+      : asked === "lines" || asked === "terminals"
         ? asked
-        : c.req.query("w") || !terminalMode || !agentPanes.length
-          ? "lines"
-          : "terminals";
-    const tab = (v: typeof view, label: string, n?: number) =>
-      `<a class="lchip ltab${view === v ? " on" : ""}" href="${runLiveHref(r, { view: v })}">${esc(label)}${n ? ` <span class="muted">${n}</span>` : ""}</a>`;
+        : asked === "advisors" || (!c.req.query("w") && panes.length)
+          ? "terminals"
+          : "lines";
+    const seg = (v: typeof view, label: string, n?: number) =>
+      `<a class="${view === v ? "on" : ""}" href="${runLiveHref(r, { view: v, ...(w !== "all" ? { w } : {}) })}" data-keep-w${view === v ? ' aria-current="page"' : ""}>${esc(label)}${n ? ` <span class="muted">${n}</span>` : ""}</a>`;
     const tabs = terminalMode
-      ? `<nav class="ltabs" aria-label="Views">${tab("terminals", "Terminals", agentPanes.length)}${tab("lines", "Lines")}${tab("advisors", "Advisors", advisorPanes.length)}</nav>`
+      ? `<nav class="lseg" aria-label="Show">${seg("terminals", "Terminals", panes.length)}${seg("lines", "Lines")}</nav>`
       : "";
-    const grid = (panes: typeof agentPanes, none: string) =>
-      panes.length
-        ? terminalGrid(dash, c, panes)
-        : `<div class="empty" style="margin:auto">${none}</div>`;
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
       ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
@@ -221,9 +236,15 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const to =
       lanes.includes(w) || w === "planner"
         ? w
-        : w === "advisors" || r.has_agents === false
-          ? "advisors"
-          : "all";
+        : /^(teacher-\d+|merged-by)$/.test(w)
+          ? "teachers"
+          : w === "auditor"
+            ? "auditor"
+            : /^reviewer-\d+$/.test(w)
+              ? "review_panel"
+              : w === "advisors" || r.has_agents === false || /^(synthesizer|final-writer)$/.test(w)
+                ? "advisors"
+                : "all";
     // The review panel reads only for a goal it reviews (a goal checked by review) or a research
     // run's questions (goal 112).
     const reviewed = panelReviews(store, runCampaign(r));
@@ -295,17 +316,13 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         view === "lines"
           ? `<div class="lchips">${tabs}${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
 <div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>`
-          : `<div class="lchips">${tabs}<span class="grow"></span><span data-part="lkept">${keptBox}</span></div>${
-              view === "terminals"
-                ? grid(
-                    agentPanes,
-                    "No agent of this run is at work in its terminal now. A lane's trial and the planner's call show here as they start.",
-                  )
-                : grid(
-                    advisorPanes,
-                    "No advisor of this run is at work now. The teachers, the auditor and the review panel each show here, in their terminal, while they work.",
-                  )
-            }`
+          : panes.length
+            ? terminalGrid(dash, c, panes, {
+                lead: tabs,
+                tail: `<span data-part="lkept">${keptBox}</span>`,
+                shown: w,
+              })
+            : `<div class="lchips">${tabs}<span class="grow"></span><span data-part="lkept">${keptBox}</span></div><div class="empty" style="margin:auto">No agent of this run is at work in its terminal now. A lane's trial, the planner's call and each advisor's show here as they start.</div>`
       }
 <div data-part="lnotice">${notice}</div>${box}</section></div>`,
       vs,

@@ -101,7 +101,8 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
   if (signed) {
     const refused = harnessRefusal(store, rig, b);
     if (refused) return refuse(refused[1]);
-  } else if (subject.source !== "supervisor")
+  } else if (subject.source !== "supervisor" && !subject.source.startsWith("advisor:"))
+    // The supervisor's unsigned lines: its own, and its advisors' (goal 188).
     return refuse("unsigned lines must be the supervisor's own");
   const lines = read.entries.filter((e) => onSubject(e, subject));
   const leftOut =

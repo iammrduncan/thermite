@@ -1,6 +1,6 @@
 import { LiveLog } from "../../core/live.ts";
 
-export { type LiveBusConfig, LiveCounts, publishLiveOnce } from "./bus.ts";
+export { followLive, type LiveBusConfig, LiveCounts, publishLiveOnce } from "./bus.ts";
 export { relayScreens, relayScreensOnce, type ScreensRelayConfig } from "./screens.ts";
 
 /**
