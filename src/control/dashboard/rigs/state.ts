@@ -7,7 +7,7 @@ import { tail, updateScript } from "../../machines/index.ts";
 import { checkRigPlace, controlImages, NO_RIG_BUS } from "../../rigs/index.ts";
 import { rigHref } from "../../ui/urls.ts";
 import { backTo, type Dashboard, wantsJson } from "../context.ts";
-import { machinesOfRig } from "./machine-parts.ts";
+import { leaderPoolOf, machinesOfRig, poolsOf } from "./machine-parts.ts";
 import { rigHelpers, updateFollowUrl } from "./shared.ts";
 
 /**
@@ -55,10 +55,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
     if (!parts.rigBus) throw new Error(NO_RIG_BUS);
     store.machines.setRigStatus(rig, "updating");
     // Every machine of the rig moves (goal 205): its leader, then each follower.
-    const followers = r.followers?.machines.map((f) => ({
-      machine: f.machine,
-      gpus: f.gpus.length,
-    }));
+    const followers = r.followers?.machines.map((f) => ({ machine: f.machine, pools: poolsOf(f) }));
     for (const p of machinesOfRig(store, opts.secrets, r)) {
       const on = p.follower ? `follower ${p.machine}: ` : "";
       if (!p.target) {
@@ -76,8 +73,8 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
           root: p.root,
           bus: parts.rigBus,
           ...(p.follower
-            ? { follower: p.follower }
-            : { followers, judgeHere: r.followers?.judgeHere }),
+            ? { follower: p.follower, pools: p.pools }
+            : { followers, leader: leaderPoolOf(r) }),
         }),
         [],
         30 * 60_000,

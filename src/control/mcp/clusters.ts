@@ -51,7 +51,19 @@ export function registerAddClusterRig(tools: ToolContext): void {
               z.object({
                 machine: z.string().min(1).describe(RIG_ID_SENTENCE),
                 node: z.string().min(1),
-                gpus: z.number().int().min(0),
+                gpus: z.number().int().min(0).describe("Its GPUs the judge measures on"),
+                workers: z
+                  .number()
+                  .int()
+                  .min(0)
+                  .optional()
+                  .describe(
+                    "Its GPUs the lanes work on: their trials run on this node (default 0)",
+                  ),
+                cpu: z
+                  .enum(["judge", "workers"])
+                  .optional()
+                  .describe("With no GPU for either: whose its CPUs are (default the judge's)"),
                 device_class: z.string().min(1).optional(),
                 storage_gb: z.number().int().min(1).optional(),
                 cpus: z.number().positive().optional(),
@@ -61,13 +73,19 @@ export function registerAddClusterRig(tools: ToolContext): void {
             .max(16)
             .optional()
             .describe(
-              "A rig over several machines: its followers, each a node of the cluster whose GPUs the judge measures on, with its DRA device class when not the rig's, its volume and its CPUs and memory. `node` is then the leader's, and the leader's harness judges on the followers' GPUs too",
+              "A rig over several machines: its followers, each a node of the cluster with its GPUs for the judge and for the workers, its DRA device class when not the rig's, its volume and its CPUs and memory. `node` is then the leader's: it keeps the run's records and hands out the work",
             ),
           judge_here: z
             .boolean()
             .optional()
             .describe(
               "With followers: false when the leader's own GPUs are all the workers', so the leader judges only on its followers' GPUs (default true)",
+            ),
+          lanes_here: z
+            .boolean()
+            .optional()
+            .describe(
+              "With followers: false when the leader's own GPUs are all the judge's, so the lanes work only on the followers' workers' GPUs (default true)",
             ),
         },
       },
@@ -90,12 +108,15 @@ export function registerAddClusterRig(tools: ToolContext): void {
             machine: string;
             node: string;
             gpus: number;
+            workers?: number;
+            cpu?: "judge" | "workers";
             device_class?: string;
             storage_gb?: number;
             cpus?: number;
             memory_gib?: number;
           }[];
           judge_here?: boolean;
+          lanes_here?: boolean;
         }) => {
           const r = await addClusterRig(
             opts.parts,
@@ -116,12 +137,15 @@ export function registerAddClusterRig(tools: ToolContext): void {
                 machine: f.machine,
                 node: f.node,
                 gpus: f.gpus,
+                workers: f.workers,
+                cpu: f.cpu,
                 deviceClass: f.device_class,
                 storageGi: f.storage_gb,
                 cpus: f.cpus,
                 memoryGi: f.memory_gib,
               })),
               judgeHere: a.judge_here,
+              lanesHere: a.lanes_here,
             },
             actor,
           );

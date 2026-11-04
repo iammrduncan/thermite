@@ -1,3 +1,4 @@
+import type { FollowerPools, LeaderPool } from "../../../core/followers.ts";
 import type { MachineFacts } from "../../machines/index.ts";
 import type { SecretBox } from "../../secrets.ts";
 import type { ControlStore, MachineRig } from "../../store/index.ts";
@@ -14,6 +15,7 @@ export function machinesOfRig(
 ): {
   machine: string;
   gpus: number[];
+  pools?: FollowerPools | undefined;
   root: boolean;
   follower?: string | undefined;
   target?:
@@ -38,10 +40,27 @@ export function machinesOfRig(
     { machine: r.machine, gpus: r.gpus, root: r.root, target: targetOf(r.machine) },
     ...(r.followers?.machines ?? []).map((f) => ({
       machine: f.machine,
-      gpus: f.gpus,
+      // The judge's first, then the workers': the container numbers them so.
+      gpus: [...f.gpus, ...(f.workers ?? [])],
+      pools: poolsOf(f),
       root: rootOf(f.machine),
       follower: f.machine,
       target: targetOf(f.machine),
     })),
   ];
 }
+
+/** A machine rig's follower's GPUs by pool (core/followers.ts). */
+export const poolsOf = (f: NonNullable<MachineRig["followers"]>["machines"][number]) => ({
+  judge: f.gpus.length,
+  workers: f.workers?.length ?? 0,
+  ...(f.cpu ? { cpu: f.cpu } : {}),
+});
+
+/** Whose a machine rig's leader's own GPUs are. */
+export const leaderPoolOf = (r: MachineRig): LeaderPool =>
+  r.followers?.judgeHere === false
+    ? "workers"
+    : r.followers?.lanesHere === false
+      ? "judge"
+      : "shared";

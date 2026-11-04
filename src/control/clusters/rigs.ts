@@ -1,4 +1,5 @@
 import { errorText } from "../../common/errors.ts";
+import { poolsRefusal } from "../../core/followers.ts";
 import { RIG_ID_SENTENCE } from "../../core/ids.ts";
 import { PROGRAM_MODE_DEFAULT, type ProgramMode } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
@@ -138,7 +139,12 @@ export interface ClusterRigRequest {
     | {
         machine: string;
         node: string;
+        /** Its judge's GPUs. */
         gpus: number;
+        /** Its workers' GPUs, on which lanes work (step 2); none unless given. */
+        workers?: number | undefined;
+        /** With no GPU: whose its CPUs are; the judge's unless given. */
+        cpu?: "judge" | "workers" | undefined;
         deviceClass?: string | undefined;
         storageGi?: number | undefined;
         cpus?: number | undefined;
@@ -147,6 +153,8 @@ export interface ClusterRigRequest {
     | undefined;
   /** False: the leader's own GPUs are all the workers'; it judges only on its followers'. */
   judgeHere?: boolean | undefined;
+  /** False: the leader's own GPUs are all the judge's; its lanes work on its followers'. */
+  lanesHere?: boolean | undefined;
 }
 
 /**
@@ -263,16 +271,18 @@ export async function addClusterRig(
   // GPUs: what the slot's quota allows through the device plugin, or of the DRA device class.
   const devices = quotaRefusal(namespace, slotQuota, { gpus, deviceClass });
   if (devices) return fail(devices);
-  if (i.cuda === "13" && !gpus)
-    return fail("A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.");
-  // Left out: the CUDA its GPUs take, where control can tell (an arm64 node, a Blackwell GPU).
-  const cuda = gpus
-    ? (i.cuda ?? cudaOfPlace(facts, { deviceClass, node: i.node })?.cuda)
-    : undefined;
-  const images = controlImages(parts, gpus, cuda);
-  if (typeof images === "string") return fail(images);
   const followers = await followersOf(parts, k, facts, { rig, namespace, node, i });
   if (typeof followers === "string") return fail(followers);
+  // Every machine of a rig runs one image: the CUDA one when any of them has a GPU (goal 205).
+  const anyGpus = gpus || followers.reduce((n, f) => n + f.gpus + (f.workers ?? 0), 0);
+  if (i.cuda === "13" && !anyGpus)
+    return fail("A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.");
+  // Left out: the CUDA its GPUs take, where control can tell (an arm64 node, a Blackwell GPU).
+  const cuda = anyGpus
+    ? (i.cuda ?? cudaOfPlace(facts, { deviceClass, node: i.node })?.cuda)
+    : undefined;
+  const images = controlImages(parts, anyGpus, cuda);
+  if (typeof images === "string") return fail(images);
   const token = newToken();
   store.enrollments.enroll(rig, token.sha256, by);
   store.clusters.addRig({
@@ -295,7 +305,13 @@ export async function addClusterRig(
       controlUrl: controlAddress(parts),
       ...(openings.length ? { openings } : {}),
       ...(ingress ? { ingress } : {}),
-      ...(followers.length ? { followers, judgeHere: i.judgeHere !== false } : {}),
+      ...(followers.length
+        ? {
+            followers,
+            judgeHere: i.judgeHere !== false,
+            ...(i.lanesHere === false ? { lanesHere: false } : {}),
+          }
+        : {}),
     },
     created_by: by,
   });
@@ -332,6 +348,7 @@ export const clusterPlan = (
   programMode,
   followers: r.spec.followers,
   judgeHere: r.spec.judgeHere,
+  lanesHere: r.spec.lanesHere,
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
   reach: parts.store.reachable.list(),
@@ -370,8 +387,16 @@ async function followersOf(
     if (facts.nodes.length && !node) return `${k.name} has no node ${f.node} that control can see.`;
     if (arch && node?.arch && node.arch !== arch)
       return `${f.node} is ${node.arch} and the leader's node ${arch}: a rig's machines run one image.`;
-    if (!Number.isInteger(f.gpus) || f.gpus < 0 || f.gpus > MAX_RIG_GPUS)
+    const workers = f.workers ?? 0;
+    if (
+      !Number.isInteger(f.gpus) ||
+      !Number.isInteger(workers) ||
+      f.gpus < 0 ||
+      workers < 0 ||
+      f.gpus + workers > MAX_RIG_GPUS
+    )
       return `A follower takes from none to ${MAX_RIG_GPUS} GPUs.`;
+    const cpu = f.gpus + workers === 0 && f.cpu === "workers" ? ("workers" as const) : undefined;
     const deviceClass = f.deviceClass || undefined;
     // Checked where control may list the classes: a slot's role often can't.
     if (deviceClass && facts.device_classes.length && !facts.device_classes.includes(deviceClass))
@@ -392,7 +417,11 @@ async function followersOf(
         return `${f.machine}: ${errorText(err)}`;
       }
     }
-    const devices = quotaRefusal(o.namespace, quota, { gpus: f.gpus, deviceClass, resources });
+    const devices = quotaRefusal(o.namespace, quota, {
+      gpus: f.gpus + workers,
+      deviceClass,
+      resources,
+    });
     if (devices) return `${f.machine}: ${devices}`;
     if (k.placement === "slot") {
       const net = await slotNetwork(
@@ -414,12 +443,23 @@ async function followersOf(
       machine: f.machine,
       node: f.node,
       gpus: f.gpus,
+      ...(workers ? { workers } : {}),
+      ...(cpu ? { cpu } : {}),
       ...(deviceClass ? { deviceClass } : {}),
       storageGi,
       ...(resources ? { resources } : {}),
     });
   }
-  return out;
+  // The judge needs a GPU to measure on, and the lanes one to work on (core/followers.ts).
+  const leader = o.i.judgeHere === false ? "workers" : o.i.lanesHere === false ? "judge" : "shared";
+  const refused = poolsRefusal(
+    leader,
+    out.map((f) => ({
+      machine: f.machine,
+      pools: { judge: f.gpus, workers: f.workers ?? 0, cpu: f.cpu },
+    })),
+  );
+  return refused ?? out;
 }
 
 /** Sets a rig up on a cluster, in the background: one apply, then the first report. */

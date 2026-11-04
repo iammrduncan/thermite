@@ -437,5 +437,34 @@ describe("a rig over several machines over SSH (goal 205)", () => {
       await s.post("/ui/rigs/add", { machine: "box", rig: "pair-b", m_follow__box: "box" }),
       /Choose another machine to follow box/,
     );
+    // Step 2d: the leader the judge's only, its follower's CPUs the workers'.
+    assert.match(
+      await s.post("/ui/rigs/add", {
+        machine: "box",
+        rig: "pair-c",
+        m_follow__box: "box2",
+        m_lead__box: "judge",
+      }),
+      /give the workers a follower's GPU/,
+    );
+    assert.equal(
+      await s.post("/ui/rigs/add", {
+        machine: "box",
+        rig: "pair-c",
+        m_follow__box: "box2",
+        m_lead__box: "judge",
+        m_fcpu__box__box2: "workers",
+      }),
+      "/ui/rigs/pair-c",
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    assert.deepEqual(s.store.machines.rig("pair-c")?.followers, {
+      machines: [{ machine: "box2", gpus: [], cpu: "workers" }],
+      judgeHere: true,
+      lanesHere: false,
+    });
+    const leaderUnits = sent.filter((x) => x.address === "box").at(-1)?.script ?? "";
+    assert.match(leaderUnits, /Environment=THERMITE_FOLLOWERS=box2=0\+1/);
+    assert.match(leaderUnits, /Environment=THERMITE_LOCAL_LANES=0/);
   });
 });

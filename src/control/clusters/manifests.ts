@@ -1,4 +1,5 @@
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
+import { leaderEnv } from "../../core/followers.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import type { ReachEntry } from "../../core/reach.ts";
@@ -72,13 +73,18 @@ export interface ClusterRigPlan {
   followers?: FollowerPlan[] | undefined;
   /** False: the leader's own GPUs are all the workers', and it judges only on its followers'. */
   judgeHere?: boolean | undefined;
+  /** False: the leader's own GPUs are all the judge's, and its lanes work on its followers'. */
+  lanesHere?: boolean | undefined;
 }
 
 /** A follower as control plans it: its node, GPUs, volume, and CPUs and memory. */
 interface FollowerPlan {
   machine: string;
   node: string;
+  /** Its judge's GPUs, then its workers'; with neither, whose its CPUs are. */
   gpus: number;
+  workers?: number | undefined;
+  cpu?: "judge" | "workers" | undefined;
   deviceClass?: string | undefined;
   storageGi: number;
   resources?: { cpus: number; memoryGi: number } | undefined;
@@ -155,15 +161,14 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
   const ns = p.namespace;
   const followers = p.followers ?? [];
   if (followers.length && !p.node) throw new Error("a rig with followers needs its leader's node");
-  // The leader judges on its followers' GPUs (goal 205), and on its own unless they are all the
-  // workers'.
-  const leading: Record<string, string> = followers.length
-    ? {
-        // A follower with no GPU judges on its CPU: one device all the same.
-        THERMITE_FOLLOWERS: followers.map((f) => `${f.machine}=${Math.max(1, f.gpus)}`).join(","),
-        ...(p.judgeHere === false ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
-      }
-    : {};
+  // The leader's followers by pool, and its own GPUs' pool (goal 205, core/followers.ts).
+  const leading = leaderEnv(
+    followers.map((f) => ({
+      machine: f.machine,
+      pools: { judge: f.gpus, workers: f.workers ?? 0, cpu: f.cpu },
+    })),
+    p.judgeHere === false ? "workers" : p.lanesHere === false ? "judge" : "shared",
+  );
   const meta = (name: string, component?: "harness" | "supervisor") => ({
     name,
     namespace: ns,

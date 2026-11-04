@@ -42,8 +42,8 @@ const machineOf = (r: Row): Machine => ({
 
 /**
  * A machine rig's followers (goal 205), made by the store's migration to schema version 30: each
- * another machine with the GPUs the judge measures on there, and whether the leader's own GPUs
- * are the workers' only; JSON, null for a rig of one machine.
+ * another machine with its GPUs in the judge's pool or the workers', and the pool of the leader's
+ * own GPUs; JSON, null for a rig of one machine.
  */
 export function machineRigFollowersColumn(db: DatabaseSync): void {
   const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
@@ -51,11 +51,21 @@ export function machineRigFollowersColumn(db: DatabaseSync): void {
     db.exec("alter table machine_rig add column followers text");
 }
 
-/** A machine rig's followers: each machine and its GPUs, all the judge's. */
+/**
+ * A machine rig's followers: each machine with its judge's GPUs and its workers' (step 2), and
+ * with neither, whose its CPUs are; and the pool of the leader's own GPUs.
+ */
 interface MachineFollowers {
-  machines: { machine: string; gpus: number[] }[];
+  machines: {
+    machine: string;
+    gpus: number[];
+    workers?: number[] | undefined;
+    cpu?: "judge" | "workers" | undefined;
+  }[];
   /** False: the leader's own GPUs are all the workers'. */
   judgeHere: boolean;
+  /** False: the leader's own GPUs are all the judge's, and no lane runs on it. */
+  lanesHere?: boolean | undefined;
 }
 
 /** A rig control set up on a machine. */

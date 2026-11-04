@@ -82,7 +82,7 @@ export const ADD_RIG_JS = `
       const slot = get("k_slot");
       sum.textContent = "Control will enroll " + name + " and create it on " + k + (slot ? ", in the slot " + slot : ", in a namespace of its own") +
         ": a secret with its tokens, a " + (get("k_size") || "100") + " GB volume, and the harness and supervisor pods" + (gpus ? " with " + gpus + " GPU" + (gpus > 1 ? "s" : "") : "") +
-        (followers ? ", and on " + followers + " more node" + (followers > 1 ? "s" : "") + " a volume, harness and supervisor of each, which follow it and on whose GPUs the judge measures" : "") +
+        (followers ? ", and on " + followers + " more node" + (followers > 1 ? "s" : "") + " a volume, harness and supervisor of each, which follow it: the judge measures on the judge's GPUs and the lanes work on the workers'" : "") +
         ". Then it waits for the rig's first report. You need to do nothing in the cluster.";
       return;
     }
@@ -120,7 +120,7 @@ export const ADD_RIG_JS = `
       "Judge: GPU " + gpus.slice(0, j).join(", ") + ". Agents' test runs: GPU " + gpus.slice(j).join(", ") + ". They never wait for each other.";
     const machine = place.startsWith("machine:") ? place.slice(8) : "";
     sum.textContent = machine
-      ? "Control will enroll " + name + ", write its files and services on " + machine + (gpus.length ? " with GPU" + (gpus.length > 1 ? "s " + gpus.join(" and ") : " " + gpus[0]) : " (CPU only)") + (followers ? ", and on " + followers + " more machine" + (followers > 1 ? "s" : "") + " that follow it, where the judge measures" : "") + ", start it, and wait for its first report. You need to do nothing on the machine."
+      ? "Control will enroll " + name + ", write its files and services on " + machine + (gpus.length ? " with GPU" + (gpus.length > 1 ? "s " + gpus.join(" and ") : " " + gpus[0]) : " (CPU only)") + (followers ? ", and on " + followers + " more machine" + (followers > 1 ? "s" : "") + " that follow it, the judge on the judge's GPUs and the lanes on the workers'" : "") + ", start it, and wait for its first report. You need to do nothing on the machine."
       : "Choose a machine or a cluster.";
   };
   // A CUDA chosen by hand stays as chosen.

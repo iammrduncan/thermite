@@ -210,4 +210,58 @@ describe("Add a rig's More machines, and the rig's page (goal 205)", () => {
     assert.match(page, /<b>gpu-node-2<\/b> <span class="chip">follower<\/span>/);
     assert.match(page, /its supervisor has not registered on the bus yet/);
   });
+
+  test("a follower's GPUs go to the judge and the workers (step 2d): one claim, the judge's first", async () => {
+    const { f, s, mcp } = await withCluster({
+      moreNodes: [{ name: "gpu-node-2" }, { name: "gpu-node-3" }],
+    });
+    assert.deepEqual(
+      await mcp.call("add_cluster_rig", {
+        ...PAIR,
+        rig: "pair-3",
+        followers: [
+          { machine: "both-1", node: "gpu-node-2", gpus: 1, workers: 1 },
+          { machine: "lanes-1", node: "gpu-node-3", gpus: 0, workers: 1 },
+        ],
+        judge_here: true,
+        lanes_here: false,
+      }),
+      { error: false, body: { rig: "pair-3", status: "deploying" } },
+    );
+    await settle(f, 1);
+    const objects = applied(f);
+    const leader = need(objects, "Deployment", "thermite-pair-3-harness");
+    assert.equal(envOf(leader).THERMITE_FOLLOWERS, "both-1=1+1,lanes-1=0+1");
+    assert.equal(envOf(leader).THERMITE_LOCAL_LANES, "0");
+    assert.equal(envOf(leader).THERMITE_LOCAL_JUDGE, undefined);
+    const both = need(objects, "Deployment", "thermite-pair-3-both-1-harness");
+    assert.equal(envOf(both).THERMITE_GPU_INDEX, "0");
+    assert.equal(envOf(both).THERMITE_DEV_GPU_INDEX, "1");
+    const limits = (d: Obj) =>
+      (
+        d.spec as {
+          template: { spec: { containers: { resources: { limits?: Record<string, unknown> } }[] } };
+        }
+      ).template.spec.containers[0]?.resources.limits;
+    assert.equal(limits(both)?.["nvidia.com/gpu"], 2);
+    const lanes = need(objects, "Deployment", "thermite-pair-3-lanes-1-harness");
+    assert.equal(envOf(lanes).THERMITE_GPU_INDEX, "0");
+    assert.equal(envOf(lanes).THERMITE_DEV_GPU_INDEX, undefined);
+    assert.equal(s.store.clusters.rig("pair-3")?.spec.lanesHere, false);
+    const page = await s.page("/ui/rigs/pair-3");
+    assert.match(page, /1 GPU, the judge's/);
+    assert.match(page, /1 GPU the judge's, 1 GPU the workers'/);
+  });
+
+  test("pools that leave the lanes nowhere are refused", async () => {
+    const { mcp } = await withCluster();
+    const r = await mcp.call("add_cluster_rig", {
+      ...PAIR,
+      rig: "pair-4",
+      judge_here: true,
+      lanes_here: false,
+    });
+    assert.equal(r.error, true);
+    assert.match(JSON.stringify(r.body), /give the workers a follower's GPU/);
+  });
 });

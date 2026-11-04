@@ -5,9 +5,10 @@ import { esc } from "../../ui/components/index.ts";
 
 /**
  * Add a rig's More machines for a cluster (goal 205, from the owner's mockup): the other ready
- * nodes of the cluster, each of which can follow the rig's own node, with the GPUs the judge
- * measures on there, their DRA device class when it is not the rig's, its CPUs, memory and
- * volume; and whether the leader's own GPUs are the judge's and the workers' or the workers' only.
+ * nodes of the cluster, each of which can follow the rig's own node, with how many of its GPUs
+ * are the judge's and how many the workers' (with none, whose its CPUs are), their DRA device
+ * class when it is not the rig's, its CPUs, memory and volume; and the pool of the leader's own
+ * GPUs.
  * A node whose name is no rig's name can't be a follower, and is left out.
  */
 export function followerChoices(cluster: string, f: ClusterFacts): string {
@@ -25,7 +26,9 @@ export function followerChoices(cluster: string, f: ClusterFacts): string {
         .join(", ");
       return `<label class="ch"><input type="checkbox" name="k_follow__${kn}" value="${nn}" style="margin:2px 8px 0 0"><span><b>${nn}</b>${what ? ` <span class="muted small">${esc(what)}</span>` : ""}</span></label>
 <div class="g3" data-follow-for="${kn}:${nn}" hidden>
-<label class="fd">${infoLabel("GPUs for the judge", "How many of this node's GPUs the judge measures on. Every GPU of a follower is the judge's.")}<select name="k_fgpus__${kn}__${nn}">${Array.from({ length: most }, (_, i) => opt(String(i + 1), String(i + 1))).join("")}</select></label>
+<label class="fd">${infoLabel("GPUs for the judge", "How many of this node's GPUs the judge measures on.")}<select name="k_fgpus__${kn}__${nn}">${Array.from({ length: most + 1 }, (_, i) => opt(String(i), String(i), i === 1)).join("")}</select></label>
+<label class="fd">${infoLabel("GPUs for the workers", "How many of this node's GPUs the lanes work on: their trials run on this node then, with their workspace and their own checks. A node with no GPU for the judge gives the workers one for now.")}<select name="k_fwork__${kn}__${nn}">${Array.from({ length: most + 1 }, (_, i) => opt(String(i), String(i))).join("")}</select></label>
+<label class="fd">${infoLabel("With no GPU, its CPUs", "With no GPU for either here: the judge measures on this node's CPUs, or the lanes work there.")}<select name="k_fcpu__${kn}__${nn}">${opt("judge", "the judge's")}${opt("workers", "the workers'")}</select></label>
 ${
   f.device_classes.length
     ? `<label class="fd">${infoLabel("DRA device class", "When the rig's GPUs come through DRA and this node's GPU is in another device class than the rig's, such as a class for any GB10.")}<select name="k_fmode__${kn}__${nn}">${opt("", "the rig's")}${f.device_classes.map((d) => opt(`dra:${d}`, d)).join("")}</select></label>`
@@ -37,15 +40,24 @@ ${
 </div>`;
     })
     .join("");
-  return `<div class="follow" style="margin-top:14px"><h3 style="font-size:14px;margin:0 0 4px">More machines</h3><p class="lead">The rig can run on more nodes of ${kn}. The node chosen above leads: it keeps the run and its lanes work there. Each node you add here follows it, and the judge measures on its GPUs.</p>
-<label class="fd" style="max-width:420px">${infoLabel("The leader's own GPUs", "With followers: shared by the judge and the workers, as on a rig of one node, or the workers' only, so the judge measures on the followers' GPUs alone and the lanes' own runs never wait for it.")}<select name="k_lead__${kn}">${opt("shared", "the judge's and the workers'")}${opt("workers", "the workers' only: the judge measures on the followers'")}</select></label>
+  return `<div class="follow" style="margin-top:14px"><h3 style="font-size:14px;margin:0 0 4px">More machines</h3><p class="lead">The rig can run on more nodes of ${kn}. The node chosen above leads: it keeps the run's records and hands out the work. Each node you add here follows it, and its GPUs go to the judge or to the workers: the judge measures on the judge's, and the lanes work on the workers'.</p>
+${leaderChoice(`k_lead__${kn}`, "node")}
 <div class="stack" style="margin-top:10px">${rows}</div></div>`;
 }
 
+/** The leader's own GPUs' pool, as both kinds of More machines offer it (core/followers.ts). */
+function leaderChoice(name: string, one: string): string {
+  return `<label class="fd" style="max-width:420px">${infoLabel(
+    "The leader's own GPUs",
+    `With followers: shared by the judge and the workers, as on a rig of one ${one}; the workers' only, so the judge measures on the followers' GPUs alone and the lanes' own runs never wait for it; or the judge's only, so the lanes work on the followers' GPUs and nothing but the judge runs beside its measurements.`,
+  )}<select name="${name}"><option value="shared">the judge's and the workers'</option><option value="workers">the workers' only: the judge measures on the followers'</option><option value="judge">the judge's only: the lanes work on the followers'</option></select></label>`;
+}
+
 /**
- * Add a rig's More machines for a machine over SSH (goal 205): the other ready machines, each of
- * which can follow the rig, with the GPUs the judge measures on there (a free GPU each), and
- * whether the leader's own GPUs are the judge's and the workers' or the workers' only.
+ * Add a rig's More machines for a machine over SSH (goal 205, from the owner's mockup): the other
+ * ready machines, each of which can follow the rig, with what each free GPU there is for: the
+ * judge, the workers or nothing; with no GPU, whose its CPUs are. And the pool of the leader's
+ * own GPUs.
  */
 export function machineFollowerChoices(
   leader: string,
@@ -59,14 +71,22 @@ export function machineFollowerChoices(
       const gpus = o.gpus
         .map(
           (g) =>
-            `<label class="gr${g.used ? " used" : ""}"><input type="checkbox" name="m_fgpus__${kn}__${on}" value="${g.index}"${g.used ? " disabled" : ""}><span><b>GPU ${g.index}</b> · ${esc(g.name)}</span><span class="muted small">${g.used ? `used by rig ${esc(g.used)}` : "free: the judge's"}</span></label>`,
+            `<label class="gr${g.used ? " used" : ""}"><span><b>GPU ${g.index}</b> · ${esc(g.name)}</span>${
+              g.used
+                ? `<span class="muted small">used by rig ${esc(g.used)}</span>`
+                : `<select name="m_fgpu__${kn}__${on}__${g.index}" aria-label="What GPU ${g.index} of ${on} is for"><option value="">not used</option><option value="judge" selected>the judge's</option><option value="workers">the workers'</option></select>`
+            }</label>`,
         )
         .join("");
       return `<label class="ch"><input type="checkbox" name="m_follow__${kn}" value="${on}" style="margin:2px 8px 0 0"><span><b>${on}</b> <span class="muted small">a machine over SSH</span></span></label>
-<div data-follow-for="${kn}:${on}" hidden>${gpus ? `<div class="card flat">${gpus}</div>` : `<div class="card"><div class="muted">No NVIDIA GPU: the judge measures on its CPUs.</div></div>`}</div>`;
+<div data-follow-for="${kn}:${on}" hidden>${
+        gpus
+          ? `<div class="card flat">${gpus}</div>`
+          : `<div class="card"><label class="fd" style="max-width:420px">${infoLabel("Its CPUs", "This machine has no NVIDIA GPU: the judge measures on its CPUs, or the lanes work there.")}<select name="m_fcpu__${kn}__${on}"><option value="judge">the judge's</option><option value="workers">the workers'</option></select></label></div>`
+      }</div>`;
     })
     .join("");
-  return `<div class="follow" style="margin-top:14px"><h3 style="font-size:14px;margin:0 0 4px">More machines</h3><p class="lead">The rig can run on more machines. This one leads: it keeps the run and its lanes work here. Each machine you add follows it, and the judge measures on the GPUs you tick there.</p>
-<label class="fd" style="max-width:420px">${infoLabel("The leader's own GPUs", "With followers: shared by the judge and the workers, as on a rig of one machine, or the workers' only, so the judge measures on the followers' GPUs alone and the lanes' own runs never wait for it.")}<select name="m_lead__${kn}"><option value="shared">the judge's and the workers'</option><option value="workers">the workers' only: the judge measures on the followers'</option></select></label>
+  return `<div class="follow" style="margin-top:14px"><h3 style="font-size:14px;margin:0 0 4px">More machines</h3><p class="lead">The rig can run on more machines. This one leads: it keeps the run's records and hands out the work. Each machine you add follows it, and each of its GPUs goes to the judge or to the workers: the judge measures on the judge's, and the lanes work on the workers'.</p>
+${leaderChoice(`m_lead__${kn}`, "machine")}
 <div class="stack" style="margin-top:10px">${rows}</div></div>`;
 }

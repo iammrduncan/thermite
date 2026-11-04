@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { type LeaderPool, poolsRefusal } from "../../../core/followers.ts";
 import { RIG_ID_SENTENCE } from "../../../core/ids.ts";
 import { inBackground } from "../../background.ts";
 import {
@@ -34,7 +35,7 @@ import { esc } from "../../ui/components/index.ts";
 import { ADD_RIG_JS, CUDA_UNSURE } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { followerChoices, machineFollowerChoices } from "./followers.ts";
-import { machinesOfRig } from "./machine-parts.ts";
+import { leaderPoolOf, machinesOfRig, poolsOf } from "./machine-parts.ts";
 import { rigHelpers } from "./shared.ts";
 
 /**
@@ -63,7 +64,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
           // A follower's GPUs on this machine (goal 205) are its rig's too.
           ...(r.followers?.machines ?? [])
             .filter((f) => f.machine === machine)
-            .flatMap((f) => f.gpus.map((g) => [g, r.rig] as const)),
+            .flatMap((f) => [...f.gpus, ...(f.workers ?? [])].map((g) => [g, r.rig] as const)),
         ]),
     );
   /** Why a machine can't take a rig now, or nothing. */
@@ -84,10 +85,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
    */
   const deployRig = async (r: MachineRig, controlToken: string) => {
     const secrets = { controlToken, harnessSupervisorToken: newToken().token };
-    const followers = r.followers?.machines.map((f) => ({
-      machine: f.machine,
-      gpus: f.gpus.length,
-    }));
+    const followers = r.followers?.machines.map((f) => ({ machine: f.machine, pools: poolsOf(f) }));
     try {
       for (const p of machinesOfRig(store, opts.secrets, r)) {
         if (!p.target)
@@ -106,8 +104,8 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
               controlFingerprint: fingerprint(parts.controlPublicKey),
               bus: rigBusOf(parts),
               ...(p.follower
-                ? { follower: p.follower }
-                : { followers, judgeHere: r.followers?.judgeHere }),
+                ? { follower: p.follower, pools: p.pools }
+                : { followers, leader: leaderPoolOf(r) }),
             },
             secrets,
           ),
@@ -370,8 +368,13 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
     if (gpus.length && !(facts.nvidia_ctk && facts.cdi))
       return fail(`${m.name} needs NVIDIA's container toolkit first: install it under Providers.`);
     // A rig over several machines (goal 205): each machine ticked under More machines follows
-    // this one, with the GPUs the judge measures on there.
-    const followers: { machine: string; gpus: number[] }[] = [];
+    // this one, each of its GPUs the judge's or the workers'.
+    const followers: {
+      machine: string;
+      gpus: number[];
+      workers?: number[];
+      cpu?: "workers";
+    }[] = [];
     for (const name of [f[`m_follow__${m.name}`] ?? []].flat().map(String)) {
       const fm = store.machines.get(name);
       if (!fm || name === m.name) return fail(`Choose another machine to follow ${m.name}.`);
@@ -383,22 +386,41 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         return fail(
           `${name} is ${ff.arch} and ${m.name} ${facts.arch}: a rig's machines run one image.`,
         );
-      const fg = [f[`m_fgpus__${m.name}__${name}`] ?? []]
-        .flat()
-        .map((x) => Number(x))
-        .sort((a, b) => a - b);
+      // Each of its GPUs: not used, the judge's or the workers'.
+      const pool = (g: number) => {
+        const v = f[`m_fgpu__${m.name}__${name}__${g}`];
+        return String(Array.isArray(v) ? v[0] : (v ?? ""));
+      };
+      const judgeGpus = ff.gpus.map((g) => g.index).filter((g) => pool(g) === "judge");
+      const workerGpus = ff.gpus.map((g) => g.index).filter((g) => pool(g) === "workers");
       const usedThere = gpusInUse(name);
-      for (const g of fg) {
-        if (!ff.gpus.some((x) => x.index === g)) return fail(`${name} has no GPU ${g}.`);
+      for (const g of [...judgeGpus, ...workerGpus])
         if (usedThere.has(g))
           return fail(`GPU ${g} of ${name} is used by rig ${usedThere.get(g)}.`);
-      }
-      if (fg.length > MAX_RIG_GPUS) return fail(`A follower takes at most ${MAX_RIG_GPUS} GPUs.`);
-      if (fg.length && !(ff.nvidia_ctk && ff.cdi))
+      if (judgeGpus.length + workerGpus.length > MAX_RIG_GPUS)
+        return fail(`A follower takes at most ${MAX_RIG_GPUS} GPUs.`);
+      if (judgeGpus.length + workerGpus.length && !(ff.nvidia_ctk && ff.cdi))
         return fail(`${name} needs NVIDIA's container toolkit first: install it under Providers.`);
-      followers.push({ machine: name, gpus: fg });
+      const cpu = String([f[`m_fcpu__${m.name}__${name}`] ?? ""].flat()[0] ?? "");
+      followers.push({
+        machine: name,
+        gpus: judgeGpus,
+        ...(workerGpus.length ? { workers: workerGpus } : {}),
+        ...(!ff.gpus.length && cpu === "workers" ? { cpu: "workers" as const } : {}),
+      });
     }
-    const anyGpu = gpus.length > 0 || followers.some((x) => x.gpus.length > 0);
+    const lead = String([f[`m_lead__${m.name}`] ?? ""].flat()[0] ?? "");
+    const leaderPool: LeaderPool = lead === "workers" || lead === "judge" ? lead : "shared";
+    const refused = poolsRefusal(
+      leaderPool,
+      followers.map((x) => ({
+        machine: x.machine,
+        pools: { judge: x.gpus.length, workers: x.workers?.length ?? 0, cpu: x.cpu },
+      })),
+    );
+    if (followers.length && refused) return fail(refused);
+    const anyGpu =
+      gpus.length > 0 || followers.some((x) => x.gpus.length + (x.workers?.length ?? 0) > 0);
     if (anyGpu && !parts.rigImages.harnessCuda)
       return fail(
         "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).",
@@ -421,7 +443,8 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         ? {
             followers: {
               machines: followers,
-              judgeHere: String(f[`m_lead__${m.name}`] ?? "") !== "workers",
+              judgeHere: leaderPool !== "workers",
+              ...(leaderPool === "judge" ? { lanesHere: false } : {}),
             },
           }
         : {}),
@@ -456,6 +479,8 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         machine: node,
         node,
         gpus: Number(own("k_fgpus") || "1"),
+        workers: Number(own("k_fwork") || "0"),
+        cpu: own("k_fcpu") === "workers" ? ("workers" as const) : undefined,
         deviceClass: fmode.startsWith("dra:") ? fmode.slice(4) : own("k_fclass") || undefined,
         storageGi: Number(own("k_fsize") || "100"),
         cpus: own("k_fcpus") ? Number(own("k_fcpus")) : undefined,
@@ -479,7 +504,13 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         storageGi: Number(one("k_size") || "100"),
         cpus: num("k_cpus"),
         memoryGi: num("k_mem"),
-        ...(followers.length ? { followers, judgeHere: one("k_lead") !== "workers" } : {}),
+        ...(followers.length
+          ? {
+              followers,
+              judgeHere: one("k_lead") !== "workers",
+              lanesHere: one("k_lead") !== "judge",
+            }
+          : {}),
       },
       "owner:ui",
     );

@@ -1,4 +1,5 @@
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
+import { followerGpuEnv } from "../../core/followers.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import {
@@ -19,7 +20,7 @@ import type { ClusterRigPlan } from "./manifests.ts";
 
 /**
  * A follower of a rig over several machines, on a cluster (goal 205): a node of its own, with its
- * judge GPUs, its own volume and its two parts, the harness started as a follower and its
+ * judge's and workers' GPUs, its own volume and its two parts, the harness started as a follower and its
  * supervisor, which take the leader's asks on the bus. They share the rig's namespace and secret;
  * their objects carry the rig's instance, so the rig's stop, start and removal take them too, and
  * the machine's label, with components of their own, so no selector of the rig's own parts takes
@@ -31,8 +32,12 @@ export interface Follower {
   machine: string;
   /** The node it runs on. */
   node: string;
-  /** Its GPUs, all the judge's. */
+  /** Its judge's GPUs. */
   gpus: number;
+  /** Its workers' GPUs (step 2), after the judge's in its container's numbering. */
+  workers?: number | undefined;
+  /** With no GPU: whose its CPUs are. */
+  cpu?: "judge" | "workers" | undefined;
   /** Its DRA device class, when it is not the rig's. */
   deviceClass?: string | undefined;
   storageGi: number;
@@ -56,7 +61,9 @@ export function followerObjects(p: ClusterRigPlan, f: Follower): Obj[] {
   const n = followerNames(p.rig, f.machine);
   const secret = `thermite-${p.rig}`;
   const deviceClass = f.deviceClass ?? p.deviceClass;
-  const gpu = f.gpus > 0;
+  // The judge's GPUs and the workers', in one claim: the container numbers the judge's first.
+  const count = f.gpus + (f.workers ?? 0);
+  const gpu = count > 0;
   if (gpu && p.gpuMode === "dra" && !deviceClass)
     throw new Error(`follower ${f.machine} needs its DRA device class`);
   const meta = (name: string, component?: string) => ({
@@ -116,7 +123,7 @@ export function followerObjects(p: ClusterRigPlan, f: Follower): Obj[] {
       spec: {
         spec: {
           devices: {
-            requests: [{ name: "gpus", exactly: { deviceClassName: deviceClass, count: f.gpus } }],
+            requests: [{ name: "gpus", exactly: { deviceClassName: deviceClass, count } }],
           },
         },
       },
@@ -125,7 +132,7 @@ export function followerObjects(p: ClusterRigPlan, f: Follower): Obj[] {
     gpu && p.gpuMode === "device-plugin"
       ? {
           ...(f.resources ? { requests: f.resources.harness.requests } : {}),
-          limits: { ...(f.resources?.harness.limits ?? {}), "nvidia.com/gpu": f.gpus },
+          limits: { ...(f.resources?.harness.limits ?? {}), "nvidia.com/gpu": count },
         }
       : gpu
         ? { ...(f.resources?.harness ?? {}), claims: [{ name: "gpus" }] }
@@ -141,10 +148,8 @@ export function followerObjects(p: ClusterRigPlan, f: Follower): Obj[] {
             THERMITE_RIG_ID: p.rig,
             THERMITE_ROLE: "follower",
             THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
-            // Every GPU of a follower is the judge's.
-            ...(gpu
-              ? { THERMITE_GPU_INDEX: Array.from({ length: f.gpus }, (_, i) => i).join(",") }
-              : {}),
+            // Its GPUs by pool (core/followers.ts).
+            ...followerGpuEnv({ judge: f.gpus, workers: f.workers ?? 0 }),
             THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
             THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
           }),
