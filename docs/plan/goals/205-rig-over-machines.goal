@@ -72,12 +72,13 @@ What exists, 2026-11-04: one harness process holds the run's ledger, its schedul
 
 - 2026-11-04, the owner: one rig over any number of machines, with pools of devices for the judge and for the workers, set by the owner, before the recipe's hill climb on the Sparks (asked instead of starting on one Spark now, or on two rigs of one Spark each).
 - 2026-11-04, the owner, on the first mockup: machines from any place; a leader and followers that all run the same code, kept in step over NATS, so that the judge and the workers can run on any machine; a Raft quorum at three machines or more. Redrawn so.
+- 2026-11-04, the owner: the leader is chosen by a lease on control's message bus (a compare-and-set key in NATS's key-value store), not by a Raft quorum among the machines. It works from two machines up and needs no machine to reach another; each lease's number fences off a stopped leader. While control is away the leader goes on, and no new leader is chosen.
 
 ## Progress
 
 - 2026-11-04: Goal written from the owner's words. The recipe's needs are from its README (memory, disk, one model to a Spark).
 - 2026-11-04: Researched how a rig works today (above, under Design) and proposed the design: one main machine keeps the run, and the other machines run the judge's jobs or the lanes' trials it gives them. Mockup made for the owner: Add a rig with machines and a pool for each GPU, the rig's page with its machines, and how two machines work together.
-- 2026-11-04: Redrawn as the owner said: machines from any place, a leader and followers kept in step over control's bus, the leader's lease taken over by a follower when the leader stops. Left to the owner: how the leader is chosen (a lease on control's bus, or a Raft quorum among the machines).
+- 2026-11-04: Redrawn as the owner said: machines from any place, a leader and followers kept in step over control's bus, the leader's lease taken over by a follower when the leader stops. The owner chose a lease on control's bus for the leader.
 
 ---
 
