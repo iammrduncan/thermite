@@ -486,7 +486,6 @@ export interface Shell {
 export const SETTINGS_AREAS = [
   { area: "providers", group: "Models", label: "Providers" },
   { area: "prices", group: "Models", label: "Model prices" },
-  { area: "routes", group: "Models", label: "Rigs' models" },
   { area: "machines", group: "Rigs", label: "Machines" },
   { area: "mcp", group: "Agents", label: "MCP servers" },
   { area: "reach", group: "Agents", label: "Addresses rigs may reach" },
@@ -504,7 +503,6 @@ const settingsHref = (area: SettingsArea) =>
 const AREA_ICON: Record<SettingsArea, string> = {
   providers: icon.key,
   prices: icon.chart,
-  routes: icon.cpu,
   machines: icon.rigs,
   mcp: icon.chip,
   reach: icon.live,

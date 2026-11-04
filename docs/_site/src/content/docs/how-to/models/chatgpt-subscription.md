@@ -36,21 +36,22 @@ Sign in with ChatGPT was tested from start to end with a real plan: signed in, g
 7. Tick **Unattended use**: "I allow Thermite's agents to use my ChatGPT plan when I am not there, for my own research." Its ⓘ says: "OpenAI asks apps to get your consent before they use your plan when you are not there. Thermite's agents work for hours without you: workers, the planner and the advisors, on the rigs you give its models."
 8. Press **Finish the sign-in**.
 
-The page shows `"chatgpt-pro" is signed in: its 6 models run in Pi, OpenCode v2 or Codex. Choose one for a rig on Rigs' models.` with your name and count. Control reads the models from OpenAI's list for your plan, so which ones you get, and how many, depends on OpenAI. The subscription's row under **Providers** lists them as `chatgpt:` and the model's name.
+The page shows `"chatgpt-pro" is signed in: its 6 models run in Pi, OpenCode v2 or Codex. Give one to a rig on its Edit rig.` with your name and count. Control reads the models from OpenAI's list for your plan, so which ones you get, and how many, depends on OpenAI. The subscription's row under **Providers** lists them as `chatgpt:` and the model's name.
 
 ## Give a rig one of its models
 
-1. Open **Rigs' models** in Settings' navigation, and find the rig's row.
-2. Choose the [worker harness](../../reference/glossary.md), the program the agents run in: **Pi**, **OpenCode v2** or **Codex**. Codex is the Codex CLI, OpenAI's own program for agents; see [Run the agents in Codex](#run-the-agents-in-codex). Claude Code does not take a ChatGPT subscription.
-3. Choose a model from the group "chatgpt-pro (ChatGPT subscription: Pi, OpenCode or Codex)", and press **Use**.
+1. Open **Rigs** in the sidebar, press the rig, then **Edit rig**. Under **2 · The agents**, find the **Workers** line.
+2. In its **Model**, choose a model from the group "chatgpt-pro (ChatGPT subscription)".
+3. In its **Runs in**, choose the [worker harness](../../reference/glossary.md), the program the agents run in: **Pi**, **OpenCode v2** or **Codex**. Codex is the Codex CLI, OpenAI's own program for agents; see [Run the agents in Codex](#run-the-agents-in-codex). Claude Code does not take a ChatGPT subscription.
+4. Press **Save changes**.
 
-Stay on the page: within a minute or two, the rig's row shows the new model, then the model check's result below it, with no refresh. To give the planner or an advisor the subscription, use **Edit rig**: see [Give each agent its own model](model-per-agent.md).
+The rig's page opens. Stay on it: within a minute or two, its **The agents' model** block shows the new model, then the model check's result below it, with no refresh. The planner and the advisors have their own lines on **Edit rig**: see [Give each agent its own model](model-per-agent.md).
 
 ## Run the agents in Codex
 
 A ChatGPT subscription runs in Pi unless you choose another harness. To run the workers in the Codex CLI instead:
 
-1. On **Settings › Rigs' models**, in the rig's row, choose **Codex** and the subscription's model, and press **Use**. On the rig's **Edit rig** page, it is **Codex** in the workers' **Runs in**. An agent can do the same over MCP with [`set_rig_model`](../../reference/mcp-tools.md#set_rig_model) and `harness: "codex"`.
+1. On the rig's **Edit rig** page, choose the subscription's model and **Codex** in the workers' **Runs in**, and press **Save changes**. An agent can do the same over MCP with [`set_rig_model`](../../reference/mcp-tools.md#set_rig_model) and `harness: "codex"`.
 2. After a minute, the model check runs in Codex. When it passes, its result says `<model> answered with a correct tool call in <seconds> s (Codex)`.
 
 Then:

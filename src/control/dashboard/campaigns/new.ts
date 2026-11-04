@@ -278,7 +278,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       // Not on the rig yet: it arrives within a minute. Starting now would fail the first trials.
       if (startValue === "start" && !sameModel(rig.model?.model, model)) {
         startValue = "save";
-        modelNote = `${rig.id} takes ${model} within a minute. Settings › Rigs' models shows the rig taking it until then; then start the run here.`;
+        modelNote = `${rig.id} takes ${model} within a minute. The rig's page shows it taking the model until then; then start the run here.`;
       }
     }
     // Control gave the rig a model it has not taken yet: saved now, started once it has.
@@ -290,7 +290,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       !sameModel(rig.model?.model, pending.model)
     ) {
       startValue = "save";
-      modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then). Then start the run here.`;
+      modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; the rig's page shows it taking the model until then). Then start the run here.`;
     }
     if (!chosen && startValue === "start" && agentsModelMissing(store, rig))
       return newCampaignPage(c, {

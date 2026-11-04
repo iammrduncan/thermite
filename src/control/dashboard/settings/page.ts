@@ -1,17 +1,8 @@
 import type { Hono } from "hono";
 import { KEY_PROVIDER_TYPES } from "../../../core/agents.ts";
-import { compactAtWords } from "../../../core/compaction.ts";
 import { isFree } from "../../../core/usage.ts";
 import { busState } from "../../bus/index.ts";
 import { type ClusterFacts, clusterLine } from "../../clusters/index.ts";
-import {
-  checkRow,
-  checkRowsOf,
-  checkWaits,
-  modelFollowUrl,
-  TAKING_WHY,
-  takingModel,
-} from "../../command-progress.ts";
 import {
   factsLine,
   fingerprint as fingerprintOf,
@@ -25,11 +16,9 @@ import {
 import {
   ANTHROPIC_BASE,
   CHATGPT_REDIRECT,
-  capWords,
   creditsNoteDismissedAt,
   isOpencodeOwn,
 } from "../../providers/index.ts";
-import { HARNESS_NAMES } from "../../rigs/index.ts";
 import {
   cheapestGpu,
   DEFAULT_DISK_GB,
@@ -38,16 +27,10 @@ import {
   type TestView,
 } from "../../runpod/index.ts";
 import { spaceOf } from "../../space.ts";
-import {
-  HARNESSES,
-  type Machine,
-  type ModelProvider,
-  type ProviderType,
-} from "../../store/index.ts";
+import type { Machine, ModelProvider, ProviderType } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { ago, esc, SETTINGS_AREAS, type SettingsArea } from "../../ui/components/index.ts";
 import { creditsChip, creditsNote, usageBlock, usageChips } from "../../ui/providers/usage.ts";
-import { checkFollowUrl, modelCheckHtml } from "../../ui/rigs/checks.ts";
 import { modelPricesBlock } from "../../ui/usage.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { busSettingsBlock } from "./bus.ts";
@@ -55,7 +38,7 @@ import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
 import { draftOf, retentionBlocks } from "./retention.ts";
-import { modelPrefix, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
+import { TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
 import { spaceBlock } from "./space.ts";
 
 /** Each Settings area's page title (goal 181). */
@@ -66,11 +49,11 @@ const AREA_TITLES = Object.fromEntries(SETTINGS_AREAS.map((a) => [a.area, a.labe
 
 /**
  * Settings, a page for each area: the providers with their rows and what can be added, model
- * prices, the harness and model for each rig, MCP servers, the addresses cluster rigs may reach,
+ * prices, the machines rigs run on (goal 203), MCP servers, the addresses cluster rigs may reach,
  * the knowledge base's settings, Space, retention policies and the message bus.
  */
 export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
-  const { cmdForm, csrf, mcpServers, opts, page, parts, said, store, views } = dash;
+  const { csrf, mcpServers, opts, page, parts, said, store, views } = dash;
 
   // ---------------------------------------------------------------- settings: model providers
   /** The types reached with an API key (a subscription is added differently). */
@@ -130,6 +113,8 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
   // names (`at`), as before the split.
   const settingsPage = async (c: Ctx) => {
     const named = c.req.param("area");
+    // Rigs' models is gone (goal 203): each rig's agents' model is on its own page and Edit rig.
+    if (named === "routes") return c.redirect("/ui/rigs", 301);
     const at = c.req.query("at") ?? (c.req.query("retention") ? "retention" : undefined);
     const area = (named ?? (at && at in AREA_TITLES ? at : "providers")) as SettingsArea;
     if (!(area in AREA_TITLES)) return c.notFound();
@@ -153,7 +138,7 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
             given[rig]?.provider === name ||
             Object.values(store.agentModels.byRole(rig)).some((r) => r?.provider === name),
         );
-    // What a form did is said on its area's page: at the top of Providers and of Rigs' models,
+    // What a form did is said on its area's page: at the top of Providers and of Machines,
     // and in its own block on the others, which read it themselves.
     const atPrices = area === "prices";
     const ok = c.req.query("ok");
@@ -301,65 +286,6 @@ ${typeField}
       `<fieldset class="mkinds" style="grid-column:1/-1;border:0;padding:0;margin:0;display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))"><legend class="small" style="font-weight:600;margin-bottom:6px">${infoLabel("Kind", "Where the rigs run: a Linux computer control reaches over SSH, such as a workstation or a DGX Spark; a Kubernetes cluster through a kubeconfig; or RunPod, where control starts a pod for each rig.")}</legend>${kind("ssh", "A computer over SSH", "A Linux machine, a workstation or a DGX Spark", true)}${kind("k8s", "A Kubernetes cluster", "Through a kubeconfig: namespaces or slots")}${kind("runpod", "A GPU cloud", "RunPod: control starts a pod for each rig")}</fieldset>`,
       "ssh",
     );
-    const options = (want: { provider: string; model: string } | undefined) =>
-      `<option value=""${want ? "" : " selected"}>its own settings</option>${providers
-        .filter((p) => p.models.length)
-        .map(
-          (p) =>
-            `<optgroup label="${esc(p.name)}${p.type === "claude" ? " (Claude subscription: runs in Claude Code)" : p.type === "chatgpt" ? " (ChatGPT subscription: Pi, OpenCode or Codex)" : isOpencodeOwn(p) ? (p.key_sealed ? " (free models: OpenCode harness only)" : " (OpenCode harness only)") : ""}">${p.models
-              .map(
-                (m) =>
-                  `<option value="${esc(`${encodeURIComponent(p.name)}|${encodeURIComponent(m.id)}`)}"${want?.provider === p.name && want.model === m.id ? " selected" : ""}>${modelPrefix(p.type)}${esc(m.id)}</option>`,
-              )
-              .join("")}</optgroup>`,
-        )
-        .join("")}`;
-    const rigRows = vs
-      .map((u) => {
-        const m = u.model;
-        const want = given[u.id];
-        // A cap on the model's context window (goal 070), once the rig runs that model.
-        const capped =
-          want?.contextCap && m?.name === want.provider && m.model === want.model
-            ? capWords(
-                store.modelProviders.get(want.provider)?.models.find((x) => x.id === want.model)
-                  ?.context_window ?? 0,
-                want.contextCap,
-              )
-            : undefined;
-        // Its compaction point (goal 070), with the model it was set with.
-        const compacts =
-          want && m?.name === want.provider && m.model === want.model
-            ? ` Its conversations are compacted at ${compactAtWords(want.compactAt)}.`
-            : "";
-        const uses = !m
-          ? "Its harness does not report its model (it needs a newer image)."
-          : m.source === "control"
-            ? `Its agents run under ${HARNESS_NAMES[m.harness]} with ${m.model} from ${m.name}.${capped ? ` Its context window: ${capped}.` : ""}${compacts}`
-            : m.source === "environment"
-              ? `Its agents use the rig's own settings (${m.model}, under ${HARNESS_NAMES[m.harness]}).`
-              : "Its agents have no model: they wait.";
-        const taking = takingModel(m, want);
-        const moving = !taking
-          ? ""
-          : want
-            ? ` <span class="chip info">taking ${esc(want.model)} under ${esc(HARNESS_NAMES[want.harness])}</span>`
-            : ` <span class="chip info">going back to its own settings</span>`;
-        // The model check in its state now: sent, running, its result, or why it did not run.
-        const chk =
-          checkRowsOf(store, u.id, u.checks, now).model ??
-          checkRow("model", undefined, undefined, now);
-        const waits = checkWaits(chk);
-        const bad = chk.state === "failed" || chk.state === "refused" || chk.state === "expired";
-        // The page follows the rig while it takes the model, then its check (goal 080).
-        const follow = taking
-          ? ` data-follow="${esc(modelFollowUrl(u.id))}" data-follow-state="taking"`
-          : waits
-            ? ` data-follow="${esc(checkFollowUrl(u.id, "model"))}" data-follow-state="${chk.state}"`
-            : "";
-        return `<div class="ck rr-route"${follow}><span class="ck-res"><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></span><span class="ck-main"><span>${esc(uses)}${moving}</span><span class="ck-sum ${bad ? "bad" : ""}">${modelCheckHtml(chk, now)}</span></span><span class="route-acts"><form class="inline" method="post" action="/ui/settings/rigs" data-act><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="rig" value="${esc(u.id)}"><select name="harness" class="harness" aria-label="harness for ${esc(u.id)}">${HARNESSES.map((h) => `<option value="${h}"${(want?.harness ?? "pi") === h ? " selected" : ""}>${HARNESS_NAMES[h]}</option>`).join("")}</select><select name="choice" aria-label="model for ${esc(u.id)}">${options(want)}</select><button>Use</button></form>${cmdForm(c, { rig: u.id, kind: "rig_check", fields: { check: "model" }, label: "Check", back: "/ui/settings/routes", disabled: waits || taking, ...(taking ? { why: TAKING_WHY } : {}) })}</span></div>`;
-      })
-      .join("");
     const intro = `<p class="run-said">Providers are the logins Thermite uses: model providers serve the agents' models, and Git access lets rigs fetch private repositories. Add each once with its sign-in or key. Control seals every secret, never shows it again, and gives a rig only what it uses. Where rigs run is under <a href="/ui/settings/machines">Machines</a>.</p>`;
     // Settings › Machines (goal 203): where rigs run, each kind in its own block.
     const placeBlock = (title: string, rows: string, n: number, none: string) =>
@@ -380,31 +306,29 @@ ${placeBlock("GPU clouds", cloudRows(t), store.gpuClouds.list().length, "No GPU 
           ? machinesBody()
           : area === "prices"
             ? prices
-            : area === "routes"
-              ? `<p class="run-said">The harness each rig's agents run in (Pi, OpenCode v2, Claude Code or Codex) and their model, from the providers'.</p>${note}<div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>`
-              : area === "mcp"
-                ? mcpSettingsBlocks(store, mcpServers, t, now, query)
-                : area === "reach"
-                  ? reachBlock(store, t, now, (k) => c.req.query(k))
-                  : area === "kb"
-                    ? kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) =>
-                        c.req.query(k),
-                      )
-                    : area === "space"
-                      ? spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())
-                      : area === "bus"
-                        ? busSettingsBlock({
-                            state: await busState(store, opts.parts.bus),
-                            store,
-                            views: vs,
-                            now,
-                          })
-                        : retentionBlocks(
-                            store,
-                            t,
-                            (k) => c.req.query(k),
-                            draftOf(dash, c.req.query("draft")),
-                          );
+            : area === "mcp"
+              ? mcpSettingsBlocks(store, mcpServers, t, now, query)
+              : area === "reach"
+                ? reachBlock(store, t, now, (k) => c.req.query(k))
+                : area === "kb"
+                  ? kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) =>
+                      c.req.query(k),
+                    )
+                  : area === "space"
+                    ? spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())
+                    : area === "bus"
+                      ? busSettingsBlock({
+                          state: await busState(store, opts.parts.bus),
+                          store,
+                          views: vs,
+                          now,
+                        })
+                      : retentionBlocks(
+                          store,
+                          t,
+                          (k) => c.req.query(k),
+                          draftOf(dash, c.req.query("draft")),
+                        );
     return page(
       c,
       {

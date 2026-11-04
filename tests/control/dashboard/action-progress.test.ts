@@ -241,7 +241,8 @@ describe("Run it on a rig's checks (goal 080)", () => {
       (await s.send("/ui/commands", { rig: "rig-a", kind: "rig_check", check: "model" })).text,
     ) as Answer;
     assert.equal(a.follow, "/ui/rigs/rig-a/checks/model.json");
-    let settings = await s.page("/ui/settings/routes");
+    // The rig's page: its agents' model and its Checks (goal 203; Settings › Rigs' models before).
+    let settings = await s.page("/ui/rigs/rig-a");
     assert.match(
       settings,
       /Its model check was sent to the rig at \d\d:\d\d UTC\. It starts when the rig takes it\./,
@@ -250,16 +251,22 @@ describe("Run it on a rig's checks (goal 080)", () => {
       settings,
       /data-follow="\/ui\/rigs\/rig-a\/checks\/model\.json" data-follow-state="sent"/,
     );
-    assert.match(settings, /<button class="" disabled>Check<\/button>/);
+    assert.match(
+      settings,
+      /data-check="model"(?:(?!data-check=)[\s\S])*<button class="" disabled>Sent<\/button>/,
+    );
     await s.relay();
-    settings = await s.page("/ui/settings/routes");
+    settings = await s.page("/ui/rigs/rig-a");
     assert.match(settings, /Its model check is running · <span data-since="[^"]+">\d+ s<\/span>\./);
     model.end({ ok: true, summary: "m answered with a correct tool call in 1.2 s" });
     await tick();
     await s.relay();
-    settings = await s.page("/ui/settings/routes");
+    settings = await s.page("/ui/rigs/rig-a");
     assert.match(settings, /Its model check passed \d+s ago: m answered with a correct tool call/);
-    assert.match(settings, /<button class="">Check<\/button>/);
+    assert.match(
+      settings,
+      /data-check="model"(?:(?!data-check=)[\s\S])*<button class="">Run it<\/button>/,
+    );
   });
 });
 
@@ -429,7 +436,7 @@ describe("every button that sends a command (goal 080)", () => {
     assert.equal(a.follow, "/ui/rigs/rig-a/model.json");
     assert.match(a.said, /rig-a takes m from "lab" under Pi within a minute, and checks it/);
     assert.match(
-      await s.page("/ui/settings/routes"),
+      await s.page("/ui/rigs/rig-a"),
       /data-follow="\/ui\/rigs\/rig-a\/model\.json" data-follow-state="taking"/,
     );
     const r = await s.send("/ui/settings/rigs", { rig: "no-such-rig", choice: "lab|m" });

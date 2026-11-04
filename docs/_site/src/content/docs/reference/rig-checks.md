@@ -49,7 +49,7 @@ When the harness restarts during a check, it records the check as finished with 
   | Refused: the rig did not run the command | The last result | `Not run: the rig refused it at 03:41 UTC.` and the rig's reason, such as `Not now: …` | **Run it** |
   | Expired: the rig did not take the command before its signature ran out | The last result | `Not run: the rig did not take it before 04:41 UTC.` | **Run it** |
 
-  A run of the check that started after the command, or that still runs, shows in place of the command: the rig ran it by itself, or it will refuse the command while it runs. **Providers › Harness and model for each rig** says the same of the model check in its rig's row, such as `Its model check was sent to the rig at 03:41 UTC. It starts when the rig takes it.` or `Its model check is running · 12 s.`, and its **Check** button is off meanwhile.
+  A run of the check that started after the command, or that still runs, shows in place of the command: the rig ran it by itself, or it will refuse the command while it runs. The rig's page says the same of the model check under **The agents' model**, such as `Its model check was sent to the rig at 03:41 UTC. It starts when the rig takes it.` or `Its model check is running · 12 s.`, and its **Check** button is off meanwhile.
 - The rig's history, and `checks` in `GET /v1/rigs/<rig>/view` on the [REST API](rest-api.md).
 - The MCP tool `recent_events`. See [MCP tools](mcp-tools.md).
 

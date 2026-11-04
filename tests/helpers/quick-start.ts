@@ -343,10 +343,14 @@ export interface QuickStartPlan {
     providerName: string;
     addProvider: string;
     providerSaved: string;
-    /** 2. Give the rig a model: the row's words before, the worker harness, and the button. */
+    /**
+     * 2. Give the rig a model on Edit rig: the workers' Model before, the worker harness, the
+     * button, and what the rig's page then says.
+     */
     noModel: string;
     harness: string;
     use: string;
+    sent: string;
     /** 3. Check that the model works: words of the passed check. */
     modelPassed: string[];
     /** 4. Get the sample and pack its kit: the commands, the release tag and the archive. */
@@ -496,9 +500,10 @@ export function quickStartPlan(read: (page: string) => string): QuickStartPlan {
       providerName,
       addProvider: named(s1.text, "Add and list its models"),
       providerSaved: quoted(s1.text, `"${providerName}" is saved`),
-      noModel: quoted(a(2).text, "Its agents have no model"),
-      harness: boldAfter(a(2).text, "In its first list, choose"),
-      use: named(a(2).text, "Use"),
+      noModel: quoted(a(2).text, "none: can't run"),
+      harness: boldAfter(a(2).text, "Runs in** list, choose"),
+      use: named(a(2).text, "Save changes"),
+      sent: quoted(a(2).text, "Control sent a new model to"),
       modelPassed: [quoted(a(3).text, "answered with a correct tool call"), quoted(a(3).text, "(")],
       source,
       tag,

@@ -139,7 +139,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | Kind | Dashboard (`owner:ui`) | REST and `thermite` (`owner:api`) | MCP owner (`owner:mcp`) | MCP operator (`owner:operator`) | MCP agent (`agent:mcp`) | Owner only |
 | --- | --- | --- | --- | --- | --- | --- |
 | `assign_campaign` | **New campaign**; **Start the run** in the **Start a run** panel of a campaign's page | Yes; `thermite assign` | Yes | Yes | Yes | |
-| `rig_check` | **Run it** in a rig's **Checks**; **Check** on **Settings › Rigs' models** | Yes | Yes | Yes | Yes | |
+| `rig_check` | **Run it** in a rig's **Checks** | Yes | Yes | Yes | Yes | |
 | `pause_run` | **Pause**, then **Pause the run** in its menu, in a run's header, in the header of the run's **Live**, and on the run's card under **At work now** | Yes | Yes | Yes | Yes | |
 | `resume_run` | **Resume** in a run's header, in the header of the run's **Live**, and on a paused run's row under **Earlier runs** | Yes | Yes | Yes | Yes | |
 | `close_run` | **⋯**, then **Close the run**, in the header of a run's page, while the run is running or paused | Yes | Yes | No | No | Yes |

@@ -126,7 +126,7 @@ describe("control dashboard", () => {
     assert.equal(current?.contextWindow, 262144);
     assert.equal(statSync(join(dir, "model-route.json")).mode & 0o777, 0o600);
     await s.relay();
-    page = await (await s.get("/ui/settings/routes")).text();
+    page = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(page, /Its agents run under Pi with deepseek-v4\.1-flash-free from opencode\./);
     const rig = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(rig, /The agents now use model route &quot;opencode&quot;/);
@@ -180,7 +180,7 @@ describe("control dashboard", () => {
     assert.equal(zen?.api, "opencode");
     assert.equal(zen?.apiKey, "");
     await s.relay();
-    page = await (await s.get("/ui/settings/routes")).text();
+    page = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(page, /Its agents run under OpenCode v2 with free-model-free from zen\./);
     // A planner given OpenCode's own models runs through OpenCode too; cleared, it follows the workers.
     s.store.agentModels.assignRole("rig-a", "planner", {

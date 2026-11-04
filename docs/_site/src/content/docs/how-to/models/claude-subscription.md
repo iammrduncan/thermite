@@ -80,7 +80,7 @@ For rigs that control sets up on your machines or clusters, build the images wit
 4. Paste the token into **Token from claude setup-token**. Its ⓘ says: "The long-lived token that Claude Code prints. Control seals it at once and never shows it again. Only Claude Code, Anthropic's own program, uses it on the rigs: Anthropic does not allow other programs to use a subscription."
 5. Press **Add the subscription**.
 
-The page shows `"claude-max" is saved: its 5 models run only in Claude Code. Choose one for a rig on Rigs' models.` Control makes no call to Anthropic with the token. Its list of models is fixed. `opus-5.5` and `opus-5.5[1m]` are the same model with the same context, so either one will do:
+The page shows `"claude-max" is saved: its 5 models run only in Claude Code. Give one to a rig on its Edit rig.` Control makes no call to Anthropic with the token. Its list of models is fixed. `opus-5.5` and `opus-5.5[1m]` are the same model with the same context, so either one will do:
 
 | Model | Context |
 | --- | --- |
@@ -92,13 +92,13 @@ The page shows `"claude-max" is saved: its 5 models run only in Claude Code. Cho
 
 ## 4. Give a rig one of its models
 
-1. Open **Rigs' models** in Settings' navigation, and find the rig's row.
-2. Choose a model from the group "claude-max (Claude subscription: runs in Claude Code)". Thermite sets the [worker harness](../../reference/glossary.md), the program the agents run in, to **Claude Code** for you.
-3. Press **Use**.
+1. Open **Rigs** in the sidebar, press the rig, then **Edit rig**. Under **2 · The agents**, find the **Workers** line.
+2. In its **Model**, choose a model from the group "claude-max (Claude subscription: runs in Claude Code)", and set its **Runs in**, the [worker harness](../../reference/glossary.md) the agents run in, to **Claude Code**: a Claude subscription runs only there.
+3. Press **Save changes**.
 
-The page shows `rig-1 takes sonnet-5.5 from "claude-max" under Claude Code within a minute, and checks it.` Stay on the page: within a minute or two, the rig's row shows the new model, then the model check's result below it, with no refresh, for example "Its model check passed 1m ago: claude-sonnet-5-5 answered with a correct tool call in 6.1 s (Claude Code)".
+The rig's page opens and says `Control sent a new model to rig-1. The rig takes the change in less than one minute.` Stay on it: within a minute or two, its **The agents' model** block shows the new model, then the model check's result below it, with no refresh, for example "Its model check passed 1m ago: claude-sonnet-5-5 answered with a correct tool call in 6.1 s (Claude Code)".
 
-To give the planner or an advisor the subscription, and to set an effort, use **Edit rig**: see [Give each agent its own model](model-per-agent.md).
+The planner and the advisors have their own lines on **Edit rig**, each with its own model and effort: see [Give each agent its own model](model-per-agent.md).
 
 Control gives a rig the token only while one of its agents uses the subscription. On the rig, Claude Code runs as the agent's own user with its own sandbox off: the rig's isolation holds the commands it runs, and the token reaches Claude Code on a file descriptor, never in an environment variable. An advisor's Claude Code runs in the supervisor's container as an advisor user of its own, which can't read the supervisor's files, with none of its own tools, also with its sandbox off and the token on a file descriptor ([Who holds your keys](../../explanation/who-holds-your-keys.md#subscriptions)); on a rig whose agent programs run in their own terminal, the teachers, the auditor and the reviewers run in Claude Code's own terminal there ([An advisor's terminal](../campaigns/agent-terminal.md#an-advisors-terminal)).
 

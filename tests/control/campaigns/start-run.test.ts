@@ -409,7 +409,7 @@ describe("Start a run over REST (goal 029)", () => {
     assert.equal(given.status, 202);
     assert.deepEqual(await json(given), {
       started: false,
-      said: "rig-b takes glm-5.3-flash-free within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again.",
+      said: "rig-b takes glm-5.3-flash-free within a minute; its page shows it taking the model until then. Then start the run again.",
     });
     assert.deepEqual(s.store.agentModels.byRig()["rig-b"], {
       provider: "zen",

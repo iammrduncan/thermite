@@ -214,7 +214,7 @@ describe("a cap on a rig's model context window", () => {
   test("the dashboard shows the cap, and its forms keep it while the rig keeps the same model", async () => {
     const s = await stack();
     await s.give({ provider: "lab", model: "wide-model", context_window: 131_072 });
-    const settings = await s.page("/ui/settings/routes");
+    const settings = await s.page("/ui/rigs/rig-a");
     assert.match(
       settings,
       /Its agents run under Pi with wide-model from lab\. Its context window: 131,072 tokens \(capped; the provider allows 204,800\)\./,
@@ -242,7 +242,7 @@ describe("a cap on a rig's model context window", () => {
     });
     assert.equal(s.store.agentModels.byRig()["rig-a"]?.contextCap, undefined);
     assert.equal((await s.route()).context_window, 131_072);
-    assert.doesNotMatch(await s.page("/ui/settings/routes"), /capped/);
+    assert.doesNotMatch(await s.page("/ui/rigs/rig-a"), /capped/);
   });
 });
 
@@ -339,15 +339,15 @@ describe("the compaction point of a rig's model (goal 070)", () => {
     await mcp.close();
   });
 
-  test("Settings › Providers shows the point with the model, and its forms keep it with the same model", async () => {
+  test("the rig's page shows the point with the model, and its forms keep it with the same model", async () => {
     const s = await stack();
     await s.give({ provider: "lab", model: "wide-model" });
     assert.match(
-      await s.page("/ui/settings/routes"),
+      await s.page("/ui/rigs/rig-a"),
       /Its agents run under Pi with wide-model from lab\. Its conversations are compacted at 80% of the window \(the default\)\./,
     );
     await s.give({ provider: "lab", model: "wide-model", compact_at: 75 });
-    const settings = await s.page("/ui/settings/routes");
+    const settings = await s.page("/ui/rigs/rig-a");
     assert.match(settings, /Its conversations are compacted at 75% of the window\./);
     const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(settings)?.[1] ?? "";
     await s.post("/ui/settings/rigs", {

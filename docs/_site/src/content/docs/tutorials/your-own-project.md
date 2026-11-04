@@ -16,7 +16,7 @@ It takes half an hour to an hour, most of it waiting for the agent. New words ar
 
 - Everything from the first two tutorials, [Install on one machine](first-run.md) and [Run your first campaign](agents-with-a-free-model.md): Thermite running, the dashboard signed in, and `local-1` with a free model from OpenCode. This tutorial uses that model.
 
-  Free models are often busy. Before you start, open **Settings › Rigs' models**, find the row for `local-1`, and press **Check**. The row says the check was sent, then that it is running, then its result, with no refresh: usually within a minute. If the row says `Its model check FAILED`, for example with `Rate limit exceeded. Please try again later.`, choose another model whose name ends in `-free`, press **Use**, and wait until the check has `passed`, as in [step 3 of Run your first campaign](agents-with-a-free-model.md#3-check-that-the-model-works).
+  Free models are often busy. Before you start, open **Rigs**, then `local-1`, and under **Checks** press **Run it** on **Model route**. The rig's page says the check was sent, then that it is running, then its result, with no refresh: usually within a minute. If it says `Its model check FAILED`, for example with `Rate limit exceeded. Please try again later.`, choose another model whose name ends in `-free` on the rig's **Edit rig**, press **Save changes**, and wait until the check has `passed`, as in [step 3 of Run your first campaign](agents-with-a-free-model.md#3-check-that-the-model-works).
 
   If your rig uses a paid model instead, set **Stop after (hours)** in step 7, so each run of the campaign pauses itself after that many hours.
 

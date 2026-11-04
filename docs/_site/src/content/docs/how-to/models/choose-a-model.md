@@ -39,7 +39,7 @@ The rig's **Model route** check tests exactly this. It sends one short request a
 
 ## Where the agents run
 
-Each agent runs inside a program that gives the model its tools: the **worker harness**. (The **harness** alone is something else: the rig's container that holds the judge and the agents.) You choose the worker harness in the block **Harness and model for each rig** on **Settings › Providers**, under **Runs in** for each agent on a rig's **Edit rig** page, or under **The agents run in** when you choose the agents' model on the **New campaign** page:
+Each agent runs inside a program that gives the model its tools: the **worker harness**. (The **harness** alone is something else: the rig's container that holds the judge and the agents.) You choose the worker harness under **Runs in** for each agent on a rig's **Edit rig** page, or under **The agents run in** when you choose the agents' model on the **New campaign** page:
 
 - **Pi**: the agent toolkit by Mario Zechner, which Thermite builds in ([Credits](../../project/credits.md#programs-the-agents-run-in)). It is the default.
 - **OpenCode v2**: the OpenCode coding agent, which is always in Thermite's harness image.
