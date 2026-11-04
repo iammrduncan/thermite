@@ -19,7 +19,7 @@ import {
   heldOutResult,
   heldOutWords,
 } from "../held-out.ts";
-import { type Arm, type MeasureContext, runArm } from "../measure.ts";
+import type { Arm, MeasureContext } from "../measure.ts";
 
 /**
  * The confirm job, and what happens to a win it confirms. A hill climb's screened win is measured
@@ -132,8 +132,8 @@ async function heldOut(
     const rv: number[] = [];
     let failed: HeldOutKind | undefined;
     for (let rep = 0; rep < 3 && !failed; rep++) {
-      const c = await runArm(ctx, cand, cell);
-      const r = await runArm(ctx, champ, cell);
+      const c = await judge.run(ctx, cand, cell);
+      const r = await judge.run(ctx, champ, cell);
       if (r.kind !== "ok") {
         // An opaque reason: details of held-out cells never leave promotion code.
         logWarn("judge", "champion failed on a held-out cell", { job: job.id, reason: r.reason });

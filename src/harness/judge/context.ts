@@ -1,18 +1,17 @@
-import { chmodSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { errorText } from "../../common/errors.ts";
 import { logError } from "../../common/log.ts";
 import type { Contract, GoalContract, HillClimbContract } from "../../core/contract.ts";
 import type { EventToRecord } from "../../core/events/bodies.ts";
 import { contractMetrics, type Kit } from "../../core/kit.ts";
 import { toFraction } from "../../core/stats.ts";
-import { builderRole, checkerRole, driverRole, type Runner, runRole } from "../broker/index.ts";
+import type { Runner } from "../broker/index.ts";
 import type { JobRow, Ledger } from "../ledger/index.ts";
 import type { HarnessService } from "../service/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
 import { BASELINE_BLOCKS, type Baseline, baselineDir, baselineOf } from "./baseline.ts";
-import { BuildStore } from "./builds.ts";
 import type { Decision } from "./decide.ts";
+import { type JudgeDevice, LocalDevice, type Measured } from "./device.ts";
 import { recordInfraFailure } from "./failure.ts";
 import { HELD_OUT_INFRA } from "./held-out.ts";
 import { exportKit, loadKit } from "./kits.ts";
@@ -52,6 +51,11 @@ export interface JudgeOptions {
    * card than its screen's, and runs are timed by the card's own user.
    */
   card?: { index: number; uuid: string; count: number } | undefined;
+  /**
+   * Where the judge builds and runs (goal 205): a follower's GPU through the bus. None: this
+   * machine's own card, through `runner` and `driver`, as always.
+   */
+  device?: JudgeDevice | undefined;
 }
 
 export class InfraError extends Error {}
@@ -123,7 +127,8 @@ export class Stop extends Error {
 export class JudgeContext {
   readonly o: Required<JudgeOptions>;
   readonly ledger: Ledger;
-  readonly store: BuildStore;
+  /** Where its builds and runs happen: its card's machine. */
+  readonly device: JudgeDevice;
   /** The job this judge holds: its lease is renewed while a build runs (lease.ts). */
   holding: JobRow | undefined;
 
@@ -137,11 +142,19 @@ export class JudgeContext {
       deviceGate: undefined,
       baselineBlocks: BASELINE_BLOCKS,
       card: undefined,
+      device: undefined,
       ...opts,
     } as Required<JudgeOptions>;
     this.ledger = opts.service.ledger;
-    const { stateDir, scratchDir } = opts.service.paths;
-    this.store = new BuildStore(stateDir, scratchDir, opts.runner, this.ledger);
+    this.device =
+      opts.device ??
+      new LocalDevice({
+        runner: opts.runner,
+        driver: opts.driver,
+        paths: opts.service.paths,
+        ledger: this.ledger,
+        index: opts.card?.index ?? 0,
+      });
   }
 
   /** A line for control's live view of the judge. */
@@ -174,9 +187,9 @@ export class JudgeContext {
     const mirror = this.o.service.mirrorFor(`kit-${ref.repo}`);
     const dir = await exportKit(this.o.service.paths.stateDir, mirror, ref.commit);
     const kit = loadKit(dir);
-    if (kit.target !== this.o.driver.type) {
+    if (kit.target !== this.device.driver.type) {
       throw new InfraError(
-        `kit ${kit.name} measures ${kit.target}, this rig has ${this.o.driver.type}`,
+        `kit ${kit.name} measures ${kit.target}, this rig has ${this.device.driver.type}`,
       );
     }
     return { kit, dir, commit: ref.commit };
@@ -188,7 +201,7 @@ export class JudgeContext {
     const started = Date.now();
     this.note(`build ${commit.slice(0, 12)}: started`, run);
     const ensure = () =>
-      this.store.ensure({
+      this.device.build({
         repo: inst.seed_repo,
         mirror: this.o.service.mirrorFor(inst.seed_repo),
         commit,
@@ -196,7 +209,6 @@ export class JudgeContext {
         kitDir: k.dir,
         kitCommit: k.commit,
         actor: this.o.owner,
-        role: builderRole(this.o.card?.index ?? 0),
       });
     const h = this.holding;
     const renew = () => h && this.ledger.jobs.heartbeat(h.id, h.fence, this.o.leaseMs);
@@ -234,19 +246,21 @@ export class JudgeContext {
   }
 
   /**
-   * The folder a baseline job's checks write the baseline's files to: `<scratch>/runs/job-<id>/
-   * baseline`, made empty and handed to the job's card's checker. The job keeps what it holds
-   * (keepBaselineDir), then removes it.
+   * The folder a baseline job's checks write the baseline's files to, made empty and handed to the
+   * job's card's checker. The job keeps what it holds (keepBaselineDir), then removes it.
    */
-  async baselineWork(job: JobRow): Promise<string> {
-    const runs = join(this.o.service.paths.scratchDir, "runs");
-    const dir = join(runs, `job-${job.id}`, "baseline");
-    // An earlier try of the same job left its folder: it starts empty again.
-    if (existsSync(dir)) await this.o.runner.remove(dir);
-    mkdirSync(dir, { recursive: true });
-    for (const d of [runs, join(runs, `job-${job.id}`)]) chmodSync(d, 0o711);
-    await this.o.runner.handOver(dir, checkerRole(this.o.card?.index ?? 0));
-    return dir;
+  baselineWork(job: JobRow): Promise<string> {
+    return this.device.baselineWork(job.id);
+  }
+
+  /** One run of an arm on a case, on the job's card. */
+  async run(ctx: MeasureContext, arm: Arm, cell: string): Promise<ArmRun> {
+    return (await this.device.measure(ctx, arm, cell)).run;
+  }
+
+  /** One timed run of an arm on a case, with the throttling of the card's machine around it. */
+  measure(ctx: MeasureContext, arm: Arm, cell: string): Promise<Measured> {
+    return this.device.measure(ctx, arm, cell);
   }
 
   /**
@@ -259,11 +273,6 @@ export class JudgeContext {
     job: JobRow,
     baselineDirNow?: string | undefined,
   ): MeasureContext {
-    const runsDir = join(this.o.service.paths.scratchDir, "runs", `job-${job.id}`);
-    mkdirSync(runsDir, { recursive: true });
-    // Reachable by exact (unguessable) path only: no role may list in-flight runs.
-    chmodSync(join(this.o.service.paths.scratchDir, "runs"), 0o711);
-    chmodSync(runsDir, 0o711);
     const run = this.jobRun(job);
     // No contract, no held-out mask: the job stops as an infrastructure failure, never measuring
     // on cells it would have hidden (goal 163).
@@ -277,23 +286,17 @@ export class JudgeContext {
       return dir && existsSync(dir) ? dir : undefined;
     })();
     const folder = baselineDirNow ?? sealed;
-    return {
-      runner: this.o.runner,
-      store: this.store,
+    return this.device.context({
+      job: job.id,
       kit: k.kit,
       kitDir: k.dir,
-      runsDir,
-      modelsDir: join(this.o.service.paths.stateDir, "models"),
       ...(folder ? { baselineDir: folder } : {}),
       ...(contract ? { uses: contractMetrics(contract) } : {}),
-      runRole: runRole(this.o.card?.index ?? 0),
-      checkerRole: checkerRole(this.o.card?.index ?? 0),
-      driverRole: driverRole(this.o.card?.index ?? 0),
       note: (arm, cell, outcome) =>
         held.has(cell)
           ? this.note(`held-out run ${++heldRuns} done`, run)
           : this.note(`${arm} · ${cell}: ${outcome}`, run),
-    };
+    });
   }
 
   /**
@@ -305,7 +308,7 @@ export class JudgeContext {
     // The baseline's reasons name the cell: they tell the workers in setup what to fix.
     const on = arm.name === "baseline" && cell ? `cell ${cell}: ` : "";
     if (r.kind === "ok") {
-      const implausible = this.o.driver.plausibility(r.metrics);
+      const implausible = this.device.driver.plausibility(r.metrics);
       if (implausible.length === 0) return;
       if (judged) throw new Stop("invalid", `${on}implausible: ${implausible.join("; ")}`);
       throw new InfraError(`${arm.name} implausible: ${implausible.join("; ")}`);

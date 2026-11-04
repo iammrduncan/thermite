@@ -432,7 +432,6 @@
       "StartingPoint",
       "baselineFailure"
     ],
-    "src/harness/judge/builds.ts": ["BuildResult", "BuildInput"],
     "src/harness/judge/decide.ts": [
       "ScreenVerdict",
       "ConfirmVerdict",
@@ -511,7 +510,6 @@
     "src/harness/service/trials.ts": ["IdeaRequest"],
     "src/harness/service/watch.ts": ["StreakNews"],
     "src/harness/service/wipe.ts": ["notBeforeOf"],
-    "src/harness/targets/cgroup.ts": ["ThrottleSample"],
     "src/harness/targets/cuda.ts": ["GpuRow", "parseCsvRow", "CudaLimits", "CudaDriverOptions"],
     "src/harness/v0.ts": ["V0Result", "VIOLATIONS_SHOWN"],
     "src/release/bundle.ts": ["imageTag", "README_NEEDS"],

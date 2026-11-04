@@ -14,7 +14,7 @@ import {
   heldOutResult,
   meetsThreshold,
 } from "./held-out.ts";
-import { type Arm, type MeasureContext, runArm } from "./measure.ts";
+import type { Arm, MeasureContext } from "./measure.ts";
 import { clipReason } from "./reasons.ts";
 
 /**
@@ -113,7 +113,7 @@ export async function verifyGoals(
             heldCell({ cell, verifier: name, ok: false, kind: "no_cell" });
             continue;
           }
-          const r = await runArm(ctx, arm, cell);
+          const r = await judge.run(ctx, arm, cell);
           if (r.kind !== "ok") failures.push(`${cell}: ${r.kind}: ${clipReason(r.reason)}`);
           if (!opts.heldOut) {
             const metrics = runValues(ctx.kit, r);
@@ -214,7 +214,7 @@ export async function verifyGoals(
         continue;
       }
       for (let rep = 1; rep <= contract.threshold_reps; rep++) {
-        const r = await runArm(ctx, arm, cell);
+        const r = await judge.run(ctx, arm, cell);
         if (r.kind !== "ok") {
           failures.push(`${cell}: ${r.kind}: ${clipReason(r.reason)}`);
           heldCell({ cell, goal: g.id, ok: false, kind: heldOutKindOf(r) });
