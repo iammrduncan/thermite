@@ -1,39 +1,96 @@
 ---
 title: "Code performance optimization"
-description: "Use Thermite to optimize performance-critical code: agents propose changes, and a judge benchmarks each one on your hardware and accepts it only if your tests pass and the output is unchanged."
+description: "Use Thermite to make a hot path faster on your own hardware, with each change benchmarked beside the best version so far and its output compared byte for byte with the version you started from."
 type: use-case
 useCase:
   mode: climb
   personas: [solo-builders, startups, enterprises]
-  summary: "Agents propose performance changes. The judge benchmarks each on your hardware and accepts it only if your tests pass and the output is unchanged."
-  measure: "Time per call · every test passes, same output · real inputs the agents never see"
+  summary: "Agents rework a hot path: allocations, data structures, algorithms, build settings. The judge benchmarks each change on your machine and compares its output with the starting version's."
+  measure: "Renders or calls a second · tests pass, output byte for byte · production inputs the agents never see"
 sidebar:
   order: 1
 ---
 
-Most projects have performance-critical code: a parser, a renderer, a serializer, a query or a build step. Improving it is a long series of small experiments, most of which fail. Thermite runs those experiments with AI agents working in parallel, while a judge the agents cannot access benchmarks each change on your hardware. A change is accepted only if it is faster and produces exactly the same output.
+Most services spend their time in a few hot paths: a parser or serializer, a template engine, a query planner, an image or compression codec, a request handler. Engineers find them with a profiler, often `perf` and a flame graph on Linux, and measure them with a benchmark harness: Google Benchmark for C++, JMH for Java, Criterion for Rust, pytest-benchmark for Python, or hyperfine for a whole command. A hot path that uses less CPU time per request needs fewer servers for the same traffic.
 
-## The campaign
+Making it faster is a long run of small experiments, and most of them fail: an allocation removed in one place moves the cost to another, a cache helps one input and slows the next, a SIMD path pays off only on long inputs. Timings are noisy, so engineers pin CPUs, repeat runs and read the confidence intervals that Criterion and JMH report. Correctness is judged by the unit tests, by golden outputs (the output on a fixed corpus, compared byte for byte) and, for parsers and codecs, by fuzzing. Thermite gives the benchmark and the comparison to a judge the agents can't reach, and lets agents work through the experiments.
 
-| | |
-| --- | --- |
-| **Mode** | [Hill climb](../../explanation/campaign-modes.md): push one number as far as it goes |
-| **The number** | Time per call, or calls a second, from the judge's own clock. Lower memory or allocations can be a guard, or the number itself |
-| **What must hold** | Your unit tests pass, and the output on every test input is byte for byte the output of the version you started from |
-| **Hidden from the agents** | A set of real inputs, such as templates or files from production, that a win must also pass and stay fast on |
-| **Where it runs** | A CPU rig: any Linux computer with Podman or Docker. A GPU is not needed |
+## Where Thermite fits
 
-## How it runs
+The agents change the source and the build settings, each in its own copy, and can benchmark on development inputs. The judge builds each change itself, runs it on the kit's corpus beside the current best version, times it on its own clock and compares every output with the starting version's. The agents never see the kit's corpus, benchmark or reference outputs, or the production inputs held back for confirmation.
 
-1. **You write a kit.** It is a small repository that the agents never see: a command that builds your project, a list of test inputs (the kit calls them cells), a command that runs the build on one input, and a check that compares the output with the reference ([Write a kit](../../how-to/campaigns/write-a-kit.md)). For a first try, the **New campaign** page can write a simple kit from your answers ([Your own project](../../tutorials/your-own-project.md)).
-2. **You write a contract.** It names the number to push, the folders the agents may change, and the inputs to keep hidden ([Write a contract](../../how-to/campaigns/write-a-contract.md)).
-3. **Agents work in lanes.** Each lane is one agent in its own copy of the project. A planner gives each lane a different idea to try: a faster data structure, fewer allocations, a cache, a different algorithm.
-4. **The judge decides.** It builds each change itself, runs it beside the best version so far in alternating blocks, checks the output, and works out whether the gain is larger than the machine's noise. A gain must hold a second time, and on the hidden inputs, before the change becomes the new best version.
-5. **You take the result.** The best version is a patch against the commit you started from, or a commit on the run's branch in your repository ([Take the result](../../how-to/campaigns/take-the-result.md)). Every attempt, with its code and the judge's reasons, stays in the run's record.
+## Example campaigns
+
+### 1. A faster parse and render, the same bytes out
+
+A team's template engine renders every page its product serves, and the profile shows parsing and rendering as most of each request's CPU time.
+
+- **What the agents change:** the engine's source and its build settings, never the tests or the benchmark.
+- **What the judge runs:** the kit's benchmark, which parses and renders one set of templates a fixed number of times: short ones such as emails, typical pages, and the largest real ones, as three cells.
+- **The number:** templates rendered per second, on the judge's clock. Higher is better.
+- **What must hold:** the unit tests pass; every rendered output is byte for byte the starting version's; object allocations per render, counted by the kit's benchmark, no more than 2% worse in one step and 5% in all.
+- **Hidden from the agents:** templates exported from production, which a win must also render identically, and no slower beyond a small margin.
+- **What agents would try:** scanning bytes in place of regular expressions in the tokenizer; fewer temporary strings and arrays (shared constants, lazy initialization, pre-sized buffers); caching parsed templates or filter lookups; a flatter node layout or a faster hash map; a better algorithm for the hottest loop; link-time or profile-guided optimization (PGO) where the language is compiled.
+- **What you get:** the fastest version that kept every output, as a commit on the run's branch, and every attempt with the judge's reasons.
+
+### 2. A smaller binary, no slower
+
+A team ships a command-line tool, and every user downloads it.
+
+- **What the agents change:** the build profile, the dependencies' features and the code.
+- **What the judge runs:** the build, then the binary on the benchmark inputs.
+- **The number:** the stripped binary's size in bytes, which the check reads from the judge's own build. Lower is better.
+- **What must hold:** the tests and golden outputs; run time no more than 2% worse in one step and 5% in all.
+- **Hidden from the agents:** inputs from real use, held back as above.
+- **What agents would try:** building for size (`opt-level = "z"` in Rust, `-Os` in C and C++), link-time optimization, one codegen unit, aborting on panic, stripping symbols, dropping unused dependency features, replacing a heavy dependency.
+- **What you get:** the smallest build that kept speed and output.
+
+### 3. Read what others measured first
+
+Before a large rewrite, a research campaign can answer a question such as "Which techniques do published JSON and CSV parsers credit for their speed, on which input sizes and CPUs?" The agents read papers and benchmark reports, and record claims whose quotes code finds, word for word, in the pages it archived.
+
+## The contract for the first campaign
+
+```json title="contract.json"
+{
+  "schema_version": 1,
+  "campaign": "render-speed",
+  "version": 1,
+  "title": "Faster parse and render, the same output",
+  "mode": "hill_climb",
+  "project": {
+    "repo": "template-engine",
+    "kit": { "repo": "template-engine-kit", "commit": "5e8a2c7f1b9d4e6a3c0f8b2d7e1a9c4f6b3d5e8a" }
+  },
+  "target": { "type": "cpu", "class": "generic-cpu" },
+  "editable_paths": ["lib/**", "ext/**"],
+  "objective": { "primary": { "metric": "renders_per_s", "direction": "max", "min_effect": 0.03 } },
+  "guards": [
+    { "metric": "allocs_per_render", "direction": "min", "max_step_regression": 0.02, "max_total_regression": 0.05 }
+  ],
+  "cells": ["short", "typical", "large"],
+  "held_out_cells": ["production"]
+}
+```
+
+The kit holds the template corpus and the benchmark. Its build compiles the candidate and runs the unit tests, which sit outside `editable_paths`. Its run renders one cell's templates and writes every output. On the judge's first job, which measures the starting point, the check keeps a hash of each output in its baseline folder; every later check compares each output with its hash and prints one line, such as `{"pass": true, "allocs_per_render": 412}`. `renders_per_s` is a rate: the cell's `renders` parameter divided by the run's time on the judge's clock. A gain counts only when it is at least 3% ([Contract](../../reference/contract.md), [Kit manifest](../../reference/kit-manifest.md)).
+
+## What to expect
+
+- **Time per attempt.** The judge runs each change several times, alternating with the best version so far, so an attempt costs a build and several benchmark runs. Keep a run to seconds or tens of seconds, long enough that start-up time doesn't dominate.
+- **Where the agents help most.** Local changes with a clear profile: allocations, data layout, a slow library call, a missing fast path, build settings.
+- **Where people stay.** Choosing the corpus, reading each accepted change (a faster version can be harder to maintain), and any change to the public API.
 
 ## What the judge guards against
 
-The usual failure of automated optimization is a change that is fast but wrong. In Thermite, the agents never run the official benchmark and never see the check, so they cannot alter a timer, skip work or simplify the reference. Numbers reported by an agent are ignored; only the judge's measurements count, and withheld inputs detect changes tuned only to the visible ones.
+The usual failure of automated optimization is a change that is fast but wrong. The agents never run the official benchmark or see the check, so they can't alter the timer, skip work for known inputs or relax the comparison, and numbers an agent reports are ignored. The production inputs held back catch a change tuned to the visible corpus, such as a cache sized for it. The contract can also refuse any added line that matches a pattern, such as a call to the clock.
+
+## Limits
+
+- A rig measures on one machine. A gain from `-march=native` or a cache size tuned to its CPU can shrink on another: measure on a machine like production, or refuse such flags with a forbidden pattern.
+- A benchmark misses caches shared with other work, I/O and garbage-collection pauses under load. Confirm a win under load before you ship it.
+- A byte-for-byte comparison refuses changes that are correct but different, such as another order of floating-point additions. Where those are acceptable, compare with a tolerance or a normalized form.
+- The judge reports no memory metric of its own: a count of allocations or bytes comes from the kit's benchmark.
 
 ## Who it's for
 
@@ -43,10 +100,10 @@ The usual failure of automated optimization is a change that is fast but wrong. 
 
 ## Related work
 
-In March 2026, an agent loop made Shopify's Liquid template engine, a library about twenty years old, spend 53% less time to parse and render its benchmark (7,469 µs to 3,534 µs), with about 120 automated experiments ([the pull request](https://github.com/Shopify/liquid/pull/2056), still open when this page was written). Codeflash, which builds a tool for this work, reported that 62% of the optimizations GPT-4o proposed were incorrect ([their post](https://hackernoon.com/90percent-failure-rate-why-gpt-4o-cant-optimize-code-and-what-we-built-instead)). Both show why the check matters as much as the speed.
+In March 2026, an agent loop cut the parse-and-render time of Shopify's Liquid, a template engine about twenty years old, by 53% on its benchmark (7,469 µs to 3,534 µs), with 61% fewer object allocations, over about 120 automated experiments ([the pull request](https://github.com/Shopify/liquid/pull/2056), still open when this page was written). Codeflash, which builds a tool for this work, found that 62% of GPT-4o's attempts to optimize code introduced bugs, and that 28% more were correct but not faster ([their post](https://hackernoon.com/90percent-failure-rate-why-gpt-4o-cant-optimize-code-and-what-we-built-instead)). Both show why the check matters as much as the speed.
 
 ## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md): about twenty minutes.
 2. Start a campaign on [your own project](../../tutorials/your-own-project.md) from **New campaign**, and press **Try the kit first** to see the judge measure your project before any agent starts.
-3. For a kit of your own, [test it with known changes](../../how-to/campaigns/test-a-kit.md): a real speed-up, a change that is wrong, a change that does nothing.
+3. For a kit of your own, [write one](../../how-to/campaigns/write-a-kit.md) around your benchmark, and [test it with known changes](../../how-to/campaigns/test-a-kit.md): a real speed-up, a change that is wrong, a change that does nothing.
