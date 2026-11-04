@@ -42,11 +42,6 @@ const smoke = [
     <div class="wrap hero-grid">
       <div class="hero-text">
         <p class="lede">{lede}</p>
-        <a class="proof-row" href={study}>
-          <span class="delta">7.74 → 30.06 <small>tok/s</small></span>
-          <span class="what">LLM decoding on a $100 GPU · 131 changes judged, 28 kept</span>
-          <span class="go" aria-hidden="true">Read the study</span>
-        </a>
         <div class="btns">
           <a class="btn primary" href="/tutorials/first-run/"
 >Install on one machine</a>
@@ -295,41 +290,6 @@ const smoke = [
     margin: 1.5rem 0 0.5rem;
     font-size: 0.85rem;
     color: var(--muted);
-  }
-  .proof-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 0.75rem;
-    margin-top: 1.3rem;
-    padding: 0.7rem 0.95rem;
-    border: 1px solid var(--rule-2);
-    border-radius: 12px;
-    background: var(--panel);
-    color: var(--ink-2);
-    font-size: 0.86rem;
-    text-decoration: none;
-  }
-  .proof-row:hover {
-    border-color: var(--accent);
-  }
-  .proof-row .delta {
-    color: var(--ink);
-    font-size: 1.02rem;
-    font-weight: 600;
-  }
-  .proof-row .delta small {
-    color: var(--muted);
-    font-size: 0.75rem;
-    font-weight: 400;
-  }
-  .proof-row .what {
-    color: var(--muted);
-  }
-  .proof-row .go {
-    margin-left: auto;
-    color: var(--ink-2);
-    font-weight: 560;
   }
   @media (max-width: 62rem) {
     .hero-grid {
