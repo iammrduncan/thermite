@@ -65,6 +65,8 @@ export type RigSettingsWanted = { [P in RigPart]?: boolean | undefined } & {
   promotion?: string | undefined;
   /** null: the rig's default split. */
   judge_gpus?: number | null | undefined;
+  /** The rig's runner processes on its other machines, all of them (goal 206). */
+  runners?: { name: string; pools: string[] }[] | undefined;
 };
 
 /** Edit rig's description of the quiet setting (goal 143), beside its field. */
@@ -163,6 +165,8 @@ export function rigSettingsChange(
     change.program_mode = want.program_mode;
   if (want.promotion !== undefined && want.promotion !== now.promotion)
     change.promotion = want.promotion;
+  if (want.runners !== undefined && JSON.stringify(want.runners) !== JSON.stringify(now.runners))
+    change.runners = want.runners;
   const judge = want.judge_gpus;
   if (judge !== undefined) {
     if (!split || split.set < 2) {
@@ -209,8 +213,9 @@ export type RigSettingsOutcome =
  * Changes a rig's settings as Save changes on Edit rig does (REST and MCP): the change built by
  * rigSettingsChange, sent as one signed rig_settings command issued by `by`. `owner`: whether the
  * owner's token asks. Another token (an operator's, on MCP) may not change the promotion rule,
- * which decides whether a win waits for the owner, nor the GPU split, which restarts the rig's
- * harness: as start_run, it is refused in words when the change holds either. A new program_mode
+ * which decides whether a win waits for the owner, the GPU split, which restarts the rig's harness,
+ * nor its runners, the machines its judge measures on: as start_run, it is refused in words when
+ * the change holds any of them. A new program_mode
  * on a rig control set up on a cluster with its CPUs and memory set moves its supervisor's share:
  * checked before anything is sent, refused in the same words as a size, and applied after the
  * command, its pods restarting (draining first while it works).
@@ -246,6 +251,11 @@ export async function setRigSettings(
     );
   if (!owner && change.judge_gpus !== undefined)
     return refuse("Only the owner's token changes a rig's GPU split: leave out judge_gpus.", 403);
+  if (!owner && change.runners !== undefined)
+    return refuse(
+      "Only the owner's token changes the machines a rig runs on: leave out runners.",
+      403,
+    );
   const resize = change.program_mode
     ? await prepareModeChange(parts, rig, change.program_mode, by, { owner })
     : undefined;
@@ -378,6 +388,21 @@ export const rigSettingsFields = {
     .optional()
     .describe(
       "On a rig set up with its set of GPUs: how many are the judge's, 1 to min(8, set - 1), the rest the agents' (at most 8). null: the rig's default. A new split restarts the rig's harness",
+    ),
+  runners: z
+    .array(
+      z.object({
+        name: z.string().describe("The runner process's name, as its THERMITE_RUNNER says"),
+        pools: z
+          .array(z.string())
+          .describe(
+            "The pool of each runner it serves, in its order: judge, shared (the judge's and every lane's, first come, first served) or one lane's, such as lane-2",
+          ),
+      }),
+    )
+    .optional()
+    .describe(
+      "The rig's runner processes on its other machines, all of them (at most 16, each with 1 to 8 runners): the rig's core takes the list while it works. One added takes runs once it answers; one left out leaves, and its run under way fails, which the judge tries again and a lane is told of. []: none",
     ),
 };
 

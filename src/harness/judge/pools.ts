@@ -1,4 +1,6 @@
+import type { RunnerPool } from "../../core/rig-settings.ts";
 import type { LaneRun, RemoteRunner } from "./remote-runner.ts";
+import { RunnerAway } from "./runner-link.ts";
 
 /**
  * The runners of a rig's other machines, in their pools (goal 206): each is the judge's, one
@@ -6,39 +8,65 @@ import type { LaneRun, RemoteRunner } from "./remote-runner.ts";
  * first come, first served: the judge holds its runner for a whole job, a lane for one run of its
  * command, and whoever waited first for a runner it may use gets it when it is free. So a
  * measurement never shares its runner with another run.
+ *
+ * Runners come and go while the rig works: one added takes runs once it answers (up), one that
+ * stops answering takes none until it answers again, and one taken away takes none again. A run
+ * waits while no runner of its pool is up and free; a run that waits for a pool no runner serves
+ * any more is told so.
  */
 
 /** A runner's pool: the judge's, a lane's, or shared. */
-export type Pool = "judge" | "shared" | `lane-${number}`;
+export type Pool = RunnerPool;
 
 interface Slot {
   runner: RemoteRunner;
   pool: Pool;
   /** Who holds it now, if anyone. */
   holder: string | undefined;
+  /** It answered its last check: runs go to it. */
+  up: boolean;
 }
 
 interface Waiter {
   who: string;
   may: (s: Slot) => boolean;
-  take: (s: Slot) => void;
+  take: (s: Slot | "gone") => void;
 }
 
 export class RunnerPools {
-  private readonly slots: Slot[];
+  private readonly slots: Slot[] = [];
   private readonly waiters: Waiter[] = [];
   /** Each trial's runners it ran on, by trial: their workspaces go when it ends. */
   private readonly used = new Map<string, { lane: string; runners: Set<RemoteRunner> }>();
 
-  constructor(runners: { runner: RemoteRunner; pool: Pool }[]) {
-    this.slots = runners.map((r) => ({ ...r, holder: undefined }));
+  /** A runner joins its pool: it takes runs once it is up. */
+  add(runner: RemoteRunner, pool: Pool, up = false): void {
+    const s: Slot = { runner, pool, holder: undefined, up };
+    this.slots.push(s);
+    this.offer(s);
   }
 
-  /** The runners the judge measures on: its own and the shared ones. */
-  judges(): { runner: RemoteRunner; shared: boolean }[] {
-    return this.slots
-      .filter((s) => s.pool === "judge" || s.pool === "shared")
-      .map((s) => ({ runner: s.runner, shared: s.pool === "shared" }));
+  /**
+   * A runner leaves: no run goes to it again. Its run under way fails through its link; a run
+   * that waits for a pool no runner serves now is told so.
+   */
+  remove(runner: RemoteRunner): void {
+    const i = this.slots.findIndex((s) => s.runner === runner);
+    if (i < 0) return;
+    this.slots.splice(i, 1);
+    for (const w of [...this.waiters])
+      if (!this.slots.some((s) => w.may(s))) {
+        this.waiters.splice(this.waiters.indexOf(w), 1);
+        w.take("gone");
+      }
+  }
+
+  /** Whether the runner answers: up, it takes runs; down, none until it answers again. */
+  setUp(runner: RemoteRunner, up: boolean): void {
+    const s = this.slots.find((x) => x.runner === runner);
+    if (!s || s.up === up) return;
+    s.up = up;
+    this.offer(s);
   }
 
   /** Whether a lane's runs go to runners: it has one of its own, or a shared one serves it. */
@@ -47,45 +75,46 @@ export class RunnerPools {
   }
 
   /**
-   * Holds a runner `who` may use, in the order asked: at once when one is free and nobody waits
-   * for it (one `first` picks, when free), else when it comes free. Gives up, with undefined, when
-   * `signal` aborts first.
+   * Holds a runner `who` may use, in the order asked: at once when one is up and free and nobody
+   * waits for it (one `first` picks, when free), else when one comes free. "ended": `signal`
+   * aborted first; "gone": no runner it may use is in the rig any more.
    */
   private hold(
     who: string,
     may: (s: Slot) => boolean,
     signal?: AbortSignal,
     first?: (s: Slot) => boolean,
-  ): Promise<Slot | undefined> {
-    const open = (s: Slot) => !s.holder && may(s) && !this.waiters.some((w) => w.may(s));
+  ): Promise<Slot | "ended" | "gone"> {
+    if (!this.slots.some(may)) return Promise.resolve("gone");
+    const open = (s: Slot) => s.up && !s.holder && may(s) && !this.waiters.some((w) => w.may(s));
     const free = this.slots.find((s) => open(s) && (first?.(s) ?? true)) ?? this.slots.find(open);
     if (free) {
       free.holder = who;
       return Promise.resolve(free);
     }
-    if (signal?.aborted) return Promise.resolve(undefined);
+    if (signal?.aborted) return Promise.resolve("ended");
     return new Promise((resolve) => {
       const w: Waiter = {
         who,
         may,
         take: (s) => {
-          signal?.removeEventListener("abort", gone);
+          signal?.removeEventListener("abort", ended);
           resolve(s);
         },
       };
-      const gone = () => {
+      const ended = () => {
         const i = this.waiters.indexOf(w);
         if (i >= 0) this.waiters.splice(i, 1);
-        resolve(undefined);
+        resolve("ended");
       };
-      signal?.addEventListener("abort", gone, { once: true });
+      signal?.addEventListener("abort", ended, { once: true });
       this.waiters.push(w);
     });
   }
 
-  /** Lets a runner go: the first waiter that may use it takes it. */
-  private release(s: Slot): void {
-    s.holder = undefined;
+  /** Gives a runner up and free to the first waiter that may use it. */
+  private offer(s: Slot): void {
+    if (!s.up || s.holder || !this.slots.includes(s)) return;
     const i = this.waiters.findIndex((w) => w.may(s));
     if (i < 0) return;
     const [w] = this.waiters.splice(i, 1) as [Waiter];
@@ -93,10 +122,19 @@ export class RunnerPools {
     w.take(s);
   }
 
-  /** The judge's executor on `runner` holds it for a job; the function returned lets it go. */
-  async holdForJudge(runner: RemoteRunner, who: string): Promise<() => void> {
+  /** Lets a runner go: the first waiter that may use it takes it. */
+  private release(s: Slot): void {
+    s.holder = undefined;
+    this.offer(s);
+  }
+
+  /**
+   * The judge's executor on `runner` holds it for a job; the function returned lets it go.
+   * Undefined: the runner left the rig.
+   */
+  async holdForJudge(runner: RemoteRunner, who: string): Promise<(() => void) | undefined> {
     const s = await this.hold(who, (x) => x.runner === runner);
-    if (!s) throw new Error("the runner was not held");
+    if (typeof s === "string") return undefined;
     return () => this.release(s);
   }
 
@@ -109,19 +147,27 @@ export class RunnerPools {
   /**
    * One run of a lane's command on a runner of its pools, its own first: it waits for one in
    * turn, and gives up when its trial ends first (`signal`). The answer is the run's output, which
-   * never counts.
+   * never counts, or why it did not run: its runner left or stopped answering.
    */
   async laneRun(r: LaneRun, signal?: AbortSignal): Promise<object> {
     const mine = (s: Slot) => s.pool === r.lane;
     const may = (s: Slot) => mine(s) || s.pool === "shared";
     // Its own runner when it has one free: a shared one only when its own is busy or it has none.
     const s = await this.hold(r.lane, may, signal, mine);
-    if (!s) return { ran: false, reason: "the trial ended before a runner was free" };
+    if (s === "ended") return { ran: false, reason: "the trial ended before a runner was free" };
+    if (s === "gone")
+      return {
+        ran: false,
+        reason: `no runner serves ${r.lane} now: run it again, and it runs on the core's machine`,
+      };
     const u = this.used.get(r.trial) ?? { lane: r.lane, runners: new Set() };
     u.runners.add(s.runner);
     this.used.set(r.trial, u);
     try {
       return { ...(await s.runner.laneRun(r)), runner: s.runner.name };
+    } catch (err) {
+      if (!(err instanceof RunnerAway)) throw err;
+      return { ran: false, reason: `${err.message} while your command ran: run it again` };
     } finally {
       this.release(s);
     }

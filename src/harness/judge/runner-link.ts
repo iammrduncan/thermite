@@ -16,6 +16,12 @@ import type { RunLink } from "./remote-runner.ts";
 /** The longest a runner may take to answer: a build or a run of the longest kits. */
 const RUNNER_ANSWER_MS = 3 * 3_600_000;
 
+/**
+ * A runner that left the rig or stopped answering (goal 206): its run failed for that alone. The
+ * judge queues its job again and a lane is told; neither counts it against the change.
+ */
+export class RunnerAway extends Error {}
+
 interface Open {
   item: QueuedRun;
   deadline: number;
@@ -38,7 +44,8 @@ export class RunnerLink {
   /** How the core reaches one runner process. */
   to(runner: string): RunLink {
     return {
-      ask: (ask: RunAsk) => this.put({ id: randomUUID(), runner, kind: "ask", ask }),
+      ask: (ask: RunAsk, answerMs?: number) =>
+        this.put({ id: randomUUID(), runner, kind: "ask", ask }, answerMs),
       sendGit: async (repo, commit, bundle) => {
         const id = randomUUID();
         // A dot folder: the supervisor's exports take no name that starts with a dot.
@@ -53,13 +60,32 @@ export class RunnerLink {
     };
   }
 
-  private put(item: QueuedRun): Promise<unknown> {
+  private put(item: QueuedRun, answerMs = this.answerMs): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      this.waiting.push({ item, deadline: Date.now() + this.answerMs, resolve, reject });
+      this.waiting.push({ item, deadline: Date.now() + answerMs, resolve, reject });
       for (const wake of this.wakers.splice(0)) wake();
       // Failed at its time also while no supervisor comes for the asks.
-      setTimeout(() => this.expire(), this.answerMs + 10).unref?.();
+      setTimeout(() => this.expire(), answerMs + 10).unref?.();
     });
+  }
+
+  /**
+   * Fails every ask of `runner` now, waiting or taken, as a runner away: it left the rig or stopped
+   * answering. An answer that comes later finds no ask open.
+   */
+  fail(runner: string, reason: string): void {
+    const mine = (o: Open) => o.item.runner === runner;
+    for (let i = this.waiting.length - 1; i >= 0; i--) {
+      const o = this.waiting[i] as Open;
+      if (!mine(o)) continue;
+      this.waiting.splice(i, 1);
+      o.reject(new RunnerAway(reason));
+    }
+    for (const [id, o] of this.taken)
+      if (mine(o)) {
+        this.taken.delete(id);
+        o.reject(new RunnerAway(reason));
+      }
   }
 
   /** Fails the asks past their time, waiting or taken. */

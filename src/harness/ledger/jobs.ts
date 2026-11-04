@@ -169,7 +169,7 @@ export class LedgerJobs extends LedgerPart {
 
   /** Re-queues jobs whose lease ran out, or blocks them after MAX_LEASE_EXPIRIES. */
   expireLeases(actor = "controller"): number[] {
-    return this.requeue("lease_until < ?", this.now(), actor, "job_lease_expired");
+    return this.requeue("lease_until < ?", [this.now()], actor, "job_lease_expired");
   }
 
   /**
@@ -177,7 +177,23 @@ export class LedgerJobs extends LedgerPart {
    * they are re-queued now (not after their lease runs out), each recorded once as crash_infra.
    */
   reclaimLeases(owner: string, actor = "controller"): number[] {
-    return this.requeue("lease_owner = ?", owner, actor, "crash_infra");
+    return this.requeue("lease_owner = ?", [owner], actor, "crash_infra");
+  }
+
+  /**
+   * The same for every executor's leases (`executor-…`): at the start, none of them runs yet, the
+   * executors of runners that left the rig meanwhile included (goal 206).
+   */
+  reclaimExecutorLeases(actor = "controller"): number[] {
+    return this.requeue("lease_owner like ?", ["executor-%"], actor, "crash_infra");
+  }
+
+  /**
+   * One job back to the queue while `fence` still holds its lease, recorded as crash_infra: its
+   * runner went away (goal 206). The loss counts, as after any lost lease.
+   */
+  reclaimJob(jobId: number, fence: number, actor: string): number[] {
+    return this.requeue("id = ? and fence = ?", [jobId, fence], actor, "crash_infra");
   }
 
   /**
@@ -253,11 +269,11 @@ export class LedgerJobs extends LedgerPart {
   }
 
   /** The leased jobs `where` picks go back to the queue, or are blocked, each with a `kind` event. */
-  private requeue(where: string, arg: SQLInputValue, actor: string, kind: EventKind): number[] {
+  private requeue(where: string, args: SQLInputValue[], actor: string, kind: EventKind): number[] {
     return this.tx(() => {
       const rows = this.rows<Row>(
         `select id, expiries, fence, attempt from job where state = 'leased' and ${where}`,
-        arg,
+        ...args,
       );
       for (const r of rows) {
         const expiries = Number(r.expiries) + 1;

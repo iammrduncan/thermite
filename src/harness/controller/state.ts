@@ -9,6 +9,7 @@ import { Ledger } from "../ledger/index.ts";
 import { lanesFromEnv, RigSettingsStore, trialMinutesFromEnv } from "../rig-settings-store.ts";
 import { gapAtStart, NOT_BEFORE_FILE, wipeIfRequested } from "../service/index.ts";
 import type { ControllerContext } from "./context.ts";
+import { runnersOf } from "./judges.ts";
 
 /**
  * The controller's private state: its folders and their modes, a full reset's wipe, the ledger,
@@ -107,6 +108,8 @@ export function rigSettings(ctx: ControllerContext, promotion: PromotionPolicy):
       program_mode: PROGRAM_MODE_DEFAULT,
       promotion,
       judge_gpus: null,
+      // The runner processes the deployment gives the core, until the owner sets them (goal 206).
+      runners: runnersOf(env),
     },
     join(paths.stateDir, "rig-settings.json"),
   );

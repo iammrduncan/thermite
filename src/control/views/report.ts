@@ -3,6 +3,8 @@ import {
   PROGRAM_MODE_DEFAULT,
   type ProgramMode,
   type RigSettings,
+  type RunnerSetting,
+  RunnerSettings,
 } from "../../core/rig-settings.ts";
 import type { ControlStore } from "../store/index.ts";
 import type { RigView } from "./types.ts";
@@ -34,6 +36,8 @@ export function readSettings(v: unknown): RigSettings | null {
     program_mode: o.program_mode === "terminal" ? "terminal" : "headless",
     promotion: o.promotion === "auto" ? "auto" : "owner_approval",
     judge_gpus: typeof o.judge_gpus === "number" ? o.judge_gpus : null,
+    // A harness older than runners reports none (goal 206); a list it reports is the setting's.
+    runners: (RunnerSettings.safeParse(o.runners ?? []).data ?? []) as RunnerSetting[],
   };
 }
 

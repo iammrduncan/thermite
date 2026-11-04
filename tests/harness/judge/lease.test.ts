@@ -93,7 +93,7 @@ test("a job blocked by lost leases ends its attempt, and gets one more try at th
   // Its attempt is settled, so the lane's round can end without it.
   assert.equal(lifecycle(), "errored");
   const said: string[] = [];
-  jobsAtStart(ledger, ["executor-0"], (msg) => said.push(msg));
+  jobsAtStart(ledger, (msg) => said.push(msg));
   assert.deepEqual(said, ["blocked jobs queued again at start"]);
   assert.equal(ledger.jobs.get(job)?.state, "queued");
   assert.equal(lifecycle(), "queued");
@@ -115,11 +115,22 @@ test("a job whose third lost lease is the start's own reclaim stays blocked (goa
   for (let i = 0; i < MAX_LEASE_EXPIRIES - 1; i++) lose();
   // Its third try kills the controller: the harness starts again with the job still leased.
   assert.ok(ledger.jobs.lease("executor-0", 60_000));
-  jobsAtStart(ledger, ["executor-0"], () => {});
+  jobsAtStart(ledger, () => {});
   assert.equal(ledger.jobs.get(job)?.state, "blocked", "never retried for ever");
   assert.equal(ledger.attempts.get("a-1")?.lifecycle, "errored");
   // The next start gives it its one more try, as for any blocked job.
-  jobsAtStart(ledger, ["executor-0"], () => {});
+  jobsAtStart(ledger, () => {});
+  assert.equal(ledger.jobs.get(job)?.state, "queued");
+  ledger.close();
+});
+
+test("at the start, a job a runner's executor held goes back to the queue, its runner gone or not (goal 206)", () => {
+  const { ledger, job } = oneJob();
+  // The core stopped while the executor on box-2's first runner held the job; box-2 left meanwhile.
+  assert.ok(ledger.jobs.lease("executor-box-2-0", 60_000));
+  const said: string[] = [];
+  jobsAtStart(ledger, (msg) => said.push(msg));
+  assert.deepEqual(said, ["reclaimed leases at start"]);
   assert.equal(ledger.jobs.get(job)?.state, "queued");
   ledger.close();
 });

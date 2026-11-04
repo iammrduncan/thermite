@@ -24,7 +24,7 @@ import { LOG_LEVELS, LOG_PARTS } from "./log-levels.ts";
 import { McpUses } from "./mcp.ts";
 import { currentCommand } from "./names.ts";
 import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
-import { PROGRAM_MODES } from "./rig-settings.ts";
+import { PROGRAM_MODES, RunnerSettings } from "./rig-settings.ts";
 import { TerminalInput } from "./terminal-input.ts";
 
 /**
@@ -449,6 +449,8 @@ export const CommandPayloads = {
     promotion: z.enum(["auto", "owner_approval"]).optional(),
     /** How many of the rig's GPUs are the judge's (a rig configured with its GPU set). */
     judge_gpus: z.number().int().min(1).max(8).nullable().optional(),
+    /** The rig's runner processes and their runners' pools, all of them (goal 206). */
+    runners: RunnerSettings.optional(),
   }),
   /**
    * The owner says no to a confirmed win that waits for approval, or to an attempt held for (or

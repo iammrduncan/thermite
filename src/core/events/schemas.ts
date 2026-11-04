@@ -414,7 +414,18 @@ const BODIES = {
   rig_check_started: z.object({ id: str, check: str, force: bool }),
   rig_check_finished: z.object({ id: str, check: str, ok: bool, summary: str, note: str }),
   rig_settings_changed: z.object({
-    change: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]).nullish()),
+    change: z.record(
+      z.string(),
+      z
+        .union([
+          z.string(),
+          z.number(),
+          z.boolean(),
+          // The rig's runner processes (goal 206).
+          z.array(z.object({ name: z.string(), pools: z.array(z.string()) })),
+        ])
+        .nullish(),
+    ),
   }),
   legacy: z.object({ kind: z.string(), bytes: num }),
 

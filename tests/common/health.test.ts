@@ -34,6 +34,17 @@ describe("loops that tick, and health that checks them (goal 173)", () => {
     assert.equal(loops.health().loops.scheduler?.late, true);
   });
 
+  test("a loop that ended is not watched; one of the same name added since stays (goal 206)", () => {
+    const loops = new Loops(() => 0);
+    const first = loops.add("judge:executor-box-2-0", 1000);
+    // The runner left and came back: its new executor's loop starts before the old one ends.
+    const second = loops.add("judge:executor-box-2-0", 1000);
+    loops.remove("judge:executor-box-2-0", first);
+    assert.ok(loops.health().loops["judge:executor-box-2-0"], "the new loop is still watched");
+    loops.remove("judge:executor-box-2-0", second);
+    assert.deepEqual(loops.health().loops, {});
+  });
+
   test("every() ticks its loop each time a round ends, well or not", async () => {
     const loops = new Loops();
     let rounds = 0;

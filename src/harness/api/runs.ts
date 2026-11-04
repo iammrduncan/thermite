@@ -7,8 +7,8 @@ const TAKE_WAIT_MAX_MS = 25_000;
 
 /**
  * The core's asks of its runners (goal 206): the supervisor takes them, carries each on the bus,
- * and brings back each runner's answer. A rig with no runners has none, and its supervisor never
- * asks.
+ * and brings back each runner's answer. A rig with no runners has none: the take waits and gives
+ * nothing.
  */
 export function runRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   app.get(RUN_ASKS.path, supervisor, async (c) => {

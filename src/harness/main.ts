@@ -13,13 +13,14 @@ import {
   createJudges,
   createScheduler,
   gpuSplitAtStart,
+  JudgeCards,
   openState,
   promotionPolicy,
+  RunnerHub,
   reclaimJobs,
   rigHardware,
   rigSettings,
-  runnerPools,
-  runnersOf,
+  runnerExecutors,
   startLoops,
   targetDrivers,
 } from "./controller/index.ts";
@@ -84,10 +85,9 @@ async function main(): Promise<void> {
   };
   const hardware = await rigHardware(ctx, service, targets);
   // The core judges on its runners of other machines too (goal 206), and on its own unless the
-  // rig says it doesn't (THERMITE_LOCAL_JUDGE=0).
-  const runners = runnersOf(env);
-  const judging = runners.length && env.THERMITE_LOCAL_JUDGE === "0" ? [] : hardware;
-  const executorIds = reclaimJobs(ledger, judging, runners);
+  // rig had runners at its start and says it doesn't (THERMITE_LOCAL_JUDGE=0).
+  const judging = settings.get().runners.length && env.THERMITE_LOCAL_JUDGE === "0" ? [] : hardware;
+  const executorIds = reclaimJobs(ledger, judging);
   const parts = agentParts(ctx, ledger, service, targets);
 
   // A check a previous controller left running is over, and a run's export at its end that it
@@ -124,21 +124,24 @@ async function main(): Promise<void> {
   });
 
   // The core's link to its runner processes: their supervisors answer on the bus (goal 206).
-  const link = runners.length ? new RunnerLink({ outboxDir: service.paths.outboxDir }) : undefined;
+  const link = new RunnerLink({ outboxDir: service.paths.outboxDir });
   service.runners = link;
-  // Each runner of theirs in its pool; the lanes' runs go to those that serve them.
-  const pools = runnerPools(service, runners, link, {
-    type: driver.type,
-    separated: runner.separated,
+  // Each runner of theirs in its pool, as the rig's settings name them now; the lanes' runs go
+  // to those that serve them.
+  const hub = new RunnerHub({
+    service,
+    link,
+    core: { type: driver.type, separated: runner.separated },
   });
-  parts.devRuns.remote = pools;
+  parts.devRuns.remote = hub.pools;
+  const cards = new JudgeCards();
   const executors = createJudges(ctx, {
     service,
     devRuns: parts.devRuns,
     judging,
     judgeCards: targets.judgeCards,
     executorIds,
-    pools,
+    cards,
   });
   const links = agentLinks(ctx, service, port);
   addModelCheck(service, links);
@@ -150,7 +153,20 @@ async function main(): Promise<void> {
     parts,
     split: { gpuSet, judgeNow },
   });
-  startLoops({ ledger, service, settings, scheduler, executors, executorIds, server });
+  const loops = startLoops({
+    ledger,
+    service,
+    settings,
+    scheduler,
+    executors,
+    executorIds,
+    server,
+  });
+  // The judge's executors on the runners of other machines, as they come and go.
+  hub.executors = runnerExecutors(ctx, { service, pools: hub.pools, cards, start: loops.runJudge });
+  hub.apply(settings.get().runners);
+  settings.onChange((s) => hub.apply(s.runners));
+  hub.start();
 }
 
 main().catch((err) => {

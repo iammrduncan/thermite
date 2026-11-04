@@ -305,6 +305,7 @@ export class HarnessService {
         // Hands-off by default (goal 079).
         promotion: input.promotion ?? "auto",
         judge_gpus: null,
+        runners: [],
       });
     this.rig = input.rig;
     this.clock = input.clock ?? (() => new Date());

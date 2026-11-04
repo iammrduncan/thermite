@@ -352,16 +352,15 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));
 
-  // A rig's core with runner processes: its harness's asks of them, carried on the bus (goal
-  // 206). A rig without runners has none, and its supervisor never asks.
-  if (env.THERMITE_RUNNERS?.trim())
-    void carryRunnerAsks({
-      rig,
-      bus,
-      harness,
-      outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
-      stopping: () => stopping,
-    });
+  // A rig's core: its harness's asks of its runner processes, carried on the bus (goal 206).
+  // Runners join while the rig works, so it carries from the start; a rig without them has none.
+  void carryRunnerAsks({
+    rig,
+    bus,
+    harness,
+    outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
+    stopping: () => stopping,
+  });
 
   // Whether control holds a report of this rig: its answer to the figures names its place in the
   // rig's reports, past 0 once it took one. Control pins the rig's report key on the first, and

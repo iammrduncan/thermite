@@ -20,7 +20,8 @@ import type { KeptBaseline, Measured, MeasureSpec, RigRunner, RunBuild, Sealed }
 
 /** How the core reaches one runner process. */
 export interface RunLink {
-  ask(a: RunAsk): Promise<unknown>;
+  /** An ask, failed when no answer comes in `answerMs` (the link's own limit when not given). */
+  ask(a: RunAsk, answerMs?: number): Promise<unknown>;
   /** A git bundle for one of the runner's mirrors, which must hold `commit` after. */
   sendGit(repo: string, commit: string, bundle: Buffer): Promise<void>;
   /** Model files the runner's supervisor fetches from their sources and gives its process. */
@@ -72,6 +73,16 @@ export class RemoteRunner implements RigRunner {
 
   get separated(): boolean {
     return this.o.info.separated;
+  }
+
+  /**
+   * What the core knows the runner holds, forgotten: it answers again after it was away, and may
+   * be a new machine by the same name. It is sent what it lacks again.
+   */
+  forget(): void {
+    this.sent.clear();
+    this.baselines.clear();
+    this.modelsHeld.clear();
   }
 
   /** Sends the runner a commit of one of the core's mirrors, as a bundle of what it lacks, once. */

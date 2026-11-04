@@ -5,7 +5,7 @@ import type { HeldOutCell } from "../held-out.ts";
 import type { KbItemBody, KbItemFile } from "../kb/index.ts";
 import type { AgentPromptBody } from "../prompts.ts";
 import type { RetentionRemoved } from "../retention/index.ts";
-import type { RigSettings } from "../rig-settings.ts";
+import type { RigSettings, RigSettingsChange } from "../rig-settings.ts";
 import type { TerminalOutcome } from "../terminal-input.ts";
 import type {
   ConclusionDecided,
@@ -557,7 +557,7 @@ export interface EventBodies {
   };
   /** What Edit rig changed (the `rig_settings` command's fields), and the settings now. */
   rig_settings_changed: {
-    change: Record<string, string | number | boolean | null | undefined>;
+    change: RigSettingsChange;
     settings: RigSettings;
   };
   /** The harness did not run, `restarted`: found at its start (service/gaps.ts). Not research time. */

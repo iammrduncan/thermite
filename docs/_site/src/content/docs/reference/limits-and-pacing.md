@@ -220,6 +220,8 @@ The dashboard calls an epoch a **round**.
 | Development runs on a shared device | A development run waits while the judge has any job queued or running, then holds the device | It waits until the judge is done or its trial ends: no time limit of its own |
 | A development run behind another lane's | It waits for a free device | Until one is free, or its trial ends: `the trial ended before a device was free` |
 | One development run for each lane | A lane's next development run waits for its last | |
+| A run on a runner of another machine | One run at a time on each runner, first come, first served, between the judge and the lanes of its pool ([`THERMITE_RUNNERS`](settings.md)). A run waits while no runner of its pool is up and free: one the rig's core has not heard from yet, or one away | Until one is free, or its trial ends: `the trial ended before a runner was free` |
+| A runner that leaves | Taken out of the rig's `runners` setting, or given other pools: at once. Away: after two failed checks in a row, 15 seconds apart, each waiting 20 seconds for its answer | Its run under way fails. The judge queues its job again, and a job that loses its lease three times is blocked, as after any lost lease; a lane is told `the runner <name> left the rig while your command ran: run it again`, or `… stopped answering …`. A lane whose pools no runner serves now runs on the core's own machine |
 
 ## Per-process and per-trial limits
 

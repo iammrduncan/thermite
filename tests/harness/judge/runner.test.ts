@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { RigRunner } from "../../../src/harness/judge/runner.ts";
+import { RunnerAway } from "../../../src/harness/judge/runner-link.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../../helpers/judge-env.ts";
 
 /**
@@ -53,5 +54,46 @@ describe("the judge's runner (goal 206)", () => {
     assert.ok((calls.build ?? 0) > before.build, JSON.stringify(calls));
     assert.ok((calls.measure ?? 0) > before.measure + 1, JSON.stringify(calls));
     assert.ok((calls.throttle ?? 0) >= 2, JSON.stringify(calls));
+  });
+
+  test("a job whose runner went away goes back to the queue, and never counts against the change (3c)", async () => {
+    let away = false;
+    const env = makeJudgeEnv({
+      wrapRunner: (core) => ({
+        ...counting(core, {}),
+        measure: (s, a, c) => {
+          if (away) {
+            away = false;
+            return Promise.reject(new RunnerAway("the runner box-2 stopped answering"));
+          }
+          return core.measure(s, a, c);
+        },
+      }),
+    });
+    await env.start();
+    away = true;
+    const r = await env.service.submitAttempt(
+      {
+        run: "js-1",
+        patch_base64: env.patch(FAST_KERNEL),
+        hypothesis: "a faster kernel",
+        known_flaws: [],
+      },
+      "proposer",
+    );
+    await env.drain();
+    assert.equal(away, false, "its first measurement went away");
+    const verdicts = env.ledger.db
+      .prepare("select verdict from verdict where attempt = ?")
+      .all(r.attempt) as { verdict: string }[];
+    assert.ok(verdicts.length >= 1, env.explain(r.attempt));
+    assert.ok(
+      verdicts.every((v) => v.verdict !== "crash_infra"),
+      `no infrastructure failure is recorded: ${JSON.stringify(verdicts)}`,
+    );
+    const requeued = env.ledger.db
+      .prepare("select count(*) as n from event where kind = 'crash_infra'")
+      .get() as { n: number };
+    assert.equal(requeued.n, 1, "its job went back to the queue once");
   });
 });

@@ -20,6 +20,7 @@ import type { Arm, ArmRun } from "./measure.ts";
 import type { PortFound } from "./ports.ts";
 import { clipReason, REASONS_CHARS } from "./reasons.ts";
 import type { MeasureSpec, RigRunner } from "./runner.ts";
+import { RunnerAway } from "./runner-link.ts";
 
 /** A run's kit: loaded, its folder here, and its repository and commit, which name it anywhere. */
 interface KitAt {
@@ -67,9 +68,10 @@ export interface JudgeOptions {
   target?: RigRunner | undefined;
   /**
    * A runner of another machine takes one run at a time (goal 206): the judge holds it for each
-   * job, in turn with the lanes on a shared one, and on a shared one waits for a job first.
+   * job, in turn with the lanes on a shared one, and on a shared one waits for a job first. The
+   * hold gives nothing when the runner left the rig.
    */
-  slot?: { shared: boolean; hold(): Promise<() => void> } | undefined;
+  slot?: { shared: boolean; hold(): Promise<(() => void) | undefined> } | undefined;
 }
 
 export class InfraError extends Error {}
@@ -379,7 +381,8 @@ export class JudgeContext {
     try {
       return await pass();
     } catch (err) {
-      if (err instanceof FixedInfraError) throw err;
+      // A runner that went away (goal 206) is named in fixed words: its job goes back to the queue.
+      if (err instanceof FixedInfraError || err instanceof RunnerAway) throw err;
       logError("judge", "held-out pass failed", {
         job: job.id,
         attempt: job.attempt,

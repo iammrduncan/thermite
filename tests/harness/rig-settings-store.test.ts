@@ -24,6 +24,7 @@ const defaults: RigSettings = {
   program_mode: "headless",
   promotion: "owner_approval",
   judge_gpus: null,
+  runners: [],
 };
 
 describe("the rig's own settings (Edit rig)", () => {
@@ -138,6 +139,38 @@ describe("the rig's own settings (Edit rig)", () => {
       accepted?: boolean;
     };
     assert.ok(odd.status === "rejected" || odd.accepted === false, JSON.stringify(odd));
+  });
+
+  test("the rig's runners: the whole list, which the core takes and reports (goal 206)", async () => {
+    const env = makeJudgeEnv();
+    const seen: unknown[] = [];
+    env.service.settings.onChange((s) => seen.push(s.runners));
+    const runners = [
+      { name: "box-2", pools: ["judge", "shared"] },
+      { name: "box-3", pools: ["lane-2"] },
+    ];
+    const r = await env.service.applyCommand(env.sign("rig_settings", { runners }));
+    assert.equal((r as { accepted: boolean }).accepted, true);
+    assert.deepEqual(env.service.settings.get().runners, runners);
+    assert.deepEqual(seen, [runners], "the core's runners hear of it at once");
+    const report = env.service.snapshot(0, 10) as { summary: { settings: RigSettings } };
+    assert.deepEqual(report.summary.settings.runners, runners);
+    for (const bad of [
+      [{ name: "box-2", pools: ["gpu"] }],
+      [{ name: "box-2", pools: [] }],
+      [{ name: "Box 2", pools: ["judge"] }],
+      [
+        { name: "box-2", pools: ["judge"] },
+        { name: "box-2", pools: ["shared"] },
+      ],
+    ]) {
+      const out = (await env.service.applyCommand(env.sign("rig_settings", { runners: bad }))) as {
+        status: string;
+        accepted?: boolean;
+      };
+      assert.ok(out.status === "rejected" || out.accepted === false, JSON.stringify(bad));
+    }
+    assert.deepEqual(env.service.settings.get().runners, runners);
   });
 
   test("a drain before an image update: the report says what still runs, until the drain ends (goal 079)", async () => {
