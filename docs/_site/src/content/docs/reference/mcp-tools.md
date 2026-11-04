@@ -755,7 +755,7 @@ Returns what [`PUT /v1/control/log-level`](rest-api.md#controls-log-level) retur
 
 **Providers.** Owner, operator and reader.
 
-> What control holds in Settings › Providers: model providers, Git access, machines, Kubernetes clusters and GPU clouds, each with what control last read and its last error. A subscription's usage: its windows (id, label, minutes, used_percent from 0 to 100, resets_at), source (claude-code: as Claude Code on rig last reported them; openai: as ChatGPT's usage endpoint answered control, asked at most every 5 minutes), plan, at, and error in words when there are none; null for another provider, or a Claude subscription no rig reported yet. Never a key, token, password or kubeconfig.
+> What control holds in Settings › Providers (model providers and Git access) and Settings › Machines (machines, Kubernetes clusters and GPU clouds), each with what control last read and its last error. A subscription's usage: its windows (id, label, minutes, used_percent from 0 to 100, resets_at), source (claude-code: as Claude Code on rig last reported them; openai: as ChatGPT's usage endpoint answered control, asked at most every 5 minutes), plan, at, and error in words when there are none; null for another provider, or a Claude subscription no rig reported yet. Never a key, token, password or kubeconfig.
 
 No inputs. Returns:
 
@@ -796,12 +796,12 @@ Inputs: `stream`, one of `REPORTS`, `EVENTS`, `COMMANDS`, `LIVE`, `CONFIG` and `
 
 **Add a rig on a cluster.** Owner and operator.
 
-> Adds a rig on a Kubernetes cluster in Providers, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and 4 GiB of them and the harness the rest, and a size below 1.5 CPUs and 8 GiB is refused. The rig's first key may wait for the owner's acceptance.
+> Adds a rig on a Kubernetes cluster in Settings › Machines, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and 4 GiB of them and the harness the rest, and a size below 1.5 CPUs and 8 GiB is refused. The rig's first key may wait for the owner's acceptance.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `rig` | string | | The new rig's name: "A rig's name is 2 to 40 characters of a-z, 0-9 and -, starting and ending with a letter or digit." |
-| `cluster` | string | | The cluster's name in **Providers** |
+| `cluster` | string | | The cluster's name in **Settings › Machines** |
 | `slot` | string, optional | | For a cluster of pre-made slots: a free slot's namespace |
 | `gpus` | whole number, 0 or more | 0 | GPUs for the rig. 0 measures on the CPU |
 | `judge_gpus` | whole number, optional | half, rounded up | With two or more GPUs, how many are the judge's |
@@ -822,7 +822,7 @@ It refuses with the same words as **Add a rig**:
 - `A rig's name is 2 to 40 characters of a-z, 0-9 and -, starting and ending with a letter or digit.`
 - `There is a rig named <rig> already.`
 - `Choose a machine or a cluster.` (no cluster by that name)
-- `<cluster> is not ready: check it under Providers.`
+- `<cluster> is not ready: check it under Settings › Machines.`
 - `A rig takes from none to 16 GPUs.`
 - `With <n> GPUs the judge takes 1 to <m> of them, and the agents at most 8.`
 - `Name the DRA device class, such as gpu.nvidia.com.`
@@ -1364,7 +1364,7 @@ Returns `{rig, said}`, where `said` is `Stopped.`, `Started.` or `Restarted.`. E
 
 - `Control didn't set <rig> up on a cluster.` (also for a removed rig)
 - `<rig> is <status>: wait until its page shows it running, or failed.`: a `start` or `restart` while the rig is `updating`, `starting` or `deploying`. A `stop` is not refused for this
-- `The cluster <cluster> is no longer in Providers.`
+- `The cluster <cluster> is no longer in Settings › Machines.`
 - kubectl's own error
 
 Besides `mcp:cluster_rig`, the audit log records `cluster_rig_stop`, `cluster_rig_start` or `cluster_rig_restart` with the caller's actor.
@@ -1404,7 +1404,7 @@ Errors:
 - `Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.`
 - `Control has no rig images configured.`
 - `Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).`, or for a rig added with `cuda: "13"`, `Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).`
-- `The cluster <cluster> is no longer in Providers.`
+- `The cluster <cluster> is no longer in Settings › Machines.`
 - `<rig> is being updated: wait until its page shows it running, or failed.`, or `<rig> is starting: …`: another update, or a start, is still waiting for its pods
 - `Control could not read <rig>'s deployment to compare control's address: <kubectl's error>` (or `kubectl's answer is not a deployment`): the same images, and the supervisor's deployment could not be read
 - kubectl's own error
@@ -1450,7 +1450,7 @@ Errors:
 - `Control didn't set <rig> up on a cluster.` (also for a removed rig)
 - `<rig> is still being set up.`
 - `Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.`
-- `The cluster <cluster> is no longer in Providers.`
+- `The cluster <cluster> is no longer in Settings › Machines.`
 - `<rig> is being updated: wait until its page shows it running, or failed.`, or `<rig> is starting: …`
 - `<rig> is draining for an image update: wait until its page shows it running, or call the update off first.`
 - `Only the owner's token changes a rig's GPU split: leave out judge_gpus. A new number of GPUs without it gives the judge half of them, rounded up.`: an operator's call with `judge_gpus`. Nothing changes, whatever else the call gives
@@ -1469,11 +1469,11 @@ Besides `mcp:set_cluster_rig_resources`, the audit log records `cluster_rig_drai
 
 **Set a cluster's slots.** Owner and operator.
 
-> For a cluster of pre-made slots in Providers: the namespaces control may use, one rig each. Control reads the cluster again, with each slot's network rules and quota. A slot that holds a rig must stay in the list.
+> For a cluster of pre-made slots in Settings › Machines: the namespaces control may use, one rig each. Control reads the cluster again, with each slot's network rules and quota. A slot that holds a rig must stay in the list.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cluster` | string | | The cluster's name in **Providers** |
+| `cluster` | string | | The cluster's name in **Settings › Machines** |
 | `slots` | list of strings, at least one | | The namespaces, one rig each. The list replaces the old one |
 
 Returns `{cluster, slots}`. Errors: `no such cluster`, `<cluster> puts rigs in namespaces control creates, not in slots`, `"<namespace>" is not a namespace name`, `<namespaces> still holds a rig (<rigs>): keep it in the list`, or why control could not read the cluster again.
@@ -1594,7 +1594,7 @@ Returns `{rig, retired:false}`. Error: `<rig> is not retired`.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cloud` | string, optional | every cloud | "The GPU cloud's name in Providers" |
+| `cloud` | string, optional | every cloud | "The GPU cloud's name in Settings › Machines" |
 | `limit` | whole number, 1 to 50 | 5 | How many tests |
 
 Returns a list of tests, each with `id`, `cloud`, `active`, `created_by`, `phase`, `phase_words`, `cost_usd`, `findings`, `outcome` (`running`, `passed`, `failed` or `ended`), the GPU, price, image, times and the probe's reports.
@@ -1603,11 +1603,11 @@ Returns a list of tests, each with `id`, `cloud`, `active`, `created_by`, `phase
 
 **Start a RunPod test pod.** Owner and operator.
 
-> Spends money. Starts one pod of Thermite's CUDA harness image, or of the one-container rig image that a rig on RunPod starts from (its isolation self-test then also checks the supervisor's places), on a GPU cloud from Providers, to check that a rig can run there: root, capabilities, GPU device nodes, RunPod's variables, outbound HTTPS and Thermite's isolation self-test, then (by default) a stop and a start to see it gets its GPU back. Control removes the pod when the test ends; follow it with runpod_tests. One test per cloud at a time. Defaults: the cheapest GPU in stock on Secure cloud, control's test image, a 40 GB disk, no time limit.
+> Spends money. Starts one pod of Thermite's CUDA harness image, or of the one-container rig image that a rig on RunPod starts from (its isolation self-test then also checks the supervisor's places), on a GPU cloud from Settings › Machines, to check that a rig can run there: root, capabilities, GPU device nodes, RunPod's variables, outbound HTTPS and Thermite's isolation self-test, then (by default) a stop and a start to see it gets its GPU back. Control removes the pod when the test ends; follow it with runpod_tests. One test per cloud at a time. Defaults: the cheapest GPU in stock on Secure cloud, control's test image, a 40 GB disk, no time limit.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cloud` | string | | "The GPU cloud's name in Providers" |
+| `cloud` | string | | "The GPU cloud's name in Settings › Machines" |
 | `gpu` | string, optional | the cheapest in stock | "A GPU type's id or name" |
 | `cloud_type` | `SECURE` or `COMMUNITY`, optional | `SECURE` | RunPod's Secure or Community cloud |
 | `image` | string, optional | `THERMITE_RUNPOD_TEST_IMAGE` | The image the pod runs |
@@ -1637,7 +1637,7 @@ Returns the test. Error: `no test <id>`.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cloud` | string, optional | every cloud | "The GPU cloud's name in Providers" |
+| `cloud` | string, optional | every cloud | "The GPU cloud's name in Settings › Machines" |
 
 Returns a list of rigs, each a `runpod rig` as [Rigs on a GPU cloud](rest-api.md#rigs-on-a-gpu-cloud) describes it: its pod, `status`, `price_per_hr`, `spend_usd`, limits, enrollment and notes.
 
@@ -1659,11 +1659,11 @@ Returns `{rig, pod, lines: [{source, ts, line}], read_at}`, as [`GET /v1/rigs/<r
 
 **Launch a rig on RunPod.** Owner only.
 
-> Spends money. Launches a rig on a GPU cloud from Providers: one pod of Thermite's one-container rig image, in pull mode, billed by the hour until it is stopped or removed. Control enrolls it and follows its price and spend (runpod_rigs). Defaults: 1 GPU, Secure cloud on demand, any data center, control's rig image, a 40 GB container disk, a 100 GB volume, no spend limit, no idle stop. The owner's token only.
+> Spends money. Launches a rig on a GPU cloud from Settings › Machines: one pod of Thermite's one-container rig image, in pull mode, billed by the hour until it is stopped or removed. Control enrolls it and follows its price and spend (runpod_rigs). Defaults: 1 GPU, Secure cloud on demand, any data center, control's rig image, a 40 GB container disk, a 100 GB volume, no spend limit, no idle stop. The owner's token only.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `cloud` | string | | "The GPU cloud's name in Providers" |
+| `cloud` | string | | "The GPU cloud's name in Settings › Machines" |
 | `gpu` | string | | "A GPU type's id or name, from providers" |
 | `gpu_count` | whole number, 1 to 8, optional | 1 | GPUs in the pod |
 | `cloud_type` | `SECURE`, optional | `SECURE` | Secure cloud on demand. `COMMUNITY` is refused until a later version |

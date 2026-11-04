@@ -13,7 +13,7 @@ describe("a cluster whose connection control can't check", () => {
     const s = await control(f.k);
     const add = (name: string, kubeconfig: string, more: Record<string, string> = {}) =>
       s.post("/ui/settings/add", { type: "k8s", name, kubeconfig, placement: "created", ...more });
-    const page = await s.page("/ui/settings");
+    const page = await s.page("/ui/settings/machines");
     assert.match(
       page,
       /Unchecked connection<i class="ii" tabindex="0" data-tip="Tick this only for a kubeconfig that skips TLS checks \(insecure-skip-tls-verify\) or reaches its API server over plain http:\/\/\./,
@@ -42,7 +42,7 @@ describe("a cluster whose connection control can't check", () => {
     ]);
     assert.equal(k?.unchecked?.by, "owner:ui");
     assert.match(
-      await s.page("/ui/settings"),
+      await s.page("/ui/settings/machines"),
       /<span class="chip warn" title="cluster &quot;c&quot; skips TLS checks \(insecure-skip-tls-verify\)">connection not checked: you accepted it [^<]+ ago<\/span>/,
     );
     const added = s.store.auditLog.list(10, { action: "cluster_added" })[0]?.body as Record<

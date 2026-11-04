@@ -21,7 +21,7 @@ This page lists where each part of Thermite listens, which networks join them, w
 | A free port on `127.0.0.1` | The supervisor in pull mode: its own calls to control wait there for control's next exchange | The supervisor alone: the port takes only a token that lives in the supervisor's memory, and answers anything else with an empty 404 | Chosen at start |
 | 7422/tcp | The pod's own NATS server, the leaf node of a rig on RunPod, on every interface, over TLS only ([A rig on RunPod](../explanation/how-the-parts-talk.md#a-rig-on-runpod)) | Control's NATS server alone, at the public address and port RunPod gives it: the port takes only a client certificate control's authority signed for control's server | Fixed; the launch exposes it as TCP (`7422/tcp`) |
 | 4222/tcp, on the pod's own `127.0.0.1` | The pod's own NATS server, for its supervisor, over TLS | The rig's supervisor alone, signed in with the rig's key on the bus | Fixed |
-| 22/tcp, or the machine's own | A machine's SSH server | Control, to check the machine and set rigs up on it | The machine's **SSH port** on the Providers page, 22 by default |
+| 22/tcp, or the machine's own | A machine's SSH server | Control, to check the machine and set rigs up on it | The machine's **SSH port** on the Machines page, 22 by default |
 | The cluster's API server | Kubernetes | Control's `kubectl`, to set rigs up on a cluster, and later to stop, start, restart, update or remove them | The cluster's kubeconfig |
 | 8000/tcp | A RunPod test pod's probe | Control, through RunPod's proxy, at an address with a random token in its path | Fixed |
 | 8810/tcp | The dashboard demo (`scripts/dev/dashboard-demo/main.ts`) | A browser | `--port` |

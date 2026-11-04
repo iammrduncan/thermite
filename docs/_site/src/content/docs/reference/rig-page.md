@@ -102,7 +102,7 @@ Control compares the rig's version with its own ([Rig versions](rest-api.md#rig-
 
 When the update can't come from control, the banner says how to do it:
 
-- a rig set up by control whose place is gone or not ready: why, such as `The machine gpu-host-1 is no longer in Settings › Providers, so control can't reach it.`, or control's missing images or address;
+- a rig set up by control whose place is gone or not ready: why, such as `The machine gpu-host-1 is no longer in Settings › Machines, so control can't reach it.`, or control's missing images or address;
 - a rig on RunPod: `Control can't move a pod onto another image. To run 0.2.0, terminate this rig and launch a new one on control's image.`;
 - any other rig: `Pull the 0.2.0 images where the rig runs, and start it again with them.`
 
@@ -255,7 +255,7 @@ A rig on RunPod has **History** in place of **Recent**, with filters: **All**, *
 
 ### Pod log
 
-**Pod log** shows the pod's log as RunPod keeps it: what the rig image printed and RunPod's own steps. Before the rig enrolls, it is the one place that says why a pod runs but never enrolls. Control reads it from RunPod's API (`GET /v2/pods/<pod>/logs`) with the GPU cloud's key from **Settings › Providers**. A read asks for the newest 200 lines and stops once they came, once no line came for 2 seconds, or after 10 seconds.
+**Pod log** shows the pod's log as RunPod keeps it: what the rig image printed and RunPod's own steps. Before the rig enrolls, it is the one place that says why a pod runs but never enrolls. Control reads it from RunPod's API (`GET /v2/pods/<pod>/logs`) with the GPU cloud's key from **Settings › Machines**. A read asks for the newest 200 lines and stops once they came, once no line came for 2 seconds, or after 10 seconds.
 
 | Part | What it shows |
 | --- | --- |

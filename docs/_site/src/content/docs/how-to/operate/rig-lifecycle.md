@@ -92,7 +92,7 @@ Before you start:
 
 - **Control runs with the new images**, as for [a rig on a cluster](#a-rig-on-a-cluster): `THERMITE_RIG_HARNESS_IMAGE` (`THERMITE_RIG_HARNESS_CUDA_IMAGE` for a rig with GPUs) and `THERMITE_RIG_SUPERVISOR_IMAGE`, those of control's own version.
 - **Control's address for rigs is set** (`THERMITE_CONTROL_PUBLIC_URL`).
-- **The machine or the cluster is still in Settings › Providers.**
+- **The machine or the cluster is still in Settings › Machines.**
 
 Steps:
 
@@ -115,7 +115,7 @@ Before you start:
 
 - **Control runs with the new images,** and was restarted after you set them: `THERMITE_RIG_HARNESS_IMAGE` (`THERMITE_RIG_HARNESS_CUDA_IMAGE` for a rig with GPUs) and `THERMITE_RIG_SUPERVISOR_IMAGE` ([settings](../../reference/settings.md#rigs-that-control-sets-up)). [Push the images to your own registry](../install/own-registry.md) says how. Give each new build a new tag: control compares the images' names, not their contents, and offers the update only when a name differs.
 - **Control's address for rigs is set** (`THERMITE_CONTROL_PUBLIC_URL`): the update writes it into the rig's supervisor again. Without it, control refuses the update with `Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.`
-- **The cluster is still in Settings › Providers.**
+- **The cluster is still in Settings › Machines.**
 - **The rig is not starting or being updated.** Its status says `running`, `stopped` or `failed`.
 
 Steps:
@@ -141,7 +141,7 @@ Steps:
 
 3. Wait on the page: the block shows each step as it comes, with no refresh. Control waits up to 15 minutes for the new pods to run, then up to 10 minutes for a report from them. Two more steps get a ✓, "Its pods run the new images" and "A report reached control from the new images", and the status is `running` again.
 
-If control refuses the update, the page shows a card that starts with **Not done.** and the reason, such as `The cluster cluster-1 is no longer in Providers.`, `rig-1 is being updated: wait until its page shows it running, or failed.`, the refusal for a missing address above, or kubectl's error.
+If control refuses the update, the page shows a card that starts with **Not done.** and the reason, such as `The cluster cluster-1 is no longer in Settings › Machines.`, `rig-1 is being updated: wait until its page shows it running, or failed.`, the refusal for a missing address above, or kubectl's error.
 
 If a step gets ✕ instead, with "not running after 15 minutes" or "no report after 10 minutes: it may not have started", the status says `failed`: see [A rig on a cluster never reports](troubleshoot.md#a-rig-on-a-cluster-never-reports). Fix the cause; the pods keep trying by themselves. When the rig reports again, its status says `running`, and a ✓ step follows the ✕: "A report reached control from the new images · it reported after the wait ended". To have control apply the images again and wait once more, see [Try again after a failure](#try-again-after-a-failure).
 

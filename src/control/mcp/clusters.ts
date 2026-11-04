@@ -27,7 +27,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
       "add_cluster_rig",
       {
         title: "Add a rig on a cluster",
-        description: `Adds a rig on a Kubernetes cluster in Providers, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and ${SUPERVISOR_SHARE.terminal.memoryGi} GiB of them and the harness the rest, and a size below ${leastRigSize("terminal").cpus} CPUs and ${leastRigSize("terminal").memoryGi} GiB is refused. The rig's first key may wait for the owner's acceptance.`,
+        description: `Adds a rig on a Kubernetes cluster in Settings › Machines, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and ${SUPERVISOR_SHARE.terminal.memoryGi} GiB of them and the harness the rest, and a size below ${leastRigSize("terminal").cpus} CPUs and ${leastRigSize("terminal").memoryGi} GiB is refused. The rig's first key may wait for the owner's acceptance.`,
         inputSchema: {
           rig: z.string().min(1).describe(RIG_ID_SENTENCE),
           cluster: z.string().min(1),
@@ -175,7 +175,7 @@ export function registerClusterRigs(tools: ToolContext): void {
       {
         title: "Set a cluster's slots",
         description:
-          "For a cluster of pre-made slots in Providers: the namespaces control may use, one rig each. Control reads the cluster again, with each slot's network rules and quota. A slot that holds a rig must stay in the list.",
+          "For a cluster of pre-made slots in Settings › Machines: the namespaces control may use, one rig each. Control reads the cluster again, with each slot's network rules and quota. A slot that holds a rig must stay in the list.",
         inputSchema: { cluster: z.string().min(1), slots: z.array(z.string().min(1)).min(1) },
       },
       audited("set_cluster_slots", async (a: { cluster: string; slots: string[] }) => {

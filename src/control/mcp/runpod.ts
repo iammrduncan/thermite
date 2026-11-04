@@ -29,7 +29,11 @@ export function registerRunpod(tools: ToolContext): void {
         description:
           "Test pods on a GPU cloud, newest first: where each is (phase), its GPU and price, its cost so far, and what it found in words (findings), with the probe's whole report. A test that is not active has had its pod removed.",
         inputSchema: {
-          cloud: z.string().min(1).optional().describe("The GPU cloud's name in Providers"),
+          cloud: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("The GPU cloud's name in Settings › Machines"),
           limit: z.number().int().min(1).max(50).default(5),
         },
       },
@@ -43,9 +47,9 @@ export function registerRunpod(tools: ToolContext): void {
         {
           title: "Start a RunPod test pod",
           description:
-            "Spends money. Starts one pod of Thermite's CUDA harness image, or of the one-container rig image that a rig on RunPod starts from (its isolation self-test then also checks the supervisor's places), on a GPU cloud from Providers, to check that a rig can run there: root, capabilities, GPU device nodes, RunPod's variables, outbound HTTPS and Thermite's isolation self-test, then (by default) a stop and a start to see it gets its GPU back. Control removes the pod when the test ends; follow it with runpod_tests. One test per cloud at a time. Defaults: the cheapest GPU in stock on Secure cloud, control's test image, a 40 GB disk, no time limit.",
+            "Spends money. Starts one pod of Thermite's CUDA harness image, or of the one-container rig image that a rig on RunPod starts from (its isolation self-test then also checks the supervisor's places), on a GPU cloud from Settings › Machines, to check that a rig can run there: root, capabilities, GPU device nodes, RunPod's variables, outbound HTTPS and Thermite's isolation self-test, then (by default) a stop and a start to see it gets its GPU back. Control removes the pod when the test ends; follow it with runpod_tests. One test per cloud at a time. Defaults: the cheapest GPU in stock on Secure cloud, control's test image, a 40 GB disk, no time limit.",
           inputSchema: {
-            cloud: z.string().min(1).describe("The GPU cloud's name in Providers"),
+            cloud: z.string().min(1).describe("The GPU cloud's name in Settings › Machines"),
             gpu: z.string().min(1).optional().describe("A GPU type's id or name"),
             cloud_type: z.enum(["SECURE", "COMMUNITY"]).optional(),
             image: z.string().min(1).optional(),
@@ -95,7 +99,11 @@ export function registerRunpod(tools: ToolContext): void {
         description:
           "Rigs the owner launched on a GPU cloud, newest first: each one's pod and its status at RunPod, what it was launched with, its price per hour, what it has cost so far (spend_usd), its enrollment, and the owner's spend limit and idle stop, if set.",
         inputSchema: {
-          cloud: z.string().min(1).optional().describe("The GPU cloud's name in Providers"),
+          cloud: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("The GPU cloud's name in Settings › Machines"),
         },
       },
       audited("runpod_rigs", (a: { cloud?: string }) => launched.list(a.cloud)),
@@ -142,9 +150,9 @@ export function registerRunpod(tools: ToolContext): void {
         "runpod_launch",
         {
           title: "Launch a rig on RunPod",
-          description: `Spends money. Launches a rig on a GPU cloud from Providers: one pod of Thermite's one-container rig image, in pull mode, billed by the hour until it is stopped or removed. Control enrolls it and follows its price and spend (runpod_rigs). Defaults: 1 GPU, Secure cloud on demand, any data center, control's rig image, a 40 GB container disk, a 100 GB volume, no spend limit, ${DEFAULT_IDLE_STOP_MINUTES === null ? "no idle stop" : `an idle stop of ${DEFAULT_IDLE_STOP_MINUTES} minutes`}. The owner's token only.`,
+          description: `Spends money. Launches a rig on a GPU cloud from Settings › Machines: one pod of Thermite's one-container rig image, in pull mode, billed by the hour until it is stopped or removed. Control enrolls it and follows its price and spend (runpod_rigs). Defaults: 1 GPU, Secure cloud on demand, any data center, control's rig image, a 40 GB container disk, a 100 GB volume, no spend limit, ${DEFAULT_IDLE_STOP_MINUTES === null ? "no idle stop" : `an idle stop of ${DEFAULT_IDLE_STOP_MINUTES} minutes`}. The owner's token only.`,
           inputSchema: {
-            cloud: z.string().min(1).describe("The GPU cloud's name in Providers"),
+            cloud: z.string().min(1).describe("The GPU cloud's name in Settings › Machines"),
             gpu: z.string().min(1).describe("A GPU type's id or name, from providers"),
             gpu_count: z.number().int().min(1).max(8).optional(),
             cloud_type: z.enum(["SECURE", "COMMUNITY"]).optional(),

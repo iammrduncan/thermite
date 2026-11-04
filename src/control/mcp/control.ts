@@ -97,7 +97,7 @@ export function registerControl(tools: ToolContext): void {
     {
       title: "Providers",
       description:
-        "What control holds in Settings › Providers: model providers, Git access, machines, Kubernetes clusters and GPU clouds, each with what control last read and its last error. A subscription's usage: its windows (id, label, minutes, used_percent from 0 to 100, resets_at), source (claude-code: as Claude Code on rig last reported them; openai: as ChatGPT's usage endpoint answered control, asked at most every 5 minutes), plan, at, and error in words when there are none; null for another provider, or a Claude subscription no rig reported yet. Never a key, token, password or kubeconfig.",
+        "What control holds in Settings › Providers (model providers and Git access) and Settings › Machines (machines, Kubernetes clusters and GPU clouds), each with what control last read and its last error. A subscription's usage: its windows (id, label, minutes, used_percent from 0 to 100, resets_at), source (claude-code: as Claude Code on rig last reported them; openai: as ChatGPT's usage endpoint answered control, asked at most every 5 minutes), plan, at, and error in words when there are none; null for another provider, or a Claude subscription no rig reported yet. Never a key, token, password or kubeconfig.",
       inputSchema: {},
     },
     audited("providers", async () => ({

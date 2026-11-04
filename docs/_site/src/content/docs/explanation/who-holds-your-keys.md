@@ -32,7 +32,7 @@ flowchart LR
 
 ## Control's sealed store
 
-Everything you add on the dashboard's **Settings › Providers** page is **sealed**: model provider keys, subscription logins, Git access, SSH keys, kubeconfigs, RunPod keys, and MCP servers' keys, client secrets and sign-ins. Control encrypts each one with AES-256-GCM, under a key kept in a separate file, outside its database. A copy of the database alone reveals no secret, and a sealed value that was changed fails to open. The [ports, volumes and secret files reference](../reference/ports-volumes-secrets.md#secret-files) says where each file lives.
+Everything you add on the dashboard's **Settings › Providers** and **Settings › Machines** pages is **sealed**: model provider keys, subscription logins, Git access, SSH keys, kubeconfigs, RunPod keys, and MCP servers' keys, client secrets and sign-ins. Control encrypts each one with AES-256-GCM, under a key kept in a separate file, outside its database. A copy of the database alone reveals no secret, and a sealed value that was changed fails to open. The [ports, volumes and secret files reference](../reference/ports-volumes-secrets.md#secret-files) says where each file lives.
 
 The dashboard shows only a hint of each key: its last four characters, such as `key …abcd`. No page, REST route or MCP tool shows you a key again. The MCP tool `providers` lists what control holds without any key, token or kubeconfig, and `mcp_servers` lists the MCP servers with only each secret's hint.
 

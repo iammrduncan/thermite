@@ -14,7 +14,7 @@ A [rig](../../reference/glossary.md) on RunPod runs on a GPU you rent by the hou
 
 ## Before you start
 
-- **A RunPod account in Settings › Providers**, added with an API key that may write. [Test a GPU on RunPod](runpod-test.md#1-add-the-runpod-account) gives the steps. A test pod there is a cheap way to check a GPU type first.
+- **A RunPod account in Settings › Machines**, added with an API key that may write. [Test a GPU on RunPod](runpod-test.md#1-add-the-runpod-account) gives the steps. A test pod there is a cheap way to check a GPU type first.
 - **The rig image, on control.** A pod runs the [one-container rig image](../../reference/harness-image.md#the-one-container-rig-image): the CUDA harness and the supervisor in one container. Each release publishes it on `ghcr.io` ([Published images](../../reference/harness-image.md#published-images)), and the release's `compose.yaml` gives it to control, pinned by its digest, in `THERMITE_RUNPOD_RIG_IMAGE`. With a release's `compose.yaml` there is nothing to do: a launch runs that image. A control that runs from the source code's `compose.yaml` has no rig image until you name one in `.env`: a published one, such as `ghcr.io/iammrduncan/thermite-rig:0.1.0-cuda`, or [one of your own](#use-a-rig-image-of-your-own). Without one, the launch form offers only **Your own image**.
 - **The owner's sign-in.** Only the owner may launch, stop, start or terminate a rig on RunPod. The dashboard signs in with the owner's token. For the command line, keep the token in a file: on the local compose stack it is `.dev/secrets/control-admin-token`.
 - **A way out to the internet for control and its message bus.** Control needs no public address: it connects to the pod through RunPod's proxy, its message bus connects to the pod's own bus server, and the pod never connects to control ([A rig on RunPod](../../explanation/how-the-parts-talk.md#a-rig-on-runpod)). The local compose stack is enough. A firewall in front of control must let the bus's `nats` service reach any TCP port on the internet: RunPod chooses the pod's public port. A rig reaches control only on the bus: a pod the bus can't reach can't report.
@@ -27,7 +27,7 @@ c="--control http://127.0.0.1:8800 --token-file .dev/secrets/control-admin-token
 
 ## 1. Open Launch on RunPod
 
-Open **Rigs** in the sidebar, press **Add a rig**, and choose your RunPod account under "Or launch it on a GPU you rent by the hour". **Launch on RunPod** at the top of **Rigs**, and **Launch a rig** on the account's row in **Settings › Providers**, open the same page.
+Open **Rigs** in the sidebar, press **Add a rig**, and choose your RunPod account under "Or launch it on a GPU you rent by the hour". **Launch on RunPod** at the top of **Rigs**, and **Launch a rig** on the account's row in **Settings › Machines**, open the same page.
 
 **Launch on RunPod** shows the account, its pods running now, and when control last read RunPod's prices and stock. Press **Read again** to read them now.
 
@@ -62,7 +62,7 @@ The same launch from the command line has no idle stop unless you give `--idle-s
 npx thermite runpod launch runpod --gpu "RTX A4000" --gpus 2 --spend-limit 20 --idle-stop 60 $c
 ```
 
-`runpod` is the account's name in **Providers**. It prints the rig on one line, then `Launched: RunPod bills the pod from now. Control enrolls it once it runs; follow it with npx thermite runpod list.` [`npx thermite runpod launch`](../../reference/command-line.md#runpod-launch) lists every option, such as `--setting THERMITE_JUDGE_GPUS=1` and `--image`. Over the REST API, or with the MCP tool [`runpod_launch`](../../reference/mcp-tools.md#runpod_launch):
+`runpod` is the account's name in **Settings › Machines**. It prints the rig on one line, then `Launched: RunPod bills the pod from now. Control enrolls it once it runs; follow it with npx thermite runpod list.` [`npx thermite runpod launch`](../../reference/command-line.md#runpod-launch) lists every option, such as `--setting THERMITE_JUDGE_GPUS=1` and `--image`. Over the REST API, or with the MCP tool [`runpod_launch`](../../reference/mcp-tools.md#runpod_launch):
 
 ```sh
 curl -sS -X POST http://127.0.0.1:8800/v1/gpu-clouds/runpod/rigs \
@@ -83,7 +83,7 @@ Once the pod runs, RunPod gives its port 7422 a public address and port, and con
 
 ### A pod that runs but never enrolls: read its log
 
-Before a rig enrolls, control sees nothing of it, and the pod's log is the one place that says why. **Pod log**, under **Getting it ready**, reads it from RunPod's API with the key you gave in **Settings › Providers**, so you need no RunPod console. The first time the page opens, it reads the log by itself; after that it shows the last read, and **Read again** reads the newest lines. Each line is marked `container`, for what the rig image printed, or `system`, for RunPod's own steps, such as the image pull. The newest line is at the bottom.
+Before a rig enrolls, control sees nothing of it, and the pod's log is the one place that says why. **Pod log**, under **Getting it ready**, reads it from RunPod's API with the key you gave in **Settings › Machines**, so you need no RunPod console. The first time the page opens, it reads the log by itself; after that it shows the last read, and **Read again** reads the newest lines. Each line is marked `container`, for what the rig image printed, or `system`, for RunPod's own steps, such as the image pull. The newest line is at the bottom.
 
 Look for the last thing the image printed: an image that failed to pull, a crash at start, or a supervisor that could not reach control. A read that RunPod refuses says why in the block, such as `Not read: RunPod refused to show pod …'s log with this key: the key may not read pod logs.`: give control a key with read access to pods. Over the REST API, `GET /v1/rigs/<rig>/runpod/logs` gives the same lines, and so does the MCP tool [`runpod_rig_logs`](../../reference/mcp-tools.md#runpod_rig_logs).
 
@@ -147,7 +147,7 @@ A stopped pod is terminated at once when its last stop sent every result out. Ot
 
 From the command line: `npx thermite runpod terminate rp-1a2b3c4d $c`.
 
-To check that nothing is left at RunPod, press **Read again** on the account's row in **Providers**: **Pods** no longer lists `thermite-rp-1a2b3c4d`.
+To check that nothing is left at RunPod, press **Read again** on the account's row in **Settings › Machines**: **Pods** no longer lists `thermite-rp-1a2b3c4d`.
 
 ## Fully reset it
 

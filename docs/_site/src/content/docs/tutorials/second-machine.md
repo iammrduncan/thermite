@@ -44,8 +44,8 @@ It takes about thirty minutes, most of it the second machine downloading the ima
 
 ## 2. Add the machine
 
-1. Open the dashboard and press the cog at the foot of the sidebar: **Settings › Providers** opens.
-2. Under **Add a provider**, set **Type** to **A machine over SSH**, and fill in a **Name** such as `machine-2`, its **Address**, the **SSH port** (usually 22) and the **User**, `thermite`. Leave **Private key** empty: control makes one.
+1. Open the dashboard, press the cog at the foot of the sidebar, then **Machines** under **Rigs**, and press **Add a machine**.
+2. Choose **A computer over SSH**, and fill in a **Name** such as `machine-2`, its **Address**, the **SSH port** (usually 22) and the **User**, `thermite`. Leave **Private key** empty: control makes one.
 3. Press **Add and read its host key**.
 
 The machine's row opens, with a line that starts with `restrict`: the public half of control's key.

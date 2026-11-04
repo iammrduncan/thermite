@@ -59,7 +59,7 @@ export async function actOnClusterRig(
   )
     return { error: `${r.rig} is ${r.status}: wait until its page shows it running, or failed.` };
   const k = store.clusters.get(r.cluster);
-  if (!k) return { error: `The cluster ${r.cluster} is no longer in Providers.` };
+  if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
   const runs = clusterActionCalls(r, action);
   for (const [i, args] of runs.entries()) {
     const out = await parts.kube.kubectl(clusterTarget(parts, k), args, undefined, 120_000);

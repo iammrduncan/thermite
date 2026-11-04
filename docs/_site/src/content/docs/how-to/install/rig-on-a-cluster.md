@@ -101,9 +101,8 @@ A helper that writes a slot's objects out for the operators is planned ([goal 03
 
 ## 1. Add the cluster
 
-1. Press the cog at the foot of the sidebar to open **Settings › Providers**.
-2. Under **Add a provider**, fill in:
-   - **Type:** A Kubernetes cluster
+1. Press the cog at the foot of the sidebar to open **Settings**, then **Machines** under **Rigs**, and press **Add a machine**.
+2. Choose **A Kubernetes cluster**, and fill in:
    - **Name:** the name Thermite shows for it, such as `cluster-1`
    - **Kubeconfig:** paste it
    - **Context:** which context to use. Empty: its current context
@@ -315,7 +314,7 @@ Only a rig on a cluster has this share. The local stack and other compose rigs, 
 
 Over MCP, the owner's and the operator's tokens have five tools for clusters (see [MCP tools](../../reference/mcp-tools.md)):
 
-- `add_cluster_rig` adds a rig on a cluster in Providers, with the same checks as **Add a rig**. Its fields are `rig`, `cluster`, `slot`, `gpus`, `judge_gpus`, `gpu_mode` (`device-plugin` or `dra:<device class>`), `node`, `storage_class`, `storage_gb`, `cpus` and `memory_gib`. It answers with the rig's name and `"status": "deploying"`; follow the rig with `rig_setup` and `list_rigs`.
+- `add_cluster_rig` adds a rig on a cluster in **Settings › Machines**, with the same checks as **Add a rig**. Its fields are `rig`, `cluster`, `slot`, `gpus`, `judge_gpus`, `gpu_mode` (`device-plugin` or `dra:<device class>`), `node`, `storage_class`, `storage_gb`, `cpus` and `memory_gib`. It answers with the rig's name and `"status": "deploying"`; follow the rig with `rig_setup` and `list_rigs`.
 - `set_cluster_slots` replaces the list of slots of a cluster that uses slots. A slot that holds a rig must stay in the list.
 - `cluster_rig` stops, starts or restarts a rig, as the buttons on its page do. Its fields are `rig` and `action`: `stop`, `start` or `restart`. Its answer's `said` is `Stopped.`, `Started.` or `Restarted.` After a start or a restart, follow the rig with `rig_setup`: it says `starting`, then `running` once the pods run and the rig reports, or `failed`. Removing a rig is done on the dashboard.
 - `update_rig_images` moves a rig onto control's images, as **Update to these images**, **Try the update again** and **Give it control's new address** do. Its fields are `rig` and `wait`: by default it drains a rig at work first; `"wait": false` restarts its pods now, also during a drain. Its answer's `said` is one of:

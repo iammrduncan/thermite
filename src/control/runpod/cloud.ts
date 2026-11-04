@@ -1,5 +1,5 @@
 /**
- * RunPod as a place for rigs (Settings › Providers): control seals the owner's API key and reads,
+ * RunPod as a place for rigs (Settings › Machines): control seals the owner's API key and reads,
  * with RunPod's REST API v2, the GPU types with their prices and stock, the data centers, the
  * network volumes, the account's pods and, when asked, a pod's log (podLogs: what a pod that
  * never enrolls printed). Reading spends nothing. Control starts pods only when
@@ -366,7 +366,7 @@ async function podLogRefusal(r: Response, podId: string): Promise<RunpodRefused>
   if (status === 401)
     return new RunpodRefused(
       status,
-      "RunPod refused the key: it is wrong or was revoked. Check it in Settings › Providers",
+      "RunPod refused the key: it is wrong or was revoked. Check it in Settings › Machines",
     );
   if (status === 403)
     return new RunpodRefused(
@@ -579,7 +579,7 @@ async function readSpend(get: (path: string) => Promise<Json | null>): Promise<R
   }
 }
 
-/** Reads every GPU cloud in Providers again (control's loop, every 15 minutes): prices, pods, spend. */
+/** Reads every GPU cloud in Settings › Machines again (control's loop, every 15 minutes): prices, pods, spend. */
 export async function refreshGpuClouds(
   store: ControlStore,
   secrets: SecretBox,

@@ -150,7 +150,8 @@ export async function addClusterRig(
   if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
   if (!k) return fail("Choose a machine or a cluster.");
   const facts = k.facts as ClusterFacts | null;
-  if (!facts || k.check_error) return fail(`${k.name} is not ready: check it under Providers.`);
+  if (!facts || k.check_error)
+    return fail(`${k.name} is not ready: check it under Settings › Machines.`);
   const gpus = i.gpus;
   if (!Number.isInteger(gpus) || gpus < 0 || gpus > MAX_RIG_GPUS)
     return fail(`A rig takes from none to ${MAX_RIG_GPUS} GPUs.`);
@@ -458,7 +459,7 @@ export async function checkClusterRig(
 ): Promise<{ ok: boolean; words: string }> {
   const r = parts.store.clusters.rig(rig);
   const k = r ? parts.store.clusters.get(r.cluster) : undefined;
-  if (!r || !k) return { ok: false, words: "The cluster is no longer in Settings › Providers." };
+  if (!r || !k) return { ok: false, words: "The cluster is no longer in Settings › Machines." };
   const n = clusterNames(rig);
   const out = await parts.kube.kubectl(
     clusterTarget(parts, k),

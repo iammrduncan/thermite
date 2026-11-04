@@ -283,7 +283,7 @@ describe("RunPod test pods", () => {
     assert.ok(!(await agent.listTools()).tools.some((t) => t.name.startsWith("runpod_")));
 
     const ui = await signIn(api);
-    const page = await ui.page("/ui/settings");
+    const page = await ui.page("/ui/settings/machines");
     assert.match(page, new RegExp(`Test ${started.id}</b> · RTX A4000, Secure`));
     assert.match(page, /End it now: remove the pod/);
     assert.match(page, /a test pod is running/);
@@ -294,7 +294,7 @@ describe("RunPod test pods", () => {
     );
     assert.equal(ended.active, false);
     assert.equal(cloud.pods.size, 0);
-    const after = await ui.page("/ui/settings");
+    const after = await ui.page("/ui/settings/machines");
     assert.match(after, /Start a test pod/);
     assert.match(after, new RegExp(`value="${IMAGE}"`), "control's test image fills the form in");
     // The form and the MCP tool name both images a test pod can run.

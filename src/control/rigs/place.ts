@@ -11,7 +11,7 @@ export type PlaceParts = Pick<ControlParts, "store" | "secrets" | "machineSsh" |
  * rig turns stale and offline: rigs/watch.ts): over SSH on a machine, through the cluster's API on
  * a cluster. What it found is a step in the rig's history. Null when control can't reach it: it
  * set the rig up nowhere it knows (RunPod, a place the owner joined it, compose), or that machine
- * or cluster is no longer in Providers.
+ * or cluster is no longer in Settings › Machines.
  */
 export async function checkRigPlace(
   parts: PlaceParts,

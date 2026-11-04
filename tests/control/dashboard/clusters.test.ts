@@ -47,7 +47,7 @@ describe("clusters in Providers and Add a rig", () => {
     const k = s.store.clusters.get("k8s-a");
     assert.equal(k?.context, "kind-thermite");
     assert.equal(s.secrets.open(k?.kubeconfig_sealed ?? ""), KUBECONFIG.trim());
-    let page = await s.page("/ui/settings");
+    let page = await s.page("/ui/settings/machines");
     assert.match(page, /class="kind r">Cluster</);
     assert.match(page, /Kubernetes v1\.35\.2 · 1 node, 1 with 2 GPUs · storage standard/);
     assert.match(page, /control may create namespaces/);
@@ -136,7 +136,7 @@ describe("clusters in Providers and Add a rig", () => {
       placement: "slot",
       slots: "thermite-slot-1, thermite-slot-2, thermite-slot-3",
     });
-    const page = await s.page("/ui/settings");
+    const page = await s.page("/ui/settings/machines");
     assert.match(page, /thermite-slot-1: <span class="chip ok">free/);
     assert.match(page, /thermite-slot-2: <span class="chip warn">control may not deploy here/);
     // A slot whose rules don't keep the harness off the cluster is refused.

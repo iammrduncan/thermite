@@ -46,7 +46,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
     const r = store.machines.rig(rig);
     if (!r || r.status === "removed") throw new Error(`Control didn't set ${rig} up on a machine.`);
     const m = store.machines.get(r.machine);
-    if (!m) throw new Error(`The machine ${r.machine} is no longer in Settings › Providers.`);
+    if (!m) throw new Error(`The machine ${r.machine} is no longer in Settings › Machines.`);
     const images = controlImages(parts, r.gpus.length);
     if (typeof images === "string") throw new Error(images);
     if (!parts.publicUrl)

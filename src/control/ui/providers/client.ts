@@ -49,9 +49,10 @@ export const PROVIDERS_JS = `
   const form = document.getElementById("prov-add");
   if (form) {
     const says = JSON.parse(form.dataset.says || "{}");
-    const type = form.elements.type;
+    // The type: Providers' list, or Machines' three choices (goal 203), each named "type".
     const show = () => {
-      const t = type.value;
+      const t = form.elements.type.value;
+      for (const l of form.querySelectorAll("label.ch")) l.classList.toggle("on", !!l.querySelector("input:checked"));
       for (const el of form.querySelectorAll("[data-for]")) el.hidden = !el.dataset.for.split(" ").includes(t);
       const s = says[t] || ["Add it", ""];
       document.getElementById("padd").textContent = s[0];
@@ -62,7 +63,9 @@ export const PROVIDERS_JS = `
       what.append(b, " " + s[1]);
       form.elements.name.placeholder = t === "gitkey" || t === "gittoken" ? "for example github-deploy" : t === "runpod" ? "for example runpod" : t === "claude" ? "for example claude-max" : t === "chatgpt" ? "for example chatgpt-pro" : "for example my-litellm";
     };
-    type.addEventListener("change", show);
+    form.addEventListener("change", (e) => {
+      if (e.target && e.target.name === "type") show();
+    });
     show();
   }
 

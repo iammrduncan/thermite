@@ -204,7 +204,7 @@ describe("Launch on RunPod", () => {
       /href="\/ui\/rigs\/add\/runpod\?cloud=runpod"><span><b>runpod · RunPod/,
     );
     assert.match(
-      await s.page("/ui/settings"),
+      await s.page("/ui/settings/machines"),
       /<a class="btn sm" href="\/ui\/rigs\/add\/runpod\?cloud=runpod">Launch a rig<\/a>/,
     );
   });

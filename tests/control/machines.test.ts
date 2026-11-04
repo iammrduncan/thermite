@@ -95,7 +95,7 @@ describe("machines in Providers", () => {
     const machine = s.store.machines.get("gpu-box-1");
     assert.ok(machine);
     assert.match(s.secrets.open(machine.key_sealed), /OPENSSH PRIVATE KEY/);
-    let page = await s.page("/ui/settings");
+    let page = await s.page("/ui/settings/machines");
     assert.ok(page.includes(machine.public_key));
     assert.ok(!page.includes("PRIVATE KEY"));
     assert.match(page, /Check the host key\./);
@@ -123,7 +123,7 @@ describe("machines in Providers", () => {
     assert.equal(m.state.calls[0]?.script, CHECK_SCRIPT);
     assert.deepEqual(m.state.calls[0]?.args, ["https://control.example.com/v1/health"]);
     assert.equal(m.state.calls[0]?.target.user, "thermite");
-    page = await s.page("/ui/settings");
+    page = await s.page("/ui/settings/machines");
     assert.match(
       page,
       /1 × NVIDIA GeForce RTX 4090 · Ubuntu 24\.04\.1 LTS · 32 CPUs · 125 GB memory · Podman 4\.9\.3/,
@@ -146,7 +146,8 @@ describe("machines in Providers", () => {
       port: "2222",
       user: "thermite",
     });
-    const first = /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings"))?.[1] ?? "";
+    const first =
+      /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings/machines"))?.[1] ?? "";
     assert.equal(first, `[192.0.2.10]:2222 ssh-ed25519 ${HOST}`);
     await s.post("/ui/settings/machines/box/trust", { seen: first });
     m.state.hostKey = OTHER;
@@ -154,7 +155,7 @@ describe("machines in Providers", () => {
       await s.page(await s.post("/ui/settings/machines/box/check", {})),
       /different host key/,
     );
-    const page = await s.page("/ui/settings");
+    const page = await s.page("/ui/settings/machines");
     assert.match(page, /The machine now presents a different host key/);
     assert.match(page, /showing the last check/);
     // Trusting the new key is the owner's choice; then it connects again.
@@ -207,9 +208,10 @@ describe("machines in Providers", () => {
       port: "22",
       user: "thermite",
     });
-    const seen = /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings"))?.[1] ?? "";
+    const seen =
+      /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings/machines"))?.[1] ?? "";
     await s.post("/ui/settings/machines/box/trust", { seen });
-    let page = await s.page("/ui/settings");
+    let page = await s.page("/ui/settings/machines");
     assert.match(
       page,
       /May control install NVIDIA&#39;s container toolkit\?|May control install NVIDIA's container toolkit\?/,
@@ -242,7 +244,7 @@ describe("machines in Providers", () => {
     );
     assert.equal(ran.length, 1);
     assert.match(ran[0] ?? "", /nvidia-ctk cdi generate/);
-    page = await s.page("/ui/settings");
+    page = await s.page("/ui/settings/machines");
     assert.match(
       page,
       /<b>Installing NVIDIA&#39;s container toolkit<\/b>|<b>Installing NVIDIA's container toolkit<\/b>/,

@@ -11,6 +11,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Rigs
 
+- **Settings › Machines**: where rigs run has its own page, apart from Providers' logins: Kubernetes clusters with their slots, computers over SSH and GPU clouds, each with **Add a rig here**, and **Add a machine** with its three kinds. Providers keeps model providers, subscriptions and Git access. Add a rig's **+ A new machine** opens it, and Add a rig here opens Add a rig with that machine or cluster chosen.
 - A rig on a cluster can run the CUDA 13 harness, for Blackwell GPUs and the DGX Spark on arm64: **Add a rig** has a **CUDA** field, which control sets to 13 for an arm64 node or a Blackwell GPU where it can tell, and says why; MCP's `add_cluster_rig` takes `cuda` and defaults the same way. Control deploys `THERMITE_RIG_HARNESS_CUDA13_IMAGE` (a release's `compose.yaml` sets the release's `-cuda13` image), and each update keeps the rig on it. The cluster check reads each node's architecture and, where it may read resource slices, the GPU each DRA device class names.
 
 ### Model use

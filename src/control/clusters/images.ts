@@ -52,7 +52,7 @@ export async function updateRigImages(
   if (typeof images === "string") return { error: images };
   const old = r.spec.images;
   const k = store.clusters.get(r.cluster);
-  if (!k) return { error: `The cluster ${r.cluster} is no longer in Providers.` };
+  if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
   // A drain for a change to its GPUs, CPUs or memory (goal 118) is that change's.
   if (r.status === "draining" && r.pending)
     return {

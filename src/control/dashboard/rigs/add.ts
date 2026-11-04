@@ -121,6 +121,8 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
   app.get("/ui/rigs/add", (c) => {
     const t = csrf(c);
     const error = c.req.query("error");
+    // The place to choose first: one from Settings › Machines' Add a rig here (goal 203).
+    const wanted = c.req.query("place");
     const machines = store.machines.list();
     const cards = machines
       .map((m, i) => {
@@ -130,9 +132,9 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
         const free = (f?.gpus ?? []).filter((g) => !used.has(g.index)).length;
         const rigsHere = store.machines.rigs(m.name).filter((r) => r.status !== "removed");
         const sub = why
-          ? `Not ready: ${why}. Fix it under Settings › Providers.`
+          ? `Not ready: ${why}. Fix it under Settings › Machines.`
           : `${factsLine(f as MachineFacts)}${rigsHere.length ? ` · runs ${rigsHere.map((r) => r.rig).join(", ")}` : ""}${f?.gpus.length ? ` · ${free} GPU${free === 1 ? "" : "s"} free` : ""}`;
-        return `<label class="ch${why ? " dis" : ""}"><input type="radio" name="place" value="machine:${esc(m.name)}"${why ? " disabled" : i === 0 ? " checked" : ""} style="margin:2px 8px 0 0"><span><b>${esc(m.name)} · a machine over SSH</b><br><span class="muted small">${esc(sub)}</span></span></label>`;
+        return `<label class="ch${why ? " dis" : ""}"><input type="radio" name="place" value="machine:${esc(m.name)}"${why ? " disabled" : (wanted ? wanted === `machine:${m.name}` : i === 0) ? " checked" : ""} style="margin:2px 8px 0 0"><span><b>${esc(m.name)} · a machine over SSH</b><br><span class="muted small">${esc(sub)}</span></span></label>`;
       })
       .join("");
     const gpuLists = machines
@@ -165,9 +167,9 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
         const why = clusterReady(k);
         const f = k.facts as ClusterFacts | null;
         const sub = why
-          ? `Not ready: ${why}. Check it under Settings › Providers.`
+          ? `Not ready: ${why}. Check it under Settings › Machines.`
           : `${clusterLine(f as ClusterFacts)} · ${k.placement === "created" ? `rigs get namespace ${k.namespace_pattern}` : `${(f as ClusterFacts).slots.filter((s) => s.usable && !s.used_by).length} free slot(s)`}`;
-        return `<label class="ch${why ? " dis" : ""}"><input type="radio" name="place" value="cluster:${esc(k.name)}"${why ? " disabled" : ""} style="margin:2px 8px 0 0"><span><b>${esc(k.name)} · Kubernetes</b><br><span class="muted small">${esc(sub)}</span></span></label>`;
+        return `<label class="ch${why ? " dis" : ""}"><input type="radio" name="place" value="cluster:${esc(k.name)}"${why ? " disabled" : wanted === `cluster:${k.name}` ? " checked" : ""} style="margin:2px 8px 0 0"><span><b>${esc(k.name)} · Kubernetes</b><br><span class="muted small">${esc(sub)}</span></span></label>`;
       })
       .join("");
     const clusterSections = clusters
@@ -281,8 +283,8 @@ ${
       `<p class="run-said">Choose where the rig runs. On a machine or cluster control knows, control connects with the credentials you gave it once, writes the rig's files and services, starts it and looks after it: stop, start, restart, remove. Where control can't connect, you run one command it gives you.</p>
 ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not created.</b> ${esc(error)}</div>` : ""}${blocked ? `<div class="card warn" style="margin-bottom:16px">${esc(blocked)}</div>` : ""}
 <form id="add-rig" method="post" action="/ui/rigs/add" autocomplete="off"><input type="hidden" name="csrf" value="${t}">
-<div class="sec"><h2>1 · Where</h2><p class="lead">A machine or a cluster control knows. They are added, checked and prepared under <a href="/ui/settings">Settings › Providers</a>.</p>
-<div class="stack">${cards}${clusterCards}${cards || clusterCards ? "" : `<div class="card"><div class="empty">No machine or cluster yet.</div></div>`}<a class="ch" href="/ui/settings"><span><b>+ A new machine or cluster</b><br><span class="muted small">A Linux machine control can reach with an SSH key, or a Kubernetes cluster through a kubeconfig. Add it in Providers, then come back.</span></span></a></div>
+<div class="sec"><h2>1 · Where</h2><p class="lead">A machine or a cluster control knows. They are added, checked and prepared under <a href="/ui/settings/machines">Settings › Machines</a>.</p>
+<div class="stack">${cards}${clusterCards}${cards || clusterCards ? "" : `<div class="card"><div class="empty">No machine or cluster yet.</div></div>`}<a class="ch" href="/ui/settings/machines?add=1#add-machine"><span><b>+ A new machine</b><br><span class="muted small">A computer control can reach over SSH, such as a DGX Spark, or a Kubernetes cluster through a kubeconfig. Add it under Settings › Machines, then press Add a rig here on it.</span></span></a></div>
 <p class="lead" style="margin-top:14px">Or run it yourself, where control can't connect:</p><div class="stack">${joinCards}</div>
 <p class="lead" style="margin-top:14px">Or launch it on a GPU you rent by the hour:</p><div class="stack">${
         store.gpuClouds
@@ -292,7 +294,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
               `<a class="ch" href="/ui/rigs/add/runpod?cloud=${encodeURIComponent(g.name)}"><span><b>${esc(g.name)} · RunPod</b><br><span class="muted small">Control starts a pod with Thermite's rig image, enrolls it and follows its price. RunPod bills it by the second while it runs. Opens Launch on RunPod.</span></span></a>`,
           )
           .join("") ||
-        `<a class="ch" href="/ui/settings"><span><b>+ A RunPod account</b><br><span class="muted small">Add it in Providers with an API key that may start pods, then come back to launch a rig on it.</span></span></a>`
+        `<a class="ch" href="/ui/settings/machines?add=1#add-machine"><span><b>+ A RunPod account</b><br><span class="muted small">Add it under Settings › Machines with an API key that may start pods, then press Launch a rig on it.</span></span></a>`
       }</div></div>
 <div class="sec"><h2>2 · GPUs and resources</h2><p class="lead">As control last read the place. One GPU is shared by the judge and the agents. With more, some are the judge's and the rest the agents': half each by default, and on a machine the lowest-numbered GPUs are the judge's.</p>${gpuLists}<label class="fd" id="judge-pick" hidden style="max-width:280px;margin-top:10px">${infoLabel("GPUs for the judge", "How many of the chosen GPUs the judge measures on: the lowest-numbered ones. The rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. Default: half, rounded up.")}<input name="judge_gpus" inputmode="numeric" maxlength="2" placeholder="half"></label>${clusterSections}${joinSections}<div class="nc-does" id="gpu-note"></div></div>
 <div class="sec"><h2>3 · Name and start</h2><div class="g3">

@@ -75,7 +75,8 @@ export async function prepareResize(
     };
   if (!parts.rigBus) return { error: NO_RIG_BUS, status: 409 };
   const k = store.clusters.get(r.cluster);
-  if (!k) return { error: `The cluster ${r.cluster} is no longer in Providers.`, status: 409 };
+  if (!k)
+    return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.`, status: 409 };
   if (r.status === "updating" || r.status === "starting")
     return {
       error: `${rig} is ${r.status === "updating" ? "being updated" : "starting"}: wait until its page shows it running, or failed.`,
@@ -170,7 +171,8 @@ export async function applyResize(
   if (!r || r.status === "removed")
     return { error: `Control didn't set ${rig} up on a cluster.`, status: 404 };
   const k = store.clusters.get(r.cluster);
-  if (!k) return { error: `The cluster ${r.cluster} is no longer in Providers.`, status: 409 };
+  if (!k)
+    return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.`, status: 409 };
   const from = sizeOf(r);
   const to: ClusterRigSize = {
     gpus: size.gpus,

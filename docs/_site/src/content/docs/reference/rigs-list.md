@@ -14,7 +14,7 @@ The line beside the title counts the rigs, then, when there are any, those that 
 
 The buttons at the right:
 
-- **Launch on RunPod** opens [the launch form](../how-to/install/runpod-rig.md). It shows only when **Settings › Providers** has a RunPod account.
+- **Launch on RunPod** opens [the launch form](../how-to/install/runpod-rig.md). It shows only when **Settings › Machines** has a RunPod account.
 - **Add a rig** opens the ways to add a rig.
 
 ## Filters

@@ -225,7 +225,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       action === "remove" ? removeCheck(store, r.rig, String(f.confirm ?? "").trim()) : null;
     if (removing && "refused" in removing) return back("error", removing.refused);
     const m = store.machines.get(r.machine);
-    if (!m) return back("error", `The machine ${r.machine} is no longer in Providers.`);
+    if (!m) return back("error", `The machine ${r.machine} is no longer in Settings › Machines.`);
     try {
       const out = await ssh.sshScript(
         {

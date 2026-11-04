@@ -191,7 +191,7 @@ describe("RunPod in Providers", () => {
     const g = s.store.gpuClouds.get("runpod");
     assert.equal(s.secrets.open(g?.key_sealed ?? ""), KEY);
     assert.equal(g?.key_hint, "…cdef");
-    let page = await s.page("/ui/settings");
+    let page = await s.page("/ui/settings/machines");
     assert.ok(!page.includes(KEY), "the key is never shown");
     assert.match(page, /RunPod \(a GPU cloud\)/);
     assert.match(page, /2 GPU types · from \$0\.25\/h \(RTX A4000, Secure\)/);
@@ -229,7 +229,7 @@ describe("RunPod in Providers", () => {
       await nb.post("/ui/settings/add", { type: "runpod", name: "rp-nb", runpod_key: KEY }),
       /"rp-nb" is added and read/,
     );
-    assert.match(await nb.page("/ui/settings"), /RunPod refused this key for billing/);
+    assert.match(await nb.page("/ui/settings/machines"), /RunPod refused this key for billing/);
 
     // RunPod can't be reached: the last read stays, with why.
     const down = await control(fakeRunpod({ down: true }).f);
@@ -246,7 +246,7 @@ describe("RunPod in Providers", () => {
       /"runpod" is deleted: control keeps nothing of its key/,
     );
     assert.equal(s.store.gpuClouds.get("runpod"), undefined);
-    page = await s.page("/ui/settings");
+    page = await s.page("/ui/settings/machines");
     assert.ok(!page.includes("RunPod ·"));
     // Every call only read.
     assert.ok(rp.calls.every((c) => c.method === "GET"));

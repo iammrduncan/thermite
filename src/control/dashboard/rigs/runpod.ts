@@ -120,7 +120,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
       "cache-control": "no-cache",
     }),
   );
-  /** The launch form, for one RunPod account in Providers, maybe with what was typed and why not. */
+  /** The launch form, for one RunPod account in Settings › Machines, maybe with what was typed and why not. */
   const launchPage = (c: Ctx, form: LaunchForm, error?: string) => {
     const clouds = store.gpuClouds.list().map((g) => ({
       name: g.name,
@@ -138,7 +138,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
       return page(
         c,
         { title: "Launch on RunPod", crumbs, active: "rigs" },
-        `<div class="card"><p>Control has no RunPod account yet. Add one under <a href="/ui/settings">Settings › Providers</a>, with an API key that may start pods, then come back.</p></div>`,
+        `<div class="card"><p>Control has no RunPod account yet. Add one under <a href="/ui/settings/machines?add=1#add-machine">Settings › Machines</a>, with an API key that may start pods, then come back.</p></div>`,
       );
     return page(
       c,
@@ -186,7 +186,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
     }
     const rigs = opts.runpodRigs;
     if (!rigs || !store.gpuClouds.get(form.cloud ?? ""))
-      return launchPage(c, form, "Choose a RunPod account from Settings › Providers.");
+      return launchPage(c, form, "Choose a RunPod account from Settings › Machines.");
     const count = Number(form.gpu_count || "1");
     if (!(Number.isInteger(count) && count >= 1 && count <= 8))
       return launchPage(c, form, "A pod has 1 to 8 GPUs.");

@@ -631,7 +631,7 @@ rig-3: enrolled, no report yet
 
 ### `runpod launch`
 
-`thermite runpod launch CLOUD` **spends money**. It launches a rig on the GPU cloud `CLOUD` from **Providers** (`POST /v1/gpu-clouds/CLOUD/rigs`): one pod of the [one-container rig image](harness-image.md#the-one-container-rig-image), in [pull mode](../explanation/trust.md#rigs-in-pull-mode), billed by the hour until it is stopped or removed. Only the owner's token may launch. Control enrolls the rig once its pod runs.
+`thermite runpod launch CLOUD` **spends money**. It launches a rig on the GPU cloud `CLOUD` from **Settings › Machines** (`POST /v1/gpu-clouds/CLOUD/rigs`): one pod of the [one-container rig image](harness-image.md#the-one-container-rig-image), in [pull mode](../explanation/trust.md#rigs-in-pull-mode), billed by the hour until it is stopped or removed. Only the owner's token may launch. Control enrolls the rig once its pod runs.
 
 ```sh
 thermite runpod launch runpod --gpu "RTX A4000" --spend-limit 20 --idle-stop 60 \
