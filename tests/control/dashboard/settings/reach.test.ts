@@ -194,7 +194,7 @@ describe("addresses cluster rigs may reach", () => {
     await s.post("/ui/settings/add", add);
     // Not in the list: refused, as before.
     assert.match(
-      await s.page("/ui/settings"),
+      await s.page("/ui/settings/machines"),
       /thermite-slot-1: <span class="chip warn">refused: the rule &quot;thermite-harness&quot; lets the harness reach private, shared or link-local addresses/,
     );
     const rig = {
@@ -219,7 +219,10 @@ describe("addresses cluster rigs may reach", () => {
       "owner:test",
     );
     await s.post("/ui/settings/clusters/k8s-b/check", {});
-    assert.match(await s.page("/ui/settings"), /thermite-slot-1: <span class="chip ok">free/);
+    assert.match(
+      await s.page("/ui/settings/machines"),
+      /thermite-slot-1: <span class="chip ok">free/,
+    );
     assert.equal(await s.post("/ui/rigs/add", rig), "/ui/rigs/k8s-b-1");
     assert.deepEqual(s.store.clusters.rig("k8s-b-1")?.spec.openings, [
       { address: MODEL, ports: [8000], rule: "thermite-harness" },

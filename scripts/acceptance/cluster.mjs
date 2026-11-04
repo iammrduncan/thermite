@@ -277,7 +277,7 @@ try {
     /is added and checked/.test(added),
     added,
   );
-  const html = await get("/ui/settings");
+  const html = await get("/ui/settings/machines");
   check(
     "the check found the version, the node, the storage class and the right to create namespaces",
     /Kubernetes v1\.\d+/.test(html) &&
@@ -406,7 +406,7 @@ try {
     placement: "slot",
     slots: "thermite-slot-1, thermite-slot-2",
   });
-  let slots = await get("/ui/settings");
+  let slots = await get("/ui/settings/machines");
   check(
     "with a namespaced role, control may deploy into its slot and nowhere else",
     /thermite-slot-2: <span class="chip warn">control may not deploy here/.test(slots),
@@ -464,7 +464,7 @@ try {
     stdio: ["pipe", "pipe", "inherit"],
   });
   await post("/ui/settings/clusters/kind-slots/check", {});
-  slots = await get("/ui/settings");
+  slots = await get("/ui/settings/machines");
   check(
     "with the operators' rule, the slot is free",
     /thermite-slot-1: <span class="chip ok">free/.test(slots),
