@@ -39,7 +39,13 @@ import {
   waitWords,
 } from "../../../ui/operator/index.ts";
 import { promptsTab } from "../../../ui/prompts.ts";
-import { attemptHref, championPatchHref, type RunTab, runHref } from "../../../ui/urls.ts";
+import {
+  attemptHref,
+  championPatchHref,
+  type RunTab,
+  runHref,
+  runLiveHref,
+} from "../../../ui/urls.ts";
 import { type RunUsage, runStatsTab, runUsageTop } from "../../../ui/usage.ts";
 import { auditReason, clip, jobText, runStatusText, signed } from "../../../ui/words/index.ts";
 import { pricingOf, usageData } from "../../../usage-report.ts";
@@ -91,6 +97,7 @@ export function runHelpers(dash: Dashboard) {
       wallMs: Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : null,
       rig: u.id,
       champion: championCard(i),
+      live: runLiveHref(i, { view: "lines" }),
       pod: launched
         ? { perHour: typeof perHour === "number" && perHour > 0 ? perHour : null }
         : undefined,

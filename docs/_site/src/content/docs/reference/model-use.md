@@ -61,9 +61,9 @@ Under the line:
 **Stats**, the last of the run's tabs (`?view=stats` in the address), has the details:
 
 - **Calls**: the run's calls, how many calls the workers made in a trial (`28 a trial`), and the median time to the first token (`first token 1.8 s`). The bars beside it count the calls in each round, from `round 1` to the latest; a run with fewer than two rounds has no bars.
-- **By agent and model**: one row for each agent's calls to each model.
+- **By agent and model**: one row for each agent's calls to each model, and one for each agent the rig gives a model to that has made no call in the run yet.
 
-A run that has made no model call yet says `No model call recorded yet. Code counts each call of the agents when it ends.` A run with no agents and no model use says `No model use: this run has no agents.`
+A run that has made no model call yet, on a rig that gives no agent a model, says `No model call recorded yet. Code counts each call of the agents when it ends.` A run with no agents and no model use says `No model use: this run has no agents.`
 
 **By agent and model** has its rows in groups, as [Edit rig](../how-to/models/model-per-agent.md) names the agents:
 
@@ -85,6 +85,18 @@ A run that has made no model call yet says `No model call recorded yet. Code cou
 | **Share** | Its tokens in and out, as a part of the run's |
 
 On a narrow screen the table keeps **Agent**, **In**, **Cached**, **Out**, **tok/s** and **Cost**, and shows the model under the agent.
+
+#### Agents with no calls yet
+
+Each agent the rig gives a model to has a row, whether or not it has made a call: from control's record of the agents' models (**Edit rig**), else the rig's own, its model for the workers and its [advisors file](advisors-file.md) for the advisors. The **Planner** has the workers' model when it has none of its own, and the synthesizer and the final writer, in a research run, the first teacher's. A run lists only its own agents: no planner in a research run, no review panel in a hill climb, and the merged by model only with two teachers.
+
+An agent with no call yet shows **No calls yet** in place of its figures, on a tinted row, with why under it, where Thermite knows it:
+
+- its part is off on **Edit rig**, such as `The planner is off on Edit rig: the fixed rules plan each round.`;
+- else its newest line on the run's **Live** that says its call had no answer, with its time and **Open Live ›**: `On Live at 19:06 UTC: teacher-2 has no answer after 30 s: …`. Thermite knows these lines only for the advisors whose models control gives the rig, by their names on Live (`teacher-1`, `teacher-2`, `merged-by`, `auditor`, `reviewer-1` to `reviewer-3`, `synthesizer`, `final-writer`), and only while the rig's live log keeps them;
+- else when the agent works, such as `It writes the research paper when the run ends.`
+
+A record of the model under the name its program gives it counts as the agent's: Claude Code records a subscription's model by its own name, such as `claude-sonnet-5-5` for `sonnet-5.5`. A closed run lists only the rows with calls: its rig may give its agents other models now. The totals above the table count calls only.
 
 ## A campaign's page
 

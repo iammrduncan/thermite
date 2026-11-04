@@ -15,6 +15,7 @@ export {
   type AgentModelPlan,
   advisorRoutesOf,
   advisorsFileOf,
+  agentModelsOf,
   agentsModelMissing,
   applyAgentModel,
   checkAgentModel,

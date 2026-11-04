@@ -9,6 +9,12 @@ import { type Row, StorePart } from "./part.ts";
  * and the stuck trials the owner left running (goal 143).
  */
 
+/** A line of Live: when it came, and its words. */
+interface LiveSaid {
+  at: string;
+  text: string;
+}
+
 /** How many of each open trial's newest live lines control keeps past the rig's window. */
 export const OPEN_TRIAL_LINES = 400;
 
@@ -261,6 +267,27 @@ export class LiveLines extends StorePart {
       const m = /^review (\d+)\b/.exec(String(r.text));
       return m ? [{ review: Number(m[1]), at: String(r.at), text: String(r.text) }] : [];
     });
+  }
+
+  /**
+   * Each advisor's newest Live line in a run that says its call had no answer (goal 193), by its
+   * source (`advisor:teacher-2`): "teacher-2 has no answer after 6 min: …". Kept only while the
+   * rig's live log keeps it.
+   */
+  noAnswers(rig: string, run: string, sources: readonly string[]): Map<string, LiveSaid> {
+    const out = new Map<string, LiveSaid>();
+    if (!sources.length) return out;
+    const rows = this.db
+      .prepare(
+        `select source, at, text from rig_live where rig = ? and run = ? and kind = 'status'
+           and source in (${sources.map(() => "?").join(",")}) and text like '% has no answer after %'
+         order by id desc limit 200`,
+      )
+      .all(rig, run, ...sources) as Row[];
+    for (const r of rows)
+      if (!out.has(String(r.source)))
+        out.set(String(r.source), { at: String(r.at), text: String(r.text) });
+    return out;
   }
 
   /** One run's newest live lines, newest last (for the Live page's first view). */

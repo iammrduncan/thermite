@@ -16,6 +16,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 - **Start a teachers' round**, under **⋯** in a running run's header and in its Live: the run's teachers review it now, as at a timed round, and the next timed round counts from this one, where they waited for their timer. A round under way finishes first. The owner's and the operator's `start_teachers_round` over MCP and `POST /v1/runs/<run>/teachers-round` do the same. Control refuses it, in words, for a run that is not running, a rig with no teachers and a rig with its teachers off ([issue 53](https://github.com/iammrduncan/thermite/issues/53)).
 
+### Model use
+
+- A run's **Stats** tab lists every agent the rig gives a model to, with **No calls yet** in place of the figures of one that has made no call, and why where Thermite knows it: its part off on **Edit rig**, its newest line on Live that says its call had no answer, or when it works. A teacher that never worked looked the same as one never set up. `model_usage` over MCP and `GET /v1/usage` give those lines too, with `configured: true`, `why` and `why_at` ([issue 52](https://github.com/iammrduncan/thermite/issues/52)).
+
 ### Fixes
 
 - A rig's model check waits as long as the rig says: **The model check waits (seconds)** on **Edit rig** (under **Advanced** in **2 · The agents**), `check_seconds` over REST and MCP, 10 to 3600 s, 120 s unless set. A shared or self-hosted model that answers after 120 s failed every check, and its rig's agents stayed stopped. A check with no answer now says the model is down or busy for longer than the check waits, not "is the model up?", and Pi's check that passes gives the time to the model's first token.

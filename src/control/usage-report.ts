@@ -10,8 +10,11 @@ import {
   type UsageScope,
   usageReport,
   usageSince,
+  withConfigured,
 } from "../core/usage.ts";
+import { sameModel } from "./providers/index.ts";
 import type { ControlStore } from "./store/index.ts";
+import { configuredAgents } from "./usage-agents.ts";
 
 /**
  * The agents' model usage as control sums it (goal 075): for one run, for a campaign (all its runs
@@ -110,7 +113,18 @@ export function usageData(
     .rows(scope, since)
     .map((r) => ({ ...r, pricing: price(r.provider, r.model, r.harness) }));
   const pods = store.usage.podSpend(scope, since);
-  return { report: usageReport(rows, scope, q.period, since, pods, tz), rows, pods };
+  const report = usageReport(rows, scope, q.period, since, pods, tz);
+  // One run over all its time (goal 193): a line for each agent its rig gives a model to, with
+  // none of its records too. Not for part of its time: an agent may have worked before it.
+  const rig = q.run && q.period === "all" ? store.runRegistry.rigsOf(q.run)[0] : undefined;
+  return {
+    report:
+      rig && q.run
+        ? withConfigured(report, configuredAgents(store, rig, q.run), sameModel)
+        : report,
+    rows,
+    pods,
+  };
 }
 
 // --------------------------------------------------------------------------- prices

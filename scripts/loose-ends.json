@@ -354,7 +354,7 @@
     "src/core/role-additions.ts": ["AdditionRole"],
     "src/core/stats.ts": ["incompleteBeta", "sampleSd"],
     "src/core/tunnel.ts": ["TUNNEL_VERSION"],
-    "src/core/usage.ts": ["USAGE_AGENTS", "ADVISOR_AGENTS", "USAGE_HARNESSES", "sumCost"],
+    "src/core/usage.ts": ["USAGE_AGENTS", "ADVISOR_AGENTS", "sumCost"],
     "src/harness/agents/cli/once.ts": ["CliOnceOptions"],
     "src/harness/agents/coordinator.ts": ["ruleBy"],
     "src/harness/agents/devrun.ts": ["DevRunRequest"],

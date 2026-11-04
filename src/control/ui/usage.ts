@@ -53,6 +53,10 @@ export const dur = (ms: number) => {
   return h < 100 ? `${h} h ${m % 60} m` : `${h} h`;
 };
 const ii = (tip: string) => `<i class="ii" tabindex="0" data-tip="${esc(tip)}">i</i>`;
+/** A time of day in UTC, from an ISO time: 19:06 UTC. */
+const utcTime = (at: string) => `${at.slice(11, 16)} UTC`;
+const NO_CALLS_TIP =
+  "This agent has a model on this rig, and no record of a model call in this run yet. Under it: why, where Thermite knows it: its part off on Edit rig, its newest line on Live that says it had no answer, else when it works.";
 const NR = `<span class="nr">not reported</span>`;
 const list = (xs: string[]) =>
   xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
@@ -312,6 +316,8 @@ export interface RunUsage {
   teacher: (provider: string | null, model: string) => string;
   /** A hill climb's champion card, left of Cost (goal 142); empty for another mode. */
   champion?: string | undefined;
+  /** The run's Live, for an agent with no calls whose why is a line there (goal 193). */
+  live?: string | undefined;
 }
 
 /** Nothing to show yet: no record, and no pod spend. */
@@ -378,15 +384,22 @@ ${tokensCard(
 export function runStatsTab(u: RunUsage): string {
   const r = u.report;
   const t = r.total;
-  if (noUse(t))
-    return `<div class="card"><div class="empty">No model call recorded yet. Code counts each call of the agents when it ends.</div></div>`;
   const lines = r.by_agent_model;
+  if (noUse(t) && !lines.length)
+    return `<div class="card"><div class="empty">No model call recorded yet. Code counts each call of the agents when it ends.</div></div>`;
   const all = tokensOf(t);
   const teachers = lines.filter((l) => l.agent === "teachers");
   const row = (l: (typeof lines)[number]) => {
     const [word, under] = AGENT[l.agent] ?? [l.name, ""];
     const sub = under || (teachers.length > 1 ? u.teacher(l.provider, l.model) : "");
     const by = [harnessWord(l.harness)];
+    // An agent the rig gives a model to, with no call yet (goal 193): why, in place of its figures.
+    if (l.configured && !l.records) {
+      const said = l.why_at
+        ? `On Live at ${utcTime(l.why_at)}: <code>${esc(l.why ?? "")}</code>${u.live ? ` · <a href="${esc(u.live)}">Open Live ›</a>` : ""}`
+        : esc(l.why ?? "");
+      return `<tr class="u-none"><td><b>${esc(word)}</b>${sub ? `<span class="us">${esc(sub)}</span>` : ""}<span class="us u-ph">${esc(l.model)}</span></td><td class="u-opt"><span class="u-m">${esc(l.model)}</span><span class="us">${esc(routeLine(l.harness, l.provider))}</span></td><td colspan="8"><span class="u-nc">No calls yet ${ii(NO_CALLS_TIP)}</span>${said ? `<span class="u-ncw">${said}</span>` : ""}</td></tr>`;
+    }
     return `<tr><td><b>${esc(word)}</b>${sub ? `<span class="us">${esc(sub)}</span>` : ""}<span class="us u-ph">${esc(l.model)}</span></td><td class="u-opt"><span class="u-m">${esc(l.model)}</span><span class="us">${esc(routeLine(l.harness, l.provider))}</span></td><td class="num u-opt">${callsCell(l)}</td><td class="num">${tok(l.tokens_in)}</td><td class="num">${cacheCell(l, "cached_in")}</td><td class="num u-opt">${cacheCell(l, "uncached_in")}</td><td class="num">${tok(l.tokens_out)}</td><td class="num">${speedCell(l)}</td><td class="num">${costCell(l.cost, by)}</td><td class="num u-opt">${shareCell(all > 0 ? tokensOf(l) / all : 0)}</td></tr>`;
   };
   const grp = (name: string, rows: string) =>
