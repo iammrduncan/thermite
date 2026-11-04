@@ -25,7 +25,7 @@ Pausing a run to use the machine should not cost the run.
 
 ## Done when
 
-- [x] Items 1 and 2, with tests: tests/harness/run-clock.test.ts and tests/control/issue/run-hours.test.ts. Passing on the lab's test machine is still to come.
+- [x] Items 1 and 2, with tests: tests/harness/run-clock.test.ts and tests/control/issue/run-hours.test.ts, passing on the lab's test machine (7 of 7, 2026-11-04).
 - [x] Pages: Budget and stop time, the contract's reference, the MCP tools, the command line, and the changelog. The command line has no command of its own: `thermite command` sends `add_run_hours`.
 
 ## Decisions
@@ -41,6 +41,7 @@ Pausing a run to use the machine should not cost the run.
 - 2026-11-04: Researched and verified on v0.1.3 (a442ad8d): the scheduler compared `wall_hours` with the time since the run's creation (agents/scheduler/index.ts), and so did the fork rounds (scheduler/lanes.ts maybeForkRound); a research run's clock (research/research/clock.ts) already left out paused and blocked time. A spent run is paused, and pauses again at once when resumed: no command changes its budget. The page Budget and stop time is Set a budget or a stop time (how-to/campaigns/budget-and-stop-time.md).
 - 2026-11-04: Item 1 built: harness/run-clock.ts (blockedSpans, moved from research/blocked.ts, and workedTime, by the ledger's clock), used by the scheduler's wall-time check, the fork rounds and the research clock. Test: tests/harness/run-clock.test.ts (the judge env takes a clock). Pages: the contract, Limits and pacing, Verdicts, Set a budget or a stop time, Runs until done; changelog. Item 2's mockup comes next.
 - 2026-11-04: Item 2 built as the owner said: `add_run_hours` (core/commands.ts) and its event `run_hours_added`; the harness adds the hours (run-clock.ts hoursOf: the contract's `wall_hours` with the hours added), resumes a run its hours paused, and refuses a closed run, a run with no stop time and too few hours; control's **Add hours** beside ⋯ (dashboard/context.ts hoursMenu), the MCP tool, `POST /v1/runs/<run>/hours`, History's line. core/events/bodies.ts was at its 800 lines: its helper types moved to body-parts.ts. Tests: tests/harness/run-clock.test.ts, tests/control/issue/run-hours.test.ts. Pages: signed commands, the MCP tools, the REST API, Set a budget or a stop time, Limits and pacing, Verdicts, Steer a run; changelog.
+- 2026-11-04 04:00Z: Checked on the lab, with control on 43b577e1 and its rigs on da45f9b8, with only commands that are refused, so no run changed. Add hours on a closed run: control refused it before sending ("… is closed: start a new run of its campaign instead."). On a run paused by hand, with no stop time, so it could not resume: the rig's harness refused it ("… has no stop time (budget.wall_hours): it never stops for its hours, so there are none to add"), and control showed the command as failed with that reason. The two test files passed on the test machine at f1787073, 7 of 7. Left: hours added to a run with a stop time, which changes a real run and waits for the owner's yes.
 
 ---
 
