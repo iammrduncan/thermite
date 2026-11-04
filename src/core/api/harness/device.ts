@@ -1,0 +1,115 @@
+import { z } from "zod";
+import { RunId } from "../../ids.ts";
+import type { Route } from "../route.ts";
+
+/**
+ * A follower's judge GPUs, as the rig's leader asks for them (goal 205). The leader's judge decides
+ * and records; a follower builds and measures on its judge GPUs for it. src/harness/follower/
+ * answers these routes on the follower; the leader's judge asks them through its RemoteDevice
+ * (harness/judge/remote.ts), its supervisor and the bus. Both take the supervisor's token.
+ *
+ * A folder in an ask is one the follower named in an earlier answer: a run's or a baseline's
+ * folder under its scratch, or a build under its store. It refuses any other.
+ */
+
+/** The most bytes one ask carries: a kept baseline's files are the largest. */
+const DEVICE_MAX_BYTES = 48 * 1024 * 1024;
+/** The most bytes of one git bundle the leader sends a follower. */
+const DEVICE_GIT_MAX_BYTES = 512 * 1024 * 1024;
+
+/** A judge GPU of the follower, by its place among them: its users are run-i, builder-i… */
+const Card = z.number().int().min(0).max(7);
+/** A repository's name in the harness's mirrors: `kit-` and the kit's name for a kit. */
+export const MirrorName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/);
+export const Commit = z.string().regex(/^[0-9a-f]{40}$/);
+const Job = z.number().int().positive();
+const Folder = z.string().min(1).max(4096);
+
+/** What a job's runs need (judge/device.ts's MeasureSpec), with the kit by its commit. */
+const Spec = z.object({
+  job: Job,
+  kit_repo: MirrorName,
+  kit_commit: Commit,
+  /** The folder a baseline job's checks write, or the run's kept baseline, by run and job. */
+  baseline: z.union([z.object({ written: Folder }), z.object({ run: RunId, job: Job })]).optional(),
+  /** The metrics the run decides by; none: all of the kit's. */
+  uses: z.array(z.string().max(200)).max(200).optional(),
+});
+
+const Arm = z.object({
+  name: z.enum(["champion", "candidate", "retained", "twin", "baseline"]),
+  dir: Folder,
+  manifest: z.looseObject({ key: z.string() }),
+});
+
+/** A kept baseline's file: its path in the folder and its bytes. */
+const BaselineFile = z.object({ path: z.string().min(1).max(1024), base64: z.string() });
+
+/** One ask of a follower's device, by its `op`. */
+export const DeviceAsk = z.discriminatedUnion("op", [
+  /** Its kind of target, its judge GPUs and whether its roles are separated. */
+  z.object({ op: z.literal("info") }),
+  /** Whether it has a commit, and the commits it was sent (to send only what it lacks). */
+  z.object({ op: z.literal("git_has"), repo: MirrorName, commit: Commit }),
+  /** A commit built with the kit as the card's builder, or found built. */
+  z.object({
+    op: z.literal("build"),
+    card: Card,
+    repo: MirrorName,
+    commit: Commit,
+    kit_repo: MirrorName,
+    kit_commit: Commit,
+    actor: z.string().max(80),
+  }),
+  /** One run of an arm on a case, the throttling around it and any implausible value. */
+  z.object({
+    op: z.literal("measure"),
+    card: Card,
+    spec: Spec,
+    arm: Arm,
+    cell: z.string().max(200),
+  }),
+  /** The card's identity, readiness, environment, state after a block, or a recovery. */
+  z.object({
+    op: z.literal("driver"),
+    card: Card,
+    ask: z.enum(["identify", "ready", "env", "after_block", "recover"]),
+  }),
+  /** The follower's CPU throttling so far. */
+  z.object({ op: z.literal("throttle") }),
+  /** A baseline job's folder for the card's checker to write. */
+  z.object({ op: z.literal("baseline_work"), card: Card, job: Job }),
+  /** That folder sealed and kept by run and job, with its files for the leader to keep. */
+  z.object({ op: z.literal("baseline_keep"), written: Folder, run: RunId, job: Job }),
+  /** A run's kept baseline that the follower lacks, from the leader's copy. */
+  z.object({
+    op: z.literal("baseline_put"),
+    run: RunId,
+    job: Job,
+    files: z.array(BaselineFile).max(10_000),
+  }),
+  /** A folder taken back from the user it was handed to, or removed. */
+  z.object({ op: z.literal("folder"), act: z.enum(["reclaim", "remove"]), dir: Folder }),
+]);
+export type DeviceAsk = z.infer<typeof DeviceAsk>;
+
+export const DEVICE = {
+  method: "POST",
+  path: "/v1/device",
+  what: "device",
+  body: DeviceAsk,
+  answer: z.looseObject({}),
+  maxBytes: DEVICE_MAX_BYTES,
+} as const satisfies Route;
+
+/**
+ * A git bundle of commits the follower lacks, for the named mirror: the request's bytes. The
+ * commit named must be in it.
+ */
+export const DEVICE_GIT = {
+  method: "POST",
+  path: "/v1/device/git/:repo/:commit",
+  what: "git bundle",
+  answer: z.looseObject({ ok: z.boolean() }),
+  maxBytes: DEVICE_GIT_MAX_BYTES,
+} as const satisfies Route;

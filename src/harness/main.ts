@@ -22,6 +22,7 @@ import {
   targetDrivers,
 } from "./controller/index.ts";
 import { DiskWatch } from "./disk.ts";
+import { startFollower } from "./follower/index.ts";
 import { HarnessService } from "./service/index.ts";
 
 /**
@@ -41,6 +42,8 @@ async function main(): Promise<void> {
   process.umask(0o022);
   const env = process.env;
   startLogging("harness", env);
+  // A follower of a rig's leader serves its judge GPUs and runs nothing of its own (goal 205).
+  if (env.THERMITE_ROLE === "follower") return startFollower(env);
   const ctx = await controllerContext(env);
   const { rig, paths, controlPublicKeyPem, tokens, runner } = ctx;
   const targets = targetDrivers(ctx);

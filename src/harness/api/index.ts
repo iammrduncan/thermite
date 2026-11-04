@@ -20,6 +20,7 @@ import { usageRoutes } from "./usage.ts";
 import { workRoutes } from "./work.ts";
 
 export type { ApiTokens, HarnessApiExtras, Scope } from "./context.ts";
+export { allows } from "./context.ts";
 
 /**
  * Harness HTTP API. Only the rig's own supervisor reaches it over the network; proposers

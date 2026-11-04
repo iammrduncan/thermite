@@ -215,6 +215,7 @@ export class JudgeContext {
         commit,
         kit: k.kit,
         kitDir: k.dir,
+        kitRepo: k.repo,
         kitCommit: k.commit,
         actor: this.o.owner,
       });

@@ -50,7 +50,19 @@ export interface Measured {
 }
 
 /** A baseline job's sealed folder, or why it was refused (sealBaselineDir). */
-type Sealed = { ok: true; files: BaselineFile[]; bytes: number } | { ok: false; reason: string };
+export type Sealed =
+  | { ok: true; files: BaselineFile[]; bytes: number }
+  | { ok: false; reason: string };
+
+/** What a device builds from: a commit and the kit, with the kit's mirror by name. */
+export type DeviceBuild = Omit<BuildInput, "role"> & { kitRepo: string };
+
+/** Where the leader keeps a baseline job's sealed folder, and the run and job it is named by. */
+export interface KeptBaseline {
+  dir: string;
+  run: string;
+  job: number;
+}
 
 export interface JudgeDevice {
   /** The device itself: its identity, readiness, state after a block and plausible values. */
@@ -58,7 +70,7 @@ export interface JudgeDevice {
   /** Whether the judge's runs are separated from the agents' (each role its own user). */
   readonly separated: boolean;
   /** Builds a commit with the kit as the device's builder, or finds it built. */
-  build(input: Omit<BuildInput, "role">): Promise<BuildResult>;
+  build(input: DeviceBuild): Promise<BuildResult>;
   /** One run of an arm on a case. */
   measure(spec: MeasureSpec, arm: Arm, cell: string): Promise<Measured>;
   /** The device's CPU throttling so far, read before and after a block. */
@@ -69,10 +81,10 @@ export interface JudgeDevice {
    */
   baselineWork(job: number): Promise<string>;
   /**
-   * Seals the folder a baseline job's checks wrote (sealBaselineDir) and keeps it in `to`, the
-   * leader's folder for it (keepBaselineDir). Returns its files, or why it was refused.
+   * Seals the folder a baseline job's checks wrote (sealBaselineDir) and keeps it in the leader's
+   * folder for it (keepBaselineDir). Returns its files, or why it was refused.
    */
-  keepBaseline(written: string, to: string): Promise<Sealed>;
+  keepBaseline(written: string, kept: KeptBaseline): Promise<Sealed>;
   /** Takes a folder back from the user it was handed to. */
   reclaim(dir: string): Promise<void>;
   /** Removes a folder, whoever owns its files. */
@@ -106,8 +118,9 @@ export class LocalDevice implements JudgeDevice {
     return this.o.runner.separated;
   }
 
-  build(input: Omit<BuildInput, "role">): Promise<BuildResult> {
-    return this.store.ensure({ ...input, role: builderRole(this.o.index) });
+  build(input: DeviceBuild): Promise<BuildResult> {
+    const { kitRepo: _, ...rest } = input;
+    return this.store.ensure({ ...rest, role: builderRole(this.o.index) });
   }
 
   /** A job's measuring context here: its runs' folder, the models, the store and the card's users. */
@@ -158,9 +171,9 @@ export class LocalDevice implements JudgeDevice {
     return dir;
   }
 
-  async keepBaseline(written: string, to: string): Promise<Sealed> {
+  async keepBaseline(written: string, kept: KeptBaseline): Promise<Sealed> {
     const sealed = sealBaselineDir(written);
-    if (sealed.ok) keepBaselineDir(written, to);
+    if (sealed.ok) keepBaselineDir(written, kept.dir);
     return sealed;
   }
 

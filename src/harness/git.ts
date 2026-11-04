@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
@@ -296,6 +297,41 @@ export async function patchBetween(
     parent,
     commit,
   ]);
+}
+
+/** The newest commits under a ref prefix, newest first, at most `max` (none: no mirror yet). */
+export async function refTips(mirror: string, prefix: string, max = 50): Promise<string[]> {
+  if (!existsSync(join(mirror, "HEAD"))) return [];
+  const out = await git(mirror, [
+    "for-each-ref",
+    `--count=${max}`,
+    "--sort=-committerdate",
+    "--format=%(objectname)",
+    prefix,
+  ]);
+  return out.split("\n").filter(Boolean);
+}
+
+/**
+ * A bundle of `commit` written to `file`, without the commits of `haves` that this mirror has too
+ * (and what they reach): what a follower that has them lacks (goal 205). Its one ref is
+ * `refs/thermite/send/<commit>-<n>`, made for the bundle and removed after.
+ */
+export async function bundleOf(
+  mirror: string,
+  commit: string,
+  haves: readonly string[],
+  file: string,
+): Promise<void> {
+  const ref = `refs/thermite/send/${commit}-${randomBytes(4).toString("hex")}`;
+  await git(mirror, ["update-ref", ref, commit]);
+  try {
+    const known: string[] = [];
+    for (const h of haves) if (h !== commit && (await hasCommit(mirror, h))) known.push(`^${h}`);
+    await git(mirror, ["bundle", "create", "--quiet", file, ref, ...known]);
+  } finally {
+    await git(mirror, ["update-ref", "-d", ref]);
+  }
 }
 
 export async function updateRef(mirror: string, ref: string, commit: string): Promise<void> {
