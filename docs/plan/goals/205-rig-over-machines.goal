@@ -52,6 +52,16 @@ What exists, 2026-11-04: one harness process holds the run's ledger, its schedul
 - **Files fetched once:** each machine keeps a model's files, the kits and its builds on its own disk, by their hash.
 - **The pools:** each GPU is the judge's or the workers'. A machine with both is allowed, with a note that the lanes' work there makes the judge's timing noisier.
 
+## Step 1: a follower that runs the judge's jobs
+
+The judge's jobs write to the ledger as they go (heartbeats, lifecycles, receipts, each measurement) and decide from the ledger (the champion, the noise floor), so the judge stays whole on the leader. Only what touches a GPU's machine moves: a build, one run of an arm on a case (with its check), the device's readiness and state, its throttling, and a baseline's folder.
+
+- **1a. The judge's device:** one interface for those operations. The leader's own GPUs use today's code through it; nothing changes in what the judge does.
+- **1b. A follower's harness:** the same image, started as a follower, with no run of its own. It serves those operations for its judge GPUs, with the broker's roles as today. It keeps the git objects it is sent (the project's and the kit's), the model's files it fetched from their source, and its builds by hash.
+- **1c. Over the bus:** the leader's harness asks for an operation through its supervisor, which reads the requests from the harness; the follower's supervisor passes each to its harness and the answer back. The harnesses stay off the bus.
+- **1d. Control:** a rig's followers (the machine, its GPUs and their pools, its CPUs, memory and disk), set up on a cluster node or a machine over SSH, each supervisor with a bus user of its own; the rig's page shows them.
+- **1e. Tests,** and an acceptance check with a leader and a follower under compose.
+
 ## Questions to answer before the mockup
 
 - **How a job or a trial reaches another machine:** what runs on each machine (a part of the harness, with the broker's isolation), what it gets (the candidate's build or its source, the kit, the model's files), and how its results come back signed.
