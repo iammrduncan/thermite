@@ -216,6 +216,9 @@ export class DeviceServer {
       case "trial_wait":
       case "trial_answer":
       case "trial_stop":
+      case "trial_screen":
+      case "trial_input":
+      case "trial_keys":
         if (!this.o.lanes) throw new DeviceRefusal("this follower runs no lanes");
         return this.o.lanes.ask(a);
     }

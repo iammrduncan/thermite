@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
-import type { MessageInbox, TurnDelivery } from "../../agents/cli/index.ts";
+import type { MessageInbox, TrialConsole, TurnDelivery } from "../../agents/cli/index.ts";
 import {
   type ModelConfig,
   type ProviderErrorAnswer,
   stallWords,
 } from "../../agents/model/index.ts";
+import type { ScreenSnapshot } from "../../agents/terminal/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { log } from "../../common/log.ts";
 import type { InTurn } from "../../core/agents.ts";
 import type { LaneAsk, LaneEvent, LaneWaitAnswer } from "../../core/api/harness/lanes.ts";
 import {
   laneCacheEnv,
+  type PiConsole,
   prepareWorkspace,
   type SubmitOutcome,
   type TrialLink,
@@ -24,8 +26,10 @@ import { ProviderAnswers } from "../service/index.ts";
 /**
  * The trials of the lanes a follower holds (goal 205, step 2): the leader starts each here, with
  * its spec, its route and the parent commit it sent first. The follower makes the workspace, runs
- * the program headless as the lane's users with its own runner and dev runs, and keeps what the
- * program reports, in order, for the leader's next wait (core/api/harness/lanes.ts). A call of the
+ * the program as the lane's users with its own runner and dev runs, in its own terminal or
+ * headless as the leader said, and keeps what the program reports, in order, for the leader's
+ * next wait (core/api/harness/lanes.ts); the leader asks for its terminal's screen and passes on
+ * the owner's inputs and keys. A call of the
  * trial that needs the run's records waits here too until a wait takes it, and the leader's answer
  * comes back as an ask of its own. A trial whose leader stops asking ends, interrupted.
  */
@@ -65,8 +69,19 @@ export interface Hosted {
   draining: boolean;
   submitted?: SubmitOutcome | undefined;
   turn?: TurnDelivery | undefined;
+  /** Its program in its own terminal, as the leader said at its start (step 2e). */
+  terminal: boolean;
+  /** Its terminal's console once its program set it, and a worker's Pi view's own side. */
+  console?: TrialConsole | "headless" | undefined;
+  piView?: PiConsole | undefined;
   session: { name: string; base64: string }[];
-  ended?: { result: TrialResult; session: { name: string; base64: string }[] } | undefined;
+  ended?:
+    | {
+        result: TrialResult;
+        session: { name: string; base64: string }[];
+        screen?: ScreenSnapshot | undefined;
+      }
+    | undefined;
   endedAt?: number | undefined;
   abort: AbortController;
   lastWait: number;
@@ -117,6 +132,7 @@ export class LaneHost {
           messages: [],
           given: new Set(),
           draining: false,
+          terminal: a.terminal === true,
           session: [],
           abort: new AbortController(),
           lastWait: Date.now(),
@@ -141,10 +157,7 @@ export class LaneHost {
               resolve();
             });
           });
-        const answer: LaneWaitAnswer = {
-          events: h.events,
-          ...(h.ended ? { ended: { result: h.ended.result, session: h.ended.session } } : {}),
-        };
+        const answer: LaneWaitAnswer = { events: h.events, ...(h.ended ? { ended: h.ended } : {}) };
         return answer;
       }
       case "trial_answer": {
@@ -161,7 +174,47 @@ export class LaneHost {
         this.trials.get(a.trial)?.abort.abort();
         return { ok: true };
       }
+      // Its terminal, for control's live view and the owner's inputs (step 2e).
+      case "trial_screen": {
+        const c = this.hosted(a.trial).console;
+        if (!c || c === "headless") return { screen: null, queued: 0, pi_view: false };
+        const screen = await c.screen().catch(() => undefined);
+        const limit = c.limit();
+        return {
+          screen: screen ?? null,
+          limit: limit ?? null,
+          queued: c.queued,
+          held: c.held ?? null,
+          pi_view: this.hosted(a.trial).piView !== undefined,
+        };
+      }
+      case "trial_input": {
+        const h = this.hosted(a.trial);
+        const c = this.consoleOf(h);
+        return c.input(a.input, (outcome, why) =>
+          this.emit(h, { kind: "input_later", id: a.id, outcome, ...(why ? { why } : {}) }),
+        );
+      }
+      case "trial_keys": {
+        const lines: string[] = [];
+        await this.consoleOf(this.hosted(a.trial)).keystrokes(a.data, (l) => lines.push(l));
+        return { lines };
+      }
     }
+  }
+
+  /** A running trial's console, or why there is none to type into. */
+  private consoleOf(h: Hosted): TrialConsole {
+    if (h.ended) throw new LaneRefusal("the trial has ended: nothing more goes into its terminal");
+    if (!h.console) throw new LaneRefusal("its program has not started yet");
+    if (h.console === "headless")
+      throw new LaneRefusal("its program runs headless, with no terminal");
+    return h.console;
+  }
+
+  /** A worker's Pi view on this follower, which its process asks for the owner's inputs. */
+  piViewOf(h: Hosted): PiConsole | undefined {
+    return h.piView;
   }
 
   /** The open trial a token belongs to; undefined for any other. */
@@ -282,10 +335,6 @@ export class LaneHost {
       });
       if (h.abort.signal.aborted) throw new Error("stopped before the trial started");
       if (!h.route) throw new Error("this rig has no model for its agents");
-      this.emit(h, {
-        kind: "live",
-        entries: [{ kind: "status", text: "a trial on a follower runs headless" }],
-      });
       result = await this.o.runTrial(
         { ...h.spec, workspace: ws.repo, workspaceRoot: ws.dir } as TrialSpec,
         this.linkOf(h),
@@ -299,7 +348,9 @@ export class LaneHost {
       await this.o.devRuns?.settle(lane).catch(() => undefined);
       await this.o.runner.killRole(lane).catch(() => 0);
       if (ws) await this.o.runner.remove(ws.dir).catch(() => undefined);
-      h.ended = { result, session: h.session };
+      const c = h.console;
+      const screen = c && c !== "headless" ? c.lastScreen() : undefined;
+      h.ended = { result, session: h.session, ...(screen ? { screen } : {}) };
       h.endedAt = Date.now();
       for (const [id, c] of h.calls) {
         clearTimeout(c.timer);
@@ -335,7 +386,10 @@ export class LaneHost {
       inTurn: (d) => {
         h.turn = d;
       },
-      console: () => undefined,
+      console: (c, piView) => {
+        h.console = c;
+        h.piView = piView;
+      },
       usage: (windows) => this.emit(h, { kind: "windows", windows }),
       compacted: (harness, compaction) => this.emit(h, { kind: "compacted", harness, compaction }),
       keepSession: (files) => {
@@ -358,7 +412,7 @@ export class LaneHost {
       waiting: (wait) => this.emit(h, { kind: "wait", wait }),
       draining: () => h.draining,
       env: laneCacheEnv(this.o.scratchDir, h.spec.lane),
-      terminal: false,
+      terminal: h.terminal,
       sent: (prompt) => this.emit(h, { kind: "sent", prompt }),
       signal: h.abort.signal,
     };

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ConsoleLater, ConsoleNow, TrialConsole } from "../../agents/cli/index.ts";
 import type { ModelConfig } from "../../agents/model/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { log } from "../../common/log.ts";
@@ -10,8 +11,10 @@ import {
   type LaneEvent,
   LaneWaitAnswer,
 } from "../../core/api/harness/lanes.ts";
+import type { TerminalInput } from "../../core/terminal-input.ts";
 import type { CallUsage } from "../../core/usage.ts";
 import { type DeviceLink, sendCommit } from "../judge/index.ts";
+import { LedgerError } from "../ledger/index.ts";
 import type { TrialLink } from "./programs.ts";
 import type { LaneAway } from "./scheduler/index.ts";
 import { TrialResult, type TrialSpec } from "./worker/index.ts";
@@ -24,7 +27,8 @@ import { TrialResult, type TrialSpec } from "./worker/index.ts";
  * passed to that API with the trial's own token and answered. Each wait carries the owner's
  * messages waiting for the trial, whether the rig drains, and a renewed key. A stop is passed on;
  * a follower that stops answering ends the trial, interrupted, and its experiment goes back to
- * the queue.
+ * the queue. A trial in its own terminal there has a console here whose screens, inputs and keys
+ * go to the follower (AwayConsole).
  */
 
 /** How long the follower may give no answer to the waits before the trial ends, interrupted. */
@@ -52,6 +56,110 @@ interface AwayOptions {
   proxySaw: (trial: string, tokens: unknown) => void;
   /** How long the follower may not answer before its trial ends (tests shorten it). */
   goneMs?: number | undefined;
+}
+
+/** A terminal's screen, as the follower's terminal host gives it. */
+type Screen = { cols: number; rows: number; data: string };
+
+/**
+ * The owner's console into a trial's terminal on a follower (step 2e), as the leader's consoles
+ * hold it: each screen, input and key is an ask of the follower, whose own console answers; what
+ * its last screen said of the usage limit, the inputs waiting and a held line is kept for the
+ * live view. An input that waits for the reset is told its outcome when the follower reports it.
+ */
+class AwayConsole {
+  queued = 0;
+  held: string | undefined;
+  /** Its screen is a worker's Pi view. */
+  piView = false;
+  private shown: { resetsAt?: string | undefined } | undefined;
+  private last: Screen | undefined;
+  private readonly laters = new Map<string, ConsoleLater>();
+  private readonly link: DeviceLink;
+  private readonly trial: string;
+
+  constructor(link: DeviceLink, trial: string) {
+    this.link = link;
+    this.trial = trial;
+  }
+
+  async input(
+    i: Pick<TerminalInput, "text" | "keys" | "wait" | "follow_up">,
+    later: ConsoleLater,
+  ): Promise<ConsoleNow> {
+    const id = randomUUID();
+    this.laters.set(id, later);
+    try {
+      const r = (await this.link.ask({
+        op: "trial_input",
+        trial: this.trial,
+        id,
+        input: {
+          ...(i.text !== undefined ? { text: i.text } : {}),
+          ...(i.keys ? { keys: [...i.keys] } : {}),
+          ...(i.follow_up ? { follow_up: true as const } : {}),
+          wait: i.wait,
+        },
+      })) as { outcome?: string; until?: string };
+      if (r.outcome === "queued") return { outcome: "queued", until: r.until };
+      this.laters.delete(id);
+      return { outcome: "typed" };
+    } catch (err) {
+      this.laters.delete(id);
+      throw err;
+    }
+  }
+
+  async keystrokes(data: string, typed: (line: string) => void): Promise<void> {
+    try {
+      const r = (await this.link.ask({ op: "trial_keys", trial: this.trial, data })) as {
+        lines?: string[];
+      };
+      for (const line of r.lines ?? []) typed(line);
+    } catch (err) {
+      throw new LedgerError("conflict", errorText(err));
+    }
+  }
+
+  async screen(): Promise<Screen | undefined> {
+    const r = (await this.link.ask(
+      { op: "trial_screen", trial: this.trial },
+      { answerMs: 20_000 },
+    )) as {
+      screen?: Screen | null;
+      limit?: { resetsAt?: string } | null;
+      queued?: number;
+      held?: string | null;
+      pi_view?: boolean;
+    };
+    this.shown = r.limit ?? undefined;
+    this.queued = r.queued ?? 0;
+    this.held = r.held ?? undefined;
+    this.piView = r.pi_view === true;
+    if (r.screen) this.last = r.screen;
+    return r.screen ?? undefined;
+  }
+
+  limit(): { resetsAt?: string | undefined } | undefined {
+    return this.shown;
+  }
+
+  lastScreen(): Screen | undefined {
+    return this.last;
+  }
+
+  /** The follower said what became of an input that waited. */
+  later(id: string, outcome: "typed_after_reset" | "dropped", why?: string): void {
+    this.laters.get(id)?.(outcome, why);
+    this.laters.delete(id);
+  }
+
+  /** The trial ended there: its last screen, and nothing still waits for its outcome. */
+  ended(screen: Screen | undefined): void {
+    if (screen) this.last = screen;
+    for (const later of this.laters.values()) later("dropped", "the trial has ended");
+    this.laters.clear();
+  }
 }
 
 /** A route as the follower takes it: with its key now, and nothing that is code. */
@@ -85,6 +193,8 @@ export class AwayLane implements LaneAway {
       tokensIn: 0,
       tokensOut: 0,
     };
+    // Its program in its own terminal there, as the rig says now, or headless (step 2e).
+    const terminal = link.terminal === true;
     try {
       await sendCommit(this.o, repo, spec.parentCommit);
       const route = routeOut(m);
@@ -93,10 +203,14 @@ export class AwayLane implements LaneAway {
         spec: spec as never,
         repo,
         ...(route ? { route: route as never } : {}),
+        terminal,
       });
     } catch (err) {
       return { ...none, error: `the trial could not start on ${this.machine}: ${errorText(err)}` };
     }
+    const owner = terminal ? new AwayConsole(this.o.link, trial) : undefined;
+    // The leader's consoles hold it as a trial's own console (its shape is the one they use).
+    link.console?.(owner ? (owner as unknown as TrialConsole) : "headless");
     let seen = 0;
     let key = m?.keyNow?.() ?? m?.apiKey;
     let failingSince: number | undefined;
@@ -145,9 +259,11 @@ export class AwayLane implements LaneAway {
         for (const e of answer.events) {
           if (e.seq <= seen) continue;
           seen = e.seq;
-          this.apply(e, spec, link, closers);
+          if (e.kind === "input_later") owner?.later(e.id, e.outcome, e.why);
+          else this.apply(e, spec, link, closers);
         }
         if (answer.ended) {
+          owner?.ended(answer.ended.screen);
           this.keepSession(spec, answer.ended.session, link);
           const r = TrialResult.safeParse(answer.ended.result);
           return r.success
@@ -204,6 +320,8 @@ export class AwayLane implements LaneAway {
         return;
       case "call":
         void this.answer(spec, e);
+        return;
+      case "input_later":
         return;
     }
   }

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
+import { TrialConsole } from "../../../src/agents/cli/index.ts";
 import { DeviceAsk } from "../../../src/core/api/harness/device.ts";
 import { AwayLane } from "../../../src/harness/agents/away.ts";
 import type { TrialLink } from "../../../src/harness/agents/programs.ts";
@@ -88,7 +89,12 @@ async function followerFor(
 }
 
 /** The leader's lane on that follower, with a trial's link that reports to the leader's records. */
-function awayLane(env: ReturnType<typeof makeJudgeEnv>, link: DeviceLink, goneMs?: number) {
+function awayLane(
+  env: ReturnType<typeof makeJudgeEnv>,
+  link: DeviceLink,
+  goneMs?: number,
+  terminal?: { console: (c: unknown) => void },
+) {
   const api = createHarnessApi(env.service, { supervisor: "s".repeat(40) });
   const runner = new LocalRunner(env.paths.scratchDir);
   return new AwayLane({
@@ -110,6 +116,7 @@ function awayLane(env: ReturnType<typeof makeJudgeEnv>, link: DeviceLink, goneMs
         messages: env.service.trialInbox(trial),
         handOver: () => () => undefined,
         signal,
+        ...(terminal ? { terminal: true, console: terminal.console } : {}),
       };
     },
     api: (req) => api.fetch(req),
@@ -210,7 +217,6 @@ describe("a lane's trial on a follower (goal 205, step 2)", () => {
       .map((e) => e.text);
     assert.ok(lines.includes("the trial runs on spark-03"), lines.join("\n"));
     assert.ok(lines.includes("working on the follower"), lines.join("\n"));
-    assert.ok(lines.includes("a trial on a follower runs headless"), lines.join("\n"));
   });
 
   test("a call without one of its trials' tokens is refused, and never reaches the leader", async () => {
@@ -260,6 +266,82 @@ describe("a lane's trial on a follower (goal 205, step 2)", () => {
     const r = await run;
     f.host.close();
     assert.equal(r.stopped, "interrupted");
+  });
+
+  test("its own terminal there: the leader's console shows its screen and passes on the owner's input and keys (step 2e)", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 1 } });
+    await env.start();
+    const typedThere: unknown[] = [];
+    const rawThere: string[] = [];
+    let terminalSaid: boolean | undefined;
+    const f = await followerFor(env, async (_spec, link) => {
+      terminalSaid = link.terminal;
+      link.console?.(
+        new TrialConsole({
+          ownerInput: async (i) => {
+            typedThere.push(i);
+          },
+          ownerRaw: async (d) => {
+            rawThere.push(d);
+          },
+          limitShown: () => undefined,
+          screen: async () => ({ cols: 80, rows: 24, data: "working on the follower" }),
+          lastScreen: () => ({ cols: 80, rows: 24, data: "the last screen" }),
+        }),
+      );
+      await new Promise<void>((resolve) => link.signal?.addEventListener("abort", () => resolve()));
+      return { stopped: "interrupted", turns: 1, toolCalls: 0, tokensIn: 1, tokensOut: 1 };
+    });
+    let owner:
+      | {
+          screen(): Promise<{ data: string } | undefined>;
+          input(i: unknown, later: () => void): Promise<{ outcome: string }>;
+          keystrokes(d: string, typed: (l: string) => void): Promise<void>;
+          lastScreen(): { data: string } | undefined;
+        }
+      | undefined;
+    const away = awayLane(env, f.link, undefined, {
+      console: (c) => {
+        owner = c as typeof owner;
+      },
+    });
+    const abort = new AbortController();
+    const run = away.run(
+      {
+        spec: {
+          trialId: "t-00112233445566ff",
+          token: "b".repeat(64),
+          run: "js-1",
+          lane: "lane-1",
+          parentCommit: env.ledger.champions.current("js-1").commit_sha,
+          editablePaths: [],
+          brief: "work",
+        } as never,
+        repo: String(env.ledger.runs.get("js-1")?.seed_repo),
+      },
+      abort.signal,
+    );
+    for (let i = 0; i < 100 && terminalSaid === undefined; i++)
+      await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 100 && !(await owner?.screen().catch(() => undefined)); i++)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.equal(terminalSaid, true, "the follower runs it in its own terminal");
+    assert.equal((await owner?.screen())?.data, "working on the follower");
+    assert.deepEqual(
+      await owner?.input({ text: "look at the tests", wait: "now" }, () => undefined),
+      {
+        outcome: "typed",
+      },
+    );
+    assert.deepEqual(typedThere, [{ text: "look at the tests" }]);
+    const lines: string[] = [];
+    await owner?.keystrokes("ls\r", (l) => lines.push(l));
+    assert.deepEqual(rawThere, ["ls\r"]);
+    assert.deepEqual(lines, ["ls"]);
+    abort.abort();
+    assert.equal((await run).stopped, "interrupted");
+    f.host.close();
+    assert.equal(owner?.lastScreen()?.data, "the last screen");
   });
 
   test("a follower that stops answering ends its trial, interrupted", async () => {

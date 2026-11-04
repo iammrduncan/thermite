@@ -3,17 +3,18 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { forwardToProvider, modelStallMs } from "../../agents/model/index.ts";
 import { throughProxy } from "../../core/agents.ts";
+import { PI_VIEW_DONE, PI_VIEW_END, PI_VIEW_NEXT } from "../../core/api/harness/console.ts";
 import { LANE_CALL_MAX_BYTES } from "../../core/api/harness/lanes.ts";
 import { TURN_OFFER, TURN_TAKEN } from "../../core/api/harness/turn.ts";
 import { laneLimits } from "../../core/contract.ts";
 import { type DevRuns, type LaneRunner, laneRun } from "../agents/index.ts";
-import type { Hosted, LaneHost } from "./lanes.ts";
+import { type Hosted, type LaneHost, LaneRefusal } from "./lanes.ts";
 
 /**
  * A follower's routes for the trials of the lanes it holds (goal 205, step 2), which their
  * processes reach on loopback with the trial's token: those that need the workspace's machine
  * (the lane's commands, dev runs, the model proxy with the trial's route, the owner's messages
- * inside a turn) are served here; every other call of the trial goes to the leader (lanes.ts), and
+ * inside a turn, a Pi view's own side) are served here; every other call of the trial goes to the leader (lanes.ts), and
  * its answer comes back as the leader's API gave it.
  */
 
@@ -111,10 +112,28 @@ export function laneRoutes(
     return c.json({ messages: host.turnTaken(h, offer) });
   });
 
-  // A Pi view's console: a trial on a follower runs headless (goal 205, step 2e).
-  app.all("/v1/trial/console/*", (c) => {
-    holderOf(c);
-    return c.json({ error: "a trial on a follower runs headless" }, 404);
+  // A worker's Pi view asks its own side here for the owner's inputs (goal 169; step 2e).
+  const piView = (c: Context) => {
+    const view = host.piViewOf(holderOf(c));
+    if (!view) throw new LaneRefusal("this trial has no Pi view");
+    return view;
+  };
+  app.post(PI_VIEW_NEXT.path, bodyLimit({ maxSize: PI_VIEW_NEXT.maxBytes }), async (c) => {
+    const view = piView(c);
+    const { wait_ms } = PI_VIEW_NEXT.body.parse(await c.req.json());
+    return c.json({ input: await view.next(wait_ms) });
+  });
+  app.post(PI_VIEW_DONE.path, bodyLimit({ maxSize: PI_VIEW_DONE.maxBytes }), async (c) => {
+    const view = piView(c);
+    const b = PI_VIEW_DONE.body.parse(await c.req.json());
+    view.done(b.id, b.outcome, b.why);
+    return c.json({ ok: true });
+  });
+  app.post(PI_VIEW_END.path, bodyLimit({ maxSize: PI_VIEW_END.maxBytes }), async (c) => {
+    const view = piView(c);
+    PI_VIEW_END.body.parse(await c.req.json());
+    await view.end();
+    return c.json({ ok: true });
   });
 
   // Every other call of the trial: the leader's API answers it.

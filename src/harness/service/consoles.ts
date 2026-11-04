@@ -266,7 +266,9 @@ export class TerminalConsoles {
           id: trial,
           console: c && c !== "headless" ? c : undefined,
           last: this.last.get(trial),
-          piView: this.piViews.has(trial),
+          // A trial's Pi view here, or on a follower (its console says so, goal 205).
+          piView:
+            this.piViews.has(trial) || (c as { piView?: boolean } | undefined)?.piView === true,
           at: this.svc.clock().toISOString(),
         }),
       );

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { RunId, TRIAL_ID } from "../../ids.ts";
 import { LIVE_KINDS } from "../../live.ts";
+import {
+  TERMINAL_KEYS,
+  TERMINAL_KEYS_MAX,
+  TERMINAL_TEXT_MAX,
+  TERMINAL_WAITS,
+} from "../../terminal-input.ts";
 
 /**
  * A lane's trial on a follower (goal 205, step 2), as the rig's leader asks for it through the
@@ -42,6 +48,8 @@ export const LaneAsk = z.discriminatedUnion("op", [
     }),
     repo: MirrorName,
     route: Route.optional(),
+    /** Its program in its own terminal (the rig's setting when it starts), else headless. */
+    terminal: z.boolean().optional(),
   }),
   /**
    * What the trial reported since event `seen`, and its calls waiting; the trial's end once it
@@ -68,6 +76,25 @@ export const LaneAsk = z.discriminatedUnion("op", [
   }),
   /** The trial is stopped: a reset, a drain's end or the leader's own stop. */
   z.object({ op: z.literal("trial_stop"), trial: TrialId }),
+  /** Its terminal's screen now, for control's live view (step 2e). */
+  z.object({ op: z.literal("trial_screen"), trial: TrialId }),
+  /**
+   * The owner's input into its terminal: typed now, or queued for its usage window's reset, whose
+   * outcome comes back later as an `input_later` event with this `id`.
+   */
+  z.object({
+    op: z.literal("trial_input"),
+    trial: TrialId,
+    id: z.uuid(),
+    input: z.object({
+      text: z.string().max(TERMINAL_TEXT_MAX).optional(),
+      keys: z.array(z.enum(TERMINAL_KEYS)).max(TERMINAL_KEYS_MAX).optional(),
+      follow_up: z.literal(true).optional(),
+      wait: z.enum(TERMINAL_WAITS),
+    }),
+  }),
+  /** Keys the owner pressed on Live, as they came; the answer holds each line they ended. */
+  z.object({ op: z.literal("trial_keys"), trial: TrialId, data: z.string().max(64 * 1024) }),
 ]);
 export type LaneAsk = z.infer<typeof LaneAsk>;
 
@@ -118,6 +145,14 @@ export const LaneEvent = z.discriminatedUnion("kind", [
   z.object({ seq: Seq, kind: z.literal("proxy_saw"), tokens: z.unknown() }),
   /** Its program's own code hands its usage over, as `harness` runs it. */
   z.object({ seq: Seq, kind: z.literal("hand_over"), harness: z.string() }),
+  /** What became of an owner's input that waited for the usage window's reset. */
+  z.object({
+    seq: Seq,
+    kind: z.literal("input_later"),
+    id: z.uuid(),
+    outcome: z.enum(["typed_after_reset", "dropped"]),
+    why: z.string().optional(),
+  }),
   /** A call of the trial for the leader's API, which `trial_answer` answers. */
   z.object({
     seq: Seq,
@@ -139,9 +174,21 @@ export type LaneEvent = z.infer<typeof LaneEvent>;
 /** A file of the trial's session log, which the leader keeps by run and trial. */
 const SessionFile = z.object({ name: z.string().min(1).max(200), base64: z.string() });
 
-/** The answer to a wait: the events after `seen`, and the trial's end once it ended. */
+/** A terminal's screen, as the terminal host gives it. */
+const Screen = z.object({ cols: z.number(), rows: z.number(), data: z.string() });
+
+/**
+ * The answer to a wait: the events after `seen`, and the trial's end once it ended, with its
+ * terminal's last screen when it had one.
+ */
 export const LaneWaitAnswer = z.object({
   events: z.array(LaneEvent),
-  ended: z.object({ result: z.looseObject({}), session: z.array(SessionFile) }).optional(),
+  ended: z
+    .object({
+      result: z.looseObject({}),
+      session: z.array(SessionFile),
+      screen: Screen.optional(),
+    })
+    .optional(),
 });
 export type LaneWaitAnswer = z.infer<typeof LaneWaitAnswer>;
