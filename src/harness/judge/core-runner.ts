@@ -9,9 +9,9 @@ import {
   throttledFraction,
 } from "../targets/index.ts";
 import { keepBaselineDir, sealBaselineDir } from "./baseline.ts";
-import { type BuildInput, type BuildResult, BuildStore } from "./builds.ts";
+import { type BuildResult, BuildStore } from "./builds.ts";
 import { type Arm, type MeasureContext, runArm } from "./measure.ts";
-import type { Measured, MeasureSpec, RigRunner, Sealed } from "./runner.ts";
+import type { KeptBaseline, Measured, MeasureSpec, RigRunner, RunBuild, Sealed } from "./runner.ts";
 
 interface CoreRunnerOptions {
   runner: Runner;
@@ -44,7 +44,7 @@ export class CoreRunner implements RigRunner {
     return this.o.runner.separated;
   }
 
-  build(input: Omit<BuildInput, "role">): Promise<BuildResult> {
+  build({ kitRepo: _, ...input }: RunBuild): Promise<BuildResult> {
     return this.store.ensure({ ...input, role: builderRole(this.o.index) });
   }
 
@@ -96,10 +96,10 @@ export class CoreRunner implements RigRunner {
     return dir;
   }
 
-  async keepBaseline(written: string, to: string): Promise<Sealed> {
+  async keepBaseline(written: string, to: KeptBaseline): Promise<Sealed> {
     await this.o.runner.reclaim(written);
     const sealed = sealBaselineDir(written);
-    if (sealed.ok) keepBaselineDir(written, to);
+    if (sealed.ok) keepBaselineDir(written, to.dir);
     return sealed;
   }
 

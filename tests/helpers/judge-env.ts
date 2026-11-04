@@ -10,13 +10,19 @@ import {
   type SupervisedResult,
   type SupervisedRun,
 } from "../../src/harness/broker/process.ts";
-import { LocalRunner, type RunOutcome, type RunRequest } from "../../src/harness/broker/runner.ts";
+import {
+  LocalRunner,
+  type Runner,
+  type RunOutcome,
+  type RunRequest,
+} from "../../src/harness/broker/runner.ts";
 import { CoreRunner } from "../../src/harness/judge/core-runner.ts";
 import { Judge, type PromotionPolicy } from "../../src/harness/judge/judge.ts";
 import type { RigRunner } from "../../src/harness/judge/runner.ts";
 import { Ledger } from "../../src/harness/ledger/index.ts";
 import { HarnessService } from "../../src/harness/service/index.ts";
 import { CpuDriver } from "../../src/harness/targets/cpu.ts";
+import type { TargetDriver } from "../../src/harness/targets/driver.ts";
 
 /**
  * A throwaway harness with a small Node-based project and kit, for judge tests that run on any
@@ -280,8 +286,22 @@ export function makeJudgeEnv(
      * the stand-in runner answers them (StandInRunner).
      */
     realRuns?: boolean | undefined;
-    /** The judge's runner, made from the core's own (goal 206): a test sees what reaches it. */
-    wrapRunner?: ((core: RigRunner) => RigRunner) | undefined;
+    /**
+     * The judge's runner, made from the core's own (goal 206): a test sees what reaches it, or
+     * gives a runner of another process, made with the core's service and its test's folder.
+     */
+    wrapRunner?:
+      | ((
+          core: RigRunner,
+          made: {
+            service: HarnessService;
+            ledger: Ledger;
+            root: string;
+            processes: Runner;
+            driver: TargetDriver;
+          },
+        ) => RigRunner)
+      | undefined;
     /** The clock the ledger and the service go by; none: the computer's. */
     clock?: (() => Date) | undefined;
   } = {},
@@ -462,6 +482,7 @@ export function makeJudgeEnv(
       ? {
           target: opts.wrapRunner(
             new CoreRunner({ runner: processes, driver, paths, ledger, index: 0 }),
+            { service, ledger, root, processes, driver },
           ),
         }
       : {}),

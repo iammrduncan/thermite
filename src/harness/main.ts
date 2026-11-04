@@ -22,6 +22,7 @@ import {
   targetDrivers,
 } from "./controller/index.ts";
 import { DiskWatch } from "./disk.ts";
+import { startRunner } from "./runner/index.ts";
 import { HarnessService } from "./service/index.ts";
 
 /**
@@ -41,6 +42,8 @@ async function main(): Promise<void> {
   process.umask(0o022);
   const env = process.env;
   startLogging("harness", env);
+  // A runner of a rig (goal 206) serves the core's runs, and keeps no run of its own.
+  if (env.THERMITE_ROLE === "runner") return startRunner(env);
   const ctx = await controllerContext(env);
   const { rig, paths, controlPublicKeyPem, tokens, runner } = ctx;
   const targets = targetDrivers(ctx);

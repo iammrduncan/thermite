@@ -131,6 +131,7 @@ The harness container runs a **broker**, which runs as root and starts the other
 | `THERMITE_TARGET_CLASS` | string | `generic-cpu` on `cpu`, `cuda-gpu` on `cuda-gpu` | no | A name for the kind of device. The dashboard shows it with the rig's hardware, and the **New campaign** page and the smoke check copy it into the contracts they write. Nothing compares it |
 | `THERMITE_CONTROL_PUBKEY_FILE` | path | required | no | Control's command-signing public key, to verify signed commands. The harness waits up to 120 seconds for the file to appear, then stops with `timed out waiting for <path>`. In the one-container rig image in pull mode, the broker writes it from enrollment before it starts the harness |
 | `THERMITE_LISTEN` | `host:port` | `0.0.0.0:8700` | no | Where the harness serves its API, for the rig's supervisor, a proposer's `thermite submit` and the agents' tools. Rigs that control sets up expect port 8700 |
+| `THERMITE_ROLE` | `runner` or not set | not set | no | `runner`: the harness serves its target resources to its rig's core, one run at a time on each: a build, a measurement with its check, and a baseline's folder. It keeps its own builds, kits, model files and kept baselines, and no run of its own: no scheduler, planner, judge's queue or agents. Not set: the harness is the rig's core, as always |
 
 ### The one-container rig image
 

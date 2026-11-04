@@ -11,7 +11,11 @@
 export {
   BASELINE_PRIORITY,
   type BaselineState,
+  baselineDir,
   baselineState,
+  keepBaselineDir,
+  prepareBaselineDir,
+  removeBaselineDir,
   SETUP_DIRECTION,
   startingPoint,
 } from "./baseline.ts";
@@ -19,6 +23,7 @@ export { BUILD_KEY, removeBuild } from "./builds.ts";
 export { CoreRunner } from "./core-runner.ts";
 export { type HeldOutKind, heldOutCellsOf, heldOutKinds, heldOutWords } from "./held-out.ts";
 export { Judge, type PromotionPolicy } from "./judge.ts";
+export { exportKit, loadKit } from "./kits.ts";
 export { jobsAtStart } from "./lease.ts";
 export { copyForRun } from "./measure.ts";
 export { portReplaced } from "./ports.ts";

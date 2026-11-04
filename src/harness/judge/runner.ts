@@ -33,10 +33,20 @@ export interface MeasureSpec {
   note?: MeasureContext["note"];
 }
 
+/** What a build is made from, with the kit's repository, which names it anywhere. */
+export type RunBuild = Omit<BuildInput, "role"> & { kitRepo: string };
+
 /** One run of an arm on a cell, and how much of it the runner's CPUs were throttled. */
 export interface Measured {
   run: ArmRun;
   throttled: number | undefined;
+}
+
+/** Where a run's baseline is kept on the core: its folder, by run and job. */
+export interface KeptBaseline {
+  dir: string;
+  run: string;
+  job: number;
 }
 
 /** A baseline job's sealed folder, or why it was refused. */
@@ -52,7 +62,7 @@ export interface RigRunner {
   /** Whether the judge's runs are separated from the agents' (each role its own user). */
   readonly separated: boolean;
   /** Builds a commit with the kit as the runner's builder, or finds it built. */
-  build(input: Omit<BuildInput, "role">): Promise<BuildResult>;
+  build(input: RunBuild): Promise<BuildResult>;
   /** One run of an arm on a cell. */
   measure(spec: MeasureSpec, arm: Arm, cell: string): Promise<Measured>;
   /** The runner's CPU throttling so far, read before and after a block. */
@@ -63,10 +73,10 @@ export interface RigRunner {
    */
   baselineWork(job: number): Promise<string>;
   /**
-   * Takes back the folder a baseline job's checks wrote, seals it and keeps it in `to`, the core's
-   * folder for it. Returns its files, or why it was refused.
+   * Takes back the folder a baseline job's checks wrote, seals it and keeps it in `to.dir`, the
+   * core's folder for the run's job. Returns its files, or why it was refused.
    */
-  keepBaseline(written: string, to: string): Promise<Sealed>;
+  keepBaseline(written: string, to: KeptBaseline): Promise<Sealed>;
   /** Removes a folder of the runner's, whoever owns its files. */
   remove(dir: string): Promise<void>;
 }

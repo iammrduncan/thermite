@@ -78,7 +78,7 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       count,
       runsPerCell: contract.acceptance.runs_per_cell,
     });
-    const sealed = await judge.target.keepBaseline(written, dir);
+    const sealed = await judge.target.keepBaseline(written, { dir, run, job: job.id });
     if (!sealed.ok) throw new Stop("invalid", sealed.reason);
     const body = baselineBody({
       job,
