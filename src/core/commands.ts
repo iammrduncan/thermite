@@ -266,6 +266,11 @@ export const CommandPayloads = {
   }),
   reset_workers: z.object({ run: RunId, reseed_commit: CommitSchema.optional() }),
   /**
+   * The owner (or an operator) asks a running run's teachers for a round now (goal 194): the same
+   * round the timer starts, and the next timed one counts from it.
+   */
+  start_teachers_round: z.object({ run: RunId }),
+  /**
    * The owner's message to the run's agents (owner only). `to`: everyone working (`all`: every
    * lane, and the planner of a hill-climb or goal run), a lane, a running worker's trial, the
    * planner, or the advisors (`advisors`: all of them; `teachers`, `auditor` or `panel`). The
@@ -514,6 +519,7 @@ export const MCP_OPERATOR_KINDS = [
   "unkeep_message",
   "stop_trial",
   "end_wait",
+  "start_teachers_round",
   // The experiment queue and the rules for the plan (goal 064): the owner's and operators'.
   "queue_add",
   "queue_move",
@@ -562,6 +568,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "hypothesis_status",
   "stop_trial",
   "end_wait",
+  "start_teachers_round",
   "invalidate_evidence",
   "terminal_input",
   "retention_run",
@@ -579,6 +586,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "close_run",
   "redirect",
   "reset_workers",
+  "start_teachers_round",
   "message_agent",
   "unkeep_message",
   "queue_add",

@@ -2,11 +2,14 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { redact } from "../../common/env.ts";
 import { errorText, jsonBody } from "../../common/errors.ts";
-import { COMMAND, ISSUE } from "../../core/api/control/owner.ts";
-import { issueWaking, WakeRefused } from "../issue/index.ts";
+import { COMMAND, ISSUE, TEACHERS_ROUND } from "../../core/api/control/owner.ts";
+import { issueWaking, startTeachersRound, WakeRefused } from "../issue/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
-/** Signed commands from the owner's token: one issued, and the newest listed. */
+/**
+ * Signed commands from the owner's token: one issued, a teachers' round asked for (goal 194),
+ * and the newest listed.
+ */
 export function commandRoutes(app: Hono, api: ApiContext): void {
   const { store, privateKeyPem, parts, admin } = api;
   const { runpodRigs } = parts;
@@ -47,6 +50,22 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
       { id: issued.id, status: "pending", ...(issued.woke ? { woke: issued.woke } : {}) },
       201,
     );
+  });
+
+  // A teachers' round now (goal 194), the run named alone: control sends it to the run's rig.
+  app.post(TEACHERS_ROUND.path, admin, (c) => {
+    const run = c.req.param("run");
+    try {
+      return c.json(startTeachersRound(store, privateKeyPem, { run, issuedBy: "owner:api" }), 201);
+    } catch (err) {
+      const error = errorText(err);
+      store.auditLog.refusal("owner:api", "refused", {
+        path: TEACHERS_ROUND.path,
+        run,
+        why: redact(error),
+      });
+      return c.json({ error }, /^(unknown rig|Control knows no run)/.test(error) ? 404 : 409);
+    }
   });
 
   app.get("/v1/commands", admin, (c) =>

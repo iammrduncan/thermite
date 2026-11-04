@@ -17,6 +17,8 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
     end_wait: { run },
     close_run: { run, reason: String(f.reason ?? "").trim() },
     reset_workers: { run },
+    // Start a teachers' round (goal 194), from a run's ⋯ menu.
+    start_teachers_round: { run },
     // Export (goal 103): the run alone, or a full one, as the owner chose (goal 180: no export of
     // what changed).
     export_now: exportForm(f).payload,

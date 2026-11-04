@@ -65,6 +65,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
   next.tries ??= {};
   next.ownerSeen ??= {};
   next.ideasSeen ??= {};
+  next.askedSeen ??= {};
   const s = next.stats;
   const now = Date.now();
   const retryMs = cfg.retryMs ?? 30 * 60_000;
@@ -454,7 +455,8 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     cfg,
     harness,
     // The state the pass returns, with the teachers' markers (ownerSeen, ideasSeen) made above.
-    next: next as AdviseState & Required<Pick<AdviseState, "ownerSeen" | "ideasSeen">>,
+    next: next as AdviseState &
+      Required<Pick<AdviseState, "ownerSeen" | "ideasSeen" | "askedSeen">>,
     s,
     now,
     retryMs,

@@ -128,6 +128,7 @@ export const EVENT_KINDS = [
   "run_status",
   "source_fetched",
   "submission_refused",
+  "teachers_round_requested",
   "terminal_input",
   "trial_finished",
   "trial_repeating",

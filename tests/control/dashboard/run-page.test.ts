@@ -128,9 +128,12 @@ describe("control dashboard", () => {
     assert.match(page, /<dt>Agents<\/dt><dd>On: they start work at the first round<\/dd>/);
     assert.match(page, /\/live\?compose=1">Message<\/a>/);
     assert.match(page, /Restart the lanes/);
-    // Restart the lanes, and a change on Edit rig, each leave a line in the run's History.
+    assert.match(page, /<button class="">Start a teachers' round<\/button>/);
+    // Restart the lanes, a teachers' round (goal 194) and a change on Edit rig, each leave a line
+    // in the run's History.
     const csrf = s.csrfFrom(page);
     await s.post("/ui/commands", { csrf, rig: "rig-a", kind: "reset_workers", run: "js-1" });
+    await s.post("/ui/commands", { csrf, rig: "rig-a", kind: "start_teachers_round", run: "js-1" });
     const edit = await (await s.get("/ui/rigs/rig-a/edit")).text();
     const form: Record<string, string> = { csrf: s.csrfFrom(edit), choice: "", harness: "pi" };
     for (const k of ["judge", "workers", "auditor", "teachers", "review", "exports"]) form[k] = "1";
@@ -140,6 +143,10 @@ describe("control dashboard", () => {
     await s.relay();
     const history = await (await s.get("/ui/campaigns/js-sum/runs/js-1/history")).text();
     assert.match(history, /You restarted the lanes: their trials ended/);
+    assert.match(
+      history,
+      /You asked the teachers for a round now: they review the run within a minute, or when a round under way ends\./,
+    );
     assert.match(history, /You changed the rig's settings: [^<]*the planner off/);
     // Another run assigned through control: its own page (goal 170) says it is starting until
     // the rig reports it; a link to a run control never assigned finds no run.
@@ -225,6 +232,7 @@ describe("control dashboard", () => {
     assert.match(page, /<a class="btn" href="\/ui\/campaigns\/js-sum\/runs\/js-1\/live">/);
     assert.doesNotMatch(page, />Message<\/a>/);
     assert.doesNotMatch(page, /Restart the lanes/);
+    assert.doesNotMatch(page, /Start a teachers' round/);
     // An experiment in its queue waits for a run with workers; the queue says how to carry it.
     const tab = "/ui/campaigns/js-sum/runs/js-1/experiments";
     assert.doesNotMatch(await (await s.get(tab)).text(), /no worker takes these experiments/);

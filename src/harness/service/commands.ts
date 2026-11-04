@@ -1,5 +1,6 @@
 import { errorText, Refusal } from "../../common/errors.ts";
 import { setLogLevel } from "../../common/log.ts";
+import { teachersRoundRefusal } from "../../core/agents.ts";
 import {
   CommandPayloads,
   type Envelope,
@@ -333,6 +334,15 @@ export class Commands {
         const event = svc.ledger.appendEvent(by, "workers_reset", p.run, {});
         svc.agents?.onReset({ event, run: p.run });
         return { run: p.run, reset: true };
+      }
+      // A teachers' round asked for now (goal 194): the supervisor reads the request with the run's
+      // other reasons for a round (api/advisors.ts) and starts it at once, or when one ends.
+      case "start_teachers_round": {
+        const p = CommandPayloads.start_teachers_round.parse(payload);
+        const refused = teachersRoundRefusal(p.run, requireRun(svc.ledger, p.run).status);
+        if (refused) throw new Refusal(refused);
+        const event = svc.ledger.appendEvent(by, "teachers_round_requested", p.run, {});
+        return { run: p.run, asked: true, event };
       }
       case "propagate":
         return receivePropagation(svc, CommandPayloads.propagate.parse(payload), by);

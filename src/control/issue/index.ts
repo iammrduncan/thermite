@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { errorText, Refusal } from "../../common/errors.ts";
-import { ADVISOR_ROLES, type AdvisorRole } from "../../core/agents.ts";
+import { ADVISOR_ROLES, type AdvisorRole, teachersRoundRefusal } from "../../core/agents.ts";
 import { canonicalJson } from "../../core/canonical.ts";
 import {
   COMMAND_MAX_BYTES,
@@ -27,9 +27,17 @@ import {
 import { takingModel } from "../command-progress.ts";
 import { controlDiskOf } from "../disk.ts";
 import { mcpRefusal } from "../mcp-servers/index.ts";
+import { rigHasTeachers } from "../rigs/index.ts";
 import { usedRunRefusal } from "../run-names.ts";
 import type { ControlStore } from "../store/index.ts";
-import { currentChampion, findRun, type RigView, type RunView, rigView } from "../views/index.ts";
+import {
+  currentChampion,
+  findRun,
+  type RigView,
+  type RunView,
+  rigSettingsOf,
+  rigView,
+} from "../views/index.ts";
 import { publishCommand, unpublishCommand } from "./bus.ts";
 import { commandRig } from "./rig.ts";
 import { agentAssignRefusal, gitAccessRefusal } from "./sources.ts";
@@ -186,6 +194,24 @@ export function modelCheckRefusal(store: ControlStore, rig: string, p: { check: 
 }
 
 /**
+ * Why control refuses a teachers' round before signing it, or "" (goal 194, issue 53): the run must
+ * be running, on a rig with teachers, switched on. From the rig's reports; what they don't show
+ * yet is the rig's to check, and its harness refuses a run that is not running.
+ */
+export function teachersRoundAsked(store: ControlStore, rig: string, p: { run: string }): string {
+  // A status the rig has not reported yet ("unknown") is the rig's to check.
+  const status = rigView(store, rig)?.runs.find((x) => x.id === p.run)?.status;
+  const refused =
+    status === "paused" || status === "closed" ? teachersRoundRefusal(p.run, status) : "";
+  if (refused) return refused;
+  if (rigHasTeachers(store, rig) === false)
+    return `${rig} has no teachers: give them a model on Edit rig.`;
+  if (rigSettingsOf(store, rig)?.settings?.teachers === false)
+    return `${rig}'s teachers are off: switch them on on Edit rig.`;
+  return "";
+}
+
+/**
  * Why control refuses a set of rules (redirect) before signing it, or "". A rule may name a
  * direction the run doesn't have yet: the planner designs it (goal 066). A research run has no
  * planner, so there only its task kinds may be named. The rig's harness checks the same.
@@ -331,6 +357,27 @@ export function issueCommand(
   auditChange(store, signed);
   publishCommand(store, signed);
   return { id: signed.envelope.id };
+}
+
+/**
+ * A teachers' round now (goal 194), as the MCP tool and the REST route ask for it: one signed
+ * start_teachers_round to the run's rig, refused in words before signing (teachersRoundAsked).
+ */
+export function startTeachersRound(
+  store: ControlStore,
+  privateKeyPem: string,
+  a: { rig?: string | undefined; run: string; issuedBy: string },
+): { started: true; id: string; rig: string; said: string } {
+  const payload = { run: a.run };
+  const rig = commandRig(store, "start_teachers_round", a.rig, payload);
+  const { id } = issueCommand(store, privateKeyPem, {
+    rig,
+    kind: "start_teachers_round",
+    payload,
+    issuedBy: a.issuedBy,
+  });
+  const said = `${rig}'s teachers review ${a.run} within a minute, or when a round under way ends.`;
+  return { started: true, id, rig, said };
 }
 
 /**
@@ -490,7 +537,9 @@ export function prepareCommand(
           ? usedRunRefusal(store, payload as { run: string })
           : input.kind === "rig_check"
             ? modelCheckRefusal(store, rig, payload as { check: string })
-            : "";
+            : input.kind === "start_teachers_round"
+              ? teachersRoundAsked(store, rig, payload as { run: string })
+              : "";
   if (ruled) throw new Error(ruled);
   const now = Date.now();
   const signed = signEnvelope(

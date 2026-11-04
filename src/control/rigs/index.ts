@@ -29,6 +29,7 @@ export {
   RigModelBody,
   type RouteParts,
   researchModelRefusal,
+  rigHasTeachers,
   rigModelAnswer,
   rigModelFields,
   rigModelRequest,

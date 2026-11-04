@@ -85,6 +85,13 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "warn",
         { run: String(e.subject) },
       );
+    // A teachers' round asked for now (goal 194): the supervisor starts it within a minute.
+    case "teachers_round_requested":
+      return s(
+        `${who(e.actor)} asked the teachers for a round now: they review the run within a minute, or when a round under way ends.`,
+        "",
+        { run: String(e.subject) },
+      );
     // The run's experiment queue (goal 064): what was added, moved, dropped and given out.
     case "experiment_added": {
       // An experiment whose trial was interrupted (or failed) goes back to the queue as a new one

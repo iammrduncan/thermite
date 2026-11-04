@@ -1,16 +1,16 @@
 ---
 id: "194"
 title: "Start a teachers' round now: an MCP tool, a dashboard action and a signed command"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 # 194 · Start a teachers' round now: an MCP tool, a dashboard action and a signed command
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 
@@ -28,17 +28,22 @@ Checking a fix to the teachers, or what they make of a run's state, meant waitin
 
 ## Done when
 
-- [ ] Items 1 to 4, with tests of each refusal.
-- [ ] Pages: the run's page and Live, the MCP tools, the signed commands, Steer a run, and the changelog.
+- [x] Items 1 to 4, with tests of each refusal: `tests/control/issue/teachers-round.test.ts`, `tests/supervisor/advisors/pass/asked.test.ts` and the run page's test. Passing on the lab's test machine is still to come.
+- [x] Pages: the run's page and Live, the MCP tools, the signed commands, Steer a run, and the changelog. Also the REST API, the advisors file, Use advisors, and Limits and pacing.
 - [ ] Issue 53 closed with its commit.
 
 ## Decisions
 
-- None yet.
+- 2026-11-03, the owner, from the mockup ("Build it as drawn"): **Start a teachers' round** in the run's ⋯ menu, between **Restart the lanes** and **Close run**, for a running run with agents; greyed out, with why, on a rig with no teachers or with them off. MCP's `start_teachers_round {rig?, run}` answers `{started, id, rig, said}`, and REST has `POST /v1/runs/<run>/teachers-round`. Owner and operator only, never an agent: the harness takes it only from an `owner:` issuer.
+- 2026-11-03: a request while a round is under way is not refused: it waits for that round to end, then starts the next. At the day's spending limit it is not refused either: Live says once that the teachers review the run after midnight UTC, as for a message. Item 2's refusals are therefore a run that is not running, a rig with no teachers and a rig with its teachers off; control refuses all three before it signs, and the rig refuses the first again.
+- 2026-11-03: a run whose status control has not had from its rig yet is the rig's to check: control signs the request, and the harness refuses it if the run is not running. Before the rig's supervisor has reported its advisors, control can't tell whether the rig has teachers, and signs it too.
+- Item 5 (the auditor and the review panel) stays for later: neither has a round to start; each works when an audit or review is open.
 
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Researched: no round on request existed (the supervisor's reasons were the timer, an owner's message and `queue_low`). Mockup approved by the owner.
+- 2026-11-04: Built: the signed command `start_teachers_round` and its event `teachers_round_requested`; the harness's runs list for the supervisor gives the newest request as `teachers_asked`, and the supervisor starts one round for each, saved in its state across restarts. Control's refusals, the ⋯ menu item, the MCP tool, the REST route, History's line and the pages. Typecheck, lint, the size, import and loose-ends checks and the docs check pass; the tests run on the lab's test machine.
 
 ---
 

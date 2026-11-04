@@ -14,6 +14,7 @@ You can steer a running campaign without touching its judge: pause or resume it,
 | **Resume** | The run's header; Live's header, where a paused run is listed under **Ended in the last day**, marked `paused`; or the run's row under **Earlier runs** | New trials start again, in the round the run was in: a trial that the pause stopped still counts in it. The planner plans the next round when this one's trials are done. If the model provider stopped the run's agents, the model is checked again at once ([limits and pacing](../../reference/limits-and-pacing.md#the-model-provider)). Any other running run on that rig is paused: a rig runs one run at a time |
 | **Resume now** | The run's header, while its agents wait for the provider's limit | Ends the wait now: new trials and plans of the run start at once. See [End a wait for the provider](#end-a-wait-for-the-provider) |
 | **Restart the lanes** | **⋯** in the run's header or in Live's header, while a run with agents is running | Ends the running trials and the current round at once, with no question first. Their experiments go back to the top of the queue. The planner plans the next round straight away, and every lane starts again from the champion. Nothing the judge decided is lost |
+| **Start a teachers' round** | **⋯** in the run's header or in Live's header, while a run with agents is running | The run's [teachers](../../reference/glossary.md) review it now, as at a timed round, and the next timed round counts from this one. See [Start a round now](../operate/advisors.md#start-a-round-now) |
 | **Close run** | **⋯** in the run's header, while the run is running or paused | Ends the run for good, with your reason: as for **Pause**, its running trials stop and nothing new starts, and its jobs waiting for the judge never run. It can't be resumed. Its experiments, attempts, champion and journal stay. See [Close a run](#close-a-run) |
 | A message | The message box in **Live**, or **Tell the planner** on the **Planner** tab | Text for everyone working, one lane, the planner or the [advisors](../../reference/glossary.md). A message to everyone or to a lane can stay in force for every new trial. The planner makes rules from what you tell it |
 | Typing into an agent's terminal | The console under each agent's terminal: **Terminals** in the run's **Live**, or the trial's own Live page | Words, a slash command, a skill or a key, typed into one worker's program as you would type them. Only you can. See [Watch and steer an agent in its terminal](agent-terminal.md) |
@@ -216,7 +217,7 @@ Over MCP, an agent sends the same kinds and payloads with the `issue_command` to
 
 ## Who may do what
 
-| | Pause, resume, restart the lanes, add rules | Message the agents, remove a kept message, end a wait for the provider | Change the experiment queue, remove a rule | Close a run |
+| | Pause, resume, restart the lanes, add rules | Message the agents, remove a kept message, end a wait for the provider, start a teachers' round | Change the experiment queue, remove a rule | Close a run |
 | --- | --- | --- | --- | --- |
 | The owner: dashboard, REST API, command line, MCP | yes | yes | yes | yes |
 | The operator's token over MCP | yes | yes | yes | no |

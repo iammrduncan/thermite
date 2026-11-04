@@ -420,6 +420,7 @@ export interface EventBodies {
     error: string | null;
   };
   workers_reset: Record<string, never>;
+  teachers_round_requested: Record<string, never>;
   agents_stopped: { kind: string; words: string; by: string; said: string };
   agents_resumed: { why: string };
   agents_wait_for_limit: {

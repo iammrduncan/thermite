@@ -270,6 +270,22 @@ export const RUN = {
   answer: z.looseObject({ id: z.string() }),
 } as const satisfies Route;
 
+/**
+ * A teachers' round now (goal 194): the run's teachers review it within a minute, or when a round
+ * under way ends. Refused in words: a run not running, a rig with no teachers or with them off.
+ */
+export const TEACHERS_ROUND = {
+  method: "POST",
+  path: "/v1/runs/:run/teachers-round",
+  body: Nothing,
+  answer: z.looseObject({
+    started: z.boolean(),
+    id: z.string(),
+    rig: z.string(),
+    said: z.string(),
+  }),
+} as const satisfies Route;
+
 /** A run's untried experiments, as a new run of its campaign takes them into its queue. */
 export const UNTRIED = {
   method: "GET",

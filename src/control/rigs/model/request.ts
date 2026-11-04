@@ -486,6 +486,16 @@ export function advisorsFileOf(
   return file.success ? file.data : undefined;
 }
 
+/**
+ * Whether a rig has teachers (goal 194): models control gave them, or its advisors file's, as its
+ * supervisor reports it; undefined when control can't tell.
+ */
+export function rigHasTeachers(store: ControlStore, rig: string): boolean | undefined {
+  if (agentModelsOf(store, rig).teachers.models.length) return true;
+  const file = advisorsFileOf(store.reportedRigs.supervisor(rig));
+  return file ? file.teachers.length > 0 : undefined;
+}
+
 /** The answer of `rig_models` and its REST twin: each agent's model, and the advisors file's. */
 export const rigModelsAnswer = (store: ControlStore, rig: string, agents: AgentModels) => ({
   rig,

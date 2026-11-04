@@ -10,6 +10,7 @@ const COMMAND: Record<string, string> = {
   resume_run: "resume the run",
   close_run: "close the run",
   reset_workers: "reset the workers",
+  start_teachers_round: "start a teachers' round",
   redirect: "steer the planner",
   accept_review: "decide a review",
   conclude: 'decide a "not possible" proposal',
