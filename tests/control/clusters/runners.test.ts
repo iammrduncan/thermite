@@ -244,8 +244,8 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       "a-rig-with-a-rather-long-name-indeed",
       "and-a-runner-named-at-length-too",
     );
-    assert.ok(unit.length <= 46, unit);
-    assert.match(unit, /^a-rig-with-a-rathe-and-a-runner-named-[0-9a-f]{8}$/);
+    assert.ok(unit.length <= 40, unit);
+    assert.match(unit, /^a-rig-with-a-ra-and-a-runner-na-[0-9a-f]{8}$/);
     assert.notEqual(
       unit,
       runnerUnit("a-rig-with-a-rather-long-name-indeed", "and-a-runner-named-at-length-two"),

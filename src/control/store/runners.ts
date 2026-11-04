@@ -8,13 +8,16 @@ import { StorePart } from "./part.ts";
  * nothing else. A runner process someone started by hand has no row: it uses the rig's token.
  */
 
-/** A runner process on a cluster, as control set it up. */
+/**
+ * A runner process as control set it up: on a cluster (placement created or slot), or on a
+ * machine over SSH (placement machine, with the machine's name in `cluster` and no namespace).
+ */
 export interface RigRunner {
   rig: string;
   runner: string;
   cluster: string;
   namespace: string;
-  placement: "created" | "slot";
+  placement: "created" | "slot" | "machine";
   spec: RigRunnerSpec;
   status: string;
   created_at: string;
@@ -24,6 +27,9 @@ export interface RigRunner {
 interface RigRunnerSpec {
   /** Its GPUs: none (the node's CPUs) or one. */
   gpus: number;
+  /** On a machine: its GPU's index there, and whether control logs in as root. */
+  gpuIndex?: number | undefined;
+  root?: boolean | undefined;
   gpuMode: "device-plugin" | "dra";
   deviceClass?: string | undefined;
   node?: string | undefined;

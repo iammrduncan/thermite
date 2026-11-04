@@ -4,6 +4,13 @@ import { RIG_NAME_RULE } from "../../core/ids.ts";
 import { RunnerSetting } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
 import { newToken } from "../credential.ts";
+import {
+  deployScript,
+  type MachineFacts,
+  manageScript,
+  tail,
+  updateScript,
+} from "../machines/index.ts";
 import type { ControlParts } from "../parts.ts";
 import {
   type CudaVersion,
@@ -12,9 +19,9 @@ import {
   rigBusOf,
   setRigSettings,
 } from "../rigs/index.ts";
-import { RIG_ID, type RigRunner } from "../store/index.ts";
+import { fingerprint, type Machine, RIG_ID, type RigRunner } from "../store/index.ts";
 import { rigSettingsOf } from "../views/index.ts";
-import { cudaOfPlace } from "./cuda.ts";
+import { cudaFor, cudaOfPlace } from "./cuda.ts";
 import { type ClusterFacts, HARNESS_LABELS, slotNetwork } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
 import {
@@ -28,9 +35,10 @@ import { quotaRefusal } from "./resources.ts";
 import { clusterTarget, NS } from "./rigs.ts";
 
 /**
- * A rig's runner processes on a cluster control knows (goal 206): each a harness and a supervisor
- * started as a runner, on one node, with one GPU or none, a volume of its own and a token of its
- * own, with which its supervisor registers its key on the bus and nothing else. Control sets it up,
+ * A rig's runner processes on a cluster control knows, or on a machine it reaches over SSH (goal
+ * 206): each a harness and a supervisor started as a runner, on one node or as Quadlet units on
+ * one machine, with one GPU or none, volumes of its own and a token of its own, with which its
+ * supervisor registers its key on the bus and nothing else. Control sets it up,
  * then sends the rig its new list of runners, which the rig's core takes while it works; taken
  * away, the rig hears first, so the core fails its run under way cleanly, then its objects go.
  */
@@ -132,7 +140,8 @@ export const clusterRunnerRequest = (rig: string, b: ClusterRunnerBody): Cluster
 const runnerPlan = (parts: ControlParts, r: RigRunner): ClusterRigPlan => ({
   rig: r.rig,
   runner: r.runner,
-  placement: r.placement,
+  // A runner on a machine has no plan for a cluster: never asked for one.
+  placement: r.placement === "machine" ? "created" : r.placement,
   namespace: r.namespace,
   controlUrl: parts.publicUrl ?? "",
   images: r.spec.images,
@@ -326,6 +335,12 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
     store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
     return;
   }
+  await giveRunner(parts, r, by);
+}
+
+/** Gives a runner process control set up to its rig, once the rig reports its settings. */
+async function giveRunner(parts: ControlParts, r: RigRunner, by: string) {
+  const { store } = parts;
   // A rig control is setting up gets its runners once it reports its settings.
   for (let t = 0; t < RIG_WAIT_TRIES && !rigSettingsOf(store, r.rig)?.settings; t++)
     await new Promise((done) => setTimeout(done, RIG_WAIT_MS));
@@ -354,6 +369,17 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
 
 /** Deletes what control set up for a runner process on its cluster; why not, in words. */
 async function deleteRunnerObjects(parts: ControlParts, r: RigRunner): Promise<string | undefined> {
+  if (r.placement === "machine") {
+    const m = parts.store.machines.get(r.cluster);
+    if (!m) return undefined;
+    const out = await parts.machineSsh.sshScript(
+      machineTarget(parts, m),
+      manageScript({ rig: runnerUnit(r.rig, r.runner), root: r.spec.root === true }, "remove"),
+      [],
+      300_000,
+    );
+    return out.code === 0 ? undefined : `on ${m.name}: ${tail(out.stderr) || `exit ${out.code}`}`;
+  }
   const k = parts.store.clusters.get(r.cluster);
   if (!k) return undefined;
   const sel = [
@@ -461,6 +487,10 @@ export async function updateRunnerImages(parts: ControlParts, rig: string): Prom
   const { store } = parts;
   for (const r of store.rigRunners.of(rig)) {
     if (r.status === "removed") continue;
+    if (r.placement === "machine") {
+      await updateMachineRunner(parts, r);
+      continue;
+    }
     const images = controlImages(parts, r.spec.gpus, r.spec.cuda);
     const k = store.clusters.get(r.cluster);
     if (typeof images === "string" || !k) {
@@ -487,4 +517,183 @@ export async function updateRunnerImages(parts: ControlParts, rig: string): Prom
     store.rigRunners.setImages(rig, r.runner, images);
     store.rigHistory.add(rig, "runner_images", true, `${r.runner}: harness ${images.harness}`);
   }
+}
+
+/** How control logs in to a machine. */
+const machineTarget = (parts: ControlParts, m: Machine & { key_sealed: string }) => ({
+  address: m.address,
+  port: m.port,
+  user: m.user,
+  privateKey: parts.secrets.open(m.key_sealed),
+  hostKeys: m.host_keys,
+});
+
+/** A runner process's units on a machine, as its deploy, update and removal write them. */
+const machinePlan = (parts: ControlParts, r: RigRunner, images = r.spec.images) => ({
+  rig: runnerUnit(r.rig, r.runner),
+  runnerOf: r.rig,
+  runner: r.runner,
+  controlUrl: parts.publicUrl ?? "",
+  images,
+  gpus: r.spec.gpuIndex === undefined ? [] : [r.spec.gpuIndex],
+  root: r.spec.root === true,
+  bus: rigBusOf(parts),
+});
+
+/** Adding a runner process on a machine control reaches over SSH (Edit rig). */
+interface MachineRunnerRequest {
+  rig: string;
+  runner: string;
+  machine: string;
+  /** The machine's GPU it uses, by index; none: its CPUs. */
+  gpu?: number | undefined;
+  pool: string;
+}
+
+/**
+ * Sets a runner process up on a machine over SSH for a rig, in the background, as Quadlet units
+ * named for it, and gives it to the rig. Says why in words when it can't.
+ */
+export async function addMachineRunner(
+  parts: ControlParts,
+  i: MachineRunnerRequest,
+  by: string,
+): Promise<{ rig: string; runner: string; said: string } | { error: string }> {
+  const { store } = parts;
+  const fail = (error: string) => ({ error });
+  const { rig, runner } = i;
+  if (!parts.rigImages) return fail("Control has no rig images configured.");
+  if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
+  if (!parts.rigBus) return fail(NO_RIG_BUS);
+  const runners = runnersNow(parts, rig);
+  if (typeof runners === "string") return fail(runners);
+  if (!RIG_ID.test(runner)) return fail(`A runner's name is ${RIG_NAME_RULE}.`);
+  if (
+    runners.some((r) => r.name === runner) ||
+    store.rigRunners.get(rig, runner)?.status === "deploying"
+  )
+    return fail(`${rig} has a runner named ${runner} already.`);
+  if (!RunnerSetting.safeParse({ name: runner, pools: [i.pool] }).success)
+    return fail("A runner's pool is judge, shared or lane-1 to lane-16.");
+  const m = store.machines.get(i.machine);
+  if (!m) return fail("Choose a machine.");
+  const facts = m.facts as MachineFacts | null;
+  if (!m.host_keys.length || !facts || m.check_error)
+    return fail(`${m.name} is not ready: check it under Settings › Machines.`);
+  if (!facts.podman || !facts.systemd || (!facts.root && facts.linger === false))
+    return fail(`${m.name} is not ready for a rig: see what it misses under Settings › Machines.`);
+  const g = i.gpu === undefined ? undefined : facts.gpus.find((x) => x.index === i.gpu);
+  if (i.gpu !== undefined && !g) return fail(`${m.name} has no GPU ${i.gpu}.`);
+  if (i.gpu !== undefined) {
+    const rigUsing = store.machines
+      .rigs(m.name)
+      .find((r) => r.status !== "removed" && r.gpus.includes(i.gpu as number))?.rig;
+    const runnerUsing = store.rigRunners
+      .onCluster(m.name)
+      .find((r) => r.placement === "machine" && r.spec.gpuIndex === i.gpu);
+    if (rigUsing ?? runnerUsing)
+      return fail(
+        `GPU ${i.gpu} of ${m.name} is used by ${rigUsing ? `rig ${rigUsing}` : `runner ${runnerUsing?.runner} of ${runnerUsing?.rig}`}.`,
+      );
+    if (!(facts.nvidia_ctk && facts.cdi))
+      return fail(`${m.name} needs NVIDIA's container toolkit first: install it under Providers.`);
+  }
+  const cuda = g ? cudaFor({ product: g.name, arch: facts.arch })?.cuda : undefined;
+  const images = controlImages(parts, g ? 1 : 0, cuda);
+  if (typeof images === "string") return fail(images);
+  const token = newToken();
+  store.rigRunners.add({
+    rig,
+    runner,
+    tokenSha256: token.sha256,
+    cluster: m.name,
+    namespace: "",
+    placement: "machine",
+    spec: {
+      gpus: g ? 1 : 0,
+      gpuIndex: i.gpu,
+      root: facts.root,
+      gpuMode: "device-plugin",
+      storageGi: 0,
+      images,
+      ...(cuda === "13" ? { cuda: "13" as const } : {}),
+      pools: [i.pool],
+    },
+    created_by: by,
+  });
+  store.rigHistory.add(rig, "runner_added", true, `${runner} on ${m.name}`);
+  const r = store.rigRunners.get(rig, runner) as RigRunner;
+  void inBackground(
+    store,
+    "machine",
+    rig,
+    "runner_applied",
+    deployMachineRunner(parts, r, token.token, by),
+  );
+  return {
+    rig,
+    runner,
+    said: `Control sets ${runner} up on ${m.name}${i.gpu === undefined ? ", on its CPUs" : `, on its GPU ${i.gpu}`}, then gives it to ${rig}: it takes runs once it answers the rig's core.`,
+  };
+}
+
+/** Writes a runner process's files and units on its machine and starts them, then gives it. */
+async function deployMachineRunner(parts: ControlParts, r: RigRunner, token: string, by: string) {
+  const { store } = parts;
+  const m = store.machines.get(r.cluster);
+  try {
+    if (!m) throw new Error(`the machine ${r.cluster} is no longer in Settings › Machines`);
+    const out = await parts.machineSsh.sshScript(
+      machineTarget(parts, m),
+      deployScript(
+        {
+          ...machinePlan(parts, r),
+          controlPublicKey: parts.controlPublicKey,
+          controlFingerprint: fingerprint(parts.controlPublicKey),
+        },
+        { controlToken: token, harnessSupervisorToken: newToken().token },
+      ),
+      [],
+      30 * 60_000,
+    );
+    if (out.code !== 0) throw new Error(tail(out.stderr) || `the deploy exited ${out.code}`);
+    store.rigRunners.setStatus(r.rig, r.runner, "running");
+    store.rigHistory.add(r.rig, "runner_applied", true, `${r.runner}: units on ${m.name}`);
+  } catch (err) {
+    store.rigRunners.setStatus(r.rig, r.runner, "failed");
+    store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
+    return;
+  }
+  await giveRunner(parts, r, by);
+}
+
+/** Moves a runner process on a machine onto control's images: its units written again. */
+async function updateMachineRunner(parts: ControlParts, r: RigRunner): Promise<void> {
+  const { store } = parts;
+  const images = controlImages(parts, r.spec.gpus, r.spec.cuda);
+  const m = store.machines.get(r.cluster);
+  if (typeof images === "string" || !m) {
+    const why = typeof images === "string" ? images : `the machine ${r.cluster} is gone`;
+    store.rigHistory.add(r.rig, "runner_images", false, `${r.runner}: ${why}`);
+    return;
+  }
+  if (images.harness === r.spec.images.harness && images.supervisor === r.spec.images.supervisor)
+    return;
+  const out = await parts.machineSsh.sshScript(
+    machineTarget(parts, m),
+    updateScript(machinePlan(parts, r, images)),
+    [],
+    30 * 60_000,
+  );
+  if (out.code !== 0) {
+    store.rigHistory.add(
+      r.rig,
+      "runner_images",
+      false,
+      `${r.runner}: ${tail(out.stderr) || `exit ${out.code}`}`,
+    );
+    return;
+  }
+  store.rigRunners.setImages(r.rig, r.runner, images);
+  store.rigHistory.add(r.rig, "runner_images", true, `${r.runner}: harness ${images.harness}`);
 }

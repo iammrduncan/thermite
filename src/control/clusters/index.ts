@@ -51,6 +51,7 @@ export {
 } from "./rigs.ts";
 export {
   addClusterRunner,
+  addMachineRunner,
   ClusterRunnerBody,
   clusterRunnerRequest,
   dropRunner,

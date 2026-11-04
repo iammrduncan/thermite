@@ -368,7 +368,7 @@ A runner process that control sets up for a rig on a Kubernetes cluster, as **Ed
 | `cpus`, `memory_gib` | numbers, optional, together | Its CPUs and memory; its supervisor takes half a CPU and 2 GiB of them. None: the namespace's defaults |
 | `pool` | string | Its runner's pool: `judge`, `shared` or `lane-1` to `lane-16` |
 
-Its objects are named for `<rig>-<runner>` (cut, with a hash, past 46 characters), in their own instance label, so a stop, start or update of the rig's own pods leaves them alone. An update of the rig's images moves its runners onto control's images too, and removing the rig removes them.
+Its objects are named for `<rig>-<runner>` (cut, with a hash, past 40 characters), in their own instance label, so a stop, start or update of the rig's own pods leaves them alone. An update of the rig's images moves its runners onto control's images too, and removing the rig removes them.
 
 | Error | When |
 | --- | --- |

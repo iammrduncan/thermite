@@ -139,15 +139,16 @@ const labels = (rig: string, component?: "harness" | "supervisor", partOf?: stri
 });
 
 /**
- * A runner process's name for its objects on a cluster (goal 206): `<rig>-<runner>`, cut and
- * given a hash of the whole when longer than 46 characters, so that its service's name stays
- * within Kubernetes' 63. Its objects' instance label is this name, never its rig's: what control
- * does to the rig's pods by their label leaves the runner's alone.
+ * A runner process's name for what control sets up for it (goal 206): `<rig>-<runner>`, cut and
+ * given a hash of the whole when longer than 40 characters, so that it is a name as a rig's is
+ * and its service's name on a cluster stays within Kubernetes' 63. Its objects' instance label,
+ * or its units on a machine, go by it, never its rig's: what control does to the rig's own leaves
+ * the runner's alone.
  */
 export function runnerUnit(rig: string, runner: string): string {
   const unit = `${rig}-${runner}`;
-  if (unit.length <= 46) return unit;
-  const cut = (x: string) => x.slice(0, 18).replace(/-+$/, "");
+  if (unit.length <= 40) return unit;
+  const cut = (x: string) => x.slice(0, 15).replace(/-+$/, "");
   return `${cut(rig)}-${cut(runner)}-${createHash("sha256").update(unit).digest("hex").slice(0, 8)}`;
 }
 

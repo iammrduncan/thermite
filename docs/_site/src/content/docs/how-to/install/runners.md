@@ -24,21 +24,21 @@ A lane runs on its own runner first, then on a shared one; a lane that no runner
 
 ## When you add the rig
 
-On **Rigs › Add a rig**, below **2 · GPUs and resources**, **Runners on other machines** lists each node of the clusters control knows, with **Its pool** (**Not used** by default) and **Its GPU through**. Choose a pool for each node that is to be a runner, then create the rig: control sets the rig up, then each runner, named for its node, which the rig takes once it reports. A core on a cluster with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same.
+On **Rigs › Add a rig**, below **2 · GPUs and resources**, **Runners on other machines** lists each node of the clusters control knows, and each GPU of its machines, with **Its pool** (**Not used** by default) and **Its GPU through**. Choose a pool for each node that is to be a runner, then create the rig: control sets the rig up, then each runner, named for its node, which the rig takes once it reports. A core on a cluster with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same.
 
-## On a cluster control knows
+## On a cluster or a machine control knows
 
-On the rig's page, press **Edit rig**. Under **4 · Where it runs**, **Add a runner on a cluster** has:
+On the rig's page, press **Edit rig**. Under **4 · Where it runs**, **Add a runner on a cluster or a machine** has:
 
 | Field | What it takes |
 | --- | --- |
 | **Runner name** | Its name in the rig, such as the node's |
-| **Where** | A cluster under **Settings › Machines**, the slot it goes in (a free one, or one that holds this rig or its runners) and its node |
+| **Where** | A cluster under **Settings › Machines**, the slot it goes in (a free one, or one that holds this rig or its runners) and its node; or a GPU of a machine control reaches over SSH |
 | **GPU** | One GPU of the node, or none: its CPUs |
-| **GPUs through** | NVIDIA's device plugin, or one of the cluster's DRA device classes |
+| **GPUs through** | On a cluster: NVIDIA's device plugin, or one of the cluster's DRA device classes. A machine's GPU comes through NVIDIA's container toolkit |
 | **Its pool** | The judge's, shared, or a lane's |
 
-Press **Add the runner**. Control sets its harness and supervisor up on the node, started as a runner, with a volume and a token of their own, then gives it to the rig: the rig's **History** says each step, and the runner takes runs once it answers the rig's core. A script or an agent does the same with [`POST /v1/rigs/<rig>/runners`](../../reference/rest-api.md#a-rigs-runners-on-clusters), or MCP's `add_cluster_runner`, with the owner's token.
+Press **Add the runner**. Control sets its harness and supervisor up on the node, or as Quadlet units on the machine, named for the runner, started as a runner, with volumes and a token of their own, then gives it to the rig: the rig's **History** says each step, and the runner takes runs once it answers the rig's core. A script or an agent does the same on a cluster with [`POST /v1/rigs/<rig>/runners`](../../reference/rest-api.md#a-rigs-runners-on-clusters), or MCP's `add_cluster_runner`, with the owner's token; on a machine, as a rig there, from the dashboard only. A GPU of a machine that a rig or another runner uses is refused.
 
 When the rig moves onto control's newer images, its runners move with it; when the rig is removed, so are they.
 
