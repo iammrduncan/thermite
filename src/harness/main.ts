@@ -12,6 +12,7 @@ import {
   controllerContext,
   createJudges,
   createScheduler,
+  followersOf,
   gpuSplitAtStart,
   openState,
   promotionPolicy,
@@ -80,7 +81,9 @@ async function main(): Promise<void> {
     process.exit(0);
   };
   const judging = await rigHardware(ctx, service, targets);
-  const executorIds = reclaimJobs(ledger, judging);
+  // A rig's leader judges on its followers' GPUs too (goal 205).
+  const followers = followersOf(env);
+  const executorIds = reclaimJobs(ledger, judging, followers);
   const parts = agentParts(ctx, ledger, service, targets);
 
   // A check a previous controller left running is over, and a run's export at its end that it
@@ -122,6 +125,7 @@ async function main(): Promise<void> {
     judging,
     judgeCards: targets.judgeCards,
     executorIds,
+    followers,
   });
   const links = agentLinks(ctx, service, port);
   addModelCheck(service, links);

@@ -26,7 +26,7 @@ import type { Arm, ArmRun } from "./measure.ts";
  */
 
 /** How the leader reaches one follower. */
-interface DeviceLink {
+export interface DeviceLink {
   ask(a: DeviceAsk): Promise<unknown>;
   /** A git bundle for one of the follower's mirrors, which must hold `commit` after. */
   sendGit(repo: string, commit: string, bundle: Buffer): Promise<void>;

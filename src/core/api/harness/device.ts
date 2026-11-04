@@ -113,3 +113,39 @@ export const DEVICE_GIT = {
   answer: z.looseObject({ ok: z.boolean() }),
   maxBytes: DEVICE_GIT_MAX_BYTES,
 } as const satisfies Route;
+
+/**
+ * The leader's asks of its followers, as its supervisor takes them to carry on the bus (goal 205):
+ * an ask of a follower's device, or a git bundle for one of its mirrors, which waits in the
+ * harness's outbox (`file`, below it) for the supervisor to read and remove.
+ */
+export const QueuedAsk = z.discriminatedUnion("kind", [
+  z.object({ id: z.string(), machine: z.string(), kind: z.literal("ask"), ask: DeviceAsk }),
+  z.object({
+    id: z.string(),
+    machine: z.string(),
+    kind: z.literal("git"),
+    repo: MirrorName,
+    commit: Commit,
+    file: z.string(),
+  }),
+]);
+export type QueuedAsk = z.infer<typeof QueuedAsk>;
+
+/** The asks waiting, taken by the supervisor; it waits up to `wait` milliseconds for one. */
+export const DEVICE_ASKS = {
+  method: "GET",
+  path: "/v1/device-asks",
+  what: "followers' asks",
+  answer: z.looseObject({ asks: z.array(QueuedAsk) }),
+} as const satisfies Route;
+
+/** A follower's answer to an ask the supervisor took, or why none came. */
+export const DEVICE_ANSWER = {
+  method: "POST",
+  path: "/v1/device-asks/:id",
+  what: "follower's answer",
+  body: z.object({ answer: z.unknown().optional(), error: z.string().max(4000).optional() }),
+  answer: z.looseObject({ ok: z.boolean() }),
+  maxBytes: DEVICE_MAX_BYTES + 1024 * 1024,
+} as const satisfies Route;

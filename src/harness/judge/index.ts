@@ -25,6 +25,8 @@ export { type HeldOutKind, heldOutCellsOf, heldOutKinds, heldOutWords } from "./
 export { Judge, type PromotionPolicy } from "./judge.ts";
 export { exportKit, loadKit } from "./kits.ts";
 export { jobsAtStart } from "./lease.ts";
+export { FollowerLink } from "./link.ts";
 export { type Arm, copyForRun } from "./measure.ts";
 export { portReplaced } from "./ports.ts";
 export { clipReason, REASONS_CHARS } from "./reasons.ts";
+export { RemoteDevice } from "./remote.ts";
