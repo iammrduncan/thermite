@@ -52,6 +52,7 @@
     "acceptance:rig-image": "node scripts/acceptance/rig-image.mjs",
     "acceptance:runpod": "node scripts/acceptance/runpod.mjs",
     "acceptance:runpod-paid": "node scripts/acceptance/runpod-paid.mjs",
+    "acceptance:runners": "node scripts/acceptance/runners.mjs",
     "acceptance:steering": "node scripts/acceptance/steering.mjs",
     "acceptance:terminal": "node scripts/acceptance/terminal.mjs"
   },

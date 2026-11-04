@@ -1,0 +1,131 @@
+# A rig's core and two runner processes on one computer (goal 206), for the runners acceptance
+# check (scripts/acceptance/runners.mjs). The rig local-1's harness is its core: it judges on its
+# runners alone (THERMITE_LOCAL_JUDGE=0). runner-1 and runner-2 are each a harness started as a
+# runner and its supervisor, with volumes and networks of their own. Each supervisor registers
+# its own key on the message bus with the rig's token, and answers the core's asks there. The
+# rig's runners setting, which the check sends, says which runner serves which pool.
+#
+#   podman compose -f compose.yaml -f compose.runners.yaml up -d
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "50m", max-file: "3" }
+
+x-runner-harness: &runner-harness
+  build: { context: ., dockerfile: containers/Containerfile, target: harness, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+  cap_drop: [ALL]
+  cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+x-runner-supervisor: &runner-supervisor
+  build: { context: ., dockerfile: containers/Containerfile, target: supervisor, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+  cap_drop: [ALL]
+  cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  harness:
+    environment:
+      # The core judges on its runners alone: it has no GPU of its own in the lab's plan.
+      THERMITE_LOCAL_JUDGE: "0"
+
+  harness-r1:
+    <<: *runner-harness
+    environment:
+      THERMITE_RIG_ID: local-1
+      THERMITE_ROLE: runner
+      THERMITE_TARGET: cpu
+      THERMITE_CONTROL_PUBKEY_FILE: /keys/control-signing.pub
+      THERMITE_SUPERVISOR_TOKEN_FILE: /run/secrets/harness-supervisor-token
+    volumes:
+      - harness-r1-state:/var/lib/thermite
+      - harness-r1-scratch:/scratch
+      - ./.dev/inbox-r1:/controller/inbox:ro
+      - outbox-r1:/outbox
+      - control-pub:/keys:ro
+    secrets: [harness-supervisor-token]
+    networks: [rig-r1, rig-r1-egress]
+
+  supervisor-r1:
+    <<: *runner-supervisor
+    environment:
+      THERMITE_RIG_ID: local-1
+      THERMITE_ROLE: runner
+      THERMITE_RUNNER: runner-1
+      HARNESS_URL: http://harness-r1:8700
+      CONTROL_URL: http://control:8800
+      THERMITE_HARNESS_TOKEN_FILE: /run/secrets/harness-supervisor-token
+      THERMITE_CONTROL_TOKEN_FILE: /run/secrets/control-rig-token
+      THERMITE_NATS_URL: nats://nats:4222
+      THERMITE_NATS_CA_FILE: /keys/bus-ca.pem
+    volumes:
+      - supervisor-r1-home:/var/lib/thermite-supervisor
+      - ./.dev/inbox-r1:/supervisor/inbox
+      - outbox-r1:/outbox:ro
+      - control-pub:/keys:ro
+    secrets: [harness-supervisor-token, control-rig-token]
+    networks: [rig-r1, control, rig-r1-egress]
+    depends_on:
+      harness-r1: { condition: service_started }
+      control: { condition: service_started }
+      enroll: { condition: service_completed_successfully }
+
+  harness-r2:
+    <<: *runner-harness
+    environment:
+      THERMITE_RIG_ID: local-1
+      THERMITE_ROLE: runner
+      THERMITE_TARGET: cpu
+      THERMITE_CONTROL_PUBKEY_FILE: /keys/control-signing.pub
+      THERMITE_SUPERVISOR_TOKEN_FILE: /run/secrets/harness-supervisor-token
+    volumes:
+      - harness-r2-state:/var/lib/thermite
+      - harness-r2-scratch:/scratch
+      - ./.dev/inbox-r2:/controller/inbox:ro
+      - outbox-r2:/outbox
+      - control-pub:/keys:ro
+    secrets: [harness-supervisor-token]
+    networks: [rig-r2, rig-r2-egress]
+
+  supervisor-r2:
+    <<: *runner-supervisor
+    environment:
+      THERMITE_RIG_ID: local-1
+      THERMITE_ROLE: runner
+      THERMITE_RUNNER: runner-2
+      HARNESS_URL: http://harness-r2:8700
+      CONTROL_URL: http://control:8800
+      THERMITE_HARNESS_TOKEN_FILE: /run/secrets/harness-supervisor-token
+      THERMITE_CONTROL_TOKEN_FILE: /run/secrets/control-rig-token
+      THERMITE_NATS_URL: nats://nats:4222
+      THERMITE_NATS_CA_FILE: /keys/bus-ca.pem
+    volumes:
+      - supervisor-r2-home:/var/lib/thermite-supervisor
+      - ./.dev/inbox-r2:/supervisor/inbox
+      - outbox-r2:/outbox:ro
+      - control-pub:/keys:ro
+    secrets: [harness-supervisor-token, control-rig-token]
+    networks: [rig-r2, control, rig-r2-egress]
+    depends_on:
+      harness-r2: { condition: service_started }
+      control: { condition: service_started }
+      enroll: { condition: service_completed_successfully }
+
+networks:
+  rig-r1: { internal: true }
+  rig-r1-egress: {}
+  rig-r2: { internal: true }
+  rig-r2-egress: {}
+
+volumes:
+  harness-r1-state: {}
+  harness-r1-scratch: {}
+  outbox-r1: {}
+  supervisor-r1-home: {}
+  harness-r2-state: {}
+  harness-r2-scratch: {}
+  outbox-r2: {}
+  supervisor-r2-home: {}
