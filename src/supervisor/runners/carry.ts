@@ -24,6 +24,8 @@ import {
 
 /** How long one take waits at the harness for an ask, in milliseconds. */
 const TAKE_WAIT_MS = 20_000;
+/** How long the asks may fail before the supervisor warns: its harness may still be starting. */
+const QUIET_FAILING_MS = 60_000;
 
 interface Carrier {
   rig: string;
@@ -137,7 +139,10 @@ async function carryOne(c: Carrier, a: QueuedRun): Promise<void> {
 
 /** Takes the harness's asks of its runners and carries each, until the supervisor stops. */
 export async function carryRunnerAsks(c: Carrier): Promise<void> {
-  let failing = false;
+  // Since when the harness's asks have failed, and whether that was said: a harness that starts
+  // a few seconds after its supervisor is no reason to warn.
+  let failingSince: number | undefined;
+  let said = false;
   while (!c.stopping()) {
     c.tick?.();
     const began = Date.now();
@@ -149,11 +154,14 @@ export async function carryRunnerAsks(c: Carrier): Promise<void> {
           timeoutMs: TAKE_WAIT_MS + 30_000,
         })
       ).asks as QueuedRun[];
-      failing = false;
+      failingSince = undefined;
+      said = false;
     } catch (err) {
-      if (!failing)
+      failingSince ??= Date.now();
+      if (!said && Date.now() - failingSince >= QUIET_FAILING_MS) {
         log("supervisor", "the runners' asks are not reachable", { error: errorText(err) }, "warn");
-      failing = true;
+        said = true;
+      }
       await new Promise((r) => setTimeout(r, 5000));
       continue;
     }
