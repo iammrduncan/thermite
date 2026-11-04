@@ -181,6 +181,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 **The owner's asks of 2026-11-04.**
 
 - [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `IN_PROGRESS`
+- [204](goals/204-quiet-ride-through.goal) A supervisor rides through control's restart quietly · `PROPOSED`
 
 **Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
 

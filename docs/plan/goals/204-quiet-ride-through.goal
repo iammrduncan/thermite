@@ -1,0 +1,48 @@
+---
+id: "204"
+title: "A supervisor rides through control's restart quietly"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-04
+updated: 2026-11-04
+---
+
+# 204 · A supervisor rides through control's restart quietly
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+On the lab, 2026-11-04, each restart of control's pod took the message bus away for about 32 seconds: about 11 for the pod to start, then about 5 more for the bus. Every rig's supervisor logged it at level error, though nothing was lost and the rig went on by itself:
+
+- the bus "disconnected; reconnecting", then reconnected;
+- while it was away, "screens relay error" and "live relay error", each a `TimeoutError`;
+- just after the reconnect, one more "live relay error".
+
+The same happened at both control restarts that night, on more than one rig, and never while control was steady.
+
+1. **While the bus is away, a relay that times out says so once, at level info or warn,** as part of the disconnect: "control is away; the live lines and screens wait for it". Error is kept for a relay that fails while the bus is up.
+2. **Lines and screens kept meanwhile go once the bus is back,** as far as the supervisor keeps them, and the first relay after the reconnect does not time out on a connection still opening.
+3. **A test** of a bus that drops for half a minute: no error-level line, and the relays carry on.
+
+## Why
+
+An error in every rig's log at each control update reads as a fault, and hides a real one among them.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests.
+- [ ] Pages: what the supervisor logs while control is away, where the docs say how a rig rides through a control restart, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-04: Goal written from the lab's logs of two control restarts that night: the bus away 02:39:48 to 02:40:21Z and 02:49:54 to 02:50:29Z, the relays' timeouts at error level within those windows.
+
+---
+
+Run with `/goal Complete docs/plan/goals/204-quiet-ride-through.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
