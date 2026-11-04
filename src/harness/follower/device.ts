@@ -4,6 +4,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import type { DeviceAsk } from "../../core/api/harness/device.ts";
 import type { Runner } from "../broker/index.ts";
 import { fetchBundle, hasCommit, initMirror, refTips } from "../git.ts";
+import { importFile } from "../imports.ts";
 import {
   type Arm,
   baselineDir,
@@ -31,7 +32,7 @@ interface DeviceServerOptions {
   runner: Runner;
   /** One driver for each judge card, in order. */
   drivers: TargetDriver[];
-  paths: { stateDir: string; scratchDir: string };
+  paths: { stateDir: string; scratchDir: string; inboxDir: string };
   /** The follower's own ledger: its builds. */
   ledger: Ledger;
 }
@@ -189,6 +190,21 @@ export class DeviceServer {
         const dir = this.runFolder(a.dir);
         if (a.act === "reclaim") await this.card(0).reclaim(dir);
         else await this.card(0).remove(dir);
+        return { ok: true };
+      }
+      case "models_have": {
+        const models = join(this.o.paths.stateDir, "models");
+        return { missing: a.sha256s.filter((sha) => !existsSync(join(models, sha))) };
+      }
+      case "models_take": {
+        // Each checked against its SHA-256 as it is copied in, as an assignment's models are.
+        for (const m of a.models)
+          await importFile({
+            inboxDir: this.o.paths.inboxDir,
+            rel: m.path,
+            expectedSha256: m.sha256,
+            storeDir: join(this.o.paths.stateDir, "models"),
+          });
         return { ok: true };
       }
     }

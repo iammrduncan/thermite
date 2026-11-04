@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
-import type { DeviceAsk } from "../../core/api/harness/device.ts";
+import type { DeviceAsk, ModelFetch } from "../../core/api/harness/device.ts";
 import { bundleOf } from "../git.ts";
 import type { Ledger } from "../ledger/index.ts";
 import type { Readiness, TargetDriver, TargetIdentity, ThrottleSample } from "../targets/index.ts";
@@ -30,6 +30,8 @@ export interface DeviceLink {
   ask(a: DeviceAsk): Promise<unknown>;
   /** A git bundle for one of the follower's mirrors, which must hold `commit` after. */
   sendGit(repo: string, commit: string, bundle: Buffer): Promise<void>;
+  /** Model files the follower's supervisor fetches from their sources and gives its harness. */
+  fetchModels(models: ModelFetch[]): Promise<void>;
 }
 
 /** What the leader knows of the follower's device: from its `info` answer. */
@@ -56,6 +58,8 @@ export class RemoteDevice implements JudgeDevice {
   private readonly sent = new Set<string>();
   /** Runs' kept baselines the follower has, as `<run>/<job>`. */
   private readonly baselines = new Set<string>();
+  /** Runs whose model files the follower has. */
+  private readonly modelsHeld = new Set<string>();
   /** The follower's word on each run's values (a driver's plausibility), by the values. */
   private readonly implausible = new WeakMap<object, string[]>();
 
@@ -146,8 +150,41 @@ export class RemoteDevice implements JudgeDevice {
     this.baselines.add(key);
   }
 
+  /**
+   * The run's model files on the follower, once per run: those it lacks, which its supervisor
+   * fetches from their sources (each checked by its SHA-256). A model with no source can't reach
+   * a follower, and fails the job in words.
+   */
+  private async sendModels(run: string): Promise<void> {
+    if (this.modelsHeld.has(run)) return;
+    const models = this.o.ledger.commands.modelsOf(run);
+    if (models.length) {
+      const have = (await this.ask({
+        op: "models_have",
+        sha256s: models.map((m) => m.sha256),
+      })) as { missing: string[] };
+      const missing = models.filter((m) => have.missing.includes(m.sha256));
+      const nowhere = missing.filter((m) => !m.url);
+      if (nowhere.length)
+        throw new Error(
+          `the model ${nowhere.map((m) => m.name).join(", ")} came with no source, so a follower can't fetch it`,
+        );
+      if (missing.length)
+        await this.o.link.fetchModels(
+          missing.map((m) => ({
+            name: m.name,
+            path: m.path,
+            sha256: m.sha256,
+            url: String(m.url),
+          })),
+        );
+    }
+    this.modelsHeld.add(run);
+  }
+
   async measure(spec: MeasureSpec, arm: Arm, cell: string): Promise<Measured> {
     await this.sendCommit(spec.kitRepo, spec.kitCommit);
+    if (spec.run) await this.sendModels(spec.run);
     const b = spec.baseline;
     if (b && "kept" in b) await this.sendBaseline(b);
     const m = (await this.ask({

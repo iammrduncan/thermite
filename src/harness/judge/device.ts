@@ -29,6 +29,8 @@ import { type Arm, type ArmRun, type MeasureContext, runArm } from "./measure.ts
 export interface MeasureSpec {
   /** The job the runs are for: its runs' folder is named from it. */
   job: number;
+  /** Its run: a follower fetches the run's model files once (goal 205). */
+  run?: string | undefined;
   kit: Kit;
   kitDir: string;
   kitRepo: string;

@@ -84,7 +84,11 @@ describe("a follower's judge GPU (goal 205)", () => {
 describe("a follower refuses what it did not name (goal 205)", () => {
   const server = () => {
     const root = mkdtempSync(join(tmpdir(), "thermite-follower-"));
-    const paths = { stateDir: join(root, "state"), scratchDir: join(root, "scratch") };
+    const paths = {
+      stateDir: join(root, "state"),
+      scratchDir: join(root, "scratch"),
+      inboxDir: join(root, "inbox"),
+    };
     for (const d of Object.values(paths)) mkdirSync(d, { recursive: true });
     return new DeviceServer({
       runner: new LocalRunner(paths.scratchDir),
@@ -127,5 +131,46 @@ describe("a follower refuses what it did not name (goal 205)", () => {
       separated: false,
       cards: 1,
     });
+  });
+});
+
+describe("a run's model files, as a follower fetches them (goal 205)", () => {
+  test("from the run's accepted assignment, each with its source; none for another run", () => {
+    const root = mkdtempSync(join(tmpdir(), "thermite-models-"));
+    const ledger = Ledger.open(join(root, "ledger.db"));
+    const sha = "a".repeat(64);
+    const assign = (id: string, run: string, accepted: boolean) =>
+      ledger.commands.record({
+        id,
+        kind: "assign_campaign",
+        envelope: {
+          payload: {
+            run,
+            imports: [
+              { kind: "repo_bundle", path: "repos/p.bundle", repo: "proj", commit: "b".repeat(40) },
+              {
+                kind: "model",
+                path: "models/m.gguf",
+                name: "m",
+                sha256: sha,
+                source: { url: "https://models.example.com/m.gguf" },
+              },
+              { kind: "model", path: "models/n.gguf", name: "n", sha256: "c".repeat(64) },
+            ],
+          },
+        },
+        signature: "s",
+        accepted,
+        result: {},
+        actor: "test",
+      });
+    assign("c-1", "js-1", false);
+    assert.deepEqual(ledger.commands.modelsOf("js-1"), [], "a refused assignment names none");
+    assign("c-2", "js-1", true);
+    assert.deepEqual(ledger.commands.modelsOf("js-1"), [
+      { name: "m", path: "models/m.gguf", sha256: sha, url: "https://models.example.com/m.gguf" },
+      { name: "n", path: "models/n.gguf", sha256: "c".repeat(64) },
+    ]);
+    assert.deepEqual(ledger.commands.modelsOf("js-2"), []);
   });
 });

@@ -467,6 +467,7 @@ export function makeJudgeEnv(
   const followerPaths = {
     stateDir: join(root, "follower", "state"),
     scratchDir: join(root, "follower", "scratch"),
+    inboxDir: join(root, "follower", "inbox"),
   };
   let device: RemoteDevice | undefined;
   let stopped = false;
@@ -486,6 +487,9 @@ export function makeJudgeEnv(
           : {
               ask: async (a) => wire(await server.ask(DeviceAsk.parse(wire(a)))),
               sendGit: (repo, commit, bundle) => server.takeGit(repo, commit, Buffer.from(bundle)),
+              fetchModels: async () => {
+                throw new Error("this test's follower fetches no model files");
+              },
             },
       card: 0,
       info: { type: "cpu", separated: false },

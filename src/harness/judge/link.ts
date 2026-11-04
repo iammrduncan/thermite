@@ -46,6 +46,9 @@ export class FollowerLink {
         writeFileSync(join(dir, `${id}.bundle`), bundle, { mode: 0o640 });
         await this.put({ id, machine, kind: "git", repo, commit, file: `device/${id}.bundle` });
       },
+      fetchModels: async (models) => {
+        await this.put({ id: randomUUID(), machine, kind: "models", models });
+      },
     };
   }
 
@@ -105,5 +108,9 @@ export class FollowerLink {
 
 /** An ask in words, for a failure's reason. */
 function what(item: QueuedAsk): string {
-  return item.kind === "git" ? `commit ${item.commit.slice(0, 12)}` : item.ask.op;
+  return item.kind === "git"
+    ? `commit ${item.commit.slice(0, 12)}`
+    : item.kind === "models"
+      ? `model files (${item.models.length})`
+      : item.ask.op;
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Commit, DeviceAsk, MirrorName } from "../api/harness/device.ts";
+import { Commit, DeviceAsk, MirrorName, ModelFetch } from "../api/harness/device.ts";
 import { RIG_ID } from "../ids.ts";
 
 /**
@@ -50,6 +50,8 @@ export const MachineRequest = z.discriminatedUnion("kind", [
   }),
   /** The next part of an answer that came in parts. */
   z.object({ kind: z.literal("more"), id: z.string().max(64), part: Part.min(1) }),
+  /** Model files to fetch from their sources and give the follower's harness. */
+  z.object({ kind: z.literal("models"), models: z.array(ModelFetch).max(200) }),
 ]);
 export type MachineRequest = z.infer<typeof MachineRequest>;
 

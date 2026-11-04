@@ -12,6 +12,7 @@ import {
   MachineRequest,
   machineSubject,
 } from "../../core/link/machines.ts";
+import { downloadModel, ModelDownloads } from "../model-download.ts";
 
 /**
  * A follower's supervisor answers its leader's asks (goal 205): each request on the follower's own
@@ -31,6 +32,12 @@ interface Answerer {
   harness: Pick<HarnessClient, "call">;
   /** Where a bundle's parts are joined. */
   scratchDir: string;
+  /** The inbox it shares with its harness, where model files land; none: it fetches none. */
+  inboxDir?: string | undefined;
+  /** A Hugging Face token for gated models, the supervisor's own; none: public models only. */
+  hfToken?: string | undefined;
+  /** Tests only: how model files are fetched, a local server's included. */
+  fetchImpl?: typeof fetch | undefined;
 }
 
 /** Serves the leader's asks on the follower's subject. */
@@ -77,6 +84,35 @@ export async function answerLeaderAsks(o: Answerer): Promise<void> {
           o.harness.call(DEVICE, { body: req.ask, timeoutMs: MACHINE_ASK_TIMEOUT_MS }),
         ),
       );
+    if (req.kind === "models") {
+      const inbox = o.inboxDir;
+      if (!inbox) return JSON.stringify({ error: "this follower fetches no model files" });
+      // Each from its source into the inbox, landed only with its SHA-256, then taken in by the
+      // harness, which checks it again.
+      return reply(
+        await harnessSays(async () => {
+          const downloads = new ModelDownloads();
+          for (const m of req.models)
+            await downloadModel({
+              url: m.url,
+              sha256: m.sha256,
+              target: join(inbox, m.path),
+              path: m.path,
+              name: m.name,
+              hfToken: o.hfToken,
+              downloads,
+              fetchImpl: o.fetchImpl,
+            });
+          return o.harness.call(DEVICE, {
+            body: {
+              op: "models_take",
+              models: req.models.map(({ path, sha256 }) => ({ path, sha256 })),
+            },
+            timeoutMs: MACHINE_ASK_TIMEOUT_MS,
+          });
+        }),
+      );
+    }
     if (req.kind === "more") {
       const part = held.get(req.id)?.parts[req.part];
       if (part === undefined) return JSON.stringify({ error: "no such part of an answer is held" });

@@ -2,12 +2,13 @@ import { mkdirSync } from "node:fs";
 import { controlClient } from "../../common/api/control.ts";
 import { harnessClient } from "../../common/api/harness.ts";
 import { BUS_URL_SETTING, busTrust, busUrl, natsBus } from "../../common/bus/index.ts";
-import { log, requireEnv, secretFromFile } from "../../common/env.ts";
+import { log, optionalSecretFromFile, requireEnv, secretFromFile } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { Loops } from "../../common/health.ts";
 import { MACHINE_REGISTER } from "../../core/api/control/rigs.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
 import { userKeyFingerprint } from "../../core/link/users.ts";
+import { SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import { serveHealth } from "../health.ts";
 import { busKey } from "../relay/index.ts";
 import { controlTokenFrom } from "../settings.ts";
@@ -79,6 +80,8 @@ export async function startFollowerSupervisor(env: NodeJS.ProcessEnv): Promise<v
     bus,
     harness: harnessClient({ url: harnessUrl, token: harnessToken }),
     scratchDir: home,
+    inboxDir: env.THERMITE_INBOX_DIR ?? SUPERVISOR_INBOX_DIR,
+    hfToken: optionalSecretFromFile("THERMITE_HF_TOKEN_FILE"),
   });
   log("supervisor", "the follower answers its leader's asks on the message bus", { rig, machine });
 }

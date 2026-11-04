@@ -42,6 +42,22 @@ const Arm = z.object({
   manifest: z.looseObject({ key: z.string() }),
 });
 
+const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+/** A model file a run names: where it lands in the inbox and its SHA-256. */
+const ModelFile = z.object({
+  path: z.string().min(1).max(1000),
+  sha256: Sha256,
+});
+/** A model file as a follower's supervisor fetches it: its name and source too. */
+export const ModelFetch = ModelFile.extend({
+  name: z.string().min(1).max(500),
+  url: z
+    .string()
+    .max(4000)
+    .regex(/^https?:\/\//),
+});
+export type ModelFetch = z.infer<typeof ModelFetch>;
+
 /** A kept baseline's file: its path in the folder and its bytes. */
 const BaselineFile = z.object({ path: z.string().min(1).max(1024), base64: z.string() });
 
@@ -90,6 +106,10 @@ export const DeviceAsk = z.discriminatedUnion("op", [
   }),
   /** A folder taken back from the user it was handed to, or removed. */
   z.object({ op: z.literal("folder"), act: z.enum(["reclaim", "remove"]), dir: Folder }),
+  /** Which of these model files, by SHA-256, the follower lacks. */
+  z.object({ op: z.literal("models_have"), sha256s: z.array(Sha256).max(200) }),
+  /** Model files its supervisor put in its inbox, each taken in by its SHA-256. */
+  z.object({ op: z.literal("models_take"), models: z.array(ModelFile).max(200) }),
 ]);
 export type DeviceAsk = z.infer<typeof DeviceAsk>;
 
@@ -128,6 +148,13 @@ export const QueuedAsk = z.discriminatedUnion("kind", [
     repo: MirrorName,
     commit: Commit,
     file: z.string(),
+  }),
+  /** Model files the follower lacks, which its supervisor fetches from their sources. */
+  z.object({
+    id: z.string(),
+    machine: z.string(),
+    kind: z.literal("models"),
+    models: z.array(ModelFetch).max(200),
   }),
 ]);
 export type QueuedAsk = z.infer<typeof QueuedAsk>;

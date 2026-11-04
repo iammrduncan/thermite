@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -49,6 +50,8 @@ describe("a follower reached over the bus (goal 205)", () => {
   function wired(device: {
     ask?: (body: unknown) => Promise<unknown>;
     git?: (bytes: Uint8Array) => Promise<unknown>;
+    inboxDir?: string;
+    fetchImpl?: typeof fetch;
   }) {
     const bus = new FakeBus();
     const outboxDir = mkdtempSync(join(tmpdir(), "thermite-carry-"));
@@ -72,6 +75,8 @@ describe("a follower reached over the bus (goal 205)", () => {
       bus,
       harness: follower,
       scratchDir: mkdtempSync(join(tmpdir(), "thermite-answer-")),
+      inboxDir: device.inboxDir,
+      fetchImpl: device.fetchImpl,
     });
     void carryFollowerAsks({
       rig: "rig-a",
@@ -112,6 +117,34 @@ describe("a follower reached over the bus (goal 205)", () => {
       for (let i = 0; i < bundle.length; i++) bundle[i] = i % 251;
       await w.to.sendGit("proj", "a".repeat(40), bundle);
       assert.ok(took && Buffer.from(took).equals(bundle), "the follower's harness has it whole");
+    } finally {
+      w.stop();
+    }
+  });
+
+  test("a follower's supervisor fetches a run's model file from its source, and its harness takes it in", async () => {
+    const bytes = Buffer.from("model weights");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const inboxDir = mkdtempSync(join(tmpdir(), "thermite-inbox-"));
+    let took: unknown;
+    const w = wired({
+      inboxDir,
+      fetchImpl: (async () => new Response(bytes, { status: 200 })) as typeof fetch,
+      ask: async (body) => {
+        took = body;
+        return { ok: true };
+      },
+    });
+    try {
+      const model = {
+        name: "m",
+        path: "models/m.bin",
+        sha256,
+        url: "https://models.example.com/m.bin",
+      };
+      await w.to.fetchModels([model]);
+      assert.deepEqual(readFileSync(join(inboxDir, model.path)), bytes);
+      assert.deepEqual(took, { op: "models_take", models: [{ path: model.path, sha256 }] });
     } finally {
       w.stop();
     }

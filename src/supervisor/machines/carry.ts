@@ -86,11 +86,18 @@ async function carryOne(c: Carrier, a: QueuedAsk): Promise<void> {
   try {
     body = {
       answer:
-        a.kind === "ask"
+        a.kind === "ask" || a.kind === "models"
           ? await answerOf(
               c,
               a.machine,
-              await send(c, a.machine, { kind: "ask", ask: a.ask }, MACHINE_ASK_TIMEOUT_MS),
+              await send(
+                c,
+                a.machine,
+                a.kind === "ask"
+                  ? { kind: "ask", ask: a.ask }
+                  : { kind: "models", models: a.models },
+                MACHINE_ASK_TIMEOUT_MS,
+              ),
             )
           : await sendBundle(c, a),
     };
