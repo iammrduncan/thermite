@@ -33,6 +33,7 @@ import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { esc } from "../../ui/components/index.ts";
 import { ADD_RIG_JS, CUDA_UNSURE } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
+import { addRigRunners, addRigRunnersChosen, addRigRunnersSection } from "./runners.ts";
 import { rigHelpers } from "./shared.ts";
 
 /**
@@ -297,6 +298,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         `<a class="ch" href="/ui/settings/machines?add=1#add-machine"><span><b>+ A RunPod account</b><br><span class="muted small">Add it under Settings › Machines with an API key that may start pods, then press Launch a rig on it.</span></span></a>`
       }</div></div>
 <div class="sec"><h2>2 · GPUs and resources</h2><p class="lead">As control last read the place. One GPU is shared by the judge and the agents. With more, some are the judge's and the rest the agents': half each by default, and on a machine the lowest-numbered GPUs are the judge's.</p>${gpuLists}<label class="fd" id="judge-pick" hidden style="max-width:280px;margin-top:10px">${infoLabel("GPUs for the judge", "How many of the chosen GPUs the judge measures on: the lowest-numbered ones. The rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. Default: half, rounded up.")}<input name="judge_gpus" inputmode="numeric" maxlength="2" placeholder="half"></label>${clusterSections}${joinSections}<div class="nc-does" id="gpu-note"></div></div>
+${addRigRunnersSection(store)}
 <div class="sec"><h2>3 · Name and start</h2><div class="g3">
 <label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-a"></label>
 <label class="fd" style="grid-column:span 2">${infoLabel("Images", "The Thermite images control deploys, as set where control is deployed. A GPU rig uses the CUDA harness image.")}<span class="mono small">${images ? `${esc(images.harness)}${images.harnessCuda ? `<br>${esc(images.harnessCuda)} (GPU rigs, CUDA 12)` : ""}${images.harnessCuda13 ? `<br>${esc(images.harnessCuda13)} (GPU rigs, CUDA 13)` : ""}<br>${esc(images.supervisor)}` : "none configured"}</span></label>
@@ -362,7 +364,12 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
     store.rigHistory.add(rig, "enrolled", true);
     const r = store.machines.rig(rig) as MachineRig;
     void inBackground(store, "machine", rig, "deploy", deployRig(r, m, token.token));
-    return c.redirect(`/ui/rigs/${encodeURIComponent(rig)}`, 303);
+    // Its runners on clusters (goal 206), once the rig reports.
+    const refused = await addRigRunners(parts, rig, addRigRunnersChosen(f));
+    return c.redirect(
+      `/ui/rigs/${encodeURIComponent(rig)}${refused ? `?error=${encodeURIComponent(`The rig is being set up, but a runner was not added: ${refused}`)}` : ""}`,
+      303,
+    );
   });
   const addClusterRigFrom = async (
     c: Ctx,
@@ -376,6 +383,9 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
       return String(Array.isArray(v) ? v[0] : (v ?? "")).trim();
     };
     const num = (key: string) => (one(key) ? Number(one(key)) : undefined);
+    // Its runners on other machines (goal 206): a core with no GPU judges on them alone.
+    const runners = addRigRunnersChosen(f);
+    const gpus = Number(one("k_gpus") || "0");
     const r = await addClusterRig(
       parts,
       {
@@ -393,11 +403,17 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         storageGi: Number(one("k_size") || "100"),
         cpus: num("k_cpus"),
         memoryGi: num("k_mem"),
+        judgeOnRunners:
+          gpus === 0 && runners.some((x) => x.pool === "judge" || x.pool === "shared"),
       },
       "owner:ui",
     );
     if ("error" in r) return fail(r.error);
-    return c.redirect(`/ui/rigs/${encodeURIComponent(r.rig)}`, 303);
+    const refused = await addRigRunners(parts, r.rig, runners);
+    return c.redirect(
+      `/ui/rigs/${encodeURIComponent(r.rig)}${refused ? `?error=${encodeURIComponent(`The rig is being set up, but a runner was not added: ${refused}`)}` : ""}`,
+      303,
+    );
   };
   const DRA_CLASS = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
   /** Add a rig you join yourself: checks the choices, then shows its join command once. */

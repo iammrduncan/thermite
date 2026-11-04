@@ -23,6 +23,8 @@ export interface ClusterRigPlan {
    * by runnerUnit, its parts start as a runner, and its supervisor registers with its own token.
    */
   runner?: string | undefined;
+  /** Its judge measures on its runners alone (goal 206): THERMITE_LOCAL_JUDGE=0. */
+  judgeOnRunners?: boolean | undefined;
   /**
    * created: control makes the namespace and its network rules; slot: it exists already, with
    * the operators' rules; joined: it exists already, and the operator applies the rig's objects
@@ -333,6 +335,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           env: env({
             THERMITE_RIG_ID: p.rig,
             ...role,
+            ...(p.judgeOnRunners ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
             THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
             ...split,
             THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",

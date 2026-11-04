@@ -22,6 +22,10 @@ Each runner is in one pool. A runner takes one run at a time, so a measurement n
 
 A lane runs on its own runner first, then on a shared one; a lane that no runner serves runs on the core's machine. What a lane runs never counts: only the judge's measurement does.
 
+## When you add the rig
+
+On **Rigs › Add a rig**, below **2 · GPUs and resources**, **Runners on other machines** lists each node of the clusters control knows, with **Its pool** (**Not used** by default) and **Its GPU through**. Choose a pool for each node that is to be a runner, then create the rig: control sets the rig up, then each runner, named for its node, which the rig takes once it reports. A core on a cluster with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same.
+
 ## On a cluster control knows
 
 On the rig's page, press **Edit rig**. Under **4 · Where it runs**, **Add a runner on a cluster** has:

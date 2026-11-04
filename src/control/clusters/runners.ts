@@ -35,6 +35,10 @@ import { clusterTarget, NS } from "./rigs.ts";
  * away, the rig hears first, so the core fails its run under way cleanly, then its objects go.
  */
 
+/** How long a runner set up with its rig waits for the rig's first report: 20 minutes. */
+const RIG_WAIT_MS = 10_000;
+const RIG_WAIT_TRIES = 120;
+
 /** Adding a runner process on a cluster (Edit rig, REST or MCP). */
 interface ClusterRunnerRequest {
   rig: string;
@@ -146,9 +150,15 @@ const runnerPlan = (parts: ControlParts, r: RigRunner): ClusterRigPlan => ({
   reach: parts.store.reachable.list(),
 });
 
-/** The rig's runner processes as its settings have them now, or why they can't change. */
+/**
+ * The rig's runner processes as its settings have them now, or why they can't change. A rig
+ * control is setting up, which has not reported yet, has none (Add a rig with its runners).
+ */
 function runnersNow(parts: ControlParts, rig: string) {
   const now = rigSettingsOf(parts.store, rig);
+  const { store } = parts;
+  const settingUp = store.clusters.rig(rig) ?? store.machines.rig(rig);
+  if (!now && settingUp && settingUp.status !== "removed") return [];
   if (!now) return `There is no rig ${rig}.`;
   if (!now.settings)
     return `${rig}'s harness is older: it does not report its settings and cannot take runners. They work after its next roll.`;
@@ -316,9 +326,13 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
     store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
     return;
   }
+  // A rig control is setting up gets its runners once it reports its settings.
+  for (let t = 0; t < RIG_WAIT_TRIES && !rigSettingsOf(store, r.rig)?.settings; t++)
+    await new Promise((done) => setTimeout(done, RIG_WAIT_MS));
   const now = runnersNow(parts, r.rig);
-  if (typeof now === "string") {
-    store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${now}`);
+  if (typeof now === "string" || !rigSettingsOf(store, r.rig)?.settings) {
+    const why = typeof now === "string" ? now : `${r.rig} has not reported its settings yet`;
+    store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${why}`);
     return;
   }
   const out = await setRigSettings(

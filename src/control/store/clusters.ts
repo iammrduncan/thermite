@@ -61,6 +61,11 @@ export interface ClusterRig {
     programMode?: ProgramMode | undefined;
     images: { harness: string; supervisor: string };
     /**
+     * Its judge measures on its runners of other machines alone, never on its own (goal 206): a
+     * core with no GPU. Its harness has THERMITE_LOCAL_JUDGE=0.
+     */
+    judgeOnRunners?: boolean | undefined;
+    /**
      * The CUDA harness its GPUs take (goal 132): "13", the CUDA 13 image, which each update to
      * control's images keeps; none: CUDA 12.
      */

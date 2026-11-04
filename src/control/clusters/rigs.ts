@@ -128,6 +128,8 @@ export interface ClusterRigRequest {
   memoryGi?: number | undefined;
   /** The CUDA harness its GPUs take (goal 132); default 12. */
   cuda?: CudaVersion | undefined;
+  /** Its judge measures on its runners of other machines alone (goal 206): a core with no GPU. */
+  judgeOnRunners?: boolean | undefined;
 }
 
 /**
@@ -271,6 +273,7 @@ export async function addClusterRig(
       programMode,
       images,
       ...(cuda === "13" ? { cuda: "13" as const } : {}),
+      ...(i.judgeOnRunners ? { judgeOnRunners: true } : {}),
       controlUrl: controlAddress(parts),
       ...(openings.length ? { openings } : {}),
       ...(ingress ? { ingress } : {}),
@@ -308,6 +311,7 @@ export const clusterPlan = (
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
   programMode,
+  judgeOnRunners: r.spec.judgeOnRunners,
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
   reach: parts.store.reachable.list(),

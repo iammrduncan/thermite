@@ -50,6 +50,12 @@ export function registerAddClusterRig(tools: ToolContext): void {
             .describe(
               'For a rig with GPUs, the CUDA harness it runs: "12" (the default: Pascal to Hopper, amd64) or "13" (Turing to Blackwell, and the DGX Spark on arm64). Updates keep it',
             ),
+          judge_on_runners: z
+            .boolean()
+            .optional()
+            .describe(
+              "True: the rig's judge measures on its runners of other machines alone, never on its own machine: a core with no GPU, whose runners add_cluster_runner adds. Its judge's jobs wait until one of the judge's or the shared pool answers",
+            ),
         },
       },
       audited(
@@ -67,6 +73,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
           cpus?: number;
           memory_gib?: number;
           cuda?: CudaVersion;
+          judge_on_runners?: boolean;
         }) => {
           const r = await addClusterRig(
             opts.parts,
@@ -83,6 +90,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
               cpus: a.cpus,
               memoryGi: a.memory_gib,
               cuda: a.cuda,
+              judgeOnRunners: a.judge_on_runners,
             },
             actor,
           );

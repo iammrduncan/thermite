@@ -194,6 +194,51 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await owner.close();
   });
 
+  test("Add a rig with its runners: a core with no GPU judges on its runners alone", async () => {
+    const { f, s } = await withRig();
+    const page = await s.page("/ui/rigs/add");
+    assert.match(page, /<h2>Runners on other machines<\/h2>/);
+    assert.match(page, /name="ar_at__0" value="k8s-a\|\|gpu-node-1"/);
+    assert.equal(
+      await s.post("/ui/rigs/add", {
+        place: "cluster:k8s-a",
+        rig: "core-2",
+        "k_gpus__k8s-a": "0",
+        "k_size__k8s-a": "50",
+        ar_at__0: "k8s-a||gpu-node-1",
+        ar_pool__0: "judge",
+        ar_mode__0: "device-plugin",
+      }),
+      "/ui/rigs/core-2",
+    );
+    await settle(f, 2);
+    const applies = f.calls
+      .filter((c) => c.args[0] === "apply")
+      .map((c) => JSON.parse(c.stdin ?? "{}").items as Obj[]);
+    const core = applies[0]?.find(
+      (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-2-harness",
+    );
+    assert.equal(envOf(core).THERMITE_LOCAL_JUDGE, "0", "the core's judge measures on its runners");
+    const runner = applies[1]?.find(
+      (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-2-gpu-node-1-harness",
+    );
+    assert.equal(envOf(runner).THERMITE_ROLE, "runner");
+    assert.equal(s.store.rigRunners.get("core-2", "gpu-node-1")?.spec.pools[0], "judge");
+    // Over MCP: a core with GPUs judges on itself too, unless told.
+    const owner = await mcpWith(s.api, ADMIN);
+    await owner.call("add_cluster_rig", {
+      rig: "core-3",
+      cluster: "k8s-a",
+      judge_on_runners: true,
+    });
+    await settle(f, 3);
+    const third = applied(f).find(
+      (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-3-harness",
+    );
+    assert.equal(envOf(third).THERMITE_LOCAL_JUDGE, "0");
+    await owner.close();
+  });
+
   test("a long rig and runner name is cut, with a hash, under Kubernetes' limits", () => {
     const unit = runnerUnit(
       "a-rig-with-a-rather-long-name-indeed",

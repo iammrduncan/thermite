@@ -118,3 +118,79 @@ export function runnerRoutes(app: Hono, dash: Dashboard): void {
     );
   });
 }
+
+/**
+ * Add a rig's runners (goal 206): each node of a cluster control knows, with the pool its runner
+ * would take and how it would ask for its GPU; Not used by default. The rig is set up first, then
+ * each chosen runner, which the rig takes once it reports.
+ */
+export function addRigRunnersSection(store: ControlStore): string {
+  const where = places(store, "").filter((w) => !w.value.endsWith("|"));
+  if (!where.length) return "";
+  const opt = (v: string, t: string) => `<option value="${esc(v)}">${esc(t)}</option>`;
+  const ways = modes(store);
+  const rows = where
+    .map(
+      (w, i) =>
+        `<div class="rn"><div><b>${esc(w.text)}</b></div><div class="g3"><input type="hidden" name="ar_at__${i}" value="${esc(w.value)}">
+<label class="fd">${infoLabel("Its pool", "Not used: no runner here. The judge's: only the judge measures there. Shared: the judge and every lane, in turn. A lane's: only that lane runs its run_experiment there.")}<select name="ar_pool__${i}">${opt("", "Not used")}${opt("judge", "The judge's")}${opt("shared", "Shared: the judge and the lanes")}${opt("lane-1", "Lane 1's")}${opt("lane-2", "Lane 2's")}${opt("lane-3", "Lane 3's")}${opt("lane-4", "Lane 4's")}</select></label>
+<label class="fd">${infoLabel("Its GPU through", "One GPU of the node, through NVIDIA's device plugin or a DRA device class; or none: the node's CPUs.")}<select name="ar_mode__${i}">${ways.map((m) => opt(m, m === "device-plugin" ? "One GPU, NVIDIA's device plugin" : `One GPU, DRA: ${m.slice(4)}`)).join("")}${opt("none", "None: its CPUs")}</select></label></div></div>`,
+    )
+    .join("");
+  return `<div class="sec"><h2>Runners on other machines</h2><p class="lead">A rig is a core and its runners. The core, above, keeps the run: its records, the planner, the lanes' agent programs and the judge's decisions; it needs no GPU. Each runner is one GPU of a node, in one pool, and takes one run at a time. Runners can be added and taken away later on Edit rig, while a run goes on.</p><div class="card flat">${rows}</div></div>`;
+}
+
+/** The runners Add a rig's form chose, each with its name (the node's), place, GPU and pool. */
+export function addRigRunnersChosen(f: Record<string, unknown>): {
+  runner: string;
+  cluster: string;
+  slot?: string;
+  node?: string;
+  gpus: number;
+  mode: string;
+  pool: string;
+}[] {
+  const one = (k: string) => {
+    const v = f[k];
+    return String(Array.isArray(v) ? v[0] : (v ?? "")).trim();
+  };
+  const out = [];
+  for (let i = 0; `ar_at__${i}` in f; i++) {
+    const pool = one(`ar_pool__${i}`);
+    if (!pool) continue;
+    const [cluster = "", slot = "", node = ""] = one(`ar_at__${i}`)
+      .split("|")
+      .map((x) => decodeURIComponent(x));
+    const mode = one(`ar_mode__${i}`) || "device-plugin";
+    out.push({
+      runner: /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(node) ? node : `runner-${i + 1}`,
+      cluster,
+      ...(slot ? { slot } : {}),
+      ...(node ? { node } : {}),
+      gpus: mode === "none" ? 0 : 1,
+      mode: mode === "none" ? "device-plugin" : mode,
+      pool,
+    });
+  }
+  return out;
+}
+
+/**
+ * Sets up the runners Add a rig chose, after the rig itself: each is refused or set up on its own,
+ * and the rig's history says so; the first refusal is returned, in words.
+ */
+export async function addRigRunners(
+  parts: Dashboard["parts"],
+  rig: string,
+  chosen: ReturnType<typeof addRigRunnersChosen>,
+): Promise<string | undefined> {
+  let first: string | undefined;
+  for (const r of chosen) {
+    const out = await addClusterRunner(parts, { rig, ...r }, "owner:ui");
+    if ("error" in out) {
+      parts.store.rigHistory.add(rig, "runner_added", false, `${r.runner}: ${out.error}`);
+      first ??= `${r.runner}: ${out.error}`;
+    }
+  }
+  return first;
+}
