@@ -389,7 +389,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         machine: node,
         node,
         gpus: Number(own("k_fgpus") || "1"),
-        deviceClass: fmode.startsWith("dra:") ? fmode.slice(4) : undefined,
+        deviceClass: fmode.startsWith("dra:") ? fmode.slice(4) : own("k_fclass") || undefined,
         storageGi: Number(own("k_fsize") || "100"),
         cpus: own("k_fcpus") ? Number(own("k_fcpus")) : undefined,
         memoryGi: own("k_fmem") ? Number(own("k_fmem")) : undefined,

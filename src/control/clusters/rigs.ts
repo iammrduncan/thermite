@@ -373,8 +373,11 @@ async function followersOf(
     if (!Number.isInteger(f.gpus) || f.gpus < 0 || f.gpus > MAX_RIG_GPUS)
       return `A follower takes from none to ${MAX_RIG_GPUS} GPUs.`;
     const deviceClass = f.deviceClass || undefined;
-    if (deviceClass && !facts.device_classes.includes(deviceClass))
+    // Checked where control may list the classes: a slot's role often can't.
+    if (deviceClass && facts.device_classes.length && !facts.device_classes.includes(deviceClass))
       return `${k.name} has no DRA device class ${deviceClass}.`;
+    if (deviceClass && !/^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/.test(deviceClass))
+      return `"${deviceClass}" is not a DRA device class's name.`;
     const storageGi = f.storageGi ?? 100;
     if (!Number.isInteger(storageGi) || storageGi < 1 || storageGi > 10_000)
       return "A follower's volume is a whole number of GB, from 1 to 10000.";

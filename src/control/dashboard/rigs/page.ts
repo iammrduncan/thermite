@@ -120,7 +120,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(onCluster.cluster)} · ${esc(onCluster.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
+        `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${machinesBlock(store, onCluster.rig)}${clusterPlacedBlock(onCluster, csrf(c))}`,
         vs,
       );
     if (!u && joined) return joinedPage(c, joined, flash);

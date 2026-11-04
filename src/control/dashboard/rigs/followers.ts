@@ -26,7 +26,11 @@ export function followerChoices(cluster: string, f: ClusterFacts): string {
       return `<label class="ch"><input type="checkbox" name="k_follow__${kn}" value="${nn}" style="margin:2px 8px 0 0"><span><b>${nn}</b>${what ? ` <span class="muted small">${esc(what)}</span>` : ""}</span></label>
 <div class="g3" data-follow-for="${kn}:${nn}" hidden>
 <label class="fd">${infoLabel("GPUs for the judge", "How many of this node's GPUs the judge measures on. Every GPU of a follower is the judge's.")}<select name="k_fgpus__${kn}__${nn}">${Array.from({ length: most }, (_, i) => opt(String(i + 1), String(i + 1))).join("")}</select></label>
-${f.device_classes.length ? `<label class="fd">${infoLabel("DRA device class", "When the rig's GPUs come through DRA and this node's GPU is in another device class than the rig's, such as a class for any GB10.")}<select name="k_fmode__${kn}__${nn}">${opt("", "the rig's")}${f.device_classes.map((d) => opt(`dra:${d}`, d)).join("")}</select></label>` : ""}
+${
+  f.device_classes.length
+    ? `<label class="fd">${infoLabel("DRA device class", "When the rig's GPUs come through DRA and this node's GPU is in another device class than the rig's, such as a class for any GB10.")}<select name="k_fmode__${kn}__${nn}">${opt("", "the rig's")}${f.device_classes.map((d) => opt(`dra:${d}`, d)).join("")}</select></label>`
+    : `<label class="fd">${infoLabel("DRA device class", "When the rig's GPUs come through DRA and this node's GPU is in another device class than the rig's: the class the cluster's operators named for it. Empty: the rig's.")}<input name="k_fclass__${kn}__${nn}" maxlength="253" placeholder="the rig's"></label>`
+}
 <label class="fd">${infoLabel("CPUs", "This node's share for the rig: its supervisor takes half a CPU, its harness the rest. Empty: the namespace's defaults.")}<input name="k_fcpus__${kn}__${nn}" inputmode="decimal" placeholder="the namespace's defaults"></label>
 <label class="fd">${infoLabel("Memory (GiB)", "This node's share for the rig: its supervisor takes 2 GiB, its harness the rest. A DGX Spark's GPU uses the same memory, so a model the judge loads counts here. Empty: the namespace's defaults.")}<input name="k_fmem__${kn}__${nn}" inputmode="decimal" placeholder="the namespace's defaults"></label>
 <label class="fd">${infoLabel("Volume size (GB)", "This node's own volume: its builds, the kits and the model's files, which it fetches once.")}<input name="k_fsize__${kn}__${nn}" value="100"></label>
