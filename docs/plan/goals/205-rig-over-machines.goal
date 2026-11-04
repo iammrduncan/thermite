@@ -1,7 +1,7 @@
 ---
 id: "205"
 title: "A rig over several machines, with pools of devices for its judge and its workers"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: []
 created: 2026-11-04
@@ -10,7 +10,7 @@ updated: 2026-11-04
 
 # 205 · A rig over several machines, with pools of devices for its judge and its workers
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## Words
 
@@ -73,6 +73,7 @@ What exists, 2026-11-04: one harness process holds the run's ledger, its schedul
 - 2026-11-04, the owner: one rig over any number of machines, with pools of devices for the judge and for the workers, set by the owner, before the recipe's hill climb on the Sparks (asked instead of starting on one Spark now, or on two rigs of one Spark each).
 - 2026-11-04, the owner, on the first mockup: machines from any place; a leader and followers that all run the same code, kept in step over NATS, so that the judge and the workers can run on any machine; a Raft quorum at three machines or more. Redrawn so.
 - 2026-11-04, the owner: the leader is chosen by a lease on control's message bus (a compare-and-set key in NATS's key-value store), not by a Raft quorum among the machines. It works from two machines up and needs no machine to reach another; each lease's number fences off a stopped leader. While control is away the leader goes on, and no new leader is chosen.
+- 2026-11-04, the owner: build it in four steps, each rolled to the lab as it is ready: (1) a follower that runs the judge's jobs it leases from the leader, enough for the judge on one Spark and the leader with its lane on the other; (2) lanes on followers; (3) followers' copies of the run and the leader's lease taken over; (4) Edit rig changes the machines and the pools. The design is in [decisions](../decisions.md).
 
 ## Progress
 

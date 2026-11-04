@@ -182,7 +182,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 - [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `IN_PROGRESS`
 - [204](goals/204-quiet-ride-through.goal) A supervisor rides through control's restart quietly · `PROPOSED`
-- [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `PROPOSED`
+- [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `IN_PROGRESS`
 
 **Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
 
