@@ -104,7 +104,9 @@ export async function firstRun() {
     status: ran.status,
     text: ran.text.slice(0, 200),
   });
-  const smoke = await checkDone("smoke", 1_200_000);
+  // Minutes on a quiet machine; on a noisy one each change is measured to the judge's last look,
+  // which took 24 minutes on a virtual machine with four cores.
+  const smoke = await checkDone("smoke", 2_700_000);
   const said = String(smoke.summary);
   // On a machine whose timing is noisy, such as a virtual machine, the page says the check can
   // pass with the no-op inconclusive and a note, and to go on.
