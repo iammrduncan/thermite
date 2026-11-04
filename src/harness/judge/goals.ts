@@ -14,8 +14,9 @@ import {
   heldOutResult,
   meetsThreshold,
 } from "./held-out.ts";
-import { type Arm, type MeasureContext, runArm } from "./measure.ts";
+import type { Arm } from "./measure.ts";
 import { clipReason } from "./reasons.ts";
+import type { MeasureSpec } from "./runner.ts";
 
 /**
  * A goal campaign's goals checked on one build, as its evaluate, confirm and validate jobs check
@@ -41,7 +42,7 @@ export async function verifyGoals(
   judge: JudgeContext,
   job: JobRow,
   contract: GoalContract,
-  ctx: MeasureContext,
+  ctx: MeasureSpec,
   arm: Arm,
   opts: {
     heldOut?: boolean;
@@ -113,7 +114,7 @@ export async function verifyGoals(
             heldCell({ cell, verifier: name, ok: false, kind: "no_cell" });
             continue;
           }
-          const r = await runArm(ctx, arm, cell);
+          const r = await judge.measure(ctx, arm, cell);
           if (r.kind !== "ok") failures.push(`${cell}: ${r.kind}: ${clipReason(r.reason)}`);
           if (!opts.heldOut) {
             const metrics = runValues(ctx.kit, r);
@@ -214,7 +215,7 @@ export async function verifyGoals(
         continue;
       }
       for (let rep = 1; rep <= contract.threshold_reps; rep++) {
-        const r = await runArm(ctx, arm, cell);
+        const r = await judge.measure(ctx, arm, cell);
         if (r.kind !== "ok") {
           failures.push(`${cell}: ${r.kind}: ${clipReason(r.reason)}`);
           heldCell({ cell, goal: g.id, ok: false, kind: heldOutKindOf(r) });
@@ -319,7 +320,7 @@ export async function heldOutGoals(
   judge: JudgeContext,
   job: JobRow,
   contract: GoalContract,
-  ctx: MeasureContext,
+  ctx: MeasureSpec,
   arm: Arm,
   goals: string[],
 ): Promise<HeldOutResult & { failed: string[] }> {

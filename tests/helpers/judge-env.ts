@@ -11,7 +11,9 @@ import {
   type SupervisedRun,
 } from "../../src/harness/broker/process.ts";
 import { LocalRunner, type RunOutcome, type RunRequest } from "../../src/harness/broker/runner.ts";
+import { CoreRunner } from "../../src/harness/judge/core-runner.ts";
 import { Judge, type PromotionPolicy } from "../../src/harness/judge/judge.ts";
+import type { RigRunner } from "../../src/harness/judge/runner.ts";
 import { Ledger } from "../../src/harness/ledger/index.ts";
 import { HarnessService } from "../../src/harness/service/index.ts";
 import { CpuDriver } from "../../src/harness/targets/cpu.ts";
@@ -278,6 +280,8 @@ export function makeJudgeEnv(
      * the stand-in runner answers them (StandInRunner).
      */
     realRuns?: boolean | undefined;
+    /** The judge's runner, made from the core's own (goal 206): a test sees what reaches it. */
+    wrapRunner?: ((core: RigRunner) => RigRunner) | undefined;
     /** The clock the ledger and the service go by; none: the computer's. */
     clock?: (() => Date) | undefined;
   } = {},
@@ -442,16 +446,25 @@ export function makeJudgeEnv(
   );
 
   const standIn = opts.realRuns ? undefined : new StandInRunner(paths.scratchDir);
+  const processes = standIn ?? new LocalRunner(paths.scratchDir);
+  // Host load is not what these tests are about (the judge refuses a loaded CPU; see cpu.test).
+  const driver = opts.neverReady
+    ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
+    : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY });
   const judge = new Judge({
     service,
-    runner: standIn ?? new LocalRunner(paths.scratchDir),
-    // Host load is not what these tests are about (the judge refuses a loaded CPU; see cpu.test).
-    driver: opts.neverReady
-      ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
-      : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
+    runner: processes,
+    driver,
     owner: "judge-test",
     readyRetries: 0,
     calibrationBlocks: 0,
+    ...(opts.wrapRunner
+      ? {
+          target: opts.wrapRunner(
+            new CoreRunner({ runner: processes, driver, paths, ledger, index: 0 }),
+          ),
+        }
+      : {}),
   });
 
   /** A change to the kernel, as a patch from the project's root (its folder, if it has one). */

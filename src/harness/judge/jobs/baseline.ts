@@ -78,10 +78,8 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       count,
       runsPerCell: contract.acceptance.runs_per_cell,
     });
-    await judge.o.runner.reclaim(written);
-    const sealed = sealBaselineDir(written);
+    const sealed = await judge.target.keepBaseline(written, dir);
     if (!sealed.ok) throw new Stop("invalid", sealed.reason);
-    keepBaselineDir(written, dir);
     const body = baselineBody({
       job,
       run,
@@ -128,7 +126,7 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
     };
   } finally {
     // The kept copy is in the state; the checks' folder goes, whoever owns its files.
-    await judge.o.runner.remove(written);
+    await judge.target.remove(written);
   }
 }
 
