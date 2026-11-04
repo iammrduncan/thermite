@@ -180,7 +180,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
 
-- [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `PROPOSED`
+- [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `IN_PROGRESS`
 - [201](goals/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop, and stop holding up the rest (issue 50) · `PROPOSED`
 - [199](goals/199-judge-files-once-disk-ready.goal) The judge copies a job's files once, and checks the disk before it times (issue 50) · `PROPOSED`
 - [200](goals/200-plateau-stop.goal) A plateau stop: a run ends after a time without a new champion, when the owner sets it (issue 50) · `PROPOSED`

@@ -1,16 +1,16 @@
 ---
 id: "198"
 title: "A run's time budget counts the time it worked, and a run that spent it can go on"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: ["123"]
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 # 198 · A run's time budget counts the time it worked, and a run that spent it can go on
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 
@@ -30,11 +30,15 @@ Pausing a run to use the machine should not cost the run.
 
 ## Decisions
 
-- None yet.
+- 2026-11-04, the owner: item 1 now; item 2 by mockup, for approval before it is built ("Item 1 now, item 2 by mockup").
+- 2026-11-04: item 1 counts what a research run's clock counts, for every mode: the run's running time, without paused time and the time its agents could not work (stopped, waiting for the provider's limit or the run's MCP servers, the rig draining, the harness down). One clock, `workedTime` (harness/run-clock.ts), serves both. The fork rounds at a third and two thirds of `wall_hours` count the same way.
+- 2026-11-04: the dependency on goal 123 is item 2's: raising a run's budget needs a way to change it on a running run, which goal 123's budgets will shape. Item 1 needs nothing of it.
 
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-04: Researched and verified on v0.1.3 (a442ad8d): the scheduler compared `wall_hours` with the time since the run's creation (agents/scheduler/index.ts), and so did the fork rounds (scheduler/lanes.ts maybeForkRound); a research run's clock (research/research/clock.ts) already left out paused and blocked time. A spent run is paused, and pauses again at once when resumed: no command changes its budget. The page Budget and stop time is Set a budget or a stop time (how-to/campaigns/budget-and-stop-time.md).
+- 2026-11-04: Item 1 built: harness/run-clock.ts (blockedSpans, moved from research/blocked.ts, and workedTime, by the ledger's clock), used by the scheduler's wall-time check, the fork rounds and the research clock. Test: tests/harness/run-clock.test.ts (the judge env takes a clock). Pages: the contract, Limits and pacing, Verdicts, Set a budget or a stop time, Runs until done; changelog. Item 2's mockup comes next.
 
 ---
 

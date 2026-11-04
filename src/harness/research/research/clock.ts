@@ -1,6 +1,5 @@
 import { parseDuration } from "../../../core/duration.ts";
-import { statusEvents } from "../../run-status.ts";
-import { blockedSpans } from "../blocked.ts";
+import { workedTime } from "../../run-clock.ts";
 import type { ResearchContext } from "./context.ts";
 
 /**
@@ -8,7 +7,8 @@ import type { ResearchContext } from "./context.ts";
  * time the agents could not run (goal 079): while they were stopped (no credits, a refused key,
  * a failing model check), waited for the provider's rate limit or for the run's MCP servers, or
  * the rig drained (goal 136), or while the harness did not run at all (the host slept, the
- * harness was stopped or it crashed): `blockedSpans`. The minimum is a floor, never
+ * harness was stopped or it crashed): the time it worked, `workedTime`, as every run's wall-time
+ * budget counts it (goal 198). The minimum is a floor, never
  * a stop: after it, a run ends when the review panel finds every question answered (goal 112),
  * at its maximum, or when the owner closes it.
  */
@@ -16,28 +16,7 @@ import type { ResearchContext } from "./context.ts";
 export function clockOf(ctx: ResearchContext, run: string, now = Date.now()) {
   const c = ctx.contract(run);
   const created = String(ctx.ledger.runs.createdAt(run));
-  const running: [number, number][] = [];
-  let since: number | null = Date.parse(created);
-  for (const e of statusEvents(ctx.ledger, run)) {
-    const status = e.status;
-    const at = Date.parse(e.at);
-    if (at > now) break;
-    if (status === "running") since ??= at;
-    else if (since !== null) {
-      running.push([since, at]);
-      since = null;
-    }
-  }
-  if (since !== null) running.push([since, now]);
-  const blocked = blockedSpans(ctx.ledger, run, now);
-  let elapsedMs = 0;
-  let waitedMs = 0;
-  for (const [a, b] of running) {
-    let lost = 0;
-    for (const [x, y] of blocked) lost += Math.max(0, Math.min(b, y) - Math.max(a, x));
-    elapsedMs += b - a - lost;
-    waitedMs += lost;
-  }
+  const { elapsed_ms: elapsedMs, waited_ms: waitedMs } = workedTime(ctx.ledger, run, now);
   const minMs = parseDuration(c.min_duration as string);
   const maxMs = c.max_duration ? parseDuration(c.max_duration) : null;
   return {

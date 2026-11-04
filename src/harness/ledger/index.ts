@@ -150,6 +150,11 @@ export class Ledger {
     this.db.close();
   }
 
+  /** The time by the clock the ledger records its events with, in milliseconds. */
+  nowMs(): number {
+    return this.clock().getTime();
+  }
+
   /**
    * A consistent copy of the whole ledger in a new file at `path`, without the tables named in
    * `without`.

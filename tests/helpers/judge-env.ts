@@ -278,6 +278,8 @@ export function makeJudgeEnv(
      * the stand-in runner answers them (StandInRunner).
      */
     realRuns?: boolean | undefined;
+    /** The clock the ledger and the service go by; none: the computer's. */
+    clock?: (() => Date) | undefined;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "thermite-judge-"));
@@ -330,7 +332,7 @@ export function makeJudgeEnv(
   }
 
   const keys = generateSigningKeys();
-  const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
+  const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"), opts.clock);
   const rig = opts.rig ?? "rig-a";
   const service = new HarnessService({
     rig,
@@ -339,6 +341,7 @@ export function makeJudgeEnv(
     controlPublicKeyPem: keys.publicKeyPem,
     rigKeys: generateSigningKeys(),
     promotion: opts.promotion ?? "auto",
+    ...(opts.clock ? { clock: opts.clock } : {}),
   });
   const goalContract = opts.goal
     ? {

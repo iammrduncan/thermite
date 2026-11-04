@@ -12,9 +12,11 @@ Set a limit when you want one, and always before agents use a paid model key.
 
 | Limit | Where you set it | What it counts | Where it works |
 | --- | --- | --- | --- |
-| A stop time | **Stop after (hours)** on the **New campaign** page, or `budget.wall_hours` in the contract | Hours since the run was created, paused time included | Every rig |
+| A stop time | **Stop after (hours)** on the **New campaign** page, or `budget.wall_hours` in the contract | Hours the run worked: from its creation, without the time it was paused, its agents could not work, its rig drained or its harness did not run | Every rig |
 | Device hours | `budget.device_hours` in the contract | Hours the judge's jobs for the run took, each from its start to its end | Every rig |
 | Model spend | `budget.llm_usd` in the contract | Dollars of the tokens that the workers' [trials](../../reference/glossary.md) used, at the token prices the rig was given | Only on a rig that has both token prices: the local stack, once you set them |
+
+Pausing a run costs it none of its stop time: the hours count only while it works, as a research run's clock does.
 
 A limit pauses only a run with agents that has a model. A run with no agents, such as a [try](../../reference/glossary.md) of the kit or a run started with `--agents off`, is never paused by a limit.
 

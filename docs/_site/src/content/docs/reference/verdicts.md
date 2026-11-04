@@ -262,7 +262,7 @@ A **run** is a campaign at work on one rig. The rig records one of three states 
 | | The smoke check ends and resumes a run it paused | `resumed after the smoke check` |
 | `paused` | Someone pauses it (`pause_run`) | the reason given. The dashboard's **Pause** sends what you typed in **why (optional)**, or `paused from the dashboard` when you typed nothing |
 | | Another run is assigned or resumed on the same rig: a rig works on one run at a time | `replaced by <run>` |
-| | The contract's `budget.wall_hours` has passed since the run was created | `the wall-time budget is spent` |
+| | The run has worked the contract's `budget.wall_hours`: its time since its creation, without the time it was paused or its agents could not work | `the wall-time budget is spent` |
 | | The judge's time on the run reaches `budget.device_hours` | `the device-hours budget is spent` |
 | | The agents' model spending reaches `budget.llm_usd` | `the model budget is spent ($<amount>)` |
 | | A full reset is about to wipe the rig | `wiping` |
@@ -279,7 +279,7 @@ A **run** is a campaign at work on one rig. The rig records one of three states 
 - **A closed run stays closed.** Resuming or pausing it is refused with `run <run> is closed`, and closing it again with `run <run> is already closed (<its reason>): there is nothing to close` (without the reason in brackets when it closed with none). A job the judge was measuring when the run closed finishes, but never closes the run a second time: the first reason stays.
 - **Nothing waits in a closed run.** What waited for the owner or the auditor when it closed stays as it was, out of **Needs you**, and the owner's decisions on it are refused, such as `run <run> is closed: none of its changes can become the champion` ([`close_run`](signed-commands.md#close_run)).
 - **A hill climb never closes on its own.** It runs until someone pauses or closes it, or a budget the contract sets pauses it. [Why Thermite runs until the job is done](../explanation/runs-until-done.md) says why.
-- **Budgets pause; they do not close.** They apply only to runs with agents and a model. When one is spent, no new trial starts, and the run is paused once the running trial ends. `wall_hours` counts from the run's creation, paused time included, so a resumed run is paused again. [Set a budget or a stop time](../how-to/campaigns/budget-and-stop-time.md) and [Limits and pacing](limits-and-pacing.md) say more.
+- **Budgets pause; they do not close.** They apply only to runs with agents and a model. When one is spent, no new trial starts, and the run is paused once the running trial ends. `wall_hours` counts the time the run worked, without its paused time, but a run that has worked its hours is paused again once resumed. [Set a budget or a stop time](../how-to/campaigns/budget-and-stop-time.md) and [Limits and pacing](limits-and-pacing.md) say more.
 - **Judging waits with the run.** The judge works only on running runs. A paused run's queued judge jobs stay queued until it resumes. A closed run's are cancelled when it closes, and each change that waited for one becomes `not_judged`; a harness that starts does the same for runs closed before. A job the judge was already measuring finishes.
 
 ### Run labels on the dashboard

@@ -1,6 +1,7 @@
 import type { Contract } from "../../../core/contract.ts";
 import { startingPoint } from "../../judge/index.ts";
 import type { Ledger } from "../../ledger/index.ts";
+import { workedTime } from "../../run-clock.ts";
 import type { SchedulerContext } from "./context.ts";
 
 /**
@@ -93,8 +94,8 @@ export function maybeForkRound(
   const w = contract.budget.wall_hours;
   let due = false;
   if (w !== undefined) {
-    const created = String(sched.ledger.runs.createdAt(run));
-    const used = (Date.now() - Date.parse(created)) / (w * 3_600_000);
+    // The share of its wall-time budget the run worked (goal 198).
+    const used = workedTime(sched.ledger, run).elapsed_ms / (w * 3_600_000);
     due = (rounds < 1 && used >= 1 / 3) || (rounds < 2 && used >= 2 / 3);
   } else {
     due = n > 1 && (n - 1) % 20 === 0;
