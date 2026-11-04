@@ -38,6 +38,18 @@ The owner, 2026-11-04, on running a hill climb of the Qwen3.8 Flash Next recipe 
 
 The recipe needs about 107 GiB free to start, and loading its weights takes about 81 GiB of a Spark's 128 GB, which its GPU shares. One Spark holds one copy of the model. A rig on one Spark can only take turns, judging or developing; with two or more Sparks the judge can measure on one while the lanes develop on the others. The same holds for any model or engine that fills a machine.
 
+## Design (proposed, for the owner's approval)
+
+What exists, 2026-11-04: one harness process holds the run's ledger, its scheduler and planner, the judge's executors (one for each judge GPU) and the lanes. The broker, as root, runs each role as its own user on its own GPU. The judge builds a candidate from the harness's git mirror and keeps its builds, kits and models on the harness's volume. A lane works in a one-commit repository on the same volume and sends its change to the harness's API as a patch. Nothing runs a judge job or a trial on another machine.
+
+- **Every machine of a rig runs the harness image,** with its broker and its roles as today.
+- **One of them is the rig's main machine.** Its harness keeps the run: the ledger, the scheduler, the planner, the project's git mirror and the judge's queue. The supervisor runs beside it. A rig of one machine is a main machine alone, and works as today.
+- **The judge's jobs on another machine:** that machine's harness runs an executor for each of its judge GPUs. Each executor leases a job from the main machine, with the lease and its fence as today. It fetches the candidate's tree, the kit and the model's files from the main machine, builds and measures as the judge does now, and sends the result back. The main machine records it under the lease, so a machine that goes away loses no verdict: its jobs go back to the queue when their leases end.
+- **A lane on another machine:** the main machine's scheduler starts the trial there. That machine's harness makes the lane's workspace from the parent's tree, runs the agent program as the lane's user, runs its own checks on its workers' GPU, and sends the change, the trial's end and its live lines to the main machine. A machine that goes away ends its trials as interrupted, and their experiments go back to the queue.
+- **Files fetched once:** each machine keeps a model's files and the kits on its own disk, fetched from the main machine once and kept by their hash.
+- **The network:** a rig's harnesses reach each other's API on the rig's own port, each with a key of its own, and nothing more than a harness reaches today. The judge's machines need nothing but the main machine.
+- **The pools:** each GPU is the judge's or the workers'. A machine with both is allowed, with a note that the lanes' work there makes the judge's timing noisier.
+
 ## Questions to answer before the mockup
 
 - **How a job or a trial reaches another machine:** what runs on each machine (a part of the harness, with the broker's isolation), what it gets (the candidate's build or its source, the kit, the model's files), and how its results come back signed.
@@ -61,6 +73,7 @@ The recipe needs about 107 GiB free to start, and loading its weights takes abou
 ## Progress
 
 - 2026-11-04: Goal written from the owner's words. The recipe's needs are from its README (memory, disk, one model to a Spark).
+- 2026-11-04: Researched how a rig works today (above, under Design) and proposed the design: one main machine keeps the run, and the other machines run the judge's jobs or the lanes' trials it gives them. Mockup made for the owner: Add a rig with machines and a pool for each GPU, the rig's page with its machines, and how two machines work together.
 
 ---
 
