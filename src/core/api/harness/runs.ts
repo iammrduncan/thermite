@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RunId } from "../../ids.ts";
+import { RunId, TRIAL_ID } from "../../ids.ts";
 import type { Route } from "../route.ts";
 
 /**
@@ -27,6 +27,7 @@ export const Commit = z.string().regex(/^[0-9a-f]{40}$/);
 const Job = z.number().int().positive();
 const Folder = z.string().min(1).max(4096);
 const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+const Lane = z.string().regex(/^lane-\d+$/);
 
 /** What a job's runs need (judge/runner.ts's MeasureSpec), with the kit by its commit. */
 const Spec = z.object({
@@ -109,6 +110,36 @@ export const RunAsk = z.discriminatedUnion("op", [
   z.object({ op: z.literal("models_have"), sha256s: z.array(Sha256).max(200) }),
   /** Model files its supervisor put in its inbox, each taken in by its SHA-256. */
   z.object({ op: z.literal("models_take"), models: z.array(ModelFile).max(200) }),
+  /**
+   * A lane's run of a command on its change (its `run_experiment`): the trial's workspace on the
+   * runner, made from the parent commit once and kept for the trial's next runs, is set to the
+   * parent with the change on it, and the command runs there as the lane's user, within its
+   * limits. Its output never counts.
+   */
+  z.object({
+    op: z.literal("lane_run"),
+    card: Card,
+    lane: Lane,
+    trial: z.string().regex(TRIAL_ID),
+    repo: MirrorName,
+    parent: Commit,
+    /** The change on the parent, as `git diff --binary` gives it, in base64. */
+    patch: z.string().max(12 * 1024 * 1024),
+    command: z.string().min(1).max(4000),
+    timeout_s: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 3600)
+      .optional(),
+    limits: z.object({
+      rss_mib: z.number().int().positive(),
+      disk_mib: z.number().int().positive(),
+      processes: z.number().int().positive().optional(),
+    }),
+  }),
+  /** A trial ended: its workspace on the runner goes. */
+  z.object({ op: z.literal("lane_end"), lane: Lane, trial: z.string().regex(TRIAL_ID) }),
 ]);
 export type RunAsk = z.infer<typeof RunAsk>;
 

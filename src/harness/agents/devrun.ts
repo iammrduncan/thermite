@@ -1,7 +1,9 @@
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
+import { shellQuote } from "../../common/exec.ts";
 import { SHARED_DEV_RUN_S } from "../../core/contract.ts";
 import { type Role, RoleSchema, type Runner } from "../broker/index.ts";
+import type { LaneRun } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import { laneCacheEnv } from "./workspace.ts";
 
@@ -29,9 +31,26 @@ export const DevRunRequest = z.object({
     .optional(),
 });
 
+/**
+ * The runners of the rig's other machines, for the lanes their pools serve (goal 206): a lane's
+ * run of its command on its change, there, in turn.
+ */
+interface RemoteLanes {
+  serves(lane: string): boolean;
+  laneRun(r: LaneRun, signal?: AbortSignal): Promise<object>;
+  trialEnded(trial: string): Promise<void>;
+}
+
 export class DevRuns {
   /** True while a dev run holds the device; the judge checks it before leasing a job. */
   active = false;
+  /**
+   * The runners of the rig's other machines in their pools (goal 206): a lane they serve runs
+   * there, with its change carried, not on this machine.
+   */
+  remote: RemoteLanes | undefined;
+  /** Each lane's trial with runs on those runners: their workspaces go when it settles. */
+  private readonly remoteTrial = new Map<string, string>();
   /** Which development cards are in use; one card in shared mode. */
   private readonly busy: boolean[];
   /** Dev runs waiting for a card, in arrival order. */
@@ -101,7 +120,89 @@ export class DevRuns {
    */
   async settle(lane: string): Promise<void> {
     this.waiting.get(lane)?.();
+    this.remoteWaits.get(lane)?.abort();
     await this.perLane.get(lane)?.catch(() => undefined);
+    const trial = this.remoteTrial.get(lane);
+    this.remoteTrial.delete(lane);
+    if (trial) await this.remote?.trialEnded(trial).catch(() => undefined);
+  }
+
+  /** Each lane's run waiting for a runner of another machine: how to give it up. */
+  private readonly remoteWaits = new Map<string, AbortController>();
+
+  /**
+   * A lane's run on a runner of its pools (goal 206): its change, as `git diff --binary` gives it
+   * in its workspace, goes with the parent commit and the command; the run waits its turn there.
+   */
+  private async onRunner(
+    req: z.infer<typeof DevRunRequest>,
+    cwd: string,
+    trial: string,
+    limits: { rssMib: number; diskMib: number; processes?: number },
+    timeoutS: number | undefined,
+  ): Promise<unknown> {
+    const t = this.ledger.trials.get(trial);
+    const repo = t ? this.ledger.runs.get(t.run)?.seed_repo : undefined;
+    if (!t || !repo || !this.remote) return { ran: false, reason: "the trial has ended" };
+    // Its workspace's root: the repository the change is made in.
+    const root = cwd
+      .split(sep)
+      .slice(0, join(this.scratchDir, "lanes", req.lane).split(sep).length + 2);
+    const change = await this.runner.run({
+      role: req.lane as Role,
+      argv: ["sh", "-c", "git add -A && git diff --cached --binary"],
+      cwd: root.join(sep),
+      env: laneCacheEnv(this.scratchDir, req.lane),
+      rssLimitBytes: limits.rssMib * 1024 * 1024,
+      captureBytes: 9 * 1024 * 1024,
+    });
+    if (change.exitCode !== 0)
+      return { ran: false, reason: `the change could not be read: ${change.stderr.slice(-500)}` };
+    const wait = new AbortController();
+    this.remoteWaits.set(req.lane, wait);
+    this.remoteTrial.set(req.lane, trial);
+    try {
+      const r = await this.remote.laneRun(
+        {
+          lane: req.lane,
+          trial,
+          repo,
+          parent: t.parent_commit,
+          patch: Buffer.from(change.stdout),
+          // From the workspace's folder where it was asked.
+          command:
+            cwd === root.join(sep)
+              ? req.command
+              : `cd ${shellQuote(relative(root.join(sep), cwd))} && ${req.command}`,
+          timeoutS,
+          limits,
+        },
+        wait.signal,
+      );
+      const o = r as {
+        wall_ms?: unknown;
+        exit?: unknown;
+        killed?: unknown;
+        peak_rss_mib?: unknown;
+        runner?: unknown;
+      };
+      if (o.wall_ms !== undefined)
+        this.ledger.appendEvent("devrun", "dev_run", req.lane, {
+          wall_ms: Number(o.wall_ms),
+          exit: typeof o.exit === "number" ? o.exit : null,
+          killed:
+            o.killed === "timeout" || o.killed === "memory" || o.killed === "disk"
+              ? o.killed
+              : null,
+          // As the runner measured it.
+          peak_rss_mib: Number(o.peak_rss_mib ?? 0),
+          command: req.command.slice(0, 300),
+          ...(typeof o.runner === "string" ? { runner: o.runner } : {}),
+        });
+      return r;
+    } finally {
+      if (this.remoteWaits.get(req.lane) === wait) this.remoteWaits.delete(req.lane);
+    }
   }
 
   private trialOpen(trial: string): boolean {
@@ -123,6 +224,23 @@ export class DevRuns {
     const cwd = resolve(req.cwd);
     if (!cwd.startsWith(laneRoot + sep))
       throw new Error("a dev run must run in the lane's own workspace");
+    // A lane a runner of another machine serves runs there (goal 206), only the contract's limit
+    // applying: it waits for no judge on this machine's card.
+    if (this.remote?.serves(req.lane)) {
+      const prev = this.laneTail.get(req.lane) ?? Promise.resolve();
+      const asked = req.timeout_s;
+      const timeoutS =
+        limits.timeoutS === undefined
+          ? asked
+          : Math.min(asked ?? Number.POSITIVE_INFINITY, limits.timeoutS);
+      const next = prev.then(() => this.onRunner(req, cwd, trial, limits, timeoutS));
+      this.perLane.set(req.lane, next);
+      this.laneTail.set(
+        req.lane,
+        next.catch(() => undefined),
+      );
+      return next;
+    }
     if (this.unavailable) return Promise.resolve({ ran: false, reason: this.unavailable });
     const cap = limits.timeoutS ?? (this.dedicated ? undefined : SHARED_DEV_RUN_S);
     const timeoutS =

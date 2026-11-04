@@ -65,6 +65,11 @@ export interface JudgeOptions {
    * card above.
    */
   target?: RigRunner | undefined;
+  /**
+   * A runner of another machine takes one run at a time (goal 206): the judge holds it for each
+   * job, in turn with the lanes on a shared one, and on a shared one waits for a job first.
+   */
+  slot?: { shared: boolean; hold(): Promise<() => void> } | undefined;
 }
 
 export class InfraError extends Error {}
@@ -152,6 +157,7 @@ export class JudgeContext {
       baselineBlocks: BASELINE_BLOCKS,
       card: undefined,
       target: undefined,
+      slot: undefined,
       ...opts,
     } as Required<JudgeOptions>;
     this.ledger = opts.service.ledger;

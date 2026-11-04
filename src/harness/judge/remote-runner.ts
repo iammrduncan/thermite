@@ -237,4 +237,47 @@ export class RemoteRunner implements RigRunner {
   async remove(dir: string): Promise<void> {
     await this.o.link.ask({ op: "remove", dir });
   }
+
+  /**
+   * A lane's command on its change, on this runner (goal 206): the parent commit sent first when
+   * the runner lacks it. The answer is the run's output, which never counts.
+   */
+  async laneRun(r: LaneRun): Promise<object> {
+    await this.sendCommit(r.repo, r.parent);
+    return (await this.o.link.ask({
+      op: "lane_run",
+      card: this.o.card,
+      lane: r.lane,
+      trial: r.trial,
+      repo: r.repo,
+      parent: r.parent,
+      patch: r.patch.toString("base64"),
+      command: r.command,
+      ...(r.timeoutS !== undefined ? { timeout_s: r.timeoutS } : {}),
+      limits: {
+        rss_mib: r.limits.rssMib,
+        disk_mib: r.limits.diskMib,
+        ...(r.limits.processes !== undefined ? { processes: r.limits.processes } : {}),
+      },
+    })) as object;
+  }
+
+  /** A trial ended: its workspace on this runner goes. */
+  async laneEnd(lane: string, trial: string): Promise<void> {
+    await this.o.link.ask({ op: "lane_end", lane, trial });
+  }
+}
+
+/** A lane's run on a runner of another machine: its change on its parent, and its command. */
+export interface LaneRun {
+  lane: string;
+  trial: string;
+  /** The mirror the parent commit is in. */
+  repo: string;
+  parent: string;
+  /** The change on the parent, as `git diff --binary` gives it. */
+  patch: Buffer;
+  command: string;
+  timeoutS?: number | undefined;
+  limits: { rssMib: number; diskMib: number; processes?: number | undefined };
 }

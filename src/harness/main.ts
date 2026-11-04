@@ -18,6 +18,7 @@ import {
   reclaimJobs,
   rigHardware,
   rigSettings,
+  runnerPools,
   runnersOf,
   startLoops,
   targetDrivers,
@@ -125,15 +126,19 @@ async function main(): Promise<void> {
   // The core's link to its runner processes: their supervisors answer on the bus (goal 206).
   const link = runners.length ? new RunnerLink({ outboxDir: service.paths.outboxDir }) : undefined;
   service.runners = link;
+  // Each runner of theirs in its pool; the lanes' runs go to those that serve them.
+  const pools = runnerPools(service, runners, link, {
+    type: driver.type,
+    separated: runner.separated,
+  });
+  parts.devRuns.remote = pools;
   const executors = createJudges(ctx, {
     service,
     devRuns: parts.devRuns,
     judging,
     judgeCards: targets.judgeCards,
     executorIds,
-    runners,
-    link,
-    driver,
+    pools,
   });
   const links = agentLinks(ctx, service, port);
   addModelCheck(service, links);

@@ -246,7 +246,7 @@ Memory is the sum over all the processes the build or run started, sampled every
 | One command a lane runs (a build, a test) | None: it runs until it ends or the trial ends. On a trial with a length, a Pi worker's command (`run`, `dev_run`) stops 3 minutes before the trial's end, so that the worker can still submit, and nearer the end than that it gets 1 minute at most. Its result then says `stopped by the trial's clock` | `run_timeout_s` (10 to 7,200) |
 | Memory of everything a lane runs at once, OpenCode, Claude Code and Codex included | 2,048 MiB | `run_rss_mib` (256 to 16,384) |
 | The trial's workspace, build folders included | 2,048 MiB | `workspace_mib` (256 to 65,536) |
-| One development run | None on a development device of its own; 300 s on a device the judge shares | `dev_run_timeout_s` (10 to 3,600) |
+| One development run | None on a development device of its own, or on a runner of another machine; 300 s on a device of the core's that the judge shares | `dev_run_timeout_s` (10 to 3,600) |
 | Memory of one development run | 4,096 MiB | `dev_run_rss_mib` (256 to 16,384) |
 | Processes and threads at once, for each of a lane's users: its commands with OpenCode, Claude Code or Codex, its development runs, its Pi worker | 256. At the limit, starting one more fails with `Resource temporarily unavailable` | `processes` (64 to 65,536) |
 | A lane's build cache | 8 GB (`CCACHE_MAXSIZE`). ccache's paths are relative to the lane's folder (`CCACHE_BASEDIR`, with `CCACHE_NOHASHDIR`), so a build in the same folder of each trial's checkout hits what earlier trials compiled ([A lane's cache](ports-volumes-secrets.md#a-lanes-cache)) | Fixed |

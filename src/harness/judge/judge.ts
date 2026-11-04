@@ -37,6 +37,9 @@ export type { JudgeOptions, PromotionPolicy } from "./context.ts";
  * its goals in goals.ts.
  */
 
+/** The judge's jobs, as it leases them. */
+const JOB_KINDS = ["baseline", "evaluate", "parent_screen", "confirm", "calibrate", "validate"];
+
 export class Judge {
   /** The judge's options, ledger, build store and held job, and the steps every job takes. */
   private readonly judge: JudgeContext;
@@ -60,10 +63,16 @@ export class Judge {
 
   /** One scheduling step. Returns true when a job was processed. */
   async tick(): Promise<boolean> {
+    // A runner of another machine is held for the step (goal 206): on a shared one, only when a
+    // job waits, so the lanes keep it while the judge has nothing to do.
+    const slot = this.judge.o.slot;
+    if (slot?.shared && !this.judge.ledger.jobs.open(JOB_KINDS)) return false;
+    const release = slot ? await slot.hold() : undefined;
     try {
       return await this.step();
     } finally {
       this.judge.holding = undefined;
+      release?.();
     }
   }
 
@@ -76,7 +85,7 @@ export class Judge {
     const job = this.judge.ledger.jobs.lease(
       this.judge.o.owner,
       this.judge.o.leaseMs,
-      ["baseline", "evaluate", "parent_screen", "confirm", "calibrate", "validate"],
+      JOB_KINDS,
       this.judge.cards > 1 ? this.judge.o.card?.uuid : undefined,
       waiting,
     );

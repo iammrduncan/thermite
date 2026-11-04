@@ -410,6 +410,8 @@ export interface EventBodies {
     killed: "timeout" | "memory" | "disk" | null;
     peak_rss_mib: number;
     command: string;
+    /** The runner of another machine it ran on (goal 206); none: the core's own machine. */
+    runner?: string | undefined;
   };
   context_compacted: {
     trial: string | null;

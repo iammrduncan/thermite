@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import type { RunAsk } from "../../core/api/harness/runs.ts";
-import type { Runner } from "../broker/index.ts";
+import { laneCacheEnv, prepareWorkspace } from "../agents/index.ts";
+import type { Role, Runner } from "../broker/index.ts";
 import { fetchBundle, hasCommit, initMirror, refTips } from "../git.ts";
 import { importFile } from "../imports.ts";
 import {
@@ -223,6 +224,92 @@ export class RunHost {
             storeDir: join(this.o.paths.stateDir, "models"),
           });
         return { ok: true };
+      case "lane_run":
+        this.card(a.card);
+        return this.one(a.card, () => this.laneRun(a));
+      case "lane_end": {
+        const ws = this.workspaces.get(a.trial);
+        this.workspaces.delete(a.trial);
+        await this.o.runner.killRole(a.lane as Role).catch(() => 0);
+        if (ws) await this.o.runner.remove(ws.dir).catch(() => undefined);
+        return { ok: true };
+      }
+    }
+  }
+
+  /** Each trial's workspace on this runner, kept for its next runs until it ends. */
+  private readonly workspaces = new Map<string, { dir: string; repo: string; lane: string }>();
+
+  /**
+   * A lane's command on its change: the trial's workspace, made from the parent once, set to the
+   * parent with the change on it (what an earlier run built where git ignores it stays), then the
+   * command, as the lane's user with the device's group, within the lane's limits.
+   */
+  private async laneRun(a: Extract<RunAsk, { op: "lane_run" }>): Promise<object> {
+    const lane = a.lane as Role;
+    let ws = this.workspaces.get(a.trial);
+    if (!ws || ws.lane !== a.lane) {
+      const made = await prepareWorkspace({
+        runner: this.o.runner,
+        scratchDir: this.o.paths.scratchDir,
+        mirror: this.mirror(a.repo),
+        commit: a.parent,
+        lane,
+      });
+      ws = { ...made, lane: a.lane };
+      this.workspaces.set(a.trial, ws);
+    }
+    const env = laneCacheEnv(this.o.paths.scratchDir, a.lane);
+    const rss = a.limits.rss_mib * 1024 * 1024;
+    const disk = { path: ws.dir, limitBytes: a.limits.disk_mib * 1024 * 1024 };
+    const nproc = a.limits.processes !== undefined ? { nproc: a.limits.processes } : {};
+    const setUp = await this.o.runner.run({
+      role: lane,
+      argv: [
+        "sh",
+        "-c",
+        "git reset --hard -q && git clean -fdq && git apply --binary --whitespace=nowarn",
+      ],
+      cwd: ws.repo,
+      env,
+      stdin: Buffer.from(a.patch, "base64").toString("utf8"),
+      rssLimitBytes: rss,
+      disk,
+      ...nproc,
+      captureBytes: 32 * 1024,
+    });
+    if (setUp.exitCode !== 0)
+      return {
+        ran: false,
+        reason: `the change did not apply on the parent: ${setUp.stderr.slice(-1500)}`,
+      };
+    try {
+      const r = await this.o.runner.run({
+        role: lane,
+        argv: ["sh", "-c", a.command],
+        cwd: ws.repo,
+        env,
+        ...(a.timeout_s !== undefined ? { timeoutMs: a.timeout_s * 1000 } : {}),
+        rssLimitBytes: rss,
+        disk,
+        ...nproc,
+        captureBytes: 32 * 1024,
+        gpu: this.card(0).driver.type === "cuda-gpu",
+        ...(this.card(0).driver.type === "cuda-gpu" ? {} : { keepBackground: true }),
+      });
+      return {
+        ran: true,
+        exit: r.exitCode ?? r.signal,
+        killed: r.killedFor,
+        wall_ms: Math.round(r.wallMs),
+        peak_rss_mib: Math.round(r.peakRssBytes / 2 ** 20),
+        stdout: r.stdout.slice(-6_000),
+        stderr: r.stderr.slice(-3_000),
+        note: "diagnostic only: this number never counts",
+      };
+    } finally {
+      // Nothing a run started on the device outlives it.
+      await this.o.runner.killRole(lane, { gpu: true }).catch(() => 0);
     }
   }
 
