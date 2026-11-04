@@ -82,8 +82,11 @@ export async function piPlannerScene(check) {
   });
 }
 
-/** Whether one of the owner's messages came inside the planner's turn, and its plans answered. */
-const plannerSeen = { came: false, plans: 0 };
+/**
+ * Whether the planner in OpenCode has asked the model yet, whether one of the owner's messages came
+ * inside its turn, and its plans answered.
+ */
+const plannerSeen = { asked: false, came: false, plans: 0 };
 /** The most short commands its first plan runs while it waits for the owner's message. */
 const PLANNER_WAITS = 60;
 
@@ -98,6 +101,7 @@ const PLANNER_WAITS = 60;
  */
 export function opencodePlanner(messages, asked) {
   if (!asked.includes("The campaign, as JSON:")) return undefined;
+  plannerSeen.asked = true;
   const came = asked.includes("as one more of owner_messages");
   if (came) plannerSeen.came = true;
   const waited = messages.filter((m) => m.role === "tool").length;
@@ -136,8 +140,16 @@ export async function opencodePlannerScene(check) {
     }),
   });
   check("the planner is given the model in OpenCode over REST", given.status === 200, given.body);
-  // Its next round may wait for the trial planned before it took the model.
-  const call = await plannerInTerminal("smoke-1", { ms: 900_000 });
+  // Its next round may wait for the trial planned before it took the model. A planner in Pi plans
+  // in its own Pi view too, so the call that counts is the one whose program asked the model in
+  // OpenCode: the message goes in once it waits there.
+  await until(
+    "the planner's call runs in OpenCode",
+    async () => plannerSeen.asked || undefined,
+    900_000,
+    1000,
+  );
+  const call = await plannerInTerminal("smoke-1", { ms: 60_000 });
   const since = (await events()).length;
   await command("message_agent", {
     run: "smoke-1",
