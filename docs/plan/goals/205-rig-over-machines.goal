@@ -75,7 +75,7 @@ The judge's jobs write to the ledger as they go (heartbeats, lifecycles, receipt
 
 - [ ] The design, with what owns what, and a mockup of Add a rig, Edit rig and the rig's page, agreed by the owner before code.
 - [ ] Items 1 to 6, with tests and the acceptance checks of the parts they touch.
-- [ ] A hill climb of the recipe on two DGX Sparks, the judge on one and a lane on the other.
+- [ ] A hill climb on two DGX Sparks, the judge on one and a lane on the other, with a kit the harness builds today. The recipe's own hill climb follows when its kit is ready, which someone else makes (the owner, 2026-11-04).
 - [ ] Pages: Add a rig, Edit rig, the rig's page, the rig's parts and their network rules, and the changelog. The settled decision that a rig is one harness container changes in [decisions](../decisions.md).
 
 ## Decisions
@@ -84,6 +84,7 @@ The judge's jobs write to the ledger as they go (heartbeats, lifecycles, receipt
 - 2026-11-04, the owner, on the first mockup: machines from any place; a leader and followers that all run the same code, kept in step over NATS, so that the judge and the workers can run on any machine; a Raft quorum at three machines or more. Redrawn so.
 - 2026-11-04, the owner: the leader is chosen by a lease on control's message bus (a compare-and-set key in NATS's key-value store), not by a Raft quorum among the machines. It works from two machines up and needs no machine to reach another; each lease's number fences off a stopped leader. While control is away the leader goes on, and no new leader is chosen.
 - 2026-11-04, the owner: build it in four steps, each rolled to the lab as it is ready: (1) a follower that runs the judge's jobs it leases from the leader, enough for the judge on one Spark and the leader with its lane on the other; (2) lanes on followers; (3) followers' copies of the run and the leader's lease taken over; (4) Edit rig changes the machines and the pools. The design is in [decisions](../decisions.md).
+- 2026-11-04, the owner: the TensorFold recipe's kit, and a harness that can build it (the recipe builds in NVIDIA's PyTorch container), are someone else's to make; this goal is verified with a hill climb on the two Sparks with a kit the harness builds today, and the recipe's run follows when its kit is ready.
 
 ## Progress
 
