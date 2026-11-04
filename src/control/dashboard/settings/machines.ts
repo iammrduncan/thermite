@@ -74,10 +74,11 @@ export function machineRoutes(app: Hono, dash: Dashboard): void {
       303,
     );
   });
-  // The owner trusts exactly the keys they were shown (the form carries them back).
+  // The owner trusts exactly the keys they were shown (the form carries them back). A browser
+  // sends the hidden field's line breaks as CRLF, so a machine with several keys compares by line.
   app.post("/ui/settings/machines/:name/trust", async (c) => {
     const m = store.machines.get(c.req.param("name"));
-    const seen = String((await c.req.parseBody()).seen ?? "");
+    const seen = String((await c.req.parseBody()).seen ?? "").replace(/\r\n?/g, "\n");
     if (!m) return c.redirect(machineUrl("error", "No such machine."), 303);
     if (!m.seen_host_keys.length || seen !== m.seen_host_keys.join("\n"))
       return c.redirect(
