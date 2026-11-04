@@ -175,7 +175,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **The owner's asks of 2026-11-03.**
 
-- [194](goals/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `IN_PROGRESS`
+- [194](goals/_completed/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `VERIFIED`
 - [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-04.**

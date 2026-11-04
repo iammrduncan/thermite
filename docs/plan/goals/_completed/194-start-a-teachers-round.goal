@@ -1,7 +1,7 @@
 ---
 id: "194"
 title: "Start a teachers' round now: an MCP tool, a dashboard action and a signed command"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.3"
 depends_on: []
 created: 2026-11-03
@@ -10,7 +10,7 @@ updated: 2026-11-04
 
 # 194 · Start a teachers' round now: an MCP tool, a dashboard action and a signed command
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
 
 ## What
 
@@ -28,9 +28,9 @@ Checking a fix to the teachers, or what they make of a run's state, meant waitin
 
 ## Done when
 
-- [x] Items 1 to 4, with tests of each refusal: `tests/control/issue/teachers-round.test.ts`, `tests/supervisor/advisors/pass/asked.test.ts` and the run page's test. Passing on the lab's test machine is still to come.
+- [x] Items 1 to 4, with tests of each refusal: `tests/control/issue/teachers-round.test.ts`, `tests/supervisor/advisors/pass/asked.test.ts` and the run page's test, which passed on the lab's test machine (11/11); the hierarchy test, which the full check at 6bc096c6 failed on the MCP tool's `rig`, passed after d38534be (6/6).
 - [x] Pages: the run's page and Live, the MCP tools, the signed commands, Steer a run, and the changelog. Also the REST API, the advisors file, Use advisors, and Limits and pacing.
-- [ ] Issue 53 closed with its commit.
+- [x] Issue 53 closed with its commit, by the owner's yes, 2026-11-04.
 
 ## Decisions
 
@@ -46,7 +46,8 @@ Checking a fix to the teachers, or what they make of a run's state, meant waitin
 - 2026-11-03: Researched: no round on request existed (the supervisor's reasons were the timer, an owner's message and `queue_low`). Mockup approved by the owner.
 - 2026-11-04: Built: the signed command `start_teachers_round` and its event `teachers_round_requested`; the harness's runs list for the supervisor gives the newest request as `teachers_asked`, and the supervisor starts one round for each, saved in its state across restarts. Control's refusals, the ⋯ menu item, the MCP tool, the REST route, History's line and the pages. Typecheck, lint, the size, import and loose-ends checks and the docs check pass; the tests run on the lab's test machine.
 - 2026-11-04: its 3 test files passed on the lab's test machine (11/11); the full check at 6bc096c6 failed the hierarchy test on the tool's `rig`, fixed by dropping it. Control ran 6bc096c6 from 01:42Z; the CPU rigs were verified on it at 01:45Z.
+- 2026-11-04: Verified live on a lab rig at 6bc096c6: the owner's request for a round on a running hill climb (event teachers_round_requested at 02:33:34Z) started both teachers' calls 0.25 s later, both programs ran 5 s later, both teachers reviewed with no error, and the round's record, with 2 reviews, 2 rules, 3 experiments and 4 moves, came 4 min 54 s after the request, where the timed round would have waited. Issue 53 closed.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/194-start-a-teachers-round.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/194-start-a-teachers-round.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).
