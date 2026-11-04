@@ -6,9 +6,11 @@ import { CHECK_SCRIPT } from "../../src/control/machines/facts.ts";
 import { type MachineSsh, parseHostKeys, type SshTarget } from "../../src/control/machines/ssh.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
 import { controlOnly, signIn } from "../helpers/control-stack.ts";
+import { ingestReport } from "../helpers/control-store.ts";
 
 const HOST = makeDeployKey("host").publicKey.split(" ")[1] as string;
 const OTHER = makeDeployKey("other").publicKey.split(" ")[1] as string;
+const FACTS_GPU = "gpu=0, GPU-aaaa, NVIDIA GeForce RTX 4090, 24564, 412, 0";
 const FACTS = [
   "os=Ubuntu 24.04.1 LTS",
   "os_id=ubuntu debian",
@@ -18,7 +20,7 @@ const FACTS = [
   "mem_kib=131072000",
   "disk_free_kib=1610612736",
   "user=thermite",
-  "gpu=0, GPU-aaaa, NVIDIA GeForce RTX 4090, 24564, 412, 0",
+  FACTS_GPU,
   "driver=550.127.05",
   "cuda=12.4",
   "podman=4.9.3",
@@ -29,7 +31,7 @@ const FACTS = [
 ].join("\n");
 
 /** A machine behind a fake SSH layer: its host key can change, and every call is recorded. */
-function fakeMachine() {
+function fakeMachine(facts = FACTS) {
   const state = {
     hostKey: HOST,
     calls: [] as { target: SshTarget; script: string; args: string[] }[],
@@ -48,7 +50,7 @@ function fakeMachine() {
         throw new Error(
           "the machine presented a different host key from the one you trusted: control refused it",
         );
-      return { code: 0, stdout: FACTS, stderr: "" };
+      return { code: 0, stdout: facts, stderr: "" };
     },
   };
   return { state, ssh };
@@ -361,5 +363,141 @@ describe("machines in Providers", () => {
     assert.equal(s.store.enrollments.rig("box-a"), undefined);
     page = await s.page("/ui/rigs/box-a");
     assert.match(page, /Removed from the machine/);
+  });
+
+  // A GPU machine ready for rigs: NVIDIA's toolkit and its CDI file are there.
+  const gpuFacts = (gpu: string, arch = "x86_64") =>
+    `${FACTS.replace("arch=x86_64", `arch=${arch}`).replace(/^gpu=.*$/m, gpu)}\nnvidia_ctk=1.17.3\ncdi=/etc/cdi/nvidia.yaml`;
+  /** gpu-a, set up on GPU 0 of gpu-host-1 with these facts by Add a rig; the scripts it ran. */
+  const gpuRig = async (
+    facts: string,
+    rigImages: NonNullable<ControlOptions["rigImages"]> = {
+      harness: "registry.example.com/thermite/harness:1",
+      harnessCuda: "registry.example.com/thermite/harness-cuda:1",
+      harnessCuda13: "registry.example.com/thermite/harness-cuda13:1",
+      supervisor: "registry.example.com/thermite/supervisor:1",
+    },
+  ) => {
+    const m = fakeMachine(facts);
+    const scripts: string[] = [];
+    const base = m.ssh.sshScript;
+    m.ssh.sshScript = async (target, script, args) => {
+      if (script === CHECK_SCRIPT) return base(target, script, args);
+      scripts.push(script);
+      return {
+        code: 0,
+        stdout: script.includes("echo updated") ? "updated\n" : "started",
+        stderr: "",
+      };
+    };
+    const s = await control(m.ssh, { rigImages });
+    await s.post("/ui/settings/add", {
+      type: "ssh",
+      name: "gpu-host-1",
+      address: "gpu-host-1",
+      port: "22",
+      user: "thermite",
+    });
+    const seen =
+      /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings/machines"))?.[1] ?? "";
+    await s.post("/ui/settings/machines/gpu-host-1/trust", { seen });
+    assert.equal(
+      await s.post("/ui/rigs/add", { machine: "gpu-host-1", rig: "gpu-a", gpus: "0" }),
+      "/ui/rigs/gpu-a",
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    return { s, scripts };
+  };
+  for (const [what, facts, image] of [
+    ["an RTX 4090 takes the CUDA 12 harness", gpuFacts(FACTS_GPU), "harness-cuda:1"],
+    [
+      "a Blackwell GPU takes the CUDA 13 harness",
+      gpuFacts("gpu=0, GPU-bbbb, NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 225, 0"),
+      "harness-cuda13:1",
+    ],
+    [
+      "an arm64 machine takes the CUDA 13 harness",
+      gpuFacts("gpu=0, GPU-cccc, NVIDIA GH200 480GB, 97871, 0, 0", "aarch64"),
+      "harness-cuda13:1",
+    ],
+  ] as const) {
+    test(`Add a rig on a machine: ${what} (goal 132)`, async () => {
+      const { s, scripts } = await gpuRig(facts);
+      assert.equal(
+        s.store.machines.rig("gpu-a")?.images.harness,
+        `registry.example.com/thermite/${image}`,
+      );
+      assert.ok(scripts[0]?.includes(`Image=registry.example.com/thermite/${image}\n`));
+    });
+  }
+
+  /** The harness image Update to control's version moves gpu-a onto, over SSH. */
+  const updatedTo = async (s: Awaited<ReturnType<typeof gpuRig>>["s"], scripts: string[]) => {
+    await ingestReport(s.store, {
+      rig: "gpu-a",
+      ledger_id: "ledger-gpu-a",
+      cursor: 0,
+      next: 0,
+      summary: {},
+      events: [],
+    });
+    assert.match(await s.post("/ui/rigs/gpu-a/update", {}), /ok=The update of gpu-a/);
+    const end = Date.now() + 5000;
+    while (!scripts.some((x) => x.includes("echo updated")) && Date.now() < end)
+      await new Promise((r) => setTimeout(r, 10));
+    return /Image=(\S+harness\S*)\n/.exec(
+      scripts.find((x) => x.includes("echo updated")) ?? "",
+    )?.[1];
+  };
+  test("Update to control's version keeps a rig on the CUDA 13 harness when the facts lose its GPU (goal 132)", async () => {
+    const blackwell =
+      "gpu=0, GPU-bbbb, NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 225, 0";
+    const { s, scripts } = await gpuRig(gpuFacts(blackwell));
+    // Read again while the driver was down: the facts name no GPU.
+    const facts = s.store.machines.get("gpu-host-1")?.facts as Record<string, unknown>;
+    s.store.machines.setFacts("gpu-host-1", { facts: { ...facts, gpus: [] } });
+    assert.equal(await updatedTo(s, scripts), "registry.example.com/thermite/harness-cuda13:1");
+  });
+  test("Update to control's version moves a Blackwell machine rig onto the CUDA 13 harness (goal 132)", async () => {
+    const blackwell =
+      "gpu=0, GPU-bbbb, NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 225, 0";
+    const { s, scripts } = await gpuRig(gpuFacts(blackwell));
+    // Set up before control told Blackwell apart: it runs the CUDA 12 harness.
+    s.store.machines.setRigImages("gpu-a", {
+      harness: "registry.example.com/thermite/harness-cuda:1",
+      supervisor: "registry.example.com/thermite/supervisor:1",
+    });
+    assert.equal(await updatedTo(s, scripts), "registry.example.com/thermite/harness-cuda13:1");
+  });
+  test("Update to control's version keeps a CUDA 13 rig on CUDA 13 after control's new release (goal 132)", async () => {
+    const blackwell =
+      "gpu=0, GPU-bbbb, NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 225, 0";
+    const rigImages = {
+      harness: "registry.example.com/thermite/harness:1",
+      harnessCuda: "registry.example.com/thermite/harness-cuda:1",
+      harnessCuda13: "registry.example.com/thermite/harness-cuda13:1",
+      supervisor: "registry.example.com/thermite/supervisor:1",
+    };
+    const { s, scripts } = await gpuRig(gpuFacts(blackwell), rigImages);
+    assert.equal(s.store.machines.rig("gpu-a")?.images.cuda, "13");
+    // Control moved to a new release, and the facts, read while the driver was down, name no GPU.
+    rigImages.harnessCuda13 = "registry.example.com/thermite/harness-cuda13:2";
+    const facts = s.store.machines.get("gpu-host-1")?.facts as Record<string, unknown>;
+    s.store.machines.setFacts("gpu-host-1", { facts: { ...facts, gpus: [] } });
+    assert.equal(await updatedTo(s, scripts), "registry.example.com/thermite/harness-cuda13:2");
+    assert.equal(s.store.machines.rig("gpu-a")?.images.cuda, "13");
+  });
+  test("A Blackwell machine rig takes the CUDA image while control has no CUDA 13 image (goal 132)", async () => {
+    const blackwell =
+      "gpu=0, GPU-bbbb, NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 225, 0";
+    const { s, scripts } = await gpuRig(gpuFacts(blackwell), {
+      harness: "registry.example.com/thermite/harness:1",
+      harnessCuda: "registry.example.com/thermite/harness-cuda:1",
+      supervisor: "registry.example.com/thermite/supervisor:1",
+    });
+    const r = s.store.machines.rig("gpu-a");
+    assert.equal(r?.images.harness, "registry.example.com/thermite/harness-cuda:1");
+    assert.equal(r?.images.cuda, "13");
+    assert.ok(scripts[0]?.includes("Image=registry.example.com/thermite/harness-cuda:1\n"));
   });
 });

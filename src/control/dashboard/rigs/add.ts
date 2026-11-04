@@ -8,6 +8,7 @@ import {
   clusterLine,
   cudaFor,
   leastRigSize,
+  machineRigImages,
   NS,
   SUPERVISOR_SHARE,
 } from "../../clusters/index.ts";
@@ -339,14 +340,8 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
     if (typeof judge === "string") return fail(judge);
     if (gpus.length && !(facts.nvidia_ctk && facts.cdi))
       return fail(`${m.name} needs NVIDIA's container toolkit first: install it under Providers.`);
-    if (gpus.length && !parts.rigImages.harnessCuda)
-      return fail(
-        "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).",
-      );
-    const images = {
-      harness: gpus.length ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
-      supervisor: parts.rigImages.supervisor,
-    };
+    const images = machineRigImages(parts, facts, gpus);
+    if (typeof images === "string") return fail(images);
     const token = newToken();
     store.enrollments.enroll(rig, token.sha256, "owner:ui");
     const placed = {
