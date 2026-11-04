@@ -82,11 +82,11 @@ export function registerCommands(tools: ToolContext): void {
       {
         title: "Start a teachers' round",
         description:
-          "Ask a running run's teachers for a round now, the same round their timer starts: they review the run from its brief and give their advice, and the next timed round counts from this one. The owner's messages to them stay as they are. Control knows the rig each run is on: leave out rig, or give the run's own. Returns {started, id, rig, said}; follow id with command_status. A request while a round is under way waits for it to end; at the rig's spending limit for the day, the teachers review the run after midnight UTC. Refused in words before it is signed: a run that is not running (a paused one: resume it first), a rig with no teachers (give them a model with set_rig_model), or a rig with its teachers off (set_rig_settings with teachers: true).",
-        inputSchema: { rig: z.string().min(1).optional(), run: z.string().min(1) },
+          "Ask a running run's teachers for a round now, the same round their timer starts: they review the run from its brief and give their advice, and the next timed round counts from this one. The owner's messages to them stay as they are. Control knows the rig the run is on. Returns {started, id, rig, said}; follow id with command_status. A request while a round is under way waits for it to end; at the rig's spending limit for the day, the teachers review the run after midnight UTC. Refused in words before it is signed: a run that is not running (a paused one: resume it first), a rig with no teachers (give them a model with set_rig_model), or a rig with its teachers off (set_rig_settings with teachers: true).",
+        inputSchema: { run: z.string().min(1) },
       },
-      audited("start_teachers_round", (a: { rig?: string; run: string }) =>
-        startTeachersRound(store, opts.privateKeyPem, { ...a, issuedBy: actor }),
+      audited("start_teachers_round", (a: { run: string }) =>
+        startTeachersRound(store, opts.privateKeyPem, { run: a.run, issuedBy: actor }),
       ),
     );
   }

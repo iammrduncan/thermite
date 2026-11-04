@@ -347,14 +347,13 @@ Returns `{id, seq}`: the `propagate` command's id and the champion's number. The
 
 **Start a teachers' round.** Owner and operator.
 
-> Ask a running run's teachers for a round now, the same round their timer starts: they review the run from its brief and give their advice, and the next timed round counts from this one. The owner's messages to them stay as they are. Control knows the rig each run is on: leave out rig, or give the run's own. Returns {started, id, rig, said}; follow id with command_status. A request while a round is under way waits for it to end; at the rig's spending limit for the day, the teachers review the run after midnight UTC. Refused in words before it is signed: a run that is not running (a paused one: resume it first), a rig with no teachers (give them a model with set_rig_model), or a rig with its teachers off (set_rig_settings with teachers: true).
+> Ask a running run's teachers for a round now, the same round their timer starts: they review the run from its brief and give their advice, and the next timed round counts from this one. The owner's messages to them stay as they are. Control knows the rig the run is on. Returns {started, id, rig, said}; follow id with command_status. A request while a round is under way waits for it to end; at the rig's spending limit for the day, the teachers review the run after midnight UTC. Refused in words before it is signed: a run that is not running (a paused one: resume it first), a rig with no teachers (give them a model with set_rig_model), or a rig with its teachers off (set_rig_settings with teachers: true).
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `rig` | string | the run's | The run's rig: one the run's name is used on |
-| `run` | string | | The run whose teachers review it |
+| `run` | string | | The run whose teachers review it, by its name alone: control knows its rig |
 
-Returns `{started, id, rig, said}`: `true`, the [`start_teachers_round`](signed-commands.md#start_teachers_round) command's id, the run's rig, and `<rig>'s teachers review <run> within a minute, or when a round under way ends.` The errors are those of [`POST /v1/runs/<run>/teachers-round`](rest-api.md#signed-commands), and those of a `rig` that is not the run's ([A command about one run](rest-api.md#signed-commands)).
+Returns `{started, id, rig, said}`: `true`, the [`start_teachers_round`](signed-commands.md#start_teachers_round) command's id, the run's rig, and `<rig>'s teachers review <run> within a minute, or when a round under way ends.` The errors are those of [`POST /v1/runs/<run>/teachers-round`](rest-api.md#signed-commands).
 
 ### command_status
 

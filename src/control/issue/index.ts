@@ -366,10 +366,10 @@ export function issueCommand(
 export function startTeachersRound(
   store: ControlStore,
   privateKeyPem: string,
-  a: { rig?: string | undefined; run: string; issuedBy: string },
+  a: { run: string; issuedBy: string },
 ): { started: true; id: string; rig: string; said: string } {
   const payload = { run: a.run };
-  const rig = commandRig(store, "start_teachers_round", a.rig, payload);
+  const rig = commandRig(store, "start_teachers_round", undefined, payload);
   const { id } = issueCommand(store, privateKeyPem, {
     rig,
     kind: "start_teachers_round",

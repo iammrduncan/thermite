@@ -37,6 +37,7 @@ Checking a fix to the teachers, or what they make of a run's state, meant waitin
 - 2026-11-03, the owner, from the mockup ("Build it as drawn"): **Start a teachers' round** in the run's ⋯ menu, between **Restart the lanes** and **Close run**, for a running run with agents; greyed out, with why, on a rig with no teachers or with them off. MCP's `start_teachers_round {rig?, run}` answers `{started, id, rig, said}`, and REST has `POST /v1/runs/<run>/teachers-round`. Owner and operator only, never an agent: the harness takes it only from an `owner:` issuer.
 - 2026-11-03: a request while a round is under way is not refused: it waits for that round to end, then starts the next. At the day's spending limit it is not refused either: Live says once that the teachers review the run after midnight UTC, as for a message. Item 2's refusals are therefore a run that is not running, a rig with no teachers and a rig with its teachers off; control refuses all three before it signs, and the rig refuses the first again.
 - 2026-11-03: a run whose status control has not had from its rig yet is the rig's to check: control signs the request, and the harness refuses it if the run is not running. Before the rig's supervisor has reported its advisors, control can't tell whether the rig has teachers, and signs it too.
+- 2026-11-04: the MCP tool takes the run alone, `start_teachers_round {run}`, not `{rig?, run}` as drawn: a run's name is unique on control, so no MCP tool takes a rig with a run (goal 170's rule, tests/control/hierarchy.test.ts), and the full check at 6bc096c6 failed on it.
 - Item 5 (the auditor and the review panel) stays for later: neither has a round to start; each works when an audit or review is open.
 
 ## Progress
@@ -44,6 +45,7 @@ Checking a fix to the teachers, or what they make of a run's state, meant waitin
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
 - 2026-11-03: Researched: no round on request existed (the supervisor's reasons were the timer, an owner's message and `queue_low`). Mockup approved by the owner.
 - 2026-11-04: Built: the signed command `start_teachers_round` and its event `teachers_round_requested`; the harness's runs list for the supervisor gives the newest request as `teachers_asked`, and the supervisor starts one round for each, saved in its state across restarts. Control's refusals, the ⋯ menu item, the MCP tool, the REST route, History's line and the pages. Typecheck, lint, the size, import and loose-ends checks and the docs check pass; the tests run on the lab's test machine.
+- 2026-11-04: its 3 test files passed on the lab's test machine (11/11); the full check at 6bc096c6 failed the hierarchy test on the tool's `rig`, fixed by dropping it. Control ran 6bc096c6 from 01:42Z; the CPU rigs were verified on it at 01:45Z.
 
 ---
 

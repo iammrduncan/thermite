@@ -149,7 +149,7 @@ describe("a teachers' round on request, at control (goal 194)", () => {
     assert.equal(store.commands.list(10)[0]?.issued_by, "owner:operator");
     const refused = await operator.callTool({
       name: "start_teachers_round",
-      arguments: { rig: "rig-t", run: "tr-3" },
+      arguments: { run: "tr-3" },
     });
     assert.ok(refused.isError);
     assert.match(JSON.stringify(refused.content), /tr-3 is closed/);
