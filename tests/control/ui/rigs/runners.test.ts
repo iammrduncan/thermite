@@ -137,7 +137,7 @@ describe("a rig's runners in control (goal 206)", () => {
       processes: [
         {
           ...reported.processes[0],
-          store: { total_gib: 200, free_gib: 159.5, builds: 3, kits: 1 },
+          store: { total_gib: 200, free_gib: 160, builds: 3, kits: 1 },
         },
       ],
       waiting: ["lane-1"],
@@ -145,7 +145,7 @@ describe("a rig's runners in control (goal 206)", () => {
     });
     assert.deepEqual(r?.processes[0]?.store, {
       total_gib: 200,
-      free_gib: 159.5,
+      free_gib: 160,
       builds: 3,
       kits: 1,
     });

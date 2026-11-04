@@ -42,7 +42,10 @@ const machineOf = (r: Row): Machine => ({
 
 /** Migration 34: whether a rig control set up on a machine judges on its runners alone (goal 206). */
 export function machineRigJudgeOnRunners(db: DatabaseSync): void {
-  db.exec("alter table machine_rig add column judge_on_runners integer not null default 0");
+  // Once: a store whose migrations run again from an earlier version has it already.
+  const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "judge_on_runners"))
+    db.exec("alter table machine_rig add column judge_on_runners integer not null default 0");
 }
 
 /** A rig control set up on a machine. */
