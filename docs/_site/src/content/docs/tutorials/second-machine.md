@@ -61,7 +61,7 @@ Control logs in and reads the machine: its system, GPUs, Podman and whether it r
 
 1. Open **Rigs** in the sidebar, then press **Add a rig**.
 2. Under **1 · The core**, choose **machine-2** (over SSH).
-3. Under **2 · Runners**, if machine-2 has GPUs, set the first one's pool to **Shared: the judge and the lanes**. With none, the rig measures on the machine's CPUs.
+3. Under **2 · Runners**, if machine-2 has GPUs, press **+ Add a runner**, choose **machine-2** and its first GPU, and set **Its pool** to **Shared: the judge and the lanes**. With no runner, the rig measures on the machine's CPUs.
 4. Under **3 · Name and start**, give a **Rig name**, such as `rig-2`. **Message bus** shows the address the rig will reach, such as `nats://control.example.com:4222`.
 5. Press **Create the rig**.
 

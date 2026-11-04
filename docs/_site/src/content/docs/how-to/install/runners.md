@@ -27,7 +27,7 @@ A lane runs on its own runner first, then on a shared one; a lane that no runner
 **Rigs › Add a rig** has three steps and a summary:
 
 1. **1 · The core**: where the core goes, any machine or free slot control knows, with the core's CPUs, memory and disk, filled in from the slot's quota. It needs no GPU.
-2. **2 · Runners**: each GPU control knows, under its machine, node or slot, with its pool: **The judge's**, **Shared: the judge and the lanes**, a lane's, or **Not used**, the default. The machine or slot that is also the core shows **the core too**. **Workers at a time** sets how many lanes work at once, 2 by default.
+2. **2 · Runners**: none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. **Workers at a time** sets how many lanes work at once, 2 by default.
 3. **3 · Name and start**: the rig's name, and the images: the core's, and the runners' CUDA image for their GPUs.
 
 **What this rig will be** says where the core runs, where the judge measures and where each lane tries its changes, and notes what would go wrong:
@@ -38,6 +38,8 @@ A lane runs on its own runner first, then on a shared one; a lane that no runner
 | "The runners are of two kinds, …: a rig measures on one kind of target, so its verdicts compare. Use one kind, or make a rig for each." | Off |
 | A runner that is a lane's beyond **Workers at a time**: "… it would stay idle." | On |
 | The core and a runner on one machine, or in one slot: the judge's timings can be noisier | On |
+
+The core's place is chosen first among those without a GPU, since the core needs none.
 
 Press **Create the rig**: control sets the core up, then each runner, named for its machine or node, such as `gpu-node-1`, or for its GPU, such as `gb10-1`, where control can't tell the node. The rig takes them, and its **Workers at a time**, once it reports. A core with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same. With no runner chosen, the core measures on its own CPUs, as a CPU rig.
 

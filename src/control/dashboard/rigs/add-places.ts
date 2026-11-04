@@ -119,6 +119,8 @@ interface CorePlace {
   /** A cluster's core: the CPUs, memory (GiB) and volume (GB) it starts with; empty: the defaults. */
   size?: { cpus: string; memoryGi: string; diskGb: string } | undefined;
   arch: string;
+  /** Its GPUs: a place with none comes first for the core, which needs none. */
+  gpus: number;
 }
 
 /** Every place the rig's core can go, a not-ready one with why. */
@@ -134,6 +136,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
       checked: checked(m.checked_at),
       why: machineNotReady(m),
       arch: archOf(f?.arch),
+      gpus: f?.gpus.length ?? 0,
     });
   }
   for (const k of store.clusters.list()) {
@@ -148,6 +151,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
         checked: checked(k.checked_at),
         why,
         arch: "",
+        gpus: 0,
       });
       continue;
     }
@@ -160,6 +164,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
         checked: checked(k.checked_at),
         size: { cpus: "", memoryGi: "", diskGb: "100" },
         arch: "",
+        gpus: f.nodes.reduce((n, x) => n + x.gpus, 0),
       });
       continue;
     }
@@ -187,6 +192,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
           diskGb: q?.storageGi !== undefined ? String(Math.floor(q.storageGi)) : "100",
         },
         arch: "",
+        gpus: devices,
       });
     }
   }
@@ -314,8 +320,11 @@ export function runnerGroups(
       };
       // DRA: the classes the slot's quota allows, each as many times; with no such quota, each
       // class whose GPU control knows, once.
-      const classes: [string, number][] = q?.devices
-        ? Object.entries(q.devices).filter(([c, n]) => n > 0 && f.device_classes.includes(c))
+      // DRA: in a slot whose quota control reads, the classes it names, each as many times as it
+      // allows (a slot whose quota names none takes no GPU); else each class whose GPU control
+      // knows, once.
+      const classes: [string, number][] = q
+        ? Object.entries(q.devices ?? {}).filter(([c, n]) => n > 0 && f.device_classes.includes(c))
         : Object.keys(f.gpu_classes ?? {}).map((c) => [c, 1]);
       // Less the devices of each class the slot's runners take already.
       const inUse = (c: string) =>
@@ -399,20 +408,27 @@ export function productAt(store: ControlStore, at: Place): string {
   return f?.nodes.find((n) => n.name === at.node)?.gpu_product ?? "";
 }
 
-/** The pools a runner row offers: not used first chosen, as the form sends none. */
+/** What a runner's pool means, beside its field. */
 const POOL_TIP =
-  "The runner's pool. The judge's: only the judge measures here. Shared: the judge and every lane, in turn. A lane's: only that lane tries its changes here, with run_experiment, and the judge never measures on it. Not used: it stays free for other rigs.";
+  "The judge's: only the judge measures here. Shared: the judge and every lane, in turn, first come, first served. A lane's: only that lane tries its changes here, with run_experiment, and the judge never measures on it.";
+
+/**
+ * The core's place chosen first: the one Settings › Machines' Add a rig here asked for, else the
+ * first ready one without a GPU, as the core needs none, else the first ready one.
+ */
+export function firstPlace(places: CorePlace[], wanted: string | undefined) {
+  const ready = places.filter((p) => !p.why);
+  return wanted
+    ? ready.find((p) => wanted === p.value || wanted === p.value.split("|")[0])
+    : (ready.find((p) => !p.gpus) ?? ready[0]);
+}
 
 /** Add a rig's 1 · The core: a radio row for each place, a not-ready one disabled with why. */
 export function coreRows(places: CorePlace[], wanted: string | undefined): string {
-  const first = places.find((p) => !p.why)?.value;
-  const on = (p: CorePlace) =>
-    !p.why && (wanted ? wanted === p.value || wanted === p.value.split("|")[0] : p.value === first);
-  let chosen = false;
+  const first = firstPlace(places, wanted)?.value;
   return places
     .map((p) => {
-      const checked = !chosen && on(p);
-      if (checked) chosen = true;
+      const checked = p.value === first;
       const size = p.size
         ? ` data-cpus="${esc(p.size.cpus)}" data-mem="${esc(p.size.memoryGi)}" data-disk="${esc(p.size.diskGb)}"`
         : "";
@@ -421,26 +437,44 @@ export function coreRows(places: CorePlace[], wanted: string | undefined): strin
     .join("");
 }
 
-/** Add a rig's 2 · Runners: each group's GPUs, each with its pool, not used by default. */
-export function runnerRows(groups: ReturnType<typeof runnerGroups>): string {
-  const opt = (v: string, t: string, on = false) =>
-    `<option value="${v}"${on ? " selected" : ""}>${esc(t)}</option>`;
+/**
+ * Add a rig's 2 · Runners (goal 206): none at first; **+ Add a runner** adds a row where the owner
+ * picks a machine (a machine over SSH, a node or a slot), then one of its free GPUs, then the
+ * runner's pool. The row comes from a template the page's script copies; without the script, one
+ * row is in the form. Each row sends `runner_new__<n>` (the runner's name, `=`, its place) and
+ * `runner_new_pool__<n>`.
+ */
+export function runnerPicker(groups: ReturnType<typeof runnerGroups>): string {
+  if (!groups.length)
+    return `<div class="card"><div class="empty">No free GPU that control knows. Without runners, the rig measures on its core's CPUs.</div></div>`;
+  const opt = (v: string, t: string, more = "") =>
+    `<option value="${esc(v)}"${more}>${esc(t)}</option>`;
+  const machines = groups
+    .map((g, i) =>
+      opt(
+        String(i),
+        `${g.name} · ${g.where}${g.facts ? ` (${g.facts})` : ""}`,
+        ` data-core-of="${esc(g.core.join(" "))}"`,
+      ),
+    )
+    .join("");
+  const gpus = groups
+    .flatMap((g, i) =>
+      g.gpus.map((x) =>
+        opt(
+          `${x.runner}=${x.at}`,
+          x.used ? `${x.label}: ${x.used}` : x.label,
+          ` data-group="${i}" data-product="${esc(x.product)}" data-cuda="${x.cuda}" data-says="${esc(x.says)}"${x.used ? " disabled" : ""}`,
+        ),
+      ),
+    )
+    .join("");
   const pools = [
     opt("judge", "The judge's"),
     opt("shared", "Shared: the judge and the lanes"),
     ...Array.from({ length: 16 }, (_, i) => opt(`lane-${i + 1}`, `Lane ${i + 1}'s`)),
-    opt("off", "Not used", true),
   ].join("");
-  let n = 0;
-  return groups
-    .map(
-      (g) =>
-        `<div class="ar-mach" data-core-of="${esc(g.core.join(" "))}"><div><b>${esc(g.name)}</b> <span class="chip">${esc(g.where)}</span> <span class="chip info" data-core-too hidden>the core too</span> <span class="muted small">${esc(g.facts)}</span></div>${g.gpus
-          .map((x) => {
-            const i = n++;
-            return `<div class="ar-gpu" data-gpu data-product="${esc(x.product)}" data-cuda="${x.cuda}" data-says="${esc(x.says)}"><span class="small">${infoLabel(x.label, POOL_TIP)}</span><span><input type="hidden" name="ar_at__${i}" value="${esc(x.at)}"><input type="hidden" name="ar_name__${i}" value="${esc(x.runner)}"><select class="ar-pool" name="ar_pool__${i}" aria-label="${esc(`The pool of ${x.says}`)}"${x.used ? " disabled" : ""}>${pools}</select></span><span class="muted small" data-pool-says>${esc(x.used ?? "Not used: free for other rigs.")}</span></div>`;
-          })
-          .join("")}</div>`,
-    )
-    .join("");
+  const row = (n: string) =>
+    `<div class="ar-run" data-runner-row><label class="fd">${infoLabel("Machine", "A machine control reaches over SSH, a node of a cluster, or a slot whose GPUs come through DRA, where the device class picks the node.")}<select data-machine aria-label="The runner's machine"><option value="">Choose a machine</option>${machines}</select></label><label class="fd">${infoLabel("GPU", "One of the machine's free GPUs: the runner takes it alone, one run at a time.")}<select name="runner_new__${n}" data-gpu-pick aria-label="The runner's GPU"><option value="">Choose its GPU</option>${gpus}</select></label><label class="fd">${infoLabel("Its pool", POOL_TIP)}<select class="ar-pool" name="runner_new_pool__${n}" aria-label="The runner's pool">${pools}</select></label><button type="button" class="sm" data-remove-runner>Remove</button><span class="muted small ar-says" data-pool-says></span></div>`;
+  return `<div class="card flat" data-runner-list><div class="empty" data-runner-none>No runners yet: the rig measures on its core's CPUs. Add one for each GPU it should use.</div><noscript>${row("0")}</noscript></div><div class="act" style="margin-top:10px"><button type="button" class="sm" data-add-runner hidden>+ Add a runner</button></div><template id="ar-row">${row("N")}</template>`;
 }

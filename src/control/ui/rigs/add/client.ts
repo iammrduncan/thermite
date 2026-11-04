@@ -99,31 +99,42 @@ export const ADD_RIG_JS = `
     if (note) note.hidden = true;
     const core = picked ? picked.dataset.name || "" : "";
     const lanes = Math.max(1, Math.min(16, Math.floor(Number(form.elements.lanes.value) || 1)));
-    // Each GPU row: its pool, what it says, and the runners chosen.
+    // Each runner row: its machine shows that machine's GPUs, a GPU another row took is taken,
+    // and its pool says what it means.
+    const rows = [...form.querySelectorAll("[data-runner-row]")];
+    const taken = rows.map((r) => r.querySelector("[data-gpu-pick]").value).filter(Boolean);
     const used = [];
-    for (const row of form.querySelectorAll("[data-gpu]")) {
+    const besides = [];
+    for (const row of rows) {
+      const machine = row.querySelector("[data-machine]");
+      const gpu = row.querySelector("[data-gpu-pick]");
       const sel = row.querySelector("select.ar-pool");
-      if (!sel) continue;
-      const pool = sel.value;
+      for (const o of gpu.options) {
+        if (!o.value) continue;
+        o.hidden = o.dataset.group !== machine.value || (o.value !== gpu.value && taken.includes(o.value));
+      }
+      if (gpu.value && gpu.selectedOptions[0].hidden) gpu.value = "";
+      if (!gpu.value && machine.value) {
+        const free = [...gpu.options].find((o) => o.value && !o.hidden && !o.disabled);
+        if (free) { gpu.value = free.value; taken.push(free.value); }
+      }
       for (const o of sel.options)
         if (o.value.startsWith("lane-")) o.hidden = Number(o.value.slice(5)) > Math.max(4, lanes) && !o.selected;
       row.classList.remove("judge", "shared", "lane");
-      if (!sel.disabled && pool !== "off") {
-        row.classList.add(pool.startsWith("lane-") ? "lane" : pool);
-        used.push({ pool, label: row.dataset.says, product: row.dataset.product, cuda: row.dataset.cuda, row });
-      }
       const says = row.querySelector("[data-pool-says]");
-      if (says && !sel.disabled) says.textContent = poolSays(pool);
+      if (!gpu.value) { if (says) says.textContent = machine.value ? "This machine has no free GPU left." : ""; continue; }
+      const o = gpu.selectedOptions[0];
+      const pool = sel.value;
+      row.classList.add(pool.startsWith("lane-") ? "lane" : pool);
+      if (says) says.textContent = o.dataset.says + ": " + poolSays(pool);
+      used.push({ pool, label: o.dataset.says, product: o.dataset.product, cuda: o.dataset.cuda });
+      const m = machine.selectedOptions[0];
+      if (place && m && (m.dataset.coreOf || "").split(" ").includes(place)) besides.push(o.dataset.says);
     }
-    // The core's place's GPUs are runners beside the core.
-    const besides = [];
-    for (const g of form.querySelectorAll(".ar-mach")) {
-      const too = !!place && (g.dataset.coreOf || "").split(" ").includes(place);
-      const chip = g.querySelector("[data-core-too]");
-      if (chip) chip.hidden = !too;
-      if (too) for (const u of used) if (g.contains(u.row)) besides.push(u.label);
-    }
-    document.getElementById("ar-count").textContent = used.length + " chosen";
+    const none = form.querySelector("[data-runner-none]");
+    if (none) none.hidden = rows.length > 0;
+    const count = document.getElementById("ar-count");
+    if (count) count.textContent = used.length + " chosen";
     const judgeOn = used.filter((u) => u.pool === "judge" || u.pool === "shared");
     const shared = used.filter((u) => u.pool === "shared").map((u) => u.label);
     const kinds = [...new Set(used.map((u) => u.product).filter(Boolean))];
@@ -170,6 +181,31 @@ export const ADD_RIG_JS = `
     }
     if (create) create.disabled = blocked || !picked || stop;
   };
+  // + Add a runner: a row from the page's template, its fields numbered; the first one the
+  // judge's, the next ones shared. Remove takes a row away.
+  const runnerList = form.querySelector("[data-runner-list]");
+  const tpl = document.getElementById("ar-row");
+  const add = form.querySelector("[data-add-runner]");
+  let next = 0;
+  if (add && tpl && runnerList) {
+    add.hidden = false;
+    add.addEventListener("click", () => {
+      const holder = document.createElement("div");
+      holder.innerHTML = tpl.innerHTML.replace(/__N"/g, "__" + next++ + '"');
+      const row = holder.firstElementChild;
+      const judged = [...runnerList.querySelectorAll("select.ar-pool")].some((x) => x.value === "judge" || x.value === "shared");
+      row.querySelector("select.ar-pool").value = judged ? "shared" : "judge";
+      runnerList.append(row);
+      say();
+      row.querySelector("[data-machine]").focus();
+    });
+  }
+  form.addEventListener("click", (e) => {
+    const t = e.target.closest ? e.target.closest("[data-remove-runner]") : null;
+    if (!t) return;
+    t.closest("[data-runner-row]").remove();
+    say();
+  });
   form.addEventListener("change", say);
   form.addEventListener("input", say);
   say();

@@ -21,12 +21,13 @@ import type { Ctx, Dashboard } from "../context.ts";
 import {
   corePlaces,
   coreRows,
+  firstPlace,
   machineNotReady,
   productAt,
   runnerGroups,
-  runnerRows,
+  runnerPicker,
 } from "./add-places.ts";
-import { addRigRunners, addRigRunnersChosen, giveWorkers } from "./runners.ts";
+import { addRigRunners, addRigRunnersChosen, giveWorkers, runnersAdded } from "./runners.ts";
 import { rigHelpers } from "./shared.ts";
 
 /**
@@ -107,9 +108,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
     const wanted = c.req.query("place");
     const places = corePlaces(store);
     const groups = runnerGroups(store);
-    const first = places.find((p) =>
-      wanted ? !p.why && (wanted === p.value || wanted === p.value.split("|")[0]) : !p.why,
-    );
+    const first = firstPlace(places, wanted);
     // Rigs you run yourself: one command where the rig goes, for places control can't reach.
     const joinCards = `<label class="ch"><input type="radio" name="place" value="join:machine" style="margin:2px 8px 0 0"><span><b>A machine you set it up on yourself</b><br><span class="muted small">For a machine control can't reach over SSH, such as one behind NAT. You run one command there; it fetches the rig's files from control and starts it. Control can't reach the machine afterwards, so you stop and remove it there too.</span></span></label>
 <label class="ch"><input type="radio" name="place" value="join:namespace" style="margin:2px 8px 0 0"><span><b>A Kubernetes namespace you apply it to yourself</b><br><span class="muted small">For a cluster whose operators give Thermite no kubeconfig. You run one kubectl apply, with your own rights, in a namespace you have. Control holds no credential for the cluster.</span></span></label>`;
@@ -165,8 +164,8 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
 <p class="lead" style="margin-top:18px">Or run it yourself, where control can't connect:</p><div class="stack">${joinCards}</div>${joinSections}<div class="nc-does" id="gpu-note" hidden></div>
 <p class="lead" style="margin-top:14px">Or launch it on a GPU you rent by the hour:</p><div class="stack">${clouds}</div></div>
 <div class="sec" data-runners><div class="sec-head"><h2>2 · Runners <span class="muted small" id="ar-count">0 chosen</span></h2><a class="small" href="/ui/settings/machines?add=1#add-machine">+ A new machine (Settings › Machines)</a></div>
-<p class="lead">Each GPU is a runner in one pool. A runner takes one run at a time, so a measurement never shares its GPU.</p>
-<div class="card flat">${groups.length ? runnerRows(groups) : `<div class="empty">No free GPU that control knows. Without runners, the rig measures on its core's CPUs.</div>`}</div>
+<p class="lead">Add a runner for each GPU the rig uses: its machine, its GPU and its pool. A runner takes one run at a time, so a measurement never shares its GPU.</p>
+${runnerPicker(groups)}
 <label class="fd" style="max-width:200px;margin-top:14px">${infoLabel("Workers at a time", `How many lanes work at once: 1 to ${MAX_LANES}. A lane's own runner serves only that lane.`)}<input name="lanes" type="number" min="1" max="${MAX_LANES}" value="2"></label></div>
 <div class="sec"><h2>3 · Name and start</h2><div class="g3">
 <label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="spark-rig"></label>
@@ -185,7 +184,8 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
    * any, and a rig's runners are of one kind, so its verdicts compare. Refused in words.
    */
   const runnersPlan = (f: Record<string, unknown>, coreGpus: number) => {
-    const chosen = addRigRunnersChosen(f);
+    // The rows of + Add a runner, and an older form's list of every GPU with its pool.
+    const chosen = [...runnersAdded(f), ...addRigRunnersChosen(f)];
     const raw = String([f.lanes ?? ""].flat()[0] ?? "").trim();
     const lanes = raw ? Number(raw) : undefined;
     if (lanes !== undefined && !(Number.isInteger(lanes) && lanes >= 1 && lanes <= MAX_LANES))

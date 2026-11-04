@@ -22,7 +22,7 @@ A [rig](../../reference/glossary.md) with one GPU shares it: while the judge mea
 
 ## When you add the rig
 
-**Rigs › Add a rig** makes each GPU of a machine or a cluster a runner of its own, under **2 · Runners**, each in a pool: as many as the judge should measure on are **The judge's**, and the rest the lanes', each a lane's or **Shared**. A GPU another rig or runner uses says so and can't be chosen. See [Give a rig runners on other machines](runners.md).
+**Rigs › Add a rig** makes each GPU of a machine or a cluster a runner of its own, one **+ Add a runner** each, under **2 · Runners**, each in a pool: as many as the judge should measure on are **The judge's**, and the rest the lanes', each a lane's or **Shared**. A GPU another rig or runner uses says so and can't be chosen. See [Give a rig runners on other machines](runners.md).
 
 The rules above are for the GPUs of a rig's own harness, which these give it:
 

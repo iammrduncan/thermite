@@ -276,24 +276,32 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       page,
       /<h2>2 · Runners <span class="muted small" id="ar-count">0 chosen<\/span><\/h2>/,
     );
-    assert.match(page, /name="ar_at__0" value="k8s-a\|\|gpu-node-1\|device-plugin">/);
-    assert.match(page, /name="ar_name__0" value="gpu-node-1-1">/);
-    assert.match(page, /<option value="off" selected>Not used<\/option>/);
+    // No runner at first: + Add a runner adds a row, a machine, then its GPU, then the pool.
+    assert.match(page, /data-runner-none>No runners yet/);
+    assert.match(
+      page,
+      /<button type="button" class="sm" data-add-runner hidden>\+ Add a runner<\/button>/,
+    );
+    assert.match(page, /<option value="0" data-core-of="">gpu-node-1 · a node of k8s-a \(/);
+    assert.match(
+      page,
+      /<option value="gpu-node-1-1=k8s-a\|\|gpu-node-1\|device-plugin" data-group="0"/,
+    );
+    assert.match(page, /name="runner_new__N" data-gpu-pick/);
     const form = {
       place: "cluster:k8s-a",
       rig: "core-2",
       core_disk: "50",
       lanes: "2",
-      ar_at__0: "k8s-a||gpu-node-1|device-plugin",
-      ar_name__0: "gpu-node-1",
-      ar_pool__0: "judge",
-      ar_at__1: "k8s-a||gpu-node-1|device-plugin",
-      ar_name__1: "gpu-node-1-2",
-      ar_pool__1: "off",
+      runner_new__0: "gpu-node-1=k8s-a||gpu-node-1|device-plugin",
+      runner_new_pool__0: "judge",
+      // A row with no GPU chosen adds nothing.
+      runner_new__1: "",
+      runner_new_pool__1: "shared",
     };
     // A core with no GPU and runners, none of them the judge's, is refused in words.
     assert.match(
-      await s.post("/ui/rigs/add", { ...form, ar_pool__0: "lane-1" }),
+      await s.post("/ui/rigs/add", { ...form, runner_new_pool__0: "lane-1" }),
       /Give the judge a runner, its own or a shared one: the core has no GPU to measure on\./,
     );
     assert.equal(s.store.clusters.rig("core-2"), undefined, "nothing was set up");

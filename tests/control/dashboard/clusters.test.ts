@@ -55,9 +55,9 @@ describe("clusters in Providers and Add a rig", () => {
     // Add a rig offers it for the core, and its node's GPUs as runners (goal 206).
     const add = await s.page("/ui/rigs/add");
     assert.match(add, /name="place" value="cluster:k8s-a"/);
-    assert.match(add, /<b>gpu-node-1<\/b> <span class="chip">a node of k8s-a<\/span>/);
-    assert.match(add, /name="ar_at__0" value="k8s-a\|\|gpu-node-1\|device-plugin"/);
-    assert.match(add, /name="ar_name__1" value="gpu-node-1-2"/);
+    assert.match(add, />gpu-node-1 · a node of k8s-a \(16 CPUs · 64 GiB\)<\/option>/);
+    assert.match(add, /<option value="gpu-node-1-1=k8s-a\|\|gpu-node-1\|device-plugin"/);
+    assert.match(add, /<option value="gpu-node-1-2=k8s-a\|\|gpu-node-1\|device-plugin"/);
     assert.equal(
       await s.post("/ui/rigs/add", {
         place: "cluster:k8s-a",
