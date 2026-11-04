@@ -155,9 +155,10 @@ export function field(text: string, label: string): string {
   return m[1];
 }
 
-/** The first code span in the text that starts with these words: what the page quotes. */
-export function quoted(text: string, start: string): string {
-  for (const m of text.matchAll(/`([^`\n]+)`/g)) if (m[1]?.startsWith(start)) return m[1] as string;
+/** The first code span in the text that starts with these words (and holds others, if given). */
+export function quoted(text: string, start: string, holding?: string): string {
+  for (const m of text.matchAll(/`([^`\n]+)`/g))
+    if (m[1]?.startsWith(start) && (!holding || m[1].includes(holding))) return m[1] as string;
   throw new Error(`the step quotes nothing that starts with ${JSON.stringify(start)}`);
 }
 
@@ -332,6 +333,9 @@ export interface QuickStartPlan {
     smokeCheck: string;
     runIt: string;
     smokePassed: string;
+    /** On a machine whose timing is noisy: the check passes with the no-op inconclusive, and a note. */
+    smokeNoisy: string;
+    smokeNote: string;
     smokeCampaign: string;
     /** 7. See what the judge decided: each outcome's count under How the judge decided. */
     verdicts: Record<string, number>;
@@ -492,6 +496,8 @@ export function quickStartPlan(read: (page: string) => string): QuickStartPlan {
       smokeCheck: named(f(6).text, "Judge smoke"),
       runIt: named(f(6).text, "Run it"),
       smokePassed: quoted(f(6).text, "smoke on ").split(" (run")[0] as string,
+      smokeNoisy: quoted(f(6).text, "smoke on ", "not neutral"),
+      smokeNote: quoted(f(6).text, "The timing on this machine"),
       smokeCampaign: quoted(f(6).text, "rig-check-").split(" ")[0] as string,
       verdicts,
       down: shell(f(8)),
