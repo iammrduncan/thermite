@@ -47,7 +47,7 @@ A team ships a command-line tool, and every user downloads it.
 
 ### 3. Read what others measured first
 
-Before a large rewrite, a research campaign can answer a question such as "Which techniques do published JSON and CSV parsers credit for their speed, on which input sizes and CPUs?" The agents read papers and benchmark reports, and record claims whose quotes code finds, word for word, in the pages it archived.
+Before a large rewrite, a research campaign can answer a question such as "Which techniques do published JSON and CSV parsers credit for their speed, on which input sizes and CPUs?" The agents read papers and benchmark reports, and record claims whose quotes code finds, word for word, in the pages it archived. [Technology evaluation](technology-evaluation.md) shows a larger research campaign, which reads for a day or more.
 
 ## The contract for the first campaign
 

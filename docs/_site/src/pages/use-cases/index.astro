@@ -17,6 +17,15 @@ const byField = fields
   .map((f) => ({ ...f, cases: cases.filter((c) => c.field === f.key) }))
   .filter((f) => f.cases.length > 0);
 const count = (key: string) => cases.filter((c) => c.personas.includes(key)).length;
+const modeCount = (key: string) => cases.filter((c) => c.mode === key).length;
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const useCases = (n: number) => `${n} use case${n === 1 ? "" : "s"}`;
+// What each mode is for, in one line: the question each answers on Campaign modes.
+const modeLine: Record<string, string> = {
+  climb: "Push one number as far as it goes, with everything else held to its starting values.",
+  goal: "Reach a list of goals, each passed by the kit's own test or a review panel, and stop.",
+  research: "Answer hard questions from hundreds of sources, each quote checked against its archived page.",
+};
 ---
 
 <Site
@@ -28,8 +37,8 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     <div class="wrap">
       <h1 class="h1">Autoresearch for any measurable problem.</h1>
       <p class="lede">
-        Thermite applies wherever a program can build a result, run it and measure its quality. Explore use cases by
-        field or by audience.
+        Thermite applies wherever code can judge the work: a number to improve, a list of goals to reach, or questions to
+        answer from sources it checks. Explore use cases by field, by audience or by campaign mode.
       </p>
       <div class="btns">
         <a class="btn primary" href="#fields">Browse by field</a>
@@ -65,10 +74,34 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
       </div>
       <a class="own" href="/tutorials/your-own-project/">
         <span>
-          <b>Don't see your field?</b> Thermite works with any project that a program can build, run and measure.
+          <b>Don't see your field?</b> Thermite works with any project that a program can build, run and measure, and
+          any question that sources can answer.
         </span>
         <span class="own-go">Start on your own project</span>
       </a>
+    </div>
+  </section>
+
+  <section class="section" id="modes">
+    <div class="wrap">
+      <div class="head">
+        <h2 class="h2">Use cases by campaign mode</h2>
+      </div>
+      <div class="grid three">
+        {
+          modes.map((m) => (
+            <div class="card mode">
+              <h3 class="h3">{cap(m.label)}</h3>
+              <p>{modeLine[m.key]}</p>
+              <div class="links">
+                <a href={`?mode=${m.key}#all`} data-show-mode={m.key}>
+                  View {useCases(modeCount(m.key))}
+                </a>
+              </div>
+            </div>
+          ))
+        }
+      </div>
     </div>
   </section>
 
@@ -89,7 +122,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
                   Read the guide
                 </a>
                 <a href={`?for=${p.key}#all`} data-show={p.key}>
-                  View {count(p.key)} use cases
+                  View {useCases(count(p.key))}
                 </a>
               </div>
             </div>
@@ -118,6 +151,10 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
           <option value="all">Everyone</option>
           {personas.map((p) => <option value={p.key}>{p.name}</option>)}
         </select>
+        <select data-mode aria-label="Campaign mode">
+          <option value="all">Every mode</option>
+          {modes.map((m) => <option value={m.key}>{cap(m.label)}</option>)}
+        </select>
       </div>
       <p class="count small" aria-live="polite" data-shown>{cases.length} use cases</p>
       <ul class="rows" data-rows>
@@ -126,6 +163,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
             <li
               data-field={c.field}
               data-personas={c.personas.join(" ")}
+              data-mode={c.mode}
               data-text={`${c.title} ${c.summary} ${c.measure.join(" ")} ${fieldShort[c.field]}`.toLowerCase()}
             >
               <a href={c.href}>
@@ -174,15 +212,16 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
 </Site>
 
 <script>
-  // The finder: a search over each use case's words, a field and a persona, kept in the address
-  // (?q=…&field=…&for=…) so a link can open it filtered. Without scripts, the list shows them all.
+  // The finder: a search over each use case's words, a field, a persona and a mode, kept in the
+  // address (?q=…&field=…&for=…&mode=…) so a link can open it filtered. Without scripts, the list shows them all.
   const finder = document.querySelector<HTMLElement>("[data-finder]");
   const q = document.querySelector<HTMLInputElement>("input[data-q]");
   const fieldSel = document.querySelector<HTMLSelectElement>("select[data-field]");
   const personaSel = document.querySelector<HTMLSelectElement>("select[data-persona]");
+  const modeSel = document.querySelector<HTMLSelectElement>("select[data-mode]");
   const rows = [...document.querySelectorAll<HTMLElement>("[data-rows] > li")];
   const empty = document.querySelector<HTMLElement>("[data-empty]");
-  if (finder && q && fieldSel && personaSel) {
+  if (finder && q && fieldSel && personaSel && modeSel) {
     finder.hidden = false;
     const params = new URLSearchParams(location.search);
     const pick = (sel: HTMLSelectElement, v: string | null) => {
@@ -191,6 +230,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     q.value = params.get("q") ?? "";
     pick(fieldSel, params.get("field"));
     pick(personaSel, params.get("for"));
+    pick(modeSel, params.get("mode"));
     const apply = (write: boolean) => {
       const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
       let n = 0;
@@ -198,6 +238,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
         const ok =
           (fieldSel.value === "all" || row.dataset.field === fieldSel.value) &&
           (personaSel.value === "all" || (row.dataset.personas ?? "").split(" ").includes(personaSel.value)) &&
+          (modeSel.value === "all" || row.dataset.mode === modeSel.value) &&
           words.every((w) => (row.dataset.text ?? "").includes(w));
         row.hidden = !ok;
         if (ok) n++;
@@ -210,6 +251,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
         if (q.value) s.set("q", q.value);
         if (fieldSel.value !== "all") s.set("field", fieldSel.value);
         if (personaSel.value !== "all") s.set("for", personaSel.value);
+        if (modeSel.value !== "all") s.set("mode", modeSel.value);
         const str = s.toString();
         history.replaceState(null, "", `${location.pathname}${str ? `?${str}` : ""}${location.hash}`);
       }
@@ -217,21 +259,24 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     q.addEventListener("input", () => apply(true));
     fieldSel.addEventListener("change", () => apply(true));
     personaSel.addEventListener("change", () => apply(true));
-    document.querySelector("[data-reset]")?.addEventListener("click", () => {
+    modeSel.addEventListener("change", () => apply(true));
+    const showOnly = (persona: string, mode: string) => {
       q.value = "";
       fieldSel.value = "all";
-      personaSel.value = "all";
+      personaSel.value = persona;
+      modeSel.value = mode;
       apply(true);
-    });
-    for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-show]"))
+    };
+    document.querySelector("[data-reset]")?.addEventListener("click", () => showOnly("all", "all"));
+    const jump = (a: HTMLAnchorElement, persona: string, mode: string) =>
       a.addEventListener("click", (e) => {
         e.preventDefault();
-        q.value = "";
-        fieldSel.value = "all";
-        personaSel.value = a.dataset.show ?? "all";
-        apply(true);
+        showOnly(persona, mode);
         document.getElementById("all")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+    for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-show]")) jump(a, a.dataset.show ?? "all", "all");
+    for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-show-mode]"))
+      jump(a, "all", a.dataset.showMode ?? "all");
     apply(false);
   }
 </script>

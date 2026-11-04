@@ -43,7 +43,7 @@ A team's backtester loops over days and stocks in Python, which limits how many 
 
 ### 3. Read the literature first
 
-A research campaign can first answer a question such as "Which published equity anomalies keep a positive return after realistic trading costs, and how much of it remained after publication?" The agents read open-access papers, a claim counts only when code finds its quotes word for word in the archived page, and a review panel of models decides each question.
+A research campaign can first answer a question such as "Which published equity anomalies keep a positive return after realistic trading costs, and how much of it remained after publication?" The agents read open-access papers, a claim counts only when code finds its quotes word for word in the archived page, and a review panel of models decides each question. [Research from public filings](filings-research.md) describes a larger one, built from the figures 142 banks file with the FDIC and the SEC.
 
 ## The contract for the first campaign
 

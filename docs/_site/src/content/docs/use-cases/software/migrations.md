@@ -50,7 +50,7 @@ A TypeScript codebase was written without `strict`, and turning it on reports th
 
 ### 3. Read the upgrade guides first
 
-Before either, a research campaign can answer a question such as "Which breaking changes between Spring Boot 2.7 and 3.x affect a service with web controllers, a security configuration and JPA repositories?" The agents read migration guides, release notes and issue threads, and record claims whose quotes code finds, word for word, in the pages it archived. The report can go into the goal campaign's brief.
+Before either, a research campaign can answer a question such as "Which breaking changes between Spring Boot 2.7 and 3.x affect a service with web controllers, a security configuration and JPA repositories?" The agents read migration guides, release notes and issue threads, and record claims whose quotes code finds, word for word, in the pages it archived. The report can go into the goal campaign's brief. [Technology evaluation](technology-evaluation.md) shows a larger research campaign, which reads for a day or more.
 
 ## The contract for the first campaign
 

@@ -47,7 +47,7 @@ A home-battery installer wants dispatch rules that lower the bill in every home,
 
 ### 3. Read the benchmarks first
 
-A research campaign can first ask "In published BOPTEST results, how much do model predictive and reinforcement-learning controllers save against each test case's baseline, and at what cost in thermal discomfort?" The agents record only claims whose quotes code finds, word for word, in the pages it archived, and a panel of models decides each question.
+A research campaign can first ask "In published BOPTEST results, how much do model predictive and reinforcement-learning controllers save against each test case's baseline, and at what cost in thermal discomfort?" The agents record only claims whose quotes code finds, word for word, in the pages it archived, and a panel of models decides each question. [Interconnection and market rules](interconnection.md) sets out a research campaign in full, with its contract.
 
 ## The contract for the first campaign
 

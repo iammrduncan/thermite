@@ -47,7 +47,7 @@ A plant runs each day's orders through the same ten machines and wants the batch
 
 ### 3. Read the evidence first
 
-A research campaign can first ask "In published evaluations on cluster traces, which placement heuristics kept their gains when the workload changed, and how was that tested?" The agents record only claims whose quotes code finds, word for word, in the pages it archived, and a panel of models decides each question.
+A research campaign can first ask "In published evaluations on cluster traces, which placement heuristics kept their gains when the workload changed, and how was that tested?" The agents record only claims whose quotes code finds, word for word, in the pages it archived, and a panel of models decides each question. [Supply chain mapping](supply-chain-mapping.md) shows a research campaign of this field in full.
 
 ## The contract for the first campaign
 

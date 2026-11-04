@@ -47,7 +47,7 @@ AlphaEvolve raised the best known sum of radii for 26 circles in a unit square f
 
 ### 3. Read the bounds first
 
-Before a climb, a research campaign can answer a question such as "Which constructions and searches gave the best published lower bounds for cap sets in dimensions 7 to 10?" Its claims rest on quotes that code finds, word for word, in the pages it archived, and its report lists the sources to check a new record against.
+Before a climb, a research campaign can answer a question such as "Which constructions and searches gave the best published lower bounds for cap sets in dimensions 7 to 10?" Its claims rest on quotes that code finds, word for word, in the pages it archived, and its report lists the sources to check a new record against. [Data from the literature](literature-data.md) shows how such a run builds a table of reported values, each beside the sentence that reports it.
 
 ## The contract for the first campaign
 

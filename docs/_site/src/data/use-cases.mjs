@@ -8,78 +8,78 @@ export const fields = [
   {
     key: "software",
     label: "Software",
-    blurb: "Performance optimization and codebase migrations, verified by your test suite.",
-    headline: "Faster code and completed migrations, verified by your tests.",
+    blurb: "Performance optimization, codebase migrations and technology evaluation, each checked by code.",
+    headline: "Faster code, finished migrations and technology choices backed by sources.",
     intro:
-      "Performance work and migrations are long series of small experiments, and a test suite can judge each one. Thermite runs those experiments with AI agents; an independent judge builds every change, runs your tests and measures it on your hardware.",
+      "Performance work and migrations are long series of small experiments, and a test suite can judge each one: an independent judge builds every change, runs your tests and measures it on your hardware. Choosing a database or a framework is a research question: agents read every analysis, release note and issue thread on the options, and code checks each quote.",
   },
   {
     key: "ai",
     label: "AI and machine learning",
     short: "AI and ML",
-    blurb: "Inference speed, application quality and training efficiency on your own hardware.",
+    blurb: "Inference speed, application quality, training, hardware fit and method research, on your own hardware.",
     headline: "Faster inference and better models on the hardware you own.",
     intro:
-      "Inference engines, LLM applications and training recipes each have a metric that defines success. Thermite agents improve that metric on your own GPUs, while guards hold output, cost and accuracy to the limits you set.",
+      "Inference engines, LLM applications and training recipes each have a metric that defines success, and agents improve it on your own GPUs while guards hold output, cost and accuracy. A goal campaign fits a model to a memory and speed budget; a research campaign reads the papers and model cards behind a choice of method.",
   },
   {
     key: "science",
     label: "Science",
-    blurb: "Mathematical search, simulation performance and literature review.",
-    headline: "Better results in mathematics and simulation, and literature reviews you can verify.",
+    blurb: "Mathematical search, simulation, reproduction and research across the literature.",
+    headline: "Better results in mathematics and simulation, and literature research you can verify.",
     intro:
-      "Where a program can verify a result, agents can search for a better one: a construction, a faster solver, a more accurate method. Research campaigns survey the literature, with every quotation verified against its source.",
+      "Where a program can verify a result, agents can search for a better one: a construction, a faster solver, a more accurate method. Goal campaigns reproduce a paper's results to a tolerance. Research campaigns read a field's literature at scale, with every quotation and every reported value checked against its source.",
   },
   {
     key: "healthcare",
     label: "Healthcare and life sciences",
     short: "Healthcare",
-    blurb: "Genomics, imaging and clinical text, with data that stays on your infrastructure.",
+    blurb: "Genomics, imaging, clinical text, FHIR conformance and evidence research, with data that stays on your infrastructure.",
     headline: "Improve pipelines and models without moving patient data.",
     intro:
-      "Genomic, imaging and clinical data often cannot leave your infrastructure, and Thermite does not require it to. Agents improve pipelines and models against truth sets and annotations, with the data and the model on your own machines.",
+      "Genomic, imaging and clinical data often cannot leave your infrastructure, and Thermite does not require it to. Agents improve pipelines and models against truth sets and annotations on your own machines. Goal campaigns take an API through its conformance tests; research campaigns read the trial registries and the literature on a clinical question.",
   },
   {
     key: "agriculture",
     label: "Agriculture",
-    blurb: "Crop management, greenhouse control and yield forecasting, validated on held-out seasons.",
+    blurb: "Crop management, greenhouse control, yield forecasting and trial evidence, validated on held-out seasons.",
     headline: "Crop and greenhouse strategies validated on seasons the model never saw.",
     intro:
-      "Crop and greenhouse simulators and historical yield records provide an objective evaluation for management policies and forecasts. Thermite's judge scores each candidate on seasons and conditions withheld from the agents.",
+      "Crop and greenhouse simulators and historical yield records provide an objective evaluation for management policies and forecasts, and the judge scores each candidate on seasons withheld from the agents. Research campaigns gather the published trial results on a practice, region by region.",
   },
   {
     key: "energy",
     label: "Energy and buildings",
     short: "Energy",
-    blurb: "Building and battery control, evaluated in simulation.",
-    headline: "Building controllers that cut energy use without cutting comfort.",
+    blurb: "Building control, simulation validation and grid interconnection research.",
+    headline: "Better building control, validated simulation engines and interconnection rules on record.",
     intro:
-      "Building simulators evaluate a controller over a full year of weather in minutes. Agents develop the control logic offline, and the judge accepts a change only if it reduces energy use without reducing comfort.",
+      "Building simulators evaluate a controller over a full year of weather in minutes, and the judge accepts a change only if it reduces energy use without reducing comfort. A goal campaign takes a simulation engine through a standard's test cases; a research campaign reads each grid operator's interconnection rules.",
   },
   {
     key: "operations",
     label: "Operations and logistics",
     short: "Operations",
-    blurb: "Scheduling and routing heuristics, evaluated on your own data.",
-    headline: "Better scheduling and routing on your own data.",
+    blurb: "Scheduling, routing, rostering and supply chain research, on your own data.",
+    headline: "Better schedules, routes and rosters on your own data.",
     intro:
-      "Placement, scheduling and routing heuristics run at high volume, so small improvements compound. The judge replays your traces and instances, validates every result and accepts a heuristic only if it holds on held-out data.",
+      "Placement, scheduling and routing heuristics run at high volume, so small improvements compound; the judge replays your traces and instances and accepts a heuristic only if it holds on held-out data. A goal campaign builds a roster that meets every rule; a research campaign traces suppliers through their public records.",
   },
   {
     key: "robotics",
     label: "Robotics",
-    blurb: "Reward and controller design, evaluated in simulation.",
-    headline: "Reward functions evaluated by an independent test of success.",
+    blurb: "Reward design and ROS 2 migration, checked in simulation.",
+    headline: "Rewards and robot software checked by an independent test of success.",
     intro:
-      "Reinforcement learners exploit any gap in their reward function. Agents design the reward; the judge trains each policy from scratch and evaluates task success with its own test, on held-out seeds and terrain.",
+      "Reinforcement learners exploit any gap in their reward function: agents design the reward, and the judge trains each policy from scratch and evaluates task success with its own test. A goal campaign moves a robot's software from ROS 1 to ROS 2, checked by builds, launch tests and missions in simulation.",
   },
   {
     key: "finance",
     label: "Finance",
-    blurb: "Strategy research on held-out data, and faster pricing and risk engines.",
-    headline: "Strategy research and faster engines, with every trial on record.",
+    blurb: "Strategy research, faster pricing, model validation and research from public filings.",
+    headline: "Strategy research, faster engines and validated models, with every trial on record.",
     intro:
-      "Backtests overfit as the number of trials grows. The judge backtests every candidate with transaction costs and no look-ahead, withholds the most recent years, and records the total number of trials.",
+      "Backtests overfit as the number of trials grows, so the judge backtests every candidate with costs and no look-ahead, withholds the latest years and records the number of trials. Goal campaigns take a pricing model through its validation tests; research campaigns gather every figure banks file on a question, each checked against the record it quotes.",
   },
 ];
 

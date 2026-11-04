@@ -47,7 +47,7 @@ A support assistant answers from a help centre and internal runbooks, and most w
 
 ### 3. Read the evidence on prompt optimizers
 
-A research campaign can answer a question such as "What do published comparisons show about automatic prompt optimizers, such as DSPy's MIPROv2 and GEPA, against hand-written prompts, and on how many examples?" The agents read papers and documentation, and record claims whose quotes code finds, word for word, in the pages it archived.
+A research campaign can answer a question such as "What do published comparisons show about automatic prompt optimizers, such as DSPy's MIPROv2 and GEPA, against hand-written prompts, and on how many examples?" The agents read papers and documentation, and record claims whose quotes code finds, word for word, in the pages it archived. [Model and method landscape](method-landscape.md) shows a larger research campaign, on choosing the model itself.
 
 ## The contract for the first campaign
 

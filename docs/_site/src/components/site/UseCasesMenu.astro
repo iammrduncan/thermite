@@ -2,7 +2,7 @@
 // The header's "Use cases" menu: every field, every persona and the featured study, one click
 // from any of the site's own pages. Without scripts it is a plain link to the overview.
 import { useCasePages } from "../../data/use-case-pages";
-import { fields, personaHref, personas } from "../../data/use-cases.mjs";
+import { fields, modes, personaHref, personas } from "../../data/use-cases.mjs";
 import AudienceIcon from "./AudienceIcon.astro";
 import FieldIcon from "./FieldIcon.astro";
 
@@ -13,6 +13,8 @@ const { current } = Astro.props;
 const cases = await useCasePages();
 const count = (key: string) => cases.filter((c) => c.field === key).length;
 const withCases = fields.filter((f) => count(f.key) > 0);
+const byMode = modes.map((m) => ({ ...m, n: cases.filter((c) => c.mode === m.key).length })).filter((m) => m.n > 0);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 ---
 
 <div class="ucm" data-ucm>
@@ -60,7 +62,18 @@ const withCases = fields.filter((f) => count(f.key) > 0);
         </a>
       </div>
     </div>
-    <a class="all" href="/use-cases/">All {cases.length} use cases</a>
+    <div class="foot">
+      <a class="all" href="/use-cases/#all">All {cases.length} use cases</a>
+      <span class="by-mode">
+        {
+          byMode.map((m) => (
+            <a href={`/use-cases/?mode=${m.key}#all`}>
+              {cap(m.label)} <span class="n">{m.n}</span>
+            </a>
+          ))
+        }
+      </span>
+    </div>
   </div>
 </div>
 
@@ -262,19 +275,32 @@ const withCases = fields.filter((f) => count(f.key) > 0);
     font-weight: 560;
     color: var(--ink-2);
   }
-  .all {
-    display: block;
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
     margin-top: 0.9rem;
     padding: 0.7rem 0.4rem 0.1rem;
     border-top: 1px solid var(--rule);
     font-size: 0.88rem;
-    font-weight: 560;
+  }
+  .foot a {
     color: var(--ink-2);
     text-decoration: none;
   }
-  .all:hover {
+  .foot a:hover {
     color: var(--ink);
     text-decoration: underline;
+  }
+  .all {
+    font-weight: 560;
+  }
+  .by-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1rem;
   }
   @media (max-width: 52rem) {
     .panel {
