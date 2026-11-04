@@ -12,7 +12,7 @@ A **rig** can check itself in three ways. Each check runs inside the rig's **har
 | --- | --- | --- | --- | --- | --- | --- |
 | Model route | `model` | **Model route** | The rig's model answers with a correct tool call, through the same harness its agents use | A model route | 120 s | No |
 | Isolation | `isolation` | **Isolation** | Each role's user is refused what it must not reach, and reaches what it must | The broker: the harness container running as root | 30 s for each role | Yes |
-| Smoke | `smoke` | **Judge smoke** | The judge gives each change in a known set its expected verdict, on the rig's own device | A `cpu` or `cuda-gpu` target, and the smoke kits in the image | 3 hours for the whole check | Yes |
+| Smoke | `smoke` | **Judge smoke** | The judge gives each change in a known set its expected verdict, on the rig's own device, or on its runners for a core that judges on them alone ([runners](../how-to/install/runners.md)), with the smoke kit of their kind | A `cpu` or `cuda-gpu` target, and the smoke kits in the image | 3 hours for the whole check | Yes |
 
 ## How a check runs
 

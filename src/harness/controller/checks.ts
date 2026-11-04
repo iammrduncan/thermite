@@ -93,7 +93,11 @@ export function keyHint<R extends { ok: boolean; summary: string }>(
   };
 }
 
-/** The smoke check: a judge-only campaign from the smoke kit in the image, on this target. */
+/**
+ * The smoke check: a judge-only campaign from the smoke kit in the image, on the rig's target: the
+ * core's own, or its runners' when its judge measures on them alone (goal 206), whose kind the
+ * rig takes once one answers.
+ */
 export function addSmokeCheck(
   ctx: ControllerContext,
   service: HarnessService,
@@ -102,13 +106,15 @@ export function addSmokeCheck(
   const { env, paths } = ctx;
   service.rigChecks.smoke = {
     notNow: () => busyReason(paths.stateDir),
-    run: async () =>
-      smokeCheck({
+    run: async () => {
+      const type = service.targetType ?? driver.type;
+      return smokeCheck({
         service,
-        targetType: driver.type,
-        targetClass: (await driver.identify()).class,
+        targetType: type,
+        targetClass: type === driver.type ? (await driver.identify()).class : type,
         checksDir: checksDir(env),
         scratchDir: paths.scratchDir,
-      }),
+      });
+    },
   };
 }
