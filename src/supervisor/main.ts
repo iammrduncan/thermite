@@ -65,6 +65,7 @@ import { putKbFiles, relayKbAsks, removeHeldKbFiles } from "./kb/index.ts";
 import { startPodBus } from "./leaf.ts";
 import { followLive, LiveCounts, relayScreens, supervisorLive } from "./live/index.ts";
 import { onLogLevelTaken } from "./log-level.ts";
+import { carryFollowerAsks } from "./machines/index.ts";
 import { ModelDownloads } from "./model-download.ts";
 import { registerKeys } from "./register.ts";
 import {
@@ -589,6 +590,16 @@ async function main(): Promise<void> {
     { harnessUrl, harnessToken, control: onBus, own: advisorConsoles },
     () => stopping,
   );
+
+  // A rig's leader: its harness's asks of its followers, carried on the bus (goal 205). A rig of
+  // one machine has none, and the harness answers each take with none.
+  void carryFollowerAsks({
+    rig,
+    bus,
+    harness,
+    outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
+    stopping: () => stopping,
+  });
 
   // Commands from the bus, each as control issues it: a pause or a message never waits for the
   // next report.
