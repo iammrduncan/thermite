@@ -295,7 +295,7 @@ export const ROLES: readonly RoleDefinition[] = [
       },
       {
         id: "nudge-pi",
-        what: "a later turn in Pi: it stopped without calling submit",
+        what: "a later turn in Pi: it stopped without calling submit_experiment",
         text: WORKER_PI_NUDGE,
       },
       {

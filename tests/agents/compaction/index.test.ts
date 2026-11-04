@@ -147,7 +147,10 @@ describe("compaction in Pi (goal 070)", () => {
         if (replies === 5)
           return {
             toolCalls: [
-              { name: "submit", args: { hypothesis: "remove the wait", known_flaws: [] } },
+              {
+                name: "submit_experiment",
+                args: { hypothesis: "remove the wait", known_flaws: [] },
+              },
             ],
           };
         return { text: "done" };
@@ -230,7 +233,10 @@ describe("compaction in Pi (goal 070)", () => {
         if (replies === 6)
           return {
             toolCalls: [
-              { name: "submit", args: { hypothesis: "remove the wait", known_flaws: [] } },
+              {
+                name: "submit_experiment",
+                args: { hypothesis: "remove the wait", known_flaws: [] },
+              },
             ],
           };
         return { text: "done" };
@@ -294,7 +300,10 @@ describe("compaction in Pi (goal 070)", () => {
         if (replies === 4)
           return {
             toolCalls: [
-              { name: "submit", args: { hypothesis: "remove the wait", known_flaws: [] } },
+              {
+                name: "submit_experiment",
+                args: { hypothesis: "remove the wait", known_flaws: [] },
+              },
             ],
           };
         return { text: "done" };
@@ -396,7 +405,11 @@ describe("compaction in Pi (goal 070)", () => {
                 { name: "write_file", args: { path: "src/kernel/work.mjs", content: FAST_KERNEL } },
               ],
             }
-          : { toolCalls: [{ name: "submit", args: { hypothesis: "less work", known_flaws: [] } }] };
+          : {
+              toolCalls: [
+                { name: "submit_experiment", args: { hypothesis: "less work", known_flaws: [] } },
+              ],
+            };
       },
     });
     assert.equal(r.stopped, "submitted", JSON.stringify(r));

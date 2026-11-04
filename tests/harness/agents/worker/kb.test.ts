@@ -90,7 +90,7 @@ describe("a worker's knowledge-base tools in Pi", () => {
         [{ name: "kb_write", args: { kind: "note", title: "x", text: "y", slot: "planner" } }],
         [{ name: "write_file", args: { path: "src/kernel/work.mjs", content: FAST_KERNEL } }],
         [
-          { name: "submit", args: { hypothesis: "tiling" } },
+          { name: "submit_experiment", args: { hypothesis: "tiling" } },
           { name: "kb_write", args: { kind: "note", title: "Late", text: "after it" } },
         ],
       ];

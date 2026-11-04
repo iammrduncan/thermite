@@ -42,10 +42,11 @@ function serverPassword(): string {
  * the lane's access, and none of the judge's. Its permission rules are not a boundary
  * (its Code Mode reaches the network whatever they say); the user it runs as is.
  *
- * Thermite's own tools are the `thermite-trial` command (submit, dev-run, status, and a research
- * trial's tools), which calls the harness API with the trial's token. A provider's key never
- * reaches the lane: OpenCode calls the provider through the harness API's model proxy, which
- * checks the trial's token and adds the key. OpenCode's own models (its free ones) need no key.
+ * Thermite's own tools are the `thermite-trial` command (submit-experiment, run-experiment,
+ * status, and a research trial's tools), which calls the harness API with the trial's token. A
+ * provider's key never reaches the lane: OpenCode calls the provider through the harness API's
+ * model proxy, which checks the trial's token and adds the key. OpenCode's own models (its free
+ * ones) need no key.
  */
 
 /**

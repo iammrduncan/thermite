@@ -1249,12 +1249,12 @@ A refusal at any step changes no file of control's, prints `restore refused: <wh
 
 ## `thermite-trial`
 
-`thermite-trial` is in the harness image only (`/usr/local/bin/thermite-trial`, which runs `node /opt/thermite/dist/harness/agents/trial-cli.js`). A worker agent that works through its own shell, under OpenCode, Claude Code or Codex, uses it to submit its change, run a command on the device, read an attempt, propose an idea for the run's [experiment queue](signed-commands.md#queue_add), keep [field notes](knowledge-base.md#field-notes), and record the sources it reads with five of its `research` commands. A research worker under OpenCode uses all its `research` commands, and may propose ideas and keep field notes too. It runs as the [lane](glossary.md)'s user, in the trial's workspace (a research trial's: its lane's working area), with the trial's own token, which stops working when the trial ends.
+`thermite-trial` is in the harness image only (`/usr/local/bin/thermite-trial`, which runs `node /opt/thermite/dist/harness/agents/trial-cli.js`). A worker agent that works through its own shell, under OpenCode, Claude Code or Codex, uses it to submit its change, run a command with its change on the target, read an attempt, propose an idea for the run's [experiment queue](signed-commands.md#queue_add), keep [field notes](knowledge-base.md#field-notes), and record the sources it reads with five of its `research` commands. A research worker under OpenCode uses all its `research` commands, and may propose ideas and keep field notes too. It runs as the [lane](glossary.md)'s user, in the trial's workspace (a research trial's: its lane's working area), with the trial's own token, which stops working when the trial ends.
 
 ```text
 usage:
-  thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
-  thermite-trial dev-run [--timeout SECONDS] -- COMMAND...
+  thermite-trial submit-experiment --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
+  thermite-trial run-experiment [--timeout SECONDS] -- COMMAND...
   thermite-trial status ATTEMPT
   thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]
   thermite-trial note --kind KIND [--about TYPE:ID] TEXT
@@ -1266,8 +1266,8 @@ usage:
 
 | Command | What it does | Prints |
 | --- | --- | --- |
-| `submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...` | Stages and diffs only the trial's editable paths, then submits the change. The hypothesis and the claim are cut to 2000 characters, each flaw to 1000. Submitting ends the trial | `submitted <attempt>: <lifecycle>. The trial ends with this submission.`, with `; refused: <violations>` before the last sentence when the change broke a rule |
-| `dev-run [--timeout SECONDS] -- COMMAND...` | Runs the command on the measurement device, as a [development run](glossary.md), in the trial's workspace | The run's result as indented JSON |
+| `submit-experiment --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...` | Stages and diffs only the trial's editable paths, then submits the change. The hypothesis and the claim are cut to 2000 characters, each flaw to 1000. Submitting ends the trial | `submitted <attempt>: <lifecycle>. The trial ends with this submission.`, with `; refused: <violations>` before the last sentence when the change broke a rule |
+| `run-experiment [--timeout SECONDS] -- COMMAND...` | Runs the command with the trial's change on the target, as a [development run](glossary.md), which never counts: in the trial's workspace, or on a runner of another machine of the rig, in a copy of the trial's starting commit with the change on it, without the files git ignores | The run's result as indented JSON, with `runner` when a runner ran it |
 | `status ATTEMPT` | Shows an attempt of this campaign on the rig: this lane's, another lane's or an earlier run's, with `violations` for a change the static checks refused | The attempt as indented JSON |
 | `idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]` | Proposes another experiment for the run's queue, as the lane's idea: something worth trying that is not the trial's own work. The words after `idea` are its title, cut to 200 characters; `--why` is cut to 2000, `--direction` (its direction) to 80 and `--details` to 4000. A repeated option keeps its last value. A title that is one word naming a command (`submit`, `dev-run`, `status`, `idea`, `note`, `research`, `list`, `ls`, `show`, `help`, `-h`, `--help`) is refused, so a slip does not become an idea; a longer title that starts with one is fine. The idea waits until the planner or the campaign's owner queues it or drops it, and the trial goes on. Without the planner's model (none set, its answer refused, the planner off, or a research run), it waits for the owner. No limit is set on how many. In a research run, `--question` names the question the task is about, by its index from 0 (a question the run does not have is refused, and so is `--question` in another run), and an idea whose words ask for a measurement is refused: `this asks for a measurement ("<words>"), and a research run measures nothing: record it as a next experiment in a report section or a note (what it would settle, and how), and propose only work that sources can answer` ([Research](../explanation/campaign-modes.md#research) says what the rule looks for) | `proposed <experiment id>: it waits until the planner or the campaign's owner queues it or drops it. Your trial goes on.` |
 | `note --kind KIND [--about TYPE:ID] TEXT` | Writes a [field note](knowledge-base.md#field-notes) for the run's journal: an observation, a decision and why, a surprise, a question or a lesson. The words after the options are its text, 1 to 2000 characters. `--kind` is one of the kinds in the usage text, in any case. `--about` names one record of the run it is about, such as `attempt:a-11110003` or `round:12`, or the run itself, as `run:<run>`; a round or a message is named by its number. Without `--about`, the note is about the run. A repeated option keeps its last value. The note is recorded as the lane's, and the trial goes on. No limit is set on how many. In a research run, a note that repeats one of the run's last 200 field notes word for word (case, punctuation and spaces aside), whoever wrote it, is refused: `this note repeats field note #<id> (by <writer>, <time>) word for word: it is not recorded again. Note what is new, or go on with the work` | `noted (#<id>). Your trial goes on.` |
@@ -1329,9 +1329,9 @@ Everything it prints goes to standard output.
 
 | Message | Exit |
 | --- | --- |
-| `error: submit needs --hypothesis` | `2` |
+| `error: submit-experiment needs --hypothesis` | `2` |
 | `error: there are no changes inside the editable paths (<paths>)` | `2` |
-| `error: dev-run needs a command after --` | `2` |
+| `error: run-experiment needs a command after --` | `2` |
 | `error: status needs an attempt id` | `2` |
 | `error: idea needs a title: what to try, in a few words` and the usage text | `2` |
 | `error: "<title>" is a command word, not an idea. idea proposes an experiment: give what to try, in a few words. thermite-trial does not list the run's ideas or queue.` and the usage text, for a one-word title that names a command | `2` |

@@ -73,7 +73,7 @@ test("a worker's first message is cut to the window: the owner's messages and th
       "You are a research worker in an automated research harness, working in a git repository",
     ),
   );
-  assert.match(opencode, /thermite-trial submit --hypothesis/);
+  assert.match(opencode, /thermite-trial submit-experiment --hypothesis/);
 });
 
 test("a message that cannot be cut further keeps what it must, and says nothing was lost", () => {

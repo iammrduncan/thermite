@@ -7,10 +7,8 @@ import {
   type BaselineFailure,
   baselineState,
   baselineValue,
-  keepBaselineDir,
   prepareBaselineDir,
   removeBaselineDir,
-  sealBaselineDir,
 } from "../baseline.ts";
 import { runBlocks } from "../blocks.ts";
 import { type Finish, InfraError, type JudgeContext, Stop } from "../context.ts";

@@ -28,7 +28,7 @@ export function script(messages, tools) {
         {
           name: "shell",
           args: {
-            command: `printf '%s' '${GOOD.toString("base64")}' | base64 -d > src/kernel/matmul.c && thermite-trial submit --hypothesis '${HYPOTHESIS}'`,
+            command: `printf '%s' '${GOOD.toString("base64")}' | base64 -d > src/kernel/matmul.c && thermite-trial submit-experiment --hypothesis '${HYPOTHESIS}'`,
             timeout: 0,
           },
         },

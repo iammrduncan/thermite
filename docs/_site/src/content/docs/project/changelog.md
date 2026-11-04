@@ -23,6 +23,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 - **Settings › Machines**: where rigs run has its own page, apart from Providers' logins: Kubernetes clusters with their slots, computers over SSH and GPU clouds, each with **Add a rig here**, and **Add a machine** with its three kinds. Providers keeps model providers, subscriptions and Git access. Add a rig's **+ A new machine** opens it, and Add a rig here opens Add a rig with that machine or cluster chosen.
 - A rig on a cluster can run the CUDA 13 harness, for Blackwell GPUs and the DGX Spark on arm64: **Add a rig** has a **CUDA** field, which control sets to 13 for an arm64 node or a Blackwell GPU where it can tell, and says why; MCP's `add_cluster_rig` takes `cuda` and defaults the same way. Control deploys `THERMITE_RIG_HARNESS_CUDA13_IMAGE` (a release's `compose.yaml` sets the release's `-cuda13` image), and each update keeps the rig on it. The cluster check reads each node's architecture and, where it may read resource slices, the GPU each DRA device class names.
 
+### Agents
+
+- A lane's two tools are **`run_experiment`**, which runs a command with its change on the target and never counts, and **`submit_experiment`**, which sends the change to the judge: under OpenCode, Claude Code and Codex, `thermite-trial run-experiment` and `thermite-trial submit-experiment`. They were `dev_run` and `submit` (`dev-run` and `submit` in `thermite-trial`). The contract's limits keep their names, `dev_run_timeout_s` and `dev_run_rss_mib`, and so does the `dev_run` event.
+
 ### Model use
 
 - A run's **Stats** tab lists every agent the rig gives a model to, with **No calls yet** in place of the figures of one that has made no call, and why where Thermite knows it: its part off on **Edit rig**, its newest line on Live that says its call had no answer, or when it works. A teacher that never worked looked the same as one never set up. `model_usage` over MCP and `GET /v1/usage` give those lines too, with `configured: true`, `why` and `why_at` ([issue 52](https://github.com/iammrduncan/thermite/issues/52)).

@@ -263,7 +263,7 @@ export class DevRuns {
       }
       if (gaveUp) {
         if (card !== undefined) this.give(card);
-        return { ran: false, reason: "another lane's dev run held the device" };
+        return { ran: false, reason: "another lane's run_experiment held the device" };
       }
       return this.runOn(card as number, req, cwd, trial, limits, timeoutS, () => {
         started = true;
@@ -285,7 +285,7 @@ export class DevRuns {
       };
       if (this.maxWaitMs === undefined) return;
       timer = setTimeout(
-        () => giveUp("another lane's dev run held the device; try again later"),
+        () => giveUp("another lane's run_experiment held the device; try again later"),
         this.maxWaitMs,
       );
       timer.unref?.();

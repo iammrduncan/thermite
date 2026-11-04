@@ -162,15 +162,16 @@ export function trialTools(
       },
     ),
     tool(
-      "dev_run",
-      `Run a command on the measurement device (for example a GPU) when the judge is not using it. Use it to check that your change works on the real target. Results are diagnostic only. ${
+      "run_experiment",
+      `Run a command with your change on the real target (for example a GPU), when the judge is not using it, to check that the change works there. What it gives back never counts: only the judge's measurement does. It runs in your workspace, or on another machine of the rig in a copy of your starting commit with your change on it, where files git ignores (your build outputs) are not copied: build there as part of the command. ${
         limits.devRunTimeoutS !== undefined
-          ? `A dev run is stopped after ${limits.devRunTimeoutS} s (the campaign's limit), or sooner with timeout_s.`
-          : `A dev run ends when its command does, or at timeout_s; where the judge shares the device, it is stopped after ${SHARED_DEV_RUN_S} s at most.`
-      } Nothing it starts on the device outlives it.`,
+          ? `A run is stopped after ${limits.devRunTimeoutS} s (the campaign's limit), or sooner with timeout_s.`
+          : `A run ends when its command does, or at timeout_s; where the judge shares the target, it is stopped after ${SHARED_DEV_RUN_S} s at most.`
+      } Nothing it starts on the target outlives it.`,
       Type.Object({ command: Type.String(), timeout_s: Type.Optional(Type.Number()) }),
       async (p) => {
-        if (!deps.devRun) return text("dev_run is not available for this campaign; use run.");
+        if (!deps.devRun)
+          return text("run_experiment is not available for this campaign; use run.");
         const time = clock.commandTime(p.timeout_s); // the campaign's own limit is the harness's
         const r = await deps.devRun({
           lane: spec.lane,
@@ -252,7 +253,7 @@ export function trialTools(
         )
       : []),
     tool(
-      "submit",
+      "submit_experiment",
       "Submit your change for judging. Call it once, when your change builds and passes your own tests. This ends the trial.",
       Type.Object({
         hypothesis: Type.String({

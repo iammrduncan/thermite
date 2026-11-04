@@ -226,7 +226,7 @@ describe("agent scheduler", () => {
       limits,
     )) as { ran: boolean; reason: string };
     assert.equal(behind.ran, false);
-    assert.match(behind.reason, /another lane's dev run held the device/);
+    assert.match(behind.reason, /another lane's run_experiment held the device/);
     const settled = Date.now();
     await dev.settle("lane-2"); // lane-2's trial end does not wait behind lane-1
     assert.ok(Date.now() - settled < 500);

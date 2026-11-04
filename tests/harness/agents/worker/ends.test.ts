@@ -72,7 +72,9 @@ describe("worker trial", () => {
         };
       if (done === 1)
         return {
-          toolCalls: [{ name: "submit", args: { hypothesis: "less work", known_flaws: [] } }],
+          toolCalls: [
+            { name: "submit_experiment", args: { hypothesis: "less work", known_flaws: [] } },
+          ],
         };
       return { text: "done" };
     });
@@ -102,7 +104,11 @@ describe("worker trial", () => {
         const last = messages.at(-1);
         if (nudged >= 4)
           return messages.filter((m) => m.role === "tool").length > 4
-            ? { toolCalls: [{ name: "submit", args: { hypothesis: "h", known_flaws: [] } }] }
+            ? {
+                toolCalls: [
+                  { name: "submit_experiment", args: { hypothesis: "h", known_flaws: [] } },
+                ],
+              }
             : {
                 toolCalls: [
                   {
@@ -211,7 +217,9 @@ describe("worker trial", () => {
         };
       if (done === 71)
         return {
-          toolCalls: [{ name: "submit", args: { hypothesis: "less work", known_flaws: [] } }],
+          toolCalls: [
+            { name: "submit_experiment", args: { hypothesis: "less work", known_flaws: [] } },
+          ],
         };
       return { text: "done" };
     });
@@ -285,7 +293,9 @@ describe("worker trial", () => {
         };
       if (done === 1)
         return {
-          toolCalls: [{ name: "submit", args: { hypothesis: "less work", known_flaws: [] } }],
+          toolCalls: [
+            { name: "submit_experiment", args: { hypothesis: "less work", known_flaws: [] } },
+          ],
         };
       return { text: "done" };
     });

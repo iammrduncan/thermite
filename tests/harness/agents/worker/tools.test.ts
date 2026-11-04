@@ -39,8 +39,8 @@ describe("worker trial", () => {
       if (done === 2) {
         return {
           toolCalls: [
-            { name: "submit", args: { hypothesis: "faster" } },
-            { name: "submit", args: { hypothesis: "again" } },
+            { name: "submit_experiment", args: { hypothesis: "faster" } },
+            { name: "submit_experiment", args: { hypothesis: "again" } },
             { name: "write_file", args: { path: "src/kernel/work.mjs", content: "late" } },
           ],
         };
@@ -113,7 +113,8 @@ describe("worker trial", () => {
             { name: "write_file", args: { path: "src/kernel/work.mjs", content: FAST_KERNEL } },
           ],
         };
-      if (tools.length === 3) return { toolCalls: [{ name: "submit", args: { hypothesis: "h" } }] };
+      if (tools.length === 3)
+        return { toolCalls: [{ name: "submit_experiment", args: { hypothesis: "h" } }] };
       return { text: "done" };
     });
     const ideas: unknown[] = [];
@@ -192,7 +193,7 @@ describe("worker trial", () => {
         { name: "note", args: { kind: "lesson", text: "  " } },
         { name: "note", args: { kind: "rumour", text: "refused by the harness" } },
         { name: "write_file", args: { path: "src/kernel/work.mjs", content: FAST_KERNEL } },
-        { name: "submit", args: { hypothesis: "h" } },
+        { name: "submit_experiment", args: { hypothesis: "h" } },
       ];
       const step = steps[tools.length];
       return step ? { toolCalls: [step] } : { text: "done" };

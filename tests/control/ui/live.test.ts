@@ -83,7 +83,7 @@ describe("the live view's lines", () => {
     const ok = resultSummary("run (171 ms): exit 0\nok");
     assert.match(ok.hint, /^<span class="lv-res muted">171 ms · exit 0 · ok<\/span>$/);
     const dev = resultSummary(
-      'dev_run (18652 ms): {"ran":true,"exit":1,"killed":null,"wall_ms":18652,"stdout":"","stderr":"Traceback: no module named gguf\\n"}',
+      'run_experiment (18652 ms): {"ran":true,"exit":1,"killed":null,"wall_ms":18652,"stdout":"","stderr":"Traceback: no module named gguf\\n"}',
     );
     assert.match(dev.hint, /lv-res bad">18\.7 s · exit 1 · Traceback: no module named gguf/);
     assert.equal(dev.detail.trim(), "Traceback: no module named gguf");

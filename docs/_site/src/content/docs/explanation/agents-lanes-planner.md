@@ -203,7 +203,7 @@ An experiment's text reaches the worker whoever added it: the owner, the planner
 
 The owner can also write to a lane while its trial runs. A Pi worker reads the message at its next step, between two calls to the model. In Claude Code and Codex, Thermite's hooks give the agent the message inside its turn: after the next tool it runs, or, when it stops, as the reason to go on. In OpenCode, Thermite's plugin steers the message into the session when the agent starts its next tool, and OpenCode takes it in after that tool. A message still waiting when the program's run ends goes in when the harness continues the session. After a submission, no worker takes a message. The lane's next trial reads it in its brief, where it can still act on it. [How the parts fit together](how-it-fits-together.md#the-owners-messages) has the whole picture.
 
-A **development run** is an agent's own run of a command on the device the judge measures on, to test or profile its change. Its numbers are marked "diagnostic only" and never count. [Sharing a device](sharing-a-device.md) explains how the judge and the agents take turns.
+A **development run** is an agent's own run of a command with its change on the target the judge measures on, to test or profile the change: its `run_experiment` tool (`thermite-trial run-experiment` in a program), beside `submit_experiment`, which sends the change to the judge. Its numbers are marked "diagnostic only" and never count. [Sharing a device](sharing-a-device.md) explains how the judge and the agents take turns.
 
 ## Agents in their own terminal
 

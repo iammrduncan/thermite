@@ -243,7 +243,7 @@ Memory is the sum over all the processes the build or run started, sampled every
 
 | Limit | Default | Set in the contract's `lanes.limits` |
 | --- | --- | --- |
-| One command a lane runs (a build, a test) | None: it runs until it ends or the trial ends. On a trial with a length, a Pi worker's command (`run`, `dev_run`) stops 3 minutes before the trial's end, so that the worker can still submit, and nearer the end than that it gets 1 minute at most. Its result then says `stopped by the trial's clock` | `run_timeout_s` (10 to 7,200) |
+| One command a lane runs (a build, a test) | None: it runs until it ends or the trial ends. On a trial with a length, a Pi worker's command (`run`, `run_experiment`) stops 3 minutes before the trial's end, so that the worker can still submit, and nearer the end than that it gets 1 minute at most. Its result then says `stopped by the trial's clock` | `run_timeout_s` (10 to 7,200) |
 | Memory of everything a lane runs at once, OpenCode, Claude Code and Codex included | 2,048 MiB | `run_rss_mib` (256 to 16,384) |
 | The trial's workspace, build folders included | 2,048 MiB | `workspace_mib` (256 to 65,536) |
 | One development run | None on a development device of its own, or on a runner of another machine; 300 s on a device of the core's that the judge shares | `dev_run_timeout_s` (10 to 3,600) |

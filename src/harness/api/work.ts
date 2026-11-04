@@ -52,7 +52,7 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
       return full === ws.root || full.startsWith(`${ws.root}/`);
     };
     if (req.role !== trial.lane) throw new Unauthorized("not this trial's lane");
-    if (req.gpu) throw new Unauthorized("device runs go through dev_run");
+    if (req.gpu) throw new Unauthorized("device runs go through run_experiment");
     if (!inside(req.cwd) || (req.disk && !inside(req.disk.path)))
       throw new Unauthorized("outside the trial's workspace");
     // The contract's lane limits bound every lane command: memory and disk always (defaults

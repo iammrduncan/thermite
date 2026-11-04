@@ -11,19 +11,20 @@ import { FAST_KERNEL, makeJudgeEnv } from "../../helpers/judge-env.ts";
 
 /** The core's runner, with every call counted by its name. */
 function counting(core: RigRunner, calls: Record<string, number>): RigRunner {
-  const count = (k: string) => {
+  const count = <T>(k: string, call: () => T): T => {
     calls[k] = (calls[k] ?? 0) + 1;
+    return call();
   };
   return {
     name: core.name,
     driver: core.driver,
     separated: core.separated,
-    build: (i) => (count("build"), core.build(i)),
-    measure: (s, a, c) => (count("measure"), core.measure(s, a, c)),
-    throttle: () => (count("throttle"), core.throttle()),
-    baselineWork: (j) => (count("baselineWork"), core.baselineWork(j)),
-    keepBaseline: (w, t) => (count("keepBaseline"), core.keepBaseline(w, t)),
-    remove: (d) => (count("remove"), core.remove(d)),
+    build: (i) => count("build", () => core.build(i)),
+    measure: (s, a, c) => count("measure", () => core.measure(s, a, c)),
+    throttle: () => count("throttle", () => core.throttle()),
+    baselineWork: (j) => count("baselineWork", () => core.baselineWork(j)),
+    keepBaseline: (w, t) => count("keepBaseline", () => core.keepBaseline(w, t)),
+    remove: (d) => count("remove", () => core.remove(d)),
   };
 }
 
