@@ -616,7 +616,7 @@ function followerOverBus(
   const leader = {
     call: async (route: Route, input?: CallInput<Route>) =>
       route.path === DEVICE_ASKS.path
-        ? { asks: await link.take(100) }
+        ? { asks: await link.take(2000) }
         : {
             ok: link.answer(String(input?.params?.id), (input?.body ?? {}) as { answer?: unknown }),
           },

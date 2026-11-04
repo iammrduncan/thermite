@@ -60,7 +60,7 @@ describe("a follower reached over the bus (goal 205)", () => {
     const leader = {
       call: async (route: Route, input?: CallInput<Route>) =>
         route.path === DEVICE_ASKS.path
-          ? { asks: await link.take(50) }
+          ? { asks: await link.take(2000) }
           : { ok: link.answer(String(input?.params?.id), (input?.body ?? {}) as object) },
     } as unknown as HarnessClient;
     const follower = {

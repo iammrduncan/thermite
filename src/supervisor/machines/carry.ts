@@ -119,6 +119,7 @@ export async function carryFollowerAsks(c: Carrier): Promise<void> {
   let failing = false;
   while (!c.stopping()) {
     c.tick?.();
+    const began = Date.now();
     let asks: QueuedAsk[];
     try {
       asks = (
@@ -141,5 +142,8 @@ export async function carryFollowerAsks(c: Carrier): Promise<void> {
       continue;
     }
     for (const a of asks) void carryOne(c, a);
+    // A take answered empty at once (a harness that doesn't wait) waits a second here instead.
+    const quick = 1000 - (Date.now() - began);
+    if (!asks.length && quick > 0) await new Promise((r) => setTimeout(r, quick));
   }
 }
