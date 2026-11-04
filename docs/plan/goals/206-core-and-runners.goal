@@ -48,6 +48,13 @@ The owner, 2026-11-04: "We don't need copies of things everywhere we just need r
 - **A runner is the harness's image started as a runner:** the broker, its roles and isolation as on any rig, and a store of its own for builds, kits and model files, fetched once and kept by their hash. It keeps no run of its own.
 - **What a run carries:** the commits it needs, sent as git bundles of what the runner lacks; the kit, by its commit; the run's model files, which the runner's supervisor fetches from their sources; for a lane's run, the change on its parent commit.
 - **A run's result comes back to the core,** which records it. Agents never reach a runner: only the core asks it, and a lane's run never runs on a runner while the judge measures there.
+- **`run_experiment` and today's dev runs:** both let a lane try its change on real hardware before it submits, and neither counts: nothing a lane measures itself can promote, judge, set the champion or reach a leaderboard; only the judge's measurement, by kit code the agents can't write, counts (agents never judge, [decisions](../decisions.md)). A dev run runs in the live workspace on the rig's own GPU. A `run_experiment` carries only the lane's change on its parent commit, so the runner makes the workspace from them and builds there; what the agent built on the core stays on the core. A build cache for each lane on each runner keeps that fast, as the lanes' compiler caches do today.
+
+## Questions for the mockup
+
+- **What `run_experiment` takes:** a free command, as dev runs take today (the agent decides what to try); the kit's own measurement as a rehearsal (the agent sees roughly what the judge will, still uncounted); or both.
+- **The judge in the shared queue:** whether its runs go before the lanes' when a runner frees up.
+- **How the owner sets the pools:** each runner's pool on Add a rig and Edit rig, shared or dedicated to which agent.
 
 ## Steps (proposed)
 
@@ -83,3 +90,4 @@ One part of it stays, as a no-op: control's store had migrations 29 and 30 for f
 ## Progress
 
 - 2026-11-04: Goal written from the owner's words; goal 205 dropped.
+- 2026-11-04: Step 1 built: goal 205's code backed out in one commit (315507dc), with control's store at version 31 (migrations 29 and 30 retired, 31 dropping their table and column). The code matches the code before goal 205 but for the goal 132 fix kept between them and that migration. The lab rolls it to control and every rig, and runs the full check and the cluster and bus acceptance checks on its test machine. The owner agreed the design questions above go to the mockup; the owner starts the next work.
