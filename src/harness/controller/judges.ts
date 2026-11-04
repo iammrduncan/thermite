@@ -73,6 +73,7 @@ export function createJudges(
     judgeCards,
     executorIds,
     followers = [],
+    driver,
   }: {
     service: HarnessService;
     devRuns: DevRuns;
@@ -80,6 +81,8 @@ export function createJudges(
     judgeCards: GpuCard[];
     executorIds: string[];
     followers?: Follower[] | undefined;
+    /** The rig's own target driver: its kind of target is its followers' too. */
+    driver: TargetDriver;
   },
 ): Judge[] {
   const { numbers, runner } = ctx;
@@ -104,7 +107,6 @@ export function createJudges(
   );
   const link = remote.length ? new FollowerLink({ outboxDir: service.paths.outboxDir }) : undefined;
   service.followers = link;
-  const driver = judging[0] as TargetDriver;
   const others = remote.map(
     (r, j) =>
       new Judge({

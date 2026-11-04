@@ -68,6 +68,23 @@ export interface ClusterRig {
     /** Control's address the rig's supervisor reports to, as last deployed (older rigs: unknown). */
     controlUrl?: string | undefined;
     /**
+     * A rig over several machines (goal 205): its followers, each a node with its judge GPUs, its
+     * DRA device class when not the rig's, its volume, and its CPUs and memory. `node` is the
+     * leader's then.
+     */
+    followers?:
+      | {
+          machine: string;
+          node: string;
+          gpus: number;
+          deviceClass?: string | undefined;
+          storageGi: number;
+          resources?: { cpus: number; memoryGi: number } | undefined;
+        }[]
+      | undefined;
+    /** False: the leader's own GPUs are all the workers', and it judges only on its followers'. */
+    judgeHere?: boolean | undefined;
+    /**
      * In a slot: each address of the list of addresses rigs may reach that the slot's rules
      * opened when control added the rig, on its ports, with the rule's name.
      */

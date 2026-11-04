@@ -46,6 +46,29 @@ export function registerAddClusterRig(tools: ToolContext): void {
             .describe(
               'For a rig with GPUs, the CUDA harness it runs: "12" (the default: Pascal to Hopper, amd64) or "13" (Turing to Blackwell, and the DGX Spark on arm64). Updates keep it',
             ),
+          followers: z
+            .array(
+              z.object({
+                machine: z.string().min(1).describe(RIG_ID_SENTENCE),
+                node: z.string().min(1),
+                gpus: z.number().int().min(0),
+                device_class: z.string().min(1).optional(),
+                storage_gb: z.number().int().min(1).optional(),
+                cpus: z.number().positive().optional(),
+                memory_gib: z.number().positive().optional(),
+              }),
+            )
+            .max(16)
+            .optional()
+            .describe(
+              "A rig over several machines: its followers, each a node of the cluster whose GPUs the judge measures on, with its DRA device class when not the rig's, its volume and its CPUs and memory. `node` is then the leader's, and the leader's harness judges on the followers' GPUs too",
+            ),
+          judge_here: z
+            .boolean()
+            .optional()
+            .describe(
+              "With followers: false when the leader's own GPUs are all the workers', so the leader judges only on its followers' GPUs (default true)",
+            ),
         },
       },
       audited(
@@ -63,6 +86,16 @@ export function registerAddClusterRig(tools: ToolContext): void {
           cpus?: number;
           memory_gib?: number;
           cuda?: CudaVersion;
+          followers?: {
+            machine: string;
+            node: string;
+            gpus: number;
+            device_class?: string;
+            storage_gb?: number;
+            cpus?: number;
+            memory_gib?: number;
+          }[];
+          judge_here?: boolean;
         }) => {
           const r = await addClusterRig(
             opts.parts,
@@ -79,6 +112,16 @@ export function registerAddClusterRig(tools: ToolContext): void {
               cpus: a.cpus,
               memoryGi: a.memory_gib,
               cuda: a.cuda,
+              followers: a.followers?.map((f) => ({
+                machine: f.machine,
+                node: f.node,
+                gpus: f.gpus,
+                deviceClass: f.device_class,
+                storageGi: f.storage_gb,
+                cpus: f.cpus,
+                memoryGi: f.memory_gib,
+              })),
+              judgeHere: a.judge_here,
             },
             actor,
           );

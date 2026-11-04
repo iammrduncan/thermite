@@ -66,6 +66,8 @@ export function agentParts(
     scratchDir: paths.scratchDir,
     gpu: driver.type === "cuda-gpu",
     dedicated: devCard?.layout !== undefined,
+    // A leader that judges only on its followers' GPUs (goal 205) leaves its own card to the lanes.
+    judgeShares: !(ctx.env.THERMITE_FOLLOWERS && ctx.env.THERMITE_LOCAL_JUDGE === "0"),
     cards: devCards.length || undefined,
     unavailable: devCard?.error,
   });

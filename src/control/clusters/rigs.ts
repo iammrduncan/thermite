@@ -28,6 +28,7 @@ import {
   slotNetwork,
 } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
+import { MACHINE_LABEL } from "./manifest-parts.ts";
 import { asList, clusterNames, clusterRigObjects, rigResources } from "./manifests.ts";
 import type { SlotOpening } from "./netcheck.ts";
 import { quotaRefusal } from "./resources.ts";
@@ -128,6 +129,24 @@ export interface ClusterRigRequest {
   memoryGi?: number | undefined;
   /** The CUDA harness its GPUs take (goal 132); default 12. */
   cuda?: CudaVersion | undefined;
+  /**
+   * A rig over several machines (goal 205): its followers, each a node of the cluster with its
+   * judge GPUs, its DRA device class when not the rig's, its volume, and its CPUs and memory.
+   * `node` is then the leader's.
+   */
+  followers?:
+    | {
+        machine: string;
+        node: string;
+        gpus: number;
+        deviceClass?: string | undefined;
+        storageGi?: number | undefined;
+        cpus?: number | undefined;
+        memoryGi?: number | undefined;
+      }[]
+    | undefined;
+  /** False: the leader's own GPUs are all the workers'; it judges only on its followers'. */
+  judgeHere?: boolean | undefined;
 }
 
 /**
@@ -252,6 +271,8 @@ export async function addClusterRig(
     : undefined;
   const images = controlImages(parts, gpus, cuda);
   if (typeof images === "string") return fail(images);
+  const followers = await followersOf(parts, k, facts, { rig, namespace, node, i });
+  if (typeof followers === "string") return fail(followers);
   const token = newToken();
   store.enrollments.enroll(rig, token.sha256, by);
   store.clusters.addRig({
@@ -274,6 +295,7 @@ export async function addClusterRig(
       controlUrl: controlAddress(parts),
       ...(openings.length ? { openings } : {}),
       ...(ingress ? { ingress } : {}),
+      ...(followers.length ? { followers, judgeHere: i.judgeHere !== false } : {}),
     },
     created_by: by,
   });
@@ -308,10 +330,94 @@ export const clusterPlan = (
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
   programMode,
+  followers: r.spec.followers,
+  judgeHere: r.spec.judgeHere,
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
   reach: parts.store.reachable.list(),
 });
+
+/**
+ * A new rig's followers (goal 205), checked: each a node of the cluster other than the leader's
+ * and each other's, with the leader's architecture (a rig's machines run one image), its GPUs
+ * (1 to 8) through the rig's way or its own DRA device class, its volume, and its CPUs and memory
+ * as a slot allows. In a slot, its rules must keep a follower's harness off the cluster too.
+ * Says why in words when it can't.
+ */
+async function followersOf(
+  parts: ControlParts,
+  k: Cluster & { kubeconfig_sealed: string },
+  facts: ClusterFacts,
+  o: { rig: string; namespace: string; node: string | undefined; i: ClusterRigRequest },
+) {
+  const asked = o.i.followers ?? [];
+  if (!asked.length) return [];
+  if (!o.node) return "A rig over several machines names its leader's node.";
+  const seen = new Set<string>([o.node]);
+  const names = new Set<string>();
+  const nodeOf = (name: string) => facts.nodes.find((n) => n.name === name);
+  const arch = nodeOf(o.node)?.arch;
+  const quota = facts.slots.find((s) => s.namespace === o.namespace)?.quota;
+  const out: NonNullable<ClusterRig["spec"]["followers"]> = [];
+  for (const f of asked) {
+    if (!RIG_ID.test(f.machine)) return `A follower's name: ${RIG_ID_SENTENCE}`;
+    if (names.has(f.machine)) return `There are two followers named ${f.machine}.`;
+    names.add(f.machine);
+    if (seen.has(f.node))
+      return `${f.node} is in the rig already: each machine is a node of its own.`;
+    seen.add(f.node);
+    const node = nodeOf(f.node);
+    if (facts.nodes.length && !node) return `${k.name} has no node ${f.node} that control can see.`;
+    if (arch && node?.arch && node.arch !== arch)
+      return `${f.node} is ${node.arch} and the leader's node ${arch}: a rig's machines run one image.`;
+    if (!Number.isInteger(f.gpus) || f.gpus < 0 || f.gpus > MAX_RIG_GPUS)
+      return `A follower takes from none to ${MAX_RIG_GPUS} GPUs.`;
+    const deviceClass = f.deviceClass || undefined;
+    if (deviceClass && !facts.device_classes.includes(deviceClass))
+      return `${k.name} has no DRA device class ${deviceClass}.`;
+    const storageGi = f.storageGi ?? 100;
+    if (!Number.isInteger(storageGi) || storageGi < 1 || storageGi > 10_000)
+      return "A follower's volume is a whole number of GB, from 1 to 10000.";
+    let resources: { cpus: number; memoryGi: number } | undefined;
+    if (f.cpus !== undefined || f.memoryGi !== undefined) {
+      if (f.cpus === undefined || f.memoryGi === undefined)
+        return `Give ${f.machine} both its CPUs and its memory, or neither.`;
+      resources = { cpus: f.cpus, memoryGi: f.memoryGi };
+      try {
+        rigResources(resources, "headless");
+      } catch (err) {
+        return `${f.machine}: ${errorText(err)}`;
+      }
+    }
+    const devices = quotaRefusal(o.namespace, quota, { gpus: f.gpus, deviceClass, resources });
+    if (devices) return `${f.machine}: ${devices}`;
+    if (k.placement === "slot") {
+      const net = await slotNetwork(
+        parts.kube,
+        clusterTarget(parts, k),
+        o.namespace,
+        {
+          ...HARNESS_LABELS,
+          "app.kubernetes.io/component": "follower-harness",
+          "app.kubernetes.io/instance": o.rig,
+          [MACHINE_LABEL]: f.machine,
+        },
+        parts.store.reachable.list(),
+      );
+      if (!net.ok)
+        return `Refused: in the slot ${o.namespace}, for the follower ${f.machine}, ${net.why}. Ask the cluster's operators for a network rule that keeps a follower's harness off the cluster too.`;
+    }
+    out.push({
+      machine: f.machine,
+      node: f.node,
+      gpus: f.gpus,
+      ...(deviceClass ? { deviceClass } : {}),
+      storageGi,
+      ...(resources ? { resources } : {}),
+    });
+  }
+  return out;
+}
 
 /** Sets a rig up on a cluster, in the background: one apply, then the first report. */
 async function deployClusterRig(

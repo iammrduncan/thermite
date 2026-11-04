@@ -45,6 +45,8 @@ export class DevRuns {
   private readonly scratchDir: string;
   private readonly gpu: boolean;
   private readonly dedicated: boolean;
+  /** Whether the judge times on this machine's card (goal 205: a leader may judge elsewhere). */
+  private readonly judgeShares: boolean;
   private readonly unavailable: string | undefined;
   /** How long a dev run waits for a device before it gives up; none unless given (goal 079). */
   private readonly maxWaitMs: number | undefined;
@@ -56,6 +58,11 @@ export class DevRuns {
     gpu: boolean;
     /** The rig has dedicated development cards. */
     dedicated?: boolean | undefined;
+    /**
+     * False: the judge measures only on the rig's followers' GPUs (goal 205), so a dev run never
+     * waits for it on this machine's card. True unless given.
+     */
+    judgeShares?: boolean | undefined;
     /** How many development cards (dedicated mode); 1 otherwise. */
     cards?: number | undefined;
     /** Why dev runs cannot run on this rig at all. */
@@ -67,6 +74,7 @@ export class DevRuns {
     this.scratchDir = opts.scratchDir;
     this.gpu = opts.gpu;
     this.dedicated = opts.dedicated === true;
+    this.judgeShares = opts.judgeShares !== false;
     this.unavailable = opts.unavailable;
     this.maxWaitMs = opts.maxWaitMs;
     this.busy = Array.from(
@@ -124,7 +132,8 @@ export class DevRuns {
     if (!cwd.startsWith(laneRoot + sep))
       throw new Error("a dev run must run in the lane's own workspace");
     if (this.unavailable) return Promise.resolve({ ran: false, reason: this.unavailable });
-    const cap = limits.timeoutS ?? (this.dedicated ? undefined : SHARED_DEV_RUN_S);
+    const cap =
+      limits.timeoutS ?? (this.dedicated || !this.judgeShares ? undefined : SHARED_DEV_RUN_S);
     const timeoutS =
       req.timeout_s === undefined ? cap : Math.min(req.timeout_s, cap ?? Number.POSITIVE_INFINITY);
     // One dev run per card, in arrival order; a lane's next dev run waits for its last. It waits
@@ -201,7 +210,7 @@ export class DevRuns {
       // with maxWaitMs given, until that wait is over).
       const deadline =
         this.maxWaitMs !== undefined ? Date.now() + this.maxWaitMs : Number.POSITIVE_INFINITY;
-      while (!this.dedicated && this.judgeBusy()) {
+      while (!this.dedicated && this.judgeShares && this.judgeBusy()) {
         if (Date.now() > deadline)
           return { ran: false, reason: "the judge kept the device busy; try again later" };
         if (!this.trialOpen(trial)) return { ran: false, reason: "the trial has ended" };

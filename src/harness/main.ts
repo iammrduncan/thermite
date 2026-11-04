@@ -81,9 +81,11 @@ async function main(): Promise<void> {
     process.exit(0);
   };
   const judging = await rigHardware(ctx, service, targets);
-  // A rig's leader judges on its followers' GPUs too (goal 205).
+  // A rig's leader judges on its followers' GPUs too, and on its own unless they are all the
+  // workers' (THERMITE_LOCAL_JUDGE=0, goal 205).
   const followers = followersOf(env);
-  const executorIds = reclaimJobs(ledger, judging, followers);
+  const judgingHere = followers.length && env.THERMITE_LOCAL_JUDGE === "0" ? [] : judging;
+  const executorIds = reclaimJobs(ledger, judgingHere, followers);
   const parts = agentParts(ctx, ledger, service, targets);
 
   // A check a previous controller left running is over, and a run's export at its end that it
@@ -122,10 +124,11 @@ async function main(): Promise<void> {
   const executors = createJudges(ctx, {
     service,
     devRuns: parts.devRuns,
-    judging,
+    judging: judgingHere,
     judgeCards: targets.judgeCards,
     executorIds,
     followers,
+    driver,
   });
   const links = agentLinks(ctx, service, port);
   addModelCheck(service, links);
