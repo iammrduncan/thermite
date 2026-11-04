@@ -6,6 +6,9 @@ export const FORMS = `/* Edit rig: one row per part, with its switch. */
 .pt { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .pt:last-child { border-bottom: 0; } .pt.locked { opacity: .8; } .pt-off { margin-top: 4px; color: var(--muted-foreground); }
 .pt-state { font-size: 12px; } .pt-state.on { color: var(--success-foreground); } .pt-state.off { color: var(--warning-foreground); }
+/* Edit rig: its runners of other machines (goal 206), one row per runner process. */
+.sec-sub { margin-top: 16px; } .sec-sub h3 { margin: 0 0 4px; font-size: 14px; }
+.rn { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); } .rn:last-child { border-bottom: 0; }
 .sw { position: relative; display: inline-block; width: 40px; height: 22px; margin-top: 2px; }
 .sw input { opacity: 0; width: 0; height: 0; }
 .knob { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: .15s; cursor: pointer; }

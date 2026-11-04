@@ -64,7 +64,16 @@ function executors() {
 
 describe("the core's runners as they come and go (goal 206)", () => {
   test("a process joins, takes runs once it answers, and leaves with its run under way failed", async () => {
-    const sup = linked((q) => (q.kind === "ask" && q.ask.op === "info" ? fits : undefined));
+    // It has every commit: a lane's run asks for its change's parent first.
+    const sup = linked((q) =>
+      q.kind !== "ask"
+        ? undefined
+        : q.ask.op === "info"
+          ? fits
+          : q.ask.op === "git_has"
+            ? { answer: { has: true, heads: [] } }
+            : undefined,
+    );
     const hub = new RunnerHub({ service, link: sup.link, core });
     const ex = executors();
     hub.executors = ex;

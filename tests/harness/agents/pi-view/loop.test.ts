@@ -162,7 +162,7 @@ describe("the Pi view's console in a trial's loop", () => {
     assert.doesNotMatch(at("steered")?.text ?? "", /FOLLOW-ONE/);
     // The interrupt stopped the reply; with no words waiting, the trial went on with its nudge,
     // though the campaign allows none: the owner's stop is not the agent's.
-    assert.match(at("interrupted")?.text ?? "", /You have not called submit yet/);
+    assert.match(at("interrupted")?.text ?? "", /You have not called submit_experiment yet/);
     // /compact: compacted before the next call; /mcp reconnect: the new tool from the next turn.
     assert.equal(r.compactions, 1);
     assert.match(at("reconnected")?.text ?? "", /SUMMARY-OF-THE-TRIAL/);

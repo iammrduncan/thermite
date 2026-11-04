@@ -53,7 +53,7 @@ describe("the later turns inside a call (goal 166)", () => {
     const at = { turn: 1 };
     const turns: [string, Prompt][] = [
       [
-        "worker in Pi: it stopped without calling submit",
+        "worker in Pi: it stopped without calling submit_experiment",
         renderWorkerTurn({ ...at, program: "pi", kind: "nudge" }),
       ],
       [

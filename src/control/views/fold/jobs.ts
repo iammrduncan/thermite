@@ -45,7 +45,8 @@ export const JOBS: Handlers = {
   },
   job_leased(f, e) {
     const j = f.jobs.get(String(e.subject));
-    if (j) Object.assign(j, { started_at: e.at, state: "running" });
+    // Its executor: on a rig with runners, which runner the judge holds for it (goal 206).
+    if (j) Object.assign(j, { started_at: e.at, state: "running", by: e.actor });
   },
   crash_infra: blockedOrAgain,
   job_lease_expired: blockedOrAgain,

@@ -6,7 +6,13 @@ import type { ControlStore } from "../store/index.ts";
 import { type RigVersions, rigVersions } from "../versions.ts";
 import { runDirections } from "./directions.ts";
 import type { FoldedRig } from "./fold/index.ts";
-import { readGpuSplit, readModelInfo, readSettings, reportingState } from "./report.ts";
+import {
+  readGpuSplit,
+  readModelInfo,
+  readRunners,
+  readSettings,
+  reportingState,
+} from "./report.ts";
 import { standingOf } from "./research.ts";
 import { ownCopier } from "./sharing.ts";
 import type { RigView, RunView } from "./types.ts";
@@ -87,6 +93,7 @@ export function readRig(f: FoldedRig, x: RigInputs): RigView {
         model?: unknown;
         settings?: unknown;
         gpu_split?: unknown;
+        runners?: unknown;
       }
     | undefined;
   return {
@@ -102,11 +109,13 @@ export function readRig(f: FoldedRig, x: RigInputs): RigView {
     model: readModelInfo(summary?.model),
     settings: readSettings(summary?.settings),
     gpu_split: readGpuSplit(summary?.gpu_split),
+    runners: readRunners(summary?.runners),
     jobs: summary?.jobs ?? {},
     runs,
     recent: own(f.recent).toReversed(),
     judge: {
       now: own(f.jobs.filter((j) => j.state === "running").at(-1) ?? null),
+      running: own(f.jobs.filter((j) => j.state === "running")),
       queued: own(f.jobs.filter((j) => j.state === "queued")),
       jobs: own(f.jobs.slice(-SHOWN_JOBS)),
     },

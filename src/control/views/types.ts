@@ -57,8 +57,11 @@ export interface RigView {
   jobs: Record<string, number>;
   runs: RunView[];
   recent: StoredEvent[];
-  /** The judge: its job in progress, its queue and its recent jobs (newest last). */
-  judge: { now: JudgeJob | null; queued: JudgeJob[]; jobs: JudgeJob[] };
+  /**
+   * The judge: its job in progress, every job in progress (one per executor), its queue and its
+   * recent jobs (newest last).
+   */
+  judge: { now: JudgeJob | null; running: JudgeJob[]; queued: JudgeJob[]; jobs: JudgeJob[] };
   /** Each rig check's latest result (model route, isolation, smoke), or that it is running. */
   checks: Record<string, RigCheckView>;
   /** Which model route its agents use, from its signed report (older harnesses send none). */
@@ -67,6 +70,8 @@ export interface RigView {
   settings: RigSettings | null;
   /** A rig whose GPU split control may change (its GPU set and the judge's share now). */
   gpu_split: { set: number; judge: number } | null;
+  /** Its runners of other machines, from its signed report (goal 206); null: none. */
+  runners: RunnersView | null;
   /** A rig the owner launched on a GPU cloud: its pod, its price and what it has cost so far. */
   runpod?: RunpodRigView | undefined;
   /**
@@ -175,6 +180,8 @@ export interface JudgeJob {
   id: string;
   kind: string;
   attempt: string | null;
+  /** The executor that leased it last, such as executor-0 or executor-box-2-0 (goal 206). */
+  by?: string | undefined;
   /** The run it serves (an attempt's run, or the run that was running when it was queued). */
   run: string | null;
   queued_at: string;
@@ -683,4 +690,24 @@ export interface MessageView {
    * only the owner's own `redirect` sets again (`directives_left_out`).
    */
   left_out: { kind: string; direction: string | null; at: string }[];
+}
+
+/**
+ * A rig's runners of other machines as its core reports them (goal 206): each runner process,
+ * the pool of each of its runners, whether it takes runs and why not, when it last answered or
+ * since when it is away, and who holds each runner; and who waits for one.
+ */
+export interface RunnersView {
+  processes: {
+    name: string;
+    pools: string[];
+    up: boolean;
+    why: string | null;
+    answered_at: string | null;
+    away_since: string | null;
+    /** Each runner: its name (`<process>-<place>`), its pool, and its holder now, if any. */
+    runners: { name: string; pool: string; holder: string | null }[];
+  }[];
+  /** Who waits for a runner, in turn: the judge's executors and the lanes. */
+  waiting: string[];
 }

@@ -7,7 +7,7 @@ import {
   RunnerSettings,
 } from "../../core/rig-settings.ts";
 import type { ControlStore } from "../store/index.ts";
-import type { RigView } from "./types.ts";
+import type { RigView, RunnersView } from "./types.ts";
 
 /**
  * What a rig's report says of the rig itself, read loosely (the report is data): its own
@@ -38,6 +38,32 @@ export function readSettings(v: unknown): RigSettings | null {
     judge_gpus: typeof o.judge_gpus === "number" ? o.judge_gpus : null,
     // A harness older than runners reports none (goal 206); a list it reports is the setting's.
     runners: (RunnerSettings.safeParse(o.runners ?? []).data ?? []) as RunnerSetting[],
+  };
+}
+
+/** A rig's runners of other machines from its report (goal 206), read loosely; null: none. */
+export function readRunners(v: unknown): RunnersView | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as { processes?: unknown; waiting?: unknown };
+  if (!Array.isArray(o.processes) || !o.processes.length) return null;
+  const str = (x: unknown) => (typeof x === "string" ? x : null);
+  return {
+    processes: o.processes.map((x) => {
+      const p = (x ?? {}) as Record<string, unknown>;
+      return {
+        name: String(p.name ?? ""),
+        pools: Array.isArray(p.pools) ? p.pools.map(String) : [],
+        up: p.up === true,
+        why: str(p.why),
+        answered_at: str(p.answered_at),
+        away_since: str(p.away_since),
+        runners: (Array.isArray(p.runners) ? p.runners : []).map((r) => {
+          const q = (r ?? {}) as Record<string, unknown>;
+          return { name: String(q.name ?? ""), pool: String(q.pool ?? ""), holder: str(q.holder) };
+        }),
+      };
+    }),
+    waiting: Array.isArray(o.waiting) ? o.waiting.map(String) : [],
   };
 }
 

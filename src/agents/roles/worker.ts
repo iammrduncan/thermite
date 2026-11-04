@@ -356,7 +356,10 @@ export function trialBudget(
   return `This trial lasts ${parts.join(end && turns ? ", and " : " and ")}. Submit before it ends.`;
 }
 
-/** Told to a worker in Pi that stopped without calling submit_experiment (goal 079), for as long as it works. */
+/**
+ * Told to a worker in Pi that stopped without calling submit_experiment (goal 079), for as long
+ * as it works.
+ */
 export const WORKER_PI_NUDGE =
   "You have not called submit_experiment yet. Keep working with your tools: make your change, build and test it, then call submit_experiment once. If you find no change worth judging, say why in one sentence.";
 

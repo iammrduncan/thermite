@@ -65,6 +65,7 @@ import {
   agentsTable,
   EDIT_RIG_JS,
 } from "../../ui/rigs/edit/index.ts";
+import { runnersFields, runnersWanted } from "../../ui/rigs/runners.ts";
 import { listText } from "../../ui/words/index.ts";
 import { programModeOf } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
@@ -320,11 +321,11 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
 <label class="ch${s?.promotion === "auto" ? " on" : ""}"><input type="radio" name="promotion" value="auto"${s?.promotion === "auto" ? " checked" : ""}${s ? "" : " disabled"} style="margin:2px 8px 0 0"><span><b>Automatically</b><br><span class="muted small">The judge confirms the change on new runs, and it becomes the champion with no step of yours. When the campaign calls for an audit and this rig has an auditor, the auditor's clear comes first; its block stops the change. A run can still ask you about some changes (Ask me first, when you start it).</span></span></label>
 <label class="ch${s?.promotion === "owner_approval" ? " on" : ""}"><input type="radio" name="promotion" value="owner_approval"${s?.promotion === "owner_approval" ? " checked" : ""}${s ? "" : " disabled"} style="margin:2px 8px 0 0"><span><b>Ask me for each change</b><br><span class="muted small">Each confirmed change waits for you in Needs you.</span></span></label>
 </div><div class="muted small" style="margin-top:6px">A campaign can set its own rule when it starts; that rule comes first for its runs.</div></div>
-<div class="sec"><h2>4 · Where it runs</h2><div class="card"><dl class="facts"><dt>Place</dt><dd>${where}</dd>${u.hardware ? `<dt>Hardware</dt><dd>${hardwareLine(u.hardware)}</dd>` : ""}</dl>${sized}${
+<div class="sec" id="where"><h2>4 · Where it runs</h2><div class="card"><dl class="facts"><dt>Place</dt><dd>${where}</dd>${u.hardware ? `<dt>Hardware</dt><dd>${hardwareLine(u.hardware)}</dd>` : ""}</dl>${sized}${
         u.gpu_split && u.gpu_split.set >= 2
           ? `<label class="fd" style="max-width:260px;margin-top:10px" data-judge-field>${infoLabel("GPUs for the judge", `How many of the rig's ${u.gpu_split.set} GPUs the judge measures on; the rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. A campaign started on this rig can set it too.${sized ? " With a new number of GPUs above, it is the judge's share of the new ones." : ""}`)}<input name="judge_gpus" type="number" min="1" max="${Math.min(8, u.gpu_split.set - 1)}" value="${u.gpu_split.judge}" data-restarts></label><div class="muted small" data-judge-now>Now: ${u.gpu_split.judge} for the judge, ${u.gpu_split.set - u.gpu_split.judge} for the agents. ${SPLIT_RESTARTS}</div>`
           : ""
-      }</div></div>
+      }${s ? runnersFields(u, s) : ""}</div></div>
 <div class="card hl" style="margin-top:16px"><b>What changes when you save</b><ul class="chg" id="chg"><li>Nothing changes.</li></ul><div class="act"><button class="primary big" id="save">Save changes</button><a class="btn" href="/ui/rigs/${rName}">Cancel</a></div></div>
 </form>
 <script src="/ui/assets/edit-rig.js" defer></script>`,
@@ -538,6 +539,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
         // The field shows only on a rig with a GPU set. With a new number of GPUs, it goes with
         // the change to them.
         judge_gpus: u.gpu_split && !gpusMoved ? (num("judge_gpus") ?? undefined) : undefined,
+        runners: runnersWanted(s, f),
       });
       if ("error" in out) return back("error", out.error);
       settings = out.change;

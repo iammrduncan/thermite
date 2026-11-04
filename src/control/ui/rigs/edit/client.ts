@@ -65,6 +65,11 @@ export const EDIT_RIG_JS = `
         const st = el.closest(".pt").querySelector(".pt-state");
         st.textContent = el.checked ? "on" : "off"; st.className = "pt-state " + (el.checked ? "on" : "off");
         if (el.checked !== was) out.push("You turn " + (el.checked ? "on" : "off") + " the " + el.dataset.name.toLowerCase() + ".");
+      } else if (el.type === "checkbox" && el.dataset.runner !== undefined) {
+        // A runner process taken away (goal 206): at once, while the run goes on.
+        if (el.checked && !was) out.push("You take the runner process " + el.dataset.runner + " away: its run under way fails, and the judge or its lane tries again.");
+      } else if (el.dataset.addRunner !== undefined) {
+        if (el.value.trim()) out.push("You add the runner process " + el.value.trim() + ": the rig's core gives it runs once it answers.");
       } else if (el.type === "radio") {
         if (el.checked && !was) out.push("You change when a change becomes the champion: " + el.closest("label").querySelector("b").textContent.toLowerCase() + ".");
       } else if (el.tagName === "SELECT" || el.type === "number") {
