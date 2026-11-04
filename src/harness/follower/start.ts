@@ -18,7 +18,7 @@ export async function startFollower(env: NodeJS.ProcessEnv): Promise<void> {
   const ctx = await controllerContext(env);
   const { rig, paths, tokens, runner } = ctx;
   const targets = targetDrivers(ctx);
-  const { ledger } = openState(ctx);
+  const { ledger, rigKeys } = openState(ctx);
   const { host, port } = parseListen(env.THERMITE_LISTEN ?? "0.0.0.0:8700");
   // Its lanes' trials (step 2): dev runs on its workers' cards, never waiting for a judge here.
   let lanes: LaneHost | undefined;
@@ -48,7 +48,13 @@ export async function startFollower(env: NodeJS.ProcessEnv): Promise<void> {
     laneTool: [process.execPath, fileURLToPath(new URL("../agents/lanetool.js", import.meta.url))],
   };
   serve({
-    fetch: followerApi(device, tokens, rig, { host: lanes, lanes: laneRunner, devRuns }).fetch,
+    fetch: followerApi(
+      device,
+      tokens,
+      rig,
+      { host: lanes, lanes: laneRunner, devRuns },
+      rigKeys.publicKeyPem,
+    ).fetch,
     hostname: host,
     port,
   });

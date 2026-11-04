@@ -7,7 +7,12 @@ import {
 } from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
-import { busKeyTables, busSealKeyColumn, machineBusKeyTable } from "./bus.ts";
+import {
+  busKeyTables,
+  busSealKeyColumn,
+  machineBusKeyTable,
+  machineReportKeyColumn,
+} from "./bus.ts";
 import { clusterUncheckedColumn } from "./clusters.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
@@ -657,6 +662,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   machineBusKeyTable,
   // A machine rig's followers on other machines (goal 205).
   machineRigFollowersColumn,
+  // Each machine's harness's report key, which control pins when it leads (goal 205, step 3).
+  machineReportKeyColumn,
 ];
 
 /**

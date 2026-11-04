@@ -47,6 +47,17 @@ export function machineBusKeyTable(db: DatabaseSync): void {
 )`);
 }
 
+/**
+ * Each machine's harness's report-signing key, of a rig over several machines (goal 205, step 3),
+ * made by the store's migration to schema version 31: control pins it as the rig's when that
+ * machine leads.
+ */
+export function machineReportKeyColumn(db: DatabaseSync): void {
+  const cols = db.prepare("pragma table_info(machine_bus_key)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "report_key"))
+    db.exec("alter table machine_bus_key add column report_key text");
+}
+
 export class BusKeys extends StorePart {
   /** The key a rig registered, or undefined when it has none. */
   rigKey(rig: string): string | undefined {
@@ -105,15 +116,28 @@ export class BusKeys extends StorePart {
     return r?.public_key;
   }
 
-  /** Records the key a follower registered, in place of the one before. */
-  setMachineKey(rig: string, machine: string, key: string): void {
+  /**
+   * Records the key a follower registered, in place of the one before, with its harness's
+   * report-signing key when it gave one (step 3).
+   */
+  setMachineKey(rig: string, machine: string, key: string, reportKey?: string | undefined): void {
     this.db
       .prepare(
-        `insert into machine_bus_key (rig, machine, public_key, registered_at) values (?, ?, ?, ?)
+        `insert into machine_bus_key (rig, machine, public_key, registered_at, report_key)
+         values (?, ?, ?, ?, ?)
          on conflict (rig, machine) do update set public_key = excluded.public_key,
-           registered_at = excluded.registered_at`,
+           registered_at = excluded.registered_at,
+           report_key = coalesce(excluded.report_key, machine_bus_key.report_key)`,
       )
-      .run(rig, machine, key, new Date().toISOString());
+      .run(rig, machine, key, new Date().toISOString(), reportKey ?? null);
+  }
+
+  /** The report-signing key a machine's harness has (step 3), or undefined when none is known. */
+  machineReportKey(rig: string, machine: string): string | undefined {
+    const r = this.db
+      .prepare("select report_key from machine_bus_key where rig = ? and machine = ?")
+      .get(rig, machine) as { report_key: string | null } | undefined;
+    return r?.report_key ?? undefined;
   }
 
   /** Every follower's registered key, by rig and machine. */

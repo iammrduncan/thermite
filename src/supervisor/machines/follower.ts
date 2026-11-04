@@ -6,6 +6,7 @@ import { log, optionalSecretFromFile, requireEnv, secretFromFile } from "../../c
 import { errorText } from "../../common/errors.ts";
 import { Loops } from "../../common/health.ts";
 import { MACHINE_REGISTER } from "../../core/api/control/rigs.ts";
+import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
 import { userKeyFingerprint } from "../../core/link/users.ts";
 import { SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
@@ -46,12 +47,19 @@ export async function startFollowerSupervisor(env: NodeJS.ProcessEnv): Promise<v
     throw new Error(`${BUS_URL_SETTING} is not set: a follower reaches its leader only on the bus`);
   const key = busKey(home);
   const control = controlClient({ url: controlUrl, token: controlToken, rig });
-  // Its key first: the bus refuses it until control has it.
+  // Its harness's report key, which control pins when this machine leads (step 3).
+  await waitForHarness(harnessUrl, () => false);
+  const harness = harnessClient({ url: harnessUrl, token: harnessToken });
+  const reportKey = await harness
+    .call(HEALTH)
+    .then((h) => (typeof h.report_key === "string" ? h.report_key : undefined))
+    .catch(() => undefined);
+  // Its keys first: the bus refuses it until control has them.
   for (let tries = 1; ; tries++) {
     try {
       await control.call(MACHINE_REGISTER, {
         params: { machine },
-        body: { bus_key: key.publicKey },
+        body: { bus_key: key.publicKey, ...(reportKey ? { report_key: reportKey } : {}) },
       });
       log("supervisor", "the follower's key on the message bus is registered with control", {
         machine,
@@ -73,7 +81,6 @@ export async function startFollowerSupervisor(env: NodeJS.ProcessEnv): Promise<v
     seed: key.seed,
     trust: busTrust(env),
   });
-  await waitForHarness(harnessUrl, () => false);
   await answerLeaderAsks({
     rig,
     machine,

@@ -29,6 +29,8 @@ export function followerApi(
   tokens: ApiTokens,
   rig: string,
   lanes?: { host: LaneHost; lanes: LaneRunner; devRuns?: DevRuns | undefined } | undefined,
+  /** Its own report-signing key's public part, which its supervisor registers (step 3). */
+  reportKey?: string | undefined,
 ): Hono {
   const app = new Hono();
 
@@ -49,7 +51,7 @@ export function followerApi(
   app.get(HEALTH.path, (c) =>
     c.json(
       allows(tokens, ["supervisor"], c.req.header("authorization"))
-        ? { ok: true, rig, follower: true }
+        ? { ok: true, rig, follower: true, ...(reportKey ? { report_key: reportKey } : {}) }
         : { ok: true },
     ),
   );

@@ -257,9 +257,13 @@ export const MACHINE_REGISTER = {
   method: "POST",
   path: "/v1/rigs/:rig/machines/:machine/supervisor",
   what: "follower's key registration",
-  body: z.object({ bus_key: z.string().max(100) }),
+  body: z.object({
+    bus_key: z.string().max(100),
+    /** Its harness's report-signing key (PEM), which control pins when it leads (step 3). */
+    report_key: z.string().max(4096).optional(),
+  }),
   answer: z.looseObject({ ok: z.boolean() }),
-  maxBytes: 4096,
+  maxBytes: 16 * 1024,
 } as const satisfies Route;
 
 /**
