@@ -376,6 +376,8 @@ Two causes are common on a laptop:
 - `not now: …`: the rig has open trials or judge jobs. Make it idle as [Check a rig](check-a-rig.md#before-you-start) says, then run the check again.
 - **Judge smoke** fails with some candidates "judged otherwise", and the harness's log has `job failed` lines that say `target not ready for timing: load … above 75% of … cores`. The computer was too busy for fair timing. Close other heavy programs and run the check again.
 
+**Check** for the model is greyed out on **Settings › Rigs' models** and in the rig's **Checks** while the rig takes the model you just gave it, and says why on hover. Over REST or MCP the check is refused then: `rig-1 is taking my-model now: it checks the model itself once it has it, within a minute. Check it again after that.` Wait a minute: the rig checks the new model itself, and its result shows under **Checks**.
+
 ### Judge smoke passed with a note
 
 - **You see:** **Judge smoke** shows **passed**, with `the no-op came out inconclusive, not neutral` and `Note: The timing on this machine is noisy. Results here need more repeats.`
@@ -466,9 +468,9 @@ Two causes are common on a laptop:
 | --- | --- |
 | `this rig has no model for its agents: give it one on its Edit rig page` | Give the rig a model: see [Agents don't start](#agents-dont-start) |
 | `research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code: give this rig another model for research` | Give the rig a model from another provider |
-| `<model> is one of OpenCode's own models, which work only inside OpenCode: set this rig's agents' harness to OpenCode on its Edit rig page` | Set the workers' **Runs in** to **OpenCode v2** on **Edit rig** |
+| `<model> is one of OpenCode's own models, which work only inside OpenCode: set this rig's agents' harness to OpenCode on its Edit rig page` | For one of OpenCode's free models (its name ends in `-free`), set the workers' **Runs in** to **OpenCode v2** on **Edit rig**. For a paid model, give OpenCode's provider its key on **Settings › Providers**: with its key, a paid model runs in Pi too |
 
-The dashboard refuses to start a research run with agents in the last case. A run started from the command line, or on a rig whose model changed after the start, can still meet it. See [Write a contract](../campaigns/write-a-contract.md#4-write-a-research-campaign).
+Control refuses to start a research run with agents in the last two cases, before it gives the rig anything: **New campaign**, **Start a run**, `POST /v1/campaigns/<campaign>/runs`, MCP's `start_run` and `thermite run start` say why and what to do, such as `sonnet-5.5 is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on rig-1 could not work. Give rig-1's agents another provider's model for research, on its Edit rig page or here.` A run assigned with `thermite assign`, or on a rig whose model changed after the start, can still meet them. See [Write a contract](../campaigns/write-a-contract.md#4-write-a-research-campaign).
 
 ## Runs: trials, messages and the queue
 
