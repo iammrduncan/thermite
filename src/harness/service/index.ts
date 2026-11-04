@@ -180,9 +180,14 @@ export class HarnessService {
   gpuSplit?: { set: number; judge: number } | undefined;
   /**
    * The core's link to its runners (goal 206): the judge's asks of a runner process wait in it
-   * for the supervisor to take. None: a rig with no runners of other machines.
+   * for the supervisor to take. None: before the controller makes it.
    */
   runners?: RunnerLink | undefined;
+  /**
+   * Its runners of other machines now, for its report (goal 206): each process and its runs;
+   * undefined for a rig with none.
+   */
+  runnersNow?: (() => unknown) | undefined;
   /**
    * A subscription's usage windows as its runtime last reported them (Claude Code's 5-hour and
    * weekly windows), for the rig's report: no tokens, only percent used and reset times; and its

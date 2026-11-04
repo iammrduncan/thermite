@@ -138,6 +138,16 @@ export class RunnerPools {
     return () => this.release(s);
   }
 
+  /** Who holds the runner now: the judge's executor (`executor-…`) or a lane; undefined: free. */
+  holderOf(runner: RemoteRunner): string | undefined {
+    return this.slots.find((x) => x.runner === runner)?.holder;
+  }
+
+  /** Who waits for a runner, in the order they asked: the judge's executors and the lanes. */
+  waiting(): string[] {
+    return this.waiters.map((w) => w.who);
+  }
+
   /** Whether any lane waits for the runner, or holds it (the judge then waits its turn). */
   busy(runner: RemoteRunner): boolean {
     const s = this.slots.find((x) => x.runner === runner);

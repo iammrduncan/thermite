@@ -60,6 +60,7 @@ export function snapshot(
   limit: number,
 ): unknown {
   const page = svc.ledger.eventsAfter(cursor, limit);
+  const runners = svc.runnersNow?.();
   const report = {
     rig: svc.rig,
     ledger_id: svc.ledger.ledgerId(),
@@ -84,6 +85,8 @@ export function snapshot(
       usage: svc.resourceUse.read(),
       loops: svc.loops.health().loops,
       ...(svc.gpuSplit ? { gpu_split: svc.gpuSplit } : {}),
+      // Its runners of other machines (goal 206): whether each answers, and what it runs now.
+      ...(runners ? { runners } : {}),
       ...(svc.subscriptionUsage && svc.models?.info().source !== "none"
         ? {
             subscription_usage: {

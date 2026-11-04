@@ -90,6 +90,15 @@ describe("the core's runners as they come and go (goal 206)", () => {
     });
     await wait();
     assert.ok(sup.asked.some((q) => q.kind === "ask" && q.ask.op === "lane_run"));
+    // Its report to control: it answers, and lane-2 holds its second runner.
+    const report = hub.report();
+    assert.equal(report.processes[0]?.up, true);
+    assert.ok(report.processes[0]?.answered_at);
+    assert.deepEqual(report.processes[0]?.runners, [
+      { name: "box-2-0", pool: "judge", holder: null },
+      { name: "box-2-1", pool: "lane-2", holder: "lane-2" },
+    ]);
+    assert.deepEqual(report.waiting, []);
     // The same list again changes nothing; a list without it takes it away.
     hub.apply([{ name: "box-2", pools: ["judge", "lane-2"] }]);
     assert.deepEqual(ex.now, ["box-2-0"]);

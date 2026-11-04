@@ -47,6 +47,9 @@ interface Process {
   unfit?: string | undefined;
   /** Its kind of target, as it last answered while it fit. */
   type?: string | undefined;
+  /** When it last answered its check, and since when it is away. */
+  answeredAt?: number | undefined;
+  awaySince?: number | undefined;
   /**
    * Why its runs fail now: it left or is away. A run's next ask fails at once, as a runner away,
    * never as the judge's infrastructure failure. Its check is asked all the same.
@@ -101,6 +104,41 @@ export class RunnerHub {
       up: p.up,
       ...(p.unfit ? { why: p.unfit } : {}),
     }));
+  }
+
+  /**
+   * The rig's runners for its report to control: each process, whether it takes runs, when it
+   * last answered or since when it is away, and who holds each of its runners; and who waits.
+   */
+  report(): {
+    processes: {
+      name: string;
+      pools: string[];
+      up: boolean;
+      why?: string;
+      answered_at: string | null;
+      away_since: string | null;
+      runners: { name: string; pool: string; holder: string | null }[];
+    }[];
+    waiting: string[];
+  } {
+    const at = (ms: number | undefined) => (ms === undefined ? null : new Date(ms).toISOString());
+    return {
+      processes: [...this.processes.values()].map((p) => ({
+        name: p.setting.name,
+        pools: [...p.setting.pools],
+        up: p.up,
+        ...(p.unfit ? { why: p.unfit } : p.away && !p.up ? { why: p.away } : {}),
+        answered_at: at(p.answeredAt),
+        away_since: at(p.awaySince),
+        runners: p.runners.map((r) => ({
+          name: r.runner.name,
+          pool: r.pool,
+          holder: this.pools.holderOf(r.runner) ?? null,
+        })),
+      })),
+      waiting: this.pools.waiting(),
+    };
   }
 
   /** Checks every runner process on a timer; the function returned stops it. */
@@ -182,6 +220,7 @@ export class RunnerHub {
       };
       if (this.processes.get(name) !== p) return;
       p.failed = 0;
+      p.answeredAt = Date.now();
       const unfit = this.unfit(p, info);
       if (unfit) {
         if (p.unfit !== unfit)
@@ -243,8 +282,13 @@ export class RunnerHub {
   private setUp(p: Process, up: boolean, why?: string): void {
     const was = p.up;
     p.up = up;
-    if (up) p.away = undefined;
-    else if (was) p.away = why ?? `the runner ${p.setting.name} is away`;
+    if (up) {
+      p.away = undefined;
+      p.awaySince = undefined;
+    } else if (was) {
+      p.away = why ?? `the runner ${p.setting.name} is away`;
+      p.awaySince = Date.now();
+    }
     for (const r of p.runners) {
       if (up && !was) r.runner.forget();
       this.pools.setUp(r.runner, up);
