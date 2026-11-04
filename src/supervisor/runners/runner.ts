@@ -68,6 +68,8 @@ export async function startRunnerSupervisor(env: NodeJS.ProcessEnv): Promise<voi
     trust: busTrust(env),
   });
   await waitForHarness(harnessUrl, () => false);
+  // Said as it starts: it answers until the supervisor stops, and its serving never returns.
+  log("supervisor", "the runner answers its core's asks on the message bus", { rig, runner });
   await answerCoreAsks({
     rig,
     runner,
@@ -77,5 +79,4 @@ export async function startRunnerSupervisor(env: NodeJS.ProcessEnv): Promise<voi
     inboxDir: env.THERMITE_INBOX_DIR ?? SUPERVISOR_INBOX_DIR,
     hfToken: optionalSecretFromFile("THERMITE_HF_TOKEN_FILE"),
   });
-  log("supervisor", "the runner answers its core's asks on the message bus", { rig, runner });
 }
