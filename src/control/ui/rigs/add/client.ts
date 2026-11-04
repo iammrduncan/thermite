@@ -1,5 +1,9 @@
 import { judgeGpusByDefault } from "../../../../core/hardware.ts";
 
+/** The CUDA field's words when control can't tell the GPU (goal 132). */
+export const CUDA_UNSURE =
+  "Control can't tell which GPU this is. For a DGX Spark (GB10) or another Blackwell GPU, choose 13.";
+
 /**
  * The Add a rig page's script, served from control (/ui/assets/add-rig.js; no inline script runs
  * under the dashboard's CSP). It shows the chosen place's GPU and resource choices and says, in a
@@ -23,6 +27,7 @@ export const JUDGE_SHARE_JS = `(n, typed) => {
 export const ADD_RIG_JS = `
 (() => {
   "use strict";
+  const UNSURE = ${JSON.stringify(CUDA_UNSURE)};
   const form = document.getElementById("add-rig");
   if (!form) return;
   const note = document.getElementById("gpu-note");
@@ -48,6 +53,18 @@ export const ADD_RIG_JS = `
       const how = mode.startsWith("dra:") ? "DRA (" + mode.slice(4) + ")" : "NVIDIA's device plugin";
       for (const el of form.querySelectorAll("[data-judge-for]"))
         el.hidden = !(el.dataset.judgeFor === "k_gpus__" + k && gpus >= 2);
+      // The CUDA harness (goal 132): from the chosen node's GPU, else the GPU choice's, until the
+      // owner picks one; hidden for a rig with no GPUs.
+      const cuda = form.elements["k_cuda__" + k];
+      if (cuda) {
+        const picked = (n) => { const el = form.elements[n + "__" + k]; return el && el.selectedOptions ? el.selectedOptions[0] : null; };
+        const hint = [picked("k_node"), picked("k_mode")].find((o) => o && o.dataset.cuda);
+        if (hint && !cuda.dataset.touched) cuda.value = hint.dataset.cuda;
+        const why = form.querySelector('[data-cuda-why="' + k + '"]');
+        if (why) why.textContent = hint && cuda.value === hint.dataset.cuda ? hint.dataset.why : hint ? "" : UNSURE;
+        const field = form.querySelector('[data-cuda-for="' + k + '"]');
+        if (field) field.hidden = gpus === 0;
+      }
       const j = share(gpus, get("k_judge"));
       note.textContent = refused(j) ? j :
         gpus === 0 ? "No GPU: the rig measures on the CPUs of its node." :
@@ -96,6 +113,10 @@ export const ADD_RIG_JS = `
       ? "Control will enroll " + name + ", write its files and services on " + machine + (gpus.length ? " with GPU" + (gpus.length > 1 ? "s " + gpus.join(" and ") : " " + gpus[0]) : " (CPU only)") + ", start it, and wait for its first report. You need to do nothing on the machine."
       : "Choose a machine or a cluster.";
   };
+  // A CUDA chosen by hand stays as chosen.
+  form.addEventListener("change", (e) => {
+    if (e.target && e.target.name && e.target.name.startsWith("k_cuda__")) e.target.dataset.touched = "1";
+  });
   form.addEventListener("change", say);
   form.addEventListener("input", say);
   say();

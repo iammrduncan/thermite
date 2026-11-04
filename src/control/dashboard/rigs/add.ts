@@ -6,6 +6,7 @@ import {
   addClusterRig,
   type ClusterFacts,
   clusterLine,
+  cudaFor,
   leastRigSize,
   NS,
   SUPERVISOR_SHARE,
@@ -30,7 +31,7 @@ import {
 } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { esc } from "../../ui/components/index.ts";
-import { ADD_RIG_JS } from "../../ui/rigs/add/client.ts";
+import { ADD_RIG_JS, CUDA_UNSURE } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { rigHelpers } from "./shared.ts";
 
@@ -38,6 +39,10 @@ import { rigHelpers } from "./shared.ts";
  * Rigs › Add a rig: on a machine control reaches over SSH, on a cluster, or joined from a place
  * control can't reach.
  */
+/** The CUDA field's tip on Add a rig (goal 132). */
+const CUDA_TIP =
+  "The CUDA harness the rig's GPUs run in. 12: Pascal to Hopper (P100, V100, A100, H100), on amd64. 13: Turing to Blackwell (B200, RTX 50), and the DGX Spark's GB10 on arm64. Set from the GPU where control can tell; you can change it.";
+
 export function addRigRoutes(app: Hono, dash: Dashboard): void {
   const { csrf, opts, page, parts, ssh, store } = dash;
   const { joinedPage, mintJoin } = rigHelpers(dash);
@@ -188,18 +193,43 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
               MAX_RIG_GPUS,
               Math.max(0, ...f.nodes.map((n) => n.gpus), f.device_classes.length ? 8 : 0),
             );
-        const opt = (v: string, text: string, on = false) =>
-          `<option value="${esc(v)}"${on ? " selected" : ""}>${esc(text)}</option>`;
+        const opt = (v: string, text: string, on = false, data = "") =>
+          `<option value="${esc(v)}"${on ? " selected" : ""}${data}>${esc(text)}</option>`;
         const def = f.storage_classes.find((s) => s.default)?.name;
+        // The CUDA harness each GPU choice takes (goal 132), where control knows the GPU: the
+        // device plugin's nodes when they all agree, a DRA class's GPU, a chosen node's.
+        const hintOf = (h: ReturnType<typeof cudaFor>) =>
+          h ? ` data-cuda="${h.cuda}" data-why="${esc(h.why)}"` : "";
+        const gpuNodes = f.nodes.filter((n) => n.gpus > 0);
+        const pluginHints = gpuNodes.map((n) => cudaFor({ product: n.gpu_product, arch: n.arch }));
+        const pluginHint =
+          pluginHints.length && pluginHints.every((h) => h && h.cuda === pluginHints[0]?.cuda)
+            ? pluginHints[0]
+            : undefined;
+        const classHint = (d: string) => {
+          const g = f.gpu_classes?.[d];
+          return g ? cudaFor(g) : undefined;
+        };
+        const firstHint = plugin
+          ? pluginHint
+          : f.device_classes[0]
+            ? classHint(f.device_classes[0])
+            : undefined;
         return `<div data-place="cluster:${kn}" hidden><div class="g3">
 <label class="fd">${infoLabel("GPUs", "How many GPUs the rig's harness pod asks for. One is shared by the judge and the agents; with more, you choose how many are the judge's and the rest are the agents'.")}<select name="k_gpus__${kn}">${Array.from({ length: maxGpus + 1 }, (_, n) => opt(String(n), n === 0 ? "none: the CPU" : String(n), n === Math.min(1, maxGpus))).join("")}</select></label>
 <label class="fd" data-judge-for="k_gpus__${kn}" hidden>${infoLabel("GPUs for the judge", "How many of the rig's GPUs the judge measures on; the rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. Default: half, rounded up.")}<input name="k_judge__${kn}" inputmode="numeric" maxlength="2" placeholder="half"></label>
-<label class="fd">${infoLabel("GPUs through", "NVIDIA's device plugin (nvidia.com/gpu) or DRA (a device class), as the cluster offers them.")}<select name="k_mode__${kn}">${plugin ? opt("device-plugin", "NVIDIA's device plugin") : ""}${f.device_classes.map((d) => opt(`dra:${d}`, `DRA: ${d}`)).join("")}${restricted ? opt("dra", "DRA: a device class you name") : ""}${!plugin && !f.device_classes.length ? opt("device-plugin", "no GPUs offered") : ""}</select></label>
+<label class="fd">${infoLabel("GPUs through", "NVIDIA's device plugin (nvidia.com/gpu) or DRA (a device class), as the cluster offers them.")}<select name="k_mode__${kn}">${plugin ? opt("device-plugin", "NVIDIA's device plugin", false, hintOf(pluginHint)) : ""}${f.device_classes.map((d) => opt(`dra:${d}`, `DRA: ${d}`, false, hintOf(classHint(d)))).join("")}${restricted ? opt("dra", "DRA: a device class you name") : ""}${!plugin && !f.device_classes.length ? opt("device-plugin", "no GPUs offered") : ""}</select></label>
+<label class="fd" data-cuda-for="${kn}">${infoLabel("CUDA", CUDA_TIP)}<select name="k_cuda__${kn}">${opt("12", "12: Pascal to Hopper, amd64", firstHint?.cuda !== "13")}${opt("13", "13: Turing to Blackwell, DGX Spark", firstHint?.cuda === "13")}</select><span class="muted small" data-cuda-why="${kn}">${esc(firstHint ? firstHint.why : CUDA_UNSURE)}</span></label>
 ${restricted ? `<label class="fd">${infoLabel("DRA device class", "Only for DRA in a cluster whose classes control can't list: the device class the cluster's operators named, such as gpu.nvidia.com.")}<input name="k_class__${kn}" maxlength="253" placeholder="gpu.nvidia.com"></label>` : ""}
 <label class="fd">${infoLabel("Node", "Any lets Kubernetes choose. A fixed node keeps the rig on a known machine, which keeps timings comparable between runs.")}<select name="k_node__${kn}">${opt("", "any node with room")}${f.nodes
           .filter((n) => n.ready)
           .map((n) =>
-            opt(n.name, `${n.name}${n.gpus ? ` (${n.gpus} GPU${n.gpus === 1 ? "" : "s"})` : ""}`),
+            opt(
+              n.name,
+              `${n.name}${n.gpus ? ` (${n.gpus} GPU${n.gpus === 1 ? "" : "s"}${n.arch ? `, ${n.arch}` : ""})` : ""}`,
+              false,
+              n.gpus ? hintOf(cudaFor({ product: n.gpu_product, arch: n.arch })) : "",
+            ),
           )
           .join("")}</select></label>
 <label class="fd">${infoLabel("Storage class", "The class for the rig's volume (its state, builds, inbox and outbox).")}<select name="k_storage__${kn}">${def ? "" : opt("", "the cluster's default")}${f.storage_classes.map((s) => opt(s.name, `${s.name}${s.default ? " (default)" : ""}`, s.name === def)).join("")}</select></label>
@@ -267,7 +297,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
 <div class="sec"><h2>2 · GPUs and resources</h2><p class="lead">As control last read the place. One GPU is shared by the judge and the agents. With more, some are the judge's and the rest the agents': half each by default, and on a machine the lowest-numbered GPUs are the judge's.</p>${gpuLists}<label class="fd" id="judge-pick" hidden style="max-width:280px;margin-top:10px">${infoLabel("GPUs for the judge", "How many of the chosen GPUs the judge measures on: the lowest-numbered ones. The rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. Default: half, rounded up.")}<input name="judge_gpus" inputmode="numeric" maxlength="2" placeholder="half"></label>${clusterSections}${joinSections}<div class="nc-does" id="gpu-note"></div></div>
 <div class="sec"><h2>3 · Name and start</h2><div class="g3">
 <label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-a"></label>
-<label class="fd" style="grid-column:span 2">${infoLabel("Images", "The Thermite images control deploys, as set where control is deployed. A GPU rig uses the CUDA harness image.")}<span class="mono small">${images ? `${esc(images.harness)}${images.harnessCuda ? `<br>${esc(images.harnessCuda)} (GPU rigs)` : ""}<br>${esc(images.supervisor)}` : "none configured"}</span></label>
+<label class="fd" style="grid-column:span 2">${infoLabel("Images", "The Thermite images control deploys, as set where control is deployed. A GPU rig uses the CUDA harness image.")}<span class="mono small">${images ? `${esc(images.harness)}${images.harnessCuda ? `<br>${esc(images.harnessCuda)} (GPU rigs, CUDA 12)` : ""}${images.harnessCuda13 ? `<br>${esc(images.harnessCuda13)} (GPU rigs, CUDA 13)` : ""}<br>${esc(images.supervisor)}` : "none configured"}</span></label>
 <label class="fd" style="grid-column:span 3">${infoLabel("Message bus", "Where the rig's supervisor reaches control's message bus, over TLS, for its reports, commands, live lines and config (THERMITE_NATS_PUBLIC_URL). The machine or cluster must reach this port, or the rig never reports, and is shown broken.")}<span class="mono small">${parts.rigBus ? esc(parts.rigBus.url) : "none: control can't set a rig up"}</span></label>
 </div>
 <div class="card hl"><p class="sum" id="add-sum">Control will enroll the rig, write its files and services on the machine, start it, and wait for its first report.</p><div class="act"><button class="primary big"${blocked ? " disabled" : ""}>Create the rig</button></div></div></div>
@@ -356,6 +386,8 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         deviceClass: one("k_class") || undefined,
         node: one("k_node") || undefined,
         storageClass: one("k_storage") || undefined,
+        // The CUDA harness the owner chose (goal 132), for a rig with GPUs.
+        cuda: Number(one("k_gpus") || "0") > 0 ? (one("k_cuda") === "13" ? "13" : "12") : undefined,
         storageGi: Number(one("k_size") || "100"),
         cpus: num("k_cpus"),
         memoryGi: num("k_mem"),

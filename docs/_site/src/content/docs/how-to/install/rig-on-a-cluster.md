@@ -34,7 +34,7 @@ Rigs that control sets up, on a machine, on a cluster or with a join command, ge
 
 ### What created namespaces need
 
-Rights across the cluster, since the namespaces don't exist yet: to create and delete namespaces, and in them to create, change and delete deployments, services, secrets, persistent volume claims and network policies (and resource claim templates for DRA). Control also scales and restarts the deployments to stop, start and restart the rig. To move the rig onto new images, or to change its GPUs, CPUs or memory, it applies the deployments again; with DRA and a new number of GPUs, it also deletes the rig's resource claim template and makes it again, since a template can't change. After a start, a restart or a change, it reads the deployments' status (`get`) until the new pods run. With rights to read nodes, storage classes and device classes, its check of the cluster shows them; without them it shows less. Control never reads pods.
+Rights across the cluster, since the namespaces don't exist yet: to create and delete namespaces, and in them to create, change and delete deployments, services, secrets, persistent volume claims and network policies (and resource claim templates for DRA). To tell which GPU a DRA device class names, control may also read resource slices (`get` and `list` on `resourceslices` in `resource.k8s.io`): without them, Add a rig can't tell a Blackwell GPU from an older one, and you choose its **CUDA**. Control also scales and restarts the deployments to stop, start and restart the rig. To move the rig onto new images, or to change its GPUs, CPUs or memory, it applies the deployments again; with DRA and a new number of GPUs, it also deletes the rig's resource claim template and makes it again, since a template can't change. After a start, a restart or a change, it reads the deployments' status (`get`) until the new pods run. With rights to read nodes, storage classes and device classes, its check of the cluster shows them; without them it shows less. Control never reads pods.
 
 Thermite's own cluster test uses the cluster's admin kubeconfig for this placement, so there is no tested narrower role to copy. If the cluster's operators won't give control rights across the cluster, use slots.
 
@@ -116,7 +116,7 @@ A helper that writes a slot's objects out for the operators is planned ([goal 03
 Control reads the cluster and changes nothing. The page says `"cluster-1" is added and checked: see what control found below.` The cluster's row shows:
 
 - **Version** and **Nodes**, with each node's GPUs;
-- **GPUs**: NVIDIA's device plugin, DRA device classes, or neither;
+- **GPUs**: NVIDIA's device plugin, DRA device classes, or neither; and, where control may read the cluster's resource slices, the GPU each device class names, by the UUID or the name its selectors give, which sets the CUDA a rig takes;
 - **Storage**: the storage classes, with the default one marked;
 - **Placement**: "control may create namespaces", or each slot with "free", "used by rig …", "refused: …" or "control may not deploy here".
 
@@ -131,7 +131,8 @@ To change the slots later, edit **Slots** on the cluster's row and press **Save 
 3. Under **2 · GPUs and resources**:
    - **GPUs**: how many the harness pod asks for. **none: the CPU**, one shared by the judge and the agents, or several. With several, **GPUs for the judge** sets the judge's share (half by default). See [Give a rig several GPUs](several-gpus.md).
    - **GPUs through**: **NVIDIA's device plugin**, or **DRA:** and a device class. Where control can't read the cluster's nodes, as is common in a slot, choose **DRA: a device class you name** and name it in **DRA device class**, such as `gpu.nvidia.com`.
-   - **Node**: **any node with room**, or one node. A fixed node keeps timings comparable between runs.
+   - **CUDA**, for a rig with GPUs: the harness its GPUs run in. **12: Pascal to Hopper, amd64** for a P100, V100, A100 or H100; **13: Turing to Blackwell, DGX Spark** for a Blackwell GPU, such as a B200 or an RTX 50, and for the DGX Spark's GB10 on arm64. Control sets it from the GPU the choice names, where it can tell, and says why under the field, such as `NVIDIA GB10 is on an arm64 node: only the CUDA 13 harness runs there.`: a node's architecture (`kubernetes.io/arch`) and GPU (`nvidia.com/gpu.product`), and a DRA device class's GPU when control may read the cluster's resource slices. Where it can't tell, it says `Control can't tell which GPU this is. For a DGX Spark (GB10) or another Blackwell GPU, choose 13.` Each update keeps the rig on its CUDA ([The CUDA harness](../../reference/harness-image.md#the-cuda-harness)).
+   - **Node**: **any node with room**, or one node, with its GPUs and architecture. A fixed node keeps timings comparable between runs.
    - **Storage class** and **Volume size (GB)**: the rig's one volume, 100 GB by default. It holds the rig's state, builds, inbox and outbox.
    - **CPUs** and **Memory (GiB)**: both or neither. At least 1.5 CPUs and 8 GiB: a new rig's agent programs run in their own terminals, so the supervisor takes half a CPU and 4 GiB of that for the advisors' terminals, and the harness the rest ([The supervisor's share](#the-supervisors-share)). Empty: the namespace's defaults apply.
    - **Slot** (slots): one of the free slots. For created namespaces, **Namespace** shows the pattern control names it by, such as `thermite-{rig}`.

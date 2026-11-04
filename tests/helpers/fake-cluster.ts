@@ -30,6 +30,12 @@ export function fakeCluster(
     nodeGpus?: number;
     /** DRA device classes (default: the cluster has no DRA). */
     deviceClasses?: string[];
+    /** Each class's spec, such as its selectors (goal 132). */
+    deviceClassSpecs?: Record<string, unknown>;
+    /** The cluster's resource slices; none: control may not read them. */
+    slices?: unknown[];
+    /** The node's architecture label (kubernetes.io/arch); none: no label. */
+    nodeArch?: string;
     /** What kubectl prints for one deployment by name; default: the supervisor's, in JSON. */
     deploymentStdout?: string;
   } = {},
@@ -79,7 +85,10 @@ export function fakeCluster(
           JSON.stringify({
             items: [
               {
-                metadata: { name: "gpu-node-1" },
+                metadata: {
+                  name: "gpu-node-1",
+                  ...(o.nodeArch ? { labels: { "kubernetes.io/arch": o.nodeArch } } : {}),
+                },
                 status: {
                   allocatable: {
                     cpu: "16",
@@ -94,12 +103,23 @@ export function fakeCluster(
         );
       if (a === "get deviceclasses -o json")
         return o.deviceClasses
-          ? ok(JSON.stringify({ items: o.deviceClasses.map((name) => ({ metadata: { name } })) }))
+          ? ok(
+              JSON.stringify({
+                items: o.deviceClasses.map((name) => ({
+                  metadata: { name },
+                  ...(o.deviceClassSpecs?.[name] ? { spec: o.deviceClassSpecs[name] } : {}),
+                })),
+              }),
+            )
           : {
               code: 1,
               stdout: "",
               stderr: 'error: the server doesn\'t have a resource type "deviceclasses"',
             };
+      if (a === "get resourceslices -o json")
+        return o.slices
+          ? ok(JSON.stringify({ items: o.slices }))
+          : { code: 1, stdout: "", stderr: "Error from server (Forbidden): resourceslices" };
       if (a === "get storageclass -o json")
         return ok(
           JSON.stringify({

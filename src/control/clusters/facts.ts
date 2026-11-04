@@ -5,7 +5,8 @@ import { harnessIngress, harnessKeptOffCluster, type SlotOpening } from "./netch
 /**
  * What control reads from a cluster before it sets a rig up there, and again with "Check again".
  * Only reads: the server's version, its nodes and their GPUs (NVIDIA's device plugin), DRA device
- * classes, storage classes, and whether control may create namespaces (created placement) or
+ * classes, and the resource slices that say which GPU each class names (goal 132) where control may
+ * read them, storage classes, and whether control may create namespaces (created placement) or
  * deploy into each slot (pre-made placement).
  */
 
@@ -15,8 +16,17 @@ export interface ClusterNode {
   /** Allocatable nvidia.com/gpu (the device plugin); 0 when none. */
   gpus: number;
   gpu_product?: string | undefined;
+  /** Its CPUs' architecture (`kubernetes.io/arch`), such as amd64 or arm64. */
+  arch?: string | undefined;
   cpu: string;
   memory: string;
+}
+
+/** What control knows of a GPU (goal 132): its name, compute capability and node's architecture. */
+export interface GpuKind {
+  product?: string | undefined;
+  cc?: string | undefined;
+  arch?: string | undefined;
 }
 
 export interface ClusterSlot {
@@ -122,6 +132,11 @@ export interface ClusterFacts {
   version: string;
   nodes: ClusterNode[];
   device_classes: string[];
+  /**
+   * Each DRA device class's GPU, where control can tell (goal 132): from the GPU UUIDs or names
+   * its selectors give, found in the cluster's resource slices. None: control may not read them.
+   */
+  gpu_classes?: Record<string, GpuKind> | undefined;
   storage_classes: { name: string; default: boolean }[];
   can_create_namespaces: boolean;
   slots: ClusterSlot[];
@@ -154,10 +169,61 @@ export function parseNodes(text: string): ClusterNode[] {
       ready: (status.conditions ?? []).some((c) => c.type === "Ready" && c.status === "True"),
       gpus: Number(status.allocatable?.["nvidia.com/gpu"] ?? 0) || 0,
       gpu_product: meta(n).labels?.["nvidia.com/gpu.product"],
+      arch: meta(n).labels?.["kubernetes.io/arch"],
       cpu: status.allocatable?.cpu ?? "?",
       memory: status.allocatable?.memory ?? "?",
     };
   });
+}
+
+/** A device attribute's value, under its own name or its driver's (gpu.nvidia.com/uuid). */
+const attr = (attrs: Record<string, Record<string, unknown>>, name: string): string | undefined => {
+  const key = Object.keys(attrs).find((k) => k === name || k.endsWith(`/${name}`));
+  const v = key ? attrs[key] : undefined;
+  const s = v?.string ?? v?.version ?? v?.int;
+  return s === undefined ? undefined : String(s);
+};
+
+/**
+ * Each DRA device class's GPU (goal 132), from `kubectl get deviceclasses -o json` and `kubectl
+ * get resourceslices -o json`: a class whose selectors name a GPU's UUID gets that device's name,
+ * compute capability and node's architecture; one that names a product gets that name.
+ */
+function gpuClasses(
+  classesText: string,
+  slicesText: string,
+  nodes: ClusterNode[],
+): Record<string, GpuKind> {
+  const devices = (json(slicesText).items ?? []).flatMap((s) => {
+    const spec = (s.spec ?? {}) as { nodeName?: string; devices?: Record<string, unknown>[] };
+    const arch = nodes.find((n) => n.name === spec.nodeName)?.arch;
+    return (spec.devices ?? []).map((d) => {
+      const attrs = (d.attributes ??
+        (d.basic as { attributes?: unknown })?.attributes ??
+        {}) as Record<string, Record<string, unknown>>;
+      return {
+        uuid: attr(attrs, "uuid"),
+        product: attr(attrs, "productName"),
+        cc: attr(attrs, "cudaComputeCapability"),
+        arch,
+      };
+    });
+  });
+  const out: Record<string, GpuKind> = {};
+  for (const c of json(classesText).items ?? []) {
+    const spec = c.spec as { selectors?: { cel?: { expression?: string } }[] } | undefined;
+    const cel = (spec?.selectors ?? []).map((x) => x.cel?.expression ?? "").join("\n");
+    const uuids: string[] = cel.match(/GPU-[0-9a-fA-F-]{36}/g) ?? [];
+    const named = /productName[^=]*==\s*"([^"]+)"/.exec(cel)?.[1];
+    const d = devices.find((x) => x.uuid && uuids.includes(x.uuid));
+    const kind: GpuKind = d
+      ? { product: d.product, cc: d.cc, arch: d.arch }
+      : named
+        ? { product: named }
+        : {};
+    if (kind.product || kind.cc || kind.arch) out[meta(c).name ?? "?"] = kind;
+  }
+  return out;
 }
 
 /** Storage classes from `kubectl get storageclass -o json`, the default one marked. */
@@ -231,11 +297,19 @@ export async function checkCluster(
   const classes = await k.kubectl(t, ["get", "deviceclasses", "-o", "json"]);
   const storage = await k.kubectl(t, ["get", "storageclass", "-o", "json"]);
   const ns = await k.kubectl(t, ["auth", "can-i", "create", "namespaces"]);
+  // Which GPU each device class names (goal 132): only where control may read resource slices.
+  const slices =
+    classes.code === 0 ? await k.kubectl(t, ["get", "resourceslices", "-o", "json"]) : undefined;
+  const nodeList = nodes.code === 0 ? parseNodes(nodes.stdout) : [];
   const out: ClusterFacts = {
     version: gitVersion,
-    nodes: nodes.code === 0 ? parseNodes(nodes.stdout) : [],
+    nodes: nodeList,
     device_classes:
       classes.code === 0 ? (json(classes.stdout).items ?? []).map((c) => meta(c).name ?? "?") : [],
+    gpu_classes:
+      classes.code === 0
+        ? gpuClasses(classes.stdout, slices?.code === 0 ? slices.stdout : "{}", nodeList)
+        : undefined,
     storage_classes: storage.code === 0 ? parseStorageClasses(storage.stdout) : [],
     can_create_namespaces: ns.stdout.trim() === "yes",
     slots: [],

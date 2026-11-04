@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { cudaFor } from "../../../src/control/clusters/index.ts";
 import { control, fakeCluster, KUBECONFIG, mcpWith, OPERATOR } from "../../helpers/fake-cluster.ts";
 
 /**
@@ -98,5 +99,105 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
     );
     assert.equal(none.s.store.clusters.rig("spark-2"), undefined, "nothing was added");
     await none.mcp.close();
+  });
+
+  test("control tells a GB10 from what the cluster says, and defaults to CUDA 13", async () => {
+    // The class's selector names the GPU's UUID; the slice says it is a GB10 of 12.1 on an arm64 node.
+    const UUID = "GPU-f583e817-7193-fb85-7863-b3a0d5eca14e";
+    const spark = {
+      deviceClasses: ["spark-gpus", "other-gpus"],
+      deviceClassSpecs: {
+        "spark-gpus": {
+          selectors: [
+            { cel: { expression: `device.attributes["gpu.nvidia.com"].uuid == "${UUID}"` } },
+          ],
+        },
+        "other-gpus": {
+          selectors: [
+            {
+              cel: {
+                expression: `device.attributes["gpu.nvidia.com"].productName == "Tesla P100-PCIE-16GB"`,
+              },
+            },
+          ],
+        },
+      },
+      nodeArch: "arm64",
+      slices: [
+        {
+          spec: {
+            nodeName: "gpu-node-1",
+            devices: [
+              {
+                name: "gpu-0",
+                attributes: {
+                  uuid: { string: UUID },
+                  productName: { string: "NVIDIA GB10" },
+                  cudaComputeCapability: { version: "12.1.0" },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const f = fakeCluster(spark);
+    const s = await control(f.k);
+    assert.match(
+      await s.post("/ui/settings/add", {
+        type: "k8s",
+        name: "k8s-a",
+        kubeconfig: KUBECONFIG,
+        placement: "created",
+        namespace_pattern: "thermite-{rig}",
+      }),
+      /"k8s-a" is added and checked/,
+    );
+    const facts = s.store.clusters.get("k8s-a")?.facts as { gpu_classes?: unknown } | undefined;
+    assert.deepEqual(facts?.gpu_classes, {
+      "spark-gpus": { product: "NVIDIA GB10", cc: "12.1.0", arch: "arm64" },
+      "other-gpus": { product: "Tesla P100-PCIE-16GB" },
+    });
+    // Add a rig: the GB10's class says CUDA 13, and why; the node shows its architecture.
+    const add = await s.page("/ui/rigs/add");
+    assert.match(
+      add,
+      /<option value="dra:spark-gpus" data-cuda="13" data-why="NVIDIA GB10 is on an arm64 node: only the CUDA 13 harness runs there\.">/,
+    );
+    assert.match(add, /name="k_cuda__k8s-a"/);
+    assert.match(add, /gpu-node-1 \(2 GPUs, arm64\)/);
+    // Over MCP, with no cuda: the class's GPU sets it.
+    const mcp = await mcpWith(s.api, OPERATOR);
+    const added = await mcp.call("add_cluster_rig", {
+      rig: "spark-1",
+      cluster: "k8s-a",
+      gpus: 1,
+      gpu_mode: "dra:spark-gpus",
+    });
+    assert.equal(added.error, false, JSON.stringify(added.body));
+    assert.equal(s.store.clusters.rig("spark-1")?.spec.cuda, "13");
+    // The form's choice of 12 stays 12, whatever the GPU.
+    assert.equal(
+      await s.post("/ui/rigs/add", {
+        place: "cluster:k8s-a",
+        rig: "spark-2",
+        "k_gpus__k8s-a": "1",
+        "k_mode__k8s-a": "dra:spark-gpus",
+        "k_cuda__k8s-a": "12",
+        "k_storage__k8s-a": "standard",
+        "k_size__k8s-a": "50",
+      }),
+      "/ui/rigs/spark-2",
+    );
+    assert.equal(s.store.clusters.rig("spark-2")?.spec.cuda, undefined);
+    await mcp.close();
+  });
+
+  test("the rule: arm64 or compute capability 10 and up takes CUDA 13", () => {
+    assert.equal(cudaFor({ product: "NVIDIA-GB10" })?.cuda, "13");
+    assert.equal(cudaFor({ cc: "10.0" })?.cuda, "13");
+    assert.equal(cudaFor({ product: "Tesla-V100-SXM2-16GB", arch: "amd64" }), undefined);
+    assert.equal(cudaFor({ cc: "6.0", product: "Tesla P100" })?.cuda, "12");
+    assert.equal(cudaFor({ arch: "arm64" })?.cuda, "13");
   });
 });

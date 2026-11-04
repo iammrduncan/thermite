@@ -8,6 +8,7 @@
  */
 
 export { actOnClusterRig, type ClusterRigAction, clusterRigAction } from "./actions.ts";
+export { cudaFor, cudaOfPlace } from "./cuda.ts";
 export {
   cancelDrain,
   chooseAtDeadline,

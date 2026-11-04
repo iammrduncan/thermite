@@ -19,6 +19,7 @@ import {
 } from "../rigs/index.ts";
 import { type Cluster, type ClusterRig, RIG_ID } from "../store/index.ts";
 import { programModeOf } from "../views/index.ts";
+import { cudaOfPlace } from "./cuda.ts";
 import {
   type ClusterFacts,
   type ClusterSlot,
@@ -244,7 +245,11 @@ export async function addClusterRig(
   if (devices) return fail(devices);
   if (i.cuda === "13" && !gpus)
     return fail("A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.");
-  const images = controlImages(parts, gpus, i.cuda);
+  // Left out: the CUDA its GPUs take, where control can tell (an arm64 node, a Blackwell GPU).
+  const cuda = gpus
+    ? (i.cuda ?? cudaOfPlace(facts, { deviceClass, node: i.node })?.cuda)
+    : undefined;
+  const images = controlImages(parts, gpus, cuda);
   if (typeof images === "string") return fail(images);
   const token = newToken();
   store.enrollments.enroll(rig, token.sha256, by);
@@ -264,7 +269,7 @@ export async function addClusterRig(
       resources,
       programMode,
       images,
-      ...(i.cuda === "13" ? { cuda: "13" as const } : {}),
+      ...(cuda === "13" ? { cuda: "13" as const } : {}),
       controlUrl: controlAddress(parts),
       ...(openings.length ? { openings } : {}),
       ...(ingress ? { ingress } : {}),
