@@ -1,10 +1,12 @@
 import type { Hono } from "hono";
 import { RIG_ID } from "../../../core/ids.ts";
 import { addClusterRunner, addMachineRunner, rigReportsSettings } from "../../clusters/index.ts";
-import { setRigSettings } from "../../rigs/index.ts";
+import { STEP_WORDS, setRigSettings } from "../../rigs/index.ts";
 import type { ControlStore } from "../../store/index.ts";
-import type { RunnerPlaces } from "../../ui/rigs/runners.ts";
+import { ago, esc } from "../../ui/components/index.ts";
+import { coreBlock, type RunnerPlaces, runnersBlock } from "../../ui/rigs/runners.ts";
 import { rigHref } from "../../ui/urls.ts";
+import type { RigView } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
 import { type Place, placeOf, productAt, runnerGroups } from "./add-places.ts";
 
@@ -141,12 +143,8 @@ export async function giveWorkers(
   );
 }
 
-/**
- * What Edit rig shows of a rig's runners (goal 206): where each runner control set up is, and its
- * GPU; each free GPU it can add, as the form's value (its runner's name, then its place); and
- * whether the core judges on its runners alone. `names`: the runners the rig reports.
- */
-export function runnerPlaces(store: ControlStore, rig: string, names: string[]): RunnerPlaces {
+/** Where each runner process control set up for a rig is, and its GPU, by its name. */
+function placedRunners(store: ControlStore, rig: string): RunnerPlaces["placed"] {
   const placed: RunnerPlaces["placed"] = {};
   for (const r of store.rigRunners.of(rig)) {
     if (r.status === "removed") continue;
@@ -173,6 +171,16 @@ export function runnerPlaces(store: ControlStore, rig: string, names: string[]):
       product,
     };
   }
+  return placed;
+}
+
+/**
+ * What Edit rig shows of a rig's runners (goal 206): where each runner control set up is, and its
+ * GPU; each free GPU it can add, as the form's value (its runner's name, then its place); and
+ * whether the core judges on its runners alone. `names`: the runners the rig reports.
+ */
+export function runnerPlaces(store: ControlStore, rig: string, names: string[]): RunnerPlaces {
+  const placed = placedRunners(store, rig);
   const add = runnerGroups(store, rig, names).flatMap((g) =>
     g.gpus
       .filter((x) => !x.used)
@@ -217,4 +225,63 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
     });
   }
   return out;
+}
+
+/**
+ * The rig's page's **The core** and **Runners** blocks (goal 206), as the approved mockup has
+ * them, for a rig with runners: nothing for one without.
+ */
+export function coreAndRunners(store: ControlStore, u: RigView, now: number): string {
+  if (!u.runners && !u.settings?.runners.length) return "";
+  const m = store.machines.rig(u.id);
+  const k = store.clusters.rig(u.id);
+  const h = u.hardware;
+  const iso = u.checks.isolation;
+  const chips = [
+    u.state === "reporting"
+      ? `<span class="chip ok">reporting</span>`
+      : `<span class="chip warn">${esc(u.state)}</span>`,
+    iso?.finished_at
+      ? `<span class="chip ${iso.ok ? "ok" : "bad"}">isolation ${iso.ok ? "passed" : "failed"} ${esc(ago(iso.finished_at, now))} ago</span>`
+      : "",
+  ].join(" ");
+  const state = h?.disks.find((d) => d.name === "state");
+  const facts = h
+    ? [
+        `${h.cpu.quota ?? h.cpu.usable} CPUs · ${Math.round((h.memory.limit_mib ?? h.memory.host_mib) / 1024)} GiB · ${h.devices.length ? `${h.devices.length} GPU${h.devices.length === 1 ? "" : "s"}` : "no GPU"}`,
+        state
+          ? `disk ${Math.round(state.total_gib)} GB, ${Math.round(state.total_gib - state.free_gib)} GB used`
+          : "",
+        h.os.image ? `${h.os.image}${h.os.arch ? `, ${h.os.arch}` : ""}` : "",
+      ].filter(Boolean)
+    : [];
+  const lanes = u.settings?.lanes ?? 1;
+  const laneNames = Array.from({ length: lanes }, (_, i) => `lane-${i + 1}`);
+  const mode = u.settings?.program_mode;
+  const keeps = `The run's records and the planner; ${
+    lanes <= 4
+      ? `${laneNames.slice(0, -1).join(", ")}${lanes > 1 ? " and " : ""}${laneNames.at(-1)}'s agent program${lanes === 1 ? "" : "s"}`
+      : `${lanes} lanes' agent programs`
+  }${mode === "terminal" ? ", in their own terminals" : mode === "headless" ? ", headless" : ""}; the judge's queue and decisions.`;
+  const lines = store.rigHistory
+    .list(u.id)
+    .filter((x) => x.step.startsWith("runner_") || x.step === "workers_given")
+    .map((x) => ({
+      at: x.at,
+      ok: x.ok,
+      text: `${STEP_WORDS[x.step] ?? x.step}${x.detail ? `: ${x.detail}` : ""}.`,
+    }));
+  return `${coreBlock({
+    name: m ? m.machine : k ? k.namespace : (h?.os.node ?? u.id),
+    where: m
+      ? "over SSH"
+      : k
+        ? k.placement === "slot"
+          ? `a slot of ${k.cluster}`
+          : `a namespace of ${k.cluster}`
+        : "set up outside control",
+    chips,
+    facts,
+    keeps,
+  })}${runnersBlock(u, now, { placed: placedRunners(store, u.id), lines })}`;
 }

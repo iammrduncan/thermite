@@ -44,9 +44,20 @@ export function readSettings(v: unknown): RigSettings | null {
 /** A rig's runners of other machines from its report (goal 206), read loosely; null: none. */
 export function readRunners(v: unknown): RunnersView | null {
   if (!v || typeof v !== "object") return null;
-  const o = v as { processes?: unknown; waiting?: unknown };
+  const o = v as { processes?: unknown; waiting?: unknown; waits?: unknown };
   if (!Array.isArray(o.processes) || !o.processes.length) return null;
   const str = (x: unknown) => (typeof x === "string" ? x : null);
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  const storeOf = (x: unknown) => {
+    if (!x || typeof x !== "object") return null;
+    const s = x as Record<string, unknown>;
+    return {
+      total_gib: num(s.total_gib),
+      free_gib: num(s.free_gib),
+      builds: num(s.builds) ?? 0,
+      kits: num(s.kits) ?? 0,
+    };
+  };
   return {
     processes: o.processes.map((x) => {
       const p = (x ?? {}) as Record<string, unknown>;
@@ -57,6 +68,7 @@ export function readRunners(v: unknown): RunnersView | null {
         why: str(p.why),
         answered_at: str(p.answered_at),
         away_since: str(p.away_since),
+        store: storeOf(p.store),
         runners: (Array.isArray(p.runners) ? p.runners : []).map((r) => {
           const q = (r ?? {}) as Record<string, unknown>;
           return { name: String(q.name ?? ""), pool: String(q.pool ?? ""), holder: str(q.holder) };
@@ -64,6 +76,11 @@ export function readRunners(v: unknown): RunnersView | null {
       };
     }),
     waiting: Array.isArray(o.waiting) ? o.waiting.map(String) : [],
+    waits: (Array.isArray(o.waits) ? o.waits : []).flatMap((x) => {
+      const w = (x ?? {}) as Record<string, unknown>;
+      const since = str(w.since);
+      return typeof w.who === "string" && since ? [{ who: w.who, since }] : [];
+    }),
   };
 }
 

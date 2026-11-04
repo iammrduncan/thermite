@@ -39,35 +39,149 @@ function nowHtml(u: RigView, holder: string | null): string {
   return `${esc(holder.replace("lane-", "Lane "))}'s run_experiment. It never counts.`;
 }
 
-/** Who waits for a runner, in words: the judge once, each lane's run. */
-function waitingWords(waiting: string[]): string {
-  const who = [
-    ...new Set(
-      waiting.map((w) =>
-        w.startsWith("executor-") ? "the judge" : `${w.replace("lane-", "lane ")}'s run_experiment`,
-      ),
-    ),
-  ];
-  return who.join(", ");
+/** A list in words: "a, b and c". */
+const listWords = (xs: string[]) =>
+  xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
+
+/** What the rig's page knows of its runners besides the core's report (goal 206). */
+interface RunnerPage {
+  /** By runner process: where it is, and its GPU, as control set it up. */
+  placed: RunnerPlaces["placed"];
+  /** The runners' lines of the rig's history, oldest first. */
+  lines: { at: string; ok: boolean; text: string }[];
 }
 
-/** The block: the runners, and who waits. Empty for a rig without runners. */
-export function runnersBlock(u: RigView, now: number): string {
+/** A runner process's store, in words. */
+function storeWords(p: Process): string {
+  const s = p.store;
+  if (!s) return `<span class="muted">not said yet</span>`;
+  const disk =
+    s.total_gib !== null && s.free_gib !== null
+      ? `${Math.round(s.total_gib - s.free_gib)} of ${Math.round(s.total_gib)} GB used · `
+      : "";
+  return esc(`${disk}builds ${s.builds} · kits ${s.kits}`);
+}
+
+/** What a runner runs now; for one that takes no runs, where its pool's runs go meanwhile. */
+function nowCell(u: RigView, p: Process, pool: string, holder: string | null): string {
+  if (holder || p.up) return nowHtml(u, holder);
+  const others = (u.runners?.processes ?? [])
+    .filter((x) => x.up && x.name !== p.name)
+    .flatMap((x) => x.runners.filter((y) => y.pool === pool || y.pool === "shared"))
+    .map((y) => y.name);
+  const whose =
+    pool === "judge" ? "the judge's jobs" : pool === "shared" ? "its runs" : `${pool}'s runs`;
+  return `<span class="muted">${esc(
+    others.length
+      ? `Nothing: ${whose} go to ${listWords(others)} meanwhile, and come back once ${p.name} answers.`
+      : `Nothing: ${whose} wait until ${p.name} answers${pool.startsWith("lane-") ? ", or run on the core" : ""}.`,
+  )}</span>`;
+}
+
+/** A pool as a chip, coloured as Add a rig colours it. */
+const poolChip = (pool: string) =>
+  `<span class="chip${pool === "judge" ? " warn" : pool === "shared" ? " info" : ""}">${esc(poolWords(pool))}</span>`;
+
+/** Who waits for a runner: a card for the judge's jobs and one for each lane, with since when. */
+function waitingCards(u: RigView, now: number): string {
+  const r = u.runners;
+  if (!r) return "";
+  const waits = r.waits.length ? r.waits : r.waiting.map((who) => ({ who, since: "" }));
+  if (!waits.length) return "";
+  const runnersOf = (ok: (pool: string) => boolean) =>
+    r.processes.flatMap((p) =>
+      p.runners
+        .filter((x) => ok(x.pool))
+        .map((x) => ({ name: x.name, up: p.up, holder: x.holder })),
+    );
+  const holderWords = (h: string) =>
+    h.startsWith("executor-") ? "the judge's job" : `${h.replace("lane-", "lane ")}'s run`;
+  const cards: string[] = [];
+  if (waits.some((w) => w.who.startsWith("executor-"))) {
+    const on = runnersOf((pool) => pool === "judge" || pool === "shared").filter((x) => x.up);
+    const shared = runnersOf((pool) => pool === "shared").map((x) => x.name);
+    const queued = u.judge.queued;
+    const jobs = queued.length
+      ? `${queued.length} judge job${queued.length === 1 ? "" : "s"}: ${queued
+          .slice(0, 3)
+          .map((j) => jobHtml(u, j))
+          .join(", ")}${queued.length > 3 ? ", …" : ""}.`
+      : "The judge's next step of its job.";
+    const next = on.length
+      ? `The next free one of ${listWords(on.map((x) => x.name))} takes the first${shared.length ? `, in turn with the lanes on ${listWords(shared)}` : ""}.`
+      : "No runner of the judge's or shared answers now: the jobs wait for one.";
+    cards.push(
+      `<div class="card rq"><span>${poolChip("judge")}${shared.length ? ` and ${poolChip("shared")}` : ""}</span><span>${jobs}</span><span class="small muted">${esc(next)}</span></div>`,
+    );
+  }
+  // Each lane once: its first wait.
+  const lanes = waits.filter(
+    (x, i) => !x.who.startsWith("executor-") && waits.findIndex((y) => y.who === x.who) === i,
+  );
+  for (const w of lanes) {
+    const lane = w.who;
+    const own = runnersOf((pool) => pool === lane);
+    const shared = runnersOf((pool) => pool === "shared");
+    const away = own.filter((x) => !x.up).map((x) => x.name);
+    const next = [...own, ...shared].filter((x) => x.up);
+    const busy = [...new Set(next.flatMap((x) => (x.holder ? [holderWords(x.holder)] : [])))];
+    const says = `${away.length ? `Its own ${listWords(away)} ${away.length === 1 ? "is" : "are"} away; ` : ""}${
+      next.length
+        ? `it takes the next free one of ${listWords(next.map((x) => x.name))}${busy.length ? `, after ${listWords(busy)}` : ""}.`
+        : "no runner of its pool answers now."
+    }`;
+    cards.push(
+      `<div class="card rq"><span>${own.length ? poolChip(lane) : ""}${own.length && shared.length ? " and " : ""}${shared.length ? poolChip("shared") : ""}</span><span>${esc(`${lane.replace("lane-", "Lane ")}'s run_experiment${w.since ? `, waiting ${ago(w.since, now)}` : ""}.`)}</span><span class="small muted">${esc(says)}</span></div>`,
+    );
+  }
+  return `<div class="sub-block"><h3>Waiting for a runner</h3><div class="rq-cards">${cards.join("")}</div></div>`;
+}
+
+/**
+ * The block, as the approved mockup has it: each runner with where it is and its GPU, its pool,
+ * whether it answers, what it runs now and its store; who waits, by pool; and the runners' lines
+ * of the rig's history. Empty for a rig without runners.
+ */
+export function runnersBlock(
+  u: RigView,
+  now: number,
+  more: RunnerPage = { placed: {}, lines: [] },
+): string {
   const r = u.runners;
   if (!r) return "";
   const rows = r.processes
     .flatMap((p) =>
-      p.runners.map(
-        (x) =>
-          `<tr><td><b>${esc(x.name)}</b><br><span class="small muted">runner process ${esc(p.name)}</span></td><td><span class="chip${x.pool === "judge" ? " warn" : x.pool === "shared" ? " info" : ""}">${esc(poolWords(x.pool))}</span></td><td>${stateHtml(p, now)}</td><td>${nowHtml(u, x.holder)}</td></tr>`,
-      ),
+      p.runners.map((x) => {
+        const placed = more.placed[p.name];
+        const name = p.runners.length === 1 ? p.name : x.name;
+        const sub = placed
+          ? `${placed.gpu} · ${placed.where}`
+          : `runner process ${p.name}, started by you`;
+        return `<tr><td><b>${esc(name)}</b><br><span class="small muted">${esc(sub)}</span></td><td>${poolChip(x.pool)}</td><td>${stateHtml(p, now)}</td><td>${nowCell(u, p, x.pool, x.holder)}</td><td class="small muted">${storeWords(p)}</td></tr>`;
+      }),
     )
     .join("");
   const count = r.processes.reduce((n, p) => n + p.runners.length, 0);
-  const waiting = r.waiting.length
-    ? `<div class="small" style="margin-top:8px"><b>Waiting for a runner:</b> ${esc(waitingWords(r.waiting))}.</div>`
-    : "";
-  return `<div class="block" data-part="runners"><div class="head"><h2>Runners</h2><span class="n">${count}</span><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}/edit#where">Add or take away runners on Edit rig</a> · the run goes on</span></div><div class="card flat" style="overflow-x:auto"><table class="ut"><thead><tr><th scope="col">Runner</th><th scope="col">Pool</th><th scope="col">State</th><th scope="col">Now</th></tr></thead><tbody>${rows}</tbody></table></div>${waiting}<div class="small muted" style="margin-top:6px">The core keeps the run: its records, the planner, the lanes' agent programs and the judge's decisions. Each runner takes one run at a time; on a shared one the judge and the lanes take turns, first come, first served.</div></div>`;
+  const lines = more.lines
+    .slice(-8)
+    .reverse()
+    .map(
+      (l) =>
+        `<span${l.ok ? "" : ' class="bad"'}><span class="muted mono">${esc(l.at.slice(11, 16))}</span> ${esc(l.text)}</span>`,
+    )
+    .join("");
+  return `<div class="block" data-part="runners"><div class="head"><h2>Runners</h2><span class="n">${count}</span><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}/edit#where">Add or take away runners on Edit rig</a> · the run goes on</span></div><div class="card flat" style="overflow-x:auto"><table class="ut"><thead><tr><th scope="col">Runner</th><th scope="col">Pool</th><th scope="col">State</th><th scope="col">Now</th><th scope="col">Its store</th></tr></thead><tbody>${rows}</tbody></table></div>${waitingCards(u, now)}${lines ? `<div class="sub-block"><h3>History <span class="muted small">the runners' lines</span></h3><div class="card rh">${lines}</div></div>` : ""}<div class="small muted" style="margin-top:6px">Each runner takes one run at a time; on a shared one the judge and the lanes take turns, first come, first served.</div></div>`;
+}
+
+/** The rig's core, as the approved mockup has it: where it runs, its facts, and what it keeps. */
+export function coreBlock(c: {
+  name: string;
+  where: string;
+  chips: string;
+  facts: string[];
+  keeps: string;
+}): string {
+  return `<div class="block" data-part="core"><div class="head"><h2>The core</h2></div><div class="card rc"><div><b>${esc(c.name)}</b> <span class="chip">${esc(c.where)}</span> ${c.chips}</div>${c.facts.length ? `<div class="rc-facts">${c.facts.map((f) => `<span>${esc(f)}</span>`).join("")}</div>` : ""}<div class="small">${esc(c.keeps)}</div></div></div>`;
 }
 
 /** A pool's choice in a select: the judge's, shared, or one of the rig's lanes'. */

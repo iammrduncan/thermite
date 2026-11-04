@@ -3,6 +3,12 @@
  * and a campaign's card.
  */
 export const RIG = `/* a rig's page */
+/* its core and runners (goal 206): the core's card, who waits by pool, the runners' history lines */
+.rc { display: flex; flex-direction: column; gap: 8px; } .rc-facts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted-foreground); }
+.sub-block { margin-top: 14px; } .sub-block h3 { margin: 0 0 8px; font-size: 14px; }
+.rq-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.rq { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.rh { display: flex; flex-direction: column; gap: 6px; font-size: 13px; } .rh .bad { color: var(--error-foreground); }
 .ck { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .ck:last-child { border-bottom: 0; }
 .ck-res .chip { min-width: 70px; justify-content: center; }

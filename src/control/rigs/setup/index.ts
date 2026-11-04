@@ -84,6 +84,9 @@ export const STEP_WORDS: Record<string, string> = {
   runner_removed: "A runner taken away",
   runner_images: "A runner's deployments applied with new images",
   workers_given: "Its Workers at a time sent, as Add a rig chose, once it reported its settings",
+  runner_answers: "A runner answered the rig's core: it takes runs of its pool",
+  runner_away: "A runner stopped answering: its run under way was tried again",
+  runner_back: "A runner answers again: it takes runs of its pool",
   bus_registered: "It registered its keys on the message bus with control",
   bus_off:
     "It calls control over HTTP with no keys on the message bus: it is broken until it is set up again",

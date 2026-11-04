@@ -182,6 +182,52 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await owner.close();
   });
 
+  test("the rig's history says when a runner first answers, stops answering and answers again", async () => {
+    const { s } = await withRig();
+    const report = (up: boolean, away: string | null) =>
+      ingestReport(s.store, {
+        rig: "core-1",
+        ledger_id: "ledger-core-1",
+        cursor: 0,
+        next: 0,
+        generated_at: new Date().toISOString(),
+        events: [],
+        summary: {
+          settings: { lanes: 2, promotion: "auto", runners: [{ name: "box-2", pools: ["judge"] }] },
+          runners: {
+            processes: [
+              {
+                name: "box-2",
+                pools: ["judge"],
+                up,
+                ...(away ? { why: "the runner box-2 stopped answering" } : {}),
+                answered_at: null,
+                away_since: away,
+                runners: [{ name: "box-2-0", pool: "judge", holder: null }],
+              },
+            ],
+            waiting: [],
+          },
+        },
+      });
+    await report(false, null);
+    await report(true, null);
+    await report(true, null);
+    await report(false, "2026-11-04T19:57:00Z");
+    await report(true, null);
+    assert.deepEqual(
+      s.store.rigHistory
+        .list("core-1")
+        .filter((x) => x.step.startsWith("runner_"))
+        .map((x) => [x.step, x.ok, x.detail]),
+      [
+        ["runner_answers", true, "box-2"],
+        ["runner_away", false, "box-2: the runner box-2 stopped answering"],
+        ["runner_back", true, "box-2"],
+      ],
+    );
+  });
+
   test("the owner's alone; refused in words", async () => {
     const { s } = await withRig();
     const operator = await mcpClient(s.api, OPERATOR);

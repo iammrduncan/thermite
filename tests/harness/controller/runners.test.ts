@@ -41,7 +41,14 @@ const service = {
 } as unknown as HarnessService;
 
 const core = { type: "cpu", separated: false, judges: true };
-const fits = { answer: { type: "cpu", separated: false, cards: 2 } };
+const fits = {
+  answer: {
+    type: "cpu",
+    separated: false,
+    cards: 2,
+    store: { total_gib: 200, free_gib: 159.5, builds: 3, kits: 1 },
+  },
+};
 const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
 /** The judge's executors as the hub makes and stops them, by runner. */
@@ -108,6 +115,14 @@ describe("the core's runners as they come and go (goal 206)", () => {
       { name: "box-2-1", pool: "lane-2", holder: "lane-2" },
     ]);
     assert.deepEqual(report.waiting, []);
+    assert.deepEqual(report.waits, []);
+    // What it keeps, as its check's answer said, for the rig's page.
+    assert.deepEqual(report.processes[0]?.store, {
+      total_gib: 200,
+      free_gib: 159.5,
+      builds: 3,
+      kits: 1,
+    });
     // The same list again changes nothing; a list without it takes it away.
     hub.apply([{ name: "box-2", pools: ["judge", "lane-2"] }]);
     assert.deepEqual(ex.now, ["box-2-0"]);

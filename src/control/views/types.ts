@@ -705,9 +705,18 @@ export interface RunnersView {
     why: string | null;
     answered_at: string | null;
     away_since: string | null;
+    /** What it keeps, as it last answered: its volume's size and free space, its builds and kits. */
+    store: {
+      total_gib: number | null;
+      free_gib: number | null;
+      builds: number;
+      kits: number;
+    } | null;
     /** Each runner: its name (`<process>-<place>`), its pool, and its holder now, if any. */
     runners: { name: string; pool: string; holder: string | null }[];
   }[];
   /** Who waits for a runner, in turn: the judge's executors and the lanes. */
   waiting: string[];
+  /** The same, each with since when; empty from a core that does not say. */
+  waits: { who: string; since: string }[];
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
+import { freeSpace, gib } from "../../common/disk.ts";
 import type { RunAsk } from "../../core/api/harness/runs.ts";
 import { laneCacheEnv, prepareWorkspace } from "../agents/index.ts";
 import type { Role, Runner } from "../broker/index.ts";
@@ -94,6 +95,31 @@ export class RunHost {
     return { kit: loadKit(dir), dir };
   }
 
+  /**
+   * What the runner process keeps (goal 206), for its rig's page: its state volume's size and free
+   * space, and how many builds and kits it holds.
+   */
+  private store(): { total_gib?: number; free_gib?: number; builds: number; kits: number } {
+    const { stateDir } = this.o.paths;
+    const count = (dir: string) => {
+      try {
+        return readdirSync(dir).filter((n) => !n.includes(".tmp-")).length;
+      } catch {
+        return 0;
+      }
+    };
+    let disk: { total_gib: number; free_gib: number } | undefined;
+    try {
+      const f = freeSpace(stateDir);
+      disk = { total_gib: gib(f.total), free_gib: gib(f.free) };
+    } catch {}
+    return {
+      ...disk,
+      builds: count(join(stateDir, "builds")),
+      kits: count(join(stateDir, "kits")),
+    };
+  }
+
   /** Answers one ask of the core. */
   async ask(a: RunAsk): Promise<object> {
     switch (a.op) {
@@ -102,6 +128,7 @@ export class RunHost {
           type: this.card(0).driver.type,
           separated: this.o.runner.separated,
           cards: this.cards.length,
+          store: this.store(),
         };
       case "git_has": {
         const m = this.mirror(a.repo);

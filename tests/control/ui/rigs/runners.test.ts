@@ -93,8 +93,69 @@ describe("a rig's runners in control (goal 206)", () => {
     assert.match(html, /box-2-0[\s\S]*the judge's[\s\S]*answers[\s\S]*The judge: /);
     assert.match(html, /Lane 2's run_experiment\. It never counts\./);
     assert.match(html, /away 3m[\s\S]*the runner box-3 stopped answering; its run was tried again/);
-    assert.match(html, /Waiting for a runner:<\/b> lane 1's run_experiment, the judge\./);
+    assert.match(html, /<th scope="col">Its store<\/th>/);
+    assert.match(html, /not said yet/);
+    // An away runner says where its pool's runs go meanwhile.
+    assert.match(
+      html,
+      /Nothing: lane-1&#39;s runs go to box-2-1 meanwhile, and come back once box-3 answers\.|Nothing: lane-1's runs go to box-2-1 meanwhile, and come back once box-3 answers\./,
+    );
+    // Who waits, by pool: the judge's jobs, and lane 1 once, whose own runner is away.
+    assert.match(html, /<h3>Waiting for a runner<\/h3>/);
+    assert.match(
+      html,
+      /The next free one of box-2-0 and box-2-1 takes the first, in turn with the lanes on box-2-1\./,
+    );
+    assert.equal(html.match(/Lane 1&#39;s run_experiment|Lane 1's run_experiment/g)?.length, 1);
+    assert.match(
+      html,
+      /Its own box-3-0 is away; it takes the next free one of box-2-1, after lane 2(&#39;|')s run\./,
+    );
     assert.match(html, /href="\/ui\/rigs\/rig-a\/edit#where"/);
+    // With control's places and the runners' history lines.
+    const more = runnersBlock(view(reported), Date.parse("2026-11-04T20:00:00Z"), {
+      placed: {
+        "box-3": { where: "box · over SSH", gpu: "GPU 0 · NVIDIA GB10", product: "NVIDIA GB10" },
+      },
+      lines: [
+        { at: "2026-11-04T19:20:00Z", ok: true, text: "A runner answered the rig's core: box-3." },
+        { at: "2026-11-04T19:57:00Z", ok: false, text: "A runner stopped answering: box-3." },
+      ],
+    });
+    assert.match(
+      more,
+      /<b>box-3<\/b><br><span class="small muted">GPU 0 · NVIDIA GB10 · box · over SSH<\/span>/,
+    );
+    assert.match(
+      more,
+      /the runners(&#39;|')s? lines[\s\S]*19:57<\/span> A runner stopped answering[\s\S]*19:20/,
+    );
+  });
+
+  test("a runner's store and each wait's start are read from the report", () => {
+    const r = readRunners({
+      processes: [
+        {
+          ...reported.processes[0],
+          store: { total_gib: 200, free_gib: 159.5, builds: 3, kits: 1 },
+        },
+      ],
+      waiting: ["lane-1"],
+      waits: [{ who: "lane-1", since: "2026-11-04T19:59:20Z" }, { who: 7 }],
+    });
+    assert.deepEqual(r?.processes[0]?.store, {
+      total_gib: 200,
+      free_gib: 159.5,
+      builds: 3,
+      kits: 1,
+    });
+    assert.deepEqual(r?.waits, [{ who: "lane-1", since: "2026-11-04T19:59:20Z" }]);
+    const html = runnersBlock(
+      { ...view(undefined), runners: r } as RigView,
+      Date.parse("2026-11-04T20:00:00Z"),
+    );
+    assert.match(html, /40 of 200 GB used · builds 3 · kits 1/);
+    assert.match(html, /Lane 1(&#39;|')s run_experiment, waiting 40s\./);
   });
 
   test("Edit rig: each runner's pool, Remove, and one added by its name", () => {

@@ -29,6 +29,8 @@ interface Slot {
 
 interface Waiter {
   who: string;
+  /** When it asked, in ms. */
+  since: number;
   may: (s: Slot) => boolean;
   take: (s: Slot | "gone") => void;
 }
@@ -96,6 +98,7 @@ export class RunnerPools {
     return new Promise((resolve) => {
       const w: Waiter = {
         who,
+        since: Date.now(),
         may,
         take: (s) => {
           signal?.removeEventListener("abort", ended);
@@ -146,6 +149,11 @@ export class RunnerPools {
   /** Who waits for a runner, in the order they asked: the judge's executors and the lanes. */
   waiting(): string[] {
     return this.waiters.map((w) => w.who);
+  }
+
+  /** The same, each with when it asked (goal 206: the rig's page says how long it waits). */
+  waits(): { who: string; since: number }[] {
+    return this.waiters.map((w) => ({ who: w.who, since: w.since }));
   }
 
   /** Whether any lane waits for the runner, or holds it (the judge then waits its turn). */

@@ -36,6 +36,29 @@ export interface RunnerExecutors {
   remove(runner: RemoteRunner): void;
 }
 
+/** A runner process's store, as its check's answer gives it. */
+interface RunnerStore {
+  total_gib?: number;
+  free_gib?: number;
+  builds: number;
+  kits: number;
+}
+
+/** A store from a check's answer, its numbers alone. */
+function storeOf(v: unknown): RunnerStore | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : undefined);
+  const total = n(o.total_gib);
+  const free = n(o.free_gib);
+  return {
+    ...(total !== undefined ? { total_gib: total } : {}),
+    ...(free !== undefined ? { free_gib: free } : {}),
+    builds: n(o.builds) ?? 0,
+    kits: n(o.kits) ?? 0,
+  };
+}
+
 interface Process {
   setting: RunnerSetting;
   runners: { runner: RemoteRunner; pool: Pool }[];
@@ -47,6 +70,8 @@ interface Process {
   unfit?: string | undefined;
   /** Its kind of target, as it last answered while it fit. */
   type?: string | undefined;
+  /** What it keeps, as it last answered: its volume and its builds and kits. */
+  store?: RunnerStore | undefined;
   /** When it last answered its check, and since when it is away. */
   answeredAt?: number | undefined;
   awaySince?: number | undefined;
@@ -118,9 +143,11 @@ export class RunnerHub {
       why?: string;
       answered_at: string | null;
       away_since: string | null;
+      store?: RunnerStore;
       runners: { name: string; pool: string; holder: string | null }[];
     }[];
     waiting: string[];
+    waits: { who: string; since: string }[];
   } {
     const at = (ms: number | undefined) => (ms === undefined ? null : new Date(ms).toISOString());
     return {
@@ -131,6 +158,7 @@ export class RunnerHub {
         ...(p.unfit ? { why: p.unfit } : p.away && !p.up ? { why: p.away } : {}),
         answered_at: at(p.answeredAt),
         away_since: at(p.awaySince),
+        ...(p.store ? { store: p.store } : {}),
         runners: p.runners.map((r) => ({
           name: r.runner.name,
           pool: r.pool,
@@ -138,6 +166,9 @@ export class RunnerHub {
         })),
       })),
       waiting: this.pools.waiting(),
+      waits: this.pools
+        .waits()
+        .map((w) => ({ who: w.who, since: new Date(w.since).toISOString() })),
     };
   }
 
@@ -217,10 +248,12 @@ export class RunnerHub {
         type?: unknown;
         separated?: unknown;
         cards?: unknown;
+        store?: unknown;
       };
       if (this.processes.get(name) !== p) return;
       p.failed = 0;
       p.answeredAt = Date.now();
+      p.store = storeOf(info.store);
       const unfit = this.unfit(p, info);
       if (unfit) {
         if (p.unfit !== unfit)

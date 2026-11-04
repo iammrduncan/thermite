@@ -116,7 +116,11 @@ describe("a rig's runners in their pools (goal 206)", () => {
     const pools = poolsOf([s.runner, "shared"]);
     const releaseJudge = await pools.holdForJudge(s.runner, "executor-box-2-0");
     const stop = new AbortController();
+    const before = Date.now();
     const waiting = pools.laneRun(run("lane-1"), stop.signal);
+    // The rig's page says who waits, and since when.
+    assert.deepEqual(pools.waiting(), ["lane-1"]);
+    assert.ok((pools.waits()[0]?.since ?? 0) >= before);
     stop.abort();
     assert.deepEqual(await waiting, {
       ran: false,
