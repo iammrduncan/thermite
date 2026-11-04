@@ -41,3 +41,32 @@ ${
 <label class="fd" style="max-width:420px">${infoLabel("The leader's own GPUs", "With followers: shared by the judge and the workers, as on a rig of one node, or the workers' only, so the judge measures on the followers' GPUs alone and the lanes' own runs never wait for it.")}<select name="k_lead__${kn}">${opt("shared", "the judge's and the workers'")}${opt("workers", "the workers' only: the judge measures on the followers'")}</select></label>
 <div class="stack" style="margin-top:10px">${rows}</div></div>`;
 }
+
+/**
+ * Add a rig's More machines for a machine over SSH (goal 205): the other ready machines, each of
+ * which can follow the rig, with the GPUs the judge measures on there (a free GPU each), and
+ * whether the leader's own GPUs are the judge's and the workers' or the workers' only.
+ */
+export function machineFollowerChoices(
+  leader: string,
+  others: { name: string; gpus: { index: number; name: string; used?: string | undefined }[] }[],
+): string {
+  if (!others.length) return "";
+  const kn = esc(leader);
+  const rows = others
+    .map((o) => {
+      const on = esc(o.name);
+      const gpus = o.gpus
+        .map(
+          (g) =>
+            `<label class="gr${g.used ? " used" : ""}"><input type="checkbox" name="m_fgpus__${kn}__${on}" value="${g.index}"${g.used ? " disabled" : ""}><span><b>GPU ${g.index}</b> · ${esc(g.name)}</span><span class="muted small">${g.used ? `used by rig ${esc(g.used)}` : "free: the judge's"}</span></label>`,
+        )
+        .join("");
+      return `<label class="ch"><input type="checkbox" name="m_follow__${kn}" value="${on}" style="margin:2px 8px 0 0"><span><b>${on}</b> <span class="muted small">a machine over SSH</span></span></label>
+<div data-follow-for="${kn}:${on}" hidden>${gpus ? `<div class="card flat">${gpus}</div>` : `<div class="card"><div class="muted">No NVIDIA GPU: the judge measures on its CPUs.</div></div>`}</div>`;
+    })
+    .join("");
+  return `<div class="follow" style="margin-top:14px"><h3 style="font-size:14px;margin:0 0 4px">More machines</h3><p class="lead">The rig can run on more machines. This one leads: it keeps the run and its lanes work here. Each machine you add follows it, and the judge measures on the GPUs you tick there.</p>
+<label class="fd" style="max-width:420px">${infoLabel("The leader's own GPUs", "With followers: shared by the judge and the workers, as on a rig of one machine, or the workers' only, so the judge measures on the followers' GPUs alone and the lanes' own runs never wait for it.")}<select name="m_lead__${kn}"><option value="shared">the judge's and the workers'</option><option value="workers">the workers' only: the judge measures on the followers'</option></select></label>
+<div class="stack" style="margin-top:10px">${rows}</div></div>`;
+}

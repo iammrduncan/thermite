@@ -32,6 +32,15 @@ export interface RigPlan {
   controlFingerprint: string;
   /** The message bus for its supervisor: the one way it reaches control but its registration. */
   bus: RigBus;
+  /**
+   * A follower's units (goal 205): this machine's name in the rig. Its harness starts as a
+   * follower, every GPU of its the judge's, and its supervisor answers the leader's asks.
+   */
+  follower?: string | undefined;
+  /** A leader's followers, each with how many judge GPUs it serves (goal 205). */
+  followers?: { machine: string; gpus: number }[] | undefined;
+  /** With followers: false when the leader's own GPUs are all the workers'. */
+  judgeHere?: boolean | undefined;
 }
 
 /**
@@ -87,7 +96,16 @@ export const unitName = (rig: string, part: "harness" | "supervisor") => `thermi
 /** What a rig's units are made of: the rest of a plan is for its first setup. */
 export type UnitPlan = Pick<
   RigPlan,
-  "rig" | "controlUrl" | "images" | "gpus" | "judgeGpus" | "root" | "bus"
+  | "rig"
+  | "controlUrl"
+  | "images"
+  | "gpus"
+  | "judgeGpus"
+  | "root"
+  | "bus"
+  | "follower"
+  | "followers"
+  | "judgeHere"
 >;
 
 /** The Quadlet units, by file name. */
@@ -97,8 +115,25 @@ export function rigUnits(p: UnitPlan): Record<string, string> {
   const s = unitName(p.rig, "supervisor");
   const net = `thermite-${p.rig}`;
   const egress = `thermite-${p.rig}-egress`;
-  const split = gpuSplit(p.gpus.length, p.judgeGpus);
   const gpu = p.gpus.length > 0;
+  // A follower's GPUs are all the judge's, as the container numbers them; a leader's harness is
+  // told its followers (goal 205).
+  const split = p.follower
+    ? gpu
+      ? { THERMITE_GPU_INDEX: p.gpus.map((_, i) => i).join(",") }
+      : {}
+    : gpuSplit(p.gpus.length, p.judgeGpus);
+  const role: Record<string, string> = p.follower
+    ? { THERMITE_ROLE: "follower" }
+    : p.followers?.length
+      ? {
+          // A follower with no GPU judges on its CPU: one device all the same.
+          THERMITE_FOLLOWERS: p.followers
+            .map((f) => `${f.machine}=${Math.max(1, f.gpus)}`)
+            .join(","),
+          ...(p.judgeHere === false ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
+        }
+      : {};
   const env = (pairs: Record<string, string>) =>
     Object.entries(pairs)
       .map(([k, v]) => `Environment=${k}=${v}`)
@@ -140,6 +175,7 @@ ${env({
   THERMITE_RIG_ID: p.rig,
   THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
   ...split,
+  ...role,
   THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
   THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
 })}
@@ -173,6 +209,7 @@ Image=${p.images.supervisor}
 ContainerName=${s}
 ${env({
   THERMITE_RIG_ID: p.rig,
+  ...(p.follower ? { THERMITE_ROLE: "follower", THERMITE_MACHINE: p.follower } : {}),
   HARNESS_URL: `http://${h}:8700`,
   CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
   THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",

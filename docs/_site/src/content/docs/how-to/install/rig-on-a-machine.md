@@ -93,6 +93,7 @@ All three need sudo without a password; otherwise the row says "the user can't s
 1. Open **Rigs** in the sidebar, then press **Add a rig**.
 2. Under **1 · Where**, choose **gpu-host-1 · a machine over SSH**. A machine that is not ready says why, for example "Not ready: Podman is missing. Fix it under Settings › Machines."
 3. Under **2 · GPUs and resources**, tick the GPUs the rig uses. None: the rig measures on the CPU. One: the judge and the agents share it. Several: the lowest-numbered are the judge's, half by default; set **GPUs for the judge** to change that. A GPU another rig uses shows "used by rig …". See [Give a rig several GPUs](several-gpus.md).
+   - **More machines**, when another machine is ready: the rig can run on more machines. The machine above then leads: it keeps the run, and its lanes work there. Tick each machine that follows it, then the GPUs the judge measures on there; a follower with no GPU ticked measures on its CPUs. **The leader's own GPUs** are **the judge's and the workers'**, as on a rig of one machine, or **the workers' only: the judge measures on the followers'**, so the lanes' own runs never wait for the judge. Control refuses a follower that is not ready, a follower of another architecture than the leader ("gpu-host-2 is arm64 and gpu-host-1 amd64: a rig's machines run one image."), a GPU another rig uses there, and GPUs without NVIDIA's container toolkit there. See [A rig over several machines](#a-rig-over-several-machines).
 4. Under **3 · Name and start**, give a **Rig name**: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It can't change later. **Images** shows what control will run, and **Message bus** where the rig will reach control's message bus: the machine must reach that port, since a rig talks to control only on the bus. When control has no address for rigs on its bus, **Message bus** says `none: control can't set a rig up`, and **Create the rig** is refused: `Control has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or the host of THERMITE_CONTROL_PUBLIC_URL with port 4222), so a rig could not reach it: a rig works only on the bus.`
 5. Press **Create the rig**.
 
@@ -101,7 +102,7 @@ All three need sudo without a password; otherwise the row says "the user can't s
 You land on the rig's page: "Control is setting rig-1 up on gpu-host-1. Its page fills in once the rig reports for the first time." Its **Set up by control** block lists each step, and shows each one as it comes, with no refresh:
 
 - ✓ Enrolled with control: a token of its own
-- ✓ Files and units written, images ready, services started. The first pull of the images can take a while: control allows 30 minutes for this step.
+- ✓ Files and units written, images ready, services started. The first pull of the images can take a while: control allows 30 minutes for this step. A rig with followers has a step for each follower first: "A follower's files and units written, images ready, services started: gpu-host-2".
 - ✓ Its key on the message bus registered: the supervisor made its own key and registered the public part with control over HTTPS, at its start. Each later start of the supervisor adds "It registered its keys on the message bus with control" to the rig's history.
 - ✓ First report reached control. Control waits up to 10 minutes for it. The report comes over the bus: a machine that can't reach the bus's port never reports, this step fails with "no report after 10 minutes", and 5 minutes after the rig registered its keys, its page shows it **Broken** ([A rig off the bus](../operate/message-bus.md#a-rig-off-the-bus)).
 
@@ -136,3 +137,9 @@ Next, [check the rig](../operate/check-a-rig.md): **Isolation** has already run 
 :::caution
 Keep the machine in **Settings › Machines** while rigs that control set up there remain. Control needs it to stop, start or remove them, and says "The machine gpu-host-1 is no longer in Settings › Machines." without it.
 :::
+
+## A rig over several machines
+
+Control sets the rig up on its leader and on each follower over SSH, with the same folder, units and volumes on each, named for the rig. The follower's harness starts as a follower (`THERMITE_ROLE=follower`): it runs no run of its own, and builds and measures on its GPUs when the leader's judge asks. Its supervisor (`THERMITE_ROLE=follower`, `THERMITE_MACHINE=gpu-host-2`) registers its own key on the message bus with control and carries the leader's asks to its harness, and the run's model files from their sources: each follower fetches them once. The leader's harness gets `THERMITE_FOLLOWERS`, and `THERMITE_LOCAL_JUDGE=0` when its GPUs are the workers' only ([Settings](../../reference/settings.md)).
+
+The rig's page shows **Machines**: the leader, and each follower with its GPUs and whether its supervisor is on the bus yet. **Stop its services**, **Start its services**, **Restart them**, **Update to** control's version and **Remove it from** act on every machine of the rig, the leader first. A step that fails on a follower names it: `follower gpu-host-2: …`. Keep each follower in **Settings › Machines** too.

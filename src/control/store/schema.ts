@@ -25,6 +25,7 @@ import {
   knowledgeSearch,
   knowledgeSlotNames,
 } from "./kb/index.ts";
+import { machineRigFollowersColumn } from "./machines.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
@@ -654,6 +655,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   knowledgePublicNames,
   // Each follower's key on the bus, of a rig over several machines (goal 205).
   machineBusKeyTable,
+  // A machine rig's followers on other machines (goal 205).
+  machineRigFollowersColumn,
 ];
 
 /**

@@ -157,7 +157,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(placed.machine)} · ${esc(placed.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
+        `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${machinesBlock(store, placed.rig)}${placedBlock(placed, csrf(c))}`,
         vs,
       );
     if (!u)

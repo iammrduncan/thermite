@@ -33,7 +33,8 @@ import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { esc } from "../../ui/components/index.ts";
 import { ADD_RIG_JS, CUDA_UNSURE } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
-import { followerChoices } from "./followers.ts";
+import { followerChoices, machineFollowerChoices } from "./followers.ts";
+import { machinesOfRig } from "./machine-parts.ts";
 import { rigHelpers } from "./shared.ts";
 
 /**
@@ -55,9 +56,15 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
   const gpusInUse = (machine: string) =>
     new Map(
       store.machines
-        .rigs(machine)
+        .rigs()
         .filter((r) => r.status !== "removed")
-        .flatMap((r) => r.gpus.map((g) => [g, r.rig] as const)),
+        .flatMap((r) => [
+          ...(r.machine === machine ? r.gpus.map((g) => [g, r.rig] as const) : []),
+          // A follower's GPUs on this machine (goal 205) are its rig's too.
+          ...(r.followers?.machines ?? [])
+            .filter((f) => f.machine === machine)
+            .flatMap((f) => f.gpus.map((g) => [g, r.rig] as const)),
+        ]),
     );
   /** Why a machine can't take a rig now, or nothing. */
   const notReady = (m: Machine): string | undefined => {
@@ -70,40 +77,48 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
     if (!f.root && f.linger === false) return "lingering is off for its user";
     return undefined;
   };
-  /** Sets a rig up on a machine, in the background: each step becomes a setup event. */
-  const deployRig = async (
-    r: MachineRig,
-    m: Machine & { key_sealed: string },
-    controlToken: string,
-  ) => {
-    const target = {
-      address: m.address,
-      port: m.port,
-      user: m.user,
-      privateKey: opts.secrets.open(m.key_sealed),
-      hostKeys: m.host_keys,
-    };
+  /**
+   * Sets a rig up on a machine, in the background: each step becomes a setup event. A rig over
+   * several machines (goal 205) is set up on its leader's, then on each follower's, with the
+   * same tokens.
+   */
+  const deployRig = async (r: MachineRig, controlToken: string) => {
+    const secrets = { controlToken, harnessSupervisorToken: newToken().token };
+    const followers = r.followers?.machines.map((f) => ({
+      machine: f.machine,
+      gpus: f.gpus.length,
+    }));
     try {
-      const out = await ssh.sshScript(
-        target,
-        deployScript(
-          {
-            rig: r.rig,
-            controlUrl: parts.publicUrl ?? "",
-            images: r.images,
-            gpus: r.gpus,
-            judgeGpus: r.judge_gpus,
-            root: r.root,
-            controlPublicKey: parts.controlPublicKey,
-            controlFingerprint: fingerprint(parts.controlPublicKey),
-            bus: rigBusOf(parts),
-          },
-          { controlToken, harnessSupervisorToken: newToken().token },
-        ),
-        [],
-        30 * 60_000,
-      );
-      if (out.code !== 0) throw new Error(tail(out.stderr) || `the deploy exited ${out.code}`);
+      for (const p of machinesOfRig(store, opts.secrets, r)) {
+        if (!p.target)
+          throw new Error(`The machine ${p.machine} is no longer in Settings › Machines.`);
+        const out = await ssh.sshScript(
+          p.target,
+          deployScript(
+            {
+              rig: r.rig,
+              controlUrl: parts.publicUrl ?? "",
+              images: r.images,
+              gpus: p.gpus,
+              judgeGpus: p.follower ? undefined : r.judge_gpus,
+              root: p.root,
+              controlPublicKey: parts.controlPublicKey,
+              controlFingerprint: fingerprint(parts.controlPublicKey),
+              bus: rigBusOf(parts),
+              ...(p.follower
+                ? { follower: p.follower }
+                : { followers, judgeHere: r.followers?.judgeHere }),
+            },
+            secrets,
+          ),
+          [],
+          30 * 60_000,
+        );
+        const on = p.follower ? `follower ${p.machine}: ` : "";
+        if (out.code !== 0)
+          throw new Error(`${on}${tail(out.stderr) || `the deploy exited ${out.code}`}`);
+        if (p.follower) store.rigHistory.add(r.rig, "follower_deployed", true, p.machine);
+      }
       store.rigHistory.add(r.rig, "deployed", true);
       store.machines.setRigStatus(r.rig, "starting");
     } catch (err) {
@@ -148,7 +163,21 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
             return `<label class="gr${by ? " used" : ""}"><input type="checkbox" name="gpus" value="${g.index}"${by ? " disabled" : ""}><span><b>GPU ${g.index}</b> · ${esc(g.name)} ${Math.round(g.memory_mib / 1024)} GB</span><span class="muted small">${by ? `used by rig ${esc(by)}` : `free · ${g.busy_pct}% busy · ${g.used_mib} MiB in use`}</span></label>`;
           })
           .join("");
-        return `<div data-place="machine:${esc(m.name)}" hidden>${rows ? `<div class="card flat">${rows}</div>` : `<div class="card"><div class="muted">This machine has no NVIDIA GPU: the rig measures on its CPUs.</div></div>`}</div>`;
+        // More machines (goal 205): the other ready machines, with their GPUs.
+        const others = machines
+          .filter((o) => o.name !== m.name && !notReady(o))
+          .map((o) => {
+            const inUse = gpusInUse(o.name);
+            return {
+              name: o.name,
+              gpus: ((o.facts as MachineFacts | null)?.gpus ?? []).map((g) => ({
+                index: g.index,
+                name: g.name,
+                used: inUse.get(g.index),
+              })),
+            };
+          });
+        return `<div data-place="machine:${esc(m.name)}" hidden>${rows ? `<div class="card flat">${rows}</div>` : `<div class="card"><div class="muted">This machine has no NVIDIA GPU: the rig measures on its CPUs.</div></div>`}${machineFollowerChoices(m.name, others)}</div>`;
       })
       .join("");
     // Clusters: how many GPUs and how, which node, which storage, and (for slots) which slot.
@@ -340,12 +369,42 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
     if (typeof judge === "string") return fail(judge);
     if (gpus.length && !(facts.nvidia_ctk && facts.cdi))
       return fail(`${m.name} needs NVIDIA's container toolkit first: install it under Providers.`);
-    if (gpus.length && !parts.rigImages.harnessCuda)
+    // A rig over several machines (goal 205): each machine ticked under More machines follows
+    // this one, with the GPUs the judge measures on there.
+    const followers: { machine: string; gpus: number[] }[] = [];
+    for (const name of [f[`m_follow__${m.name}`] ?? []].flat().map(String)) {
+      const fm = store.machines.get(name);
+      if (!fm || name === m.name) return fail(`Choose another machine to follow ${m.name}.`);
+      if (!RIG_ID.test(name)) return fail(`A follower's name: ${RIG_ID_SENTENCE}`);
+      const whyNot = notReady(fm);
+      if (whyNot) return fail(`${name} is not ready: ${whyNot}.`);
+      const ff = fm.facts as MachineFacts;
+      if (ff.arch !== facts.arch)
+        return fail(
+          `${name} is ${ff.arch} and ${m.name} ${facts.arch}: a rig's machines run one image.`,
+        );
+      const fg = [f[`m_fgpus__${m.name}__${name}`] ?? []]
+        .flat()
+        .map((x) => Number(x))
+        .sort((a, b) => a - b);
+      const usedThere = gpusInUse(name);
+      for (const g of fg) {
+        if (!ff.gpus.some((x) => x.index === g)) return fail(`${name} has no GPU ${g}.`);
+        if (usedThere.has(g))
+          return fail(`GPU ${g} of ${name} is used by rig ${usedThere.get(g)}.`);
+      }
+      if (fg.length > MAX_RIG_GPUS) return fail(`A follower takes at most ${MAX_RIG_GPUS} GPUs.`);
+      if (fg.length && !(ff.nvidia_ctk && ff.cdi))
+        return fail(`${name} needs NVIDIA's container toolkit first: install it under Providers.`);
+      followers.push({ machine: name, gpus: fg });
+    }
+    const anyGpu = gpus.length > 0 || followers.some((x) => x.gpus.length > 0);
+    if (anyGpu && !parts.rigImages.harnessCuda)
       return fail(
         "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).",
       );
     const images = {
-      harness: gpus.length ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
+      harness: anyGpu ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
       supervisor: parts.rigImages.supervisor,
     };
     const token = newToken();
@@ -358,11 +417,19 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
       images,
       root: facts.root,
       created_by: "owner:ui",
+      ...(followers.length
+        ? {
+            followers: {
+              machines: followers,
+              judgeHere: String(f[`m_lead__${m.name}`] ?? "") !== "workers",
+            },
+          }
+        : {}),
     };
     store.machines.addRig(placed);
     store.rigHistory.add(rig, "enrolled", true);
     const r = store.machines.rig(rig) as MachineRig;
-    void inBackground(store, "machine", rig, "deploy", deployRig(r, m, token.token));
+    void inBackground(store, "machine", rig, "deploy", deployRig(r, token.token));
     return c.redirect(`/ui/rigs/${encodeURIComponent(rig)}`, 303);
   });
   const addClusterRigFrom = async (

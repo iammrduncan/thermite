@@ -363,3 +363,79 @@ describe("machines in Providers", () => {
     assert.match(page, /Removed from the machine/);
   });
 });
+
+describe("a rig over several machines over SSH (goal 205)", () => {
+  test("a machine follows the rig: both are set up, the leader told of its follower, and managed together", async () => {
+    const m = fakeMachine();
+    const sent: { address: string; script: string }[] = [];
+    const base = m.ssh.sshScript;
+    m.ssh.sshScript = async (target, script, args) => {
+      if (script === CHECK_SCRIPT) return base(target, script, args);
+      sent.push({ address: target.address, script });
+      return { code: 0, stdout: "started", stderr: "" };
+    };
+    const s = await control(m.ssh, {
+      rigImages: {
+        harness: "registry.example.com/thermite/harness:1",
+        harnessCuda: "registry.example.com/thermite/harness-cuda:1",
+        supervisor: "registry.example.com/thermite/supervisor:1",
+      },
+    });
+    for (const name of ["box", "box2"]) {
+      await s.post("/ui/settings/add", {
+        type: "ssh",
+        name,
+        address: name,
+        port: "22",
+        user: "thermite",
+      });
+      const page = await s.page("/ui/settings/machines");
+      const seen =
+        new RegExp(`/ui/settings/machines/${name}/trust"[^]*?name="seen" value="([^"]+)"`).exec(
+          page,
+        )?.[1] ?? "";
+      await s.post(`/ui/settings/machines/${name}/trust`, { seen });
+    }
+    const add = await s.page("/ui/rigs/add");
+    assert.match(add, /name="m_follow__box" value="box2"/);
+    assert.match(add, /name="m_lead__box"/);
+    assert.equal(
+      await s.post("/ui/rigs/add", {
+        machine: "box",
+        rig: "pair-a",
+        m_follow__box: "box2",
+        m_lead__box: "workers",
+      }),
+      "/ui/rigs/pair-a",
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    assert.deepEqual(s.store.machines.rig("pair-a")?.followers, {
+      machines: [{ machine: "box2", gpus: [] }],
+      judgeHere: false,
+    });
+    // The leader's units first, told of its follower; then the follower's, started as one.
+    assert.deepEqual(
+      sent.map((x) => x.address),
+      ["box", "box2"],
+    );
+    assert.match(sent[0]?.script ?? "", /Environment=THERMITE_FOLLOWERS=box2=1/);
+    assert.match(sent[0]?.script ?? "", /Environment=THERMITE_LOCAL_JUDGE=0/);
+    assert.match(sent[1]?.script ?? "", /Environment=THERMITE_ROLE=follower/);
+    assert.match(sent[1]?.script ?? "", /Environment=THERMITE_MACHINE=box2/);
+    assert.doesNotMatch(sent[1]?.script ?? "", /THERMITE_FOLLOWERS/);
+    const page = await s.page("/ui/rigs/pair-a");
+    assert.match(page, /<h2>Machines<\/h2><span class="n">2<\/span>/);
+    assert.match(page, /<b>box2<\/b> <span class="chip">follower<\/span>/);
+    // A stop reaches both machines.
+    assert.match(await s.post("/ui/rigs/pair-a/machine/stop", {}), /ok=Stopped/);
+    assert.deepEqual(
+      sent.slice(2).map((x) => x.address),
+      ["box", "box2"],
+    );
+    // A follower's GPU that another rig uses, or the leader itself as its follower, is refused.
+    assert.match(
+      await s.post("/ui/rigs/add", { machine: "box", rig: "pair-b", m_follow__box: "box" }),
+      /Choose another machine to follow box/,
+    );
+  });
+});

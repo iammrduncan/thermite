@@ -45,6 +45,15 @@ export const ADD_RIG_JS = `
       if (!on) for (const box of el.querySelectorAll('input[type="checkbox"]')) box.checked = false;
     }
     const name = form.elements.rig.value.trim() || "the rig";
+    // More machines (goal 205): each node or machine ticked shows its choices, and follows the rig.
+    const leader = place.slice(place.indexOf(":") + 1);
+    let followers = 0;
+    for (const el of form.querySelectorAll("[data-follow-for]")) {
+      const [kk, node] = el.dataset.followFor.split(":");
+      const box = [...form.querySelectorAll('input[name="k_follow__' + kk + '"], input[name="m_follow__' + kk + '"]')].find((b) => b.value === node);
+      el.hidden = !(box && box.checked);
+      if (kk === leader && box && box.checked) followers++;
+    }
     if (place.startsWith("cluster:")) {
       const k = place.slice(8);
       const get = (n) => { const el = form.elements[n + "__" + k]; return el ? el.value : ""; };
@@ -64,14 +73,6 @@ export const ADD_RIG_JS = `
         if (why) why.textContent = hint && cuda.value === hint.dataset.cuda ? hint.dataset.why : hint ? "" : UNSURE;
         const field = form.querySelector('[data-cuda-for="' + k + '"]');
         if (field) field.hidden = gpus === 0;
-      }
-      // More machines (goal 205): each node ticked shows its choices, and follows the rig.
-      let followers = 0;
-      for (const el of form.querySelectorAll("[data-follow-for]")) {
-        const [kk, node] = el.dataset.followFor.split(":");
-        const box = [...form.querySelectorAll('input[name="k_follow__' + kk + '"]')].find((b) => b.value === node);
-        el.hidden = !(box && box.checked);
-        if (kk === k && box && box.checked) followers++;
       }
       const j = share(gpus, get("k_judge"));
       note.textContent = refused(j) ? j :
@@ -119,7 +120,7 @@ export const ADD_RIG_JS = `
       "Judge: GPU " + gpus.slice(0, j).join(", ") + ". Agents' test runs: GPU " + gpus.slice(j).join(", ") + ". They never wait for each other.";
     const machine = place.startsWith("machine:") ? place.slice(8) : "";
     sum.textContent = machine
-      ? "Control will enroll " + name + ", write its files and services on " + machine + (gpus.length ? " with GPU" + (gpus.length > 1 ? "s " + gpus.join(" and ") : " " + gpus[0]) : " (CPU only)") + ", start it, and wait for its first report. You need to do nothing on the machine."
+      ? "Control will enroll " + name + ", write its files and services on " + machine + (gpus.length ? " with GPU" + (gpus.length > 1 ? "s " + gpus.join(" and ") : " " + gpus[0]) : " (CPU only)") + (followers ? ", and on " + followers + " more machine" + (followers > 1 ? "s" : "") + " that follow it, where the judge measures" : "") + ", start it, and wait for its first report. You need to do nothing on the machine."
       : "Choose a machine or a cluster.";
   };
   // A CUDA chosen by hand stays as chosen.

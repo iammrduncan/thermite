@@ -159,7 +159,8 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
   // workers'.
   const leading: Record<string, string> = followers.length
     ? {
-        THERMITE_FOLLOWERS: followers.map((f) => `${f.machine}=${f.gpus}`).join(","),
+        // A follower with no GPU judges on its CPU: one device all the same.
+        THERMITE_FOLLOWERS: followers.map((f) => `${f.machine}=${Math.max(1, f.gpus)}`).join(","),
         ...(p.judgeHere === false ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
       }
     : {};

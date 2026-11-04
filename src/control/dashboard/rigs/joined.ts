@@ -18,6 +18,7 @@ import { awaitFirstReport, STEP_WORDS } from "../../rigs/index.ts";
 import { fingerprint } from "../../store/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { ClientFailures } from "../session.ts";
+import { machinesOfRig } from "./machine-parts.ts";
 import { placeFollowUrl, rigHelpers } from "./shared.ts";
 
 /** Failed join requests a client may make in a minute before it waits. */
@@ -224,22 +225,20 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
     const removing =
       action === "remove" ? removeCheck(store, r.rig, String(f.confirm ?? "").trim()) : null;
     if (removing && "refused" in removing) return back("error", removing.refused);
-    const m = store.machines.get(r.machine);
-    if (!m) return back("error", `The machine ${r.machine} is no longer in Settings › Machines.`);
     try {
-      const out = await ssh.sshScript(
-        {
-          address: m.address,
-          port: m.port,
-          user: m.user,
-          privateKey: opts.secrets.open(m.key_sealed),
-          hostKeys: m.host_keys,
-        },
-        manageScript(r, action),
-        [],
-        5 * 60_000,
-      );
-      if (out.code !== 0) throw new Error(tail(out.stderr) || `exit ${out.code}`);
+      // Every machine of the rig (goal 205): its leader, then each follower.
+      for (const p of machinesOfRig(store, opts.secrets, r)) {
+        const on = p.follower ? `follower ${p.machine}: ` : "";
+        if (!p.target)
+          throw new Error(`${on}the machine ${p.machine} is no longer in Settings › Machines.`);
+        const out = await ssh.sshScript(
+          p.target,
+          manageScript({ rig: r.rig, root: p.root }, action),
+          [],
+          5 * 60_000,
+        );
+        if (out.code !== 0) throw new Error(`${on}${tail(out.stderr) || `exit ${out.code}`}`);
+      }
     } catch (err) {
       const why = errorText(err);
       store.rigHistory.add(r.rig, action, false, why);

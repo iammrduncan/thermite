@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import { redact } from "../../common/log.ts";
 import { type Row, StorePart } from "./part.ts";
 
@@ -39,6 +40,24 @@ const machineOf = (r: Row): Machine => ({
   created_at: String(r.created_at),
 });
 
+/**
+ * A machine rig's followers (goal 205), made by the store's migration to schema version 30: each
+ * another machine with the GPUs the judge measures on there, and whether the leader's own GPUs
+ * are the workers' only; JSON, null for a rig of one machine.
+ */
+export function machineRigFollowersColumn(db: DatabaseSync): void {
+  const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "followers"))
+    db.exec("alter table machine_rig add column followers text");
+}
+
+/** A machine rig's followers: each machine and its GPUs, all the judge's. */
+interface MachineFollowers {
+  machines: { machine: string; gpus: number[] }[];
+  /** False: the leader's own GPUs are all the workers'. */
+  judgeHere: boolean;
+}
+
 /** A rig control set up on a machine. */
 export interface MachineRig {
   rig: string;
@@ -52,6 +71,8 @@ export interface MachineRig {
   status: string;
   created_at: string;
   created_by: string;
+  /** A rig over several machines (goal 205); none: one machine. */
+  followers?: MachineFollowers | undefined;
 }
 
 const machineRigOf = (r: Row): MachineRig => ({
@@ -65,6 +86,7 @@ const machineRigOf = (r: Row): MachineRig => ({
   status: String(r.status),
   created_at: String(r.created_at),
   created_by: String(r.created_by),
+  ...(r.followers ? { followers: JSON.parse(String(r.followers)) as MachineFollowers } : {}),
 });
 
 export class Machines extends StorePart {
@@ -228,8 +250,8 @@ export class Machines extends StorePart {
   addRig(r: Omit<MachineRig, "created_at" | "status">): void {
     this.db
       .prepare(
-        `insert into machine_rig (rig, machine, gpus, judge_gpus, images, root, status, created_at, created_by)
-         values (?, ?, ?, ?, ?, ?, 'deploying', ?, ?)`,
+        `insert into machine_rig (rig, machine, gpus, judge_gpus, images, root, status, created_at, created_by, followers)
+         values (?, ?, ?, ?, ?, ?, 'deploying', ?, ?, ?)`,
       )
       .run(
         r.rig,
@@ -240,6 +262,7 @@ export class Machines extends StorePart {
         r.root ? 1 : 0,
         new Date().toISOString(),
         r.created_by,
+        r.followers ? JSON.stringify(r.followers) : null,
       );
     this.store.auditLog.add(r.created_by, "machine_rig_created", {
       rig: r.rig,
