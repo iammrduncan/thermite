@@ -48,7 +48,7 @@ export async function updateRigImages(
         "Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.",
     };
   if (!parts.rigBus) return { error: NO_RIG_BUS };
-  const images = controlImages(parts, r.spec.gpus);
+  const images = controlImages(parts, r.spec.gpus, r.spec.cuda);
   if (typeof images === "string") return { error: images };
   const old = r.spec.images;
   const k = store.clusters.get(r.cluster);

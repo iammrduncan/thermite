@@ -59,6 +59,8 @@ export {
 } from "./settings.ts";
 export {
   awaitFirstReport,
+  CUDA_VERSIONS,
+  type CudaVersion,
   controlAddress,
   controlImages,
   judgeShare,

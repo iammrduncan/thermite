@@ -204,6 +204,8 @@ export async function control(
     tag?: string;
     publicUrl?: string | null;
     drainWatchMs?: number;
+    /** False: control has no CUDA 13 harness image (goal 132). */
+    cuda13?: boolean;
   } = {},
 ) {
   const secrets = o.secrets ?? SecretBox.ephemeral();
@@ -219,6 +221,9 @@ export async function control(
       rigImages: {
         harness: `registry.example.com/harness:${tag}`,
         harnessCuda: `registry.example.com/harness-cuda:${tag}`,
+        ...(o.cuda13 === false
+          ? {}
+          : { harnessCuda13: `registry.example.com/harness-cuda13:${tag}` }),
         supervisor: `registry.example.com/supervisor:${tag}`,
       },
     },

@@ -8,7 +8,9 @@ import { MAX_RIG_GPUS } from "../machines/index.ts";
 import type { ControlParts } from "../parts.ts";
 import {
   awaitFirstReport,
+  type CudaVersion,
   controlAddress,
+  controlImages,
   judgeShare,
   NO_RIG_BUS,
   rigBusOf,
@@ -123,6 +125,8 @@ export interface ClusterRigRequest {
   /** The rig's CPUs and memory; default: what the slot's quota allows, else none. */
   cpus?: number | undefined;
   memoryGi?: number | undefined;
+  /** The CUDA harness its GPUs take (goal 132); default 12. */
+  cuda?: CudaVersion | undefined;
 }
 
 /**
@@ -238,8 +242,10 @@ export async function addClusterRig(
   // GPUs: what the slot's quota allows through the device plugin, or of the DRA device class.
   const devices = quotaRefusal(namespace, slotQuota, { gpus, deviceClass });
   if (devices) return fail(devices);
-  if (gpus && !parts.rigImages.harnessCuda)
-    return fail("Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).");
+  if (i.cuda === "13" && !gpus)
+    return fail("A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.");
+  const images = controlImages(parts, gpus, i.cuda);
+  if (typeof images === "string") return fail(images);
   const token = newToken();
   store.enrollments.enroll(rig, token.sha256, by);
   store.clusters.addRig({
@@ -257,10 +263,8 @@ export async function addClusterRig(
       storageGi,
       resources,
       programMode,
-      images: {
-        harness: gpus ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
-        supervisor: parts.rigImages.supervisor,
-      },
+      images,
+      ...(i.cuda === "13" ? { cuda: "13" as const } : {}),
       controlUrl: controlAddress(parts),
       ...(openings.length ? { openings } : {}),
       ...(ingress ? { ingress } : {}),

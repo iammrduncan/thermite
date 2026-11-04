@@ -8,6 +8,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 - **Start a teachers' round**, under **⋯** in a running run's header and in its Live: the run's teachers review it now, as at a timed round, and the next timed round counts from this one, where they waited for their timer. A round under way finishes first. The owner's and the operator's `start_teachers_round` over MCP and `POST /v1/runs/<run>/teachers-round` do the same. Control refuses it, in words, for a run that is not running, a rig with no teachers and a rig with its teachers off ([issue 53](https://github.com/iammrduncan/thermite/issues/53)).
 
+### Rigs
+
+- A rig on a cluster can run the CUDA 13 harness, for Blackwell GPUs and the DGX Spark on arm64: MCP's `add_cluster_rig` takes `cuda: "13"`, control deploys `THERMITE_RIG_HARNESS_CUDA13_IMAGE` (a release's `compose.yaml` sets the release's `-cuda13` image), and each update keeps the rig on it. Other GPU rigs keep the CUDA 12 harness.
+
 ### Model use
 
 - A run's **Stats** tab lists every agent the rig gives a model to, with **No calls yet** in place of the figures of one that has made no call, and why where Thermite knows it: its part off on **Edit rig**, its newest line on Live that says its call had no answer, or when it works. A teacher that never worked looked the same as one never set up. `model_usage` over MCP and `GET /v1/usage` give those lines too, with `configured: true`, `why` and `why_at` ([issue 52](https://github.com/iammrduncan/thermite/issues/52)).

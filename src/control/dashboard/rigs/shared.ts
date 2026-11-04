@@ -174,7 +174,7 @@ export function rigHelpers(dash: Dashboard) {
     const k = store.clusters.rig(rig);
     if (k && k.status !== "removed") {
       const known = store.clusters.get(k.cluster);
-      const images = controlImages(parts, k.spec.gpus);
+      const images = controlImages(parts, k.spec.gpus, k.spec.cuda);
       const noUpdate = !known
         ? `The cluster ${k.cluster} is no longer in Settings › Providers, so control can't reach it.`
         : typeof images === "string"

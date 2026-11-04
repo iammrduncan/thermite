@@ -15,6 +15,7 @@ import {
   setReachableAddresses,
   updateRigImages,
 } from "../clusters/index.ts";
+import { CUDA_VERSIONS, type CudaVersion } from "../rigs/index.ts";
 import type { ToolContext } from "./context.ts";
 
 /** Rigs on clusters, as Add a rig and Providers do them: the owner and operators. */
@@ -39,6 +40,12 @@ export function registerAddClusterRig(tools: ToolContext): void {
           storage_gb: z.number().int().min(1).optional(),
           cpus: z.number().positive().optional(),
           memory_gib: z.number().positive().optional(),
+          cuda: z
+            .enum(CUDA_VERSIONS)
+            .optional()
+            .describe(
+              'For a rig with GPUs, the CUDA harness it runs: "12" (the default: Pascal to Hopper, amd64) or "13" (Turing to Blackwell, and the DGX Spark on arm64). Updates keep it',
+            ),
         },
       },
       audited(
@@ -55,6 +62,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
           storage_gb?: number;
           cpus?: number;
           memory_gib?: number;
+          cuda?: CudaVersion;
         }) => {
           const r = await addClusterRig(
             opts.parts,
@@ -70,6 +78,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
               storageGi: a.storage_gb,
               cpus: a.cpus,
               memoryGi: a.memory_gib,
+              cuda: a.cuda,
             },
             actor,
           );

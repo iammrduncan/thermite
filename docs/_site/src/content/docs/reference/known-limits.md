@@ -83,7 +83,7 @@ Thermite is built to run unattended for as long as a campaign takes, and to reco
 
 ## The CUDA 13 harness is untested
 
-The release publishes two CUDA harnesses ([The CUDA harness](harness-image.md#the-cuda-harness)). The CUDA 12 one (`-cuda`) runs Thermite's GPU rigs, on P100 GPUs among others. The CUDA 13 one (`-cuda13`), for Turing to Blackwell and the DGX Spark, is built, and the release's checks hold it to its architectures, but it has not yet run on a GPU. Control sets GPU rigs up from the CUDA 12 image unless `THERMITE_RIG_HARNESS_CUDA_IMAGE` names another, and it doesn't yet choose the image from a rig's GPUs.
+The release publishes two CUDA harnesses ([The CUDA harness](harness-image.md#the-cuda-harness)). The CUDA 12 one (`-cuda`) runs Thermite's GPU rigs, on P100 GPUs among others. The CUDA 13 one (`-cuda13`), for Turing to Blackwell and the DGX Spark, is built, and the release's checks hold it to its architectures, but it has not yet run on a GPU. Control sets GPU rigs up from the CUDA 12 image unless `THERMITE_RIG_HARNESS_CUDA_IMAGE` names another, or, for a rig on a cluster added over MCP with `cuda: "13"`, from the CUDA 13 image (`THERMITE_RIG_HARNESS_CUDA13_IMAGE`). It doesn't yet choose the image from a rig's GPUs, and the dashboard's **Add a rig** has no choice.
 
 **Removed by:** [goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), Rig images for each GPU generation (v0.1.2). If you run it on a Blackwell GPU or a DGX Spark, [tell us how it went](../project/getting-help.md).
 

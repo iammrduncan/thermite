@@ -799,6 +799,7 @@ Inputs: `stream`, one of `REPORTS`, `EVENTS`, `COMMANDS`, `LIVE`, `CONFIG` and `
 | `storage_gb` | whole number, 1 or more | 100 | The volume's size in GB |
 | `cpus` | number, optional | the slot's quota; without a slot, the namespace's defaults | The rig's CPUs |
 | `memory_gib` | number, optional | the slot's quota; without a slot, the namespace's defaults | The rig's memory in GiB: the supervisor takes 4 GiB of it, since a new rig's agent programs run in their own terminal, and the harness the rest ([The supervisor's share](../how-to/install/rig-on-a-cluster.md#the-supervisors-share)) |
+| `cuda` | `"12"` or `"13"`, optional | `"12"` | For a rig with GPUs, the CUDA harness it runs: `"12"`, `THERMITE_RIG_HARNESS_CUDA_IMAGE` (Pascal to Hopper, amd64), or `"13"`, `THERMITE_RIG_HARNESS_CUDA13_IMAGE` (Turing to Blackwell, and the DGX Spark on arm64). The rig keeps it: each [update](#update_rig_images) moves it onto control's image for its CUDA ([The CUDA harness](harness-image.md#the-cuda-harness)) |
 
 Returns `{rig, status:"deploying"}`. Control enrolls the rig at once and sets it up in the background; [`rig_setup`](#rig_setup) shows each step. [Add a rig on a Kubernetes cluster](../how-to/install/rig-on-a-cluster.md) explains each choice.
 
@@ -826,7 +827,8 @@ It refuses with the same words as **Add a rig**:
 - `Give the rig both its CPUs and its memory, or neither.`
 - `a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals: its supervisor takes 4 GiB for the advisors' terminals, and its harness at least 4 GiB`
 - `The slot <namespace> allows <n> CPUs.`, `… allows <n> GiB of memory.` or `… allows <n> GB of storage.`
-- `Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).`
+- `Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).`, or for `cuda: "13"`, `Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).`
+- `A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.`
 
 ### rig_models
 
@@ -1389,7 +1391,7 @@ Errors:
 - `<rig> is still being set up.`
 - `Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.`
 - `Control has no rig images configured.`
-- `Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).`
+- `Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).`, or for a rig added with `cuda: "13"`, `Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).`
 - `The cluster <cluster> is no longer in Providers.`
 - `<rig> is being updated: wait until its page shows it running, or failed.`, or `<rig> is starting: …`: another update, or a start, is still waiting for its pods
 - `Control could not read <rig>'s deployment to compare control's address: <kubectl's error>` (or `kubectl's answer is not a deployment`): the same images, and the supervisor's deployment could not be read

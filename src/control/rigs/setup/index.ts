@@ -9,12 +9,23 @@ import type { ClusterRig } from "../../store/index.ts";
  * GPUs, the wait for its first report, and each step of its history in words.
  */
 
-/** The images a rig control sets up runs: the harness (CPU, and CUDA for GPU rigs), the supervisor. */
+/**
+ * The images a rig control sets up runs: the harness (CPU; CUDA 12 for GPU rigs, and CUDA 13 for
+ * a cluster rig that asks for it, goal 132), the supervisor.
+ */
 export interface RigImages {
   harness: string;
   harnessCuda?: string | undefined;
+  harnessCuda13?: string | undefined;
   supervisor: string;
 }
+
+/**
+ * The CUDA harness a GPU rig takes (goal 132): "12", the CUDA 12 image, Pascal to Hopper on amd64;
+ * "13", the CUDA 13 image, Turing to Blackwell and the DGX Spark on arm64.
+ */
+export const CUDA_VERSIONS = ["12", "13"] as const;
+export type CudaVersion = (typeof CUDA_VERSIONS)[number];
 
 /** The steps of an update, in words (the rig's page and its history), as update.ts records them. */
 export const UPDATE_STEP_WORDS: Record<string, string> = {
@@ -101,17 +112,22 @@ export const rigTaken = (parts: ControlParts, rig: string) =>
 export const judgeShare = (raw: string, n: number) =>
   judgeShareOf(raw ? Number(raw) : undefined, n);
 
-/** The images control deploys for a rig with these GPUs, or why it has none. */
+/** The images control deploys for a rig with these GPUs, on its CUDA (default 12), or why it has none. */
 export const controlImages = (
   parts: ControlParts,
   gpus: number,
+  cuda: CudaVersion = "12",
 ): ClusterRig["spec"]["images"] | string => {
   const images = parts.rigImages;
   if (!images) return "Control has no rig images configured.";
-  if (gpus && !images.harnessCuda)
+  if (gpus && cuda === "13" && !images.harnessCuda13)
+    return "Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).";
+  if (gpus && cuda === "12" && !images.harnessCuda)
     return "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).";
   return {
-    harness: gpus ? (images.harnessCuda as string) : images.harness,
+    harness: !gpus
+      ? images.harness
+      : ((cuda === "13" ? images.harnessCuda13 : images.harnessCuda) as string),
     supervisor: images.supervisor,
   };
 };

@@ -33,6 +33,8 @@ services:
       # The images control deploys rigs from on machines (Rigs › Add a rig).
       THERMITE_RIG_HARNESS_IMAGE: "${THERMITE_RIG_HARNESS_IMAGE:-}"
       THERMITE_RIG_HARNESS_CUDA_IMAGE: "${THERMITE_RIG_HARNESS_CUDA_IMAGE:-}"
+      # The CUDA 13 harness, for a cluster rig added with cuda "13" (Blackwell, DGX Spark).
+      THERMITE_RIG_HARNESS_CUDA13_IMAGE: "${THERMITE_RIG_HARNESS_CUDA13_IMAGE:-}"
       THERMITE_RIG_SUPERVISOR_IMAGE: "${THERMITE_RIG_SUPERVISOR_IMAGE:-}"
       # The one-container rig image control launches rigs on RunPod from (empty: each launch
       # names its image).

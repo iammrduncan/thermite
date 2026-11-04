@@ -60,6 +60,11 @@ export interface ClusterRig {
      */
     programMode?: ProgramMode | undefined;
     images: { harness: string; supervisor: string };
+    /**
+     * The CUDA harness its GPUs take (goal 132): "13", the CUDA 13 image, which each update to
+     * control's images keeps; none: CUDA 12.
+     */
+    cuda?: "13" | undefined;
     /** Control's address the rig's supervisor reports to, as last deployed (older rigs: unknown). */
     controlUrl?: string | undefined;
     /**

@@ -200,6 +200,8 @@ async function main(): Promise<void> {
           ? {
               harness: env.THERMITE_RIG_HARNESS_IMAGE,
               harnessCuda: env.THERMITE_RIG_HARNESS_CUDA_IMAGE || undefined,
+              // A cluster rig that asks for CUDA 13 (goal 132): Blackwell, the DGX Spark on arm64.
+              harnessCuda13: env.THERMITE_RIG_HARNESS_CUDA13_IMAGE || undefined,
               supervisor: env.THERMITE_RIG_SUPERVISOR_IMAGE,
             }
           : undefined,

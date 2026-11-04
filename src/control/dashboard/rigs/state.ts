@@ -93,7 +93,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   /** Moves a rig control set up on a cluster onto control's images; what changed. */
   const updateClusterRig = async (rig: string): Promise<string> => {
     const k = store.clusters.rig(rig);
-    const want = k ? controlImages(parts, k.spec.gpus) : undefined;
+    const want = k ? controlImages(parts, k.spec.gpus, k.spec.cuda) : undefined;
     if (
       k &&
       want &&
