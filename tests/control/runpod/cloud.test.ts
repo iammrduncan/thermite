@@ -193,7 +193,7 @@ describe("RunPod in Providers", () => {
     assert.equal(g?.key_hint, "…cdef");
     let page = await s.page("/ui/settings/machines");
     assert.ok(!page.includes(KEY), "the key is never shown");
-    assert.match(page, /RunPod \(a GPU cloud\)/);
+    assert.match(page, /value="runpod"[^>]*><span><b>A GPU cloud<\/b>/);
     assert.match(page, /2 GPU types · from \$0\.25\/h \(RTX A4000, Secure\)/);
     assert.match(
       page,

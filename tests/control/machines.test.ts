@@ -261,7 +261,7 @@ describe("machines in Providers", () => {
     await new Promise((r) => setTimeout(r, 20));
     assert.equal(s.store.machines.installs("box")[0]?.ok, true);
     assert.match(
-      await s.page("/ui/settings"),
+      await s.page("/ui/settings/machines"),
       /Last install: NVIDIA(&#39;|')s container toolkit, allowed by owner:ui, <span class="chip ok">done/,
     );
   });
@@ -289,7 +289,8 @@ describe("machines in Providers", () => {
       port: "22",
       user: "thermite",
     });
-    const seen = /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings"))?.[1] ?? "";
+    const seen =
+      /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings/machines"))?.[1] ?? "";
     await s.post("/ui/settings/machines/box/trust", { seen });
     const add = await s.page("/ui/rigs/add");
     assert.match(add, /name="place" value="machine:box" checked/);
