@@ -164,12 +164,14 @@ export function parseNodes(text: string): ClusterNode[] {
       allocatable?: Record<string, string>;
       conditions?: { type: string; status: string }[];
     };
+    // A node with no architecture label has no `arch`, as before the check read it (goal 132).
+    const arch = meta(n).labels?.["kubernetes.io/arch"];
     return {
       name: meta(n).name ?? "?",
       ready: (status.conditions ?? []).some((c) => c.type === "Ready" && c.status === "True"),
       gpus: Number(status.allocatable?.["nvidia.com/gpu"] ?? 0) || 0,
       gpu_product: meta(n).labels?.["nvidia.com/gpu.product"],
-      arch: meta(n).labels?.["kubernetes.io/arch"],
+      ...(arch ? { arch } : {}),
       cpu: status.allocatable?.cpu ?? "?",
       memory: status.allocatable?.memory ?? "?",
     };
