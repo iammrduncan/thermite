@@ -42,7 +42,6 @@ export const UPDATE_STEP_WORDS: Record<string, string> = {
 export const STEP_WORDS: Record<string, string> = {
   enrolled: "Enrolled with control: a token of its own",
   deployed: "Files and units written, images ready, services started",
-  follower_deployed: "A follower's files and units written, images ready, services started",
   first_report: "First report reached control",
   deploy: "Setting it up",
   stop: "Stopped",

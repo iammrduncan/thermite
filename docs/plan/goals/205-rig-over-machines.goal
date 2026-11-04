@@ -1,7 +1,7 @@
 ---
 id: "205"
 title: "A rig over several machines, with pools of devices for its judge and its workers"
-status: IN_PROGRESS
+status: DROPPED
 version: "0.1.3"
 depends_on: []
 created: 2026-11-04
@@ -10,7 +10,9 @@ updated: 2026-11-04
 
 # 205 · A rig over several machines, with pools of devices for its judge and its workers
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `DROPPED`, replaced by [206](206-core-and-runners.goal) · **Version:** [v0.1.3](../roadmap.md#v013)
+
+Dropped 2026-11-04: the owner replaced it with a rig made of one core and its runners (goal [206](206-core-and-runners.goal)), and its code was backed out of v0.1.3 for a clean base. What follows is its record as it stood.
 
 ## Words
 
@@ -132,6 +134,7 @@ The owner chose, 2026-11-04, that control decides which machine leads (Decisions
 - 2026-11-04: Step 2d, the follower acceptance with a lane on the follower: compose.follower.yaml's leader neither judges nor works (`THERMITE_FOLLOWERS=follower-1=1+1`, `THERMITE_LOCAL_JUDGE=0`, `THERMITE_LOCAL_LANES=0`), and a scripted model on the host plans one lane, whose Pi worker on the follower writes the smoke kit's faster kernel, builds it, makes a dev run and submits. scripts/acceptance/follower.mjs wants its submission judged with its verdict at control, the trial logged on the follower, its build and dev run there, every judge job held by the follower's executor, the builds on the follower and none on the leader, and no workspace left on either. A follower logs each trial it runs for its leader. Left for step 2: its run on the lab's test machine, 2e (its own terminal on a follower), research trials on followers.
 - 2026-11-04: Step 2e built: a trial on a follower runs in its own terminal there when the rig's setting says so (`trial_start`'s `terminal`). The follower keeps its console and a worker's Pi view, whose routes it serves itself; the leader's consoles hold an AwayConsole (agents/away.ts) whose screens, inputs and keys are asks of the follower (`trial_screen`, `trial_input`, `trial_keys`), and an input that waits for the usage window's reset learns its outcome from an `input_later` event. Its last screen comes with its end. Test: tests/harness/follower/lanes.test.ts. Left for step 2: the tests and the follower acceptance on the lab's test machine, research trials on followers.
 - 2026-11-04: Step 3's mechanism made simpler than the plan first said: control moves the lead by swapping the machines' settings, as an update of the rig rewrites them, instead of each machine asking control for its part. Step 3a built: a follower's harness gives its own report key in its health answer to its supervisor, which registers it with control beside its bus key (`MACHINE_REGISTER`'s `report_key`); control keeps it by rig and machine (store migration 31, `machine_bus_key.report_key`) and refuses one that is no Ed25519 key. Test: tests/control/bus/machines.test.ts; the store's tests move to schema version 31.
+- 2026-11-04: Dropped for goal 206. Every commit of its code, from the judge's device (0d5d9376) to each follower's report key (dde51470), was reverted in one commit; control's store keeps its migrations 29 and 30 as retired ones, and 31 drops what they made.
 
 ---
 

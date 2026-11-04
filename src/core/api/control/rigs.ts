@@ -248,25 +248,6 @@ export const REGISTER = {
 } as const satisfies Route;
 
 /**
- * A follower's registration of its key on the message bus (goal 205): the supervisor of a machine
- * of a rig over several machines, at its start, with the rig's token. Control gives the key the
- * follower's user (core/link/users.ts) before it answers; the follower takes its leader's asks on
- * the bus with it.
- */
-export const MACHINE_REGISTER = {
-  method: "POST",
-  path: "/v1/rigs/:rig/machines/:machine/supervisor",
-  what: "follower's key registration",
-  body: z.object({
-    bus_key: z.string().max(100),
-    /** Its harness's report-signing key (PEM), which control pins when it leads (step 3). */
-    report_key: z.string().max(4096).optional(),
-  }),
-  answer: z.looseObject({ ok: z.boolean() }),
-  maxBytes: 16 * 1024,
-} as const satisfies Route;
-
-/**
  * The largest champion's patch. Control keeps one only when its SHA-256 is the one the rig's
  * signed champion_published event names: 409 while it has no such event yet (sent again), 422 when
  * the patch is another (not sent again).

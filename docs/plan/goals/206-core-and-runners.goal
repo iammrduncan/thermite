@@ -1,0 +1,85 @@
+---
+id: "206"
+title: "A rig is a core and its runners"
+status: IN_PROGRESS
+version: "0.1.3"
+depends_on: []
+created: 2026-11-04
+updated: 2026-11-04
+---
+
+# 206 · A rig is a core and its runners
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## Words
+
+What owns what, one word for each thing:
+
+- A **rig** owns one **core** and any number of **runners**.
+- The **core** owns everything that thinks or records: the supervisor, the ledger, the project's git, the planner, every lane's agent program and workspace, and the judge's decisions. There is one core, so nothing is copied and no machine is chosen to lead.
+- A **runner** owns one **target resource**: a GPU of a machine over SSH, a pod on a node of a cluster, or a GPU pod on RunPod that exists only while it works. It holds just enough to take a run and give back its result, with the broker's isolation as today.
+- A **run** is one execution on a runner: a lane's `run_experiment`, or one of the judge's builds and measurements.
+- A **pool** is how runners are shared: a runner serves the **shared** queue, first come, first served, for every agent and the judge; or it is **dedicated** to one agent, such as the judge or lane-2.
+- A lane's two tools: **`run_experiment`** runs its change on a runner and gives back what happened, which never counts; **`submit_experiment`** sends its change to the judge.
+
+## What
+
+The owner, 2026-11-04: "We don't need copies of things everywhere we just need runners... The bit that runs an experiment. And ways to either say FIFO on all resources or dedicated resources per agent to submit. So lanes get two things. (1) run_experiment, and (2) submit_experiment. run_experiment executes their task on a target resources (A GPU, a runner on kubernetes, a ephemeral GPU on runpod, etc)... submit_experiment sends it to judging. Judges also have a run_experiment against a target resource. This means a rig is comprised of a core+runners. Core runs the superviers and all the agent loops, all of them. Runners just have enough bits around them to accept a run_experiment and do it."
+
+1. **A rig is a core and its runners.** The core runs on any machine, a CPU-only one too; each runner runs where its resource is. A rig of one machine is a core with a runner of its own, and works as today.
+2. **A lane's `run_experiment`:** its workspace's change and a command go to a runner of its pool, which makes the workspace from the parent commit and the change, runs the command as the lane's user within the lane's limits, and gives back its output. It takes the place of today's dev run.
+3. **A lane's `submit_experiment`:** today's submission.
+4. **The judge's runs:** each build and each measurement of an arm runs on a runner of the judge's pool. The judge's jobs keep their leases and fences on the core, so a runner that stops loses no verdict.
+5. **Pools:** each runner is in the shared queue or dedicated to one agent. A runner takes one run at a time, so a measurement never shares its runner with another run.
+6. **Runners come and go while the run goes on:** a run waits in its queue until a runner of its pool is free. Adding or removing a runner never pauses the run; a runner that leaves during a run fails that run, which the judge tries again and a lane is told of.
+7. **Control:** Add a rig chooses the core's place and its runners with their pools; Edit rig adds and removes runners on a live rig; the rig's page shows the core and each runner, what it runs now and its queue.
+
+## Why
+
+- **The GPUs do GPU work only.** On the lab's two DGX Sparks the owner wants "core on CPU box and runners on each gb10. Thats super clean. Allows us to use the GB10 to the fullest for the GPU work and model testing." The agents' programs, their workspaces and the core's records stay off the GPUs' machines.
+- **RunPod pays only while a GPU works.** The owner, 2026-10-23, on a kernel challenge scored on an H200: "If we do this we need to have the on demand judge, and on demand for workers" ([100](100-on-demand-gpus.goal)). A runner that exists only while it works is that, for any resource, not RunPod alone.
+- **Scale without a pause.** The owner: "later we could scale up and down the runners and not pause the active job... they are independent."
+- **Simpler than goal 205.** Goal 205 put the whole rig on each machine, with copies of the run and a leader chosen among them; the core and its runners need none of that.
+
+## Design (proposed, for the owner's approval with a mockup)
+
+- **The core and its runners talk through control's message bus,** as every rig already does, so a runner can be anywhere: the core's supervisor carries the core's asks to each runner's supervisor, which passes them to its runner. The harness stays off the bus.
+- **A runner is the harness's image started as a runner:** the broker, its roles and isolation as on any rig, and a store of its own for builds, kits and model files, fetched once and kept by their hash. It keeps no run of its own.
+- **What a run carries:** the commits it needs, sent as git bundles of what the runner lacks; the kit, by its commit; the run's model files, which the runner's supervisor fetches from their sources; for a lane's run, the change on its parent commit.
+- **A run's result comes back to the core,** which records it. Agents never reach a runner: only the core asks it, and a lane's run never runs on a runner while the judge measures there.
+
+## Steps (proposed)
+
+1. **A clean base:** goal 205's code backed out (below).
+2. **The runner:** the harness started as a runner, with its supervisor on the bus, that takes one run at a time: the judge's build or measurement, or a lane's command on its change.
+3. **The core's runs:** the judge's builds and measurements and the lanes' `run_experiment` go to runners through one queue per pool, shared or dedicated; a rig of one machine is a core and its own runner.
+4. **Control:** runners on machines over SSH and on cluster nodes, their pools in Add a rig, Edit rig adding and removing runners live, and the rig's page. A mockup first.
+5. **Tests,** and an acceptance check under compose: a core and two runners, a runner added and one removed while a run goes on.
+6. **The two Sparks:** the core on a CPU machine of the lab and a runner on each GB10, with a hill climb.
+
+Runners on RunPod that start for a batch of runs and stop after build on this: goal [100](100-on-demand-gpus.goal).
+
+## What goal 205 leaves (backed out, 2026-11-04)
+
+The owner, 2026-11-04: "I would rather throw away code and have a clean base to build this from than keep and try to mold things in." So all of goal 205's code goes, by reverting its commits, from the judge's device (0d5d9376) to each follower's report key (dde51470): the judge's device and its remote form, the follower's harness and supervisor, the asks on the bus between supervisors, followers' users on the bus, followers on cluster nodes and machines over SSH, lanes' trials on followers, pools per follower GPU, the follower acceptance, and their pages, settings and changelog entries. Its uncommitted work on copies of the run is dropped. Goal 205's plan stays as its record, `DROPPED`.
+
+One part of it stays, as a no-op: control's store had migrations 29 and 30 for followers, which the lab's control store has run. The store counts its version by its migrations, so those two stay in the list as retired migrations that do nothing, and migration 31 drops the table and the column they made.
+
+## Done when
+
+- [ ] Goal 205's code backed out, with every check passing and the store's version moving forward.
+- [ ] The design, with a mockup of Add a rig, Edit rig and the rig's page, agreed by the owner before control's code.
+- [ ] Items 1 to 7, with tests and the acceptance checks of the parts they touch.
+- [ ] A hill climb on the lab: the core on a CPU machine and a runner on each DGX Spark's GB10, with a kit the harness builds today. The TensorFold recipe's own hill climb follows when its kit is ready, which someone else makes (the owner, 2026-11-04, on goal 205).
+- [ ] Pages: Add a rig, Edit rig, the rig's page, a runner's parts and their network rules, the agents' tools, and the changelog. The settled decision that a rig is one harness container changes in [decisions](../decisions.md).
+
+## Decisions
+
+- 2026-11-04, the owner: a rig is a core and its runners, in place of goal 205's leader and followers. Lanes get `run_experiment` and `submit_experiment`; the judge runs against runners too; runners serve a shared first-come queue or are dedicated to one agent.
+- 2026-11-04, the owner: on the lab, the core on a CPU machine and a runner on each GB10.
+- 2026-11-04, the owner: goal 205's code is thrown away for a clean base, not reshaped.
+
+## Progress
+
+- 2026-11-04: Goal written from the owner's words; goal 205 dropped.

@@ -163,7 +163,7 @@ The audit of v0.1.1 studied these from their public code and documentation, for 
 
 ### Studied for the v0.1.3 plans
 
-- **A rig over several machines (goal 205):** [Qwen3.8 Flash Next on one DGX Spark (TensorFold)](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold) (MiaAI-Lab, MIT), a recipe that serves the model from one DGX Spark. Its stated needs (about 107 GiB free to start, 81 GiB to load the weights, one model to a Spark) are why a rig's judge and its workers need machines of their own. Thermite uses none of its code.
+- **A rig of a core and its runners (goal 206, first planned as goal 205):** [Qwen3.8 Flash Next on one DGX Spark (TensorFold)](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold) (MiaAI-Lab, MIT), a recipe that serves the model from one DGX Spark. Its stated needs (about 107 GiB free to start, 81 GiB to load the weights, one model to a Spark) are why a rig's judge and its workers need GPUs of their own, each a runner on its own machine. Thermite uses none of its code.
 
 ### Engines the earlier campaigns tuned
 

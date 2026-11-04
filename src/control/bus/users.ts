@@ -274,12 +274,9 @@ export class BusUsers {
       key: r.key,
       runs: runs.get(r.rig) ?? [],
     }));
-    // The followers of the rigs that have their users (goal 205).
-    const known = new Set(rigs.map((r) => r.rig));
-    const followers = store.busKeys.machineKeys().filter((f) => known.has(f.rig));
     const own = { control: this.control.publicKey, system: this.system.publicKey };
     const leaf = leafRigsFor(store, leafRigsOf(store), (rig) => this.leafTaken.has(rig));
-    return usersFile({ ...own, backup: this.backup, rigs, followers, leaf });
+    return usersFile({ ...own, backup: this.backup, rigs, leaf });
   }
 
   /**

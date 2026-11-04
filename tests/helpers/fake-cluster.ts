@@ -36,8 +36,6 @@ export function fakeCluster(
     slices?: unknown[];
     /** The node's architecture label (kubernetes.io/arch); none: no label. */
     nodeArch?: string;
-    /** More nodes, as the first, each with its own architecture where given (goal 205). */
-    moreNodes?: { name: string; arch?: string }[];
     /** What kubectl prints for one deployment by name; default: the supervisor's, in JSON. */
     deploymentStdout?: string;
   } = {},
@@ -82,23 +80,27 @@ export function fakeCluster(
         );
       if (a === "version -o json")
         return ok(JSON.stringify({ serverVersion: { gitVersion: "v1.35.2" } }));
-      if (a === "get nodes -o json") {
-        const node = (name: string, arch: string | undefined) => ({
-          metadata: { name, ...(arch ? { labels: { "kubernetes.io/arch": arch } } : {}) },
-          status: {
-            allocatable: { cpu: "16", memory: "64Gi", "nvidia.com/gpu": String(o.nodeGpus ?? 2) },
-            conditions: [{ type: "Ready", status: "True" }],
-          },
-        });
+      if (a === "get nodes -o json")
         return ok(
           JSON.stringify({
             items: [
-              node("gpu-node-1", o.nodeArch),
-              ...(o.moreNodes ?? []).map((n) => node(n.name, n.arch ?? o.nodeArch)),
+              {
+                metadata: {
+                  name: "gpu-node-1",
+                  ...(o.nodeArch ? { labels: { "kubernetes.io/arch": o.nodeArch } } : {}),
+                },
+                status: {
+                  allocatable: {
+                    cpu: "16",
+                    memory: "64Gi",
+                    "nvidia.com/gpu": String(o.nodeGpus ?? 2),
+                  },
+                  conditions: [{ type: "Ready", status: "True" }],
+                },
+              },
             ],
           }),
         );
-      }
       if (a === "get deviceclasses -o json")
         return o.deviceClasses
           ? ok(

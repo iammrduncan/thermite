@@ -1,9 +1,11 @@
+import { resolve } from "node:path";
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { ATTEMPT, ATTEMPTS } from "../../core/api/harness/proposer.ts";
 import { laneLimits } from "../../core/contract.ts";
-import { laneRun } from "../agents/index.ts";
+import { laneCacheEnv } from "../agents/index.ts";
+import { type Role, RunRequest } from "../broker/index.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { type ApiContext, allows, limitOf, trialToken, Unauthorized } from "./context.ts";
 
@@ -37,18 +39,48 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
     return c.json(await service.submitAttempt(req, "proposer"), 201);
   });
 
-  // A worker's lane work, in its own trial's workspace (agents/lane-run.ts).
+  // A worker's lane work: only in its own trial's workspace, as its lane's user, with the lane
+  // tool or a shell command, within the limits of a lane's run.
   app.post("/v1/lane/run", bodyLimit({ maxSize: 9 * 1024 * 1024 }), async (c) => {
     const { trial } = trialOf(c.req.header("authorization"));
     const lanes = extras.lanes;
     const ws = service.trialWorkspaces.get(trial.id);
     if (!lanes || !ws) return c.json({ error: "no workspace for this trial" }, 404);
-    const r = await laneRun(
-      { ...lanes, scratchDir: service.paths.scratchDir },
-      { lane: trial.lane, root: ws.root, limits: laneLimits(service.contractFor(trial.run)) },
-      await c.req.json(),
-      (why) => new Unauthorized(why),
-    );
+    const req = RunRequest.parse(await c.req.json());
+    const inside = (p: string) => {
+      const full = resolve(p);
+      return full === ws.root || full.startsWith(`${ws.root}/`);
+    };
+    if (req.role !== trial.lane) throw new Unauthorized("not this trial's lane");
+    if (req.gpu) throw new Unauthorized("device runs go through dev_run");
+    if (!inside(req.cwd) || (req.disk && !inside(req.disk.path)))
+      throw new Unauthorized("outside the trial's workspace");
+    // The contract's lane limits bound every lane command: memory and disk always (defaults
+    // when it sets none), time only when it sets one.
+    const limits = laneLimits(service.contractFor(trial.run));
+    const rssCap = limits.runRssMib * 1024 ** 2;
+    const diskCap = limits.workspaceMib * 1024 ** 2;
+    let argv: string[];
+    if (req.argv[0] === "lanetool") argv = [...lanes.laneTool, ...req.argv.slice(1)];
+    else if (req.argv.length === 3 && req.argv[0] === "sh" && req.argv[1] === "-c") argv = req.argv;
+    else throw new Unauthorized("only the lane tool or a shell command");
+    const r = await lanes.runner.run({
+      role: trial.lane as Role,
+      argv,
+      cwd: req.cwd,
+      env: laneCacheEnv(service.paths.scratchDir, trial.lane),
+      ...timeLimit(req.timeoutMs, limits.runTimeoutS),
+      rssLimitBytes: Math.min(req.rssLimitBytes ?? rssCap, rssCap),
+      ...(req.disk
+        ? { disk: { path: req.disk.path, limitBytes: Math.min(req.disk.limitBytes, diskCap) } }
+        : {}),
+      ...(req.stdin !== undefined ? { stdin: req.stdin } : {}),
+      // From the contract, never from the request.
+      nproc: limits.processes,
+      captureBytes: Math.min(req.captureBytes ?? 64 * 1024, 32 * 1024 * 1024),
+      // As in a shell: what a command starts in the background runs on until the trial ends.
+      keepBackground: true,
+    });
     return c.json(r as object);
   });
 
@@ -149,4 +181,15 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
       throw new Unauthorized("unauthorized");
     return c.json(service.attemptStatus(id) as object);
   });
+}
+
+/** A command's time limit: what it asked for, within the contract's limit if there is one. */
+function timeLimit(
+  askedMs: number | undefined,
+  limitS: number | undefined,
+): { timeoutMs?: number } {
+  const capMs = limitS !== undefined ? limitS * 1000 : undefined;
+  const ms =
+    askedMs === undefined ? capMs : capMs === undefined ? askedMs : Math.min(askedMs, capMs);
+  return ms !== undefined ? { timeoutMs: ms } : {};
 }

@@ -10,7 +10,6 @@ import {
   CLI_PROGRAMS,
   type CliOnceDeps,
   DevRuns,
-  type LaneAway,
   laneCacheEnv,
   ModelSource,
   plannerInView,
@@ -67,8 +66,6 @@ export function agentParts(
     scratchDir: paths.scratchDir,
     gpu: driver.type === "cuda-gpu",
     dedicated: devCard?.layout !== undefined,
-    // A leader that judges only on its followers' GPUs (goal 205) leaves its own card to the lanes.
-    judgeShares: !(ctx.env.THERMITE_FOLLOWERS && ctx.env.THERMITE_LOCAL_JUDGE === "0"),
     cards: devCards.length || undefined,
     unavailable: devCard?.error,
   });
@@ -249,15 +246,12 @@ export function createScheduler(
     links,
     parts,
     split,
-    laneAway,
   }: {
     service: HarnessService;
     settings: RigSettingsStore;
     links: AgentLinks;
     parts: AgentParts;
     split: { gpuSet: number; judgeNow: number };
-    /** The follower a lane's trials run on, on a rig over several machines (goal 205). */
-    laneAway?: ((lane: string) => LaneAway | undefined) | undefined;
   },
 ): Scheduler {
   const { env, numbers, runner } = ctx;
@@ -332,7 +326,6 @@ export function createScheduler(
       }
     },
     devRuns,
-    laneAway,
     usdPerMTokIn: numbers.usdPerMTokIn,
     usdPerMTokOut: numbers.usdPerMTokOut,
   });

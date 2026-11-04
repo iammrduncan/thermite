@@ -1,25 +1,10 @@
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
-import { leaderEnv } from "../../core/followers.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import type { ReachEntry } from "../../core/reach.ts";
 import type { ProgramMode } from "../../core/rig-settings.ts";
 import { gpuSplit, type RigBus } from "../machines/index.ts";
-import { followerObjects } from "./followers.ts";
-import {
-  amount,
-  envOf,
-  grace,
-  harnessPolicy,
-  labels,
-  type Obj,
-  partDeployment,
-  prepare,
-  probes,
-  type Resources,
-  secretFile,
-  supervisorPolicy,
-} from "./manifest-parts.ts";
+import { CLOSED_RANGES, reachEgress } from "./netcheck.ts";
 
 /**
  * A rig on a Kubernetes cluster, as the objects control applies with `kubectl apply -f -`: the
@@ -66,30 +51,14 @@ export interface ClusterRigPlan {
   bus: RigBus;
   /** The owner's list of addresses rigs may reach, which the harness's network rule opens. */
   reach?: ReachEntry[] | undefined;
-  /**
-   * A rig over several machines (goal 205): its followers, each on a node of its own with its
-   * judge GPUs. The rig's own node is then its leader's, which `node` must name.
-   */
-  followers?: FollowerPlan[] | undefined;
-  /** False: the leader's own GPUs are all the workers', and it judges only on its followers'. */
-  judgeHere?: boolean | undefined;
-  /** False: the leader's own GPUs are all the judge's, and its lanes work on its followers'. */
-  lanesHere?: boolean | undefined;
 }
 
-/** A follower as control plans it: its node, GPUs, volume, and CPUs and memory. */
-interface FollowerPlan {
-  machine: string;
-  node: string;
-  /** Its judge's GPUs, then its workers'; with neither, whose its CPUs are. */
-  gpus: number;
-  workers?: number | undefined;
-  cpu?: "judge" | "workers" | undefined;
-  deviceClass?: string | undefined;
-  storageGi: number;
-  resources?: { cpus: number; memoryGi: number } | undefined;
-}
-
+type Resources = { requests: Record<string, string>; limits: Record<string, string> };
+const amount = (cpus: number, mi: number): Resources => {
+  const cpu = `${Math.round(cpus * 1000)}m`;
+  const memory = `${Math.round(mi)}Mi`;
+  return { requests: { cpu, memory }, limits: { cpu, memory } };
+};
 /**
  * The supervisor's share of a rig, by how the rig's agent programs run. It relays, fetches and
  * exports, and computes little; but its advisors in their programs' own terminals take about
@@ -143,12 +112,53 @@ export interface ClusterRigSecrets {
   harnessSupervisorToken: string;
 }
 
+type Obj = Record<string, unknown>;
+
 export const clusterNames = (rig: string) => ({
   secret: `thermite-${rig}`,
   volume: `thermite-${rig}-data`,
   harness: `thermite-${rig}-harness`,
   supervisor: `thermite-${rig}-supervisor`,
   gpus: `thermite-${rig}-gpus`,
+});
+
+const labels = (rig: string, component?: "harness" | "supervisor") => ({
+  "app.kubernetes.io/name": "thermite",
+  "app.kubernetes.io/instance": rig,
+  "app.kubernetes.io/managed-by": "thermite-control",
+  ...(component ? { "app.kubernetes.io/component": component } : {}),
+});
+
+/**
+ * Prepares the shared volume's folders for both pods' users, as the compose images do. It changes
+ * the owner of the folders it makes only, never their trees: everything below them is written by
+ * their users, and root without DAC_OVERRIDE cannot read a folder a user made private (as the Codex
+ * CLI makes its own), so a recursive chown would stop the rig at every start. The inbox is the
+ * supervisor's, with the controller's group (setgid, so what the supervisor adds keeps it), and
+ * closed to everyone else, as the outbox is the controller's with the supervisor's group.
+ */
+const prepare = (image: string, resources?: Resources): Obj => ({
+  name: "prepare",
+  image,
+  ...(resources ? { resources } : {}),
+  imagePullPolicy: "IfNotPresent",
+  command: [
+    "sh",
+    "-c",
+    "mkdir -p /data/state /data/scratch /data/inbox/repos /data/inbox/models /data/outbox /data/supervisor && chown 10001:10010 /data/inbox /data/inbox/repos /data/inbox/models && chmod 2750 /data/inbox /data/inbox/repos /data/inbox/models && chown 10001:10001 /data/supervisor && chown 10010:10001 /data/outbox && chmod 2750 /data/outbox",
+  ],
+  securityContext: {
+    // Root, with the controller's group as its own. Without DAC_READ_SEARCH, root enters the
+    // closed inbox only through that group: with root's group, it stopped at the inbox's folders
+    // once it had closed the inbox, and no pod of the rig started. Both pods run it at every
+    // start. FSETID keeps the setgid bit on the outbox, whose group (the supervisor's) is not
+    // root's: without it, chmod takes the bit off.
+    runAsUser: 0,
+    runAsGroup: 10010,
+    allowPrivilegeEscalation: false,
+    capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER", "FSETID"] },
+  },
+  volumeMounts: [{ name: "data", mountPath: "/data" }],
 });
 
 /** The objects for one rig, in the order they are applied. */
@@ -159,16 +169,6 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     throw new Error("a DRA rig needs its device class");
   const n = clusterNames(p.rig);
   const ns = p.namespace;
-  const followers = p.followers ?? [];
-  if (followers.length && !p.node) throw new Error("a rig with followers needs its leader's node");
-  // The leader's followers by pool, and its own GPUs' pool (goal 205, core/followers.ts).
-  const leading = leaderEnv(
-    followers.map((f) => ({
-      machine: f.machine,
-      pools: { judge: f.gpus, workers: f.workers ?? 0, cpu: f.cpu },
-    })),
-    p.judgeHere === false ? "workers" : p.lanesHere === false ? "judge" : "shared",
-  );
   const meta = (name: string, component?: "harness" | "supervisor") => ({
     name,
     namespace: ns,
@@ -186,14 +186,55 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     },
   };
   const placement = p.node ? { nodeSelector: { "kubernetes.io/hostname": p.node } } : {};
+  const env = (pairs: Record<string, string>) =>
+    Object.entries(pairs).map(([name, value]) => ({ name, value }));
   const gpu = p.gpus > 0;
-  const deployment = (component: "harness" | "supervisor", pod: Obj): Obj =>
-    partDeployment({
-      metadata: meta(component === "harness" ? n.harness : n.supervisor, component),
-      selector: { "app.kubernetes.io/instance": p.rig, "app.kubernetes.io/component": component },
-      podLabels: labels(p.rig, component),
-      pod,
-    });
+  // Each part's health (goal 173): its route answers 503 while one of its loops is late. A part
+  // may take minutes to start (the harness runs its isolation check before it listens), so the
+  // startup probe allows 10; then kubelet looks every 30 s, and restarts a part that fails three
+  // times running. The harness is asked over HTTP; the supervisor's route listens in its container
+  // only, so a program asks it there.
+  const probes = (how: Obj, startMinutes: number) => ({
+    startupProbe: { ...how, periodSeconds: 10, failureThreshold: startMinutes * 6 },
+    readinessProbe: { ...how, periodSeconds: 30, timeoutSeconds: 10, failureThreshold: 3 },
+    livenessProbe: { ...how, periodSeconds: 30, timeoutSeconds: 10, failureThreshold: 3 },
+  });
+  // At a stop the harness ends its trials as interrupted and waits at most 5 s for the judge's
+  // job, whose lease is taken back at its next start; the supervisor ends its calls. 30 s is room
+  // for both, stated here rather than left to the default.
+  const grace = { terminationGracePeriodSeconds: 30 };
+  const deployment = (component: "harness" | "supervisor", pod: Obj): Obj => ({
+    apiVersion: "apps/v1",
+    kind: "Deployment",
+    metadata: meta(component === "harness" ? n.harness : n.supervisor, component),
+    spec: {
+      replicas: 1,
+      strategy: { type: "Recreate" },
+      selector: {
+        matchLabels: {
+          "app.kubernetes.io/instance": p.rig,
+          "app.kubernetes.io/component": component,
+        },
+      },
+      // Neither part calls the Kubernetes API (control drives the rig's lifecycle), so neither
+      // pod gets the namespace's service-account token, nor the namespace's services as
+      // variables (KUBERNETES_SERVICE_HOST stays: the isolation selftest probes it). Both run
+      // under the container runtime's default seccomp profile, as compose and Quadlet run them,
+      // whatever the kubelet's default.
+      template: {
+        metadata: { labels: labels(p.rig, component) },
+        spec: {
+          automountServiceAccountToken: false,
+          enableServiceLinks: false,
+          ...pod,
+          securityContext: {
+            ...((pod.securityContext as Obj | undefined) ?? {}),
+            seccompProfile: { type: "RuntimeDefault" },
+          },
+        },
+      },
+    },
+  });
   const objects: Obj[] = [];
   if (p.placement === "created")
     objects.push({
@@ -248,6 +289,12 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
         },
       },
     });
+  const secretFile = (key: string, path: string) => ({
+    name: "secrets",
+    mountPath: path,
+    subPath: key,
+    readOnly: true,
+  });
   objects.push(
     deployment("harness", {
       affinity: together,
@@ -259,11 +306,10 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           name: "harness",
           image: p.images.harness,
           imagePullPolicy: "IfNotPresent",
-          env: envOf({
+          env: env({
             THERMITE_RIG_ID: p.rig,
             THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
             ...split,
-            ...leading,
             THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
             THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
           }),
@@ -313,7 +359,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           name: "supervisor",
           image: p.images.supervisor,
           imagePullPolicy: "IfNotPresent",
-          env: envOf({
+          env: env({
             THERMITE_RIG_ID: p.rig,
             HARNESS_URL: `http://${n.harness}:8700`,
             CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
@@ -352,32 +398,66 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     }),
   );
   if (p.placement === "created" || p.placement === "joined") {
-    const part = (component: "harness" | "supervisor") => ({
-      "app.kubernetes.io/instance": p.rig,
-      "app.kubernetes.io/component": component,
-    });
     objects.push(
-      harnessPolicy({
+      {
+        // The harness reaches DNS and the internet, not the cluster, control or the closed
+        // ranges; only its supervisor reaches it.
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
         metadata: meta(`${n.harness}-net`, "harness"),
-        harness: part("harness"),
-        supervisor: part("supervisor"),
-        reach: p.reach ?? [],
-      }),
-      supervisorPolicy({
+        spec: {
+          podSelector: {
+            matchLabels: {
+              "app.kubernetes.io/instance": p.rig,
+              "app.kubernetes.io/component": "harness",
+            },
+          },
+          policyTypes: ["Ingress", "Egress"],
+          ingress: [
+            {
+              from: [
+                {
+                  podSelector: {
+                    matchLabels: {
+                      "app.kubernetes.io/instance": p.rig,
+                      "app.kubernetes.io/component": "supervisor",
+                    },
+                  },
+                },
+              ],
+              ports: [{ port: 8700, protocol: "TCP" }],
+            },
+          ],
+          egress: [
+            {
+              ports: [
+                { port: 53, protocol: "UDP" },
+                { port: 53, protocol: "TCP" },
+              ],
+            },
+            { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: CLOSED_RANGES } }] },
+            ...reachEgress(p.reach ?? []),
+          ],
+        },
+      },
+      {
+        // The supervisor takes no connections.
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
         metadata: meta(`${n.supervisor}-net`, "supervisor"),
-        supervisor: part("supervisor"),
-      }),
+        spec: {
+          podSelector: {
+            matchLabels: {
+              "app.kubernetes.io/instance": p.rig,
+              "app.kubernetes.io/component": "supervisor",
+            },
+          },
+          policyTypes: ["Ingress"],
+          ingress: [],
+        },
+      },
     );
   }
-  // A rig over several machines (goal 205): each follower's parts, on its own node.
-  // A follower's supervisor runs no advisor: it takes the headless share.
-  for (const f of followers)
-    objects.push(
-      ...followerObjects(p, {
-        ...f,
-        resources: f.resources ? rigResources(f.resources, "headless") : undefined,
-      }),
-    );
   return objects;
 }
 

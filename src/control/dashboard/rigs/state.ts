@@ -7,7 +7,6 @@ import { tail, updateScript } from "../../machines/index.ts";
 import { checkRigPlace, controlImages, NO_RIG_BUS } from "../../rigs/index.ts";
 import { rigHref } from "../../ui/urls.ts";
 import { backTo, type Dashboard, wantsJson } from "../context.ts";
-import { leaderPoolOf, machinesOfRig, poolsOf } from "./machine-parts.ts";
 import { rigHelpers, updateFollowUrl } from "./shared.ts";
 
 /**
@@ -54,35 +53,29 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
       throw new Error("Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL).");
     if (!parts.rigBus) throw new Error(NO_RIG_BUS);
     store.machines.setRigStatus(rig, "updating");
-    // Every machine of the rig moves (goal 205): its leader, then each follower.
-    const followers = r.followers?.machines.map((f) => ({ machine: f.machine, pools: poolsOf(f) }));
-    for (const p of machinesOfRig(store, opts.secrets, r)) {
-      const on = p.follower ? `follower ${p.machine}: ` : "";
-      if (!p.target) {
-        store.machines.setRigStatus(rig, "failed");
-        throw new Error(`${on}the machine is no longer in Settings › Machines.`);
-      }
-      const out = await ssh.sshScript(
-        p.target,
-        updateScript({
-          rig,
-          controlUrl: parts.publicUrl,
-          images,
-          gpus: p.gpus,
-          judgeGpus: p.follower ? undefined : r.judge_gpus,
-          root: p.root,
-          bus: parts.rigBus,
-          ...(p.follower
-            ? { follower: p.follower, pools: p.pools }
-            : { followers, leader: leaderPoolOf(r) }),
-        }),
-        [],
-        30 * 60_000,
-      );
-      if (out.code !== 0) {
-        store.machines.setRigStatus(rig, "failed");
-        throw new Error(`${on}${tail(out.stderr) || `the update exited ${out.code}`}`);
-      }
+    const out = await ssh.sshScript(
+      {
+        address: m.address,
+        port: m.port,
+        user: m.user,
+        privateKey: opts.secrets.open(m.key_sealed),
+        hostKeys: m.host_keys,
+      },
+      updateScript({
+        rig,
+        controlUrl: parts.publicUrl,
+        images,
+        gpus: r.gpus,
+        judgeGpus: r.judge_gpus,
+        root: r.root,
+        bus: parts.rigBus,
+      }),
+      [],
+      30 * 60_000,
+    );
+    if (out.code !== 0) {
+      store.machines.setRigStatus(rig, "failed");
+      throw new Error(tail(out.stderr) || `the update exited ${out.code}`);
     }
     store.machines.setRigImages(rig, images);
     store.machines.setRigStatus(rig, "running");

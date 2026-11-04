@@ -1,9 +1,8 @@
 import type { JobRow } from "../ledger/index.ts";
-import { throttledFraction } from "../targets/index.ts";
+import { readThrottle, throttledFraction } from "../targets/index.ts";
 import { InfraError, type JudgeContext } from "./context.ts";
 import type { Block } from "./decide.ts";
-import type { MeasureSpec } from "./device.ts";
-import type { Arm } from "./measure.ts";
+import { type Arm, type MeasureContext, runArm } from "./measure.ts";
 import { rng } from "./rng.ts";
 
 /**
@@ -22,7 +21,7 @@ const MAX_BLOCK_TRIES = 3;
 
 async function ready(judge: JudgeContext): Promise<Record<string, unknown>> {
   for (let i = 0; ; i++) {
-    const r = await judge.device.driver.readyForTiming();
+    const r = await judge.o.driver.readyForTiming();
     if (r.ready) return r.details;
     if (i >= judge.o.readyRetries) {
       throw new InfraError(`target not ready for timing: ${r.reasons.join("; ")}`);
@@ -40,7 +39,7 @@ export async function runBlocks(
   judge: JudgeContext,
   input: {
     job: JobRow;
-    ctx: MeasureSpec;
+    ctx: MeasureContext;
     arms: [Arm, Arm] | [Arm];
     cells: readonly string[];
     count: number;
@@ -51,7 +50,7 @@ export async function runBlocks(
 ): Promise<Block[]> {
   const { job, ctx, arms, cells } = input;
   const [a, b] = arms;
-  const target = await judge.device.driver.identify();
+  const target = await judge.o.driver.identify();
   const out: Block[] = [];
   for (let i = 0; i < input.count; i++) {
     const n = (input.startAt ?? 0) + i + 1;
@@ -91,7 +90,7 @@ async function runBlock(
   judge: JudgeContext,
   x: {
     job: JobRow;
-    ctx: MeasureSpec;
+    ctx: MeasureContext;
     a: Arm;
     b: Arm | undefined;
     cells: readonly string[];
@@ -109,7 +108,7 @@ async function runBlock(
   const runs: unknown[] = [];
   const order = rng(job.id * 7919 + n * 31 + x.attempt);
   let worstRunThrottle = 0;
-  const throttleBefore = await judge.device.throttle();
+  const throttleBefore = readThrottle();
   const started = Date.now();
   // Raw values per arm, metric and cell; the block takes their median (runs_per_cell).
   const raw: Record<string, Record<string, Record<string, number[]>>> = {};
@@ -117,8 +116,9 @@ async function runBlock(
     for (let k = 0; k < x.runsPerCell; k++) {
       const pair = !b ? [a] : order() < 0.5 ? [a, b] : [b, a];
       for (const arm of pair) {
-        const { run: r, throttled } = await judge.measure(ctx, arm, cell);
-        const runThrottle = throttled ?? 0;
+        const t0 = readThrottle();
+        const r = await runArm(ctx, arm, cell);
+        const runThrottle = throttledFraction(t0, readThrottle(), r.outcome.wallMs) ?? 0;
         worstRunThrottle = Math.max(worstRunThrottle, runThrottle);
         runs.push({
           arm: arm.name,
@@ -162,9 +162,8 @@ async function runBlock(
       }
     }
   }
-  const throttleAfter = await judge.device.throttle();
-  const throttled = throttledFraction(throttleBefore, throttleAfter, Date.now() - started);
-  const afterBlock = await judge.device.driver.afterBlock();
+  const throttled = throttledFraction(throttleBefore, readThrottle(), Date.now() - started);
+  const afterBlock = await judge.o.driver.afterBlock();
   const accepted =
     worstRunThrottle <= MAX_RUN_THROTTLED &&
     (throttled === undefined || throttled <= MAX_THROTTLED) &&
@@ -175,13 +174,13 @@ async function runBlock(
     block: n,
     try: x.attempt,
     accepted,
-    separated: judge.device.separated,
+    separated: judge.o.runner.separated,
     cpu_throttled_fraction: throttled ?? null,
     worst_run_throttled_fraction: worstRunThrottle,
     after_block: afterBlock,
     target: x.target,
     readiness,
-    env: await judge.device.driver.envSnapshot(),
+    env: await judge.o.driver.envSnapshot(),
     builds: { a: a.manifest.key, ...(b ? { b: b.manifest.key } : {}) },
     runs,
   });

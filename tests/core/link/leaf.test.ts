@@ -82,10 +82,7 @@ describe("a rig on RunPod on the bus: its leaf node", () => {
 
   test("a leaf account takes, as services, exactly what the rig's user may publish, the JetStream API under its own name", () => {
     const services = leafServices("rp-1", ["run-a"]);
-    // A rig on RunPod is one machine: its followers' subjects are no service of its (goal 205).
-    const allowed = rigPermissions("rp-1", ["run-a"]).publish.allow.filter(
-      (s) => !s.includes(".machine."),
-    );
+    const allowed = rigPermissions("rp-1", ["run-a"]).publish.allow;
     assert.deepEqual(
       services.map((s) => s.subject),
       allowed,

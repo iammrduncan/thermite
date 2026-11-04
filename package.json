@@ -42,7 +42,6 @@
     "acceptance:cluster": "node scripts/acceptance/cluster.mjs",
     "acceptance:codex": "node scripts/acceptance/codex.mjs",
     "acceptance:control": "node scripts/acceptance/control.mjs",
-    "acceptance:follower": "node scripts/acceptance/follower.mjs",
     "acceptance:judge": "node scripts/acceptance/judge.mjs",
     "acceptance:leaf": "node scripts/acceptance/leaf.mjs",
     "acceptance:machine": "node scripts/acceptance/machine.mjs",

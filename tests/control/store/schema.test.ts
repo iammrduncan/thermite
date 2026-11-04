@@ -21,6 +21,28 @@ const dropWaits = (db: DatabaseSync) =>
   !db.prepare("select 1 from schema_migrations where version = 12").get() && version(db) === 31;
 
 describe("control's store migrations", () => {
+  test("goal 205's followers go (goal 206): a store at version 30 loses their table and column", () => {
+    const path = fresh();
+    const made = new ControlStore(path);
+    // The two things goal 205's migrations 29 and 30 made, as a store that ran them has them.
+    made.db.exec(`create table machine_bus_key (
+      rig text not null, machine text not null, public_key text not null,
+      registered_at text not null, primary key (rig, machine))`);
+    made.db.exec("alter table machine_rig add column followers text");
+    made.db.exec("delete from schema_migrations where version = 31");
+    made.db.close();
+
+    const store = new ControlStore(path);
+    assert.equal(version(store.db), 31);
+    const table = store.db
+      .prepare("select 1 from sqlite_master where type = 'table' and name = 'machine_bus_key'")
+      .get();
+    assert.equal(table, undefined);
+    const cols = store.db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
+    assert.ok(!cols.some((c) => c.name === "followers"));
+    store.db.close();
+  });
+
   test("a store that v0.1.0 wrote is copied, then migrated, and keeps its data", () => {
     const path = fresh();
     const old = new DatabaseSync(path);

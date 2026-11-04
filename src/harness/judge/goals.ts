@@ -6,7 +6,6 @@ import type { JobRow } from "../ledger/index.ts";
 import { Reviews } from "../reviews.ts";
 import type { JudgeContext } from "./context.ts";
 import { decideThresholdGoal, type GoalStatus } from "./decide.ts";
-import type { MeasureSpec } from "./device.ts";
 import { runValues, valuesText } from "./goal-values.ts";
 import {
   type HeldOutCell,
@@ -15,7 +14,7 @@ import {
   heldOutResult,
   meetsThreshold,
 } from "./held-out.ts";
-import type { Arm } from "./measure.ts";
+import { type Arm, type MeasureContext, runArm } from "./measure.ts";
 import { clipReason } from "./reasons.ts";
 
 /**
@@ -42,7 +41,7 @@ export async function verifyGoals(
   judge: JudgeContext,
   job: JobRow,
   contract: GoalContract,
-  ctx: MeasureSpec,
+  ctx: MeasureContext,
   arm: Arm,
   opts: {
     heldOut?: boolean;
@@ -114,7 +113,7 @@ export async function verifyGoals(
             heldCell({ cell, verifier: name, ok: false, kind: "no_cell" });
             continue;
           }
-          const r = await judge.run(ctx, arm, cell);
+          const r = await runArm(ctx, arm, cell);
           if (r.kind !== "ok") failures.push(`${cell}: ${r.kind}: ${clipReason(r.reason)}`);
           if (!opts.heldOut) {
             const metrics = runValues(ctx.kit, r);
@@ -215,7 +214,7 @@ export async function verifyGoals(
         continue;
       }
       for (let rep = 1; rep <= contract.threshold_reps; rep++) {
-        const r = await judge.run(ctx, arm, cell);
+        const r = await runArm(ctx, arm, cell);
         if (r.kind !== "ok") {
           failures.push(`${cell}: ${r.kind}: ${clipReason(r.reason)}`);
           heldCell({ cell, goal: g.id, ok: false, kind: heldOutKindOf(r) });
@@ -320,7 +319,7 @@ export async function heldOutGoals(
   judge: JudgeContext,
   job: JobRow,
   contract: GoalContract,
-  ctx: MeasureSpec,
+  ctx: MeasureContext,
   arm: Arm,
   goals: string[],
 ): Promise<HeldOutResult & { failed: string[] }> {

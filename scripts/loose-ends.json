@@ -348,7 +348,7 @@
     "src/core/link/kb-files.ts": ["KB_FILES_CONSUMER"],
     "src/core/link/kb.ts": ["KbScopeView", "kbFoundShape", "KbRefusal"],
     "src/core/link/users.ts": ["BusUserKeys", "LeafRig"],
-    "src/core/live.ts": ["LiveBatch", "LiveLine"],
+    "src/core/live.ts": ["LIVE_KINDS", "LiveBatch", "LiveLine"],
     "src/core/prompts.ts": ["PROMPT_PARTS", "OWN_SOURCES", "PromptSectionInfo"],
     "src/core/queue-target.ts": ["QUEUE_TARGET_PER_LANE", "RuleText", "RuleRefusal"],
     "src/core/role-additions.ts": ["AdditionRole"],
@@ -428,9 +428,11 @@
       "BASELINE_DIR_BYTES",
       "BASELINE_DIR_FILES",
       "BaselineValue",
+      "BaselineFile",
       "StartingPoint",
       "baselineFailure"
     ],
+    "src/harness/judge/builds.ts": ["BuildResult", "BuildInput"],
     "src/harness/judge/decide.ts": [
       "ScreenVerdict",
       "ConfirmVerdict",
@@ -509,6 +511,7 @@
     "src/harness/service/trials.ts": ["IdeaRequest"],
     "src/harness/service/watch.ts": ["StreakNews"],
     "src/harness/service/wipe.ts": ["notBeforeOf"],
+    "src/harness/targets/cgroup.ts": ["ThrottleSample"],
     "src/harness/targets/cuda.ts": ["GpuRow", "parseCsvRow", "CudaLimits", "CudaDriverOptions"],
     "src/harness/v0.ts": ["V0Result", "VIOLATIONS_SHOWN"],
     "src/release/bundle.ts": ["imageTag", "README_NEEDS"],

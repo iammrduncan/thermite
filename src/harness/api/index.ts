@@ -7,7 +7,6 @@ import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import type { HarnessService } from "../service/index.ts";
 import { advisorRoutes } from "./advisors.ts";
 import { type ApiTokens, allows, apiContext, type HarnessApiExtras, statusFor } from "./context.ts";
-import { deviceRoutes } from "./device.ts";
 import { kbRoutes } from "./kb.ts";
 import { mcpRoutes } from "./mcp.ts";
 import { promptRoutes } from "./prompts.ts";
@@ -21,7 +20,6 @@ import { usageRoutes } from "./usage.ts";
 import { workRoutes } from "./work.ts";
 
 export type { ApiTokens, HarnessApiExtras, Scope } from "./context.ts";
-export { allows } from "./context.ts";
 
 /**
  * Harness HTTP API. Only the rig's own supervisor reaches it over the network; proposers
@@ -78,7 +76,6 @@ export function createHarnessApi(
   kbRoutes(app, api);
   advisorTerminalRoutes(app, api);
   reportRoutes(app, api);
-  deviceRoutes(app, api);
   advisorRoutes(app, api);
   liveRoutes(app, api);
   trialRoutes(app, api);

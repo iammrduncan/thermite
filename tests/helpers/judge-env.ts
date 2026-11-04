@@ -3,10 +3,6 @@ import { randomUUID } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import type { CallInput } from "../../src/common/api/call.ts";
-import type { HarnessClient } from "../../src/common/api/harness.ts";
-import { DEVICE, DEVICE_ASKS, DeviceAsk } from "../../src/core/api/harness/device.ts";
-import type { Route } from "../../src/core/api/route.ts";
 import { type CommandKind, generateSigningKeys, signEnvelope } from "../../src/core/commands.ts";
 import { parseContract } from "../../src/core/contract.ts";
 import {
@@ -15,15 +11,10 @@ import {
   type SupervisedRun,
 } from "../../src/harness/broker/process.ts";
 import { LocalRunner, type RunOutcome, type RunRequest } from "../../src/harness/broker/runner.ts";
-import { DeviceServer } from "../../src/harness/follower/device.ts";
 import { Judge, type PromotionPolicy } from "../../src/harness/judge/judge.ts";
-import { FollowerLink } from "../../src/harness/judge/link.ts";
-import { type DeviceLink, RemoteDevice } from "../../src/harness/judge/remote.ts";
 import { Ledger } from "../../src/harness/ledger/index.ts";
 import { HarnessService } from "../../src/harness/service/index.ts";
 import { CpuDriver } from "../../src/harness/targets/cpu.ts";
-import { answerLeaderAsks, carryFollowerAsks } from "../../src/supervisor/machines/index.ts";
-import { FakeBus } from "./fake-bus.ts";
 
 /**
  * A throwaway harness with a small Node-based project and kit, for judge tests that run on any
@@ -289,13 +280,6 @@ export function makeJudgeEnv(
     realRuns?: boolean | undefined;
     /** The clock the ledger and the service go by; none: the computer's. */
     clock?: (() => Date) | undefined;
-    /**
-     * The judge measures on a follower's GPU (goal 205): a follower's device in a folder of its
-     * own, with its own runner and ledger, reached through a link that passes every ask and
-     * answer through JSON, as the bus does. `bus`: through the whole way instead, in memory: the
-     * leader's link, its supervisor's carrying, a bus, and the follower's supervisor's answers.
-     */
-    follower?: boolean | "bus" | undefined;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "thermite-judge-"));
@@ -457,55 +441,17 @@ export function makeJudgeEnv(
     keys.privateKeyPem,
   );
 
-  // Host load is not what these tests are about (the judge refuses a loaded CPU; see cpu.test).
-  const driver = () =>
-    opts.neverReady
-      ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
-      : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY });
-  const runnerIn = (scratchDir: string) =>
-    opts.realRuns ? new LocalRunner(scratchDir) : new StandInRunner(scratchDir);
-  const followerPaths = {
-    stateDir: join(root, "follower", "state"),
-    scratchDir: join(root, "follower", "scratch"),
-    inboxDir: join(root, "follower", "inbox"),
-  };
-  let device: RemoteDevice | undefined;
-  let stopped = false;
-  if (opts.follower) {
-    for (const d of Object.values(followerPaths)) mkdirSync(d, { recursive: true });
-    const server = new DeviceServer({
-      runner: runnerIn(followerPaths.scratchDir),
-      drivers: [driver()],
-      paths: followerPaths,
-      ledger: Ledger.open(join(followerPaths.stateDir, "ledger", "ledger.db")),
-    });
-    const wire = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
-    device = new RemoteDevice({
-      link:
-        opts.follower === "bus"
-          ? followerOverBus(rig, server, paths.outboxDir, followerPaths.scratchDir, () => stopped)
-          : {
-              ask: async (a) => wire(await server.ask(DeviceAsk.parse(wire(a)))),
-              sendGit: (repo, commit, bundle) => server.takeGit(repo, commit, Buffer.from(bundle)),
-              fetchModels: async () => {
-                throw new Error("this test's follower fetches no model files");
-              },
-            },
-      card: 0,
-      info: { type: "cpu", separated: false },
-      ledger,
-      mirrorFor: (repo) => service.mirrorFor(repo),
-      scratchDir: paths.scratchDir,
-    });
-  }
+  const standIn = opts.realRuns ? undefined : new StandInRunner(paths.scratchDir);
   const judge = new Judge({
     service,
-    runner: runnerIn(paths.scratchDir),
-    driver: driver(),
+    runner: standIn ?? new LocalRunner(paths.scratchDir),
+    // Host load is not what these tests are about (the judge refuses a loaded CPU; see cpu.test).
+    driver: opts.neverReady
+      ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
+      : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
     owner: "judge-test",
     readyRetries: 0,
     calibrationBlocks: 0,
-    device,
   });
 
   /** A change to the kernel, as a patch from the project's root (its folder, if it has one). */
@@ -579,7 +525,6 @@ export function makeJudgeEnv(
   return {
     root,
     paths,
-    followerPaths,
     service,
     ledger,
     judge,
@@ -592,44 +537,5 @@ export function makeJudgeEnv(
     kitCommit,
     keys,
     explain,
-    /** Ends the follower's supervisors' loops, when the follower is reached over the bus. */
-    stop: () => {
-      stopped = true;
-    },
   };
-}
-
-/**
- * A follower reached the whole way as on a rig (goal 205), in memory: the leader's FollowerLink,
- * its supervisor carrying the asks on a bus, and the follower's supervisor answering them from its
- * device. Returns the leader's link to it.
- */
-function followerOverBus(
-  rig: string,
-  server: DeviceServer,
-  outboxDir: string,
-  scratchDir: string,
-  stopping: () => boolean,
-): DeviceLink {
-  const bus = new FakeBus();
-  const link = new FollowerLink({ outboxDir });
-  const leader = {
-    call: async (route: Route, input?: CallInput<Route>) =>
-      route.path === DEVICE_ASKS.path
-        ? { asks: await link.take(2000) }
-        : {
-            ok: link.answer(String(input?.params?.id), (input?.body ?? {}) as { answer?: unknown }),
-          },
-  } as unknown as HarnessClient;
-  const follower = {
-    call: async (route: Route, input?: CallInput<Route>) => {
-      if (route.path === DEVICE.path) return server.ask(DeviceAsk.parse(input?.body));
-      const { repo, commit } = input?.params ?? {};
-      await server.takeGit(String(repo), String(commit), Buffer.from(input?.bytes ?? []));
-      return { ok: true };
-    },
-  } as unknown as HarnessClient;
-  void answerLeaderAsks({ rig, machine: "spark-02", bus, harness: follower, scratchDir });
-  void carryFollowerAsks({ rig, bus, harness: leader, outboxDir, stopping });
-  return link.to("spark-02");
 }

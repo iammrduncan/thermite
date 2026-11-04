@@ -51,7 +51,6 @@ import { runHref } from "../../ui/urls.ts";
 import { span } from "../../ui/words/index.ts";
 import { type RigView, runCampaign } from "../../views/index.ts";
 import type { Ctx, Dashboard } from "../context.ts";
-import { machinesBlock } from "./machines-block.ts";
 import { agentsModelBlock } from "./model-line.ts";
 import {
   gpuRoles,
@@ -120,7 +119,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(onCluster.cluster)} · ${esc(onCluster.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${machinesBlock(store, onCluster.rig)}${clusterPlacedBlock(onCluster, csrf(c))}`,
+        `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
         vs,
       );
     if (!u && joined) return joinedPage(c, joined, flash);
@@ -157,7 +156,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(placed.machine)} · ${esc(placed.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${machinesBlock(store, placed.rig)}${placedBlock(placed, csrf(c))}`,
+        `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
         vs,
       );
     if (!u)
@@ -470,7 +469,7 @@ ${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b c
 ${rp ? podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>
-${machinesBlock(store, u.id)}${agentsModelBlock(store, u, now)}
+${agentsModelBlock(store, u, now)}
 <div class="block" data-part="checks"${takingModel(u.model, store.agentModels.byRig()[u.id]) ? ` data-follow="${esc(modelFollowUrl(u.id))}" data-follow-state="taking"` : ""}><div class="head"><h2>Checks</h2><span class="right">run by the rig itself; each result also goes to its history</span></div><div class="card flat cks">${checkRows}</div></div>
 <div class="block" data-part="runs"><div class="head"><h2>Runs on this rig</h2><span class="n">${u.runs.length}</span>${u.state !== "reporting" || refusedNow ? `<span class="right">as of its last report${neverReported(u) ? "" : `, ${esc(ago(u.last_seen, now))} ago`}</span>` : ""}</div>${runRows ? `<div class="card flat">${runRows}</div>` : `<div class="card"><div class="empty">No campaign assigned.</div></div>`}</div>
 ${rp ? events : ""}

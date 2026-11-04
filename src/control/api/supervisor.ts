@@ -1,11 +1,9 @@
-import { createPublicKey } from "node:crypto";
 import type { Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { BadInput, jsonBody, Refusal } from "../../common/errors.ts";
-import { MACHINE_REGISTER, REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
-import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
+import { REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
 import { isSealKey, SEAL_KEY_WORDS } from "../../core/link/config.ts";
-import { isUserKey, USER_KEY_WORDS, userKeyFingerprint } from "../../core/link/users.ts";
+import { isUserKey, USER_KEY_WORDS } from "../../core/link/users.ts";
 import {
   type BusUsers,
   busKeyHolder,
@@ -28,15 +26,6 @@ export interface SupervisorRoutesDeps {
   store: ControlStore;
   busUsers?: BusUsers | undefined;
   busConfig?: ConfigWriter | undefined;
-}
-
-/** Whether a harness's report key is one: an Ed25519 public key in PEM, as rigs sign with. */
-function isPublicKeyPem(pem: string): boolean {
-  try {
-    return createPublicKey(pem).asymmetricKeyType === "ed25519";
-  } catch {
-    return false;
-  }
 }
 
 /** Why a call with no keys on the bus is refused, in words: the rig must be set up again. */
@@ -87,38 +76,4 @@ export function supervisorRoutes(
     if (takeRigSealKey(store, rig, sealKey) !== "same") void deps.busConfig?.write();
     return c.json({ ok: true, reports: reportPlace(store, rig) });
   });
-
-  // A follower of the rig (goal 205): its key gets the follower's user on the bus, which takes
-  // only its leader's asks on its own subject. A key another holds is refused, as a rig's is.
-  app.post(
-    MACHINE_REGISTER.path,
-    rigAuth,
-    bodyLimit({ maxSize: MACHINE_REGISTER.maxBytes }),
-    async (c) => {
-      const rig = c.req.param("rig");
-      const machine = c.req.param("machine");
-      if (!RIG_ID.test(machine)) throw new BadInput(`a machine's name is ${RIG_ID_WORDS}`);
-      const { bus_key: key, report_key: reportKey } = MACHINE_REGISTER.body.parse(
-        await jsonBody(c.req),
-      );
-      if (!isUserKey(key)) throw new BadInput(`bus_key is not ${USER_KEY_WORDS}`);
-      if (reportKey !== undefined && !isPublicKeyPem(reportKey))
-        throw new BadInput("report_key is not a public key in PEM");
-      // Its harness's report key, kept for the day it leads (goal 205, step 3).
-      if (store.busKeys.machineKey(rig, machine) === key) {
-        if (reportKey && store.busKeys.machineReportKey(rig, machine) !== reportKey)
-          store.busKeys.setMachineKey(rig, machine, key, reportKey);
-        return c.json({ ok: true });
-      }
-      const holder = busKeyHolder(store, rig, key, deps.busUsers?.ownKeys() ?? []);
-      if (holder || store.busKeys.rigKey(rig) === key) {
-        noteKeyRefused(store, rig, "bus_key", key, holder ?? `rig ${rig}`);
-        throw new Refusal(keyHeldWords("bus_key"));
-      }
-      store.busKeys.setMachineKey(rig, machine, key, reportKey);
-      store.rigHistory.add(rig, "machine_bus_key", true, `${machine}: ${userKeyFingerprint(key)}`);
-      await deps.busUsers?.sync();
-      return c.json({ ok: true });
-    },
-  );
 }

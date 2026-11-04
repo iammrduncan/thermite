@@ -7,12 +7,7 @@ import {
 } from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
-import {
-  busKeyTables,
-  busSealKeyColumn,
-  machineBusKeyTable,
-  machineReportKeyColumn,
-} from "./bus.ts";
+import { busKeyTables, busSealKeyColumn } from "./bus.ts";
 import { clusterUncheckedColumn } from "./clusters.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
@@ -30,7 +25,6 @@ import {
   knowledgeSearch,
   knowledgeSlotNames,
 } from "./kb/index.ts";
-import { machineRigFollowersColumn } from "./machines.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
@@ -603,6 +597,23 @@ function schemaFive(db: DatabaseSync): void {
 }
 
 /**
+ * Two migrations of goal 205's followers, now gone (goal 206): stores that ran them keep their
+ * versions, so their places stay, and do nothing.
+ */
+function retired(): void {}
+
+/**
+ * What goal 205's two migrations made, dropped (goal 206): the followers' keys on the bus and a
+ * machine rig's followers. A store that never had them has nothing to drop.
+ */
+function dropFollowers(db: DatabaseSync): void {
+  db.exec("drop table if exists machine_bus_key");
+  const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "followers"))
+    db.exec("alter table machine_rig drop column followers");
+}
+
+/**
  * Control's migrations, in order: the store's schema version is how many have run. A change to
  * the schema is a new function at the end, never an edit of one that has run.
  */
@@ -658,12 +669,10 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   ownSettingsTable,
   // The public names in the knowledge base: field notes' kind other, source notes, directions.
   knowledgePublicNames,
-  // Each follower's key on the bus, of a rig over several machines (goal 205).
-  machineBusKeyTable,
-  // A machine rig's followers on other machines (goal 205).
-  machineRigFollowersColumn,
-  // Each machine's harness's report key, which control pins when it leads (goal 205, step 3).
-  machineReportKeyColumn,
+  // Goal 205's followers' keys on the bus and a machine rig's followers: gone (goal 206).
+  retired,
+  retired,
+  dropFollowers,
 ];
 
 /**

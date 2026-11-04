@@ -1,12 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { redact } from "../../common/env.ts";
 import { shellQuote } from "../../common/exec.ts";
-import {
-  type FollowerPools,
-  followerGpuEnv,
-  type LeaderPool,
-  leaderEnv,
-} from "../../core/followers.ts";
 import { gpuSplit, MAX_RIG_GPUS } from "../../core/hardware.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
@@ -38,17 +32,6 @@ export interface RigPlan {
   controlFingerprint: string;
   /** The message bus for its supervisor: the one way it reaches control but its registration. */
   bus: RigBus;
-  /**
-   * A follower's units (goal 205): this machine's name in the rig. Its harness starts as a
-   * follower, and its supervisor answers the leader's asks.
-   */
-  follower?: string | undefined;
-  /** A follower's GPUs by pool: `gpus` holds the judge's first, then the workers'. */
-  pools?: FollowerPools | undefined;
-  /** A leader's followers, each with its GPUs by pool (goal 205). */
-  followers?: { machine: string; pools: FollowerPools }[] | undefined;
-  /** With followers: whose the leader's own GPUs are. */
-  leader?: LeaderPool | undefined;
 }
 
 /**
@@ -104,17 +87,7 @@ export const unitName = (rig: string, part: "harness" | "supervisor") => `thermi
 /** What a rig's units are made of: the rest of a plan is for its first setup. */
 export type UnitPlan = Pick<
   RigPlan,
-  | "rig"
-  | "controlUrl"
-  | "images"
-  | "gpus"
-  | "judgeGpus"
-  | "root"
-  | "bus"
-  | "follower"
-  | "pools"
-  | "followers"
-  | "leader"
+  "rig" | "controlUrl" | "images" | "gpus" | "judgeGpus" | "root" | "bus"
 >;
 
 /** The Quadlet units, by file name. */
@@ -124,15 +97,8 @@ export function rigUnits(p: UnitPlan): Record<string, string> {
   const s = unitName(p.rig, "supervisor");
   const net = `thermite-${p.rig}`;
   const egress = `thermite-${p.rig}-egress`;
+  const split = gpuSplit(p.gpus.length, p.judgeGpus);
   const gpu = p.gpus.length > 0;
-  // A follower's GPUs by pool, as the container numbers them; a leader's harness is told its
-  // followers and its own GPUs' pool (goal 205, core/followers.ts).
-  const split = p.follower
-    ? followerGpuEnv(p.pools ?? { judge: p.gpus.length, workers: 0 })
-    : gpuSplit(p.gpus.length, p.judgeGpus);
-  const role: Record<string, string> = p.follower
-    ? { THERMITE_ROLE: "follower" }
-    : leaderEnv(p.followers ?? [], p.leader ?? "shared");
   const env = (pairs: Record<string, string>) =>
     Object.entries(pairs)
       .map(([k, v]) => `Environment=${k}=${v}`)
@@ -174,7 +140,6 @@ ${env({
   THERMITE_RIG_ID: p.rig,
   THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
   ...split,
-  ...role,
   THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
   THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
 })}
@@ -208,7 +173,6 @@ Image=${p.images.supervisor}
 ContainerName=${s}
 ${env({
   THERMITE_RIG_ID: p.rig,
-  ...(p.follower ? { THERMITE_ROLE: "follower", THERMITE_MACHINE: p.follower } : {}),
   HARNESS_URL: `http://${h}:8700`,
   CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
   THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",

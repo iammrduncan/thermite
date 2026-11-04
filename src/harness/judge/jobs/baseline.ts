@@ -7,8 +7,10 @@ import {
   type BaselineFailure,
   baselineState,
   baselineValue,
+  keepBaselineDir,
   prepareBaselineDir,
   removeBaselineDir,
+  sealBaselineDir,
 } from "../baseline.ts";
 import { runBlocks } from "../blocks.ts";
 import { type Finish, InfraError, type JudgeContext, Stop } from "../context.ts";
@@ -76,9 +78,10 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       count,
       runsPerCell: contract.acceptance.runs_per_cell,
     });
-    await judge.device.reclaim(written);
-    const sealed = await judge.device.keepBaseline(written, { dir, run, job: job.id });
+    await judge.o.runner.reclaim(written);
+    const sealed = sealBaselineDir(written);
     if (!sealed.ok) throw new Stop("invalid", sealed.reason);
+    keepBaselineDir(written, dir);
     const body = baselineBody({
       job,
       run,
@@ -125,7 +128,7 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
     };
   } finally {
     // The kept copy is in the state; the checks' folder goes, whoever owns its files.
-    await judge.device.remove(written);
+    await judge.o.runner.remove(written);
   }
 }
 

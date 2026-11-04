@@ -12,9 +12,7 @@ import {
   controllerContext,
   createJudges,
   createScheduler,
-  followersOf,
   gpuSplitAtStart,
-  lanesAway,
   openState,
   promotionPolicy,
   reclaimJobs,
@@ -24,8 +22,6 @@ import {
   targetDrivers,
 } from "./controller/index.ts";
 import { DiskWatch } from "./disk.ts";
-import { startFollower } from "./follower/index.ts";
-import { FollowerLink } from "./judge/index.ts";
 import { HarnessService } from "./service/index.ts";
 
 /**
@@ -45,8 +41,6 @@ async function main(): Promise<void> {
   process.umask(0o022);
   const env = process.env;
   startLogging("harness", env);
-  // A follower of a rig's leader serves its judge GPUs and runs nothing of its own (goal 205).
-  if (env.THERMITE_ROLE === "follower") return startFollower(env);
   const ctx = await controllerContext(env);
   const { rig, paths, controlPublicKeyPem, tokens, runner } = ctx;
   const targets = targetDrivers(ctx);
@@ -83,11 +77,7 @@ async function main(): Promise<void> {
     process.exit(0);
   };
   const judging = await rigHardware(ctx, service, targets);
-  // A rig's leader judges on its followers' GPUs too, and on its own unless they are all the
-  // workers' (THERMITE_LOCAL_JUDGE=0, goal 205).
-  const followers = followersOf(env);
-  const judgingHere = followers.length && env.THERMITE_LOCAL_JUDGE === "0" ? [] : judging;
-  const executorIds = reclaimJobs(ledger, judgingHere, followers);
+  const executorIds = reclaimJobs(ledger, judging);
   const parts = agentParts(ctx, ledger, service, targets);
 
   // A check a previous controller left running is over, and a run's export at its end that it
@@ -100,15 +90,21 @@ async function main(): Promise<void> {
   await service.checkAtStart("isolation");
 
   const { host, port } = parseListen(env.THERMITE_LISTEN ?? "0.0.0.0:8700");
-  const api = createHarnessApi(service, tokens, {
-    devRuns: parts.devRuns,
-    research: parts.research,
-    lanes: {
-      runner,
-      laneTool: [process.execPath, fileURLToPath(new URL("./agents/lanetool.js", import.meta.url))],
-    },
+  const server = serve({
+    fetch: createHarnessApi(service, tokens, {
+      devRuns: parts.devRuns,
+      research: parts.research,
+      lanes: {
+        runner,
+        laneTool: [
+          process.execPath,
+          fileURLToPath(new URL("./agents/lanetool.js", import.meta.url)),
+        ],
+      },
+    }).fetch,
+    hostname: host,
+    port,
   });
-  const server = serve({ fetch: api.fetch, hostname: host, port });
   log("harness", "listening", {
     rig,
     host,
@@ -117,31 +113,14 @@ async function main(): Promise<void> {
     build: service.build,
   });
 
-  // The leader's link to its followers: their judge GPUs and their lanes' trials (goal 205).
-  const link = followers.length
-    ? new FollowerLink({ outboxDir: service.paths.outboxDir })
-    : undefined;
-  service.followers = link;
   const executors = createJudges(ctx, {
     service,
     devRuns: parts.devRuns,
-    judging: judgingHere,
+    judging,
     judgeCards: targets.judgeCards,
     executorIds,
-    followers,
-    link,
-    driver,
   });
   const links = agentLinks(ctx, service, port);
-  const laneAway = lanesAway({
-    env,
-    service,
-    links,
-    followers,
-    link,
-    devCards: targets.devCards.length,
-    api: (req) => api.fetch(req),
-  });
   addModelCheck(service, links);
   addSmokeCheck(ctx, service, driver);
   const scheduler = createScheduler(ctx, {
@@ -150,7 +129,6 @@ async function main(): Promise<void> {
     links,
     parts,
     split: { gpuSet, judgeNow },
-    laneAway,
   });
   startLoops({ ledger, service, settings, scheduler, executors, executorIds, server });
 }

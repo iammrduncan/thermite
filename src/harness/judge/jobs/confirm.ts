@@ -7,7 +7,6 @@ import { baselineOf, guardTotals } from "../baseline.ts";
 import { runBlocks } from "../blocks.ts";
 import { type Finish, FixedInfraError, InfraError, type JudgeContext, Stop } from "../context.ts";
 import { decideConfirm, goalDelta, type StartValues } from "../decide.ts";
-import type { MeasureSpec } from "../device.ts";
 import { heldOutGoals, recordGoals, verifyGoals } from "../goals.ts";
 import {
   type HeldOutCell,
@@ -20,7 +19,7 @@ import {
   heldOutResult,
   heldOutWords,
 } from "../held-out.ts";
-import type { Arm } from "../measure.ts";
+import { type Arm, type MeasureContext, runArm } from "../measure.ts";
 
 /**
  * The confirm job, and what happens to a win it confirms. A hill climb's screened win is measured
@@ -115,7 +114,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
 async function heldOut(
   judge: JudgeContext,
   job: JobRow,
-  ctx: MeasureSpec,
+  ctx: MeasureContext,
   cand: Arm,
   champ: Arm,
   contract: HillClimbContract,
@@ -133,8 +132,8 @@ async function heldOut(
     const rv: number[] = [];
     let failed: HeldOutKind | undefined;
     for (let rep = 0; rep < 3 && !failed; rep++) {
-      const c = await judge.run(ctx, cand, cell);
-      const r = await judge.run(ctx, champ, cell);
+      const c = await runArm(ctx, cand, cell);
+      const r = await runArm(ctx, champ, cell);
       if (r.kind !== "ok") {
         // An opaque reason: details of held-out cells never leave promotion code.
         logWarn("judge", "champion failed on a held-out cell", { job: job.id, reason: r.reason });
