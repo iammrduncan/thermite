@@ -1,0 +1,67 @@
+---
+id: "205"
+title: "A rig over several machines, with pools of devices for its judge and its workers"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-04
+updated: 2026-11-04
+---
+
+# 205 · A rig over several machines, with pools of devices for its judge and its workers
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## Words
+
+What owns what, one word for each thing:
+
+- A **rig** owns one or more **machines**: a computer, such as a DGX Spark, a node of a cluster or a machine over SSH.
+- A machine owns its **devices**: its GPUs, or its CPU for a rig with no GPU.
+- A rig owns two **pools**: the **judge's pool** and the **workers' pool**. The owner puts each device of each machine in one of them.
+- The judge's jobs run on the judge's pool, and the lanes' trials on the workers' pool, on whichever machine each device is.
+
+Today a rig is one harness container and one supervisor container on one machine ([decisions](../decisions.md), 2026-10-14), and its GPUs are already two pools on that machine (2026-10-18). This goal takes the pools across machines.
+
+## What
+
+The owner, 2026-11-04, on running a hill climb of the Qwen3.8 Flash Next recipe for one DGX Spark ([its repository](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold)) on the lab's two Sparks: "I also want both sparks GPUs to be on there so that judge can use say [one Spark] and lane uses [the other]", and then: "So I want to do basically a rig over 1,2,3, n+ sparks or machines. And allow pools of stuff to be used by agents and judges. Like even if I had 3 sparks... maybe I want two for workers and 1 for judge or two for judge and one for workers."
+
+1. **A rig is made of machines:** one or more, from the same cluster or the same kind of place. **Add a rig** picks them, each with its devices and its CPUs, memory and disk.
+2. **The owner sets the pools:** each device goes to the judge or to the workers, such as two Sparks for the workers and one for the judge, or the other way round. **Edit rig** changes them, with the rig drained first.
+3. **The judge's jobs run on the judge's pool,** one job to a device at a time, on any of its machines. The judge stays code the agents can't write, and it measures on devices the agents don't use.
+4. **A lane's trial runs on a device of the workers' pool,** with its builds and its own checks on that device's machine.
+5. **The run's state stays in one place:** the rig's harness keeps its ledger. The other machines run its jobs and trials and send back what each produced.
+6. **The rig's page shows each machine:** its devices, the pool of each, what each runs now, and its checks.
+
+## Why
+
+The recipe needs about 107 GiB free to start, and loading its weights takes about 81 GiB of a Spark's 128 GB, which its GPU shares. One Spark holds one copy of the model. A rig on one Spark can only take turns, judging or developing; with two or more Sparks the judge can measure on one while the lanes develop on the others. The same holds for any model or engine that fills a machine.
+
+## Questions to answer before the mockup
+
+- **How a job or a trial reaches another machine:** what runs on each machine (a part of the harness, with the broker's isolation), what it gets (the candidate's build or its source, the kit, the model's files), and how its results come back signed.
+- **The network:** the rig's parts reach each other and nothing more, besides what a harness already reaches.
+- **What stays the same on one machine:** a rig of one machine works as today, with no new part.
+- **Each machine's resources:** a machine the judge measures on should have nothing else running; a machine of the workers' pool may hold several lanes.
+- **The rig's life:** an update, a drain, a resize and a machine that goes away while the others go on.
+- **Its neighbours:** goal [100](100-on-demand-gpus.goal)'s pods on demand would be machines that come and go in a pool, and goal [053](053-cross-rig-planning.goal) plans one campaign over several rigs.
+
+## Done when
+
+- [ ] The design, with what owns what, and a mockup of Add a rig, Edit rig and the rig's page, agreed by the owner before code.
+- [ ] Items 1 to 6, with tests and the acceptance checks of the parts they touch.
+- [ ] A hill climb of the recipe on two DGX Sparks, the judge on one and a lane on the other.
+- [ ] Pages: Add a rig, Edit rig, the rig's page, the rig's parts and their network rules, and the changelog. The settled decision that a rig is one harness container changes in [decisions](../decisions.md).
+
+## Decisions
+
+- 2026-11-04, the owner: one rig over any number of machines, with pools of devices for the judge and for the workers, set by the owner, before the recipe's hill climb on the Sparks (asked instead of starting on one Spark now, or on two rigs of one Spark each).
+
+## Progress
+
+- 2026-11-04: Goal written from the owner's words. The recipe's needs are from its README (memory, disk, one model to a Spark).
+
+---
+
+Run with `/goal Complete docs/plan/goals/205-rig-over-machines.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
