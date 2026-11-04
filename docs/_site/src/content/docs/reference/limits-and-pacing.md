@@ -265,7 +265,7 @@ Memory is the sum over all the processes the build or run started, sampled every
 
 | Limit | Value |
 | --- | --- |
-| Model route check | 120 s |
+| Model route check | 120 s, unless the rig sets **The model check waits (seconds)** on **Edit rig**, under **Advanced** in **2 · The agents**: `check_seconds`, 10 to 3600 s. It limits the check only, never a trial or a model call |
 | Isolation check | 30 s for each role |
 | Smoke check | 3 hours for the whole check |
 | A research fetch | 30 s, at most 5 redirects, at most `fetch_policy.max_bytes` (5,000,000 by default). In a hill-climb or goal run, 5,000,000 bytes, and `robots.txt` is respected |

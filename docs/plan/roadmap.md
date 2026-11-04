@@ -167,11 +167,11 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **First, what users hit.** Bugs with a clear fix, and CI's tag run.
 
-- [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `PROPOSED`
-- [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `PROPOSED`
-- [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `PROPOSED`
-- [150](goals/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `PROPOSED`
-- [192](goals/192-ci-tag-run-green.goal) CI's run on a version tag passes every check a runner can run (issue 54) · `PROPOSED`
+- [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `IN_PROGRESS`
+- [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `IN_PROGRESS`
+- [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
+- [150](goals/_completed/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `VERIFIED`
+- [192](goals/192-ci-tag-run-green.goal) CI's run on a version tag passes every check a runner can run (issue 54) · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-03.**
 
