@@ -385,8 +385,11 @@ export function runStatsTab(u: RunUsage): string {
   const r = u.report;
   const t = r.total;
   const lines = r.by_agent_model;
-  if (noUse(t) && !lines.length)
-    return `<div class="card"><div class="empty">No model call recorded yet. Code counts each call of the agents when it ends.</div></div>`;
+  // No call yet: said first, then the agents the rig gives a model to (goal 193), if any.
+  const empty = noUse(t)
+    ? `<div class="card"><div class="empty">No model call recorded yet. Code counts each call of the agents when it ends.</div></div>`
+    : "";
+  if (empty && !lines.length) return empty;
   const all = tokensOf(t);
   const teachers = lines.filter((l) => l.agent === "teachers");
   const row = (l: (typeof lines)[number]) => {
@@ -447,7 +450,7 @@ export function runStatsTab(u: RunUsage): string {
           : ""
       }</div>`
     : "";
-  return `<div id="run-stats">${callsCard}
+  return `${empty}<div id="run-stats">${callsCard}
 <div class="u-h">By agent and model</div>
 ${table}
 </div>`;
