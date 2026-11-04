@@ -33,6 +33,20 @@ export function busSealKeyColumn(db: DatabaseSync): void {
     db.exec("alter table rig_bus_key add column seal_key text");
 }
 
+/**
+ * The key each follower of a rig over several machines registered (goal 205), made by the store's
+ * migration to schema version 29: its public part, by rig and machine.
+ */
+export function machineBusKeyTable(db: DatabaseSync): void {
+  db.exec(`create table if not exists machine_bus_key (
+  rig text not null,
+  machine text not null,
+  public_key text not null,
+  registered_at text not null,
+  primary key (rig, machine)
+)`);
+}
+
 export class BusKeys extends StorePart {
   /** The key a rig registered, or undefined when it has none. */
   rigKey(rig: string): string | undefined {
@@ -75,8 +89,39 @@ export class BusKeys extends StorePart {
       .prepare("select rig from rig_bus_key where (public_key = ? or seal_key = ?) and rig != ?")
       .get(key, key, rig) as { rig: string } | undefined;
     if (r) return `rig ${r.rig}`;
+    const m = this.db
+      .prepare("select rig, machine from machine_bus_key where public_key = ?")
+      .get(key) as { rig: string; machine: string } | undefined;
+    if (m) return `machine ${m.machine} of rig ${m.rig}`;
     const own = this.db.prepare("select 1 from bus_identity where public_key = ?").get(key);
     return own ? "control" : undefined;
+  }
+
+  /** The key a follower of a rig registered (goal 205), or undefined when it has none. */
+  machineKey(rig: string, machine: string): string | undefined {
+    const r = this.db
+      .prepare("select public_key from machine_bus_key where rig = ? and machine = ?")
+      .get(rig, machine) as { public_key: string } | undefined;
+    return r?.public_key;
+  }
+
+  /** Records the key a follower registered, in place of the one before. */
+  setMachineKey(rig: string, machine: string, key: string): void {
+    this.db
+      .prepare(
+        `insert into machine_bus_key (rig, machine, public_key, registered_at) values (?, ?, ?, ?)
+         on conflict (rig, machine) do update set public_key = excluded.public_key,
+           registered_at = excluded.registered_at`,
+      )
+      .run(rig, machine, key, new Date().toISOString());
+  }
+
+  /** Every follower's registered key, by rig and machine. */
+  machineKeys(): { rig: string; machine: string; key: string }[] {
+    const rows = this.db
+      .prepare("select rig, machine, public_key from machine_bus_key order by rig, machine")
+      .all() as { rig: string; machine: string; public_key: string }[];
+    return rows.map((r) => ({ rig: r.rig, machine: r.machine, key: r.public_key }));
   }
 
   /** Every rig's registered key, by rig, with its seal key when it registered one. */

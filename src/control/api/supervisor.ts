@@ -1,9 +1,10 @@
 import type { Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { BadInput, jsonBody, Refusal } from "../../common/errors.ts";
-import { REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
+import { MACHINE_REGISTER, REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
+import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
 import { isSealKey, SEAL_KEY_WORDS } from "../../core/link/config.ts";
-import { isUserKey, USER_KEY_WORDS } from "../../core/link/users.ts";
+import { isUserKey, USER_KEY_WORDS, userKeyFingerprint } from "../../core/link/users.ts";
 import {
   type BusUsers,
   busKeyHolder,
@@ -76,4 +77,29 @@ export function supervisorRoutes(
     if (takeRigSealKey(store, rig, sealKey) !== "same") void deps.busConfig?.write();
     return c.json({ ok: true, reports: reportPlace(store, rig) });
   });
+
+  // A follower of the rig (goal 205): its key gets the follower's user on the bus, which takes
+  // only its leader's asks on its own subject. A key another holds is refused, as a rig's is.
+  app.post(
+    MACHINE_REGISTER.path,
+    rigAuth,
+    bodyLimit({ maxSize: MACHINE_REGISTER.maxBytes }),
+    async (c) => {
+      const rig = c.req.param("rig");
+      const machine = c.req.param("machine");
+      if (!RIG_ID.test(machine)) throw new BadInput(`a machine's name is ${RIG_ID_WORDS}`);
+      const { bus_key: key } = MACHINE_REGISTER.body.parse(await jsonBody(c.req));
+      if (!isUserKey(key)) throw new BadInput(`bus_key is not ${USER_KEY_WORDS}`);
+      if (store.busKeys.machineKey(rig, machine) === key) return c.json({ ok: true });
+      const holder = busKeyHolder(store, rig, key, deps.busUsers?.ownKeys() ?? []);
+      if (holder || store.busKeys.rigKey(rig) === key) {
+        noteKeyRefused(store, rig, "bus_key", key, holder ?? `rig ${rig}`);
+        throw new Refusal(keyHeldWords("bus_key"));
+      }
+      store.busKeys.setMachineKey(rig, machine, key);
+      store.rigHistory.add(rig, "machine_bus_key", true, `${machine}: ${userKeyFingerprint(key)}`);
+      await deps.busUsers?.sync();
+      return c.json({ ok: true });
+    },
+  );
 }

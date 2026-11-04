@@ -10,6 +10,7 @@ import {
   BUS_ACCOUNT,
   backupPermissions,
   controlPermissions,
+  followerPermissions,
   isUserKey,
   jetStreamFiguresSubject,
   RECORD_STREAMS,
@@ -65,7 +66,7 @@ describe("who may do what on the message bus", () => {
     assert.ok(!key.includes(fp));
   });
 
-  test("a rig may publish its own reports, live lines and files, ask control to search and read the knowledge base and what a rig asks, take its own commands and read its own config, and nothing else", () => {
+  test("a rig may publish its own reports, live lines and files, ask control to search and read the knowledge base and what a rig asks, ask its own followers, take its own commands and read its own config, and nothing else", () => {
     assert.deepEqual(rigPermissions("rig-a"), {
       publish: {
         allow: [
@@ -87,6 +88,7 @@ describe("who may do what on the message bus", () => {
           "thermite.rig.rig-a.ask.renew",
           "thermite.rig.rig-a.ask.space",
           "thermite.rig.rig-a.ask.kb-files",
+          "thermite.rig.rig-a.machine.*.device",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },
@@ -178,6 +180,38 @@ describe("who may do what on the message bus", () => {
     assert.deepEqual(none.accounts[BUS_ACCOUNT]?.users, [
       { nkey: keys.control, permissions: controlPermissions() },
     ]);
+  });
+
+  test("a follower may take its leader's asks on its own subject and answer each, and nothing else (goal 205)", () => {
+    assert.deepEqual(followerPermissions("rig-a", "spark-02"), {
+      publish: { allow: [] },
+      subscribe: { allow: ["thermite.rig.rig-a.machine.spark-02.device"] },
+      allow_responses: true,
+    });
+    const keys = { control: user(), system: user(), a: user(), f: user() };
+    const { accounts } = readUsers(
+      usersFile({
+        control: keys.control,
+        system: keys.system,
+        rigs: [{ rig: "rig-a", key: keys.a }],
+        followers: [{ rig: "rig-a", machine: "spark-02", key: keys.f }],
+      }),
+    );
+    assert.deepEqual(accounts[BUS_ACCOUNT]?.users, [
+      { nkey: keys.control, permissions: controlPermissions() },
+      { nkey: keys.a, permissions: rigPermissions("rig-a") },
+      { nkey: keys.f, permissions: followerPermissions("rig-a", "spark-02") },
+    ]);
+    assert.throws(
+      () =>
+        usersFile({
+          control: keys.control,
+          system: keys.system,
+          rigs: [],
+          followers: [{ rig: "rig-a", machine: "spark-02", key: "not a key" }],
+        }),
+      /not a NATS user key/,
+    );
   });
 
   test("the backup's user may snapshot and restore the streams of record, and nothing else", () => {

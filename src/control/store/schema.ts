@@ -7,7 +7,7 @@ import {
 } from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
-import { busKeyTables, busSealKeyColumn } from "./bus.ts";
+import { busKeyTables, busSealKeyColumn, machineBusKeyTable } from "./bus.ts";
 import { clusterUncheckedColumn } from "./clusters.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
@@ -652,6 +652,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   ownSettingsTable,
   // The public names in the knowledge base: field notes' kind other, source notes, directions.
   knowledgePublicNames,
+  // Each follower's key on the bus, of a rig over several machines (goal 205).
+  machineBusKeyTable,
 ];
 
 /**

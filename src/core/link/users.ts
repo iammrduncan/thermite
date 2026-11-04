@@ -9,6 +9,7 @@ import { kbAskSubject } from "./kb.ts";
 import { kbFileSubject } from "./kb-files.ts";
 import { LEAF_ADDRESS, LEAF_JS_API, LEAF_PORT, leafAccount, leafTlsName } from "./leaf.ts";
 import { LIVE_RUNS_PER_RIG, liveSubject, rigLiveSubject } from "./live.ts";
+import { machineSubject, machinesSubject } from "./machines.ts";
 import { reportSubject } from "./report.ts";
 
 /**
@@ -61,10 +62,14 @@ export function rigInboxPrefix(rig: string): string {
   return `_INBOX.rig.${rig}`;
 }
 
-/** What a user may publish to and subscribe to: these subjects, and nothing else. */
+/**
+ * What a user may publish to and subscribe to: these subjects, and nothing else. With
+ * `allow_responses`, it may also answer each request it takes, once.
+ */
 export interface Permissions {
   publish: { allow: string[] };
   subscribe: { allow: string[] };
+  allow_responses?: boolean | undefined;
 }
 
 /** The JetStream API's subjects: the server answers a request on these. */
@@ -112,9 +117,24 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
         kbAskSubject("search", rig),
         kbAskSubject("read", rig),
         ...RIG_ASK_KINDS.map((kind) => rigAskSubject(rig, kind)),
+        // A rig's leader asks its followers (goal 205): any machine of its own rig.
+        machinesSubject(rig),
       ],
     },
     subscribe: { allow: [`${rigInboxPrefix(rig)}.>`] },
+  };
+}
+
+/**
+ * What a follower's user may do (goal 205): take its leader's asks on its own subject
+ * (machines.ts) and answer each, once. Nothing else: no stream, no other rig's or machine's
+ * subject, no ask of control.
+ */
+export function followerPermissions(rig: string, machine: string): Permissions {
+  return {
+    publish: { allow: [] },
+    subscribe: { allow: [machineSubject(rig, machine)] },
+    allow_responses: true,
   };
 }
 
@@ -203,6 +223,8 @@ export interface BusUserKeys {
   system: string;
   backup?: string | undefined;
   rigs: readonly { rig: string; key: string; runs?: readonly string[] | undefined }[];
+  /** The followers of rigs over several machines whose supervisors registered a key (goal 205). */
+  followers?: readonly { rig: string; machine: string; key: string }[] | undefined;
   /** The rigs on RunPod whose pod's server control's server dials as a leaf node, if any. */
   leaf?: LeafRigs | undefined;
 }
@@ -245,7 +267,10 @@ interface LeafService {
  * across a leaf connection bound to an account without JetStream of its own.
  */
 export function leafServices(rig: string, runs: readonly string[] = []): LeafService[] {
-  return rigPermissions(rig, runs).publish.allow.map((subject) => ({
+  // A rig on RunPod is one machine: it asks no follower (goal 205).
+  const followers = machinesSubject(rig);
+  const allow = rigPermissions(rig, runs).publish.allow.filter((s) => s !== followers);
+  return allow.map((subject) => ({
     subject,
     ...(subject.startsWith(`${API}.`)
       ? { local: `${LEAF_JS_API}${subject.slice(API.length)}` }
@@ -316,7 +341,16 @@ function leafParts(leaf: LeafRigs | undefined) {
  */
 export function usersFile(u: BusUserKeys): string {
   const backup = u.backup === undefined ? [] : [u.backup];
-  for (const key of [u.control, u.system, ...backup, ...u.rigs.map((r) => r.key)])
+  const followers = [...(u.followers ?? [])].sort((a, b) =>
+    `${a.rig}/${a.machine}` < `${b.rig}/${b.machine}` ? -1 : 1,
+  );
+  for (const key of [
+    u.control,
+    u.system,
+    ...backup,
+    ...u.rigs.map((r) => r.key),
+    ...followers.map((f) => f.key),
+  ])
     if (!isUserKey(key)) throw new Error("not a NATS user key for the bus's users file");
   const rigs = [...u.rigs].sort((a, b) => (a.rig < b.rig ? -1 : a.rig > b.rig ? 1 : 0));
   const leaf = leafParts(u.leaf);
@@ -327,6 +361,10 @@ export function usersFile(u: BusUserKeys): string {
         { nkey: u.control, permissions: controlPermissions() },
         ...backup.map((nkey) => ({ nkey, permissions: backupPermissions() })),
         ...rigs.map((r) => ({ nkey: r.key, permissions: rigPermissions(r.rig, r.runs) })),
+        ...followers.map((f) => ({
+          nkey: f.key,
+          permissions: followerPermissions(f.rig, f.machine),
+        })),
       ],
       ...(leaf.exports.length ? { exports: leaf.exports } : {}),
     },

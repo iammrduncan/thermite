@@ -26,6 +26,12 @@ export function machineSubject(rig: string, machine: string): string {
   return `thermite.rig.${rig}.machine.${machine}.device`;
 }
 
+/** Every machine's subject of a rig, as its leader may ask them: `*` for the machine. */
+export function machinesSubject(rig: string): string {
+  if (!RIG_ID.test(rig)) throw new Error(`not a rig's name for a subject: ${rig}`);
+  return `thermite.rig.${rig}.machine.*.device`;
+}
+
 const Part = z.number().int().min(0);
 
 /** What the leader's supervisor sends a follower's. */
