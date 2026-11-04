@@ -16,7 +16,8 @@ updated: 2026-11-04
 
 What owns what, one word for each thing:
 
-- A **rig** owns one or more **machines**: a computer, such as a DGX Spark, a node of a cluster or a machine over SSH.
+- A **rig** owns one or more **machines**: a computer, such as a DGX Spark, a node of a cluster or a machine over SSH, wherever each was added.
+- One machine is the rig's **leader**; the others are its **followers**. Every machine runs the same harness and supervisor.
 - A machine owns its **devices**: its GPUs, or its CPU for a rig with no GPU.
 - A rig owns two **pools**: the **judge's pool** and the **workers' pool**. The owner puts each device of each machine in one of them.
 - The judge's jobs run on the judge's pool, and the lanes' trials on the workers' pool, on whichever machine each device is.
@@ -25,13 +26,13 @@ Today a rig is one harness container and one supervisor container on one machine
 
 ## What
 
-The owner, 2026-11-04, on running a hill climb of the Qwen3.8 Flash Next recipe for one DGX Spark ([its repository](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold)) on the lab's two Sparks: "I also want both sparks GPUs to be on there so that judge can use say [one Spark] and lane uses [the other]", and then: "So I want to do basically a rig over 1,2,3, n+ sparks or machines. And allow pools of stuff to be used by agents and judges. Like even if I had 3 sparks... maybe I want two for workers and 1 for judge or two for judge and one for workers."
+The owner, 2026-11-04, on running a hill climb of the Qwen3.8 Flash Next recipe for one DGX Spark ([its repository](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold)) on the lab's two Sparks: "I also want both sparks GPUs to be on there so that judge can use say [one Spark] and lane uses [the other]", and then: "So I want to do basically a rig over 1,2,3, n+ sparks or machines. And allow pools of stuff to be used by agents and judges. Like even if I had 3 sparks... maybe I want two for workers and 1 for judge or two for judge and one for workers." On the first mockup: "it shouldn't matter where the machines are defined as long as they can take a rig they should be able to take it. You should design it as leader/follower where one machine is leader and several machines can join the rig as followers. Any one agent can be ran on any node cause they basically all run the same code, and changes are sync'd over NATs etc... Then it doesn't matter which one judge or worker runs on... at 3 or more you probably can use RAFT quorum."
 
-1. **A rig is made of machines:** one or more, from the same cluster or the same kind of place. **Add a rig** picks them, each with its devices and its CPUs, memory and disk.
+1. **A rig is made of machines:** one or more, from any place control knows (computers over SSH, nodes of clusters, or both). **Add a rig** picks them, each with its devices and its CPUs, memory and disk.
 2. **The owner sets the pools:** each device goes to the judge or to the workers, such as two Sparks for the workers and one for the judge, or the other way round. **Edit rig** changes them, with the rig drained first.
 3. **The judge's jobs run on the judge's pool,** one job to a device at a time, on any of its machines. The judge stays code the agents can't write, and it measures on devices the agents don't use.
 4. **A lane's trial runs on a device of the workers' pool,** with its builds and its own checks on that device's machine.
-5. **The run's state stays in one place:** the rig's harness keeps its ledger. The other machines run its jobs and trials and send back what each produced.
+5. **One leader, its followers:** the leader keeps the run's records, plans and hands out the work; each follower keeps a copy of the run. If the leader stops, a follower takes over and the work goes on.
 6. **The rig's page shows each machine:** its devices, the pool of each, what each runs now, and its checks.
 
 ## Why
@@ -42,12 +43,13 @@ The recipe needs about 107 GiB free to start, and loading its weights takes abou
 
 What exists, 2026-11-04: one harness process holds the run's ledger, its scheduler and planner, the judge's executors (one for each judge GPU) and the lanes. The broker, as root, runs each role as its own user on its own GPU. The judge builds a candidate from the harness's git mirror and keeps its builds, kits and models on the harness's volume. A lane works in a one-commit repository on the same volume and sends its change to the harness's API as a patch. Nothing runs a judge job or a trial on another machine.
 
-- **Every machine of a rig runs the harness image,** with its broker and its roles as today.
-- **One of them is the rig's main machine.** Its harness keeps the run: the ledger, the scheduler, the planner, the project's git mirror and the judge's queue. The supervisor runs beside it. A rig of one machine is a main machine alone, and works as today.
-- **The judge's jobs on another machine:** that machine's harness runs an executor for each of its judge GPUs. Each executor leases a job from the main machine, with the lease and its fence as today. It fetches the candidate's tree, the kit and the model's files from the main machine, builds and measures as the judge does now, and sends the result back. The main machine records it under the lease, so a machine that goes away loses no verdict: its jobs go back to the queue when their leases end.
-- **A lane on another machine:** the main machine's scheduler starts the trial there. That machine's harness makes the lane's workspace from the parent's tree, runs the agent program as the lane's user, runs its own checks on its workers' GPU, and sends the change, the trial's end and its live lines to the main machine. A machine that goes away ends its trials as interrupted, and their experiments go back to the queue.
-- **Files fetched once:** each machine keeps a model's files and the kits on its own disk, fetched from the main machine once and kept by their hash.
-- **The network:** a rig's harnesses reach each other's API on the rig's own port, each with a key of its own, and nothing more than a harness reaches today. The judge's machines need nothing but the main machine.
+- **Every machine of a rig runs the same harness and supervisor,** with the broker's roles and isolation as today. A rig of one machine is a leader alone, and works as today.
+- **The leader** keeps the run: the ledger, the scheduler, the planner, the project's git mirror and the judge's queue. **The followers** each keep a copy of the run, from the leader's changes as it makes them.
+- **They talk through control's message bus,** as every rig already does, so the machines can be anywhere: each supervisor carries its own machine's messages, and the harness stays off the bus. Large files (models, kits) come from their source or Git, never over the bus.
+- **The judge's jobs on a follower:** its harness runs an executor for each of its judge GPUs. Each executor leases a job from the leader, with the lease and its fence as today, builds and measures as the judge does now, and sends the result back; the leader records it under the lease. A follower that stops loses no verdict: its jobs go back to the queue when their leases end.
+- **A lane on a follower:** the leader starts the trial there. The follower makes the lane's workspace from the parent's tree, runs the agent program as the lane's user and its own checks on its workers' GPU, and sends the change, the trial's end and its live lines to the leader. A follower that stops ends its trials as interrupted, and their experiments go back to the queue.
+- **A new leader:** if the leader stops, a follower takes the leader's lease and goes on from its copy of the run; the stopped machine follows when it comes back. Only one machine holds the lease at a time, and each lease has a number that fences off anything an older leader still sends.
+- **Files fetched once:** each machine keeps a model's files, the kits and its builds on its own disk, by their hash.
 - **The pools:** each GPU is the judge's or the workers'. A machine with both is allowed, with a note that the lanes' work there makes the judge's timing noisier.
 
 ## Questions to answer before the mockup
@@ -69,11 +71,13 @@ What exists, 2026-11-04: one harness process holds the run's ledger, its schedul
 ## Decisions
 
 - 2026-11-04, the owner: one rig over any number of machines, with pools of devices for the judge and for the workers, set by the owner, before the recipe's hill climb on the Sparks (asked instead of starting on one Spark now, or on two rigs of one Spark each).
+- 2026-11-04, the owner, on the first mockup: machines from any place; a leader and followers that all run the same code, kept in step over NATS, so that the judge and the workers can run on any machine; a Raft quorum at three machines or more. Redrawn so.
 
 ## Progress
 
 - 2026-11-04: Goal written from the owner's words. The recipe's needs are from its README (memory, disk, one model to a Spark).
 - 2026-11-04: Researched how a rig works today (above, under Design) and proposed the design: one main machine keeps the run, and the other machines run the judge's jobs or the lanes' trials it gives them. Mockup made for the owner: Add a rig with machines and a pool for each GPU, the rig's page with its machines, and how two machines work together.
+- 2026-11-04: Redrawn as the owner said: machines from any place, a leader and followers kept in step over control's bus, the leader's lease taken over by a follower when the leader stops. Left to the owner: how the leader is chosen (a lease on control's bus, or a Raft quorum among the machines).
 
 ---
 
