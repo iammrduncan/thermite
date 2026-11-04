@@ -7,6 +7,7 @@ import {
   OWNER_ONLY_KINDS,
   verifyCommand,
 } from "../../core/commands.ts";
+import { HOURS_SPENT } from "../../core/contract.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
 import { RIG_LOG_LEVEL_LASTS } from "../../core/log-levels.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
@@ -18,6 +19,7 @@ import type { Experiment } from "../queue.ts";
 import { RESEARCH_REVIEW, setHypothesisStatus } from "../research/index.ts";
 import { runRetention } from "../retention.ts";
 import { Reviews } from "../reviews.ts";
+import { hoursOf, workedTime } from "../run-clock.ts";
 import { assignCampaign } from "./assignment.ts";
 import { approvePromotion, declinePromotion } from "./champion.ts";
 import type { RigCheckRunner } from "./checks.ts";
@@ -343,6 +345,39 @@ export class Commands {
         if (refused) throw new Refusal(refused);
         const event = svc.ledger.appendEvent(by, "teachers_round_requested", p.run, {});
         return { run: p.run, asked: true, event };
+      }
+      // More hours of work for a run (goal 198): its stop time grows by them, and a run its hours
+      // had paused resumes, as resume_run does.
+      case "add_run_hours": {
+        const p = CommandPayloads.add_run_hours.parse(payload);
+        const inst = requireRun(svc.ledger, p.run);
+        if (inst.status === "closed")
+          throw new Refusal(`${p.run} is closed: start a new run of its campaign instead`);
+        const had = hoursOf(svc.ledger, p.run, svc.contractFor(p.run).budget.wall_hours);
+        if (had === undefined)
+          throw new Refusal(
+            `${p.run} has no stop time (budget.wall_hours): it never stops for its hours, so there are none to add`,
+          );
+        const total = had + p.hours;
+        const worked = workedTime(svc.ledger, p.run).elapsed_ms / 3_600_000;
+        if (worked >= total)
+          throw new Refusal(
+            `${p.run} has worked ${worked.toFixed(1)} of its ${had} hours: add more than ${Math.ceil((worked - had) * 10 - 1e-9) / 10}`,
+          );
+        const resumed = inst.status === "paused" && inst.pause_reason === HOURS_SPENT;
+        const event = svc.ledger.tx(() => {
+          const id = svc.ledger.appendEvent(by, "run_hours_added", p.run, {
+            hours: p.hours,
+            total,
+            resumed,
+          });
+          if (resumed) {
+            pauseOthers(svc.ledger, p.run, by);
+            svc.ledger.runs.setStatus(p.run, "running", null, by);
+          }
+          return id;
+        });
+        return { run: p.run, hours: p.hours, total, resumed, event };
       }
       case "propagate":
         return receivePropagation(svc, CommandPayloads.propagate.parse(payload), by);

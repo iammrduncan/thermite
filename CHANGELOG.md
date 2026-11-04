@@ -6,6 +6,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Steering
 
+- **Add hours**, beside **⋯** on a run its stop time paused: the run gets more hours of work, and it resumes, where it paused again at once on Resume and a new run was the only way on. `add_run_hours {run, hours}` over MCP and `POST /v1/runs/<run>/hours` do the same, for a running run too ([issue 50](https://github.com/iammrduncan/thermite/issues/50)).
 - **Start a teachers' round**, under **⋯** in a running run's header and in its Live: the run's teachers review it now, as at a timed round, and the next timed round counts from this one, where they waited for their timer. A round under way finishes first. The owner's and the operator's `start_teachers_round` over MCP and `POST /v1/runs/<run>/teachers-round` do the same. Control refuses it, in words, for a run that is not running, a rig with no teachers and a rig with its teachers off ([issue 53](https://github.com/iammrduncan/thermite/issues/53)).
 
 ### Rigs

@@ -11,6 +11,7 @@ const COMMAND: Record<string, string> = {
   close_run: "close the run",
   reset_workers: "reset the workers",
   start_teachers_round: "start a teachers' round",
+  add_run_hours: "add hours to the run",
   redirect: "steer the planner",
   accept_review: "decide a review",
   conclude: 'decide a "not possible" proposal',

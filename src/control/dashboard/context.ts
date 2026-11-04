@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { buildInfo } from "../../common/build-info.ts";
 import { sameSecret } from "../../common/secrets.ts";
+import { ADD_HOURS_MAX, HOURS_SPENT } from "../../core/contract.ts";
 import { McpServers } from "../mcp-servers/index.ts";
 import type { PageOptions } from "../pages.ts";
 import { ChatGPTLogins } from "../providers/index.ts";
@@ -25,6 +26,11 @@ const DAY_MS = 24 * 3_600_000;
 /** What Close run does, in its ⋯ menu on a run's page (goal 087). */
 const CLOSE_RUN_WORDS =
   "The run ends for good: nothing more starts, and it can't be resumed. Its results stay.";
+/** What Add hours does (goal 198), and its field's tip. */
+const HOURS_WORDS =
+  "The run used all the hours of its stop time. It goes on from where it stopped, for the hours you add. Time it is paused doesn't count.";
+const HOURS_TIP =
+  "Hours of work to add to the run's stop time, 1 to 8760. They count as its stop time does: only while the run works.";
 /** What Start a teachers' round does, in a run's ⋯ menu (goal 194). */
 const TEACHERS_ROUND_WORDS =
   "The teachers review the run now, from its brief, and give their advice, as at a timed round. The next timed round counts from this one. Your messages to them stay as they are.";
@@ -179,9 +185,18 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       : "";
     const closing = close && r.status !== "closed" ? closeForm(c, rig, r.id, back) : "";
     const items = [restart, round, closing].filter(Boolean);
-    if (!items.length) return "";
-    return `<details class="menu"><summary class="btn${cls ? ` ${cls}` : ""}" title="More">⋯</summary><div class="menu-pop">${items.join(`<div class="divider" style="margin:2px 0"></div>`)}</div></details>`;
+    const hours = hoursMenu(c, rig, r, back, cls);
+    if (!items.length) return hours;
+    return `${hours}<details class="menu"><summary class="btn${cls ? ` ${cls}` : ""}" title="More">⋯</summary><div class="menu-pop">${items.join(`<div class="divider" style="margin:2px 0"></div>`)}</div></details>`;
   };
+  /**
+   * Add hours (goal 198), beside ⋯ on a run its hours paused: more hours of work, and it resumes.
+   * Resume alone would pause it again at once.
+   */
+  const hoursMenu = (c: Ctx, rig: string, r: RunView, back: string, cls = "") =>
+    r.status === "paused" && r.pause_reason === HOURS_SPENT
+      ? `<details class="menu"><summary class="btn primary${cls ? ` ${cls}` : ""}">Add hours</summary><div class="menu-pop">${cmdForm(c, { rig, kind: "add_run_hours", fields: { run: r.id }, label: "Add hours and resume", cls: "sm", back, extra: `<label class="fd" style="margin-bottom:6px">${infoLabel("Hours to add", HOURS_TIP)}<input name="hours" type="number" min="1" max="${ADD_HOURS_MAX}" step="1" value="24" required></label>` })}<div class="muted small">${HOURS_WORDS}</div></div></details>`
+      : "";
   const forms = (c: Ctx): Forms => ({
     cmd: (f) => cmdForm(c, f),
     csrf: csrf(c),

@@ -1,7 +1,7 @@
 import type { Contract } from "../../../core/contract.ts";
 import { startingPoint } from "../../judge/index.ts";
 import type { Ledger } from "../../ledger/index.ts";
-import { workedTime } from "../../run-clock.ts";
+import { hoursOf, workedTime } from "../../run-clock.ts";
 import type { SchedulerContext } from "./context.ts";
 
 /**
@@ -91,7 +91,7 @@ export function maybeForkRound(
   n: number,
 ): void {
   const rounds = sched.ledger.events.count("fork_round", { subject: run });
-  const w = contract.budget.wall_hours;
+  const w = hoursOf(sched.ledger, run, contract.budget.wall_hours);
   let due = false;
   if (w !== undefined) {
     // The share of its wall-time budget the run worked (goal 198).

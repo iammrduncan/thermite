@@ -19,6 +19,8 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
     reset_workers: { run },
     // Start a teachers' round (goal 194), from a run's ⋯ menu.
     start_teachers_round: { run },
+    // Add hours (goal 198), on a run its hours paused.
+    add_run_hours: { run, hours: Number(f.hours) },
     // Export (goal 103): the run alone, or a full one, as the owner chose (goal 180: no export of
     // what changed).
     export_now: exportForm(f).payload,

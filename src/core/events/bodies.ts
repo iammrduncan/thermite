@@ -7,6 +7,16 @@ import type { AgentPromptBody } from "../prompts.ts";
 import type { RetentionRemoved } from "../retention/index.ts";
 import type { RigSettings } from "../rig-settings.ts";
 import type { TerminalOutcome } from "../terminal-input.ts";
+import type {
+  ConclusionDecided,
+  JobRequeued,
+  McpAgents,
+  ModelRouteInfo,
+  PropagationJudged,
+  QueuePosition,
+  ResearchReport,
+  VerdictGuard,
+} from "./body-parts.ts";
 import type { EventKind } from "./kinds.ts";
 
 /**
@@ -421,6 +431,8 @@ export interface EventBodies {
   };
   workers_reset: Record<string, never>;
   teachers_round_requested: Record<string, never>;
+  /** Hours the owner added to a run's stop time (goal 198): its hours now, and whether it resumed. */
+  run_hours_added: { hours: number; total: number; resumed: boolean };
   agents_stopped: { kind: string; words: string; by: string; said: string };
   agents_resumed: { why: string };
   agents_wait_for_limit: {
@@ -699,79 +711,6 @@ export interface EventBodies {
     /** The paper whole, as the knowledge base keeps its item's file (goal 175). */
     file?: KbItemFile | undefined;
   };
-}
-
-/** A job put back in the queue, or blocked after too many expiries. */
-interface JobRequeued {
-  fence: number;
-  expiries: number;
-  state: string;
-}
-
-/** A guard in a verdict's event (goal 184). */
-interface VerdictGuard {
-  metric: string;
-  status: string;
-  change: number | null;
-  low: number | null;
-  high: number | null;
-  values?: unknown;
-  vs_start?: { change: number | null; spent: boolean } | undefined;
-}
-
-/** A champion from another rig, judged here. */
-interface PropagationJudged {
-  attempt: string;
-  source_rig: unknown;
-  source_run: unknown;
-  source_seq: unknown;
-  tree: unknown;
-  verdict: string;
-}
-
-interface ConclusionDecided {
-  proposal: number;
-  kind: string;
-}
-
-type QueuePosition = number | "end" | "top";
-type McpAgents = "advisors" | "planner" | "workers";
-
-/** The agents' model route, as the harness took it. */
-interface ModelRouteInfo {
-  source: "control" | "environment" | "none";
-  name?: string | undefined;
-  version?: number | undefined;
-  revision?: string | undefined;
-  harness?: Harness | undefined;
-  model?: string | undefined;
-  base_url?: string | undefined;
-  key_hint?: string | undefined;
-}
-
-/** A research run's digest, or its final report. */
-interface ResearchReport {
-  sources: number;
-  domains: number;
-  verified: number;
-  corroborated: number;
-  drafts: number;
-  hypotheses: number;
-  findings: number;
-  draft_findings: number;
-  questions: { question: string; verified: number }[];
-  last_hour: { sources: number; verified: number; questions_covered: number };
-  elapsed_ms: number;
-  min_ms: number;
-  max_ms: number | null;
-  min_verified_claims: number | null;
-  paper?: boolean | undefined;
-  no_paper?: string | undefined;
-  unsupported_numbers: number;
-  /** The report cut to 60,000 characters (cutSaid); the knowledge base gets it whole as `file`. */
-  report: string;
-  /** The report whole, as the knowledge base keeps its item's file (goal 175). */
-  file?: KbItemFile | undefined;
 }
 
 /** A kind's body. */

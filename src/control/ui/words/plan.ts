@@ -85,6 +85,13 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "warn",
         { run: String(e.subject) },
       );
+    // Hours added to a run's stop time (goal 198), and whether it resumed.
+    case "run_hours_added":
+      return s(
+        `${who(e.actor)} added ${String(b.hours)} hours: the run may work ${String(b.total)} hours in all${b.resumed ? ", and it resumed" : ""}.`,
+        "",
+        { run: String(e.subject) },
+      );
     // A teachers' round asked for now (goal 194): the supervisor starts it within a minute.
     case "teachers_round_requested":
       return s(

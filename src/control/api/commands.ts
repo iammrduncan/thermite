@@ -2,8 +2,8 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { redact } from "../../common/env.ts";
 import { errorText, jsonBody } from "../../common/errors.ts";
-import { COMMAND, ISSUE, TEACHERS_ROUND } from "../../core/api/control/owner.ts";
-import { issueWaking, startTeachersRound, WakeRefused } from "../issue/index.ts";
+import { COMMAND, ISSUE, RUN_HOURS, TEACHERS_ROUND } from "../../core/api/control/owner.ts";
+import { addRunHours, issueWaking, startTeachersRound, WakeRefused } from "../issue/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
 /**
@@ -50,6 +50,30 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
       { id: issued.id, status: "pending", ...(issued.woke ? { woke: issued.woke } : {}) },
       201,
     );
+  });
+
+  // More hours for a run (goal 198), the run named alone: control sends it to the run's rig.
+  app.post(RUN_HOURS.path, admin, bodyLimit({ maxSize: RUN_HOURS.maxBytes }), async (c) => {
+    const run = c.req.param("run");
+    const body = RUN_HOURS.body.safeParse(await jsonBody(c.req));
+    if (!body.success)
+      return c.json({ error: "hours is the hours to add: more than 0, at most 8760" }, 400);
+    try {
+      const r = addRunHours(store, privateKeyPem, {
+        run,
+        hours: body.data.hours,
+        issuedBy: "owner:api",
+      });
+      return c.json(r, 201);
+    } catch (err) {
+      const error = errorText(err);
+      store.auditLog.refusal("owner:api", "refused", {
+        path: RUN_HOURS.path,
+        run,
+        why: redact(error),
+      });
+      return c.json({ error }, /^(unknown rig|Control knows no run)/.test(error) ? 404 : 409);
+    }
   });
 
   // A teachers' round now (goal 194), the run named alone: control sends it to the run's rig.

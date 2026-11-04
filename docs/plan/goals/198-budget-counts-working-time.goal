@@ -25,13 +25,14 @@ Pausing a run to use the machine should not cost the run.
 
 ## Done when
 
-- [ ] Items 1 and 2, with tests.
-- [ ] Pages: Budget and stop time, the contract's reference, the MCP tools, the command line, and the changelog.
+- [x] Items 1 and 2, with tests: tests/harness/run-clock.test.ts and tests/control/issue/run-hours.test.ts. Passing on the lab's test machine is still to come.
+- [x] Pages: Budget and stop time, the contract's reference, the MCP tools, the command line, and the changelog. The command line has no command of its own: `thermite command` sends `add_run_hours`.
 
 ## Decisions
 
 - 2026-11-04, the owner: item 1 now; item 2 by mockup, for approval before it is built ("Item 1 now, item 2 by mockup").
 - 2026-11-04: item 1 counts what a research run's clock counts, for every mode: the run's running time, without paused time and the time its agents could not work (stopped, waiting for the provider's limit or the run's MCP servers, the rig draining, the harness down). One clock, `workedTime` (harness/run-clock.ts), serves both. The fork rounds at a third and two thirds of `wall_hours` count the same way.
+- 2026-11-04, the owner, on the first mockup of item 2 (a form of limits, `set_run_limits`): "that mockup and terminology makes no sense... just do it in hours added". So item 2 is **Add hours**: a number of hours added to the run's stop time, and the run resumes when its hours had paused it. One signed command, `add_run_hours {run, hours}` (1 to 8760), over MCP and REST; the command line sends it with `thermite command`. Device hours and model spend are not raised: that stays with goal 123.
 - 2026-11-04: the dependency on goal 123 is item 2's: raising a run's budget needs a way to change it on a running run, which goal 123's budgets will shape. Item 1 needs nothing of it.
 
 ## Progress
@@ -39,6 +40,7 @@ Pausing a run to use the machine should not cost the run.
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
 - 2026-11-04: Researched and verified on v0.1.3 (a442ad8d): the scheduler compared `wall_hours` with the time since the run's creation (agents/scheduler/index.ts), and so did the fork rounds (scheduler/lanes.ts maybeForkRound); a research run's clock (research/research/clock.ts) already left out paused and blocked time. A spent run is paused, and pauses again at once when resumed: no command changes its budget. The page Budget and stop time is Set a budget or a stop time (how-to/campaigns/budget-and-stop-time.md).
 - 2026-11-04: Item 1 built: harness/run-clock.ts (blockedSpans, moved from research/blocked.ts, and workedTime, by the ledger's clock), used by the scheduler's wall-time check, the fork rounds and the research clock. Test: tests/harness/run-clock.test.ts (the judge env takes a clock). Pages: the contract, Limits and pacing, Verdicts, Set a budget or a stop time, Runs until done; changelog. Item 2's mockup comes next.
+- 2026-11-04: Item 2 built as the owner said: `add_run_hours` (core/commands.ts) and its event `run_hours_added`; the harness adds the hours (run-clock.ts hoursOf: the contract's `wall_hours` with the hours added), resumes a run its hours paused, and refuses a closed run, a run with no stop time and too few hours; control's **Add hours** beside ⋯ (dashboard/context.ts hoursMenu), the MCP tool, `POST /v1/runs/<run>/hours`, History's line. core/events/bodies.ts was at its 800 lines: its helper types moved to body-parts.ts. Tests: tests/harness/run-clock.test.ts, tests/control/issue/run-hours.test.ts. Pages: signed commands, the MCP tools, the REST API, Set a budget or a stop time, Limits and pacing, Verdicts, Steer a run; changelog.
 
 ---
 

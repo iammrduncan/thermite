@@ -8,7 +8,14 @@ import {
 } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
-import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
+import {
+  ADD_HOURS_MAX,
+  CommitSchema,
+  IdSchema,
+  MAX_LANES,
+  MAX_LANES_REASON,
+  Sha256Schema,
+} from "./contract.ts";
 import { directionName } from "./directions.ts";
 import { StructuredDirective } from "./directives.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
@@ -271,6 +278,11 @@ export const CommandPayloads = {
    */
   start_teachers_round: z.object({ run: RunId }),
   /**
+   * The owner (or an operator) gives a run more hours of work (goal 198): its stop time,
+   * `budget.wall_hours`, grows by them, and a run its hours had paused resumes.
+   */
+  add_run_hours: z.object({ run: RunId, hours: z.number().positive().max(ADD_HOURS_MAX) }),
+  /**
    * The owner's message to the run's agents (owner only). `to`: everyone working (`all`: every
    * lane, and the planner of a hill-climb or goal run), a lane, a running worker's trial, the
    * planner, or the advisors (`advisors`: all of them; `teachers`, `auditor` or `panel`). The
@@ -520,6 +532,7 @@ export const MCP_OPERATOR_KINDS = [
   "stop_trial",
   "end_wait",
   "start_teachers_round",
+  "add_run_hours",
   // The experiment queue and the rules for the plan (goal 064): the owner's and operators'.
   "queue_add",
   "queue_move",
@@ -569,6 +582,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "stop_trial",
   "end_wait",
   "start_teachers_round",
+  "add_run_hours",
   "invalidate_evidence",
   "terminal_input",
   "retention_run",
@@ -587,6 +601,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "redirect",
   "reset_workers",
   "start_teachers_round",
+  "add_run_hours",
   "message_agent",
   "unkeep_message",
   "queue_add",

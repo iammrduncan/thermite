@@ -211,6 +211,14 @@ export function teachersRoundAsked(store: ControlStore, rig: string, p: { run: s
   return "";
 }
 
+/** Why control refuses a command for a run its rig reports closed, or "" (goal 198). */
+function closedRefusal(store: ControlStore, rig: string, p: { run: string }): string {
+  const run = rigView(store, rig)?.runs.find((x) => x.id === p.run);
+  return run?.status === "closed"
+    ? `${p.run} is closed: start a new run of its campaign instead.`
+    : "";
+}
+
 /**
  * Why control refuses a set of rules (redirect) before signing it, or "". A rule may name a
  * direction the run doesn't have yet: the planner designs it (goal 066). A research run has no
@@ -381,6 +389,27 @@ export function startTeachersRound(
 }
 
 /**
+ * More hours of work for a run (goal 198), as the MCP tool and the REST route ask for them: one
+ * signed add_run_hours to the run's rig, refused in words before signing for a closed run.
+ */
+export function addRunHours(
+  store: ControlStore,
+  privateKeyPem: string,
+  a: { run: string; hours: number; issuedBy: string },
+): { id: string; rig: string; said: string } {
+  const payload = { run: a.run, hours: a.hours };
+  const rig = commandRig(store, "add_run_hours", undefined, payload);
+  const { id } = issueCommand(store, privateKeyPem, {
+    rig,
+    kind: "add_run_hours",
+    payload,
+    issuedBy: a.issuedBy,
+  });
+  const said = `${rig} adds ${a.hours} hours to ${a.run} within a minute: a run whose hours ran out resumes.`;
+  return { id, rig, said };
+}
+
+/**
  * A command that changes a rig part's setting says in the audit log what it changes, beside the
  * `command_issued` that every command gets: a `log_level` its part and level.
  */
@@ -539,7 +568,9 @@ export function prepareCommand(
             ? modelCheckRefusal(store, rig, payload as { check: string })
             : input.kind === "start_teachers_round"
               ? teachersRoundAsked(store, rig, payload as { run: string })
-              : "";
+              : input.kind === "add_run_hours"
+                ? closedRefusal(store, rig, payload as { run: string })
+                : "";
   if (ruled) throw new Error(ruled);
   const now = Date.now();
   const signed = signEnvelope(

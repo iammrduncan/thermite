@@ -87,3 +87,17 @@ export function workedTime(
   }
   return { elapsed_ms: elapsedMs, waited_ms: waitedMs };
 }
+
+/**
+ * A run's hours of work (goal 198): its contract's `wall_hours` with the hours the owner added
+ * since (add_run_hours); undefined for a run with no stop time.
+ */
+export function hoursOf(
+  ledger: Ledger,
+  run: string,
+  wallHours: number | undefined,
+): number | undefined {
+  if (wallHours === undefined) return undefined;
+  const added = ledger.events.list("run_hours_added", { subject: run });
+  return added.reduce((n, e) => n + e.body.hours, wallHours);
+}

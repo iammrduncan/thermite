@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { HOURS_SPENT } from "../../src/core/contract.ts";
 import { Scheduler } from "../../src/harness/agents/scheduler/index.ts";
 import { LocalRunner } from "../../src/harness/broker/runner.ts";
 import { workedTime } from "../../src/harness/run-clock.ts";
@@ -90,5 +91,58 @@ describe("a run's clock counts the time it worked (goal 198)", () => {
     const r = paused.env.ledger.runs.get("js-1");
     assert.notEqual(r?.pause_reason, "the wall-time budget is spent");
     assert.equal(r?.status, "running");
+  });
+
+  test("hours added let a run its hours paused go on; refused in words", async () => {
+    // A stop time of 36 seconds: the clock moves by seconds, inside a signed command's hour.
+    const { env, pass } = await onClock({ wall_hours: 0.01 });
+    pass(0.02);
+    const one = schedulerOf(env);
+    await one.tick();
+    await one.idle();
+    assert.equal(env.ledger.runs.get("js-1")?.pause_reason, HOURS_SPENT);
+    const add = (hours: number) =>
+      env.service.applyCommand(env.sign("add_run_hours", { run: "js-1", hours }));
+    // It worked 0.02 h of its 0.01: 0.005 more would still leave it past its hours.
+    const short = await add(0.005);
+    assert.ok(short.status === "applied" && !short.accepted);
+    assert.deepEqual(short.result, {
+      error: "js-1 has worked 0.0 of its 0.01 hours: add more than 0.1",
+    });
+    const r = await add(1);
+    assert.ok(r.status === "applied" && r.accepted, JSON.stringify(r));
+    const [added] = env.ledger
+      .eventsAfter(0, 5000)
+      .events.filter((e) => e.kind === "run_hours_added");
+    assert.deepEqual(r.result, {
+      run: "js-1",
+      hours: 1,
+      total: 1.01,
+      resumed: true,
+      event: added?.id,
+    });
+    assert.equal(env.ledger.runs.get("js-1")?.status, "running");
+    // The next tick finds it under its hours: it goes on.
+    const two = schedulerOf(env);
+    await two.tick();
+    await two.idle();
+    assert.notEqual(env.ledger.runs.get("js-1")?.pause_reason, HOURS_SPENT);
+  });
+
+  test("a run with no stop time has no hours to add, and a closed run takes none", async () => {
+    const { env } = await onClock();
+    const add = () =>
+      env.service.applyCommand(env.sign("add_run_hours", { run: "js-1", hours: 2 }));
+    const none = await add();
+    assert.ok(none.status === "applied" && !none.accepted);
+    assert.deepEqual(none.result, {
+      error:
+        "js-1 has no stop time (budget.wall_hours): it never stops for its hours, so there are none to add",
+    });
+    await env.service.applyCommand(env.sign("close_run", { run: "js-1", reason: "done" }));
+    const closed = await add();
+    assert.deepEqual(closed.status === "applied" && closed.result, {
+      error: "js-1 is closed: start a new run of its campaign instead",
+    });
   });
 });

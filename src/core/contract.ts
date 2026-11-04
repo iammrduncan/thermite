@@ -26,6 +26,14 @@ export const CommitSchema = z
   .string()
   .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, "full git commit id (40 or 64 hex)");
 export const DurationSchema = z.string().regex(DURATION_PATTERN, 'duration like "30m" or "8h"');
+/**
+ * Why a run that has worked its `budget.wall_hours` is paused (goal 198): the owner may add hours
+ * to it (add_run_hours), and it resumes.
+ */
+export const HOURS_SPENT = "the wall-time budget is spent";
+/** The most hours one add_run_hours may add: a year of work. */
+export const ADD_HOURS_MAX = 8760;
+
 const MetricSchema = z.string().min(1);
 const Direction = z.enum(["max", "min"]);
 /** A regular expression that compiles; checked when the contract is validated, not at use. */

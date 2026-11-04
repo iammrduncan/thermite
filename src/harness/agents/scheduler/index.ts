@@ -1,9 +1,9 @@
 import type { Prompt } from "../../../agents/prompt.ts";
 import { log, logError } from "../../../common/log.ts";
-import type { Contract } from "../../../core/contract.ts";
+import { type Contract, HOURS_SPENT } from "../../../core/contract.ts";
 import { baselineState } from "../../judge/index.ts";
 import type { PreviewAsk } from "../../prompts.ts";
-import { workedTime } from "../../run-clock.ts";
+import { hoursOf, workedTime } from "../../run-clock.ts";
 import type { AgentSignals, StopAsked } from "../../service/index.ts";
 import { type Coordinator, keepsWorking } from "../coordinator.ts";
 import type { Registry } from "../registry.ts";
@@ -179,18 +179,13 @@ export class Scheduler implements AgentSignals {
     // The contract's wall-time budget ends agent work (the judge still finishes what is queued).
     // It counts the time the run worked (goal 198): not while it was paused, nor while its agents
     // could not work.
-    const wallHours = inst.contract.budget.wall_hours;
+    const wallHours = hoursOf(sched.ledger, inst.id, inst.contract.budget.wall_hours);
     if (
       wallHours !== undefined &&
       workedTime(sched.ledger, inst.id).elapsed_ms > wallHours * 3_600_000
     ) {
       if (!sched.running.size) {
-        sched.ledger.runs.setStatus(
-          inst.id,
-          "paused",
-          "the wall-time budget is spent",
-          sched.o.owner,
-        );
+        sched.ledger.runs.setStatus(inst.id, "paused", HOURS_SPENT, sched.o.owner);
       }
       return false;
     }
