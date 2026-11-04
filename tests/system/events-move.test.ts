@@ -52,7 +52,7 @@ const version = (db: DatabaseSync) =>
   (db.prepare("select max(version) as v from schema_migrations").get() as { v: number }).v;
 /** Every migration applied but the events table's drop (12), which waits for the move. */
 const dropWaits = (db: DatabaseSync) =>
-  !db.prepare("select 1 from schema_migrations where version = 12").get() && version(db) === 32;
+  !db.prepare("select 1 from schema_migrations where version = 12").get() && version(db) === 34;
 const hasTable = (db: DatabaseSync) =>
   Boolean(db.prepare("select 1 from sqlite_master where name = 'rig_event'").get());
 const onStream = (bus: FakeBus) => bus.kept.filter((k) => k.stream === EVENT_STREAM);
@@ -164,7 +164,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(move.stopped, null);
     // The table and the rig's last cursor went, in store migration 12.
     assert.equal(hasTable(store.db), false);
-    assert.equal(version(store.db), 32);
+    assert.equal(version(store.db), 34);
     const rigCols = store.db.prepare("pragma table_info(rig)").all() as { name: string }[];
     assert.ok(!rigCols.some((c) => c.name === "last_cursor"));
     // The copy before it is kept outside the rotation, and holds the table.
@@ -256,9 +256,9 @@ describe("a store's events table, moved to the events stream once, and dropped",
       [0],
     );
     assert.equal(keptCopies(path).length, 1);
-    assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v32\..*\.kept$/);
+    assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v34\..*\.kept$/);
     assert.equal(hasTable(store.db), false);
-    assert.equal(version(store.db), 32);
+    assert.equal(version(store.db), 34);
     const kept = onStream(busOf(store).bus);
     assert.deepEqual(
       kept.map((k) => [k.headers[EVENT_HEADERS.seq], k.subject]),

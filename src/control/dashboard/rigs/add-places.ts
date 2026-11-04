@@ -3,13 +3,53 @@ import { type ClusterFacts, clusterLine, cudaFor, quantity } from "../../cluster
 import { factsLine, type MachineFacts } from "../../machines/index.ts";
 import type { Cluster, ControlStore, Machine } from "../../store/index.ts";
 import { esc, infoLabel } from "../../ui/components/index.ts";
-import { clusterAt, machineAt, type Place } from "./runners.ts";
 
 /**
  * Add a rig's places (goal 206): where the rig's core can go, a machine over SSH, a free slot of a
  * cluster or a namespace of its own, and every free GPU control knows that can be one of its
  * runners, grouped by the machine, node or slot it is on, each in a pool the owner chooses.
  */
+
+/** A machine's GPU as a place's value: never a cluster's, whose names have no `@`. */
+const MACHINE = "@machine|";
+
+/**
+ * A place's value read back: a machine and its GPU, or a cluster, its slot, a node and how the
+ * runner asks for its GPU (Add a rig's rows say; Edit rig's form has a field of its own).
+ */
+export type Place =
+  | { kind: "machine"; machine: string; gpu: number | undefined }
+  | {
+      kind: "cluster";
+      cluster: string;
+      slot: string | undefined;
+      node: string | undefined;
+      mode: string | undefined;
+    };
+export function placeOf(value: string): Place {
+  const parts = value.split("|").map((x) => decodeURIComponent(x));
+  if (value.startsWith(MACHINE))
+    return {
+      kind: "machine",
+      machine: parts[1] ?? "",
+      gpu: parts[2] ? Number(parts[2]) : undefined,
+    };
+  const [cluster = "", slot = "", node = "", mode = ""] = parts;
+  return {
+    kind: "cluster",
+    cluster,
+    slot: slot || undefined,
+    node: node || undefined,
+    mode: mode || undefined,
+  };
+}
+
+/** A machine's GPU as a place's value. */
+const machineAt = (machine: string, gpu: number) =>
+  `${MACHINE}${encodeURIComponent(machine)}|${gpu}`;
+/** A cluster's slot, node and way of asking for a GPU as a place's value. */
+const clusterAt = (cluster: string, slot: string, node: string, mode: string) =>
+  [cluster, slot, node, mode].map(encodeURIComponent).join("|");
 
 /** Why a machine can't take a rig or a runner now, or nothing. */
 export function machineNotReady(m: Machine): string | undefined {
@@ -35,17 +75,22 @@ function clusterNotReady(k: Cluster): string | undefined {
   return undefined;
 }
 
-/** A cluster's slots no rig holds, by its core or its runners. */
-function freeSlots(store: ControlStore, k: Cluster) {
+/** A cluster's slots no rig holds, by its core or its runners, but `rig` itself. */
+function freeSlots(store: ControlStore, k: Cluster, rig?: string) {
   const f = k.facts as ClusterFacts;
   const held = new Set([
     ...store.clusters
       .rigs(k.name)
-      .filter((r) => r.status !== "removed")
+      .filter((r) => r.status !== "removed" && r.rig !== rig)
       .map((r) => r.namespace),
-    ...store.rigRunners.onCluster(k.name).map((r) => r.namespace),
+    ...store.rigRunners
+      .onCluster(k.name)
+      .filter((r) => r.rig !== rig)
+      .map((r) => r.namespace),
   ]);
-  return f.slots.filter((s) => s.usable && !s.used_by && !held.has(s.namespace));
+  return f.slots.filter(
+    (s) => s.usable && (!s.used_by || s.used_by === rig) && !held.has(s.namespace),
+  );
 }
 
 /** amd64 or arm64, as the images name them; empty when unknown. */
@@ -182,8 +227,15 @@ const shortOf = (product: string) =>
     .replace(/\s/g, "")
     .toLowerCase();
 
-/** Every free GPU control knows, grouped by its machine, node or slot, each with its runner's name. */
-export function runnerGroups(store: ControlStore): (Omit<RunnerGroup, "gpus"> & {
+/**
+ * Every free GPU control knows, grouped by its machine, node or slot, each with its runner's name;
+ * for Edit rig, `rig`'s own slots too, and none of its runners' names (`names`: those it reports).
+ */
+export function runnerGroups(
+  store: ControlStore,
+  rig?: string,
+  names: string[] = [],
+): (Omit<RunnerGroup, "gpus"> & {
   gpus: RunnerGpu[];
 })[] {
   const groups = new Map<string, RunnerGroup>();
@@ -240,7 +292,7 @@ export function runnerGroups(store: ControlStore): (Omit<RunnerGroup, "gpus"> & 
     if (!f || k.check_error) continue;
     const slots =
       k.placement === "slot"
-        ? freeSlots(store, k)
+        ? freeSlots(store, k, rig)
         : k.placement === "created" && f.can_create_namespaces
           ? [undefined]
           : [];
@@ -265,7 +317,15 @@ export function runnerGroups(store: ControlStore): (Omit<RunnerGroup, "gpus"> & 
       const classes: [string, number][] = q?.devices
         ? Object.entries(q.devices).filter(([c, n]) => n > 0 && f.device_classes.includes(c))
         : Object.keys(f.gpu_classes ?? {}).map((c) => [c, 1]);
-      for (const [c, n] of classes) {
+      // Less the devices of each class the slot's runners take already.
+      const inUse = (c: string) =>
+        slot
+          ? store.rigRunners
+              .onCluster(k.name)
+              .filter((r) => r.namespace === slot && r.spec.deviceClass === c).length
+          : 0;
+      for (const [c, all] of classes) {
+        const n = all - inUse(c);
         const kind = f.gpu_classes?.[c] ?? {};
         const g = kind.node
           ? nodeGroup(kind.node)
@@ -300,7 +360,10 @@ export function runnerGroups(store: ControlStore): (Omit<RunnerGroup, "gpus"> & 
     }
   }
   // Each runner's name: its node's or machine's, numbered when it has several; else its GPU's.
-  const taken = new Set<string>();
+  const taken = new Set<string>([
+    ...names,
+    ...(rig ? store.rigRunners.of(rig).map((r) => r.runner) : []),
+  ]);
   const nameOf = (want: string, short: string) => {
     let name = RIG_ID.test(want) && !taken.has(want) ? want : "";
     for (let i = 1; !name; i++) if (!taken.has(`${short}-${i}`)) name = `${short}-${i}`;

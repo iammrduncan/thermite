@@ -358,9 +358,18 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string) {
     store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${why}`);
     return;
   }
-  // The rig's runners as it reported them, and those control set up for it that it has not
-  // reported yet: two set up together, as Add a rig does, each keep the other.
-  const listed = new Set(now.map((x) => x.name));
+  // The rig's runners as control last asked for them, while that command waits for the rig,
+  // else as the rig reported them; less those control took away. Then those control set up for
+  // it that neither names yet: two set up together, as Add a rig does, each keep the other.
+  const asked = store.commands
+    .pending(r.rig)
+    .map((c) => c.envelope)
+    .filter((e) => e.kind === "rig_settings" && "runners" in (e.payload as object))
+    .at(-1)?.payload as { runners: typeof now } | undefined;
+  const base = (asked?.runners ?? now).filter(
+    (x) => store.rigRunners.get(r.rig, x.name)?.status !== "removed",
+  );
+  const listed = new Set(base.map((x) => x.name));
   const placed = store.rigRunners
     .of(r.rig)
     .filter((x) => x.status === "running" && x.runner !== r.runner && !listed.has(x.runner))
@@ -370,7 +379,7 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string) {
     r.rig,
     {
       runners: [
-        ...now.filter((x) => x.name !== r.runner),
+        ...base.filter((x) => x.name !== r.runner),
         ...placed,
         { name: r.runner, pools: r.spec.pools },
       ],
@@ -436,7 +445,7 @@ export async function dropRunners(parts: ControlParts, rig: string, by: string):
 }
 
 /**
- * A runner process that left its rig's settings (Edit rig's Take it away): what control set up for
+ * A runner process that left its rig's settings (Edit rig's Remove): what control set up for
  * it goes, and its token stops working. Nothing for one someone started by hand.
  */
 export async function dropRunner(

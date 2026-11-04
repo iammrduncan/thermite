@@ -92,7 +92,10 @@ describe("a rig's runner process on a machine over SSH (goal 206)", () => {
   test("its units go by its own name and start as a runner; it is given to the rig", async () => {
     const s = await withMachine();
     const edit = await s.page("/ui/rigs/core-1/edit");
-    assert.match(edit, /value="@machine\|spark-02\|0">spark-02 › over SSH › GPU 0 · NVIDIA GB10/);
+    assert.match(
+      edit,
+      /<option value="spark-02=@machine\|spark-02\|0" data-product="NVIDIA GB10">spark-02 · GPU 0 · NVIDIA GB10 · over SSH<\/option>/,
+    );
     const said = await s.post("/ui/rigs/core-1/runners", {
       runner: "spark-02",
       where: "@machine|spark-02|0",

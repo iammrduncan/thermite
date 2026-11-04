@@ -135,7 +135,7 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
   });
 
   // A runner process taken away from the rig (goal 206): the rig hears first, then control
-  // removes what it set up. The twin of Edit rig's Take it away and of MCP's remove_runner.
+  // removes what it set up. The twin of Edit rig's Remove and of MCP's remove_runner.
   app.delete("/v1/rigs/:rig/runners/:runner", admin, async (c) => {
     const rig = c.req.param("rig");
     const runner = c.req.param("runner");

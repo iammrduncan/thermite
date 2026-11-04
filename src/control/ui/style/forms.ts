@@ -23,6 +23,17 @@ export const FORMS = `/* Edit rig: one row per part, with its switch. */
 .ar-sum { padding: 14px 16px; margin-bottom: 14px; } .ar-sum h2 { font-size: 15px; margin: 0 0 8px; }
 .ar-sum ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; } .ar-note { margin: 8px 0 0; padding: 8px 12px; font-size: 13px; }
 .ar-end { justify-content: flex-end; }
+/* Edit rig's 4 · Where it runs (goal 206): the core, each runner's row, Add a runner. */
+.er-core { display: flex; flex-direction: column; gap: 4px; }
+.er-row { display: grid; grid-template-columns: minmax(200px, 1.3fr) minmax(180px, 240px) minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--border); }
+.er-row:first-child { border-top: 0; } .er-row.gone { opacity: .6; } .er-row.gone .er-what b { text-decoration: line-through; } .er-row.new { background: var(--primary-surface); }
+.er-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .er-pools { display: flex; flex-direction: column; gap: 6px; }
+.er-pools select { height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: var(--control-radius); background: var(--card); font-size: 13px; width: 100%; }
+.er-btns { display: flex; gap: 6px; justify-content: flex-end; } .er-rm { cursor: pointer; }
+.er-ask { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 10px 12px; border-radius: var(--control-radius); background: var(--warning-surface); color: var(--warning-foreground); font-size: 13px; }
+.er-ask > span { flex: 1 1 420px; }
+.er-add { display: flex; flex-wrap: wrap; gap: 0 16px; align-items: flex-end; padding: 12px 14px 0; margin-top: 10px; } .er-add .fd:first-child { flex: 1 1 320px; } .er-add .fd:nth-child(2) { width: 240px; } .er-add button { margin-bottom: 14px; }
+@media (max-width: 720px) { .er-row { grid-template-columns: minmax(0, 1fr); } .er-btns { justify-content: flex-start; } }
 .sw { position: relative; display: inline-block; width: 40px; height: 22px; margin-top: 2px; }
 .sw input { opacity: 0; width: 0; height: 0; }
 .knob { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: .15s; cursor: pointer; }

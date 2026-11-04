@@ -861,7 +861,7 @@ Returns `{rig, runner, said}`, such as `Control sets spark-02 up on lab, on spar
 
 **Take a runner away from a rig.** Owner only.
 
-> Takes a runner process away from a rig, as Edit rig's Take it away does: the rig hears first, so its core stops the runner's run under way, which the judge queues again or its lane is told of; then control removes what it set up on the cluster, and the runner's token stops working. A runner process someone started by hand only leaves the rig. Returns {rig, runner, said}.
+> Takes a runner process away from a rig, as Edit rig's Remove does: the rig hears first, so its core stops the runner's run under way, which the judge queues again or its lane is told of; then control removes what it set up on the cluster, and the runner's token stops working. A runner process someone started by hand only leaves the rig. Returns {rig, runner, said}.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |

@@ -328,7 +328,7 @@ describe("control's store migrations", () => {
     // The move found the stream to hold the table whole: the table goes, its copy kept outside
     // the rotation, and the rig's last cursor with it.
     const kept = store.migrate({ eventsMoved: { rows: 2, lastSeq: 2 } });
-    assert.match(kept ?? "", /control\.db\.v32\..*\.kept$/);
+    assert.match(kept ?? "", /control\.db\.v34\..*\.kept$/);
     assert.equal(version(store.db), 34);
     assert.equal(store.eventsTable.exists(), false);
     const rigCols = store.db.prepare("pragma table_info(rig)").all() as { name: string }[];
@@ -399,7 +399,7 @@ describe("control's store migrations", () => {
     );
     store.db.close();
     const after = new ControlStore(path);
-    assert.equal(version(after.db), 32);
+    assert.equal(version(after.db), 34);
     assert.deepEqual(
       after.gitAccess.list().map((g) => [g.name, g.host]),
       [
@@ -477,11 +477,11 @@ describe("control's store migrations", () => {
     old.exec(V010);
     old.close();
     const store = new ControlStore(path);
-    store.db.prepare("insert into schema_migrations (version) values (33)").run();
+    store.db.prepare("insert into schema_migrations (version) values (35)").run();
     store.db.close();
     assert.throws(
       () => new ControlStore(path),
-      /control store is at schema version 33, newer than this code's 32: .*the copy made then: .*control\.db\.v0\..*\.copy/,
+      /control store is at schema version 35, newer than this code's 34: .*the copy made then: .*control\.db\.v0\..*\.copy/,
     );
   });
 });

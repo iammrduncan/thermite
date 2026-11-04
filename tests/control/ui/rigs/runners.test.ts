@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { runnersAdded } from "../../../../src/control/dashboard/rigs/runners.ts";
 import {
   runnersBlock,
   runnersFields,
@@ -96,8 +97,44 @@ describe("a rig's runners in control (goal 206)", () => {
     assert.match(html, /href="\/ui\/rigs\/rig-a\/edit#where"/);
   });
 
-  test("Edit rig: each runner's pool, Take it away, and one added by its name", () => {
-    const html = runnersFields(view(reported), settings);
+  test("Edit rig: each runner's pool, Remove, and one added by its name", () => {
+    const html = runnersFields(view(reported), settings, {
+      placed: {
+        "box-3": {
+          where: "k8s-a › slot-5",
+          gpu: "NVIDIA GB10 · DRA class gb10",
+          product: "NVIDIA GB10",
+        },
+      },
+      add: [
+        {
+          value: "box-9=k8s-a|slot-5||dra%3Agb10",
+          text: "box-9 · NVIDIA GB10 · a node of k8s-a",
+          product: "NVIDIA GB10",
+        },
+      ],
+      judgeOnRunners: true,
+    });
+    // Each runner: where it is, whether it answers, its GPU, and Remove, which asks first.
+    assert.match(
+      html,
+      /<b>box-2<\/b> <span class="chip">started by you<\/span> <span class="chip ok"/,
+    );
+    assert.match(
+      html,
+      /<b>box-3<\/b> <span class="chip">k8s-a › slot-5<\/span> <span class="chip bad"/,
+    );
+    assert.match(html, /NVIDIA GB10 · DRA class gb10/);
+    assert.match(
+      html,
+      /box-2 is at work: on save, the judge&#39;s job goes back to the judge&#39;s queue and starts again on another of its runners; lane 2&#39;s run_experiment stops, and lane 2 is told to run it again\. No verdict is lost|box-2 is at work: on save, the judge's job goes back to the judge's queue and starts again on another of its runners; lane 2's run_experiment stops, and lane 2 is told to run it again\. No verdict is lost/,
+    );
+    assert.match(html, /box-3 leaves the rig on save\. Nothing runs there now\./);
+    assert.match(
+      html,
+      /<option value="box-9=k8s-a\|slot-5\|\|dra%3Agb10" data-product="NVIDIA GB10">/,
+    );
+    assert.match(html, /data-judge-on-runners="1"/);
     assert.match(html, /name="runner_pool__box-2__0"[^>]*>[\s\S]*value="judge" selected/);
     assert.match(html, /name="runner_pool__box-3__0"[\s\S]*value="lane-1" selected/);
     assert.match(html, /name="runner_remove__box-3"/);
@@ -118,5 +155,25 @@ describe("a rig's runners in control (goal 206)", () => {
       ],
     );
     assert.deepEqual(runnersWanted(settings, {}), settings.runners, "nothing asked: as it is");
+  });
+
+  test("Edit rig: the runners Add put in the list, and one chosen but not put there", () => {
+    const added = runnersAdded({
+      runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10",
+      runner_new_pool__0: "judge",
+      runner_new__2: "box-7=@machine|box|1",
+      runner_new_pool__2: "lane-1",
+      add_at: "sp-a=k8s-a|slot-5||dra%3Agb10",
+      add_pool: "shared",
+    });
+    assert.deepEqual(
+      added.map((r) => [r.runner, r.pool, r.mode, r.at.kind]),
+      [
+        ["sp-a", "judge", "dra:gb10", "cluster"],
+        ["box-7", "lane-1", "device-plugin", "machine"],
+      ],
+      "each name once, the first asked kept",
+    );
+    assert.deepEqual(runnersAdded({ add_at: "", add_pool: "judge" }), []);
   });
 });

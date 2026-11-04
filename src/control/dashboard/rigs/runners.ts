@@ -1,154 +1,17 @@
 import type { Hono } from "hono";
 import { RIG_ID } from "../../../core/ids.ts";
-import {
-  addClusterRunner,
-  addMachineRunner,
-  type ClusterFacts,
-  rigReportsSettings,
-} from "../../clusters/index.ts";
-import type { MachineFacts } from "../../machines/index.ts";
+import { addClusterRunner, addMachineRunner, rigReportsSettings } from "../../clusters/index.ts";
 import { setRigSettings } from "../../rigs/index.ts";
 import type { ControlStore } from "../../store/index.ts";
-import { infoLabel } from "../../ui/campaigns/new/index.ts";
-import { esc } from "../../ui/components/index.ts";
+import type { RunnerPlaces } from "../../ui/rigs/runners.ts";
 import { rigHref } from "../../ui/urls.ts";
 import type { Dashboard } from "../context.ts";
+import { type Place, placeOf, productAt, runnerGroups } from "./add-places.ts";
 
 /**
- * Edit rig's Add a runner on a cluster (goal 206): where (a cluster, its slot, a node), its GPU,
- * how it asks for it, and its pool. Its own form, outside Edit rig's: control sets the runner up,
- * then gives it to the rig, which its history says.
+ * A rig's runners that control sets up (goal 206): Add a rig's and Edit rig's chosen GPUs, each
+ * set up and given to the rig, which its history says; and the route that adds one by its place.
  */
-
-/** A machine's GPU as a place's value: never a cluster's, whose names have no `@`. */
-const MACHINE = "@machine|";
-
-/**
- * A place's value read back: a machine and its GPU, or a cluster, its slot, a node and how the
- * runner asks for its GPU (Add a rig's rows say; Edit rig's form has a field of its own).
- */
-export type Place =
-  | { kind: "machine"; machine: string; gpu: number | undefined }
-  | {
-      kind: "cluster";
-      cluster: string;
-      slot: string | undefined;
-      node: string | undefined;
-      mode: string | undefined;
-    };
-function placeOf(value: string): Place {
-  const parts = value.split("|").map((x) => decodeURIComponent(x));
-  if (value.startsWith(MACHINE))
-    return {
-      kind: "machine",
-      machine: parts[1] ?? "",
-      gpu: parts[2] ? Number(parts[2]) : undefined,
-    };
-  const [cluster = "", slot = "", node = "", mode = ""] = parts;
-  return {
-    kind: "cluster",
-    cluster,
-    slot: slot || undefined,
-    node: node || undefined,
-    mode: mode || undefined,
-  };
-}
-
-/** A machine's GPU as a place's value. */
-export const machineAt = (machine: string, gpu: number) =>
-  `${MACHINE}${encodeURIComponent(machine)}|${gpu}`;
-/** A cluster's slot, node and way of asking for a GPU as a place's value. */
-export const clusterAt = (cluster: string, slot: string, node: string, mode: string) =>
-  [cluster, slot, node, mode].map(encodeURIComponent).join("|");
-
-/**
- * Each place a runner can go: a cluster's slot (or its own namespace) and a node, or a machine's
- * GPU over SSH.
- */
-function places(store: ControlStore, rig: string): { value: string; text: string }[] {
-  const out: { value: string; text: string }[] = [];
-  for (const k of store.clusters.list()) {
-    const f = k.facts as ClusterFacts | null;
-    if (!f || k.check_error) continue;
-    // A slot holds one rig: this one's core and runners may share it.
-    const others = new Set([
-      ...store.clusters
-        .rigs(k.name)
-        .filter((r) => r.status !== "removed" && r.rig !== rig)
-        .map((r) => r.namespace),
-      ...store.rigRunners
-        .onCluster(k.name)
-        .filter((r) => r.rig !== rig)
-        .map((r) => r.namespace),
-    ]);
-    const slots =
-      k.placement === "slot"
-        ? f.slots.filter((s) => s.usable && !others.has(s.namespace)).map((s) => s.namespace)
-        : [""];
-    const nodes = f.nodes.filter((n) => n.ready);
-    for (const slot of slots)
-      for (const n of nodes.length ? nodes : [undefined])
-        out.push({
-          value: [k.name, slot, n?.name ?? ""].map(encodeURIComponent).join("|"),
-          text: [
-            k.name,
-            slot || "its own namespace",
-            n
-              ? `${n.name}${n.gpus ? ` · ${n.gpus} GPU${n.gpus > 1 ? "s" : ""}` : ""}${n.gpu_product ? ` (${n.gpu_product})` : ""}${n.arch ? `, ${n.arch}` : ""}`
-              : "any node",
-          ].join(" › "),
-        });
-  }
-  for (const m of store.machines.list()) {
-    const f = m.facts as MachineFacts | null;
-    if (!f || m.check_error || !m.host_keys.length) continue;
-    for (const g of f.gpus)
-      out.push({
-        value: machineAt(m.name, g.index),
-        text: `${m.name} › over SSH › GPU ${g.index} · ${g.name}`,
-      });
-  }
-  return out;
-}
-
-/** The ways a cluster's GPUs come: the device plugin, or one of its DRA device classes. */
-function modes(store: ControlStore): string[] {
-  const classes = new Set<string>();
-  for (const k of store.clusters.list())
-    for (const c of (k.facts as ClusterFacts | null)?.device_classes ?? []) classes.add(c);
-  return ["device-plugin", ...[...classes].map((c) => `dra:${c}`)];
-}
-
-/**
- * The form's fields, for Edit rig's 4 · Where it runs: each takes `form="add-runner"`, so that it
- * belongs to the form after Edit rig's own (`runnerFormTag`).
- */
-export function runnerOnClusterFields(store: ControlStore, rig: string, lanes: number): string {
-  const where = places(store, rig);
-  if (!where.length)
-    return `<div class="muted small" style="margin-top:10px">To add a runner that control sets up, add a cluster or a machine under <a href="/ui/settings/machines">Settings › Machines</a>.</div>`;
-  const opt = (v: string, t: string) => `<option value="${esc(v)}">${esc(t)}</option>`;
-  const pools = [
-    opt("judge", "The judge's"),
-    opt("shared", "Shared: the judge and the lanes"),
-    ...Array.from({ length: lanes }, (_, i) => opt(`lane-${i + 1}`, `Lane ${i + 1}'s`)),
-  ].join("");
-  return `<div class="sec-sub"><h3>Add a runner on a cluster or a machine</h3><div class="g3">
-<label class="fd">${infoLabel("Runner name", "Its name in the rig: 2 to 40 lowercase letters, digits and dashes, such as the node's name.")}<input form="add-runner" name="runner" maxlength="40" required placeholder="spark-02"></label>
-<label class="fd" style="grid-column:span 2">${infoLabel("Where", "A cluster under Settings › Machines, the slot it goes in (a free one, or one that holds this rig or its runners) and its node; or a GPU of a machine control reaches over SSH.")}<select form="add-runner" name="where">${where.map((w) => opt(w.value, w.text)).join("")}</select></label>
-<label class="fd">${infoLabel("GPU", "One GPU of the node, or none: the node's CPUs.")}<select form="add-runner" name="gpus">${opt("1", "One GPU")}${opt("0", "None: its CPUs")}</select></label>
-<label class="fd">${infoLabel("GPUs through", "On a cluster: NVIDIA's device plugin, or a DRA device class, as the cluster offers its GPUs. On a machine, its GPU comes through NVIDIA's container toolkit, whatever this says.")}<select form="add-runner" name="mode">${modes(
-    store,
-  )
-    .map((m) => opt(m, m === "device-plugin" ? "NVIDIA's device plugin" : `DRA: ${m.slice(4)}`))
-    .join("")}</select></label>
-<label class="fd">${infoLabel("Its pool", "The judge's: only the judge measures there. Shared: the judge and every lane, in turn. A lane's: only that lane runs its run_experiment there.")}<select form="add-runner" name="pool">${pools}</select></label>
-</div><div class="act" style="margin-top:8px"><button form="add-runner" class="sm">Add the runner</button><span class="muted small">Control sets it up, then gives it to the rig: it takes runs once it answers. The run goes on.</span></div></div>`;
-}
-
-/** The form itself, after Edit rig's own: its fields above name it. */
-export const runnerFormTag = (rig: string, t: string) =>
-  `<form id="add-runner" method="post" action="${rigHref(rig)}/runners"><input type="hidden" name="csrf" value="${t}"></form>`;
 
 export function runnerRoutes(app: Hono, dash: Dashboard): void {
   const { parts } = dash;
@@ -276,4 +139,82 @@ export async function giveWorkers(
     out.state !== "refused",
     out.state === "refused" ? out.error : `${lanes} at a time: ${out.said}`,
   );
+}
+
+/**
+ * What Edit rig shows of a rig's runners (goal 206): where each runner control set up is, and its
+ * GPU; each free GPU it can add, as the form's value (its runner's name, then its place); and
+ * whether the core judges on its runners alone. `names`: the runners the rig reports.
+ */
+export function runnerPlaces(store: ControlStore, rig: string, names: string[]): RunnerPlaces {
+  const placed: RunnerPlaces["placed"] = {};
+  for (const r of store.rigRunners.of(rig)) {
+    if (r.status === "removed") continue;
+    const at: Place =
+      r.placement === "machine"
+        ? { kind: "machine", machine: r.cluster, gpu: r.spec.gpuIndex }
+        : {
+            kind: "cluster",
+            cluster: r.cluster,
+            slot: r.namespace,
+            node: r.spec.node,
+            mode: r.spec.deviceClass ? `dra:${r.spec.deviceClass}` : "device-plugin",
+          };
+    const product = r.spec.gpus ? productAt(store, at) : "";
+    const gpu = !r.spec.gpus
+      ? "Its CPUs"
+      : r.placement === "machine"
+        ? `GPU ${r.spec.gpuIndex ?? 0} · ${product || "a GPU"}`
+        : `${product || "A GPU"}${r.spec.deviceClass ? ` · DRA class ${r.spec.deviceClass}` : r.spec.node ? ` on ${r.spec.node}` : ""}`;
+    placed[r.runner] = {
+      where:
+        r.placement === "machine" ? `${r.cluster} · over SSH` : `${r.cluster} › ${r.namespace}`,
+      gpu,
+      product,
+    };
+  }
+  const add = runnerGroups(store, rig, names).flatMap((g) =>
+    g.gpus
+      .filter((x) => !x.used)
+      .map((x) => ({
+        value: `${x.runner}=${x.at}`,
+        text: `${g.name} · ${x.label} · ${g.where}`,
+        product: x.product,
+      })),
+  );
+  const judgeOnRunners = Boolean(
+    store.clusters.rig(rig)?.spec.judgeOnRunners ?? store.machines.rig(rig)?.judge_on_runners,
+  );
+  return { placed, add, judgeOnRunners };
+}
+
+/**
+ * The runners Edit rig adds (goal 206): each one Add put in the list (`runner_new__<n>`: its
+ * name, `=`, its place; with `runner_new_pool__<n>`), and one chosen in Add a runner and not put
+ * there, with its pool. Each name once.
+ */
+export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addRigRunnersChosen> {
+  const one = (k: string) => {
+    const v = f[k];
+    return String(Array.isArray(v) ? v[0] : (v ?? "")).trim();
+  };
+  const asked = Object.keys(f)
+    .filter((k) => /^runner_new__\d+$/.test(k))
+    .map((k) => [one(k), one(k.replace("runner_new__", "runner_new_pool__"))] as const);
+  if (one("add_at")) asked.push([one("add_at"), one("add_pool") || "shared"]);
+  const out: ReturnType<typeof addRigRunnersChosen> = [];
+  for (const [value, pool] of asked) {
+    const cut = value.indexOf("=");
+    const runner = value.slice(0, cut);
+    if (cut < 1 || !RIG_ID.test(runner) || out.some((r) => r.runner === runner)) continue;
+    const at = placeOf(value.slice(cut + 1));
+    out.push({
+      runner,
+      at,
+      gpus: 1,
+      mode: (at.kind === "cluster" ? at.mode : undefined) ?? "device-plugin",
+      pool,
+    });
+  }
+  return out;
 }

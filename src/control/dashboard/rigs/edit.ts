@@ -71,7 +71,7 @@ import { listText } from "../../ui/words/index.ts";
 import { programModeOf } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
 import { modelPrefix } from "../settings/shared.ts";
-import { runnerFormTag, runnerOnClusterFields } from "./runners.ts";
+import { addRigRunners, runnerPlaces, runnersAdded } from "./runners.ts";
 
 /** Edit rig: its page and its form. */
 export function editRigRoutes(app: Hono, dash: Dashboard): void {
@@ -287,11 +287,16 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
       },
     });
     const placed = store.machines.rig(u.id) ?? store.clusters.rig(u.id);
+    // The core (goal 206): where it is, and what it keeps.
+    const lanes = s?.lanes ?? 1;
+    const keeps = `the run's records, the planner, ${lanes} lane${lanes === 1 ? "'s" : "s'"} agent program${lanes === 1 ? "" : "s"} and the judge's decisions`;
+    const size =
+      placed && !("machine" in placed) && placed.spec.resources
+        ? `${placed.spec.resources.cpus} CPUs · ${placed.spec.resources.memoryGi} GiB · `
+        : "";
     const where = placed
-      ? "machine" in placed
-        ? `The machine ${esc(placed.machine)}, set up by control. Stop, start or remove it from the rig's page.`
-        : `The cluster ${esc(placed.cluster)}, namespace ${esc(placed.namespace)}, set up by control.`
-      : "Set up outside control (for example by your own infrastructure tooling). Its GPUs and version change with a roll.";
+      ? `<span><b>The core</b> on ${esc("machine" in placed ? placed.machine : placed.namespace)} <span class="chip">${esc("machine" in placed ? "over SSH" : placed.placement === "slot" ? `a slot of ${placed.cluster}` : `a namespace of ${placed.cluster}`)}</span> <span class="chip info">the core</span></span><span class="small muted">${esc(`${size}${keeps}`)}. Set up by control: stop, start or remove it from the rig's page.</span>`
+      : `<span><b>The core</b> set up outside control <span class="chip info">the core</span></span><span class="small muted">${esc(keeps)}. Set up by your own tooling: its GPUs and version change with a roll.</span>`;
     const mode = programModeOf(store, u.id);
     const sized = placed && !("machine" in placed) ? clusterSizeFields(placed, mode) : "";
     // On a rig set up on a cluster with its CPUs and memory set, a new mode restarts its pods.
@@ -323,14 +328,25 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
 <label class="ch${s?.promotion === "auto" ? " on" : ""}"><input type="radio" name="promotion" value="auto"${s?.promotion === "auto" ? " checked" : ""}${s ? "" : " disabled"} style="margin:2px 8px 0 0"><span><b>Automatically</b><br><span class="muted small">The judge confirms the change on new runs, and it becomes the champion with no step of yours. When the campaign calls for an audit and this rig has an auditor, the auditor's clear comes first; its block stops the change. A run can still ask you about some changes (Ask me first, when you start it).</span></span></label>
 <label class="ch${s?.promotion === "owner_approval" ? " on" : ""}"><input type="radio" name="promotion" value="owner_approval"${s?.promotion === "owner_approval" ? " checked" : ""}${s ? "" : " disabled"} style="margin:2px 8px 0 0"><span><b>Ask me for each change</b><br><span class="muted small">Each confirmed change waits for you in Needs you.</span></span></label>
 </div><div class="muted small" style="margin-top:6px">A campaign can set its own rule when it starts; that rule comes first for its runs.</div></div>
-<div class="sec" id="where"><h2>4 · Where it runs</h2><div class="card"><dl class="facts"><dt>Place</dt><dd>${where}</dd>${u.hardware ? `<dt>Hardware</dt><dd>${hardwareLine(u.hardware)}</dd>` : ""}</dl>${sized}${
+<div class="sec" id="where"><h2>4 · Where it runs</h2><div class="card"><div class="er-core">${where}${u.hardware ? `<span class="small muted">Its hardware: ${hardwareLine(u.hardware)}</span>` : ""}</div>${sized}${
         u.gpu_split && u.gpu_split.set >= 2
           ? `<label class="fd" style="max-width:260px;margin-top:10px" data-judge-field>${infoLabel("GPUs for the judge", `How many of the rig's ${u.gpu_split.set} GPUs the judge measures on; the rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. A campaign started on this rig can set it too.${sized ? " With a new number of GPUs above, it is the judge's share of the new ones." : ""}`)}<input name="judge_gpus" type="number" min="1" max="${Math.min(8, u.gpu_split.set - 1)}" value="${u.gpu_split.judge}" data-restarts></label><div class="muted small" data-judge-now>Now: ${u.gpu_split.judge} for the judge, ${u.gpu_split.set - u.gpu_split.judge} for the agents. ${SPLIT_RESTARTS}</div>`
           : ""
-      }${s ? `${runnersFields(u, s)}${runnerOnClusterFields(store, u.id, s.lanes)}` : ""}</div></div>
+      }${
+        s
+          ? runnersFields(
+              u,
+              s,
+              runnerPlaces(
+                store,
+                u.id,
+                s.runners.map((r) => r.name),
+              ),
+            )
+          : ""
+      }</div></div>
 <div class="card hl" style="margin-top:16px"><b>What changes when you save</b><ul class="chg" id="chg"><li>Nothing changes.</li></ul><div class="act"><button class="primary big" id="save">Save changes</button><a class="btn" href="/ui/rigs/${rName}">Cancel</a></div></div>
 </form>
-${s ? runnerFormTag(u.id, t) : ""}
 <script src="/ui/assets/edit-rig.js" defer></script>`,
       vs,
     );
@@ -601,10 +617,22 @@ ${s ? runnerFormTag(u.id, t) : ""}
         );
       resized = done.ok;
     }
-    if (!said.length) return back("ok", resized || "Nothing changed.");
+    // The runners Add put in the list (goal 206): control sets each up, then gives it to the rig.
+    const added = s ? runnersAdded(f) : [];
+    const refused = added.length ? await addRigRunners(parts, rig, added) : undefined;
+    const ok = added.filter((r) => !refused?.startsWith(`${r.runner}:`)).map((r) => r.runner);
+    const joins = ok.length
+      ? ` Control sets ${ok.join(" and ")} up: each joins its pool once it answers the core.`
+      : "";
+    if (refused)
+      return back(
+        "error",
+        `${said.length ? `Control sent ${said.join(" and ")} to ${rig}, but a` : "A"} runner was not added: ${refused}`,
+      );
+    if (!said.length) return back("ok", `${resized}${joins}`.trim() || "Nothing changed.");
     // The rig's page follows the settings' command, and the rig as it takes a model (goal 080).
     return c.redirect(
-      `/ui/rigs/${encodeURIComponent(rig)}?ok=${encodeURIComponent(`Control sent ${said.join(" and ")} to ${rig}. The rig takes the change in less than one minute.${resized ? ` ${resized}` : ""}`)}${sent ? `&cmd=${encodeURIComponent(sent)}` : ""}`,
+      `/ui/rigs/${encodeURIComponent(rig)}?ok=${encodeURIComponent(`Control sent ${said.join(" and ")} to ${rig}. The rig takes the change in less than one minute.${resized ? ` ${resized}` : ""}${joins}`)}${sent ? `&cmd=${encodeURIComponent(sent)}` : ""}`,
       303,
     );
   });

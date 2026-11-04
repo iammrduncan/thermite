@@ -43,17 +43,9 @@ Press **Create the rig**: control sets the core up, then each runner, named for 
 
 ## On a cluster or a machine control knows
 
-On the rig's page, press **Edit rig**. Under **4 · Where it runs**, **Add a runner on a cluster or a machine** has:
+On the rig's page, press **Edit rig**. Under **4 · Where it runs**, **Add a runner** lists each free GPU of the machines and clusters control knows, as Add a rig's **2 · Runners** does, such as `gpu-node-1 · NVIDIA GB10 · DRA class gb10-gpus · a node of cluster-1 · slot thermite-slot-2`, with a slot that holds this rig's core or runners among them. Choose one and **Its pool**, then press **Add**: the GPU joins the list of runners, marked **new**, with its pool, which you can still change, and **Remove**. Add more the same way, then press **Save changes**.
 
-| Field | What it takes |
-| --- | --- |
-| **Runner name** | Its name in the rig, such as the node's |
-| **Where** | A cluster under **Settings › Machines**, the slot it goes in (a free one, or one that holds this rig or its runners) and its node; or a GPU of a machine control reaches over SSH |
-| **GPU** | One GPU of the node, or none: its CPUs |
-| **GPUs through** | On a cluster: NVIDIA's device plugin, or one of the cluster's DRA device classes. A machine's GPU comes through NVIDIA's container toolkit |
-| **Its pool** | The judge's, shared, or a lane's |
-
-Press **Add the runner**. Control sets its harness and supervisor up on the node, or as Quadlet units on the machine, named for the runner, started as a runner, with volumes and a token of their own, then gives it to the rig: the rig's **History** says each step, and the runner takes runs once it answers the rig's core. A script or an agent does the same on a cluster with [`POST /v1/rigs/<rig>/runners`](../../reference/rest-api.md#a-rigs-runners-on-clusters), or MCP's `add_cluster_runner`, with the owner's token; on a machine, as a rig there, from the dashboard only. A GPU of a machine that a rig or another runner uses is refused.
+On **Save changes**, control sets each one's harness and supervisor up on the node, or as Quadlet units on the machine, named for the runner, started as a runner, with volumes and a token of their own, then gives it to the rig: the rig's **History** says each step, and the runner takes runs once it answers the rig's core. A script or an agent does the same on a cluster with [`POST /v1/rigs/<rig>/runners`](../../reference/rest-api.md#a-rigs-runners-on-clusters), or MCP's `add_cluster_runner`, with the owner's token; on a machine, as a rig there, from the dashboard only. A GPU of a machine that a rig or another runner uses is refused.
 
 When the rig moves onto control's newer images, its runners move with it; when the rig is removed, so are they.
 
@@ -75,7 +67,7 @@ The runner's supervisor registers its key with control, then answers the core's 
 ## 2. Add the one you started to the rig
 
 1. On the rig's page, press **Edit rig**.
-2. Under **4 · Where it runs**, in **Runners**, write the runner process's name in **Add a runner you started yourself**, and in **Its runners' pools** one pool for each runner it serves, in order, separated by commas, such as `judge, shared`.
+2. Under **4 · Where it runs**, open **A runner process you started yourself**, write the runner process's name in **Its name**, and in **Its runners' pools** one pool for each runner it serves, in order, separated by commas, such as `judge, shared`.
 3. Press **Save changes**.
 
 The rig's core takes the change at once, while its run goes on. The runner takes runs once it answers the core's check, within about 15 seconds. A script or an agent does the same with `runners` in [`POST /v1/rigs/<rig>/settings`](../../reference/rest-api.md#a-rigs-settings), or MCP's [`set_rig_settings`](../../reference/mcp-tools.md#set_rig_settings) with the owner's token: the whole list of the rig's runner processes, each `{name, pools}`.
@@ -84,7 +76,7 @@ A runner that answers but can't take the rig's runs says why on the rig's page: 
 
 ## Change a pool, or take a runner away
 
-On **Edit rig**, under **4 · Where it runs**, each runner process has a pool for each of its runners, and **Take it away**. Save the change: the rig's core takes it at once, and nothing pauses.
+On **Edit rig**, under **4 · Where it runs**, each runner is a row: its name, where it is, whether it answers, its GPU, its pool, what it runs now, and **Remove**. **Remove** asks first, and says what happens to the run there, such as "box-2 is at work: on save, the judge's job goes back to the judge's queue and starts again on another of its runners. No verdict is lost and nothing counts against the change."; **Keep it** undoes it. A new pool says "Moves to the shared pool when you save". The notes below the list say what would go wrong: no runner left for the judge of a core that judges on its runners alone, or a new runner of another kind of GPU than the rig's. **What changes when you save** lists each change. Press **Save changes**: the rig's core takes it at once, and nothing pauses.
 
 - A runner taken away, or given another pool, stops its run under way: the judge queues its job again, with no verdict, and a lane is told to run its command again.
 - A runner control set up: what it set up on the cluster goes too, and its token stops working. MCP's `remove_runner` and `DELETE /v1/rigs/<rig>/runners/<runner>` do the same.

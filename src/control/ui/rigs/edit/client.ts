@@ -28,6 +28,102 @@ export const EDIT_RIG_JS = `
   const inTable = (el) => !!table && table.contains(el);
   const after = (el) => !!table && !!(table.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
 
+  // ---------------------------------------------------------------- runners (goal 206)
+  // Each runner's Remove asks first and says what happens to its run; Keep it undoes it. Add puts
+  // a free GPU in the list, with its pool, for Save changes to set up. The notes say what would
+  // go wrong. Without the script, Remove is a box to tick and Add a runner's choice is added.
+  const escR = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const poolPhrase = (p) => p === "judge" ? "the judge's pool" : p === "shared" ? "the shared pool" : p.replace("lane-", "lane ") + "'s pool";
+  const runnerList = $("[data-runner-list]");
+  const addAt = $("[data-add-at]"), addPool = $("[data-add-pool]"), addBtn = $("[data-add-btn]");
+  let nextNew = 0;
+  if (addBtn) addBtn.hidden = false;
+  for (const box of $$("[data-runner-row] [data-runner]")) {
+    box.hidden = true;
+    const rm = box.closest(".er-rm");
+    rm.tabIndex = 0;
+    rm.setAttribute("role", "button");
+    rm.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); rm.click(); } });
+  }
+  const live = () => $$("[data-runner-row]").filter((r) => !r.querySelector("[data-runner]").checked);
+  const drawRunners = () => {
+    for (const row of $$("[data-runner-row]")) {
+      const box = row.querySelector("[data-runner]"), now = row.querySelector("[data-runner-now]");
+      if (now.dataset.was === undefined) now.dataset.was = now.innerHTML;
+      const moved = $$("[data-runner-pool]", row).find((x) => x.value !== start.get(x));
+      now.innerHTML = box.checked ? "Leaves when you save." : moved ? escR("Moves to " + poolPhrase(moved.value) + " when you save" + (row.dataset.job ? ": " + row.dataset.job : "") + ".") : now.dataset.was;
+      row.classList.toggle("gone", box.checked);
+      row.querySelector(".er-rm").hidden = box.checked || !row.querySelector("[data-ask]").hidden;
+      row.querySelector("[data-keep]").hidden = !box.checked;
+    }
+    const count = $("[data-runner-count]");
+    if (count) count.textContent = String(live().length + $$("[data-new-runner]").length);
+    const none = $("[data-runner-none]");
+    if (none) none.hidden = $$("[data-new-runner]").length > 0;
+    const box = $("[data-runner-notes]");
+    if (!box) return;
+    const notes = [];
+    const pools = [...live().flatMap((r) => $$("[data-runner-pool]", r).map((x) => x.value)), ...$$("[data-new-pool]").map((x) => x.value)];
+    if (addAt && addAt.value) pools.push(addPool.value);
+    if (runnerList && runnerList.dataset.judgeOnRunners && !pools.some((p) => p === "judge" || p === "shared"))
+      notes.push("No runner left for the judge: its jobs would wait in its queue until one joins. Keep one, or add one of the judge's or a shared one.");
+    const kinds = [...new Set(live().map((r) => r.dataset.product).filter(Boolean))];
+    const fresh = $$("[data-new-runner]").map((r) => [r.dataset.newRunner, r.dataset.product]);
+    if (addAt && addAt.value) fresh.push([addAt.value.split("=")[0], addAt.selectedOptions[0].dataset.product]);
+    for (const [name, product] of fresh)
+      if (product && kinds.length && !kinds.includes(product))
+        notes.push(name + "'s " + product + " is another kind of target than the rig's " + kinds.join(" and ") + ": the core leaves it out of the pools, and the rig's page says why.");
+    box.innerHTML = notes.map((n) => '<div class="card warn ar-note">' + escR(n) + "</div>").join("");
+  };
+  const runnerJoins = () => {
+    const out = [];
+    for (const row of $$("[data-new-runner]"))
+      out.push(row.dataset.newRunner + " joins " + poolPhrase(row.querySelector("[data-new-pool]").value) + " once it answers; runs of its pool may go there then.");
+    if (addAt && addAt.value)
+      out.push(addAt.value.split("=")[0] + " joins " + poolPhrase(addPool.value) + " once it answers; runs of its pool may go there then.");
+    return out;
+  };
+  const changed = () => form.dispatchEvent(new Event("change"));
+  form.addEventListener("click", (e) => {
+    const t = e.target.closest ? e.target : null;
+    if (!t) return;
+    const row = t.closest("[data-runner-row]");
+    if (t.closest(".er-rm") && row) {
+      e.preventDefault();
+      row.querySelector("[data-ask]").hidden = false;
+      t.closest(".er-rm").hidden = true;
+      row.querySelector("[data-ask-go]").focus();
+    } else if (t.closest("[data-ask-cancel]") && row) {
+      row.querySelector("[data-ask]").hidden = true;
+      drawRunners();
+    } else if (t.closest("[data-ask-go]") && row) {
+      row.querySelector("[data-ask]").hidden = true;
+      row.querySelector("[data-runner]").checked = true;
+      changed();
+    } else if (t.closest("[data-keep]") && row) {
+      row.querySelector("[data-runner]").checked = false;
+      changed();
+    } else if (t.closest("[data-add-btn]") && addAt && addAt.value) {
+      const o = addAt.selectedOptions[0], name = addAt.value.split("=")[0], k = nextNew++;
+      const fresh = document.createElement("div");
+      fresh.className = "er-row new";
+      fresh.dataset.newRunner = name;
+      fresh.dataset.product = o.dataset.product || "";
+      fresh.innerHTML = '<span class="er-what"><span><b>' + escR(name) + '</b> <span class="chip warn">new</span></span><span class="small muted">' + escR(o.textContent) + '</span></span><span class="er-pools"><select class="ar-pool" data-new-pool name="runner_new_pool__' + k + '" aria-label="The pool of ' + escR(name) + '">' + addPool.innerHTML + '</select></span><span class="small">Joins once it answers the core, within about 15 seconds.</span><span class="er-btns"><button type="button" class="sm" data-unstage>Remove</button></span><input type="hidden" name="runner_new__' + k + '" value="' + escR(addAt.value) + '">';
+      fresh.querySelector("select").value = addPool.value;
+      runnerList.append(fresh);
+      o.hidden = true;
+      addAt.value = "";
+      changed();
+    } else if (t.closest("[data-unstage]")) {
+      const fresh = t.closest("[data-new-runner]");
+      const v = fresh.querySelector('input[type="hidden"]').value;
+      for (const o of addAt.options) if (o.value === v) o.hidden = false;
+      fresh.remove();
+      changed();
+    }
+  });
+
   // ---------------------------------------------------------------- parts, numbers and choices
   const start = new Map();
   for (const el of form.elements) if (el.name && !inTable(el)) start.set(el, el.type === "checkbox" || el.type === "radio" ? el.checked : el.value);
@@ -66,8 +162,15 @@ export const EDIT_RIG_JS = `
         st.textContent = el.checked ? "on" : "off"; st.className = "pt-state " + (el.checked ? "on" : "off");
         if (el.checked !== was) out.push("You turn " + (el.checked ? "on" : "off") + " the " + el.dataset.name.toLowerCase() + ".");
       } else if (el.type === "checkbox" && el.dataset.runner !== undefined) {
-        // A runner process taken away (goal 206): at once, while the run goes on.
-        if (el.checked && !was) out.push("You take the runner process " + el.dataset.runner + " away: its run under way fails, and the judge or its lane tries again.");
+        // A runner taken away (goal 206): at once, while the run goes on.
+        const job = el.closest("[data-runner-row]").dataset.job;
+        if (el.checked && !was) out.push(el.dataset.runner + " leaves: " + (job || "nothing runs there now") + ".");
+      } else if (el.dataset.runnerPool !== undefined) {
+        const row = el.closest("[data-runner-row]");
+        if (el.value !== was && !row.querySelector("[data-runner]").checked)
+          out.push(el.dataset.runnerPool + " moves to " + poolPhrase(el.value) + (row.dataset.job ? ": " + row.dataset.job + ", then it takes its new pool's runs." : "."));
+      } else if (el.dataset.addAt !== undefined || el.dataset.addPool !== undefined) {
+        // Said with the runners Add put in the list.
       } else if (el.dataset.addRunner !== undefined) {
         if (el.value.trim()) out.push("You add the runner process " + el.value.trim() + ": the rig's core gives it runs once it answers.");
       } else if (el.type === "radio") {
@@ -79,6 +182,10 @@ export const EDIT_RIG_JS = `
         if (el.value !== was && el.dataset.restarts !== undefined) out.push("The rig's harness restarts to regroup its GPUs: running trials and judge jobs start again.");
         if (el.value !== was && el.dataset.moves !== undefined) moves = true;
       }
+    }
+    if (later) {
+      drawRunners();
+      out.push(...runnerJoins());
     }
     if (moves) {
       const n = gpusEl ? Number(gpusEl.value) : 0;

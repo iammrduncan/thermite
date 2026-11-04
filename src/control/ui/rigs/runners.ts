@@ -83,29 +83,72 @@ function poolOptions(now: string, lanes: number): string {
     .join("");
 }
 
+/** What control knows of a runner process it set up, and the GPUs Edit rig can add. */
+export interface RunnerPlaces {
+  /** By runner process: where it is, and its GPU in words, with the GPU's name. */
+  placed: Record<string, { where: string; gpu: string; product: string }>;
+  /** Each free GPU: the form's value (name=place), its words, and its GPU's name. */
+  add: { value: string; text: string; product: string }[];
+  /** The core judges on its runners alone: with none of the judge's, its jobs wait. */
+  judgeOnRunners: boolean;
+}
+
+/** Whether a runner process takes runs, as one chip, with since when or why not as its title. */
+function stateChip(p: Process | undefined, now: number): string {
+  if (!p) return `<span class="chip" title="It takes runs once it answers the core">joining</span>`;
+  if (p.up)
+    return `<span class="chip ok"${p.answered_at ? ` title="last check ${esc(ago(p.answered_at, now))} ago"` : ""}>answers</span>`;
+  if (p.away_since)
+    return `<span class="chip bad" title="${esc(p.why ?? "it stopped answering")}">away ${esc(ago(p.away_since, now))}</span>`;
+  if (p.why) return `<span class="chip warn" title="${esc(p.why)}">takes no runs</span>`;
+  return `<span class="chip" title="It takes runs once it answers the core">joining</span>`;
+}
+
+/** What happens to the run a runner holds when it leaves or changes pool, in words. */
+function jobWords(holder: string | null): string {
+  if (!holder) return "";
+  if (holder.startsWith("executor-"))
+    return "the judge's job goes back to the judge's queue and starts again on another of its runners";
+  const lane = holder.replace("lane-", "lane ");
+  return `${lane}'s run_experiment stops, and ${lane} is told to run it again`;
+}
+
 /**
- * Edit rig's runners (goal 206): each runner process with the pool of each of its runners and
- * Take it away, then one to add that you started yourself, by its name and its runners' pools.
- * The whole list goes to the rig as its `runners` setting, which its core takes while it works.
+ * Edit rig's runners (goal 206), as the approved mockup has them: each runner process with where
+ * it is, whether it answers, its GPU, its pool, what it runs now and Remove, which asks first and
+ * says what happens to that run; then Add a runner, a free GPU of a machine or cluster control
+ * knows in a pool, set up on Save changes; then one you started yourself, by its name. The whole
+ * list goes to the rig as its `runners` setting, which its core takes while it works.
  */
-export function runnersFields(u: RigView, settings: RigSettings): string {
+export function runnersFields(u: RigView, settings: RigSettings, at: RunnerPlaces): string {
   const state = new Map((u.runners?.processes ?? []).map((p) => [p.name, p]));
   const now = Date.now();
   const rows = settings.runners
     .map((p) => {
       const seen = state.get(p.name);
+      const placed = at.placed[p.name];
+      const holders = p.pools.map((_, i) => seen?.runners[i]?.holder ?? null);
+      const job = holders.map(jobWords).filter(Boolean).join("; ");
       const pools = p.pools
         .map(
           (pool, i) =>
-            `<label class="fd">${infoLabel(`Runner ${i}'s pool`, POOL_TIP)}<select name="runner_pool__${esc(p.name)}__${i}" data-label="${esc(p.name)}'s runner ${i}'s pool">${poolOptions(pool, settings.lanes)}</select></label>`,
+            `<select class="ar-pool" name="runner_pool__${esc(p.name)}__${i}" data-runner-pool="${esc(p.name)}" aria-label="${esc(`The pool of ${p.name}${p.pools.length > 1 ? `'s runner ${i}` : ""}`)}">${poolOptions(pool, settings.lanes)}</select>`,
         )
         .join("");
-      return `<div class="rn"><div><b>${esc(p.name)}</b> ${seen ? stateHtml(seen, now) : `<span class="chip">joining</span>`}</div><div class="g3">${pools}</div><label class="small"><input type="checkbox" name="runner_remove__${esc(p.name)}" value="1" data-runner="${esc(p.name)}"> Take it away: its run under way fails, and the judge or its lane tries again</label></div>`;
+      const busy = holders.filter(Boolean);
+      const nowText = busy.length ? busy.map((h) => nowHtml(u, h)).join("<br>") : "Nothing now.";
+      const ask = job
+        ? `${p.name} is at work: on save, ${job}. No verdict is lost and nothing counts against the change.`
+        : `${p.name} leaves the rig on save. Nothing runs there now.`;
+      return `<div class="er-row" data-runner-row="${esc(p.name)}" data-job="${esc(job)}" data-product="${esc(placed?.product ?? "")}"><span class="er-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(placed?.where ?? "started by you")}</span> ${stateChip(seen, now)}</span><span class="small muted">${esc(placed?.gpu ?? `${p.pools.length} runner${p.pools.length > 1 ? "s" : ""}`)}</span></span><span class="er-pools">${pools}</span><span class="small" data-runner-now>${nowText}</span><span class="er-btns"><label class="btn er-rm"><input type="checkbox" name="runner_remove__${esc(p.name)}" value="1" data-runner="${esc(p.name)}"> Remove</label><button type="button" class="sm" data-keep hidden>Keep it</button></span><div class="er-ask" data-ask hidden role="alert"><span>${esc(ask)}</span><button type="button" class="sm" data-ask-cancel>Cancel</button><button type="button" class="sm danger" data-ask-go>Remove ${esc(p.name)}</button></div></div>`;
     })
     .join("");
-  return `<div class="sec-sub" id="runners"><h3>Runners</h3><p class="lead small">Changes take effect at once, while the run goes on: nothing pauses. A runner takes one run at a time; on a shared one the judge and the lanes take turns.</p>${rows ? `<div class="card flat">${rows}</div>` : `<div class="muted small">None: the rig runs on its own machine alone.</div>`}
-<div class="g3" style="margin-top:10px"><label class="fd">${infoLabel("Add a runner you started yourself", "The name of a runner process started with THERMITE_ROLE=runner and THERMITE_RUNNER, with the rig's token: it registers its key with control, and the rig's core asks it once it answers. 2 to 40 lowercase letters, digits and dashes.")}<input name="runner_add_name" maxlength="40" placeholder="box-2" data-add-runner></label>
-<label class="fd">${infoLabel("Its runners' pools", "One pool for each runner it serves, in its order, separated by commas: judge, shared or lane-1 to lane-16. Each GPU is one runner.")}<input name="runner_add_pools" placeholder="judge, shared"></label></div></div>`;
+  const add = at.add.length
+    ? `<div class="card er-add"><label class="fd">${infoLabel("Add a runner", "A GPU of a machine or cluster control knows that no rig uses. Control sets it up on Save changes, and it joins its pool once it answers the core: a run waits for it, and none fails while it starts.")}<select name="add_at" data-add-at><option value="">Choose a GPU</option>${at.add.map((x) => `<option value="${esc(x.value)}" data-product="${esc(x.product)}">${esc(x.text)}</option>`).join("")}</select></label><label class="fd">${infoLabel("Its pool", POOL_TIP)}<select name="add_pool" data-add-pool>${poolOptions("shared", settings.lanes)}</select></label><button type="button" class="sm" data-add-btn hidden>Add</button></div>`
+    : `<div class="muted small" style="margin-top:10px">No free GPU that control knows: add a machine or a cluster under <a href="/ui/settings/machines">Settings › Machines</a>.</div>`;
+  return `<div class="sec-sub" id="runners"><div class="sec-head"><h3>Runners <span class="muted small" data-runner-count>${settings.runners.length}</span></h3><span class="small muted">Changes take effect at once, while the run goes on: nothing pauses.</span></div><div class="card flat" data-runner-list data-judge-on-runners="${at.judgeOnRunners ? "1" : ""}">${rows || `<div class="empty" data-runner-none>None yet: the rig runs on its core alone.</div>`}</div>${add}<div data-runner-notes></div>
+<details class="adv"><summary>A runner process you started yourself</summary><div class="g3"><label class="fd">${infoLabel("Its name", "The name of a runner process started with THERMITE_ROLE=runner and THERMITE_RUNNER, with the rig's token: it registers its key with control, and the rig's core asks it once it answers. 2 to 40 lowercase letters, digits and dashes.")}<input name="runner_add_name" maxlength="40" placeholder="box-2" data-add-runner></label>
+<label class="fd">${infoLabel("Its runners' pools", "One pool for each runner it serves, in its order, separated by commas: judge, shared or lane-1 to lane-16. Each GPU is one runner.")}<input name="runner_add_pools" placeholder="judge, shared"></label></div></details></div>`;
 }
 
 /** What a pool means, beside each pool's field. */
