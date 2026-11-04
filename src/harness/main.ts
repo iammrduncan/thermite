@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   const hub = new RunnerHub({
     service,
     link,
-    core: { type: driver.type, separated: runner.separated },
+    core: { type: driver.type, separated: runner.separated, judges: judging.length > 0 },
   });
   parts.devRuns.remote = hub.pools;
   const cards = new JudgeCards();

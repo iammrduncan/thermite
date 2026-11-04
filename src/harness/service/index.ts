@@ -265,8 +265,11 @@ export class HarnessService {
   get promotion(): "auto" | "owner_approval" {
     return this.settings.get().promotion;
   }
-  /** The rig's target type (cpu, cuda-gpu, ...): an assigned campaign's kit must measure on it. */
-  readonly targetType: string | undefined;
+  /**
+   * The rig's target type (cpu, cuda-gpu, ...): an assigned campaign's kit must measure on it. A
+   * core that judges only on runners of other machines takes theirs (goal 206).
+   */
+  targetType: string | undefined;
 
   constructor(input: {
     rig: string;

@@ -45,6 +45,8 @@ interface Process {
   checking: boolean;
   /** Why it does not take runs although it answers, said once. */
   unfit?: string | undefined;
+  /** Its kind of target, as it last answered while it fit. */
+  type?: string | undefined;
   /**
    * Why its runs fail now: it left or is away. A run's next ask fails at once, as a runner away,
    * never as the judge's infrastructure failure. Its check is asked all the same.
@@ -58,8 +60,12 @@ export class RunnerHub {
   private readonly o: {
     service: HarnessService;
     link: RunnerLink;
-    /** The core's kind of target and whether its roles are separated: a runner's must match. */
-    core: { type: string; separated: boolean };
+    /**
+     * The core's kind of target, whether its roles are separated, and whether the judge measures
+     * on its own machine too. When it does, a runner measures on the core's kind of target; when
+     * not, on its other runners', and the rig's target is theirs.
+     */
+    core: { type: string; separated: boolean; judges: boolean };
     /** Set once the judge's loops run. */
     executors?: RunnerExecutors | undefined;
     checkEveryMs?: number | undefined;
@@ -190,6 +196,18 @@ export class RunnerHub {
         return;
       }
       p.unfit = undefined;
+      // Its own kind of target: a core on a CPU machine judges on runners with GPUs.
+      const own = { type: String(info.type), separated: info.separated === true };
+      p.type = own.type;
+      for (const r of p.runners) r.runner.setInfo(own);
+      const { service, core } = this.o;
+      if (!core.judges && service.targetType !== own.type) {
+        log("harness", "the rig measures on its runners' kind of target", {
+          was: service.targetType,
+          now: own.type,
+        });
+        service.targetType = own.type;
+      }
       if (!p.up) log("harness", "a runner process answers: it takes runs", { runner: name });
       this.setUp(p, true);
     } catch (err) {
@@ -210,10 +228,13 @@ export class RunnerHub {
   /** Why a process that answers can't take the rig's runs, or undefined. */
   private unfit(p: Process, info: { type?: unknown; separated?: unknown; cards?: unknown }) {
     const { core } = this.o;
-    if (info.type !== core.type)
-      return `it measures on ${String(info.type)}, and the rig's core on ${core.type}`;
-    if (info.separated !== core.separated)
-      return "its roles are separated otherwise than the core's: it runs another image";
+    if (typeof info.type !== "string" || typeof info.separated !== "boolean")
+      return "its answer names no kind of target: it runs another image";
+    if (core.judges && info.type !== core.type)
+      return `it measures on ${info.type}, and the rig's core on ${core.type}`;
+    const others = [...this.processes.values()].find((o) => o !== p && o.up && o.type);
+    if (others?.type && info.type !== others.type)
+      return `it measures on ${info.type}, and the rig's other runners on ${others.type}`;
     if (typeof info.cards !== "number" || info.cards < p.setting.pools.length)
       return `it serves ${String(info.cards)} runners, and the rig gives it ${p.setting.pools.length} pools`;
     return undefined;

@@ -34,7 +34,10 @@ interface RemoteRunnerOptions {
   link: RunLink;
   /** The runner's place among its process's. */
   card: number;
-  /** Its kind of target and whether its roles are separated, as its process said. */
+  /**
+   * Its kind of target and whether its roles are separated, as its process said: the core's
+   * until its process answers (setInfo).
+   */
   info: { type: string; separated: boolean };
   ledger: Ledger;
   /** The core's mirror of a repository, by its name. */
@@ -60,8 +63,11 @@ export class RemoteRunner implements RigRunner {
     this.name = o.name;
     const ask = async <T>(what: "identify" | "ready" | "env" | "after_block" | "recover") =>
       ((await o.link.ask({ op: "driver", card: o.card, ask: what })) as { answer: T }).answer;
+    const info = () => this.o.info;
     this.driver = {
-      type: o.info.type,
+      get type() {
+        return info().type;
+      },
       identify: () => ask<TargetIdentity>("identify"),
       readyForTiming: () => ask<Readiness>("ready"),
       envSnapshot: () => ask<Record<string, unknown>>("env"),
@@ -73,6 +79,11 @@ export class RemoteRunner implements RigRunner {
 
   get separated(): boolean {
     return this.o.info.separated;
+  }
+
+  /** Its kind of target and whether its roles are separated, as its process answered. */
+  setInfo(info: { type: string; separated: boolean }): void {
+    this.o.info = { type: info.type, separated: info.separated };
   }
 
   /**

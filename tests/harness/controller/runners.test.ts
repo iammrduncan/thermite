@@ -40,7 +40,7 @@ const service = {
   paths: { scratchDir: "/scratch" },
 } as unknown as HarnessService;
 
-const core = { type: "cpu", separated: false };
+const core = { type: "cpu", separated: false, judges: true };
 const fits = { answer: { type: "cpu", separated: false, cards: 2 } };
 const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
@@ -140,6 +140,43 @@ describe("the core's runners as they come and go (goal 206)", () => {
         why: "it measures on cuda-gpu, and the rig's core on cpu",
       },
     ]);
+    hub.apply([]);
+    sup.stop();
+  });
+
+  test("a core on a CPU machine judges on GPU runners: the rig measures on theirs, all of one kind", async () => {
+    const kinds: Record<string, string> = { "box-2": "cuda-gpu", "box-3": "cpu" };
+    const sup = linked((q) =>
+      q.kind === "ask" && q.ask.op === "info"
+        ? { answer: { type: kinds[q.runner], separated: true, cards: 1 } }
+        : undefined,
+    );
+    const own = { ...service, targetType: "cpu" } as HarnessService;
+    const hub = new RunnerHub({
+      service: own,
+      link: sup.link,
+      core: { type: "cpu", separated: false, judges: false },
+    });
+    const ex = executors();
+    hub.executors = ex;
+    hub.apply([{ name: "box-2", pools: ["judge"] }]);
+    await wait();
+    assert.equal(hub.state()[0]?.up, true);
+    assert.equal(own.targetType, "cuda-gpu", "an assigned kit measures on the runners' kind");
+    const runner = ex.runners.get("box-2-0");
+    assert.equal(runner?.driver.type, "cuda-gpu");
+    assert.equal(runner?.separated, true);
+    hub.apply([
+      { name: "box-2", pools: ["judge"] },
+      { name: "box-3", pools: ["shared"] },
+    ]);
+    await wait();
+    assert.deepEqual(hub.state()[1], {
+      name: "box-3",
+      pools: ["shared"],
+      up: false,
+      why: "it measures on cpu, and the rig's other runners on cuda-gpu",
+    });
     hub.apply([]);
     sup.stop();
   });
