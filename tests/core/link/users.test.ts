@@ -114,7 +114,9 @@ describe("who may do what on the message bus", () => {
     // Nothing of one rig's is in another's: no subject of rig-a's is open to rig-b.
     const b = JSON.stringify(rigPermissions("rig-b"));
     assert.ok(!b.includes("rig-a"));
-    assert.ok(!/\*(?!")/.test(b), "no wildcard but the source of its own live subjects");
+    // Its own machines' subject (goal 205) aside, the one wildcard is its live subjects' source.
+    const own = b.replace('"thermite.rig.rig-b.machine.*.device"', "");
+    assert.ok(!/\*(?!")/.test(own), "no wildcard but the source of its own live subjects");
     for (const bad of ["rig.a", "rig-a.>", "*", "", "Rig-A"])
       assert.throws(() => rigPermissions(bad), /not a rig's name/, bad);
   });
