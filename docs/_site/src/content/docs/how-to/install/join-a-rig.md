@@ -55,8 +55,8 @@ done
 ## 1. Make the join command
 
 1. Open **Rigs** in the sidebar, then press **Add a rig**.
-2. Under **1 · Where**, after "Or run it yourself, where control can't connect:", choose **A machine you set it up on yourself** or **A Kubernetes namespace you apply it to yourself**.
-3. Under **2 · GPUs and resources**:
+2. Under **1 · The core**, after "Or run it yourself, where control can't connect:", choose **A machine you set it up on yourself** or **A Kubernetes namespace you apply it to yourself**. Its fields show below it, and **2 · Runners** hides: a rig you join yourself has its GPUs on its own machine.
+3. Fill in its fields:
    - for a machine, **GPUs on the machine**: the GPUs' numbers as `nvidia-smi` lists them, such as `0,1`. Empty: the rig measures on the CPU;
    - for a namespace, the **Namespace**, the number of **GPUs** (up to 8), **GPUs through** (NVIDIA's device plugin, or DRA with a **DRA device class**), the **Storage class** (empty: the cluster's default) and the **Volume size (GB)** (100 by default);
    - with two or more GPUs, **GPUs for the judge** (half by default). See [Give a rig several GPUs](several-gpus.md).

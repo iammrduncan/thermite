@@ -52,11 +52,12 @@ describe("clusters in Providers and Add a rig", () => {
     assert.match(page, /Kubernetes v1\.35\.2 · 1 node, 1 with 2 GPUs · storage standard/);
     assert.match(page, /control may create namespaces/);
     assert.ok(!page.includes("secret-kube-token-789"));
-    // Add a rig offers it, with its GPUs, nodes and storage.
+    // Add a rig offers it for the core, and its node's GPUs as runners (goal 206).
     const add = await s.page("/ui/rigs/add");
     assert.match(add, /name="place" value="cluster:k8s-a"/);
-    assert.match(add, /name="k_gpus__k8s-a"/);
-    assert.match(add, /NVIDIA&#39;s device plugin|NVIDIA's device plugin/);
+    assert.match(add, /<b>gpu-node-1<\/b> <span class="chip">a node of k8s-a<\/span>/);
+    assert.match(add, /name="ar_at__0" value="k8s-a\|\|gpu-node-1\|device-plugin"/);
+    assert.match(add, /name="ar_name__1" value="gpu-node-1-2"/);
     assert.equal(
       await s.post("/ui/rigs/add", {
         place: "cluster:k8s-a",
@@ -601,10 +602,15 @@ describe("clusters in Providers and Add a rig", () => {
       await post("/ui/settings/clusters/lab/slots", { slots: "thermite-slot-2, thermite-slot-3" }),
       /"lab" now has 2 slots, read again/,
     );
+    // Add a rig: each free slot is a place for the core, sized by its quota.
     const add = await page("/ui/rigs/add");
-    assert.match(add, /name="k_cpus__lab" inputmode="decimal" value="6"/);
-    assert.match(add, /name="k_mem__lab" inputmode="decimal" value="24"/);
-    assert.match(add, /name="k_size__lab" value="200"/);
+    assert.match(
+      add,
+      /value="cluster:lab\|thermite-slot-3" data-name="thermite-slot-3" data-arch="" data-cpus="6" data-mem="24" data-disk="200"/,
+    );
+    assert.match(add, /name="core_cpus" inputmode="decimal" value="6"/);
+    assert.match(add, /name="core_mem" inputmode="decimal" value="24"/);
+    assert.match(add, /name="core_disk" inputmode="numeric" value="200"/);
 
     // Over MCP, as an operator: a rig in each slot, sized by the quota.
     const client = await mcpClient(api, "operator-token-abcdef");

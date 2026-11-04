@@ -151,7 +151,7 @@
     "src/control/campaigns/start-run.ts": ["StartRunOutcome", "startable"],
     "src/control/clusters/actions.ts": ["clusterActionCalls"],
     "src/control/clusters/deployment.ts": ["EnvVar"],
-    "src/control/clusters/facts.ts": ["ClusterNode", "quantity"],
+    "src/control/clusters/facts.ts": ["ClusterNode"],
     "src/control/clusters/kubectl.ts": ["KubectlResult"],
     "src/control/clusters/manifests.ts": ["ClusterRigSecrets"],
     "src/control/clusters/reach.ts": ["reachListOf"],

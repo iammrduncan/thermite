@@ -22,11 +22,15 @@ export interface ClusterNode {
   memory: string;
 }
 
-/** What control knows of a GPU (goal 132): its name, compute capability and node's architecture. */
+/**
+ * What control knows of a GPU (goal 132): its name, compute capability and node's architecture;
+ * for a DRA class that names one GPU, its node (goal 206).
+ */
 export interface GpuKind {
   product?: string | undefined;
   cc?: string | undefined;
   arch?: string | undefined;
+  node?: string | undefined;
 }
 
 export interface ClusterSlot {
@@ -189,7 +193,7 @@ const attr = (attrs: Record<string, Record<string, unknown>>, name: string): str
 /**
  * Each DRA device class's GPU (goal 132), from `kubectl get deviceclasses -o json` and `kubectl
  * get resourceslices -o json`: a class whose selectors name a GPU's UUID gets that device's name,
- * compute capability and node's architecture; one that names a product gets that name.
+ * compute capability, node and node's architecture; one that names a product gets that name.
  */
 function gpuClasses(
   classesText: string,
@@ -208,6 +212,7 @@ function gpuClasses(
         product: attr(attrs, "productName"),
         cc: attr(attrs, "cudaComputeCapability"),
         arch,
+        node: spec.nodeName,
       };
     });
   });
@@ -219,7 +224,7 @@ function gpuClasses(
     const named = /productName[^=]*==\s*"([^"]+)"/.exec(cel)?.[1];
     const d = devices.find((x) => x.uuid && uuids.includes(x.uuid));
     const kind: GpuKind = d
-      ? { product: d.product, cc: d.cc, arch: d.arch }
+      ? { product: d.product, cc: d.cc, arch: d.arch, ...(d.node ? { node: d.node } : {}) }
       : named
         ? { product: named }
         : {};

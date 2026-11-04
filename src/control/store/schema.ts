@@ -25,6 +25,7 @@ import {
   knowledgeSearch,
   knowledgeSlotNames,
 } from "./kb/index.ts";
+import { machineRigJudgeOnRunners } from "./machines.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
@@ -678,6 +679,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   runnerBusKeyTable,
   // The runner processes control sets up for a rig, each with its own token (goal 206).
   rigRunnerTable,
+  // A rig control set up on a machine whose core judges on its runners alone (goal 206).
+  machineRigJudgeOnRunners,
 ];
 
 /**

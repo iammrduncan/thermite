@@ -155,17 +155,17 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
     );
     const facts = s.store.clusters.get("k8s-a")?.facts as { gpu_classes?: unknown } | undefined;
     assert.deepEqual(facts?.gpu_classes, {
-      "spark-gpus": { product: "NVIDIA GB10", cc: "12.1.0", arch: "arm64" },
+      "spark-gpus": { product: "NVIDIA GB10", cc: "12.1.0", arch: "arm64", node: "gpu-node-1" },
       "other-gpus": { product: "Tesla P100-PCIE-16GB" },
     });
-    // Add a rig: the GB10's class says CUDA 13, and why; the node shows its architecture.
+    // Add a rig: the GB10's class is a runner on its node, which takes CUDA 13 (goal 206); the
+    // node shows its architecture.
     const add = await s.page("/ui/rigs/add");
-    assert.match(
-      add,
-      /<option value="dra:spark-gpus" data-cuda="13" data-why="NVIDIA GB10 is on an arm64 node: only the CUDA 13 harness runs there\.">/,
-    );
-    assert.match(add, /name="k_cuda__k8s-a"/);
-    assert.match(add, /gpu-node-1 \(2 GPUs, arm64\)/);
+    assert.match(add, /<b>gpu-node-1<\/b> <span class="chip">a node of k8s-a<\/span>/);
+    assert.match(add, /arm64 · 16 CPUs · 64 GiB/);
+    assert.match(add, /data-product="NVIDIA GB10" data-cuda="13"/);
+    assert.match(add, /NVIDIA GB10 · DRA class spark-gpus/);
+    assert.match(add, /value="k8s-a\|\|\|dra%3Aspark-gpus"/);
     // Over MCP, with no cuda: the class's GPU sets it.
     const mcp = await mcpWith(s.api, OPERATOR);
     const added = await mcp.call("add_cluster_rig", {

@@ -338,23 +338,42 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
   await giveRunner(parts, r, by);
 }
 
+/**
+ * Whether a rig reports its settings, waiting up to 20 minutes for one control is setting up: a
+ * rig takes its runners and Add a rig's Workers at a time only then.
+ */
+export async function rigReportsSettings(parts: ControlParts, rig: string): Promise<boolean> {
+  for (let t = 0; t < RIG_WAIT_TRIES && !rigSettingsOf(parts.store, rig)?.settings; t++)
+    await new Promise((done) => setTimeout(done, RIG_WAIT_MS));
+  return Boolean(rigSettingsOf(parts.store, rig)?.settings);
+}
+
 /** Gives a runner process control set up to its rig, once the rig reports its settings. */
 async function giveRunner(parts: ControlParts, r: RigRunner, by: string) {
   const { store } = parts;
-  // A rig control is setting up gets its runners once it reports its settings.
-  for (let t = 0; t < RIG_WAIT_TRIES && !rigSettingsOf(store, r.rig)?.settings; t++)
-    await new Promise((done) => setTimeout(done, RIG_WAIT_MS));
+  const reported = await rigReportsSettings(parts, r.rig);
   const now = runnersNow(parts, r.rig);
-  if (typeof now === "string" || !rigSettingsOf(store, r.rig)?.settings) {
+  if (typeof now === "string" || !reported) {
     const why = typeof now === "string" ? now : `${r.rig} has not reported its settings yet`;
     store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${why}`);
     return;
   }
+  // The rig's runners as it reported them, and those control set up for it that it has not
+  // reported yet: two set up together, as Add a rig does, each keep the other.
+  const listed = new Set(now.map((x) => x.name));
+  const placed = store.rigRunners
+    .of(r.rig)
+    .filter((x) => x.status === "running" && x.runner !== r.runner && !listed.has(x.runner))
+    .map((x) => ({ name: x.runner, pools: x.spec.pools }));
   const out = await setRigSettings(
     parts,
     r.rig,
     {
-      runners: [...now.filter((x) => x.name !== r.runner), { name: r.runner, pools: r.spec.pools }],
+      runners: [
+        ...now.filter((x) => x.name !== r.runner),
+        ...placed,
+        { name: r.runner, pools: r.spec.pools },
+      ],
     },
     by,
     true,

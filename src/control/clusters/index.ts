@@ -16,7 +16,7 @@ export {
   drainChoices,
   watchDrains,
 } from "./drain.ts";
-export { type ClusterFacts, clusterLine } from "./facts.ts";
+export { type ClusterFacts, clusterLine, quantity } from "./facts.ts";
 export { updateRigImages } from "./images.ts";
 export { type ClusterKubectl, inspectKubeconfig, KUBE_NAME, realKubectl } from "./kubectl.ts";
 export {
@@ -57,4 +57,5 @@ export {
   dropRunner,
   dropRunners,
   removeRunner,
+  rigReportsSettings,
 } from "./runners.ts";

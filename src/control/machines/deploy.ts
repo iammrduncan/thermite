@@ -36,6 +36,8 @@ export interface RigPlan {
   judgeGpus?: number | undefined;
   /** Control logs in as root: system units and paths instead of the user's. */
   root: boolean;
+  /** Its core judges on its runners alone (goal 206): THERMITE_LOCAL_JUDGE=0. */
+  judgeOnRunners?: boolean | undefined;
   controlPublicKey: string;
   controlFingerprint: string;
   /** The message bus for its supervisor: the one way it reaches control but its registration. */
@@ -95,7 +97,16 @@ export const unitName = (rig: string, part: "harness" | "supervisor") => `thermi
 /** What a rig's units are made of: the rest of a plan is for its first setup. */
 export type UnitPlan = Pick<
   RigPlan,
-  "rig" | "runnerOf" | "runner" | "controlUrl" | "images" | "gpus" | "judgeGpus" | "root" | "bus"
+  | "rig"
+  | "runnerOf"
+  | "runner"
+  | "controlUrl"
+  | "images"
+  | "gpus"
+  | "judgeGpus"
+  | "root"
+  | "judgeOnRunners"
+  | "bus"
 >;
 
 /** The Quadlet units, by file name. */
@@ -152,6 +163,7 @@ ${env({
   ...role,
   THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
   ...split,
+  ...(p.judgeOnRunners ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
   THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
   THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
 })}

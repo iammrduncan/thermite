@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import { redact } from "../../common/log.ts";
 import { type Row, StorePart } from "./part.ts";
 
@@ -39,6 +40,11 @@ const machineOf = (r: Row): Machine => ({
   created_at: String(r.created_at),
 });
 
+/** Migration 34: whether a rig control set up on a machine judges on its runners alone (goal 206). */
+export function machineRigJudgeOnRunners(db: DatabaseSync): void {
+  db.exec("alter table machine_rig add column judge_on_runners integer not null default 0");
+}
+
 /** A rig control set up on a machine. */
 export interface MachineRig {
   rig: string;
@@ -48,6 +54,8 @@ export interface MachineRig {
   judge_gpus?: number | undefined;
   images: { harness: string; supervisor: string };
   root: boolean;
+  /** Its core judges on its runners alone (goal 206): THERMITE_LOCAL_JUDGE=0. */
+  judge_on_runners?: boolean | undefined;
   /** deploying, running, stopped, failed, removed. */
   status: string;
   created_at: string;
@@ -62,6 +70,7 @@ const machineRigOf = (r: Row): MachineRig => ({
     r.judge_gpus === null || r.judge_gpus === undefined ? undefined : Number(r.judge_gpus),
   images: JSON.parse(String(r.images)) as MachineRig["images"],
   root: Number(r.root) === 1,
+  ...(Number(r.judge_on_runners) === 1 ? { judge_on_runners: true } : {}),
   status: String(r.status),
   created_at: String(r.created_at),
   created_by: String(r.created_by),
@@ -228,8 +237,8 @@ export class Machines extends StorePart {
   addRig(r: Omit<MachineRig, "created_at" | "status">): void {
     this.db
       .prepare(
-        `insert into machine_rig (rig, machine, gpus, judge_gpus, images, root, status, created_at, created_by)
-         values (?, ?, ?, ?, ?, ?, 'deploying', ?, ?)`,
+        `insert into machine_rig (rig, machine, gpus, judge_gpus, images, root, judge_on_runners, status, created_at, created_by)
+         values (?, ?, ?, ?, ?, ?, ?, 'deploying', ?, ?)`,
       )
       .run(
         r.rig,
@@ -238,6 +247,7 @@ export class Machines extends StorePart {
         r.judge_gpus ?? null,
         JSON.stringify(r.images),
         r.root ? 1 : 0,
+        r.judge_on_runners ? 1 : 0,
         new Date().toISOString(),
         r.created_by,
       );

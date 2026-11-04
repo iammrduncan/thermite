@@ -9,6 +9,20 @@ export const FORMS = `/* Edit rig: one row per part, with its switch. */
 /* Edit rig: its runners of other machines (goal 206), one row per runner process. */
 .sec-sub { margin-top: 16px; } .sec-sub h3 { margin: 0 0 4px; font-size: 14px; }
 .rn { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); } .rn:last-child { border-bottom: 0; }
+/* Add a rig (goal 206): the core's places, a row for each GPU that can be a runner, the summary. */
+.ar-place { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); cursor: pointer; }
+.ar-place:first-child { border-top: 0; } .ar-place.on { background: var(--primary-surface); } .ar-place.dis { opacity: .55; cursor: not-allowed; }
+.ar-place input { margin-top: 3px; } .ar-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ar-mach { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); } .ar-mach:first-child { border-top: 0; }
+.ar-gpu { display: grid; grid-template-columns: minmax(180px, 300px) minmax(200px, 300px) minmax(0, 1fr); gap: 8px 14px; align-items: center; }
+.ar-gpu select { height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: var(--control-radius); background: var(--card); font-size: 13px; width: 100%; }
+.ar-gpu.judge select { border-color: var(--warning-foreground); color: var(--warning-foreground); font-weight: 600; }
+.ar-gpu.lane select, .ar-gpu.shared select { border-color: var(--primary); color: var(--info-foreground); font-weight: 600; }
+@media (max-width: 720px) { .ar-gpu { grid-template-columns: minmax(0, 1fr); } }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; } .sec-head h2 { font-size: 15px; margin: 0 0 4px; }
+.ar-sum { padding: 14px 16px; margin-bottom: 14px; } .ar-sum h2 { font-size: 15px; margin: 0 0 8px; }
+.ar-sum ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; } .ar-note { margin: 8px 0 0; padding: 8px 12px; font-size: 13px; }
+.ar-end { justify-content: flex-end; }
 .sw { position: relative; display: inline-block; width: 40px; height: 22px; margin-top: 2px; }
 .sw input { opacity: 0; width: 0; height: 0; }
 .knob { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: .15s; cursor: pointer; }

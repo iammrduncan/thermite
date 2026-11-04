@@ -153,6 +153,35 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await owner.close();
   });
 
+  test("two runners set up together are both given to the rig", async () => {
+    const { s, sent } = await withRig();
+    const owner = await mcpWith(s.api, ADMIN);
+    for (const [runner, pool] of [
+      ["spark-02", "judge"],
+      ["spark-03", "shared"],
+    ] as const) {
+      const added = await owner.call("add_cluster_runner", {
+        rig: "core-1",
+        runner,
+        cluster: "k8s-a",
+        node: "gpu-node-1",
+        gpus: 1,
+        pool,
+      });
+      assert.equal(added.error, false, JSON.stringify(added.body));
+      for (let i = 0; i < 100 && sent().length < (runner === "spark-02" ? 1 : 2); i++)
+        await new Promise((r) => setTimeout(r, 20));
+    }
+    // The rig has not reported spark-02 yet when spark-03 is given: it keeps it.
+    assert.deepEqual(sent().at(-1), {
+      runners: [
+        { name: "spark-02", pools: ["judge"] },
+        { name: "spark-03", pools: ["shared"] },
+      ],
+    });
+    await owner.close();
+  });
+
   test("the owner's alone; refused in words", async () => {
     const { s } = await withRig();
     const operator = await mcpClient(s.api, OPERATOR);
@@ -197,20 +226,32 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
   test("Add a rig with its runners: a core with no GPU judges on its runners alone", async () => {
     const { f, s } = await withRig();
     const page = await s.page("/ui/rigs/add");
-    assert.match(page, /<h2>Runners on other machines<\/h2>/);
-    assert.match(page, /name="ar_at__0" value="k8s-a\|\|gpu-node-1"/);
-    assert.equal(
-      await s.post("/ui/rigs/add", {
-        place: "cluster:k8s-a",
-        rig: "core-2",
-        "k_gpus__k8s-a": "0",
-        "k_size__k8s-a": "50",
-        ar_at__0: "k8s-a||gpu-node-1",
-        ar_pool__0: "judge",
-        ar_mode__0: "device-plugin",
-      }),
-      "/ui/rigs/core-2",
+    assert.match(
+      page,
+      /<h2>2 · Runners <span class="muted small" id="ar-count">0 chosen<\/span><\/h2>/,
     );
+    assert.match(page, /name="ar_at__0" value="k8s-a\|\|gpu-node-1\|device-plugin">/);
+    assert.match(page, /name="ar_name__0" value="gpu-node-1-1">/);
+    assert.match(page, /<option value="off" selected>Not used<\/option>/);
+    const form = {
+      place: "cluster:k8s-a",
+      rig: "core-2",
+      core_disk: "50",
+      lanes: "2",
+      ar_at__0: "k8s-a||gpu-node-1|device-plugin",
+      ar_name__0: "gpu-node-1",
+      ar_pool__0: "judge",
+      ar_at__1: "k8s-a||gpu-node-1|device-plugin",
+      ar_name__1: "gpu-node-1-2",
+      ar_pool__1: "off",
+    };
+    // A core with no GPU and runners, none of them the judge's, is refused in words.
+    assert.match(
+      await s.post("/ui/rigs/add", { ...form, ar_pool__0: "lane-1" }),
+      /Give the judge a runner, its own or a shared one: the core has no GPU to measure on\./,
+    );
+    assert.equal(s.store.clusters.rig("core-2"), undefined, "nothing was set up");
+    assert.equal(await s.post("/ui/rigs/add", form), "/ui/rigs/core-2");
     await settle(f, 2);
     const applies = f.calls
       .filter((c) => c.args[0] === "apply")

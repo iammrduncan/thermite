@@ -1,6 +1,13 @@
 import type { Hono } from "hono";
-import { addClusterRunner, addMachineRunner, type ClusterFacts } from "../../clusters/index.ts";
+import { RIG_ID } from "../../../core/ids.ts";
+import {
+  addClusterRunner,
+  addMachineRunner,
+  type ClusterFacts,
+  rigReportsSettings,
+} from "../../clusters/index.ts";
 import type { MachineFacts } from "../../machines/index.ts";
+import { setRigSettings } from "../../rigs/index.ts";
 import type { ControlStore } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { esc } from "../../ui/components/index.ts";
@@ -16,10 +23,19 @@ import type { Dashboard } from "../context.ts";
 /** A machine's GPU as a place's value: never a cluster's, whose names have no `@`. */
 const MACHINE = "@machine|";
 
-/** A place's value read back: a machine and its GPU, or a cluster, its slot and a node. */
-type Place =
+/**
+ * A place's value read back: a machine and its GPU, or a cluster, its slot, a node and how the
+ * runner asks for its GPU (Add a rig's rows say; Edit rig's form has a field of its own).
+ */
+export type Place =
   | { kind: "machine"; machine: string; gpu: number | undefined }
-  | { kind: "cluster"; cluster: string; slot: string | undefined; node: string | undefined };
+  | {
+      kind: "cluster";
+      cluster: string;
+      slot: string | undefined;
+      node: string | undefined;
+      mode: string | undefined;
+    };
 function placeOf(value: string): Place {
   const parts = value.split("|").map((x) => decodeURIComponent(x));
   if (value.startsWith(MACHINE))
@@ -28,9 +44,22 @@ function placeOf(value: string): Place {
       machine: parts[1] ?? "",
       gpu: parts[2] ? Number(parts[2]) : undefined,
     };
-  const [cluster = "", slot = "", node = ""] = parts;
-  return { kind: "cluster", cluster, slot: slot || undefined, node: node || undefined };
+  const [cluster = "", slot = "", node = "", mode = ""] = parts;
+  return {
+    kind: "cluster",
+    cluster,
+    slot: slot || undefined,
+    node: node || undefined,
+    mode: mode || undefined,
+  };
 }
+
+/** A machine's GPU as a place's value. */
+export const machineAt = (machine: string, gpu: number) =>
+  `${MACHINE}${encodeURIComponent(machine)}|${gpu}`;
+/** A cluster's slot, node and way of asking for a GPU as a place's value. */
+export const clusterAt = (cluster: string, slot: string, node: string, mode: string) =>
+  [cluster, slot, node, mode].map(encodeURIComponent).join("|");
 
 /**
  * Each place a runner can go: a cluster's slot (or its own namespace) and a node, or a machine's
@@ -75,7 +104,7 @@ function places(store: ControlStore, rig: string): { value: string; text: string
     if (!f || m.check_error || !m.host_keys.length) continue;
     for (const g of f.gpus)
       out.push({
-        value: `${MACHINE}${encodeURIComponent(m.name)}|${g.index}`,
+        value: machineAt(m.name, g.index),
         text: `${m.name} › over SSH › GPU ${g.index} · ${g.name}`,
       });
   }
@@ -143,7 +172,7 @@ export function runnerRoutes(app: Hono, dash: Dashboard): void {
               runner,
               ...at,
               gpus: Number(f.gpus ?? 1),
-              mode: String(f.mode ?? "device-plugin"),
+              mode: String(f.mode ?? at.mode ?? "device-plugin"),
               pool,
             },
             "owner:ui",
@@ -157,27 +186,9 @@ export function runnerRoutes(app: Hono, dash: Dashboard): void {
 }
 
 /**
- * Add a rig's runners (goal 206): each node of a cluster control knows, with the pool its runner
- * would take and how it would ask for its GPU; Not used by default. The rig is set up first, then
- * each chosen runner, which the rig takes once it reports.
+ * The runners Add a rig's form chose (goal 206): each GPU row given a pool, with its name, place,
+ * GPU and how it asks for it. Not used, or no pool: none.
  */
-export function addRigRunnersSection(store: ControlStore): string {
-  const where = places(store, "").filter((w) => !w.value.endsWith("|"));
-  if (!where.length) return "";
-  const opt = (v: string, t: string) => `<option value="${esc(v)}">${esc(t)}</option>`;
-  const ways = modes(store);
-  const rows = where
-    .map(
-      (w, i) =>
-        `<div class="rn"><div><b>${esc(w.text)}</b></div><div class="g3"><input type="hidden" name="ar_at__${i}" value="${esc(w.value)}">
-<label class="fd">${infoLabel("Its pool", "Not used: no runner here. The judge's: only the judge measures there. Shared: the judge and every lane, in turn. A lane's: only that lane runs its run_experiment there.")}<select name="ar_pool__${i}">${opt("", "Not used")}${opt("judge", "The judge's")}${opt("shared", "Shared: the judge and the lanes")}${opt("lane-1", "Lane 1's")}${opt("lane-2", "Lane 2's")}${opt("lane-3", "Lane 3's")}${opt("lane-4", "Lane 4's")}</select></label>
-<label class="fd">${infoLabel("Its GPU through", "One GPU of the node, through NVIDIA's device plugin or a DRA device class; or none: the node's CPUs.")}<select name="ar_mode__${i}">${ways.map((m) => opt(m, m === "device-plugin" ? "One GPU, NVIDIA's device plugin" : `One GPU, DRA: ${m.slice(4)}`)).join("")}${opt("none", "None: its CPUs")}</select></label></div></div>`,
-    )
-    .join("");
-  return `<div class="sec"><h2>Runners on other machines</h2><p class="lead">A rig is a core and its runners. The core, above, keeps the run: its records, the planner, the lanes' agent programs and the judge's decisions; it needs no GPU. Each runner is one GPU of a node, in one pool, and takes one run at a time. Runners can be added and taken away later on Edit rig, while a run goes on.</p><div class="card flat">${rows}</div></div>`;
-}
-
-/** The runners Add a rig's form chose, each with its name (the node's), place, GPU and pool. */
 export function addRigRunnersChosen(f: Record<string, unknown>): {
   runner: string;
   at: Place;
@@ -192,12 +203,15 @@ export function addRigRunnersChosen(f: Record<string, unknown>): {
   const out = [];
   for (let i = 0; `ar_at__${i}` in f; i++) {
     const pool = one(`ar_pool__${i}`);
-    if (!pool) continue;
+    if (!pool || pool === "off") continue;
     const at = placeOf(one(`ar_at__${i}`));
-    const mode = one(`ar_mode__${i}`) || "device-plugin";
-    const named = at.kind === "machine" ? `${at.machine}-gpu-${at.gpu ?? 0}` : (at.node ?? "");
+    const mode =
+      one(`ar_mode__${i}`) || (at.kind === "cluster" ? at.mode : undefined) || "device-plugin";
+    const named =
+      one(`ar_name__${i}`) ||
+      (at.kind === "machine" ? `${at.machine}-gpu-${at.gpu ?? 0}` : (at.node ?? ""));
     out.push({
-      runner: /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(named) ? named : `runner-${i + 1}`,
+      runner: RIG_ID.test(named) ? named : `runner-${i + 1}`,
       at,
       gpus: mode === "none" ? 0 : 1,
       mode: mode === "none" ? "device-plugin" : mode,
@@ -232,11 +246,34 @@ export async function addRigRunners(
             },
             "owner:ui",
           )
-        : await addClusterRunner(parts, { rig, ...rest, ...at }, "owner:ui");
+        : await addClusterRunner(parts, { rig, ...rest, ...at, mode: r.mode }, "owner:ui");
     if ("error" in out) {
       parts.store.rigHistory.add(rig, "runner_added", false, `${r.runner}: ${out.error}`);
       first ??= `${r.runner}: ${out.error}`;
     }
   }
   return first;
+}
+
+/**
+ * Add a rig's Workers at a time (goal 206), sent once the rig reports its settings, as Edit rig
+ * sends it; its history says how it went.
+ */
+export async function giveWorkers(
+  parts: Dashboard["parts"],
+  rig: string,
+  lanes: number,
+): Promise<void> {
+  const { store } = parts;
+  if (!(await rigReportsSettings(parts, rig))) {
+    store.rigHistory.add(rig, "workers_given", false, `${rig} has not reported its settings yet`);
+    return;
+  }
+  const out = await setRigSettings(parts, rig, { lanes }, "owner:ui", true);
+  store.rigHistory.add(
+    rig,
+    "workers_given",
+    out.state !== "refused",
+    out.state === "refused" ? out.error : `${lanes} at a time: ${out.said}`,
+  );
 }

@@ -68,6 +68,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
         gpus: r.gpus,
         judgeGpus: r.judge_gpus,
         root: r.root,
+        judgeOnRunners: r.judge_on_runners,
         bus: parts.rigBus,
       }),
       [],
