@@ -1,8 +1,8 @@
 # A rig over two machines on one computer (goal 205), for the follower acceptance check
 # (scripts/acceptance/follower.mjs): the rig local-1's harness leads, and follower-1, a harness
 # started as a follower and its supervisor, with volumes and networks of their own, is where the
-# judge builds and measures. Its supervisor registers its own key on the message bus with control
-# and answers the leader's asks there.
+# judge builds and measures and where the lane's trials run. Its supervisor registers its own key
+# on the message bus with control and answers the leader's asks there.
 #
 #   podman compose -f compose.yaml -f compose.follower.yaml up -d
 x-logging: &logging
@@ -12,9 +12,10 @@ x-logging: &logging
 services:
   harness:
     environment:
-      # The leader judges on its follower's CPU alone.
-      THERMITE_FOLLOWERS: follower-1=1
+      # The leader neither judges nor works: the follower's CPU is the judge's and the workers'.
+      THERMITE_FOLLOWERS: follower-1=1+1
       THERMITE_LOCAL_JUDGE: "0"
+      THERMITE_LOCAL_LANES: "0"
 
   harness-f:
     build: { context: ., dockerfile: containers/Containerfile, target: harness, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }

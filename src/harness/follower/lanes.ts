@@ -275,6 +275,11 @@ export class LaneHost {
         lane,
       });
       h.root = ws.dir;
+      log("harness", "a trial of the leader's runs here", {
+        trial: h.spec.trialId,
+        lane: h.spec.lane,
+        run: h.spec.run,
+      });
       if (h.abort.signal.aborted) throw new Error("stopped before the trial started");
       if (!h.route) throw new Error("this rig has no model for its agents");
       this.emit(h, {
