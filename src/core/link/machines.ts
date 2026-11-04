@@ -48,6 +48,17 @@ export const MachineRequest = z.discriminatedUnion("kind", [
     parts: Part.min(1),
     data: z.string().max(MACHINE_PART_CHARS),
   }),
+  /**
+   * One part of an ask too long for one message (a forwarded call's answer, a kept baseline), in
+   * order: the parts joined are the ask's JSON, and the last part's answer is the follower's.
+   */
+  z.object({
+    kind: z.literal("ask_part"),
+    id: z.string().max(64),
+    part: Part,
+    parts: Part.min(2),
+    data: z.string().max(MACHINE_PART_CHARS),
+  }),
   /** The next part of an answer that came in parts. */
   z.object({ kind: z.literal("more"), id: z.string().max(64), part: Part.min(1) }),
   /** Model files to fetch from their sources and give the follower's harness. */

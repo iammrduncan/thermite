@@ -14,6 +14,7 @@ import {
   createScheduler,
   followersOf,
   gpuSplitAtStart,
+  lanesAway,
   openState,
   promotionPolicy,
   reclaimJobs,
@@ -24,6 +25,7 @@ import {
 } from "./controller/index.ts";
 import { DiskWatch } from "./disk.ts";
 import { startFollower } from "./follower/index.ts";
+import { FollowerLink } from "./judge/index.ts";
 import { HarnessService } from "./service/index.ts";
 
 /**
@@ -98,21 +100,15 @@ async function main(): Promise<void> {
   await service.checkAtStart("isolation");
 
   const { host, port } = parseListen(env.THERMITE_LISTEN ?? "0.0.0.0:8700");
-  const server = serve({
-    fetch: createHarnessApi(service, tokens, {
-      devRuns: parts.devRuns,
-      research: parts.research,
-      lanes: {
-        runner,
-        laneTool: [
-          process.execPath,
-          fileURLToPath(new URL("./agents/lanetool.js", import.meta.url)),
-        ],
-      },
-    }).fetch,
-    hostname: host,
-    port,
+  const api = createHarnessApi(service, tokens, {
+    devRuns: parts.devRuns,
+    research: parts.research,
+    lanes: {
+      runner,
+      laneTool: [process.execPath, fileURLToPath(new URL("./agents/lanetool.js", import.meta.url))],
+    },
   });
+  const server = serve({ fetch: api.fetch, hostname: host, port });
   log("harness", "listening", {
     rig,
     host,
@@ -121,6 +117,11 @@ async function main(): Promise<void> {
     build: service.build,
   });
 
+  // The leader's link to its followers: their judge GPUs and their lanes' trials (goal 205).
+  const link = followers.length
+    ? new FollowerLink({ outboxDir: service.paths.outboxDir })
+    : undefined;
+  service.followers = link;
   const executors = createJudges(ctx, {
     service,
     devRuns: parts.devRuns,
@@ -128,9 +129,19 @@ async function main(): Promise<void> {
     judgeCards: targets.judgeCards,
     executorIds,
     followers,
+    link,
     driver,
   });
   const links = agentLinks(ctx, service, port);
+  const laneAway = lanesAway({
+    env,
+    service,
+    links,
+    followers,
+    link,
+    devCards: targets.devCards.length,
+    api: (req) => api.fetch(req),
+  });
   addModelCheck(service, links);
   addSmokeCheck(ctx, service, driver);
   const scheduler = createScheduler(ctx, {
@@ -139,6 +150,7 @@ async function main(): Promise<void> {
     links,
     parts,
     split: { gpuSet, judgeNow },
+    laneAway,
   });
   startLoops({ ledger, service, settings, scheduler, executors, executorIds, server });
 }

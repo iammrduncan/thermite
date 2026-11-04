@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { RunId } from "../../ids.ts";
 import type { Route } from "../route.ts";
+import { LaneAsk } from "./lanes.ts";
 
 /**
  * A follower's judge GPUs, as the rig's leader asks for them (goal 205). The leader's judge decides
- * and records; a follower builds and measures on its judge GPUs for it. src/harness/follower/
+ * and records; a follower builds and measures on its judge GPUs for it, and runs the trials of
+ * the lanes it holds (lanes.ts). src/harness/follower/
  * answers these routes on the follower; the leader's judge asks them through its RemoteDevice
  * (harness/judge/remote.ts), its supervisor and the bus. Both take the supervisor's token.
  *
@@ -110,6 +112,8 @@ export const DeviceAsk = z.discriminatedUnion("op", [
   z.object({ op: z.literal("models_have"), sha256s: z.array(Sha256).max(200) }),
   /** Model files its supervisor put in its inbox, each taken in by its SHA-256. */
   z.object({ op: z.literal("models_take"), models: z.array(ModelFile).max(200) }),
+  /** A lane's trial on the follower (lanes.ts). */
+  ...LaneAsk.options,
 ]);
 export type DeviceAsk = z.infer<typeof DeviceAsk>;
 

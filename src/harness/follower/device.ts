@@ -17,10 +17,12 @@ import {
 } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
+import type { LaneHost } from "./lanes.ts";
 
 /**
  * A follower's judge GPUs (goal 205): it answers its leader's asks (core/api/harness/device.ts)
- * with a LocalDevice for each card, as the leader's judge would on a card of its own. It keeps
+ * with a LocalDevice for each card, as the leader's judge would on a card of its own, and passes
+ * the asks about its lanes' trials to its LaneHost (lanes.ts). It keeps
  * the commits it was sent in mirrors of its own, the kits it exported, its builds and the runs'
  * kept baselines, and refuses any folder it did not name itself.
  */
@@ -35,6 +37,8 @@ interface DeviceServerOptions {
   paths: { stateDir: string; scratchDir: string; inboxDir: string };
   /** The follower's own ledger: its builds. */
   ledger: Ledger;
+  /** The trials of the lanes it holds, when it has workers' devices (lanes.ts). */
+  lanes?: LaneHost | undefined;
 }
 
 export class DeviceServer {
@@ -42,7 +46,8 @@ export class DeviceServer {
   private readonly cards: LocalDevice[];
 
   constructor(o: DeviceServerOptions) {
-    if (!o.drivers.length) throw new Error("a follower's device needs a judge card");
+    if (!o.drivers.length && !o.lanes)
+      throw new Error("a follower needs a judge card or a lane to run");
     this.o = o;
     this.cards = o.drivers.map(
       (driver, index) =>
@@ -51,7 +56,7 @@ export class DeviceServer {
   }
 
   /** A mirror of the follower's, by its name. */
-  private mirror(repo: string): string {
+  mirror(repo: string): string {
     return join(this.o.paths.stateDir, "git", `${repo}.git`);
   }
 
@@ -83,7 +88,7 @@ export class DeviceServer {
     switch (a.op) {
       case "info":
         return {
-          type: this.card(0).driver.type,
+          type: this.cards[0]?.driver.type ?? null,
           separated: this.o.runner.separated,
           cards: this.cards.length,
         };
@@ -207,6 +212,12 @@ export class DeviceServer {
           });
         return { ok: true };
       }
+      case "trial_start":
+      case "trial_wait":
+      case "trial_answer":
+      case "trial_stop":
+        if (!this.o.lanes) throw new DeviceRefusal("this follower runs no lanes");
+        return this.o.lanes.ask(a);
     }
   }
 

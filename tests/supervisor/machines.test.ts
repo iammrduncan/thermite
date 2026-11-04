@@ -104,6 +104,32 @@ describe("a follower reached over the bus (goal 205)", () => {
     }
   });
 
+  test("an ask longer than one message goes in parts, whole (goal 205, step 2)", async () => {
+    let took: unknown;
+    const w = wired({
+      ask: async (body) => {
+        took = body;
+        return { ok: true };
+      },
+    });
+    try {
+      // A trial call's answer of 6 MiB, in base64: longer than one message.
+      const body = Buffer.alloc(6 * 1024 * 1024, 7).toString("base64");
+      const ask = {
+        op: "trial_answer" as const,
+        trial: "t-0123456789abcdef",
+        call: "4c5f6a2e-0b8d-4d55-9a3e-2f1a6b7c8d9e",
+        status: 200,
+        type: "application/json",
+        body,
+      };
+      assert.deepEqual(await w.to.ask(ask), { ok: true });
+      assert.deepEqual(took, ask, "the follower's harness has it whole");
+    } finally {
+      w.stop();
+    }
+  });
+
   test("a bundle larger than one message goes in parts, whole and in order", async () => {
     let took: Uint8Array | undefined;
     const w = wired({

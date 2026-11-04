@@ -12,15 +12,24 @@ import {
   MirrorName,
 } from "../../core/api/harness/device.ts";
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
+import type { DevRuns, LaneRunner } from "../agents/index.ts";
 import { type ApiTokens, allows } from "../api/index.ts";
 import { DeviceRefusal, type DeviceServer } from "./device.ts";
+import { type LaneHost, LaneRefusal } from "./lanes.ts";
+import { laneRoutes } from "./trial-api.ts";
 
 /**
- * A follower's API (goal 205): its health, and its judge GPUs for the leader
- * (core/api/harness/device.ts). Only its own supervisor reaches it, with the supervisor's token,
- * and passes on the leader's asks.
+ * A follower's API (goal 205): its health, and its judge GPUs and lanes for the leader
+ * (core/api/harness/device.ts). Only its own supervisor reaches those, with the supervisor's
+ * token, and passes on the leader's asks. Its lanes' trials reach their own routes with their
+ * trial's token (trial-api.ts).
  */
-export function followerApi(device: DeviceServer, tokens: ApiTokens, rig: string): Hono {
+export function followerApi(
+  device: DeviceServer,
+  tokens: ApiTokens,
+  rig: string,
+  lanes?: { host: LaneHost; lanes: LaneRunner; devRuns?: DevRuns | undefined } | undefined,
+): Hono {
   const app = new Hono();
 
   // A refused ask says why: a card the follower lacks, a folder it did not name, a field the
@@ -30,7 +39,8 @@ export function followerApi(device: DeviceServer, tokens: ApiTokens, rig: string
     if (err instanceof HTTPException) return err.getResponse();
     if (err instanceof z.ZodError)
       return c.json({ error: `invalid request: ${err.issues[0]?.message ?? "bad body"}` }, 400);
-    if (err instanceof DeviceRefusal) return c.json({ error: err.message }, 409);
+    if (err instanceof DeviceRefusal || err instanceof LaneRefusal)
+      return c.json({ error: err.message }, 409);
     const error = errorText(err);
     log("harness", "device ask failed", { path: c.req.path, error }, "error");
     return c.json({ error: error.slice(0, 2000) }, 500);
@@ -62,6 +72,8 @@ export function followerApi(device: DeviceServer, tokens: ApiTokens, rig: string
     await device.takeGit(repo, commit, Buffer.from(await c.req.arrayBuffer()));
     return c.json({ ok: true });
   });
+
+  if (lanes) laneRoutes(app, lanes.host, lanes);
 
   return app;
 }

@@ -61,6 +61,27 @@ async function answerOf(c: Carrier, machine: string, first: MachineReply): Promi
   return reply.answer;
 }
 
+/** An ask to the follower, in parts when it is too long for one message; its answer. */
+async function sendAsk(c: Carrier, a: Extract<QueuedAsk, { kind: "ask" }>): Promise<unknown> {
+  const whole: MachineRequest = { kind: "ask", ask: a.ask };
+  const text = JSON.stringify(a.ask);
+  if (text.length + 32 <= MACHINE_PART_CHARS)
+    return answerOf(c, a.machine, await send(c, a.machine, whole, MACHINE_ASK_TIMEOUT_MS));
+  const parts = Math.ceil(text.length / MACHINE_PART_CHARS);
+  let last: MachineReply = {};
+  for (let part = 0; part < parts; part++) {
+    const data = text.slice(part * MACHINE_PART_CHARS, (part + 1) * MACHINE_PART_CHARS);
+    last = await send(
+      c,
+      a.machine,
+      { kind: "ask_part", id: a.id, part, parts, data },
+      part === parts - 1 ? MACHINE_ASK_TIMEOUT_MS : MACHINE_PART_TIMEOUT_MS,
+    );
+    if (last.error !== undefined) throw new Error(last.error);
+  }
+  return answerOf(c, a.machine, last);
+}
+
 /** A git bundle from the outbox to the follower, in parts; its last part's answer. */
 async function sendBundle(c: Carrier, a: Extract<QueuedAsk, { kind: "git" }>): Promise<unknown> {
   const data = readFileSync(join(c.outboxDir, a.file)).toString("base64");
@@ -86,20 +107,20 @@ async function carryOne(c: Carrier, a: QueuedAsk): Promise<void> {
   try {
     body = {
       answer:
-        a.kind === "ask" || a.kind === "models"
-          ? await answerOf(
-              c,
-              a.machine,
-              await send(
+        a.kind === "ask"
+          ? await sendAsk(c, a)
+          : a.kind === "models"
+            ? await answerOf(
                 c,
                 a.machine,
-                a.kind === "ask"
-                  ? { kind: "ask", ask: a.ask }
-                  : { kind: "models", models: a.models },
-                MACHINE_ASK_TIMEOUT_MS,
-              ),
-            )
-          : await sendBundle(c, a),
+                await send(
+                  c,
+                  a.machine,
+                  { kind: "models", models: a.models },
+                  MACHINE_ASK_TIMEOUT_MS,
+                ),
+              )
+            : await sendBundle(c, a),
     };
   } catch (err) {
     body = { error: errorText(err).slice(0, 4000) };

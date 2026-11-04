@@ -348,7 +348,7 @@
     "src/core/link/kb-files.ts": ["KB_FILES_CONSUMER"],
     "src/core/link/kb.ts": ["KbScopeView", "kbFoundShape", "KbRefusal"],
     "src/core/link/users.ts": ["BusUserKeys", "LeafRig"],
-    "src/core/live.ts": ["LIVE_KINDS", "LiveBatch", "LiveLine"],
+    "src/core/live.ts": ["LiveBatch", "LiveLine"],
     "src/core/prompts.ts": ["PROMPT_PARTS", "OWN_SOURCES", "PromptSectionInfo"],
     "src/core/queue-target.ts": ["QUEUE_TARGET_PER_LANE", "RuleText", "RuleRefusal"],
     "src/core/role-additions.ts": ["AdditionRole"],

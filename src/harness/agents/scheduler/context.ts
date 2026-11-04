@@ -16,6 +16,21 @@ import type { ResearchTrialSpec } from "../research/index.ts";
 import type { TrialResult, TrialSpec } from "../worker/index.ts";
 import { stopsAskedBefore } from "./stops.ts";
 
+/**
+ * A follower that runs a lane's trials (goal 205): it makes the lane's workspace there from the
+ * parent commit, which `repo` (the leader's mirror's name) holds, runs the trial's program and its
+ * commands on its own machine, and removes what the trial left when it ends. The trial's records
+ * stay here: what it calls for them comes back to this harness.
+ */
+export interface LaneAway {
+  /** The follower's machine, in the trial's lines. */
+  machine: string;
+  run(
+    t: { spec: Omit<TrialSpec, "workspace" | "workspaceRoot">; repo: string },
+    signal: AbortSignal,
+  ): Promise<TrialResult>;
+}
+
 /** How much of the judge's reasons a brief shows: for each of a lane's attempts, for each goal. */
 export const BRIEF_REASON_CHARS = 1200;
 export const BRIEF_GOAL_CHARS = 600;
@@ -80,6 +95,11 @@ export interface SchedulerOptions {
     | undefined;
   /** Development runs: a lane's queued or running dev run is settled before its next trial. */
   devRuns?: { settle(lane: string): Promise<void> } | undefined;
+  /**
+   * The follower a lane's code trials run on (goal 205), or undefined for this machine. Without
+   * it, every lane is this machine's.
+   */
+  laneAway?: ((lane: string) => LaneAway | undefined) | undefined;
   owner: string;
   maxConcurrent?: number | undefined;
   /** A trial's length when its contract sets none: none unless the rig sets one (goal 079). */
@@ -125,6 +145,7 @@ type Optional =
   | "research"
   | "runResearchTrial"
   | "devRuns"
+  | "laneAway"
   | "usdPerMTokIn"
   | "usdPerMTokOut"
   | "trialWallMs"

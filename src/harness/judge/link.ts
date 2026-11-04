@@ -38,7 +38,8 @@ export class FollowerLink {
   /** How the judge reaches one follower's device. */
   to(machine: string): DeviceLink {
     return {
-      ask: (ask: DeviceAsk) => this.put({ id: randomUUID(), machine, kind: "ask", ask }),
+      ask: (ask: DeviceAsk, o) =>
+        this.put({ id: randomUUID(), machine, kind: "ask", ask }, o?.answerMs),
       sendGit: async (repo, commit, bundle) => {
         const id = randomUUID();
         const dir = join(this.outboxDir, "device");
@@ -52,10 +53,12 @@ export class FollowerLink {
     };
   }
 
-  private put(item: QueuedAsk): Promise<unknown> {
+  private put(item: QueuedAsk, answerMs = this.answerMs): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      this.waiting.push({ item, deadline: Date.now() + this.answerMs, resolve, reject });
+      this.waiting.push({ item, deadline: Date.now() + answerMs, resolve, reject });
       for (const wake of this.wakers.splice(0)) wake();
+      // Failed at its time also while no supervisor comes for the asks.
+      setTimeout(() => this.expire(), answerMs + 10).unref?.();
     });
   }
 

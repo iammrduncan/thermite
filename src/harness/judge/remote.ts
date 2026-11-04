@@ -27,11 +27,35 @@ import type { Arm, ArmRun } from "./measure.ts";
 
 /** How the leader reaches one follower. */
 export interface DeviceLink {
-  ask(a: DeviceAsk): Promise<unknown>;
+  /** An ask of the follower; `answerMs`: how long it may take, else the link's own time. */
+  ask(a: DeviceAsk, o?: { answerMs?: number | undefined }): Promise<unknown>;
   /** A git bundle for one of the follower's mirrors, which must hold `commit` after. */
   sendGit(repo: string, commit: string, bundle: Buffer): Promise<void>;
   /** Model files the follower's supervisor fetches from their sources and gives its harness. */
   fetchModels(models: ModelFetch[]): Promise<void>;
+}
+
+/**
+ * Sends a follower a commit of one of the leader's mirrors, as a git bundle of what it lacks,
+ * unless it has it (a lane's trial's parent, goal 205, as well as a build's).
+ */
+export async function sendCommit(
+  o: { link: DeviceLink; mirrorFor: (repo: string) => string; scratchDir: string },
+  repo: string,
+  commit: string,
+): Promise<void> {
+  const has = (await o.link.ask({ op: "git_has", repo, commit })) as {
+    has: boolean;
+    heads: string[];
+  };
+  if (has.has) return;
+  const file = join(o.scratchDir, `send-${randomUUID()}.bundle`);
+  try {
+    await bundleOf(o.mirrorFor(repo), commit, has.heads, file);
+    await o.link.sendGit(repo, commit, readFileSync(file));
+  } finally {
+    rmSync(file, { force: true });
+  }
 }
 
 /** What the leader knows of the follower's device: from its `info` answer. */
@@ -90,19 +114,7 @@ export class RemoteDevice implements JudgeDevice {
   private async sendCommit(repo: string, commit: string): Promise<void> {
     const key = `${repo}@${commit}`;
     if (this.sent.has(key)) return;
-    const has = (await this.ask({ op: "git_has", repo, commit })) as {
-      has: boolean;
-      heads: string[];
-    };
-    if (!has.has) {
-      const file = join(this.o.scratchDir, `send-${randomUUID()}.bundle`);
-      try {
-        await bundleOf(this.o.mirrorFor(repo), commit, has.heads, file);
-        await this.o.link.sendGit(repo, commit, readFileSync(file));
-      } finally {
-        rmSync(file, { force: true });
-      }
-    }
+    await sendCommit(this.o, repo, commit);
     this.sent.add(key);
   }
 

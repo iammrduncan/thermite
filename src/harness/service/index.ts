@@ -62,7 +62,7 @@ export type { RigCheck, RigCheckName } from "./checks.ts";
 export type { CommandOutcome } from "./commands.ts";
 export { drainSpans } from "./drain.ts";
 export { AWAKE_EVERY_MS, AwakeWatch, gapAtStart, gapSpans } from "./gaps.ts";
-export type { CallCredential, OwnCall } from "./proxy.ts";
+export { type CallCredential, type OwnCall, ProviderAnswers } from "./proxy.ts";
 export { IdeaRequest } from "./trials.ts";
 export { NOT_BEFORE_FILE, notBeforeOf, WIPE_MARKER, wipeIfRequested } from "./wipe.ts";
 

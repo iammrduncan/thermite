@@ -50,6 +50,8 @@ export class DevRuns {
   private readonly unavailable: string | undefined;
   /** How long a dev run waits for a device before it gives up; none unless given (goal 079). */
   private readonly maxWaitMs: number | undefined;
+  /** Whether a trial is still open: from the ledger, or a follower's own trials (goal 205). */
+  private readonly isOpen: ((trial: string) => boolean) | undefined;
 
   constructor(opts: {
     runner: Runner;
@@ -68,6 +70,8 @@ export class DevRuns {
     /** Why dev runs cannot run on this rig at all. */
     unavailable?: string | undefined;
     maxWaitMs?: number;
+    /** A follower's: whether one of its trials is still open; without it, the ledger says. */
+    isOpen?: ((trial: string) => boolean) | undefined;
   }) {
     this.runner = opts.runner;
     this.ledger = opts.ledger;
@@ -77,6 +81,7 @@ export class DevRuns {
     this.judgeShares = opts.judgeShares !== false;
     this.unavailable = opts.unavailable;
     this.maxWaitMs = opts.maxWaitMs;
+    this.isOpen = opts.isOpen;
     this.busy = Array.from(
       { length: this.dedicated ? Math.max(1, opts.cards ?? 1) : 1 },
       () => false,
@@ -113,6 +118,7 @@ export class DevRuns {
   }
 
   private trialOpen(trial: string): boolean {
+    if (this.isOpen) return this.isOpen(trial);
     const t = this.ledger.trials.get(trial);
     return t !== undefined && t.ended_at === null;
   }

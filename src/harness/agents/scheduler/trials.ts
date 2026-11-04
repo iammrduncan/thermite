@@ -137,59 +137,65 @@ export function startTrial(
     const limits = limitsInForce(sched.ledger, run, contract);
     let ws: { dir: string; repo: string } | undefined;
     let r: TrialResult = { stopped: "error", turns: 0, toolCalls: 0, tokensIn: 0, tokensOut: 0 };
+    // A lane on a follower (goal 205) has its workspace, its program and its commands there.
+    const away = sched.o.laneAway?.(a.lane);
     try {
-      ws = await prepareWorkspace({
-        runner: sched.o.runner,
-        scratchDir: sched.o.service.paths.scratchDir,
-        mirror: sched.o.service.mirrorFor(inst.seed_repo),
-        commit: parent,
+      const spec = {
+        trialId: id,
+        token,
+        run,
         lane,
-      });
-      // The worker's tools reach this workspace through the API, for this trial only.
-      sched.o.service.trialWorkspaces.set(id, { lane: a.lane, repo: ws.repo, root: ws.dir });
-      // Reset while the workspace was being prepared: the trial never starts.
-      if (abort.signal.aborted) throw new Error("reset before the trial started");
-      r = await sched.o.runTrial(
-        {
-          trialId: id,
-          token,
+        parentCommit: parent,
+        editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
+        brief: withOwnerSections(
+          sched,
+          id,
           run,
-          lane,
-          workspace: ws.repo,
-          workspaceRoot: ws.dir,
-          parentCommit: parent,
-          editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
-          brief: withOwnerSections(
+          a.lane,
+          brief(
             sched,
-            id,
             run,
-            a.lane,
-            brief(
-              sched,
-              run,
-              contract,
-              epoch,
-              a,
-              got.x,
-              k,
-              perEpoch,
-              parent === champion.commit_sha
-                ? `the champion (seq ${champion.seq})`
-                : `your lane's best attempt ${best}`,
-            ),
+            contract,
+            epoch,
+            a,
+            got.x,
+            k,
+            perEpoch,
+            parent === champion.commit_sha
+              ? `the champion (seq ${champion.seq})`
+              : `your lane's best attempt ${best}`,
           ),
-          wallMs: limits.trialMinutes ? limits.trialMinutes * 60_000 : sched.o.trialWallMs,
-          maxTurns: sched.o.maxTurns,
-          limits,
-          // The MCP servers the run's kit gives its workers (goal 068).
-          mcpServers: sched.o.service.mcp.given(run, "workers").map((g) => g.name),
-          // What the lane's worker may write in the knowledge base (goal 175).
-          kbWrites: sched.o.service.kbTools.writes(run, workerSlot(a.lane)),
-          // The owner's addition to the worker, from the run's contract (goal 166).
-          addition: additionOf(contract, "worker"),
-        },
-        abort.signal,
-      );
+        ),
+        wallMs: limits.trialMinutes ? limits.trialMinutes * 60_000 : sched.o.trialWallMs,
+        maxTurns: sched.o.maxTurns,
+        limits,
+        // The MCP servers the run's kit gives its workers (goal 068).
+        mcpServers: sched.o.service.mcp.given(run, "workers").map((g) => g.name),
+        // What the lane's worker may write in the knowledge base (goal 175).
+        kbWrites: sched.o.service.kbTools.writes(run, workerSlot(a.lane)),
+        // The owner's addition to the worker, from the run's contract (goal 166).
+        addition: additionOf(contract, "worker"),
+      };
+      if (away) {
+        trialLine(sched, id, run, a.lane, "status", `the trial runs on ${away.machine}`);
+        r = await away.run({ spec, repo: inst.seed_repo }, abort.signal);
+      } else {
+        ws = await prepareWorkspace({
+          runner: sched.o.runner,
+          scratchDir: sched.o.service.paths.scratchDir,
+          mirror: sched.o.service.mirrorFor(inst.seed_repo),
+          commit: parent,
+          lane,
+        });
+        // The worker's tools reach this workspace through the API, for this trial only.
+        sched.o.service.trialWorkspaces.set(id, { lane: a.lane, repo: ws.repo, root: ws.dir });
+        // Reset while the workspace was being prepared: the trial never starts.
+        if (abort.signal.aborted) throw new Error("reset before the trial started");
+        r = await sched.o.runTrial(
+          { ...spec, workspace: ws.repo, workspaceRoot: ws.dir },
+          abort.signal,
+        );
+      }
     } catch (err) {
       r = { ...r, stopped: "error", error: errorText(err) };
     } finally {
@@ -215,9 +221,12 @@ export function startTrial(
         "status",
         `trial ended: ${attempt ? `submitted ${attempt}${r.submitted ? "" : ` (then ${r.stopped})`}` : r.stopped}${r.error ? ` (${r.error.slice(0, 200)})` : ""}`,
       );
-      await sched.o.runner.killRole(lane).catch(() => 0);
-      await sched.o.devRuns?.settle(lane).catch(() => undefined);
-      await sched.o.runner.killRole(lane).catch(() => 0);
+      // A follower removes what its trial left itself, before it says how the trial ended.
+      if (!away) {
+        await sched.o.runner.killRole(lane).catch(() => 0);
+        await sched.o.devRuns?.settle(lane).catch(() => undefined);
+        await sched.o.runner.killRole(lane).catch(() => 0);
+      }
       if (ws) await sched.o.runner.remove(ws.dir).catch(() => undefined);
     }
   })().finally(() => {

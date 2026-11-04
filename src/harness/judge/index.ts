@@ -29,4 +29,4 @@ export { FollowerLink } from "./link.ts";
 export { type Arm, copyForRun } from "./measure.ts";
 export { portReplaced } from "./ports.ts";
 export { clipReason, REASONS_CHARS } from "./reasons.ts";
-export { RemoteDevice } from "./remote.ts";
+export { type DeviceLink, RemoteDevice, sendCommit } from "./remote.ts";

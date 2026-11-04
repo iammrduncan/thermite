@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { HarnessClient } from "../../common/api/harness.ts";
 import type { Bus } from "../../common/bus/index.ts";
 import { errorText } from "../../common/errors.ts";
-import { DEVICE, DEVICE_GIT } from "../../core/api/harness/device.ts";
+import { DEVICE, DEVICE_GIT, DeviceAsk } from "../../core/api/harness/device.ts";
 import {
   MACHINE_ASK_TIMEOUT_MS,
   MACHINE_PART_CHARS,
@@ -44,6 +44,7 @@ interface Answerer {
 export async function answerLeaderAsks(o: Answerer): Promise<void> {
   const bundles = new Map<string, { file: string; next: number; at: number }>();
   const held = new Map<string, { parts: string[]; at: number }>();
+  const asks = new Map<string, { parts: string[]; at: number }>();
   const forget = (now = Date.now()) => {
     for (const [id, b] of bundles)
       if (now - b.at > HELD_MS) {
@@ -51,6 +52,7 @@ export async function answerLeaderAsks(o: Answerer): Promise<void> {
         bundles.delete(id);
       }
     for (const [id, h] of held) if (now - h.at > HELD_MS) held.delete(id);
+    for (const [id, a] of asks) if (now - a.at > HELD_MS) asks.delete(id);
   };
   // An answer as one reply, or its first part, the rest held.
   const reply = (out: MachineReply): string => {
@@ -78,12 +80,37 @@ export async function answerLeaderAsks(o: Answerer): Promise<void> {
     } catch (err) {
       return JSON.stringify({ error: `not an ask this follower reads: ${errorText(err)}` });
     }
-    if (req.kind === "ask")
-      return reply(
+    const askHarness = async (ask: unknown) =>
+      reply(
         await harnessSays(() =>
-          o.harness.call(DEVICE, { body: req.ask, timeoutMs: MACHINE_ASK_TIMEOUT_MS }),
+          o.harness.call(DEVICE, {
+            body: DeviceAsk.parse(ask),
+            timeoutMs: MACHINE_ASK_TIMEOUT_MS,
+          }),
         ),
       );
+    if (req.kind === "ask") return askHarness(req.ask);
+    // A long ask's part, in order: the last gives the joined ask to the harness.
+    if (req.kind === "ask_part") {
+      const a = asks.get(req.id) ?? { parts: [], at: Date.now() };
+      if (req.part !== a.parts.length)
+        return JSON.stringify({
+          error: `part ${req.part} of the ask came before ${a.parts.length}`,
+        });
+      a.parts.push(req.data);
+      if (req.part < req.parts - 1) {
+        asks.set(req.id, a);
+        return JSON.stringify({ took: true });
+      }
+      asks.delete(req.id);
+      let ask: unknown;
+      try {
+        ask = JSON.parse(a.parts.join(""));
+      } catch (err) {
+        return JSON.stringify({ error: `not an ask this follower reads: ${errorText(err)}` });
+      }
+      return askHarness(ask);
+    }
     if (req.kind === "models") {
       const inbox = o.inboxDir;
       if (!inbox) return JSON.stringify({ error: "this follower fetches no model files" });

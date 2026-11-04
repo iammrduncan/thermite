@@ -30,6 +30,7 @@ import { applyResets, applyStops, resetAsked, shutdown } from "./watch.ts";
 
 export { questionDetails } from "../../research/index.ts";
 export {
+  type LaneAway,
   MCP_WAIT_MS,
   type PlannerCallOptions,
   type SchedulerOptions,
