@@ -63,6 +63,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `start_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
 | `set_rig_settings` | Yes | Yes, but not the promotion rule or the GPU split | No | No |
 | `set_cluster_rig_resources` | Yes | Yes, but not `judge_gpus` (the GPU split) | No | No |
+| `add_cluster_runner`, `remove_runner` | Yes | No | No | No |
 | `retire_rig`, `bring_back_rig`, `runpod_launch`, `runpod_rig_limits`, `runpod_rig`, `set_reachable_addresses`, `set_control_log_level`, `bus_messages`, `mcp_server_add`, `mcp_server_change`, `mcp_server_check`, `mcp_server_sign_in`, `mcp_server_delete` | Yes | No | No | No |
 
 ### Command kinds for each role
@@ -841,6 +842,32 @@ It refuses with the same words as **Add a rig**:
 - `The slot <namespace> allows <n> CPUs.`, `… allows <n> GiB of memory.` or `… allows <n> GB of storage.`
 - `Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).`, or for `cuda: "13"`, `Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).`
 - `A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.`
+
+### add_cluster_runner
+
+**Add a runner on a cluster.** Owner only.
+
+> Sets up a runner process for a rig on a Kubernetes cluster in Settings › Machines, as Edit rig's Runners does: a harness and a supervisor started as a runner, on one node, with one GPU or none, a volume and a token of their own. Then control gives it to the rig, whose core takes it while its run goes on: it takes runs of its pool once it answers. A slot may hold the rig's core and its runners, never another rig's. Returns {rig, runner, said}; follow it on the rig's page or with rig_settings.
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `rig` | string | | The rig |
+| `runner`, `cluster`, `slot`, `node`, `gpus`, `mode`, `device_class`, `cuda`, `storage_gi`, `storage_class`, `cpus`, `memory_gib`, `pool` | | | As the body of [`POST /v1/rigs/<rig>/runners`](rest-api.md#a-rigs-runners-on-clusters) |
+
+Returns `{rig, runner, said}`, such as `Control sets spark-02 up on lab, on spark-02, then gives it to spark-rig: it takes runs once it answers the rig's core.` Refusals are the route's.
+
+### remove_runner
+
+**Take a runner away from a rig.** Owner only.
+
+> Takes a runner process away from a rig, as Edit rig's Take it away does: the rig hears first, so its core stops the runner's run under way, which the judge queues again or its lane is told of; then control removes what it set up on the cluster, and the runner's token stops working. A runner process someone started by hand only leaves the rig. Returns {rig, runner, said}.
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `rig` | string | | The rig |
+| `runner` | string | | The runner process's name |
+
+Returns `{rig, runner, said}`; `<rig> has no runner <runner>.` when it has none.
 
 ### rig_models
 

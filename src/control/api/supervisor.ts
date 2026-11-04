@@ -2,7 +2,7 @@ import type { Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { BadInput, jsonBody, Refusal } from "../../common/errors.ts";
 import { REGISTER, RUNNER_REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
-import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
+import { RIG_ID, RIG_NAME_RULE } from "../../core/ids.ts";
 import { isSealKey, SEAL_KEY_WORDS } from "../../core/link/config.ts";
 import { isUserKey, USER_KEY_WORDS, userKeyFingerprint } from "../../core/link/users.ts";
 import {
@@ -87,7 +87,7 @@ export function supervisorRoutes(
     async (c) => {
       const rig = c.req.param("rig");
       const runner = c.req.param("runner");
-      if (!RIG_ID.test(runner)) throw new BadInput(`a runner's name is ${RIG_ID_WORDS}`);
+      if (!RIG_ID.test(runner)) throw new BadInput(`a runner's name is ${RIG_NAME_RULE}`);
       const { bus_key: key } = RUNNER_REGISTER.body.parse(await jsonBody(c.req));
       if (!isUserKey(key)) throw new BadInput(`bus_key is not ${USER_KEY_WORDS}`);
       if (store.busKeys.runnerKey(rig, runner) === key) return c.json({ ok: true });

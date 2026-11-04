@@ -31,6 +31,7 @@ import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { reachableAddressTable } from "./reachable.ts";
 import { copiesPolicyOn, eventFloorTable, retentionTables } from "./retention.ts";
+import { rigRunnerTable } from "./runners.ts";
 import { runRegistryTable } from "./runs.ts";
 import { tunnelLeafColumns } from "./tunnels.ts";
 
@@ -675,6 +676,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   dropFollowers,
   // Each runner process's key on the bus, of a rig's core and its runners (goal 206).
   runnerBusKeyTable,
+  // The runner processes control sets up for a rig, each with its own token (goal 206).
+  rigRunnerTable,
 ];
 
 /**

@@ -6,7 +6,7 @@ import { log, optionalSecretFromFile, requireEnv, secretFromFile } from "../../c
 import { errorText } from "../../common/errors.ts";
 import { Loops } from "../../common/health.ts";
 import { RUNNER_REGISTER } from "../../core/api/control/rigs.ts";
-import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
+import { RIG_ID, RIG_NAME_RULE } from "../../core/ids.ts";
 import { userKeyFingerprint } from "../../core/link/users.ts";
 import { SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import { serveHealth } from "../health.ts";
@@ -30,7 +30,7 @@ export async function startRunnerSupervisor(env: NodeJS.ProcessEnv): Promise<voi
   mkdirSync(home, { recursive: true });
   const rig = requireEnv("THERMITE_RIG_ID");
   const runner = requireEnv("THERMITE_RUNNER");
-  if (!RIG_ID.test(runner)) throw new Error(`THERMITE_RUNNER: a runner's name is ${RIG_ID_WORDS}`);
+  if (!RIG_ID.test(runner)) throw new Error(`THERMITE_RUNNER: a runner's name is ${RIG_NAME_RULE}`);
   const harnessUrl = requireEnv("HARNESS_URL").replace(/\/$/, "");
   const harnessToken = secretFromFile("THERMITE_HARNESS_TOKEN_FILE");
   serveHealth(env, rig, new Loops(), harnessToken);

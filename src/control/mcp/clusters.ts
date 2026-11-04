@@ -3,12 +3,16 @@ import { RIG_ID_SENTENCE } from "../../core/ids.ts";
 import { REACH_MAX_ENTRIES, REACH_MAX_PORTS } from "../../core/reach.ts";
 import {
   addClusterRig,
+  addClusterRunner,
   type ClusterResourcesBody,
+  ClusterRunnerBody,
   clusterResourcesFields,
   clusterResourcesRequest,
   clusterRigAction,
+  clusterRunnerRequest,
   HARNESS_LEAST,
   leastRigSize,
+  removeRunner,
   SUPERVISOR_SHARE,
   setClusterRigResources,
   setClusterSlots,
@@ -88,6 +92,44 @@ export function registerAddClusterRig(tools: ToolContext): void {
       ),
     );
   }
+}
+
+/**
+ * A rig's runner processes on clusters (goal 206), as Edit rig's Runners does them: the owner's
+ * alone, as the rig's runners setting is, since they decide where its judge measures.
+ */
+export function registerRunners(tools: ToolContext): void {
+  const { server, opts, actor, role, audited } = tools;
+  if (role !== "owner") return;
+  server.registerTool(
+    "add_cluster_runner",
+    {
+      title: "Add a runner on a cluster",
+      description:
+        "Sets up a runner process for a rig on a Kubernetes cluster in Settings › Machines, as Edit rig's Runners does: a harness and a supervisor started as a runner, on one node, with one GPU or none, a volume and a token of their own. Then control gives it to the rig, whose core takes it while its run goes on: it takes runs of its pool once it answers. A slot may hold the rig's core and its runners, never another rig's. Returns {rig, runner, said}; follow it on the rig's page or with rig_settings.",
+      inputSchema: { rig: z.string().min(1), ...ClusterRunnerBody.shape },
+    },
+    audited("add_cluster_runner", async (a: ClusterRunnerBody & { rig: string }) => {
+      const { rig, ...body } = a;
+      const r = await addClusterRunner(opts.parts, clusterRunnerRequest(rig, body), actor);
+      if ("error" in r) throw new Error(r.error);
+      return r;
+    }),
+  );
+  server.registerTool(
+    "remove_runner",
+    {
+      title: "Take a runner away from a rig",
+      description:
+        "Takes a runner process away from a rig, as Edit rig's Take it away does: the rig hears first, so its core stops the runner's run under way, which the judge queues again or its lane is told of; then control removes what it set up on the cluster, and the runner's token stops working. A runner process someone started by hand only leaves the rig. Returns {rig, runner, said}.",
+      inputSchema: { rig: z.string().min(1), runner: z.string().min(1) },
+    },
+    audited("remove_runner", async (a: { rig: string; runner: string }) => {
+      const r = await removeRunner(opts.parts, a.rig, a.runner, actor);
+      if ("error" in r) throw new Error(r.error);
+      return { rig: a.rig, runner: a.runner, said: r.ok };
+    }),
+  );
 }
 
 /**

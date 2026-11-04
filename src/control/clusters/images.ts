@@ -17,6 +17,7 @@ import {
   undrain,
   workWords,
 } from "./rigs.ts";
+import { updateRunnerImages } from "./runners.ts";
 
 /**
  * Moves a rig control set up on a cluster onto control's current images (its page, or MCP's
@@ -151,6 +152,8 @@ export async function updateRigImages(
     return { error: kubeError(out) };
   }
   store.clusters.setRigImages(rig, images, programMode, controlAddress(parts));
+  // Its runner processes on clusters move with it (goal 206).
+  await updateRunnerImages(parts, rig);
   const changed =
     [
       old.harness !== images.harness ? `harness ${old.harness} → ${images.harness}` : "",

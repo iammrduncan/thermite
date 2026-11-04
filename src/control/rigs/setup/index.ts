@@ -76,6 +76,13 @@ export const STEP_WORDS: Record<string, string> = {
   bus_key_refused: "Its new key on the message bus refused: another rig or control holds it",
   seal_key_refused: "Its new seal key refused: another rig holds it",
   bus_keys_seen: "You saw the change of its keys on the message bus",
+  // Its runner processes (goal 206).
+  runner_bus_key: "A runner's key on the message bus registered",
+  runner_added: "A runner added: control sets it up",
+  runner_applied: "A runner's objects applied in the cluster",
+  runner_given: "A runner given to the rig: its core takes runs there once it answers",
+  runner_removed: "A runner taken away",
+  runner_images: "A runner's deployments applied with new images",
   bus_registered: "It registered its keys on the message bus with control",
   bus_off:
     "It calls control over HTTP with no keys on the message bus: it is broken until it is set up again",

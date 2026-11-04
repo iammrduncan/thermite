@@ -16,6 +16,7 @@ import {
   asksNothing,
   type ClusterFacts,
   type ClusterResourcesRequest,
+  dropRunner,
   leastRigSize,
   MODE_WORDS,
   prepareResize,
@@ -70,6 +71,7 @@ import { listText } from "../../ui/words/index.ts";
 import { programModeOf } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
 import { modelPrefix } from "../settings/shared.ts";
+import { runnerFormTag, runnerOnClusterFields } from "./runners.ts";
 
 /** Edit rig: its page and its form. */
 export function editRigRoutes(app: Hono, dash: Dashboard): void {
@@ -325,9 +327,10 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
         u.gpu_split && u.gpu_split.set >= 2
           ? `<label class="fd" style="max-width:260px;margin-top:10px" data-judge-field>${infoLabel("GPUs for the judge", `How many of the rig's ${u.gpu_split.set} GPUs the judge measures on; the rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. A campaign started on this rig can set it too.${sized ? " With a new number of GPUs above, it is the judge's share of the new ones." : ""}`)}<input name="judge_gpus" type="number" min="1" max="${Math.min(8, u.gpu_split.set - 1)}" value="${u.gpu_split.judge}" data-restarts></label><div class="muted small" data-judge-now>Now: ${u.gpu_split.judge} for the judge, ${u.gpu_split.set - u.gpu_split.judge} for the agents. ${SPLIT_RESTARTS}</div>`
           : ""
-      }${s ? runnersFields(u, s) : ""}</div></div>
+      }${s ? `${runnersFields(u, s)}${runnerOnClusterFields(store, u.id, s.lanes)}` : ""}</div></div>
 <div class="card hl" style="margin-top:16px"><b>What changes when you save</b><ul class="chg" id="chg"><li>Nothing changes.</li></ul><div class="act"><button class="primary big" id="save">Save changes</button><a class="btn" href="/ui/rigs/${rName}">Cancel</a></div></div>
 </form>
+${s ? runnerFormTag(u.id, t) : ""}
 <script src="/ui/assets/edit-rig.js" defer></script>`,
       vs,
     );
@@ -580,6 +583,12 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
         issuedBy: "owner:ui",
       }).id;
       said.push(settingsCount(Object.keys(settings).length));
+      // A runner process control set up and the owner took away: once the rig has heard, what
+      // control set up for it goes (goal 206).
+      const kept = new Set((settings.runners ?? s?.runners ?? []).map((r) => r.name));
+      if (settings.runners)
+        for (const r of s?.runners ?? [])
+          if (!kept.has(r.name)) await dropRunner(parts, rig, r.name, "owner:ui");
     }
     // Last, its GPUs, CPUs and memory: its pods restart (or it drains first).
     let resized = "";

@@ -22,7 +22,23 @@ Each runner is in one pool. A runner takes one run at a time, so a measurement n
 
 A lane runs on its own runner first, then on a shared one; a lane that no runner serves runs on the core's machine. What a lane runs never counts: only the judge's measurement does.
 
-## 1. Start a runner process
+## On a cluster control knows
+
+On the rig's page, press **Edit rig**. Under **4 · Where it runs**, **Add a runner on a cluster** has:
+
+| Field | What it takes |
+| --- | --- |
+| **Runner name** | Its name in the rig, such as the node's |
+| **Where** | A cluster under **Settings › Machines**, the slot it goes in (a free one, or one that holds this rig or its runners) and its node |
+| **GPU** | One GPU of the node, or none: its CPUs |
+| **GPUs through** | NVIDIA's device plugin, or one of the cluster's DRA device classes |
+| **Its pool** | The judge's, shared, or a lane's |
+
+Press **Add the runner**. Control sets its harness and supervisor up on the node, started as a runner, with a volume and a token of their own, then gives it to the rig: the rig's **History** says each step, and the runner takes runs once it answers the rig's core. A script or an agent does the same with [`POST /v1/rigs/<rig>/runners`](../../reference/rest-api.md#a-rigs-runners-on-clusters), or MCP's `add_cluster_runner`, with the owner's token.
+
+When the rig moves onto control's newer images, its runners move with it; when the rig is removed, so are they.
+
+## 1. Start a runner process yourself
 
 A runner process is the harness image and the supervisor image, started as a runner. Each GPU it gives the harness is one runner, in order. Start them as for a rig you set up yourself, with these settings ([Settings](../../reference/settings.md)):
 
@@ -37,7 +53,7 @@ A runner process is the harness image and the supervisor image, started as a run
 
 The runner's supervisor registers its key with control, then answers the core's asks on its own subject of the bus. Its harness listens only to its supervisor.
 
-## 2. Add it to the rig
+## 2. Add the one you started to the rig
 
 1. On the rig's page, press **Edit rig**.
 2. Under **4 · Where it runs**, in **Runners**, write the runner process's name in **Add a runner you started yourself**, and in **Its runners' pools** one pool for each runner it serves, in order, separated by commas, such as `judge, shared`.
@@ -52,12 +68,13 @@ A runner that answers but can't take the rig's runs says why on the rig's page: 
 On **Edit rig**, under **4 · Where it runs**, each runner process has a pool for each of its runners, and **Take it away**. Save the change: the rig's core takes it at once, and nothing pauses.
 
 - A runner taken away, or given another pool, stops its run under way: the judge queues its job again, with no verdict, and a lane is told to run its command again.
+- A runner control set up: what it set up on the cluster goes too, and its token stops working. MCP's `remove_runner` and `DELETE /v1/rigs/<rig>/runners/<runner>` do the same.
 - A runner that stops answering, two checks in a row, is away: the same happens to its run under way, and it takes runs again once it answers.
 - A run waits while no runner of its pool is free.
 
 ## A core on a machine without a GPU
 
-With `THERMITE_LOCAL_JUDGE=0` on the core's harness, and runners when it starts, the judge measures only on the runners. The rig then measures on its runners' kind of target, which a campaign's kit must measure on; its runners must all be of one kind. Without it, the judge measures on the core's machine too, and its runners must be of the core's kind.
+With `THERMITE_LOCAL_JUDGE=0` on the core's harness, the judge measures only on the runners, and its jobs wait until one of the judge's or the shared pool answers. The rig then measures on its runners' kind of target, which a campaign's kit must measure on; its runners must all be of one kind. Without it, the judge measures on the core's machine too, and its runners must be of the core's kind.
 
 ## See them work
 

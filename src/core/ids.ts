@@ -11,9 +11,12 @@ import { z } from "zod";
  */
 export const RIG_ID = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
 
+/** What the name of a rig, or of its runner process, takes, in words. */
+export const RIG_NAME_RULE =
+  "2 to 40 characters of a-z, 0-9 and -, starting and ending with a letter or digit";
+
 /** What a rig's name takes, in words. */
-export const RIG_ID_WORDS =
-  "a rig's name is 2 to 40 characters of a-z, 0-9 and -, starting and ending with a letter or digit";
+export const RIG_ID_WORDS = `a rig's name is ${RIG_NAME_RULE}`;
 
 /** The same, as a sentence on a page. */
 export const RIG_ID_SENTENCE = `A${RIG_ID_WORDS.slice(1)}.`;

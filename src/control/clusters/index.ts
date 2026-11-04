@@ -49,3 +49,11 @@ export {
   setClusterSlots,
   workWords,
 } from "./rigs.ts";
+export {
+  addClusterRunner,
+  ClusterRunnerBody,
+  clusterRunnerRequest,
+  dropRunner,
+  dropRunners,
+  removeRunner,
+} from "./runners.ts";

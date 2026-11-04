@@ -346,6 +346,45 @@ curl -sS -X POST -H "Authorization: Bearer $(cat ~/thermite-owner-token)" \
 
 Each refusal is in the [audit log](#audit-log-actions) as `refused`, with the route's path and why; the change is `cluster_rig_resources`, by `owner:api`. Follow the rig with MCP's [`rig_setup`](mcp-tools.md#rig_setup) or on its page.
 
+### A rig's runners on clusters
+
+A runner process that control sets up for a rig on a Kubernetes cluster, as **Edit rig**'s **Add a runner on a cluster** does ([Give a rig runners on other machines](../how-to/install/runners.md)): its harness and supervisor, started as a runner on one node, with one GPU or none, a volume and a token of their own. The token registers the runner's key on the message bus and does nothing else. Control sets it up in the background, then sends the rig its `runners` with it ([A rig's settings](#a-rigs-settings)); the rig's **History** says how each step went.
+
+| Route | Token | What it does | Request | Answer |
+| --- | --- | --- | --- | --- |
+| `POST /v1/rigs/<rig>/runners` | Owner | Sets a runner process up on a cluster and gives it to the rig | `{runner, cluster, slot?, node?, gpus, mode?, device_class?, cuda?, storage_gi?, storage_class?, cpus?, memory_gib?, pool}`, below | `202 {rig, runner, said}`, or `400 {"error":"<why>"}` |
+| `DELETE /v1/rigs/<rig>/runners/<runner>` | Owner | Takes a runner process away: the rig hears first, so its core stops the runner's run under way, which the judge queues again or its lane is told of; then control deletes what it set up, and the runner's token stops working. One someone started by hand only leaves the rig | none | `{rig, runner, said}`, or `400 {"error":"<why>"}` |
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `runner` | string | Its name in the rig: 2 to 40 lowercase letters, digits and dashes |
+| `cluster` | string | A cluster in **Settings › Machines** |
+| `slot` | string, optional | On a cluster of pre-made slots: a free slot, or one that holds this rig or its runners. A cluster where control makes namespaces gives the runner one of its own, by the cluster's pattern with `<rig>-<runner>` for `{rig}` |
+| `node` | string, optional | The node it runs on; none: any node with room |
+| `gpus` | `1` or `0` | One GPU, or none: the node's CPUs |
+| `mode` | string, optional | `device-plugin` (the default), `dra` with `device_class`, or `dra:<class>` |
+| `cuda` | `"12"` or `"13"`, optional | The CUDA harness its GPU takes; left out, the node's where control can tell (`"13"` on arm64), else `"12"` |
+| `storage_gi`, `storage_class` | number and string, optional | Its volume, for its builds and model files: 100 GB in the cluster's default class unless given |
+| `cpus`, `memory_gib` | numbers, optional, together | Its CPUs and memory; its supervisor takes half a CPU and 2 GiB of them. None: the namespace's defaults |
+| `pool` | string | Its runner's pool: `judge`, `shared` or `lane-1` to `lane-16` |
+
+Its objects are named for `<rig>-<runner>` (cut, with a hash, past 46 characters), in their own instance label, so a stop, start or update of the rig's own pods leaves them alone. An update of the rig's images moves its runners onto control's images too, and removing the rig removes them.
+
+| Error | When |
+| --- | --- |
+| `There is no rig <rig>.` | No rig by that name reports |
+| `<rig>'s harness is older: it does not report its settings and cannot take runners. They work after its next roll.` | Its harness reports no settings |
+| `A runner's name is 2 to 40 characters of a-z, 0-9 and -, starting and ending with a letter or digit.` | A name out of form |
+| `<rig> has a runner named <runner> already.` | The rig has one by that name |
+| `A runner's pool is judge, shared or lane-1 to lane-16.` | Another pool |
+| `A runner on a cluster takes one GPU, or none.` | `gpus` other than 0 or 1 |
+| `<cluster> has no node <node> that control can see.`, `<node> offers no GPU through the device plugin.` | A node it can't use |
+| `The slot <slot> holds the rig <other>.` | Another rig's slot |
+| `Refused: in the slot <slot>, <why>. …` | The slot's network rules don't keep a runner's harness off the cluster |
+| `<rig> has no runner <runner>.` | Taking away one the rig doesn't have |
+
+The audit log has `runner_added` and `runner_removed`, with the rig and the runner. MCP's [`add_cluster_runner`](mcp-tools.md#add_cluster_runner) and [`remove_runner`](mcp-tools.md#remove_runner) do the same with the owner's token.
+
 ### Addresses cluster rigs may reach
 
 **Settings › Addresses rigs may reach**: the addresses, each with its TCP ports, that the harnesses of rigs on Kubernetes clusters reach beside DNS and the internet ([Reach a model server on a private or Tailscale address](../how-to/install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)). Only the owner's token may use these routes; over MCP the operator reads the list with [`reachable_addresses`](mcp-tools.md#reachable_addresses), and the owner sets it with [`set_reachable_addresses`](mcp-tools.md#set_reachable_addresses).
@@ -1254,7 +1293,7 @@ Control writes one entry for each of these to its audit log. `GET /v1/audit`, th
 | Logs | `control_log_level_set` (control's own [log level](#controls-log-level) set: `{level, was}`, `level` `null` for `THERMITE_LOG_LEVEL`'s) |
 | Commands | `command_issued`, `log_level_sent` (a [`log_level`](signed-commands.md#log_level) command signed for a rig: `{command, rig, part, level}`), `command_renewed` (a command whose content still stages, signed again with a later expiry: `{id, rig, expires_at, why}`), `command_expired`, `command_cancelled` |
 | Needs you | `trial_left` (the owner pressed **Leave it running** on a stuck trial's card: `rig`, `run`, `trial`, `kind`, which is `quiet`, `repeating` or `refused`, and `since`), `weekly_limit_wait` (by `owner:ui`: **Wait for the reset** on a rig's weekly limit card, `{rig, until}`), `weekly_limit_model` (by `owner:ui`: **Give `<rig>` this model** on that card, `{rig, provider, model, until, runs}`, with `rig_model_given` and an `end_wait` for each run that waited) |
-| Rigs and keys | `rig_enrolled`, `rig_token_rotated`, `rig_retired`, `rig_brought_back`, `rig_key_pinned`, `rig_key_changed`, `rig_key_accepted`, `rig_bus_key_registered` and `rig_bus_key_changed` (by `rig:<rig>`: the rig's first key on the message bus, or a new one, by its `fingerprint`, and the `previous` one's), `rig_seal_key_registered` and `rig_seal_key_changed` (the same, for the rig's seal key), `rig_bus_keys_seen` (by `owner:ui`: the owner pressed **Seen** on the card of a change of a rig's keys on the bus, `{rig}`), `report_rejected`, `report_refused`, `rig_refused` and `rig_refusal_ended` (by `rig:<rig>`: control started or stopped refusing the rig for its protocol, with the reason and the builds; see [Rig versions](#rig-versions)), `git_access_handed` (by `rig:<rig>`: the Git accesses control wrote to the rig's config on the message bus, by name, each time they change), `run_refused` (by `control`: a run a rig reported creating whose name control assigned another rig; control's run registry keeps nothing of it: `{rig, run, why}`) |
+| Rigs and keys | `rig_enrolled`, `rig_token_rotated`, `rig_retired`, `runner_added` and `runner_removed` (a runner process control set up for a rig, or took away: `{rig, runner}`), `rig_brought_back`, `rig_key_pinned`, `rig_key_changed`, `rig_key_accepted`, `rig_bus_key_registered` and `rig_bus_key_changed` (by `rig:<rig>`: the rig's first key on the message bus, or a new one, by its `fingerprint`, and the `previous` one's), `rig_seal_key_registered` and `rig_seal_key_changed` (the same, for the rig's seal key), `rig_bus_keys_seen` (by `owner:ui`: the owner pressed **Seen** on the card of a change of a rig's keys on the bus, `{rig}`), `report_rejected`, `report_refused`, `rig_refused` and `rig_refusal_ended` (by `rig:<rig>`: control started or stopped refusing the rig for its protocol, with the reason and the builds; see [Rig versions](#rig-versions)), `git_access_handed` (by `rig:<rig>`: the Git accesses control wrote to the rig's config on the message bus, by name, each time they change), `run_refused` (by `control`: a run a rig reported creating whose name control assigned another rig; control's run registry keeps nothing of it: `{rig, run, why}`) |
 | Joins | `joined_rig_added`, `join_command_made`, `join_command_revoked`, `join_command_used`, `join_throttled` (a client's join requests failed 20 times in a minute) |
 | Restart and reset | `restart`, `reset_requested`, `reset_step` |
 | Upgrades | `event_moved_as_legacy` (by `control`: at the first start on a store from before, an event of its events table that the message bus can't carry as it was, moved under the kind `legacy`: `{seq, rig, ledger, event, kind, why, with_body}`; see [A store from before](../explanation/how-the-parts-talk.md#a-store-from-before-its-events-table-moved-once)) |

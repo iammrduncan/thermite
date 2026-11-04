@@ -4,6 +4,7 @@ import { STEP_WORDS } from "../rigs/index.ts";
 import type { ClusterRig } from "../store/index.ts";
 import { kubeError } from "./kubectl.ts";
 import { awaitNewPods, clusterTarget } from "./rigs.ts";
+import { dropRunners } from "./runners.ts";
 
 /** What a cluster rig's page can do to it. */
 export type ClusterRigAction = "stop" | "start" | "restart" | "remove";
@@ -81,7 +82,11 @@ export async function actOnClusterRig(
     store.clusters.setRigStatus(r.rig, "starting");
     void inBackground(store, "cluster", r.rig, "pods_running", awaitNewPods(parts, r, k, "start"));
   } else store.clusters.setRigStatus(r.rig, action === "stop" ? "stopped" : "removed");
-  if (action === "remove") store.enrollments.retire(r.rig, by);
+  if (action === "remove") {
+    store.enrollments.retire(r.rig, by);
+    // Its runner processes on clusters go with it (goal 206).
+    await dropRunners(parts, r.rig, by);
+  }
   store.auditLog.add(by, `cluster_rig_${action}`, { rig: r.rig, cluster: r.cluster, ...said });
   return { ok: `${STEP_WORDS[step]}.` };
 }

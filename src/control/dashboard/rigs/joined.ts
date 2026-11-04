@@ -6,6 +6,7 @@ import {
   actOnClusterRig,
   type ClusterRigAction,
   cancelDrain,
+  dropRunners,
   setClusterRigResources,
   updateRigImages,
 } from "../../clusters/index.ts";
@@ -250,7 +251,11 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       r.rig,
       action === "stop" ? "stopped" : action === "remove" ? "removed" : "running",
     );
-    if (action === "remove") store.enrollments.retire(r.rig, "owner:ui");
+    if (action === "remove") {
+      store.enrollments.retire(r.rig, "owner:ui");
+      // Its runner processes on clusters go with it (goal 206).
+      await dropRunners(parts, r.rig, "owner:ui");
+    }
     store.auditLog.add("owner:ui", `machine_rig_${action}`, {
       rig: r.rig,
       machine: r.machine,

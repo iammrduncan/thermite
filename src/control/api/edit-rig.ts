@@ -3,8 +3,12 @@ import { bodyLimit } from "hono/body-limit";
 import { redact } from "../../common/env.ts";
 import { bodyRefusal } from "../campaigns/index.ts";
 import {
+  addClusterRunner,
   ClusterResourcesBody,
+  ClusterRunnerBody,
   clusterResourcesRequest,
+  clusterRunnerRequest,
+  removeRunner,
   setClusterRigResources,
 } from "../clusters/index.ts";
 import {
@@ -109,6 +113,42 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
       return c.json({ rig, said: out.ok });
     },
   );
+
+  // A runner process on a cluster for the rig (goal 206): the twin of Edit rig's Add a runner on
+  // a cluster and of MCP's add_cluster_runner. Control sets it up in the background, then gives
+  // it to the rig; its history says how it went.
+  app.post("/v1/rigs/:rig/runners", admin, bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
+    const rig = c.req.param("rig");
+    const raw: unknown = await c.req.json().catch(() => undefined);
+    const body = ClusterRunnerBody.safeParse(raw);
+    const out = body.success
+      ? await addClusterRunner(parts, clusterRunnerRequest(rig, body.data), "owner:api")
+      : { error: bodyRefusal(body.error) };
+    if ("error" in out) {
+      store.auditLog.refusal("owner:api", "refused", {
+        path: `/v1/rigs/${rig}/runners`,
+        why: redact(out.error),
+      });
+      return c.json({ error: out.error }, 400);
+    }
+    return c.json(out, 202);
+  });
+
+  // A runner process taken away from the rig (goal 206): the rig hears first, then control
+  // removes what it set up. The twin of Edit rig's Take it away and of MCP's remove_runner.
+  app.delete("/v1/rigs/:rig/runners/:runner", admin, async (c) => {
+    const rig = c.req.param("rig");
+    const runner = c.req.param("runner");
+    const out = await removeRunner(parts, rig, runner, "owner:api");
+    if ("error" in out) {
+      store.auditLog.refusal("owner:api", "refused", {
+        path: `/v1/rigs/${rig}/runners/${runner}`,
+        why: redact(out.error),
+      });
+      return c.json({ error: out.error }, 400);
+    }
+    return c.json({ rig, runner, said: out.ok });
+  });
 
   // The settings a rig reports, and its GPU split: the twin of MCP's rig_settings.
   app.get("/v1/rigs/:rig/settings", admin, (c) => {

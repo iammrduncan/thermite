@@ -85,8 +85,9 @@ async function main(): Promise<void> {
   };
   const hardware = await rigHardware(ctx, service, targets);
   // The core judges on its runners of other machines too (goal 206), and on its own unless the
-  // rig had runners at its start and says it doesn't (THERMITE_LOCAL_JUDGE=0).
-  const judging = settings.get().runners.length && env.THERMITE_LOCAL_JUDGE === "0" ? [] : hardware;
+  // rig says it doesn't (THERMITE_LOCAL_JUDGE=0): a core on a machine without a GPU, whose runners
+  // may join later.
+  const judging = env.THERMITE_LOCAL_JUDGE === "0" ? [] : hardware;
   const executorIds = reclaimJobs(ledger, judging);
   const parts = agentParts(ctx, ledger, service, targets);
 
