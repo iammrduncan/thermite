@@ -178,6 +178,10 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [194](goals/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `IN_PROGRESS`
 - [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `IN_PROGRESS`
 
+**The owner's asks of 2026-11-04.**
+
+- [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `PROPOSED`
+
 **Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
 
 - [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `IN_PROGRESS`

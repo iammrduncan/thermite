@@ -1,0 +1,46 @@
+---
+id: "203"
+title: "Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-04
+updated: 2026-11-04
+---
+
+# 203 · Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+The owner, 2026-11-04, on adding the lab's DGX Spark from **Add a rig**: its card **+ A new machine or cluster** sends the owner to **Settings › Providers**, where machines, clusters and GPU clouds are types in the **Add a provider** list, beside model providers and Git access. "machines and rigs are not providers... why is it hidden in the add provider dropdown, should be a separate machine page that shows clusters, bare metal machines, runpods, etc..." and "a provider is a login and external provider... not a machine. There should be a machine page in settings."
+
+1. **Settings › Machines:** one page for where rigs run: machines over SSH, Kubernetes clusters (with their slots) and GPU clouds (RunPod), each with what control found when it checked it, its rigs, and its actions (check again, slots, remove).
+2. **Add a machine there:** one **Add a machine** with the three kinds, each its own form, not types in the providers' list.
+3. **Providers keeps logins:** model providers, subscriptions and Git access.
+4. **Add a rig** links to Machines, with the form to add one, and back again.
+5. Every link to these rows (the rig's page, Add a rig, Launch on RunPod, the docs) goes to Machines.
+6. **Rigs' models goes.** The owner, the same night, on Settings › Rigs' models: "this page seems useless... it isn't needed cause you can edit models of a rig on its edit rig page". Each rig's agents' models are set on its **Edit rig**, and its model check shows on its page and in the rigs list; Settings keeps no copy of them.
+
+## Why
+
+A provider is a login to an outside service. A machine is a place where rigs run. Looking for a machine among providers is not obvious, and DGX Spark owners, who come to try Thermite on their own machine, start there.
+
+## Done when
+
+- [ ] A mockup the owner agrees to, before the pages change.
+- [ ] Items 1 to 5, with tests.
+- [ ] Pages: every page that says Settings › Providers for a machine, a cluster or RunPod, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-04: Goal written from the owner's words while adding the lab's DGX Spark. Mockup made: Settings › Machines, with clusters (and their slots), computers over SSH and GPU clouds, Add a machine with its three kinds, and Settings without Rigs' models.
+
+---
+
+Run with `/goal Complete docs/plan/goals/203-machines-page.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
