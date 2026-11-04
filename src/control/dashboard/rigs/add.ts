@@ -33,6 +33,7 @@ import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { esc } from "../../ui/components/index.ts";
 import { ADD_RIG_JS, CUDA_UNSURE } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
+import { followerChoices } from "./followers.ts";
 import { rigHelpers } from "./shared.ts";
 
 /**
@@ -246,7 +247,7 @@ ${
         .join("")}</select></label>`
     : `<div class="fd">${infoLabel("Namespace", "Control creates it for this rig, with its own network rules.")}<span class="mono small">${esc(k.namespace_pattern)}</span></div>`
 }
-</div></div>`;
+</div>${followerChoices(k.name, f)}</div>`;
       })
       .join("");
     // Rigs you run yourself: one command where the rig goes, for places control can't reach.
@@ -376,6 +377,24 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
       return String(Array.isArray(v) ? v[0] : (v ?? "")).trim();
     };
     const num = (key: string) => (one(key) ? Number(one(key)) : undefined);
+    // A rig over several nodes (goal 205): each node chosen under More machines follows it.
+    const follow = [f[`k_follow__${name}`] ?? []].flat().map(String);
+    const followers = follow.map((node) => {
+      const own = (key: string) => {
+        const v = f[`${key}__${name}__${node}`];
+        return String(Array.isArray(v) ? v[0] : (v ?? "")).trim();
+      };
+      const fmode = own("k_fmode");
+      return {
+        machine: node,
+        node,
+        gpus: Number(own("k_fgpus") || "1"),
+        deviceClass: fmode.startsWith("dra:") ? fmode.slice(4) : undefined,
+        storageGi: Number(own("k_fsize") || "100"),
+        cpus: own("k_fcpus") ? Number(own("k_fcpus")) : undefined,
+        memoryGi: own("k_fmem") ? Number(own("k_fmem")) : undefined,
+      };
+    });
     const r = await addClusterRig(
       parts,
       {
@@ -393,6 +412,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
         storageGi: Number(one("k_size") || "100"),
         cpus: num("k_cpus"),
         memoryGi: num("k_mem"),
+        ...(followers.length ? { followers, judgeHere: one("k_lead") !== "workers" } : {}),
       },
       "owner:ui",
     );

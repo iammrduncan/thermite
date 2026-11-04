@@ -135,6 +135,7 @@ To change the slots later, edit **Slots** on the cluster's row and press **Save 
    - **Storage class** and **Volume size (GB)**: the rig's one volume, 100 GB by default. It holds the rig's state, builds, inbox and outbox.
    - **CPUs** and **Memory (GiB)**: both or neither. At least 1.5 CPUs and 8 GiB: a new rig's agent programs run in their own terminals, so the supervisor takes half a CPU and 4 GiB of that for the advisors' terminals, and the harness the rest ([The supervisor's share](#the-supervisors-share)). Empty: the namespace's defaults apply.
    - **Slot** (slots): one of the free slots. For created namespaces, **Namespace** shows the pattern control names it by, such as `thermite-{rig}`.
+   - **More machines**, on a cluster with two or more ready nodes: the rig can run on more of its nodes. The **Node** above then leads: it keeps the run, and its lanes work there. Tick each node that follows it; the judge measures on its GPUs. For each: **GPUs for the judge** (every GPU of a follower is the judge's), **DRA device class** when its GPU is in another class than the rig's (such as a class for any GB10), and its own **CPUs**, **Memory (GiB)** and **Volume size (GB)**: its supervisor takes half a CPU and 2 GiB, its harness the rest. **The leader's own GPUs** are **the judge's and the workers'**, as on a rig of one node, or **the workers' only: the judge measures on the followers'**, so the lanes' own runs never wait for the judge. Control refuses a follower on the leader's node, on a node of another architecture (a rig's machines run one image), or, in a slot, one whose rules don't keep a follower's harness off the cluster. See [A rig over several machines](#a-rig-over-several-machines).
 4. Under **3 · Name and start**, give a **Rig name**: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It can't change later.
 5. Press **Create the rig**.
 
@@ -199,6 +200,12 @@ The rig's page keeps the **Set up by control** block: the cluster, the namespace
 Control makes one change at a time. While the status says `starting` or `updating`, it refuses a start, a restart or an update, and the page shows a card that starts with **Not done.**, such as `rig-1 is starting: wait until its page shows it running, or failed.` It refuses an update before it compares any images, even for a rig that already runs control's images. **Stop its pods** and **Remove the rig** are never refused for this, and they end control's wait: a rig you stopped or removed meanwhile doesn't turn `failed` later.
 
 Next, [check the rig](../operate/check-a-rig.md), then [give it a model](../models/connect-a-provider.md).
+
+## A rig over several machines
+
+A rig with followers has, beside its own two pods, a volume, a harness and a supervisor on each follower's node, in the rig's namespace. They carry the rig's `app.kubernetes.io/instance` label, so stopping, starting, updating and removing the rig takes them too, and a `thermite.dev/machine` label with their node's name. The follower's harness starts as a follower (`THERMITE_ROLE=follower`): it runs no run of its own, and builds and measures on its GPUs when the leader's judge asks. Its supervisor registers its own key on the message bus with control and carries the leader's asks to its harness, and the run's model files from their sources: each follower fetches them once. The leader's harness gets `THERMITE_FOLLOWERS`, and `THERMITE_LOCAL_JUDGE=0` when its GPUs are the workers' only ([Settings](../../reference/settings.md)).
+
+The rig's page shows **Machines**: the leader, and each follower with its GPUs, its volume, and whether its supervisor is on the bus yet.
 
 ## Reach a model server on a private or Tailscale address
 

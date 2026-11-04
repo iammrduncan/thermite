@@ -176,3 +176,38 @@ describe("a rig over several nodes of a cluster (goal 205)", () => {
     );
   });
 });
+
+describe("Add a rig's More machines, and the rig's page (goal 205)", () => {
+  test("a cluster's other nodes are offered; the form sets a follower up, and the rig's page shows both machines", async () => {
+    const { f, s } = await withCluster();
+    const add = await s.page("/ui/rigs/add");
+    assert.match(add, /More machines/);
+    assert.match(add, /name="k_follow__k8s-a" value="gpu-node-2"/);
+    assert.match(add, /name="k_lead__k8s-a"/);
+    const to = await s.post("/ui/rigs/add", {
+      place: "cluster:k8s-a",
+      rig: "pair-2",
+      "k_gpus__k8s-a": "1",
+      "k_mode__k8s-a": "device-plugin",
+      "k_cuda__k8s-a": "12",
+      "k_node__k8s-a": "gpu-node-1",
+      "k_size__k8s-a": "100",
+      "k_lead__k8s-a": "workers",
+      "k_follow__k8s-a": "gpu-node-2",
+      "k_fgpus__k8s-a__gpu-node-2": "1",
+      "k_fsize__k8s-a__gpu-node-2": "250",
+    });
+    assert.match(to, /^\/ui\/rigs\/pair-2$/);
+    assert.deepEqual(s.store.clusters.rig("pair-2")?.spec.followers, [
+      { machine: "gpu-node-2", node: "gpu-node-2", gpus: 1, storageGi: 250 },
+    ]);
+    assert.equal(s.store.clusters.rig("pair-2")?.spec.judgeHere, false);
+    await settle(f, 1);
+    const page = await s.page("/ui/rigs/pair-2");
+    assert.match(page, /<h2>Machines<\/h2><span class="n">2<\/span>/);
+    assert.match(page, /<b>gpu-node-1<\/b> <span class="chip info">leader<\/span>/);
+    assert.match(page, /1 GPU, the workers'/);
+    assert.match(page, /<b>gpu-node-2<\/b> <span class="chip">follower<\/span>/);
+    assert.match(page, /its supervisor has not registered on the bus yet/);
+  });
+});

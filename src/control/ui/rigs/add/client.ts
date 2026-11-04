@@ -65,6 +65,14 @@ export const ADD_RIG_JS = `
         const field = form.querySelector('[data-cuda-for="' + k + '"]');
         if (field) field.hidden = gpus === 0;
       }
+      // More machines (goal 205): each node ticked shows its choices, and follows the rig.
+      let followers = 0;
+      for (const el of form.querySelectorAll("[data-follow-for]")) {
+        const [kk, node] = el.dataset.followFor.split(":");
+        const box = [...form.querySelectorAll('input[name="k_follow__' + kk + '"]')].find((b) => b.value === node);
+        el.hidden = !(box && box.checked);
+        if (kk === k && box && box.checked) followers++;
+      }
       const j = share(gpus, get("k_judge"));
       note.textContent = refused(j) ? j :
         gpus === 0 ? "No GPU: the rig measures on the CPUs of its node." :
@@ -73,6 +81,7 @@ export const ADD_RIG_JS = `
       const slot = get("k_slot");
       sum.textContent = "Control will enroll " + name + " and create it on " + k + (slot ? ", in the slot " + slot : ", in a namespace of its own") +
         ": a secret with its tokens, a " + (get("k_size") || "100") + " GB volume, and the harness and supervisor pods" + (gpus ? " with " + gpus + " GPU" + (gpus > 1 ? "s" : "") : "") +
+        (followers ? ", and on " + followers + " more node" + (followers > 1 ? "s" : "") + " a volume, harness and supervisor of each, which follow it and on whose GPUs the judge measures" : "") +
         ". Then it waits for the rig's first report. You need to do nothing in the cluster.";
       return;
     }
