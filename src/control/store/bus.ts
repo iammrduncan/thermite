@@ -33,6 +33,20 @@ export function busSealKeyColumn(db: DatabaseSync): void {
     db.exec("alter table rig_bus_key add column seal_key text");
 }
 
+/**
+ * The key each runner process of a rig registered (goal 206), made by the store's migration to
+ * schema version 32: its public part, by rig and runner.
+ */
+export function runnerBusKeyTable(db: DatabaseSync): void {
+  db.exec(`create table if not exists runner_bus_key (
+  rig text not null,
+  runner text not null,
+  public_key text not null,
+  registered_at text not null,
+  primary key (rig, runner)
+)`);
+}
+
 export class BusKeys extends StorePart {
   /** The key a rig registered, or undefined when it has none. */
   rigKey(rig: string): string | undefined {
@@ -75,8 +89,39 @@ export class BusKeys extends StorePart {
       .prepare("select rig from rig_bus_key where (public_key = ? or seal_key = ?) and rig != ?")
       .get(key, key, rig) as { rig: string } | undefined;
     if (r) return `rig ${r.rig}`;
+    const m = this.db
+      .prepare("select rig, runner from runner_bus_key where public_key = ?")
+      .get(key) as { rig: string; runner: string } | undefined;
+    if (m) return `runner ${m.runner} of rig ${m.rig}`;
     const own = this.db.prepare("select 1 from bus_identity where public_key = ?").get(key);
     return own ? "control" : undefined;
+  }
+
+  /** The key a runner process of a rig registered (goal 206), or undefined when it has none. */
+  runnerKey(rig: string, runner: string): string | undefined {
+    const r = this.db
+      .prepare("select public_key from runner_bus_key where rig = ? and runner = ?")
+      .get(rig, runner) as { public_key: string } | undefined;
+    return r?.public_key;
+  }
+
+  /** Records the key a runner process registered, in place of the one before. */
+  setRunnerKey(rig: string, runner: string, key: string): void {
+    this.db
+      .prepare(
+        `insert into runner_bus_key (rig, runner, public_key, registered_at) values (?, ?, ?, ?)
+         on conflict (rig, runner) do update set public_key = excluded.public_key,
+           registered_at = excluded.registered_at`,
+      )
+      .run(rig, runner, key, new Date().toISOString());
+  }
+
+  /** Every runner process's registered key, by rig and runner. */
+  runnerKeys(): { rig: string; runner: string; key: string }[] {
+    const rows = this.db
+      .prepare("select rig, runner, public_key from runner_bus_key order by rig, runner")
+      .all() as { rig: string; runner: string; public_key: string }[];
+    return rows.map((r) => ({ rig: r.rig, runner: r.runner, key: r.public_key }));
   }
 
   /** Every rig's registered key, by rig, with its seal key when it registered one. */

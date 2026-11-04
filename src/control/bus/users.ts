@@ -274,9 +274,12 @@ export class BusUsers {
       key: r.key,
       runs: runs.get(r.rig) ?? [],
     }));
+    // The runner processes of the rigs that have their users (goal 206).
+    const known = new Set(rigs.map((r) => r.rig));
+    const runners = store.busKeys.runnerKeys().filter((r) => known.has(r.rig));
     const own = { control: this.control.publicKey, system: this.system.publicKey };
     const leaf = leafRigsFor(store, leafRigsOf(store), (rig) => this.leafTaken.has(rig));
-    return usersFile({ ...own, backup: this.backup, rigs, leaf });
+    return usersFile({ ...own, backup: this.backup, rigs, runners, leaf });
   }
 
   /**

@@ -16,6 +16,7 @@ import {
   reloadSubject,
   rigInboxPrefix,
   rigPermissions,
+  runnerPermissions,
   SYSTEM_ACCOUNT,
   userKeyFingerprint,
   usersFile,
@@ -65,7 +66,7 @@ describe("who may do what on the message bus", () => {
     assert.ok(!key.includes(fp));
   });
 
-  test("a rig may publish its own reports, live lines and files, ask control to search and read the knowledge base and what a rig asks, take its own commands and read its own config, and nothing else", () => {
+  test("a rig may publish its own reports, live lines and files, ask control to search and read the knowledge base and what a rig asks, ask its own runners, take its own commands and read its own config, and nothing else", () => {
     assert.deepEqual(rigPermissions("rig-a"), {
       publish: {
         allow: [
@@ -87,6 +88,7 @@ describe("who may do what on the message bus", () => {
           "thermite.rig.rig-a.ask.renew",
           "thermite.rig.rig-a.ask.space",
           "thermite.rig.rig-a.ask.kb-files",
+          "thermite.rig.rig-a.runner.*.run",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },
@@ -112,11 +114,44 @@ describe("who may do what on the message bus", () => {
     // Nothing of one rig's is in another's: no subject of rig-a's is open to rig-b.
     const b = JSON.stringify(rigPermissions("rig-b"));
     assert.ok(!b.includes("rig-a"));
-    assert.ok(!/\*(?!")/.test(b), "no wildcard but the source of its own live subjects");
+    // Its own runners' subject (goal 206) aside, the one wildcard is its live subjects' source.
+    const own = b.replace('"thermite.rig.rig-b.runner.*.run"', "");
+    assert.ok(!/\*(?!")/.test(own), "no wildcard but the source of its own live subjects");
     for (const bad of ["rig.a", "rig-a.>", "*", "", "Rig-A"])
       assert.throws(() => rigPermissions(bad), /not a rig's name/, bad);
   });
 
+  test("a runner may take its core's asks on its own subject and answer each, and nothing else (goal 206)", () => {
+    assert.deepEqual(runnerPermissions("rig-a", "box-2"), {
+      publish: { allow: [] },
+      subscribe: { allow: ["thermite.rig.rig-a.runner.box-2.run"] },
+      allow_responses: true,
+    });
+    const keys = { control: user(), system: user(), a: user(), r: user() };
+    const { accounts } = readUsers(
+      usersFile({
+        control: keys.control,
+        system: keys.system,
+        rigs: [{ rig: "rig-a", key: keys.a }],
+        runners: [{ rig: "rig-a", runner: "box-2", key: keys.r }],
+      }),
+    );
+    assert.deepEqual(accounts[BUS_ACCOUNT]?.users, [
+      { nkey: keys.control, permissions: controlPermissions() },
+      { nkey: keys.a, permissions: rigPermissions("rig-a") },
+      { nkey: keys.r, permissions: runnerPermissions("rig-a", "box-2") },
+    ]);
+    assert.throws(
+      () =>
+        usersFile({
+          control: keys.control,
+          system: keys.system,
+          rigs: [],
+          runners: [{ rig: "rig-a", runner: "box-2", key: "not a key" }],
+        }),
+      /not a NATS user key/,
+    );
+  });
   test("a rig may publish the live lines of the runs control gives it, the newest 1000", () => {
     const allow = (runs: string[]) => rigPermissions("rig-a", runs).publish.allow;
     assert.deepEqual(allow(["sort-3", "sort-2", "sort-3"]).slice(0, 4), [

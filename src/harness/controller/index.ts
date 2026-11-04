@@ -7,7 +7,7 @@
 export { agentLinks, agentParts, createScheduler } from "./agents.ts";
 export { addIsolationCheck, addModelCheck, addSmokeCheck } from "./checks.ts";
 export { controllerContext, promotionPolicy } from "./context.ts";
-export { createJudges, reclaimJobs } from "./judges.ts";
+export { createJudges, reclaimJobs, runnersOf } from "./judges.ts";
 export { startLoops } from "./loops.ts";
 export { openState, rigSettings } from "./state.ts";
 export { gpuSplitAtStart, rigHardware, targetDrivers } from "./targets.ts";

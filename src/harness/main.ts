@@ -18,10 +18,12 @@ import {
   reclaimJobs,
   rigHardware,
   rigSettings,
+  runnersOf,
   startLoops,
   targetDrivers,
 } from "./controller/index.ts";
 import { DiskWatch } from "./disk.ts";
+import { RunnerLink } from "./judge/index.ts";
 import { startRunner } from "./runner/index.ts";
 import { HarnessService } from "./service/index.ts";
 
@@ -79,8 +81,12 @@ async function main(): Promise<void> {
     log("harness", "wipe requested: exiting so the next start wipes the state");
     process.exit(0);
   };
-  const judging = await rigHardware(ctx, service, targets);
-  const executorIds = reclaimJobs(ledger, judging);
+  const hardware = await rigHardware(ctx, service, targets);
+  // The core judges on its runners of other machines too (goal 206), and on its own unless the
+  // rig says it doesn't (THERMITE_LOCAL_JUDGE=0).
+  const runners = runnersOf(env);
+  const judging = runners.length && env.THERMITE_LOCAL_JUDGE === "0" ? [] : hardware;
+  const executorIds = reclaimJobs(ledger, judging, runners);
   const parts = agentParts(ctx, ledger, service, targets);
 
   // A check a previous controller left running is over, and a run's export at its end that it
@@ -116,12 +122,18 @@ async function main(): Promise<void> {
     build: service.build,
   });
 
+  // The core's link to its runner processes: their supervisors answer on the bus (goal 206).
+  const link = runners.length ? new RunnerLink({ outboxDir: service.paths.outboxDir }) : undefined;
+  service.runners = link;
   const executors = createJudges(ctx, {
     service,
     devRuns: parts.devRuns,
     judging,
     judgeCards: targets.judgeCards,
     executorIds,
+    runners,
+    link,
+    driver,
   });
   const links = agentLinks(ctx, service, port);
   addModelCheck(service, links);

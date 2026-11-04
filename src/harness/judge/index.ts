@@ -28,4 +28,6 @@ export { jobsAtStart } from "./lease.ts";
 export { copyForRun } from "./measure.ts";
 export { portReplaced } from "./ports.ts";
 export { clipReason, REASONS_CHARS } from "./reasons.ts";
+export { RemoteRunner } from "./remote-runner.ts";
 export type { Measured, MeasureSpec, RigRunner, Sealed } from "./runner.ts";
+export { RunnerLink } from "./runner-link.ts";

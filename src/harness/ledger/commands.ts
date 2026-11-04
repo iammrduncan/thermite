@@ -37,4 +37,34 @@ export class LedgerCommands extends LedgerPart {
       });
     });
   }
+
+  /**
+   * The model files a run's accepted assignment names, each with where it came from (goal 206: a
+   * runner of another machine fetches them there too). None: no assignment, or no model in it.
+   */
+  modelsOf(run: string): { name: string; path: string; sha256: string; url?: string }[] {
+    const rows = this.db
+      .prepare("select envelope from command where kind = 'assign_campaign' and accepted = 1")
+      .all() as { envelope: string }[];
+    for (const r of rows.reverse()) {
+      const payload = (JSON.parse(r.envelope) as { payload?: Record<string, unknown> }).payload;
+      if (payload?.run !== run) continue;
+      const imports = (payload.imports ?? []) as {
+        kind?: string;
+        name?: string;
+        path?: string;
+        sha256?: string;
+        source?: { url?: string };
+      }[];
+      return imports
+        .filter((i) => i.kind === "model" && i.name && i.path && i.sha256)
+        .map((i) => ({
+          name: String(i.name),
+          path: String(i.path),
+          sha256: String(i.sha256),
+          ...(i.source?.url ? { url: i.source.url } : {}),
+        }));
+    }
+    return [];
+  }
 }

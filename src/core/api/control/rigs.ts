@@ -248,6 +248,20 @@ export const REGISTER = {
 } as const satisfies Route;
 
 /**
+ * A runner process's registration of its key on the message bus (goal 206): its supervisor, at
+ * its start, with the rig's token. Control gives the key the runner's user (core/link/users.ts)
+ * before it answers; the runner takes its core's asks on the bus with it.
+ */
+export const RUNNER_REGISTER = {
+  method: "POST",
+  path: "/v1/rigs/:rig/runners/:runner/supervisor",
+  what: "runner's key registration",
+  body: z.object({ bus_key: z.string().max(100) }),
+  answer: z.looseObject({ ok: z.boolean() }),
+  maxBytes: 4096,
+} as const satisfies Route;
+
+/**
  * The largest champion's patch. Control keeps one only when its SHA-256 is the one the rig's
  * signed champion_published event names: 409 while it has no such event yet (sent again), 422 when
  * the patch is another (not sent again).

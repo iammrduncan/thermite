@@ -7,7 +7,7 @@ import {
 } from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
-import { busKeyTables, busSealKeyColumn } from "./bus.ts";
+import { busKeyTables, busSealKeyColumn, runnerBusKeyTable } from "./bus.ts";
 import { clusterUncheckedColumn } from "./clusters.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
@@ -673,6 +673,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   retired,
   retired,
   dropFollowers,
+  // Each runner process's key on the bus, of a rig's core and its runners (goal 206).
+  runnerBusKeyTable,
 ];
 
 /**

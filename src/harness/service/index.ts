@@ -26,6 +26,7 @@ import type { ControlRoute, ModelSource } from "../agents/index.ts";
 import type { Compactions } from "../compactions.ts";
 import type { DiskWatch } from "../disk.ts";
 import { Journal } from "../journal.ts";
+import type { RunnerLink } from "../judge/index.ts";
 import { KbAsks, KbTools } from "../kb/index.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { type AdvisorRole, OwnerMessages } from "../messages.ts";
@@ -177,6 +178,11 @@ export class HarnessService {
   readonly kbTools: KbTools;
   /** A rig configured with its GPU set: how many cards, and how many the judge has now. */
   gpuSplit?: { set: number; judge: number } | undefined;
+  /**
+   * The core's link to its runners (goal 206): the judge's asks of a runner process wait in it
+   * for the supervisor to take. None: a rig with no runners of other machines.
+   */
+  runners?: RunnerLink | undefined;
   /**
    * A subscription's usage windows as its runtime last reported them (Claude Code's 5-hour and
    * weekly windows), for the rig's report: no tokens, only percent used and reset times; and its

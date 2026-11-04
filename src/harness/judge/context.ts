@@ -283,6 +283,7 @@ export class JudgeContext {
     const baseline = baselineDirNow ? { written: baselineDirNow } : sealed;
     return {
       job: job.id,
+      ...(run ? { run } : {}),
       kit: k.kit,
       kitDir: k.dir,
       kitRepo: k.repo,

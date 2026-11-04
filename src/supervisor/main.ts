@@ -82,6 +82,7 @@ import {
 import { dailyReport } from "./report.ts";
 import { onRetentionTaken, sendSpace } from "./retention.ts";
 import { RunBranches } from "./run-branches.ts";
+import { carryRunnerAsks, startRunnerSupervisor } from "./runners/index.ts";
 import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
 import { stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
@@ -114,6 +115,8 @@ function notYetExported(outboxDir: string, state: ExportState): number {
 async function main(): Promise<void> {
   const env = process.env;
   startLogging("supervisor", env);
+  // A runner process of a rig answers its core's asks, and does nothing else (goal 206).
+  if (env.THERMITE_ROLE === "runner") return startRunnerSupervisor(env);
   // How long the advisors' model calls may send no data (goal 079): a bad value stops it here.
   modelStallMs(env);
   const home = env.THERMITE_SUPERVISOR_HOME ?? "/var/lib/thermite-supervisor";
@@ -348,6 +351,17 @@ async function main(): Promise<void> {
   };
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));
+
+  // A rig's core with runner processes: its harness's asks of them, carried on the bus (goal
+  // 206). A rig without runners has none, and its supervisor never asks.
+  if (env.THERMITE_RUNNERS?.trim())
+    void carryRunnerAsks({
+      rig,
+      bus,
+      harness,
+      outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
+      stopping: () => stopping,
+    });
 
   // Whether control holds a report of this rig: its answer to the figures names its place in the
   // rig's reports, past 0 once it took one. Control pins the rig's report key on the first, and

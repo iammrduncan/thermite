@@ -132,3 +132,46 @@ export const RUN_GIT = {
   answer: z.looseObject({ ok: z.boolean() }),
   maxBytes: RUN_GIT_MAX_BYTES,
 } as const satisfies Route;
+
+/**
+ * The core's asks of its runners, as its supervisor takes them to carry on the bus: an ask of a
+ * runner process, a git bundle for one of its mirrors, which waits in the harness's outbox (`file`,
+ * below it) for the supervisor to read and remove, or model files it lacks.
+ */
+export const QueuedRun = z.discriminatedUnion("kind", [
+  z.object({ id: z.string(), runner: z.string(), kind: z.literal("ask"), ask: RunAsk }),
+  z.object({
+    id: z.string(),
+    runner: z.string(),
+    kind: z.literal("git"),
+    repo: MirrorName,
+    commit: Commit,
+    /** The bundle's file in the outbox: only `.runs/<id>.bundle`, never a path out of it. */
+    file: z.string().regex(/^\.runs\/[0-9a-f-]{36}\.bundle$/),
+  }),
+  z.object({
+    id: z.string(),
+    runner: z.string(),
+    kind: z.literal("models"),
+    models: z.array(ModelFetch).max(200),
+  }),
+]);
+export type QueuedRun = z.infer<typeof QueuedRun>;
+
+/** The asks waiting, taken by the supervisor; it waits up to `wait` milliseconds for one. */
+export const RUN_ASKS = {
+  method: "GET",
+  path: "/v1/run-asks",
+  what: "runners' asks",
+  answer: z.looseObject({ asks: z.array(QueuedRun) }),
+} as const satisfies Route;
+
+/** A runner's answer to an ask the supervisor took, or why none came. */
+export const RUN_ANSWER = {
+  method: "POST",
+  path: "/v1/run-asks/:id",
+  what: "runner's answer",
+  body: z.object({ answer: z.unknown().optional(), error: z.string().max(4000).optional() }),
+  answer: z.looseObject({ ok: z.boolean() }),
+  maxBytes: RUN_MAX_BYTES + 1024 * 1024,
+} as const satisfies Route;
