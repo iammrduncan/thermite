@@ -297,7 +297,7 @@ export class JudgeContext {
       kitRepo: k.repo,
       kitCommit: k.commit,
       ...(baseline ? { baseline } : {}),
-      ...(contract ? { uses: contractMetrics(contract) } : {}),
+      ...(contract ? { uses: contractMetrics(contract, k.kit) } : {}),
       note: (arm, cell, outcome) =>
         held.has(cell)
           ? this.note(`held-out run ${++heldRuns} done`, run)

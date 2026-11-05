@@ -53,7 +53,7 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
       runsPerCell: contract.acceptance.runs_per_cell,
       onBlock: (bs) => {
         if (!looks.includes(bs.length)) return false;
-        decision = decideScreen(contract, bs, judge.noiseFloor(run));
+        decision = decideScreen(contract, bs, judge.noiseFloor(run), k.kit.metrics);
         return decision.verdict !== undefined;
       },
     });

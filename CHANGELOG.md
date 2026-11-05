@@ -4,6 +4,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ## [Unreleased]: v0.1.3
 
+### Metrics
+
+- **Priority, guard and informational metrics, in the kit.** A kit's metric may say what it is for: a priority metric (1 is the primary; each next one breaks a tie, by its own `min_effect`), a guard metric, or an informational one, kept and never deciding. A guard says where its metric must stay, `above`, `below` or `within` some standard deviations, against the baseline, the champion in force or a fixed value. The judge refuses a change that breaks one (`tradeoff`, or `infeasible` against a value), and a change equal to the champion on the primary and better on the next priority by its `min_effect` is a win. A contract's new `metrics` adds to its kit's and tightens a kit's guards, never loosens one, and a contract's own `guards`, `hard_constraints` and `objective.secondary` are judged as before. See [What each metric is for](docs/_site/src/content/docs/reference/kit-manifest.md#what-each-metric-is-for).
+
 ### Steering
 
 - **Add hours**, beside **⋯** on a run its stop time paused: the run gets more hours of work, and it resumes, where it paused again at once on Resume and a new run was the only way on. `add_run_hours {run, hours}` over MCP and `POST /v1/runs/<run>/hours` do the same, for a running run too ([issue 50](https://github.com/iammrduncan/thermite/issues/50)).

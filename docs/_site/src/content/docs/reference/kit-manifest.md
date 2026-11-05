@@ -125,9 +125,49 @@ The contract chooses which cells count: `cells` for every block, `held_out_cells
 | Time | `{"unit": "s", "from": "time"}` | The run's time in seconds, on the judge's clock. `unit` defaults to `s`. A contract improves it with `"direction": "min"` |
 | From the check | `{"unit": "", "from": "check", "field": "<field>"}` | A number the kit's check prints under `<field>` in its result line, for example an accuracy. `unit` defaults to empty |
 
-Every value must be above zero, because the judge compares runs by their ratio. A kit's metrics can serve several campaigns, and each run needs only the metrics its contract decides by: the objective's, a secondary objective's, a guard's, a `min` or `max` hard constraint's, and a threshold goal's (`monitor_only` metrics are not among them). A run whose check prints no number above zero for one of those check metrics is invalid: `the check reported no <field> above zero (got <value>)`. Each case the contract runs needs the `work` parameter of each rate the contract decides by, a number above zero: the [check against the contract](#the-kit-against-the-contract) refuses a case without it. A rate the contract decides by whose `work` parameter is still missing, zero or not a number at a run is an infrastructure error: `kit metric <name>: bad work <value> or time <seconds>`. The kit's other metrics are kept where a run gives them, a number above zero, and left out where it does not: a case whose check prints no `prefill_tps` is not invalid for a contract that decides by decode speed alone. On a held-out case, the agents get only `a held-out check could not finish (an infrastructure failure)`, and the rig's log keeps the error.
+Every value must be above zero, because the judge compares runs by their ratio. A kit's metrics can serve several campaigns, and each run needs only the metrics it decides by: its [priority and guard metrics](#what-each-metric-is-for), the kit's guards included, and a threshold goal's (informational metrics are not among them). A run whose check prints no number above zero for one of those check metrics is invalid: `the check reported no <field> above zero (got <value>)`. Each case the contract runs needs the `work` parameter of each rate the contract decides by, a number above zero: the [check against the contract](#the-kit-against-the-contract) refuses a case without it. A rate the contract decides by whose `work` parameter is still missing, zero or not a number at a run is an infrastructure error: `kit metric <name>: bad work <value> or time <seconds>`. The kit's other metrics are kept where a run gives them, a number above zero, and left out where it does not: a case whose check prints no `prefill_tps` is not invalid for a contract that decides by decode speed alone. On a held-out case, the agents get only `a held-out check could not finish (an infrastructure failure)`, and the rig's log keeps the error.
 
 The device's driver also refuses values it cannot believe. The `cpu` driver refuses values that are not finite; the `cuda-gpu` driver refuses values that are not finite or not above zero.
+
+#### What each metric is for
+
+In a hill climb, each metric is one of three kinds. The **priority metrics** are what it climbs: priority 1, the **primary**, decides, and each next one breaks a tie on those before it. A **guard metric** holds it to account: a change that breaks one of its guards is refused, however much it gains. An **informational metric** is kept where a run gives it and never decides. A metric's entry may say which, beside its form:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `kind` | `priority`, `guard`, `info`, or another lowercase word | What the metric is for. None, or another word: informational |
+| `priority` | whole number from 1 | A priority metric's place: 1 is the primary. Two metrics may not share one |
+| `direction` | `max` or `min` | A priority metric's better way |
+| `min_effect` | number > 0 | The smallest change that counts, as a fraction: `0.02` is 2%. The primary needs one; a lower priority breaks a tie only with one |
+| `guards` | list of 1 to 8 guards | Where the metric must stay. A guard metric needs them; any metric may have them |
+
+A guard is `{"stay": …, "against": …, "by": …}`, or with `"value"` against a fixed value:
+
+| Field | Meaning |
+| --- | --- |
+| `stay` | `above`: at least the reference less `by` of it (`0.03`: no more than 3% below it). `below`: at most the reference plus `by` of it. `within`: no further from the reference, either way, than `by` standard deviations of its spread |
+| `against` | `champion`: the champion in force, in the same blocks. `baseline`: the run's [starting point](contract.md#the-baseline). `value`: `value` itself |
+| `by` | A fraction for `above` and `below`, standard deviations for `within`. Not for a guard against a value |
+| `value` | The fixed value, for a guard against one, with `above` or `below` |
+
+The judge decides each guard where its reference is:
+
+- **Against the champion**, at every look and at confirmation, on the paired blocks, as a contract's [guard](contract.md#hill-climb) is: clearly past its bound, the verdict is `tradeoff`; not yet clear, screening goes on, and a guard unclear at the end makes it `inconclusive` or `not_confirmed`. For `within`, the spread is the champion's own: the standard deviation of its values in those blocks.
+- **Against the baseline**, at confirmation: the change's median on each case against the baseline's, with the baseline's own spread as its noise; for `within`, the spread is the baseline blocks' median absolute deviation × 1.4826. Past it, the verdict is `tradeoff`: `the guard's total allowance against the starting point is spent: …`.
+- **Against a value**: the change's mean on each case, as a `min` or `max` hard constraint is. Past it, the verdict is `infeasible`: `<metric>/<case>: mean <value> is not at most <value>`.
+
+```json
+"metrics": {
+  "decode_tps": { "unit": "tok/s", "work": "tokens", "kind": "priority", "priority": 1, "direction": "max", "min_effect": 0.02 },
+  "prefill_tps": { "unit": "tok/s", "work": "prompt", "kind": "priority", "priority": 2, "direction": "max", "min_effect": 0.01 },
+  "perplexity": { "from": "check", "field": "ppl", "kind": "guard", "guards": [{ "stay": "within", "against": "baseline", "by": 3 }] },
+  "peak_gib": { "unit": "GiB", "from": "check", "field": "peak_gib", "kind": "guard",
+    "guards": [{ "stay": "below", "against": "baseline", "by": 0.05 }, { "stay": "below", "against": "value", "value": 110 }] },
+  "itl_ms": { "unit": "ms", "from": "check", "field": "itl_ms", "kind": "info" }
+}
+```
+
+A run's **metric plan** joins its kit's and its contract's. The contract's `objective.primary` is priority 1; its `objective.secondary`, or the priority metrics of its own [`metrics`](contract.md#hill-climb), come next, else the kit's priority metrics after its primary, in order. A tie on the primary, within `equivalence_band`, goes to the next priority: better by its `min_effect`, the change wins, at the screen and again on fresh blocks; worse, it does not; equivalent, the one after decides. The kit's guards always hold. A contract may add guards and tighten the kit's, such as `within 2` for the kit's `within 3` against the same reference, but never loosen one: the check of a run's assignment refuses `the guard on <metric>, <its guard>, is looser than the kit's, <the kit's guard>: a campaign may tighten a kit's guard, never loosen it`. Every other metric is informational. A kit's entry that can't be judged is refused in words, such as `metric decode_tps is the primary metric: give its min_effect, the smallest gain that counts` or `metric peak_gib, guard 1: within is against the baseline or the champion, which have a spread`.
 
 ### Verifiers
 

@@ -70,6 +70,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
       guardTotals(judge.ledger, run),
       judge.noiseFloor(run),
       start,
+      k.kit.metrics,
     );
     let verdict: string = d.verdict ?? "not_confirmed";
     let reasons = d.reasons;

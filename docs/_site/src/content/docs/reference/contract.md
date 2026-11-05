@@ -205,7 +205,7 @@ A **candidate** is a change an agent submits. These two fields are checked befor
 
 ## Hill climb
 
-`"mode": "hill_climb"`: improve one metric, step by step, while guards hold. The judge first measures the run's starting point alone, its **baseline** ([below](#the-baseline)). Each candidate is then **screened** against the **champion** (the run's current best) in interleaved **blocks**: one or more timed runs of each **arm** (candidate and champion) on each **cell** (one measured input from the kit). A win is then **confirmed** on fresh blocks before it is promoted. [Verdicts and states](verdicts.md) lists the verdicts.
+`"mode": "hill_climb"`: improve one metric, step by step, while guards hold; a tie on it goes down the [priority metrics](kit-manifest.md#what-each-metric-is-for). The judge first measures the run's starting point alone, its **baseline** ([below](#the-baseline)). Each candidate is then **screened** against the **champion** (the run's current best) in interleaved **blocks**: one or more timed runs of each **arm** (candidate and champion) on each **cell** (one measured input from the kit). A win is then **confirmed** on fresh blocks before it is promoted. [Verdicts and states](verdicts.md) lists the verdicts.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -213,10 +213,11 @@ A **candidate** is a change an agent submits. These two fields are checked befor
 | `objective.primary.direction` | `max` or `min` | required | Which way is better |
 | `objective.primary.min_effect` | number > 0 | required | The smallest gain that counts, as a fraction: `0.05` is 5%. A gain that is clearly above zero, but whose whole interval is below this, is `neutral` ("gain below min_effect") |
 | `objective.policy` | `single` or `lexicographic` | `single` | Accepted, not used yet |
-| `objective.secondary` | list of `{metric, direction}` | `[]` | Accepted, not used yet. Each metric is checked against the kit when a run is assigned, but the judge does not use it |
-| `guards` | list of guards (below) | `[]` | Metrics that may not get worse beyond set fractions |
-| `hard_constraints` | list of constraints (below) | `[]` | Absolute bounds on a metric |
+| `objective.secondary` | list of `{metric, direction}` | `[]` | Priorities 2 and after, in order: each breaks a tie on those before it, with the `min_effect` its kit entry gives; one without breaks none. Not together with priority metrics in `metrics` |
+| `guards` | list of guards (below) | `[]` | Metrics that may not get worse beyond set fractions. Each reads into the run's metric plan as two guards: against the champion by `max_step_regression`, against the baseline by `max_total_regression` |
+| `hard_constraints` | list of constraints (below) | `[]` | Absolute bounds on a metric: guards against a fixed value |
 | `monitor_only` | list of metric names | `[]` | Accepted, not used yet. Not checked against the kit either |
+| `metrics` | map of kit metric to its role | none | What the campaign adds to its kit's [metric roles](kit-manifest.md#what-each-metric-is-for), in the same fields: priority metrics from priority 2 (priority 1 is `objective.primary`), metrics of a kind, guards, and tighter guards than the kit's, never looser |
 | `cells` | list of kit cells, at least one | required | The cells (test cases; the dashboard calls them **cases**) measured in every block |
 | `held_out_cells` | list of kit cells | `[]` | Cells measured only at confirmation, never one of `cells`. A candidate must be correct on each, and its primary metric no worse than twice `acceptance.equivalence_band`, on the median of three runs. When one fails, the agents learn only its kind, such as `confirmation failed: a held-out check timed out`, and the owner sees which cell, and its ratio against the threshold ([Held-out failures](verdicts.md#held-out-failures)) |
 | `acceptance` | object | all defaults below | How the judge decides |
@@ -351,7 +352,7 @@ These fields pass validation and become part of the contract and its hash, but n
 | --- | --- |
 | Every mode | `target.class` |
 | Hill climb and goal | `min_duration`, `max_duration` |
-| Hill climb | `objective.policy`; `objective.secondary` (checked against the kit only); `monitor_only`; hard constraints of kind `check` |
+| Hill climb | `objective.policy` (a tie goes down the priority metrics whatever it says); `monitor_only`; hard constraints of kind `check` |
 | Goal | `independence_epochs`; `min_live_families`; each goal's `priority` and `parent` (stored only) |
 | Research | `scope.source_types`; `scope.languages`; `report_cadence.report_hours` |
 

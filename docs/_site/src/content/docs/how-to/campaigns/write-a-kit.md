@@ -90,6 +90,8 @@ Every value must be above zero. A goal's `metric_threshold` must name one of the
 
 One kit can serve several campaigns, each deciding by some of its metrics. A run needs only the metrics its contract decides by, in every case it runs; the kit's others are kept where the check gives them. So a metric one campaign adds, such as a prefill speed only some cases measure, does not make another campaign's runs invalid ([Metrics](../../reference/kit-manifest.md#metrics)).
 
+For a hill climb, each metric can also say what it is for: a **priority metric** to climb (1, the primary, then the ones that break ties), a **guard metric** with where it must stay, such as `{"stay": "within", "against": "baseline", "by": 3}` for no further than 3 standard deviations from the starting point, or an **informational metric**, kept and never deciding. A campaign takes them, adds its own and may tighten a guard, never loosen it ([What each metric is for](../../reference/kit-manifest.md#what-each-metric-is-for)).
+
 ## 5. Write the run command
 
 The run command runs one stored build on one cell, as another user. It is timed as a whole, so start-up counts.

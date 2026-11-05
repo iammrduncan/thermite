@@ -1,7 +1,7 @@
 ---
 id: "209"
 title: "Priority, guard and informational metrics"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: ["208"]
 created: 2026-11-05
@@ -10,7 +10,7 @@ updated: 2026-11-05
 
 # 209 · Priority, guard and informational metrics
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013) · Planning with the owner: no code until the plan is approved.
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## Words (the owner, 2026-11-05)
 
@@ -47,6 +47,33 @@ The owner then plans the kit of the Spark hill climb with these words, from deta
 
 5. **The run's Overview (chosen on mockups, option B2):** across the top, the priority metrics: the primary in a card with the hill-climb chart the page draws today (each champion's gain over time, a switch between the gain and the metric's own unit, the attempt being judged dashed), the next ones in a smaller card with a sparkline. Under it, one row for each guard metric: its rule, a sparkline of the champions' values with the start dotted, the limit dashed red and an allowed band green, the champion's value, the attempt being judged and the room it has left. Then a tile for each informational metric, with a sparkline of the champions' values. No line about broken guards. Below them, as today: on the left the judge's queue, then the attempts; on the right what each lane, the planner, the judge and the runners do now, then the run's recent events.
 
+6. **Ties go down the priorities:** a change equal to the champion on priority 1, within the noise band, and better on priority 2 by at least priority 2's minimum effect, is a win and is promoted; and so on down the list. A change worse on priority 1 never wins on a lower priority.
+7. **Fixed limits are guards:** a guard is measured against the baseline, the current champion or a fixed value; a contract's `hard_constraints` read as guards against a fixed value.
+8. **The run's settings move to an Info tab:** the Overview's right column keeps Now and Recent; The run's facts go to a tab of their own, Info.
+
+## What the code does today (2026-11-05, read before the plan)
+
+- The judge reads only `objective.primary`, `guards` and `hard_constraints`. `objective.secondary`, `objective.policy` and `monitor_only` parse and are checked against the kit, but no verdict reads them: there is no tie-break today.
+- A guard is decided twice: against the current champion, each step (`max_step_regression`, a Student-t interval on the paired blocks: ok, violated or unsure), and against the baseline at confirmation (`max_total_regression`, the medians against the baseline's, with the baseline's spread as noise).
+- The baseline keeps, for every kit metric and cell, the median, the MAD and the number of blocks. The A/A calibration measures the primary metric's noise alone.
+- The agents' brief names the primary metric only: no worker or planner is told of a guard.
+- The run page shows the champions' gain, a chart for each guard of today's kind, and each attempt's guard changes.
+- A contract's hash is taken over the parsed contract, defaults included: a field added later is optional with no default, so stored contracts keep their hash.
+
+## Plan (2026-11-05; the owner's answers in decisions 6 to 8)
+
+1. **One metric plan, in core.** A kit's `metrics` entries take an optional `kind` (`priority`, `guard`, `info`, or another word a kit needs, which the judge records and shows like an informational metric) with, for a priority metric, its `priority` (1 is the primary), `direction` and `min_effect`; for a guard, its bound: `above`, `below` or `within`, `against` the `baseline`, the `champion` or a fixed `value`, and `by` (a fraction for above and below, standard deviations for within). A contract's new optional `metrics` adds metrics to a kind and tightens a kit's guards; it may not loosen one. One function in core reads the kit and the contract into the run's metric plan, which every part uses. Old contracts read into it unchanged: `objective.primary` is priority 1 and `secondary` the next ones; a guard's `max_step_regression` is a `below` (or `above`) guard against the champion, its `max_total_regression` one against the baseline; a hard constraint's `min` or `max` is a guard against a fixed value; `monitor_only` is informational. No stored contract changes its hash.
+2. **The judge.** Guards of the three kinds against either reference, each ok, broken or unsure with its interval, as today's are; `within` uses the reference's spread (the baseline's blocks, or the champion's in the same comparison). Ties go down the priority metrics: a change equal to the champion on priority 1 and better on priority 2 by its `min_effect` is a win, and so on. Every verdict records every metric of the plan, informational ones too, so each champion's values can be drawn.
+3. **The agents' brief:** the priority metrics in order, each guard with its bound and the room the champion leaves, and the informational metrics named.
+4. **The run's Overview,** as chosen (decision 5), the run's settings on an Info tab (decision 8), and the attempts' guard changes in the new words.
+5. **The words everywhere:** the glossary, the kit manifest and contract references, the judge's explanation, Write a kit and Write a contract, the run page, MCP's `get_run` and the changelog.
+
+Each step with its tests on the lab's test machine; the judge acceptance check after step 2, and the dashboard's tests after step 4.
+
 ## Done when
 
 The plan is approved, built, verified on the lab's test machine, and the pages and changelog use the three words.
+
+## Progress
+
+- 2026-11-05: Steps 1 and 2. A kit's metrics take their roles (core/metric-roles.ts) and a contract its `metrics`; one function reads both into the run's metric plan (core/metric-plan.ts), a contract's own fields as they were judged: a fall of r in an old guard is a guard `above` by r/(1+r), the same limit, and a secondary with no min_effect breaks no tie. The judge decides the plan's guards beside the contract's own, against the champion at every look, against the baseline at confirmation and against a value as a hard constraint, and breaks a tie on the primary down the priorities, at the screen and again at confirmation. The pages say so: the kit manifest's What each metric is for, the contract's hill-climb fields, the verdicts, the glossary (priority, guard and informational metrics, and goal 206's core and runner, which it lacked) and Write a kit. Next: the verdicts' informational values, the agents' brief, the Overview.
