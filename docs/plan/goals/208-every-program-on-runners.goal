@@ -32,3 +32,7 @@ For each program, one short hill climb of the smoke CUDA project on the Sparks' 
 
 - each of the four programs has a hill climb on the Sparks' rig in which its worker read a `run_experiment` result from its runner and submitted a change the judge judged there;
 - each fix has its test, run on the lab's test machine, and the pages say what changed.
+
+## Progress
+
+- 2026-11-05: Claude Code's run is goal 206's: two changes confirmed and promoted on the Sparks' rig, the second made from the lane's own runs on its runner. Codex's model check passed on the rig (GPT-6.1 Sol through a ChatGPT plan), but its run could not start from Start a run: control refused it, as the rig "measures on cpu". The core, which judges on its runners alone, took its runners' kind of target for its judge, yet still reported the target it found at its start, its own machine's CPU; goal 206's first run had started through a raw assignment, which this check does not cover. The core now reports its runners' target, the first runner's identity, once it takes their kind.

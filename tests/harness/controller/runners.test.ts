@@ -179,12 +179,16 @@ describe("the core's runners as they come and go (goal 206)", () => {
 
   test("a core on a CPU machine judges on GPU runners: the rig measures on theirs, all of one kind", async () => {
     const kinds: Record<string, string> = { "box-2": "cuda-gpu", "box-3": "cpu" };
+    const gb10 = { type: "cuda-gpu", class: "cuda-gpu", id: "GPU-1", details: {} };
     const sup = linked((q) =>
       q.kind === "ask" && q.ask.op === "info"
         ? { answer: { type: kinds[q.runner], separated: true, cards: 1 } }
-        : undefined,
+        : q.kind === "ask" && q.ask.op === "driver"
+          ? { answer: { answer: gb10 } }
+          : undefined,
     );
-    const own = { ...service, targetType: "cpu" } as HarnessService;
+    const hardware = { target: { type: "cpu", class: "generic-cpu", id: "cpu-0" } };
+    const own = { ...service, targetType: "cpu", hardware } as unknown as HarnessService;
     const hub = new RunnerHub({
       service: own,
       link: sup.link,
@@ -196,6 +200,9 @@ describe("the core's runners as they come and go (goal 206)", () => {
     await wait();
     assert.equal(hub.state()[0]?.up, true);
     assert.equal(own.targetType, "cuda-gpu", "an assigned kit measures on the runners' kind");
+    // What the rig reports measuring on, for control's check that a campaign's kit fits it.
+    for (let i = 0; i < 50 && hardware.target.id !== "GPU-1"; i++) await wait(20);
+    assert.deepEqual(hardware.target, { type: "cuda-gpu", class: "cuda-gpu", id: "GPU-1" });
     const runner = ex.runners.get("box-2-0");
     assert.equal(runner?.driver.type, "cuda-gpu");
     assert.equal(runner?.separated, true);

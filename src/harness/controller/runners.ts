@@ -279,6 +279,7 @@ export class RunnerHub {
           now: own.type,
         });
         service.targetType = own.type;
+        void this.reportTarget(p, own.type);
       }
       if (!p.up) log("harness", "a runner process answers: it takes runs", { runner: name });
       this.setUp(p, true);
@@ -295,6 +296,19 @@ export class RunnerHub {
     } finally {
       p.checking = false;
     }
+  }
+
+  /**
+   * The rig's reported target becomes its runners' kind, then the first runner's own identity:
+   * control starts a campaign only on a rig that measures on its kit's kind of target.
+   */
+  private async reportTarget(p: Process, type: string): Promise<void> {
+    const hw = this.o.service.hardware;
+    if (!hw) return;
+    hw.target = { ...hw.target, type };
+    const id = await p.runners[0]?.runner.driver.identify().catch(() => undefined);
+    if (id && id.type === this.o.service.targetType)
+      hw.target = { type: id.type, class: id.class, id: id.id };
   }
 
   /** Why a process that answers can't take the rig's runs, or undefined. */
