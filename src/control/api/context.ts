@@ -109,6 +109,8 @@ export interface ControlOptions {
   drainWatchMs?: number | undefined;
   /** How often control looks for runner processes to give their rig (tests make it short). */
   runnersWatchMs?: number | undefined;
+  /** How often control looks for Add a rig's Workers at a time to give a new rig (tests too). */
+  workersWatchMs?: number | undefined;
   /** How control reaches GPU clouds' APIs (tests give their own). */
   cloudFetch?: typeof fetch | undefined;
   /** Test pods on GPU clouds; control's loop advances them (main.ts). Made here when not given. */

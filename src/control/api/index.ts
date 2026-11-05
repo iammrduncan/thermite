@@ -8,6 +8,7 @@ import { controlDiskOf } from "../disk.ts";
 import { ExportFiles } from "../exports.ts";
 import { mountMcp } from "../mcp/index.ts";
 import { mountMcpServerRoutes } from "../mcp-servers/index.ts";
+import { watchWorkers } from "../rigs/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { busRoutes } from "./bus.ts";
 import { campaignRoutes } from "./campaigns.ts";
@@ -160,6 +161,8 @@ export function createControlApi(
   watchDrains(parts, opts.drainWatchMs);
   // Runner processes control set up are given to their rig once it reports (clusters/runners.ts).
   watchRunners(parts, opts.runnersWatchMs);
+  // Add a rig's Workers at a time is given to the new rig once it reports (rigs/workers.ts).
+  watchWorkers(parts, opts.workersWatchMs);
   opts.pages?.(app, store, {
     admin: owner,
     privateKeyPem,

@@ -35,6 +35,7 @@ import { copiesPolicyOn, eventFloorTable, retentionTables } from "./retention.ts
 import { rigRunnerTable } from "./runners.ts";
 import { runRegistryTable } from "./runs.ts";
 import { tunnelLeafColumns } from "./tunnels.ts";
+import { rigWorkersTable } from "./workers.ts";
 
 /**
  * Control's store's schema and its migrations, moved out of store.ts (goal 173). The store's
@@ -598,10 +599,7 @@ function schemaFive(db: DatabaseSync): void {
   db.exec("create index if not exists rig_event_run on rig_event (run, seq)");
 }
 
-/**
- * Two migrations of goal 205's followers, now gone (goal 206): stores that ran them keep their
- * versions, so their places stay, and do nothing.
- */
+/** Goal 205's two migrations, now gone (goal 206): a store that ran them keeps its version. */
 function retired(): void {}
 
 /**
@@ -681,6 +679,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   rigRunnerTable,
   // A rig control set up on a machine whose core judges on its runners alone (goal 206).
   machineRigJudgeOnRunners,
+  // Add a rig's Workers at a time, which control gives the new rig once it reports (goal 206).
+  rigWorkersTable,
 ];
 
 /**

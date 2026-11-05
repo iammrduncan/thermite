@@ -423,6 +423,19 @@ export class IssuedCommands extends StorePart {
   }
 
   /**
+   * Whether the rig never took a command: it refused it, or its signature ran out first. One the
+   * owner withdrew counts as taken: it is not sent again.
+   */
+  notTaken(id: string | undefined): boolean {
+    const c = id ? this.get(id) : undefined;
+    return (
+      c !== undefined &&
+      ["failed", "rejected", "expired"].includes(c.status) &&
+      !(c.outcome as { cancelled_by?: unknown } | null)?.cancelled_by
+    );
+  }
+
+  /**
    * One command as the dashboard follows it (goal 080): its state, the rig's answer, its payload
    * and when its signature runs out. A pending command past that time is one the rig never took.
    */

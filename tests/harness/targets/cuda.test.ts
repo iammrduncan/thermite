@@ -96,6 +96,27 @@ describe("cuda-gpu driver", () => {
     assert.deepEqual(r.reasons, ["the GPU's compute processes could not be read"]);
   });
 
+  test("a GPU that shares the machine's memory is ready without memory figures; a card's own must read", async () => {
+    // As a GB10 reports itself: no memory of its own, its total either (no real host data).
+    const shared =
+      "0, GPU-00000000-5555-6666-7777-888888888888, NVIDIA GB10, 00000000:00:00.0, 580.00.00, [N/A], [N/A], [N/A], 0, 47, 4.45, [N/A], 208, [N/A], 3003, [N/A], P0";
+    const gb10 = (apps = "") =>
+      new CudaDriver({ targetClass: "gb10", smi: fake(shared, "0x0000000000000001", apps) });
+    assert.deepEqual((await gb10().readyForTiming()).reasons, []);
+    // Its processes still count: one on the GPU keeps it from timing.
+    assert.deepEqual((await gb10("4242, [N/A]\n").readyForTiming()).reasons, [
+      "compute processes on the GPU: 4242",
+    ]);
+    // A card with memory of its own whose use can't be read is not ready.
+    const card = new CudaDriver({
+      targetClass: "p100-pcie-16g",
+      smi: fake(IDLE.replace("16384, 0, 16280", "16384, [N/A], 16280"), "0x0000000000000001"),
+    });
+    assert.deepEqual((await card.readyForTiming()).reasons, [
+      "nvidia-smi gave no memory.used ([N/A])",
+    ]);
+  });
+
   test("a busy, throttled GPU or one with compute processes is not ready", async () => {
     const d = new CudaDriver({
       targetClass: "p100-pcie-16g",

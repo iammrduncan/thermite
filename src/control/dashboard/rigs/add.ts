@@ -8,6 +8,7 @@ import type { JoinedSpec, JoinForm } from "../../join.ts";
 import { deployScript, MAX_RIG_GPUS, type MachineFacts, tail } from "../../machines/index.ts";
 import {
   awaitFirstReport,
+  chooseWorkers,
   judgeShare,
   NO_RIG_BUS,
   rigBusOf,
@@ -37,7 +38,7 @@ import {
   runnerGroups,
   runnerPicker,
 } from "./add-places.ts";
-import { addRigRunners, addRigRunnersChosen, giveWorkers, runnersAdded } from "./runners.ts";
+import { addRigRunners, addRigRunnersChosen, runnersAdded } from "./runners.ts";
 import { rigHelpers } from "./shared.ts";
 
 /** The documentation site, which each step of Add a rig links to. */
@@ -242,7 +243,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
         placement,
         rig,
         "workers_given",
-        giveWorkers(parts, rig, plan.lanes),
+        chooseWorkers(parts, rig, plan.lanes, "owner:ui"),
       );
     return c.redirect(
       `/ui/rigs/${encodeURIComponent(rig)}${refused ? `?error=${encodeURIComponent(`The rig is being set up, but a runner was not added: ${refused}`)}` : ""}`,

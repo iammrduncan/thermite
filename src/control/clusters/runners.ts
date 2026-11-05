@@ -44,10 +44,6 @@ import { clusterTarget, NS } from "./rigs.ts";
  * away, the rig hears first, so the core fails its run under way cleanly, then its objects go.
  */
 
-/** How long Add a rig's Workers at a time waits for the rig's first report: 20 minutes. */
-const RIG_WAIT_MS = 10_000;
-const RIG_WAIT_TRIES = 120;
-
 /** How often control looks for runner processes it has not given their rig yet: a minute. */
 const RUNNERS_WATCH_MS = 60_000;
 
@@ -353,16 +349,6 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
   await giveRunner(parts, r, by, true);
 }
 
-/**
- * Whether a rig reports its settings, waiting up to 20 minutes for one control is setting up: a
- * rig takes Add a rig's Workers at a time only then.
- */
-export async function rigReportsSettings(parts: ControlParts, rig: string): Promise<boolean> {
-  for (let t = 0; t < RIG_WAIT_TRIES && !rigSettingsOf(parts.store, rig)?.settings; t++)
-    await new Promise((done) => setTimeout(done, RIG_WAIT_MS));
-  return Boolean(rigSettingsOf(parts.store, rig)?.settings);
-}
-
 /** The rig's runners in the change of its settings control asked for last, while it waits. */
 function askedRunners(store: ControlParts["store"], rig: string) {
   return (
@@ -428,19 +414,6 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first =
 }
 
 /**
- * Whether the rig never took a command: it refused it, or its signature ran out first. One the
- * owner withdrew counts as taken: it is not sent again.
- */
-function notTaken(store: ControlParts["store"], id: string | undefined): boolean {
-  const c = id ? store.commands.get(id) : undefined;
-  return (
-    c !== undefined &&
-    ["failed", "rejected", "expired"].includes(c.status) &&
-    !(c.outcome as { cancelled_by?: unknown } | null)?.cancelled_by
-  );
-}
-
-/**
  * Control's round of runner processes (goal 206): each control set up and has not given its rig
  * yet is given once the rig reports its settings, such as one set up with a rig whose core came
  * up later, or was set up again, or one whose rig reported while control was away. One the rig,
@@ -462,7 +435,7 @@ export function watchRunners(parts: ControlParts, everyMs = RUNNERS_WATCH_MS): v
           store.rigRunners.setGiven(r.rig, r.runner, { at: new Date().toISOString(), tries: 0 });
         continue;
       }
-      if (!g || (g.tries < GIVE_TRIES && notTaken(store, g.command)))
+      if (!g || (g.tries < GIVE_TRIES && store.commands.notTaken(g.command)))
         await giveRunner(parts, r, r.created_by);
     }
   });

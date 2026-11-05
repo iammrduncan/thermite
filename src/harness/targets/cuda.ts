@@ -210,8 +210,14 @@ export class CudaDriver implements TargetDriver {
     if (this.unusable) return { ready: false, reasons: [this.unusable], details: {} };
     const [r, reasons, apps] = await Promise.all([this.row(), this.reasons(), this.apps()]);
     const why: string[] = [];
+    // A GPU that shares the machine's memory, as the GB10, has no memory of its own to report,
+    // its total either: its idleness rests on its use, its processes and its clocks.
+    const shared = !Number.isFinite(Number(r["memory.total"]));
+    const read: (keyof GpuRow)[] = shared
+      ? ["utilization.gpu", "temperature.gpu"]
+      : ["utilization.gpu", "memory.used", "temperature.gpu"];
     // Anything unreadable is not "fine": a missing or NaN field means not ready.
-    for (const f of ["utilization.gpu", "memory.used", "temperature.gpu"] as const) {
+    for (const f of read) {
       if (!Number.isFinite(Number(r[f]))) why.push(`nvidia-smi gave no ${f} (${r[f]})`);
     }
     if (reasons.includes("unknown")) why.push("clock event reasons unavailable");

@@ -51,7 +51,7 @@ const envOf = (o: Obj | undefined) =>
   );
 
 /** Control with a cluster, and the rig core-1 reporting its settings, with no runners yet. */
-async function withRig(o: { runnersWatchMs?: number } = {}) {
+async function withRig(o: { runnersWatchMs?: number; workersWatchMs?: number } = {}) {
   const f = fakeCluster();
   const s = await control(f.k, o);
   assert.match(
@@ -536,6 +536,62 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     );
     assert.equal(envOf(third).THERMITE_LOCAL_JUDGE, "0");
     await owner.close();
+  });
+
+  test("Add a rig's Workers at a time waits on control for the new rig's report, then goes once", async () => {
+    const { f, s } = await withRig({ workersWatchMs: 20 });
+    const form = {
+      kind: "many",
+      place: "cluster:k8s-a",
+      rig: "core-5",
+      core_disk: "50",
+      core_node: "gpu-node-1",
+      lanes: "3",
+      runner_new__0: "gpu-node-1=k8s-a||gpu-node-1|device-plugin",
+      runner_new_pool__0: "judge",
+    };
+    assert.equal(await s.post("/ui/rigs/add", form), "/ui/rigs/core-5");
+    await settle(f, 2);
+    const lanes = () =>
+      s.store.commands
+        .pending("core-5")
+        .map((c) => c.envelope)
+        .filter((e) => e.kind === "rig_settings" && "lanes" in (e.payload as object));
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual(lanes(), [], "nothing goes to a rig that does not report its settings");
+    // Kept in control's store, so a restart of control loses nothing while the rig comes up.
+    assert.equal(s.store.rigWorkers.get("core-5")?.lanes, 3);
+    await ingestReport(s.store, {
+      rig: "core-5",
+      ledger_id: "ledger-core-5",
+      cursor: 0,
+      next: 0,
+      generated_at: new Date().toISOString(),
+      events: [],
+      summary: { settings: { lanes: 1, promotion: "auto", runners: [] } },
+    });
+    for (let i = 0; i < 100 && !lanes().length; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(
+      lanes().map((e) => e.payload),
+      [{ lanes: 3 }],
+    );
+    // As the owner who chose it: the rig takes its settings from the owner alone.
+    assert.equal(lanes()[0]?.issued_by, "owner:ui");
+    // Given once, while it is on its way; then the rig takes it, and nothing more is given.
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(lanes().length, 1);
+    const id = String(lanes()[0]?.id);
+    s.store.commands.confirmApplied("core-5", id, "delivered", "{}", new Date().toISOString());
+    for (let i = 0; i < 100 && s.store.rigWorkers.get("core-5"); i++)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.equal(s.store.rigWorkers.get("core-5"), undefined);
+    assert.deepEqual(
+      s.store.rigHistory
+        .list("core-5")
+        .filter((x) => x.step === "workers_given")
+        .map((x) => x.ok),
+      [true],
+    );
   });
 
   test("a long rig and runner name is cut, with a hash, under Kubernetes' limits", () => {

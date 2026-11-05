@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { RIG_ID } from "../../../core/ids.ts";
-import { addClusterRunner, addMachineRunner, rigReportsSettings } from "../../clusters/index.ts";
-import { STEP_WORDS, setRigSettings } from "../../rigs/index.ts";
+import { addClusterRunner, addMachineRunner } from "../../clusters/index.ts";
+import { STEP_WORDS } from "../../rigs/index.ts";
 import type { ControlStore } from "../../store/index.ts";
 import { ago, esc } from "../../ui/components/index.ts";
 import { coreBlock, type RunnerPlaces, runnersBlock } from "../../ui/rigs/runners.ts";
@@ -118,29 +118,6 @@ export async function addRigRunners(
     }
   }
   return first;
-}
-
-/**
- * Add a rig's Workers at a time (goal 206), sent once the rig reports its settings, as Edit rig
- * sends it; its history says how it went.
- */
-export async function giveWorkers(
-  parts: Dashboard["parts"],
-  rig: string,
-  lanes: number,
-): Promise<void> {
-  const { store } = parts;
-  if (!(await rigReportsSettings(parts, rig))) {
-    store.rigHistory.add(rig, "workers_given", false, `${rig} has not reported its settings yet`);
-    return;
-  }
-  const out = await setRigSettings(parts, rig, { lanes }, "owner:ui", true);
-  store.rigHistory.add(
-    rig,
-    "workers_given",
-    out.state !== "refused",
-    out.state === "refused" ? out.error : `${lanes} at a time: ${out.said}`,
-  );
 }
 
 /** Where each runner process control set up for a rig is, and its GPU, by its name. */

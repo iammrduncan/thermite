@@ -166,7 +166,7 @@ The dashboard calls an epoch a **round**.
 | A job's lease | 15 minutes, renewed every block | A job whose lease ran out 3 times is `blocked` |
 | Readiness before each block | Up to 15 retries, 2 s apart | Then an infrastructure failure: `crash_infra`, one retry |
 | A CPU ready for timing | 1-minute load at most 75% of the cores | |
-| A GPU ready for timing | Use at most 5%, memory in use at most 600 MiB, at most 85 °C, no compute processes and no thermal or power slowdown. A value `nvidia-smi` can't give, the list of compute processes too, counts as not ready | |
+| A GPU ready for timing | Use at most 5%, memory in use at most 600 MiB, at most 85 °C, no compute processes and no thermal or power slowdown. A value `nvidia-smi` can't give, the list of compute processes too, counts as not ready. A GPU that shares the machine's memory, such as the GB10 of a DGX Spark, reports no memory of its own, its total either: its memory is not checked, the rest is | |
 | A slowed-down block | Thrown away and run again when the harness was CPU-throttled for more than 2% of it or of any one run, or the device reports a problem afterwards. 3 tries | Then an infrastructure failure |
 
 ### The rig and control

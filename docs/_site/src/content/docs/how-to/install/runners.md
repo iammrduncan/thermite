@@ -41,7 +41,7 @@ On the last step, **What this rig will be** says where the core runs, where the 
 
 The core's place is chosen first among those without a GPU, since the core needs none. **Next** stays off on a step until it is filled in, and on **Runners** while a note keeps **Create the rig** off.
 
-Press **Create the rig**: control sets the core up, then each runner, named for its machine or node, such as `gpu-node-1`, or for its GPU, such as `gb10-1`, where control can't tell the node. The rig takes them, and its **Workers at a time**, once it reports. A core with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same. With no runner chosen, the core measures on its own CPUs, as a CPU rig.
+Press **Create the rig**: control sets the core up, then each runner, named for its machine or node, such as `gpu-node-1`, or for its GPU, such as `gb10-1`, where control can't tell the node. The rig takes them, and its **Workers at a time**, once it reports: control keeps them until then, through a restart of its own, and gives them within a minute of the rig's first report. A core with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same. With no runner chosen, the core measures on its own CPUs, as a CPU rig.
 
 ## On a cluster or a machine control knows
 

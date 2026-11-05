@@ -96,6 +96,7 @@ export type {
 } from "./kb/index.ts";
 
 import { RigRunners } from "./runners.ts";
+import { RigWorkers } from "./workers.ts";
 
 export { KB_STORED_FILES } from "./kb/index.ts";
 export { OPEN_TRIAL_LINES } from "./live.ts";
@@ -153,6 +154,8 @@ export class ControlStore {
   readonly busKeys: BusKeys;
   /** The runner processes control set up for its rigs (goal 206). */
   readonly rigRunners: RigRunners;
+  /** Add a rig's Workers at a time, until the new rig takes it (goal 206). */
+  readonly rigWorkers: RigWorkers;
   readonly rigUpdates: RigUpdates;
   readonly mcpServers: McpServerRows;
   /** Changes the operator proposes to a campaign's settings, for the owner to approve. */
@@ -208,6 +211,7 @@ export class ControlStore {
     this.enrollments = new Enrollments(this, this.db);
     this.busKeys = new BusKeys(this, this.db);
     this.rigRunners = new RigRunners(this, this.db);
+    this.rigWorkers = new RigWorkers(this, this.db);
     this.rigUpdates = new RigUpdates(this, this.db);
     this.mcpServers = new McpServerRows(this, this.db);
     this.proposals = new CampaignProposals(this, this.db);
