@@ -148,6 +148,8 @@ export class DevRuns {
     const root = cwd
       .split(sep)
       .slice(0, join(this.scratchDir, "lanes", req.lane).split(sep).length + 2);
+    // As a lane's plain command: the lane's user also runs its agent's program (Claude Code,
+    // OpenCode), which a run that ends every process of its user would end with it.
     const change = await this.runner.run({
       role: req.lane as Role,
       argv: ["sh", "-c", "git add -A && git diff --cached --binary"],
@@ -155,6 +157,7 @@ export class DevRuns {
       env: laneCacheEnv(this.scratchDir, req.lane),
       rssLimitBytes: limits.rssMib * 1024 * 1024,
       captureBytes: 9 * 1024 * 1024,
+      keepBackground: true,
     });
     if (change.exitCode !== 0)
       return { ran: false, reason: `the change could not be read: ${change.stderr.slice(-500)}` };
