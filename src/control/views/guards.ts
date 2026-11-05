@@ -1,3 +1,4 @@
+import { GuardRule } from "../../core/metric-roles.ts";
 import { championsInForce } from "./facts.ts";
 import { type MetricValues, mean, metricValuesOf } from "./metric-values.ts";
 import type { RunView } from "./types.ts";
@@ -19,6 +20,8 @@ export interface GuardView {
   values: MetricValues | null;
   /** At confirmation, its change against the starting point, and whether that spent its allowance. */
   vs_start: { change: number | null; spent: boolean } | null;
+  /** A guard of the metric roles (goal 209): its bound; null for a contract's own guard. */
+  rule: GuardRule | null;
 }
 
 /** A verdict event's `guards`; empty when it has none (an older harness, a crash, no guards). */
@@ -36,6 +39,7 @@ export function guardsOf(raw: unknown): GuardView[] {
         change: num(g.change),
         values: metricValuesOf(g.values),
         vs_start: s ? { change: num(s.change), spent: s.spent === true } : null,
+        rule: GuardRule.safeParse(g.rule).data ?? null,
       },
     ];
   });

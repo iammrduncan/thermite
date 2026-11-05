@@ -54,6 +54,7 @@ export {
   valuesByCase,
   valuesWords,
 } from "./metric-values.ts";
+export { type GuardRow, type RunMetrics, roomLeft, runMetrics } from "./metrics.ts";
 export {
   OFFLINE_AFTER_MS,
   programModeOf,

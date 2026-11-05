@@ -8,6 +8,7 @@ import {
   campaignViews,
   championsInForce,
   championWords,
+  figure,
   newestRun,
   podStopped,
   type RigView,
@@ -27,6 +28,7 @@ export {
   valuesPairWords,
 } from "./gains.ts";
 export { attemptGuards, championGuardLine, guardCharts } from "./guards.ts";
+export { metricsBlock } from "./metrics.ts";
 export { APPLE_TOUCH_ICON, FAVICON_ICO, FAVICON_SVG, ICON_LINKS } from "./icons.ts";
 export { MD_CORE_JS, mdHtml } from "./markdown.ts";
 export { card } from "./need-card.ts";
@@ -373,8 +375,16 @@ export function deltaCell(d: number | null): string {
   return `<span class="delta ${d > 0 ? "ok" : d < 0 ? "bad" : "muted"}"><i style="width:${w}px;background:currentColor;opacity:.5"></i>${pct(d)}</span>`;
 }
 
-/** The champion's gain over time: a stepped line with an area, promotions marked. */
-export function gainChart(v: RunView, w = 760, h = 200): string {
+/**
+ * The champion's gain over time: a stepped line with an area, promotions marked. With `inUnit`,
+ * the same line in the metric's own unit: the start's value times one plus each gain (goal 209).
+ */
+export function gainChart(
+  v: RunView,
+  w = 760,
+  h = 200,
+  inUnit?: { start: number; unit: string },
+): string {
   const steps = championsInForce(v);
   if (steps.length < 2)
     return `<div class="empty">No promotion yet: the champion is the seed.</div>`;
@@ -404,7 +414,7 @@ export function gainChart(v: RunView, w = 760, h = 200): string {
     .map((f) => y0 + f * (y1 - y0))
     .map(
       (y) =>
-        `<line class="grid" x1="${padL}" x2="${w - padR}" y1="${Y(y).toFixed(1)}" y2="${Y(y).toFixed(1)}"/><text x="${padL - 8}" y="${(Y(y) + 4).toFixed(1)}" text-anchor="end">${pct(y, 0)}</text>`,
+        `<line class="grid" x1="${padL}" x2="${w - padR}" y1="${Y(y).toFixed(1)}" y2="${Y(y).toFixed(1)}"/><text x="${padL - 8}" y="${(Y(y) + 4).toFixed(1)}" text-anchor="end">${inUnit ? esc(figure(inUnit.start * (1 + y))) : pct(y, 0)}</text>`,
     )
     .join("");
   const fmt = (t: number) => {
@@ -421,7 +431,7 @@ export function gainChart(v: RunView, w = 760, h = 200): string {
   return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="champion gain over time">${grid}
 <path class="area" d="${area}"/><path class="line" d="${d}"/>${pts}
 <text x="${padL}" y="${h - 6}">${esc(fmt(t0))}</text><text x="${w - padR}" y="${h - 6}" text-anchor="end">now</text>
-<text x="${(X(t1) - 4).toFixed(1)}" y="${(lastY - 8).toFixed(1)}" text-anchor="end" style="fill:var(--foreground);font-weight:600">${pct(ys.at(-1) as number)}${championWords(v) ? ` · ${esc(championWords(v))}` : ""}</text></svg>`;
+<text x="${(X(t1) - 4).toFixed(1)}" y="${(lastY - 8).toFixed(1)}" text-anchor="end" style="fill:var(--foreground);font-weight:600">${inUnit ? esc(`${figure(inUnit.start * (1 + (ys.at(-1) as number)))}${inUnit.unit ? ` ${inUnit.unit}` : ""}`) : `${pct(ys.at(-1) as number)}${championWords(v) ? ` · ${esc(championWords(v))}` : ""}`}</text></svg>`;
 }
 
 /** A small sparkline of the champion's gain, for tiles and lists. */

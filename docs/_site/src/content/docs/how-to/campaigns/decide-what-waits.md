@@ -72,7 +72,7 @@ Next to it, **Ask me first about** chooses what else waits for you. All of it is
 
 A run keeps the choices it started with. A run started with **ask me every time** keeps asking, and so does a run with no rule of its own on a rig whose **Edit rig** says **Ask me for each change**.
 
-The run's **Overview** tab shows the rule in force, in the block **The run**, as **Promotion**: `Automatic when the judge confirms, after the auditor's clear when an audit is called for`, `Only with your approval`, or `The rig's default (automatic unless it was set to ask you)`, and then what else it asks you about, such as `. It asks you about a gain above 15%, a change with declared flaws`.
+The run's **Info** tab shows the rule in force, in the block **The run**, as **Promotion**: `Automatic when the judge confirms, after the auditor's clear when an audit is called for`, `Only with your approval`, or `The rig's default (automatic unless it was set to ask you)`, and then what else it asks you about, such as `. It asks you about a gain above 15%, a change with declared flaws`.
 
 ### Promotions
 

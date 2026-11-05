@@ -20,6 +20,7 @@ import {
   gainChip,
   guardCharts,
   kpi,
+  metricsBlock,
   moreText,
   num,
   stackBar,
@@ -33,6 +34,7 @@ import {
   championHeldOutBlock,
   confirmingWords,
   goalState,
+  jobHtml,
   leftByClose,
   runBrief,
   timeline,
@@ -349,9 +351,12 @@ export function runHelpers(dash: Dashboard) {
         : "";
     // The champions, newest first: what each one changed and what it gained, and its commit in git.
     const onRig = x;
+    // A hill climb's metrics (goal 209) draw the champions' gain and guards above the columns;
+    // a run the judge has not measured the start of yet keeps them here.
+    const metrics = i.mode === "hill_climb" ? metricsBlock(i) : "";
     const ladder =
       i.mode === "hill_climb"
-        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat">${git.gitLine(x, now)}<div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}${i.champion
+        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat">${git.gitLine(x, now)}${metrics ? "" : `<div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}`}${i.champion
             .filter((x) => !x.reopened)
             .slice()
             .reverse()
@@ -409,92 +414,116 @@ export function runHelpers(dash: Dashboard) {
     ]
       .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`)
       .join("");
+    // The judge's queue for this run (goal 209): what it measures now, then what waits, in order.
+    const mine = (j: { run: string | null }) => j.run === i.id;
+    const measuring = (
+      u.judge.running.length ? u.judge.running : u.judge.now ? [u.judge.now] : []
+    ).filter(mine);
+    const inQueue = u.judge.queued.filter(mine);
+    const jobRow = (j: (typeof inQueue)[number], word: string, tone: string, at: string | null) =>
+      `<div class="jq"><span class="chip ${tone}">${word}</span><span class="jq-main">${jobHtml(u, j)}${j.by ? ` <span class="muted small">on ${esc(j.by.replace(/^executor-/, ""))}</span>` : ""}</span><span class="muted small nowrap">${at ? esc(ago(at, now)) : ""}</span></div>`;
+    const judgeQueue =
+      i.mode !== "research" && (measuring.length || inQueue.length || i.status === "running")
+        ? `<div class="block" data-part="judge-queue"><div class="head"><h2>Judge queue</h2><span class="n">${measuring.length} measuring · ${inQueue.length} waiting</span></div><div class="card flat">${
+            measuring.length || inQueue.length
+              ? [
+                  ...measuring.map((j) => jobRow(j, "Measuring", "info", j.started_at)),
+                  ...inQueue.map((j) => jobRow(j, "Waiting", "", j.queued_at)),
+                ].join("")
+              : `<div class="empty">Nothing to measure: the judge waits for the lanes' next change.</div>`
+          }</div></div>`
+        : "";
+    const facts = `<div class="block" data-part="facts"><div class="head"><h2>The run</h2></div><div class="card"><dl class="facts">${settings}</dl></div></div>`;
     const body =
-      view === "attempts"
-        ? `${i.attempts.length ? `<div class="card" style="margin-bottom:12px"><div class="card-head"><span class="title">How the judge decided</span><span class="right muted small">${i.attempts.length} attempts</span></div><div style="margin-top:10px">${stackBar(i.verdicts)}</div></div>` : ""}${laneCard}${attemptRows(u, i, newest.slice(0, 300), now)}${i.attempts.length > 300 ? `<div class="muted small" style="margin-top:8px">The newest 300 of ${i.attempts.length}.</div>` : ""}${records}`
-        : view === "prompts"
-          ? promptsTab(i, prompts, now)
-          : view === "history"
-            ? timeline(
-                i.timeline.map((e) => ({ u, e })),
-                now,
-                { limit: 400 },
-              )
-            : view === "planner"
-              ? plannerTab({
-                  u,
-                  r: i,
+      view === "info"
+        ? facts
+        : view === "attempts"
+          ? `${i.attempts.length ? `<div class="card" style="margin-bottom:12px"><div class="card-head"><span class="title">How the judge decided</span><span class="right muted small">${i.attempts.length} attempts</span></div><div style="margin-top:10px">${stackBar(i.verdicts)}</div></div>` : ""}${laneCard}${attemptRows(u, i, newest.slice(0, 300), now)}${i.attempts.length > 300 ? `<div class="muted small" style="margin-top:8px">The newest 300 of ${i.attempts.length}.</div>` : ""}${records}`
+          : view === "prompts"
+            ? promptsTab(i, prompts, now)
+            : view === "history"
+              ? timeline(
+                  i.timeline.map((e) => ({ u, e })),
                   now,
-                  csrf: t,
-                  back,
-                  cmd: (f) => cmdForm(c, f),
-                  model: (() => {
-                    const own = store.agentModels.byRole(u.id).planner;
-                    if (own) return `${own.model}, its own model (from ${own.provider})`;
-                    return u.model
-                      ? u.model.source === "none"
-                        ? "No model: the lanes take the queue in order and keep to the rules."
-                        : `${u.model.model}, the agents' model (Edit rig can give the planner its own)`
-                      : "Not reported by this rig's harness.";
-                  })(),
-                  figures: diagnostics,
-                  propagate,
-                  // No model for the planner: an old rule in words waits to be converted (goal 066).
-                  noModel: !store.agentModels.byRole(u.id).planner && u.model?.source === "none",
-                  // A message to the planner that control or the rig refused.
-                  refused:
-                    c.req.query("msgerror") ||
-                    (() => {
-                      const why = store.commands.lastMessageToRun(u.id, i.id, "planner")?.refused;
-                      return why ? `The rig refused your last message to the planner: ${why}` : "";
-                    })(),
-                })
-              : view === "journal"
-                ? journalTab({
+                  { limit: 400 },
+                )
+              : view === "planner"
+                ? plannerTab({
+                    u,
                     r: i,
                     now,
-                    field: u.ledger_id
-                      ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, JOURNAL_SHOWN)
-                      : { total: 0, items: [] },
-                    counts: u.ledger_id ? store.kb().runCounts(u.id, u.ledger_id, i.id) : {},
-                    reads: i.campaign ? store.kb().reads(i.campaign) : [],
+                    csrf: t,
+                    back,
+                    cmd: (f) => cmdForm(c, f),
+                    model: (() => {
+                      const own = store.agentModels.byRole(u.id).planner;
+                      if (own) return `${own.model}, its own model (from ${own.provider})`;
+                      return u.model
+                        ? u.model.source === "none"
+                          ? "No model: the lanes take the queue in order and keep to the rules."
+                          : `${u.model.model}, the agents' model (Edit rig can give the planner its own)`
+                        : "Not reported by this rig's harness.";
+                    })(),
+                    figures: diagnostics,
+                    propagate,
+                    // No model for the planner: an old rule in words waits to be converted (goal 066).
+                    noModel: !store.agentModels.byRole(u.id).planner && u.model?.source === "none",
+                    // A message to the planner that control or the rig refused.
+                    refused:
+                      c.req.query("msgerror") ||
+                      (() => {
+                        const why = store.commands.lastMessageToRun(u.id, i.id, "planner")?.refused;
+                        return why
+                          ? `The rig refused your last message to the planner: ${why}`
+                          : "";
+                      })(),
                   })
-                : view === "experiments"
-                  ? experimentsTab({
-                      u,
+                : view === "journal"
+                  ? journalTab({
                       r: i,
                       now,
-                      csrf: t,
-                      back,
-                      cmd: (f) => cmdForm(c, f),
-                      directions: [
-                        ...new Set([
-                          ...i.queue.map((x) => x.direction),
-                          ...i.trials.map((x) => x.direction ?? ""),
-                          ...(i.epoch?.assignments.map((a) => a.direction) ?? []),
-                        ]),
-                      ].filter(Boolean),
+                      field: u.ledger_id
+                        ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, JOURNAL_SHOWN)
+                        : { total: 0, items: [] },
+                      counts: u.ledger_id ? store.kb().runCounts(u.id, u.ledger_id, i.id) : {},
+                      reads: i.campaign ? store.kb().reads(i.campaign) : [],
                     })
-                  : view === "reviews" && researchRun
-                    ? reviewsTab({ u, r: i, now, ...reviewSources(u, i) })
-                    : view === "hypotheses" && researchRun
-                      ? hypothesesTab({ u, r: i, now, cmd: (f) => cmdForm(c, f), back })
-                      : view === "stats"
-                        ? usage
-                          ? runStatsTab(usage)
-                          : `<div class="card"><div class="empty">No model use: this run has no agents.</div></div>`
-                        : `<p class="run-said" data-part="run-said">${said}</p>
+                  : view === "experiments"
+                    ? experimentsTab({
+                        u,
+                        r: i,
+                        now,
+                        csrf: t,
+                        back,
+                        cmd: (f) => cmdForm(c, f),
+                        directions: [
+                          ...new Set([
+                            ...i.queue.map((x) => x.direction),
+                            ...i.trials.map((x) => x.direction ?? ""),
+                            ...(i.epoch?.assignments.map((a) => a.direction) ?? []),
+                          ]),
+                        ].filter(Boolean),
+                      })
+                    : view === "reviews" && researchRun
+                      ? reviewsTab({ u, r: i, now, ...reviewSources(u, i) })
+                      : view === "hypotheses" && researchRun
+                        ? hypothesesTab({ u, r: i, now, cmd: (f) => cmdForm(c, f), back })
+                        : view === "stats"
+                          ? usage
+                            ? runStatsTab(usage)
+                            : `<div class="card"><div class="empty">No model use: this run has no agents.</div></div>`
+                          : `<p class="run-said" data-part="run-said">${said}</p>
 <div data-part="run-needs">${waiting ? `<div class="block" id="needs"><div class="head"><h2>Needs you</h2><span class="n">${waiting}</span></div><div class="dqs">${decisions.map((n) => n.html).join("")}</div></div>` : ""}</div>
-<div class="cols run-cols"><div>
-${goals}${championHeldOutBlock(i, now)}${research}${baselineBlock(i, now)}${ladder}
+${metrics}<div class="cols run-cols"><div>
+${goals}${championHeldOutBlock(i, now)}${research}${judgeQueue}
 <div class="block" data-part="attempts"><div class="head"><h2>Attempts</h2><span class="n">${i.attempts.length}</span><span class="right"><a href="${runHref(i, "attempts")}">All ${i.attempts.length}</a></span></div>${attemptRows(u, i, newest.slice(0, 8), now)}</div>
+${ladder}${baselineBlock(i, now)}
 </div><div class="side">
 <div class="block" data-part="now"><div class="head"><h2>Now</h2></div>${now_}</div>
-<div class="block" data-part="facts"><div class="head"><h2>The run</h2></div><div class="card"><dl class="facts">${settings}</dl></div></div>
 <div class="block" data-part="recent"><div class="head"><h2>Recent</h2><span class="right"><a href="${runHref(i, "history")}">Full history</a></span></div>${recent}</div>
 </div></div>`;
     return `${usage ? runUsageTop(usage) : ""}<section class="block" id="run-${esc(i.id)}">
-<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${fmtInt(n)} note${n === 1 ? "" : "s"}`)(u.ledger_id ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, 0).total : 0)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}</nav>
+<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${fmtInt(n)} note${n === 1 ? "" : "s"}`)(u.ledger_id ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, 0).total : 0)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}${sub("info", "Info")}</nav>
 ${body}
 </section>`;
   };

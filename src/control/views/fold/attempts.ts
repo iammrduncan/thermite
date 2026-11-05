@@ -52,6 +52,7 @@ export const ATTEMPTS: Handlers = {
       delta: null,
       values: null,
       guards: [],
+      metrics: [],
       hypothesis: (b.hypothesis as string | null) ?? null,
       recorded_at: e.at,
       updated_at: e.at,
@@ -113,6 +114,11 @@ export const ATTEMPTS: Handlers = {
     a.delta = typeof b.delta === "number" ? b.delta : null;
     a.values = metricValuesOf(b.values);
     a.guards = frozen(guardsOf(b.guards));
+    a.metrics = frozen(
+      (Array.isArray(b.metrics) ? b.metrics : [])
+        .slice(0, 50)
+        .flatMap((m) => metricValuesOf(m) ?? []),
+    );
     a.ci =
       typeof b.ci_low === "number" && typeof b.ci_high === "number" ? [b.ci_low, b.ci_high] : null;
     a.reasons = typeof b.reasons === "string" ? b.reasons : null;

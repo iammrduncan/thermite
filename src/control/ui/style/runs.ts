@@ -19,6 +19,42 @@ export const RUNS = `/* a run at a glance: its lanes, planner and judge, one lin
 .goalbar .seg { width: 14px; height: 8px; border-radius: 2px; background: var(--border); }
 .goalbar .seg.ok { background: var(--success); } .goalbar .seg.bad { background: var(--error); } .goalbar .seg.warn { background: var(--warning); }
 
+/* a hill climb's metrics on its Overview (goal 209): priorities, guard rows, informational tiles */
+.ms-top { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+.ms-top > .ms-primary:only-child { grid-column: span 2; }
+@media (max-width: 1100px) { .ms-top { grid-template-columns: minmax(0, 1fr); } .ms-top > .ms-primary:only-child { grid-column: auto; } }
+.ms-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.ms-big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.fig-big { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.ms-mid { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 4px; }
+.ms-switch { display: inline-flex; border: 1px solid var(--input); border-radius: var(--control-radius); overflow: hidden; float: right; margin-top: -30px; }
+.ms-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.ms-switch label { padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.ms-switch input:checked + label { background: var(--foreground); color: var(--background); }
+.ms-switch input:focus-visible + label { outline: 2px solid var(--primary); }
+.ms-chart-unit { display: none; }
+.ms-primary:has(#ms-unit:checked) .ms-chart-unit { display: block; }
+.ms-primary:has(#ms-unit:checked) .ms-chart-gain { display: none; }
+.ms-guards { margin-bottom: 14px; }
+.ms-guards-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.ms-guard { display: grid; grid-template-columns: minmax(180px, 1.3fr) 330px 110px 110px minmax(120px, 1fr); gap: 0 14px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.ms-guard:last-child { border-bottom: 0; }
+.ms-guard-cols { background: var(--muted); padding-top: 5px; padding-bottom: 5px; }
+@media (max-width: 1000px) { .ms-guard { grid-template-columns: minmax(0, 1fr); gap: 4px; } .ms-guard-cols { display: none; } }
+.ms-info-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
+.ms-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.ms-tile-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+svg.chart.ms-spark { height: auto; display: inline-block; }
+svg.chart .ms-line { fill: none; stroke: var(--info); stroke-width: 1.5; }
+svg.chart .ms-pt { fill: var(--info); }
+svg.chart .ms-latest { fill: var(--card); stroke: var(--info); stroke-width: 1.5; stroke-dasharray: 2 2; }
+svg.chart .ms-band { fill: var(--success); opacity: .12; }
+
+/* a run's judge queue (goal 209) */
+.jq { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.jq:last-child { border-bottom: 0; }
+.jq-main { min-width: 0; word-break: break-word; }
+
 /* a run's page */
 .run-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .run-title { font-size: 18px; font-weight: 650; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }

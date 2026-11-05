@@ -1,4 +1,5 @@
 import type { Hardware } from "../../core/hardware.ts";
+import type { GuardRule } from "../../core/metric-roles.ts";
 import type { RigSettings } from "../../core/rig-settings.ts";
 import type { RunpodRigView } from "../runpod/index.ts";
 import type { RigVersions } from "../versions.ts";
@@ -110,6 +111,8 @@ export interface AttemptView {
   values: MetricValues | null;
   /** Its latest verdict's guards: each one's change and values (goal 184). */
   guards: GuardView[];
+  /** Its latest verdict's lower priorities' and informational metrics' values (goal 209). */
+  metrics: MetricValues[];
   hypothesis: string | null;
   recorded_at: string;
   updated_at: string;
@@ -246,12 +249,26 @@ export interface BaselineView {
   guards: { metric: string; direction: string; max_total_regression: number }[];
   /** Each kit metric's unit. */
   units: Record<string, string>;
+  /** The run's metric plan as the judge recorded it (goal 209); null in a baseline from before. */
+  plan: PlanView | null;
   /** Each measured cell: each kit metric's median, median absolute deviation and count. */
   cells: { cell: string; metrics: { metric: string; median: number; mad: number; n: number }[] }[];
   /** What the kit's check kept in the baseline's judge-only folder: each file's size and hash. */
   files: { path: string; bytes: number; sha256: string }[];
   bytes: number;
   summary: string;
+}
+
+/** A run's metric plan (goal 209): its priority, guard and informational metrics. */
+export interface PlanView {
+  priorities: {
+    metric: string;
+    priority: number;
+    direction: "max" | "min";
+    min_effect: number | null;
+  }[];
+  guards: { metric: string; rule: GuardRule; from: string }[];
+  info: { metric: string; kind: string }[];
 }
 
 /** A hill climb in setup (goal 115): the judge could not measure its starting point. */
