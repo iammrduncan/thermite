@@ -42,7 +42,7 @@ interface PlannedInfo {
   kind: string;
 }
 
-interface MetricPlan {
+export interface MetricPlan {
   priorities: PlannedPriority[];
   guards: PlannedGuard[];
   info: PlannedInfo[];

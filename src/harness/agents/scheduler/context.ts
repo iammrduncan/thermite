@@ -3,6 +3,8 @@ import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
 import type { Contract } from "../../../core/contract.ts";
+import { type MetricPlan, metricPlan } from "../../../core/metric-plan.ts";
+import { guardWords } from "../../../core/metric-roles.ts";
 import type { StoredRule } from "../../../core/directives.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Runner } from "../../broker/index.ts";
@@ -258,10 +260,34 @@ export function halted(sched: SchedulerContext): boolean {
   return sched.stopping || sched.o.draining?.() === true;
 }
 
-export function objectiveOf(c: Contract): string {
+/**
+ * What the agents work toward, in words. A hill climb's says its primary metric, and from the
+ * run's metric plan (goal 209; the judge records it with the baseline, and before that the
+ * contract's alone) what breaks a tie on it, the guards a change must keep, however much it
+ * gains, and the metrics only recorded.
+ */
+export function objectiveOf(c: Contract, plan?: MetricPlan | undefined): string {
   if (c.mode === "hill_climb") {
     const p = c.objective.primary;
-    return `${p.direction === "max" ? "increase" : "decrease"} ${p.metric} (at least ${(p.min_effect * 100).toFixed(1)}% to count) on cells ${c.cells.join(", ")}, without breaking correctness`;
+    const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+    const m = plan ?? metricPlan(c);
+    const ties = m.priorities
+      .slice(1)
+      .filter((x) => x.min_effect !== undefined)
+      .map(
+        (x) =>
+          `${x.metric} (${x.direction === "max" ? "higher" : "lower"}, at least ${pct(x.min_effect ?? 0)})`,
+      );
+    const guards = m.guards.map((g) => `${g.metric} ${guardWords(g.rule)}`);
+    const info = m.info.map((i) => i.metric);
+    return [
+      `${p.direction === "max" ? "increase" : "decrease"} ${p.metric} (at least ${pct(p.min_effect)} to count) on cells ${c.cells.join(", ")}, without breaking correctness`,
+      ...(ties.length ? [`A change equal on ${p.metric} wins by ${ties.join(", then ")}`] : []),
+      ...(guards.length
+        ? [`A change is refused, however much it gains, unless it keeps ${guards.join("; ")}`]
+        : []),
+      ...(info.length ? [`Recorded, never deciding: ${info.join(", ")}`] : []),
+    ].join(". ");
   }
   if (c.mode === "goal") {
     return `reach these goals: ${c.goals.map((g) => `${g.id} (${g.description})`).join("; ")}`;

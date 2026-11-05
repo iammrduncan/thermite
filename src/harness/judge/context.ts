@@ -334,19 +334,32 @@ export class JudgeContext {
       ciLow: toFraction(d.primary.low),
       ciHigh: toFraction(d.primary.high),
       values: d.values,
-      guards: d.guards.map((g) => {
-        // At confirmation, the guard against the run's baseline too (goal 115): a log ratio.
-        const s = d.vsStart?.find((x) => x.metric === g.metric);
-        return {
-          metric: g.metric,
-          status: g.status,
-          estimate: g.interval.estimate,
-          low: g.interval.low,
-          high: g.interval.high,
-          values: g.values,
-          ...(s ? { vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent } } : {}),
-        };
-      }),
+      info: d.info,
+      guards: [
+        ...d.guards.map((g) => {
+          // At confirmation, the guard against the run's baseline too (goal 115): a log ratio.
+          const s = d.vsStart?.find((x) => x.metric === g.metric && !x.rule);
+          return {
+            metric: g.metric,
+            status: g.status,
+            estimate: g.interval.estimate,
+            low: g.interval.low,
+            high: g.interval.high,
+            values: g.values,
+            ...(g.rule ? { rule: g.rule } : {}),
+            ...(s ? { vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent } } : {}),
+          };
+        }),
+        // A role guard against the baseline alone (goal 209): its own entry, with its bound.
+        ...(d.vsStart ?? [])
+          .filter((s) => s.rule)
+          .map((s) => ({
+            metric: s.metric,
+            status: s.spent ? "violated" : "ok",
+            rule: s.rule,
+            vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent },
+          })),
+      ],
     };
   }
 

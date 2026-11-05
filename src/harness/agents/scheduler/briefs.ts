@@ -6,7 +6,7 @@ import { log } from "../../../common/log.ts";
 import { BRIEF_FILE, briefFile, briefSection } from "../../../core/brief.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { NOTES_ARE_DATA, notesText } from "../../journal.ts";
-import { baselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
+import { baselineOf, baselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
 import { briefingText } from "../../knowledge.ts";
 import { messageText } from "../../messages.ts";
 import type { Experiment } from "../../queue.ts";
@@ -160,7 +160,7 @@ export function brief(
     lane: a.lane,
     title: contract.title,
     mode: contract.mode,
-    objective: objectiveOf(contract),
+    objective: objectiveOf(contract, baselineOf(sched.ledger, run)?.plan),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : undefined,
     forbiddenPatterns: "forbidden_patterns" in contract ? contract.forbidden_patterns : [],
     start,

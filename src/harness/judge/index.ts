@@ -12,6 +12,7 @@ export {
   BASELINE_PRIORITY,
   type BaselineState,
   baselineDir,
+  baselineOf,
   baselineState,
   keepBaselineDir,
   prepareBaselineDir,

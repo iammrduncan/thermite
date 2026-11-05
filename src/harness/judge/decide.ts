@@ -50,6 +50,8 @@ export interface Decision<V> {
   guards: GuardResult[];
   /** At confirmation, each guard against the run's baseline (goal 115), when it has one. */
   vsStart?: StartGuard[] | undefined;
+  /** The informational metrics' measured values (goal 209), as the main metric's are. */
+  info?: MetricValues[] | undefined;
   reasons: string;
 }
 
@@ -128,6 +130,17 @@ export type Roles = Readonly<Record<string, MetricRole>>;
  */
 function roleGuards(policy: Policy, roles: Roles | undefined): PlannedGuard[] {
   return metricPlan(policy, roles).guards.filter((g) => !g.legacy);
+}
+
+/** The informational metrics' values in these blocks, each one the blocks carry (goal 209). */
+function infoValues(
+  policy: Policy,
+  roles: Roles | undefined,
+  blocks: readonly Block[],
+): MetricValues[] {
+  return metricPlan(policy, roles)
+    .info.map((i) => metricValues(blocks, i.metric, policy.cells))
+    .filter((v) => v.cells.length);
 }
 
 /** A metric's spread in the reference's blocks: per cell, the sd of its log values; their mean. */
@@ -432,11 +445,13 @@ export function decideScreen(
     ...guardResults(policy, blocks, alpha),
     ...championGuardResults(extra, blocks, policy.cells, alpha),
   ];
+  const info = infoValues(policy, roles, blocks);
   const result = (verdict: ScreenVerdict | undefined, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
+    ...(info.length ? { info } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 
@@ -510,12 +525,14 @@ export function decideConfirm(
         ...baselineGuardResults(extra, blocks, policy.cells, start),
       ]
     : undefined;
+  const info = infoValues(policy, roles, blocks);
   const result = (verdict: ConfirmVerdict, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
     ...(vsStart ? { vsStart } : {}),
+    ...(info.length ? { info } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 

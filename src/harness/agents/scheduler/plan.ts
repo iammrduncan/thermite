@@ -4,6 +4,7 @@ import { asToken } from "../../../core/directions.ts";
 import { queueTarget } from "../../../core/queue-target.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import { notesData } from "../../journal.ts";
+import { baselineOf } from "../../judge/index.ts";
 import { messageText } from "../../messages.ts";
 import { type Experiment, inDirection } from "../../queue.ts";
 import { type Handout, PLANNER } from "../coordinator.ts";
@@ -296,7 +297,7 @@ export function plannerInput(
     run,
     epoch: n,
     laneCount,
-    objective: objectiveOf(contract),
+    objective: objectiveOf(contract, baselineOf(sched.ledger, run)?.plan),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
     champion: { seq: champion.seq, gain: championGain(sched.ledger, run) },
     registry: sched.registry.directions(run),
