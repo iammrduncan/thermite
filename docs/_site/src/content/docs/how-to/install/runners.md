@@ -24,13 +24,13 @@ A lane runs on its own runner first, then on a shared one; a lane that no runner
 
 ## When you add the rig
 
-**Rigs › Add a rig** has three steps and a summary:
+**Rigs › Add a rig** is a wizard. Under **What kind of rig?**, choose **Several machines** and press **Next**; then, a step at a time:
 
-1. **1 · The core**: where the core goes, any machine or free slot control knows, with the core's CPUs, memory and disk, filled in from the slot's quota, and on a cluster its **Node**. It needs no GPU.
-2. **2 · Runners**: none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. A runner on a GPU of a DRA class whose node control read from the cluster goes on that node. **Workers at a time** sets how many lanes work at once, 2 by default.
-3. **3 · Name and start**: the rig's name, and the images: the core's, and the runners' CUDA image for their GPUs.
+1. **The core** (**Where does the core run?**): where the core goes, any machine or free slot control knows, with the core's CPUs, memory and disk, filled in from the slot's quota, and on a cluster its **Node**. It needs no GPU.
+2. **Runners** (**Which GPUs are its runners?**): none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. A runner on a GPU of a DRA class whose node control read from the cluster goes on that node. **Workers at a time** sets how many lanes work at once, 2 by default.
+3. **Name and create** (**Name it and create it**): the rig's name, and the images: the core's, and the runners' CUDA image for their GPUs.
 
-**What this rig will be** says where the core runs, where the judge measures and where each lane tries its changes, and notes what would go wrong:
+On the last step, **What this rig will be** says where the core runs, where the judge measures and where each lane tries its changes, and notes what would go wrong:
 
 | Note | Create the rig |
 | --- | --- |
@@ -39,7 +39,7 @@ A lane runs on its own runner first, then on a shared one; a lane that no runner
 | A runner that is a lane's beyond **Workers at a time**: "… it would stay idle." | On |
 | The core and a runner on one machine, or in one slot: the judge's timings can be noisier | On |
 
-The core's place is chosen first among those without a GPU, since the core needs none.
+The core's place is chosen first among those without a GPU, since the core needs none. **Next** stays off on a step until it is filled in, and on **Runners** while a note keeps **Create the rig** off.
 
 Press **Create the rig**: control sets the core up, then each runner, named for its machine or node, such as `gpu-node-1`, or for its GPU, such as `gb10-1`, where control can't tell the node. The rig takes them, and its **Workers at a time**, once it reports. A core with no GPU of its own, given a runner of the judge's or a shared one, judges on its runners alone (`THERMITE_LOCAL_JUDGE=0`); MCP's `add_cluster_rig` takes `judge_on_runners` for the same. With no runner chosen, the core measures on its own CPUs, as a CPU rig.
 

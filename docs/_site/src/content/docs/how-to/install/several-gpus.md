@@ -22,12 +22,12 @@ A [rig](../../reference/glossary.md) with one GPU shares it: while the judge mea
 
 ## When you add the rig
 
-**Rigs › Add a rig** makes each GPU of a machine or a cluster a runner of its own, one **+ Add a runner** each, under **2 · Runners**, each in a pool: as many as the judge should measure on are **The judge's**, and the rest the lanes', each a lane's or **Shared**. A GPU another rig or runner uses says so and can't be chosen. See [Give a rig runners on other machines](runners.md).
-
-The rules above are for the GPUs of a rig's own harness, which these give it:
+On **Rigs › Add a rig**, a rig of **One machine** takes the GPUs ticked under **Which GPUs does it use?**, and **GPUs for the judge** sets the judge's share; on a machine the lowest-numbered are the judge's. A GPU another rig or runner uses says so and can't be ticked. A rig of **Several machines** makes each GPU of another machine a runner of its own, one **+ Add a runner** each, in a pool: as many as the judge should measure on are **The judge's**, and the rest the lanes', each a lane's or **Shared** ([Give a rig runners on other machines](runners.md)).
 
 | Where the rig goes | Choose the GPUs | Choose the judge's share |
 | --- | --- | --- |
+| A machine over SSH ([guide](rig-on-a-machine.md)) | Tick each GPU. The lowest-numbered are the judge's | **GPUs for the judge** |
+| A Kubernetes cluster ([guide](rig-on-a-cluster.md)) | Tick GPUs of one node and one way | **GPUs for the judge** |
 | A machine you join yourself ([guide](join-a-rig.md)) | **GPUs on the machine**: their numbers as `nvidia-smi` lists them, such as `0,1,2,3` | **GPUs for the judge** |
 | A namespace you join yourself | **GPUs**: up to 8 | **GPUs for the judge** |
 | A cluster, over MCP's `add_cluster_rig` | `gpus`, and `gpu_mode` | `judge_gpus` |

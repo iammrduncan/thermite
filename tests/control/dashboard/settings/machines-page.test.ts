@@ -56,7 +56,7 @@ describe("Settings › Machines (goal 203)", () => {
     assert.match(add, /value="cluster:k8s-a" checked/);
     assert.match(
       add,
-      /<a class="small" href="\/ui\/settings\/machines\?add=1#add-machine">\+ A new machine \(Settings › Machines\)<\/a>/,
+      /Not listed\? <a href="\/ui\/settings\/machines\?add=1#add-machine">Add a machine or a cluster under Settings › Machines<\/a>/,
     );
     assert.match(
       await s.page("/ui/settings/machines?add=1"),

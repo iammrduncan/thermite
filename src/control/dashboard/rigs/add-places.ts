@@ -437,7 +437,7 @@ export function coreRows(places: CorePlace[], wanted: string | undefined): strin
       const size = p.size
         ? ` data-cpus="${esc(p.size.cpus)}" data-mem="${esc(p.size.memoryGi)}" data-disk="${esc(p.size.diskGb)}"`
         : "";
-      return `<label class="ar-place${p.why ? " dis" : ""}${checked ? " on" : ""}"><input type="radio" name="place" value="${esc(p.value)}"${p.why ? " disabled" : checked ? " checked" : ""} data-name="${esc(p.name)}" data-arch="${esc(p.arch)}"${size}${p.cluster ? ` data-cluster="${esc(p.cluster)}"` : ""}><span class="ar-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(p.where)}</span>${p.checked && !p.why ? ` <span class="chip ok">${esc(p.checked)}</span>` : ""} <span class="chip info" data-core-chip hidden>the core</span></span><span class="muted small">${esc(p.why ? `Not ready: ${p.why}. Fix it under Settings › Machines.` : p.facts)}</span></span></label>`;
+      return `<label class="ar-place${p.why ? " dis" : ""}${checked ? " on" : ""}"><input type="radio" name="place" value="${esc(p.value)}"${p.why ? " disabled" : checked ? " checked" : ""} data-name="${esc(p.name)}" data-arch="${esc(p.arch)}" data-gpus="${p.gpus}"${size}${p.cluster ? ` data-cluster="${esc(p.cluster)}"` : ""}><span class="ar-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(p.where)}</span>${p.checked && !p.why ? ` <span class="chip ok">${esc(p.checked)}</span>` : ""} <span class="chip info" data-core-chip hidden>the core</span></span><span class="muted small">${esc(p.why ? `Not ready: ${p.why}. Fix it under Settings › Machines.` : p.facts)}</span></span></label>`;
     })
     .join("");
 }
@@ -502,5 +502,59 @@ export function coreNodeOptions(store: ControlStore): string {
             )}</option>`,
         ),
     )
+    .join("");
+}
+
+/**
+ * Add a rig's GPUs step for a rig of one machine (the owner's wizard, goal 206): for each place,
+ * its free GPUs to tick. A machine's go by index (`gpus`); a cluster's by place (`one_gpu`: its
+ * slot, node and way of asking), one tick each, and a rig on a cluster takes its GPUs from one
+ * node and one way, which the page's script keeps.
+ */
+export function oneMachineGpus(
+  store: ControlStore,
+  places: CorePlace[],
+  groups: ReturnType<typeof runnerGroups>,
+): string {
+  const box = (name: string, value: string, label: string, more: string, used?: string) =>
+    `<label class="gpu-pick${used ? " dis" : ""}"><input type="checkbox" name="${name}" value="${esc(value)}"${used ? " disabled" : ""}${more}><span><b>${esc(label)}</b></span><span class="muted small">${esc(used ?? "free")}</span></label>`;
+  return places
+    .filter((p) => !p.why)
+    .map((p) => {
+      let rows = "";
+      if (p.value.startsWith("machine:")) {
+        const m = store.machines.get(p.value.slice(8));
+        const f = m?.facts as MachineFacts | null | undefined;
+        const g = groups.find((x) => x.key === p.value);
+        rows = (f?.gpus ?? [])
+          .map((x) => {
+            const used = g?.gpus.find((y) => y.label.startsWith(`GPU ${x.index} ·`))?.used;
+            return box(
+              "gpus",
+              String(x.index),
+              `GPU ${x.index} · ${x.name}`,
+              "",
+              used ?? (g ? undefined : "used by a rig or a runner"),
+            );
+          })
+          .join("");
+      } else {
+        const [k = "", slot = ""] = p.value.slice(8).split("|");
+        rows = groups
+          .filter((g) => g.key.startsWith(`cluster:${k}|${slot}|`))
+          .flatMap((g) =>
+            g.gpus.map((x) =>
+              box(
+                "one_gpu",
+                x.at,
+                `${x.label}${g.named ? ` · on ${g.name}` : ""}`,
+                ` data-offer="${esc(x.at)}"`,
+              ),
+            ),
+          )
+          .join("");
+      }
+      return `<div data-gpus-for="${esc(p.value)}" hidden>${rows ? `<div class="card flat">${rows}</div>` : `<div class="card"><div class="empty">${esc(p.name)} has no free GPU: the rig measures on its CPUs.</div></div>`}</div>`;
+    })
     .join("");
 }

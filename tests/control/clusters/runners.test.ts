@@ -153,6 +153,44 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await owner.close();
   });
 
+  test("Add a rig's wizard: a rig of one machine on a cluster takes the GPUs ticked, from one node", async () => {
+    const { s } = await withRig();
+    const page = await s.page("/ui/rigs/add");
+    // It opens on the kind of rig; each step links to its page on the docs site.
+    assert.match(
+      page,
+      /<section class="wz" data-step="kind"><div class="wz-head"><h2>What kind of rig\?<\/h2>/,
+    );
+    assert.match(page, /<input type="radio" name="kind" value="one"><b>One machine<\/b>/);
+    assert.match(page, /<input type="radio" name="kind" value="many"><b>Several machines<\/b>/);
+    assert.match(page, /href="https:\/\/usethermite\.com\/how-to\/install\/several-gpus\/"/);
+    assert.match(page, /<div data-gpus-for="cluster:k8s-a" hidden>/);
+    assert.match(page, /name="one_gpu" value="k8s-a\|\|gpu-node-1\|device-plugin" data-offer=/);
+    const at = "k8s-a||gpu-node-1|device-plugin";
+    // GPUs of two rows are refused in words; so is a kind and a place that don't fit.
+    assert.match(
+      await s.post("/ui/rigs/add", {
+        kind: "one",
+        place: "cluster:k8s-a",
+        rig: "one-1",
+        one_gpu: at,
+        // Fields of the steps a rig of one machine skips are left out.
+        runner_new__0: `gpu-node-1=${at}`,
+        runner_new_pool__0: "lane-1",
+        lanes: "4",
+      }),
+      /^\/ui\/rigs\/one-1$/,
+    );
+    const r = s.store.clusters.rig("one-1");
+    assert.equal(r?.spec.gpus, 1);
+    assert.equal(r?.spec.node, "gpu-node-1", "on the node of its GPUs");
+    assert.equal(s.store.rigRunners.of("one-1").length, 0, "no runner from a skipped step");
+    assert.match(
+      await s.post("/ui/rigs/add", { kind: "join", place: "cluster:k8s-a", rig: "one-2" }),
+      /Choose where you set the rig up/,
+    );
+  });
+
   test("two runners set up together are both given to the rig", async () => {
     const { s, sent } = await withRig();
     const owner = await mcpWith(s.api, ADMIN);
@@ -274,7 +312,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     const page = await s.page("/ui/rigs/add");
     assert.match(
       page,
-      /<h2>2 · Runners <span class="muted small" id="ar-count">0 chosen<\/span><\/h2>/,
+      /<h2>Which GPUs are its runners\? <span class="muted small" id="ar-count">0 chosen<\/span><\/h2>/,
     );
     // No runner at first: + Add a runner adds a row, a machine, then its GPU, then the pool.
     assert.match(page, /data-runner-none>No runners yet/);
@@ -291,8 +329,11 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     // The core's node, among its cluster's ready ones: a slot may take pods only on those it names.
     assert.match(page, /<option value="gpu-node-1" data-cluster="k8s-a">gpu-node-1 \(/);
     const form = {
+      kind: "many",
       place: "cluster:k8s-a",
       rig: "core-2",
+      // A GPU ticked on the one-machine step, which a rig of several machines leaves out.
+      one_gpu: "k8s-a||gpu-node-1|device-plugin",
       core_disk: "50",
       core_node: "gpu-node-1",
       lanes: "2",

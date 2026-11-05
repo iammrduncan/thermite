@@ -43,7 +43,35 @@ export const ADD_RIG_JS = `
     p.startsWith("lane-") ? "Only " + laneWords(p).toLowerCase() + ": its run_experiment. The judge never measures here." :
     "Not used: free for other rigs.";
   let lastPlace = "";
+  let lastKind = "";
+  // Whether the owner chose the place: until then, each kind starts on a place that fits it.
+  let placeChosen = false;
+  // Whether the page is a wizard: the script shows one step at a time.
+  const wizard = !!document.getElementById("wz-next");
+  // Whether the step now is valid, and whether Create the rig may be pressed; say() sets them.
+  let stop = false;
+  const kindNow = () => (form.querySelector('input[name="kind"]:checked') || {}).value || "";
+  const placeRadios = () => [...form.querySelectorAll('.ar-place input[name="place"]:not(:disabled)')];
   const say = () => {
+    const kind = kindNow();
+    for (const k of form.querySelectorAll(".wz-kind, .wz-alt"))
+      k.classList.toggle("on", !!k.querySelector('input[name="kind"]:checked'));
+    for (const el of form.querySelectorAll("[data-for-kind]"))
+      el.hidden = wizard && !el.dataset.forKind.split(" ").includes(kind);
+    // A kind chosen anew: a place that fits it, if the one checked does not.
+    if (kind !== lastKind) {
+      const now = form.querySelector('input[name="place"]:checked');
+      const isJoin = !!now && now.value.startsWith("join:");
+      if (kind === "join" && now && !isJoin) now.checked = false;
+      if ((kind === "one" || kind === "many") && (!now || isJoin || !placeChosen)) {
+        const radios = placeRadios();
+        const fits = (r) => (kind === "many" ? r.dataset.gpus === "0" : r.dataset.gpus !== "0");
+        const pick = radios.find(fits) || radios[0];
+        if (pick) pick.checked = true;
+        else if (now) now.checked = false;
+      }
+      lastKind = kind;
+    }
     const picked = form.querySelector('input[name="place"]:checked');
     const place = picked ? picked.value : "";
     const join = place.startsWith("join:");
@@ -51,8 +79,9 @@ export const ADD_RIG_JS = `
       const r = row.querySelector('input[name="place"]');
       const on = !!r && r.checked;
       row.classList.toggle("on", on);
+      // "the core" only for a rig of several machines: one machine has no such word.
       const chip = row.querySelector("[data-core-chip]");
-      if (chip) chip.hidden = !on;
+      if (chip) chip.hidden = !on || (wizard && kind !== "many");
     }
     for (const el of form.querySelectorAll("[data-place]")) el.hidden = el.dataset.place !== place;
     // The core's size, from its place, each time another is chosen.
@@ -73,10 +102,45 @@ export const ADD_RIG_JS = `
       for (const o of nodeSel.options) if (o.value) o.hidden = o.dataset.cluster !== cluster;
       if (nodeSel.value && nodeSel.selectedOptions[0].hidden) nodeSel.value = "";
     }
+    // A rig of one machine: the GPUs of its place, and none of another's.
+    let ticked = 0;
+    for (const b of form.querySelectorAll("[data-gpus-for]")) {
+      const mine = b.dataset.gpusFor === place;
+      b.hidden = !mine;
+      const boxes = [...b.querySelectorAll("input:not(:disabled)")];
+      for (const x of b.querySelectorAll("input")) if (!mine) x.checked = false;
+      // A place chosen anew: its free GPUs ticked, on a cluster those of its first row's node.
+      if (mine && place !== lastPlace && !boxes.some((x) => x.checked)) {
+        const first = boxes[0] ? boxes[0].value : "";
+        for (const x of boxes) x.checked = x.name === "gpus" || x.value === first;
+      }
+      if (mine) ticked = b.querySelectorAll("input:checked").length;
+    }
+    const shareBox = form.querySelector("[data-judge-share]");
+    if (shareBox) shareBox.hidden = ticked < 2;
     lastPlace = place;
     const runnersSec = form.querySelector("[data-runners]");
     if (runnersSec) runnersSec.hidden = join;
     const name = form.elements.rig.value.trim() || "the rig";
+    stop = false;
+    if (kind === "one") {
+      if (note) note.hidden = true;
+      const j = share(ticked, form.elements.judge_gpus ? form.elements.judge_gpus.value : "");
+      const where = picked ? picked.dataset.name : "the place you choose";
+      const lines = ["<b>" + esc(name) + "</b> runs on " + esc(where) + ": its agents, its records and its judge."];
+      lines.push(refused(j) ? esc(j) :
+        ticked === 0 ? "No GPU ticked: the judge measures on its CPUs." :
+        ticked === 1 ? "One GPU: while the judge measures, the agents' own test runs wait, so its timings stay clean." :
+        j + " GPU" + (j > 1 ? "s" : "") + " for the judge, " + (ticked - j) + " for the agents' test runs: neither waits for the other.");
+      lines.push('<span class="muted">GPUs of other machines can be added later on Edit rig, while a run goes on.</span>');
+      sum.innerHTML = lines.map((l) => "<li>" + l + "</li>").join("");
+      notesEl.innerHTML = "";
+      stop = refused(j) || !picked;
+      const coreImg = document.getElementById("ar-core-img");
+      if (coreImg) coreImg.textContent = ticked ? "the CUDA harness image for its GPUs" : form.dataset.imgCpu;
+      nav();
+      return;
+    }
     if (join) {
       if (note) note.hidden = false;
       if (place === "join:machine") {
@@ -100,7 +164,7 @@ export const ADD_RIG_JS = `
         sum.innerHTML = "<li>Control will show a join command for " + esc(name) + ", once. You run it within an hour where kubectl reaches the cluster: it fetches the rig's objects from control and applies them in " + esc(ns) + " with your rights. Control then waits for the rig's first report.</li>";
       }
       notesEl.innerHTML = "";
-      if (create) create.disabled = blocked;
+      nav();
       return;
     }
     if (note) note.hidden = true;
@@ -163,7 +227,6 @@ export const ADD_RIG_JS = `
     lines.push('<span class="muted">Runners can be added and taken away later on Edit rig, while a run goes on.</span>');
     sum.innerHTML = lines.map((l) => "<li>" + l + "</li>").join("");
     const notes = [];
-    let stop = false;
     if (used.length && !judgeOn.length) {
       notes.push("Give the judge a runner, its own or a shared one: the core has no GPU to measure on.");
       stop = true;
@@ -186,8 +249,58 @@ export const ADD_RIG_JS = `
       const cudas = [...new Set(used.map((u) => u.cuda))].sort();
       img.textContent = cudas.length ? cudas.map((v) => form.dataset["imgCuda" + v] || "no CUDA " + v + " harness image configured").join(", ") : "none chosen";
     }
-    if (create) create.disabled = blocked || !picked || stop;
+    if (!picked) stop = true;
+    nav();
   };
+  // The wizard: the steps of each kind, one shown at a time, Back and Next; Create the rig on
+  // the last. Without the script every step shows, and Create the rig sends them all.
+  const STEPS = { "": ["kind"], one: ["kind", "where", "gpus", "name"], many: ["kind", "where", "runners", "name"], join: ["kind", "join", "name"] };
+  const TITLE = (st, kind) => ({ kind: "Kind of rig", where: kind === "many" ? "The core" : "Where", join: "Where", gpus: "GPUs", runners: "Runners", name: "Name and create" })[st];
+  let at = 0;
+  const RIG = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
+  const valid = (st) => {
+    const kind = kindNow();
+    const place = (form.querySelector('input[name="place"]:checked') || {}).value || "";
+    if (st === "kind") return !!kind;
+    if (st === "where") return !!place && !place.startsWith("join:");
+    if (st === "join") return place === "join:machine" || (place === "join:namespace" && !!form.elements.j_namespace.value.trim());
+    if (st === "runners" || st === "gpus") return !stop;
+    if (st === "name") return RIG.test(form.elements.rig.value.trim()) && !stop;
+    return true;
+  };
+  function nav() {
+    if (!wizard) {
+      if (create) create.disabled = blocked || stop;
+      return;
+    }
+    const kind = kindNow();
+    const steps = STEPS[kind] || STEPS[""];
+    if (at > steps.length - 1) at = steps.length - 1;
+    const now = steps[at];
+    for (const sec of form.querySelectorAll("section.wz")) sec.hidden = sec.dataset.step !== now;
+    const ol = document.getElementById("wz-steps");
+    ol.hidden = false;
+    ol.innerHTML = (kind ? steps : ["kind", ""]).map((st, i) =>
+      '<li class="' + (i === at ? "on" : i < at ? "done" : "") + '"' + (i === at ? ' aria-current="step"' : "") + '><span class="n">' + (i < at ? "✓" : i + 1) + "</span>" + esc(st ? TITLE(st, kind) : "…") + "</li>").join("");
+    const last = !!kind && at === steps.length - 1;
+    const back = document.getElementById("wz-back"), next = document.getElementById("wz-next");
+    back.hidden = at === 0;
+    next.hidden = last;
+    next.disabled = !valid(now);
+    if (create) { create.hidden = !last; create.disabled = blocked || !valid(now); }
+  }
+  if (wizard) {
+    document.getElementById("wz-back").addEventListener("click", () => { if (at > 0) { at--; say(); } });
+    document.getElementById("wz-next").addEventListener("click", () => {
+      const steps = STEPS[kindNow()] || STEPS[""];
+      if (valid(steps[at]) && at < steps.length - 1) { at++; say(); const first = form.querySelector("section.wz:not([hidden]) input, section.wz:not([hidden]) select"); if (first) first.focus(); }
+    });
+    // Enter in a field moves on a step, and creates the rig on the last.
+    form.addEventListener("submit", (e) => {
+      const steps = STEPS[kindNow()] || STEPS[""];
+      if (at < steps.length - 1) { e.preventDefault(); document.getElementById("wz-next").click(); }
+    });
+  }
   // + Add a runner: a row from the page's template, its fields numbered; the first one the
   // judge's, the next ones shared. Remove takes a row away.
   const runnerList = form.querySelector("[data-runner-list]");
@@ -212,6 +325,15 @@ export const ADD_RIG_JS = `
     if (!t) return;
     t.closest("[data-runner-row]").remove();
     say();
+  });
+  // A rig on a cluster takes its GPUs from one node and one way: a GPU of another row, once
+  // ticked, unticks the others.
+  form.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.name === "place") placeChosen = true;
+    if (t.name !== "one_gpu" || !t.checked) return;
+    for (const x of form.querySelectorAll('input[name="one_gpu"]:checked'))
+      if (x.value !== t.value) x.checked = false;
   });
   form.addEventListener("change", say);
   form.addEventListener("input", say);
