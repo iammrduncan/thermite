@@ -167,8 +167,9 @@ describe("champion patches reach control", () => {
       run,
       /download champion #2 as a patch<\/a> <span class="muted small">\(applies to the folder examples\/matmul-cpu\/project at cccccccc: git apply --directory=examples\/matmul-cpu\/project\)/,
     );
+    // Where it started is in Recent, on the Overview.
     assert.match(
-      run,
+      await ui.page("/ui/campaigns/c/runs/r-1"),
       /started from the folder examples\/matmul-cpu\/project of proj at cccccccc\./,
     );
     // The file is named after the repository's commit, the one its owner has.

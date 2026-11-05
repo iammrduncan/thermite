@@ -287,10 +287,10 @@ describe("model use on the screens (goal 075)", () => {
     for (const gone of ["Calls", "Time in calls", "By agent and model", "<table"])
       assert.ok(!block.includes(gone), `${gone} is not at the top`);
     assert.match(unesc(block), /Each model's own speed is on the Stats tab\./);
-    // The Stats tab, last, after Planner.
+    // The Stats tab after Prompts, then Info, last (goal 209).
     assert.match(
       html,
-      /Planner<\/a><a class="" href="\/ui\/campaigns\/matmul\/runs\/r-1\/prompts">Prompts<\/a><a class="" href="\/ui\/campaigns\/matmul\/runs\/r-1\/stats">Stats<\/a><\/nav>/,
+      /Planner<\/a><a class="" href="\/ui\/campaigns\/matmul\/runs\/r-1\/prompts">Prompts<\/a><a class="" href="\/ui\/campaigns\/matmul\/runs\/r-1\/stats">Stats<\/a><a class="" href="\/ui\/campaigns\/matmul\/runs\/r-1\/info">Info<\/a><\/nav>/,
     );
     const stats = await s.page("/ui/campaigns/matmul/runs/r-1/stats");
     assert.match(stats, /<a class="on" href="[^"]*\/stats">Stats<\/a>/);
