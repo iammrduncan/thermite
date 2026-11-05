@@ -26,8 +26,8 @@ A lane runs on its own runner first, then on a shared one; a lane that no runner
 
 **Rigs › Add a rig** has three steps and a summary:
 
-1. **1 · The core**: where the core goes, any machine or free slot control knows, with the core's CPUs, memory and disk, filled in from the slot's quota. It needs no GPU.
-2. **2 · Runners**: none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. **Workers at a time** sets how many lanes work at once, 2 by default.
+1. **1 · The core**: where the core goes, any machine or free slot control knows, with the core's CPUs, memory and disk, filled in from the slot's quota, and on a cluster its **Node**. It needs no GPU.
+2. **2 · Runners**: none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. A runner on a GPU of a DRA class whose node control read from the cluster goes on that node. **Workers at a time** sets how many lanes work at once, 2 by default.
 3. **3 · Name and start**: the rig's name, and the images: the core's, and the runners' CUDA image for their GPUs.
 
 **What this rig will be** says where the core runs, where the judge measures and where each lane tries its changes, and notes what would go wrong:

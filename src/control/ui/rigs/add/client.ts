@@ -66,6 +66,13 @@ export const ADD_RIG_JS = `
       form.elements.core_mem.value = picked.dataset.mem || "";
       form.elements.core_disk.value = picked.dataset.disk || "100";
     }
+    // The core's node: the chosen cluster's nodes only.
+    const nodeSel = form.elements.core_node;
+    if (nodeSel) {
+      const cluster = picked ? picked.dataset.cluster || "" : "";
+      for (const o of nodeSel.options) if (o.value) o.hidden = o.dataset.cluster !== cluster;
+      if (nodeSel.value && nodeSel.selectedOptions[0].hidden) nodeSel.value = "";
+    }
     lastPlace = place;
     const runnersSec = form.querySelector("[data-runners]");
     if (runnersSec) runnersSec.hidden = join;

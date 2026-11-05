@@ -164,7 +164,8 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
     assert.match(add, />gpu-node-1 · a node of k8s-a \(arm64 · 16 CPUs · 64 GiB\)<\/option>/);
     assert.match(add, /data-product="NVIDIA GB10" data-cuda="13"/);
     assert.match(add, /NVIDIA GB10 · DRA class spark-gpus/);
-    assert.match(add, /value="gpu-node-1-1=k8s-a\|\|\|dra%3Aspark-gpus"/);
+    // On its node, which control read from the class's GPU: a slot may name the nodes it takes.
+    assert.match(add, /value="gpu-node-1-1=k8s-a\|\|gpu-node-1\|dra%3Aspark-gpus"/);
     // Over MCP, with no cuda: the class's GPU sets it.
     const mcp = await mcpWith(s.api, OPERATOR);
     const added = await mcp.call("add_cluster_rig", {

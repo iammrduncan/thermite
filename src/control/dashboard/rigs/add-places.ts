@@ -121,6 +121,8 @@ interface CorePlace {
   arch: string;
   /** Its GPUs: a place with none comes first for the core, which needs none. */
   gpus: number;
+  /** A cluster's place: the cluster, whose ready nodes the core may be pinned to. */
+  cluster?: string | undefined;
 }
 
 /** Every place the rig's core can go, a not-ready one with why. */
@@ -165,6 +167,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
         size: { cpus: "", memoryGi: "", diskGb: "100" },
         arch: "",
         gpus: f.nodes.reduce((n, x) => n + x.gpus, 0),
+        cluster: k.name,
       });
       continue;
     }
@@ -193,6 +196,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
         },
         arch: "",
         gpus: devices,
+        cluster: k.name,
       });
     }
   }
@@ -348,7 +352,8 @@ export function runnerGroups(
             });
         for (let i = 0; i < n; i++)
           g.gpus.push({
-            at: clusterAt(k.name, slot, "", `dra:${c}`),
+            // On its node, when control knows it: a slot may take pods only on nodes it names.
+            at: clusterAt(k.name, slot, kind.node ?? "", `dra:${c}`),
             label: `${kind.product ?? "A GPU"} · DRA class ${c}${n > 1 ? ` · ${i + 1} of ${n}` : ""}`,
             product: kind.product ?? "",
             cuda: cudaFor(kind)?.cuda ?? "12",
@@ -432,7 +437,7 @@ export function coreRows(places: CorePlace[], wanted: string | undefined): strin
       const size = p.size
         ? ` data-cpus="${esc(p.size.cpus)}" data-mem="${esc(p.size.memoryGi)}" data-disk="${esc(p.size.diskGb)}"`
         : "";
-      return `<label class="ar-place${p.why ? " dis" : ""}${checked ? " on" : ""}"><input type="radio" name="place" value="${esc(p.value)}"${p.why ? " disabled" : checked ? " checked" : ""} data-name="${esc(p.name)}" data-arch="${esc(p.arch)}"${size}><span class="ar-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(p.where)}</span>${p.checked && !p.why ? ` <span class="chip ok">${esc(p.checked)}</span>` : ""} <span class="chip info" data-core-chip hidden>the core</span></span><span class="muted small">${esc(p.why ? `Not ready: ${p.why}. Fix it under Settings › Machines.` : p.facts)}</span></span></label>`;
+      return `<label class="ar-place${p.why ? " dis" : ""}${checked ? " on" : ""}"><input type="radio" name="place" value="${esc(p.value)}"${p.why ? " disabled" : checked ? " checked" : ""} data-name="${esc(p.name)}" data-arch="${esc(p.arch)}"${size}${p.cluster ? ` data-cluster="${esc(p.cluster)}"` : ""}><span class="ar-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(p.where)}</span>${p.checked && !p.why ? ` <span class="chip ok">${esc(p.checked)}</span>` : ""} <span class="chip info" data-core-chip hidden>the core</span></span><span class="muted small">${esc(p.why ? `Not ready: ${p.why}. Fix it under Settings › Machines.` : p.facts)}</span></span></label>`;
     })
     .join("");
 }
@@ -477,4 +482,25 @@ export function runnerPicker(groups: ReturnType<typeof runnerGroups>): string {
   const row = (n: string) =>
     `<div class="ar-run" data-runner-row><label class="fd">${infoLabel("Machine", "A machine control reaches over SSH, a node of a cluster, or a slot whose GPUs come through DRA, where the device class picks the node.")}<select data-machine aria-label="The runner's machine"><option value="">Choose a machine</option>${machines}</select></label><label class="fd">${infoLabel("GPU", "One of the machine's free GPUs: the runner takes it alone, one run at a time.")}<select name="runner_new__${n}" data-gpu-pick aria-label="The runner's GPU"><option value="">Choose its GPU</option>${gpus}</select></label><label class="fd">${infoLabel("Its pool", POOL_TIP)}<select class="ar-pool" name="runner_new_pool__${n}" aria-label="The runner's pool">${pools}</select></label><button type="button" class="sm" data-remove-runner>Remove</button><span class="muted small ar-says" data-pool-says></span></div>`;
   return `<div class="card flat" data-runner-list><div class="empty" data-runner-none>No runners yet: the rig measures on its core's CPUs. Add one for each GPU it should use.</div><noscript>${row("0")}</noscript></div><div class="act" style="margin-top:10px"><button type="button" class="sm" data-add-runner hidden>+ Add a runner</button></div><template id="ar-row">${row("N")}</template>`;
+}
+
+/**
+ * The nodes a core on a cluster may be pinned to, each cluster's ready ones, as options of Add a
+ * rig's **Node**; the page's script shows those of the chosen place's cluster. A slot whose rules
+ * take pods only on nodes they name needs one.
+ */
+export function coreNodeOptions(store: ControlStore): string {
+  return store.clusters
+    .list()
+    .flatMap((k) =>
+      ((k.facts as ClusterFacts | null)?.nodes ?? [])
+        .filter((n) => n.ready)
+        .map(
+          (n) =>
+            `<option value="${esc(n.name)}" data-cluster="${esc(k.name)}">${esc(
+              `${n.name} (${[archOf(n.arch), `${n.cpu} CPUs`, gib(n.memory), n.gpus ? `${n.gpus} GPU${n.gpus > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ")})`,
+            )}</option>`,
+        ),
+    )
+    .join("");
 }

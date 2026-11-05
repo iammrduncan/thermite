@@ -288,10 +288,13 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       /<option value="gpu-node-1-1=k8s-a\|\|gpu-node-1\|device-plugin" data-group="0"/,
     );
     assert.match(page, /name="runner_new__N" data-gpu-pick/);
+    // The core's node, among its cluster's ready ones: a slot may take pods only on those it names.
+    assert.match(page, /<option value="gpu-node-1" data-cluster="k8s-a">gpu-node-1 \(/);
     const form = {
       place: "cluster:k8s-a",
       rig: "core-2",
       core_disk: "50",
+      core_node: "gpu-node-1",
       lanes: "2",
       runner_new__0: "gpu-node-1=k8s-a||gpu-node-1|device-plugin",
       runner_new_pool__0: "judge",
@@ -314,6 +317,12 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-2-harness",
     );
     assert.equal(envOf(core).THERMITE_LOCAL_JUDGE, "0", "the core's judge measures on its runners");
+    assert.equal(s.store.clusters.rig("core-2")?.spec.node, "gpu-node-1", "on the node chosen");
+    // The Rigs list shows it before its first report, as control sets it up.
+    assert.match(
+      await s.page("/ui/rigs"),
+      /<span class="chip info">Setting up<\/span><\/td><td class="nowrap"><a class="kname" href="\/ui\/rigs\/core-2"><b>core-2<\/b>/,
+    );
     const runner = applies[1]?.find(
       (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-2-gpu-node-1-harness",
     );

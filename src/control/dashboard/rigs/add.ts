@@ -19,6 +19,7 @@ import { esc } from "../../ui/components/index.ts";
 import { ADD_RIG_JS } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import {
+  coreNodeOptions,
   corePlaces,
   coreRows,
   firstPlace,
@@ -159,6 +160,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
 <label class="fd">${infoLabel("CPUs", "The CPUs the core takes: its supervisor gets half a CPU, and the harness the rest, for the planner, the agents' programs and their builds. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.")}<input name="core_cpus" inputmode="decimal" value="${esc(size?.cpus ?? "")}" placeholder="the namespace's defaults"></label>
 <label class="fd">${infoLabel("Memory (GiB)", `The core's memory: the supervisor gets ${SUPERVISOR_SHARE.terminal.memoryGi} GiB, since a new rig's agent programs run in their own terminals, and the harness the rest, so at least ${leastRigSize("terminal").memoryGi} GiB. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.`)}<input name="core_mem" inputmode="decimal" value="${esc(size?.memoryGi ?? "")}" placeholder="the namespace's defaults"></label>
 <label class="fd">${infoLabel("Disk (GB)", "The core's volume: the run's records, every lane's workspace and the exports it sends.")}<input name="core_disk" inputmode="numeric" value="${esc(size?.diskGb ?? "100")}"></label>
+<label class="fd">${infoLabel("Node", "The node the core runs on. Any lets Kubernetes choose; a slot whose rules take pods only on nodes they name needs one of those.")}<select name="core_node"><option value="">any node with room</option>${coreNodeOptions(store)}</select></label>
 </div>
 <p class="muted small" data-core-machine${first?.value.startsWith("machine:") ? "" : " hidden"} style="margin:10px 0 0">On a machine over SSH, the core takes the CPUs and memory it needs, and keeps its volume on the machine's disk.</p>
 <p class="lead" style="margin-top:18px">Or run it yourself, where control can't connect:</p><div class="stack">${joinCards}</div>${joinSections}<div class="nc-does" id="gpu-note" hidden></div>
@@ -315,7 +317,7 @@ ${runnerPicker(groups)}
         judgeGpus: one("k_judge") || undefined,
         mode: one("k_mode") || "device-plugin",
         deviceClass: one("k_class") || undefined,
-        node: one("k_node") || undefined,
+        node: one("core_node") || one("k_node") || undefined,
         storageClass: one("k_storage") || undefined,
         // The CUDA harness the owner chose (goal 132), for a core with GPUs of its own.
         cuda: gpus > 0 ? (one("k_cuda") === "13" ? "13" : "12") : undefined,

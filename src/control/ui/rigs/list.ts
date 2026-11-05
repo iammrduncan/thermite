@@ -35,6 +35,11 @@ export interface RigsListRow {
   keyPending: boolean;
   /** Why it is off the message bus, and so broken; undefined while nothing says so. */
   offBus?: OffBus | undefined;
+  /**
+   * A rig control is setting up on a machine or a cluster, before its first report: its status
+   * there (deploying, starting, failed...), which the row's state says.
+   */
+  setup?: string | undefined;
 }
 
 const RIG_FILTERS = ["all", "live", "update", "refused", "lost", "runpod", "stopped"] as const;
@@ -50,7 +55,17 @@ const FILTER_WORDS: Record<RigFilter, string> = {
   stopped: "Stopped",
 };
 
-type StateKey = "live" | "stale" | "offline" | "broken" | "refused" | "stopped" | "key" | "ready";
+type StateKey =
+  | "live"
+  | "stale"
+  | "offline"
+  | "broken"
+  | "refused"
+  | "stopped"
+  | "key"
+  | "ready"
+  | "setting"
+  | "failed";
 const STATES: Record<StateKey, [string, string]> = {
   live: ["Live", "ok"],
   broken: ["Broken: off the bus", "bad"],
@@ -60,6 +75,8 @@ const STATES: Record<StateKey, [string, string]> = {
   stopped: ["Stopped", ""],
   key: ["Key to accept", "warn"],
   ready: ["Getting ready", "info"],
+  setting: ["Setting up", "info"],
+  failed: ["Setup failed", "bad"],
 };
 
 const rigUrl = (rig: string) => `/ui/rigs/${encodeURIComponent(rig)}`;
@@ -77,6 +94,7 @@ function rowState(r: RigsListRow): StateKey {
   if (r.u?.version.state === "refused") return "refused";
   if (stoppedPod(r.pod)) return "stopped";
   if (r.offBus) return "broken";
+  if (!r.u && r.setup) return r.setup === "failed" ? "failed" : "setting";
   if (!r.u) return "ready";
   if (r.keyPending) return "key";
   return r.u.state === "reporting" ? "live" : r.u.state;
@@ -97,7 +115,8 @@ function rowFilters(r: RigsListRow): RigFilter[] {
     st === "stale" ||
     st === "offline" ||
     st === "broken" ||
-    (st === "key" && r.u?.state !== "reporting")
+    (st === "key" && r.u?.state !== "reporting") ||
+    st === "failed"
   )
     out.push("lost");
   if (r.pod) out.push("runpod");
@@ -171,13 +190,15 @@ function runCells(r: RigsListRow, st: StateKey, now: number): [string, string] {
     const line =
       r.pod && st === "stopped"
         ? stoppedWords(r.pod, now)
-        : !u
-          ? "not reported yet"
-          : u.runs.some((x) => x.status === "paused")
-            ? `${u.runs.filter((x) => x.status === "paused").length} paused`
-            : u.runs.length
-              ? "no run running"
-              : "no campaign assigned";
+        : st === "failed"
+          ? "its setup failed: its page says why"
+          : !u
+            ? "not reported yet"
+            : u.runs.some((x) => x.status === "paused")
+              ? `${u.runs.filter((x) => x.status === "paused").length} paused`
+              : u.runs.length
+                ? "no run running"
+                : "no campaign assigned";
     return [`<span class="muted">No run at work</span>${sub(esc(line))}`, ""];
   }
   const live = st === "live";
@@ -290,7 +311,7 @@ export function rigsListBody(o: {
     const m = Math.round(ms / 60_000);
     return `${m} minute${m === 1 ? "" : "s"}`;
   };
-  const stateTip = `Live: it reports. Stale: no report for ${minutes(o.staleAfterMs)}. Offline: none for ${minutes(o.offlineAfterMs)}. Refused: control refuses its reports, because their versions don't work together. Stopped: a RunPod pod that is stopped, so it can't report. Key to accept: its new key waits for you. Getting ready: a RunPod pod before its first report.`;
+  const stateTip = `Live: it reports. Stale: no report for ${minutes(o.staleAfterMs)}. Offline: none for ${minutes(o.offlineAfterMs)}. Refused: control refuses its reports, because their versions don't work together. Stopped: a RunPod pod that is stopped, so it can't report. Key to accept: its new key waits for you. Getting ready: a RunPod pod before its first report. Setting up: a rig control sets up on a machine or a cluster, before its first report. Setup failed: control could not set it up; its page says why.`;
   const versionTip = `The Thermite version of the rig's harness and supervisor. Needs update: the rig is behind control ${o.control.version}, or so old that control refuses it. Open it to update it on the rig's page. Update control: the rig is too new for control.`;
   if (!o.rows.length)
     return `<div class="card"><div class="empty">No rig has reported yet.</div></div>`;

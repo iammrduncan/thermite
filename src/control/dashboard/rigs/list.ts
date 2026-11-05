@@ -65,6 +65,16 @@ export function rigListRoutes(app: Hono, dash: Dashboard): void {
         keyPending: Boolean(store.reportedRigs.key(u.id).pending),
         offBus: offBus(store, u.id, { lastSeen: u.last_seen, now, podStopped: podStopped(u) }),
       })),
+      // A rig control sets up on a machine or a cluster is listed before its first report too,
+      // and one whose setup failed, so that its page says why (goal 206).
+      ...[...store.machines.rigs(), ...store.clusters.rigs()]
+        .filter((r) => r.status !== "removed" && !listed.has(r.rig))
+        .map((r) => ({
+          id: r.rig,
+          where: whereOf(r.rig, undefined),
+          keyPending: false,
+          setup: r.status,
+        })),
       // A pod costs from its launch: it is listed before its first report too.
       ...(opts.runpodRigs?.list() ?? [])
         .filter((p) => p.active && !listed.has(p.rig))
