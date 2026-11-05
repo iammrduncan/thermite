@@ -125,7 +125,11 @@ describe("control dashboard", () => {
     await s.env.service.applyCommand(s.env.assign);
     await s.relay();
     const page = await (await s.get("/ui/campaigns/js-sum/runs/js-1")).text();
-    assert.match(page, /<dt>Agents<\/dt><dd>On: they start work at the first round<\/dd>/);
+    // The run's facts are on its Info tab (goal 209).
+    assert.match(
+      await (await s.get("/ui/campaigns/js-sum/runs/js-1/info")).text(),
+      /<dt>Agents<\/dt><dd>On: they start work at the first round<\/dd>/,
+    );
     assert.match(page, /\/live\?compose=1">Message<\/a>/);
     assert.match(page, /Restart the lanes/);
     assert.match(page, /<button class="">Start a teachers' round<\/button>/);
@@ -223,7 +227,7 @@ describe("control dashboard", () => {
     await s.relay();
     const page = await (await s.get("/ui/campaigns/js-sum/runs/js-1")).text();
     assert.match(
-      page,
+      await (await s.get("/ui/campaigns/js-sum/runs/js-1/info")).text(),
       /<dt>Agents<\/dt><dd>None: judge only\. No workers run; changes come from people<\/dd>/,
     );
     // It says plainly that it is judge only (goal 099).

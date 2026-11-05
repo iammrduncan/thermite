@@ -198,10 +198,10 @@ describe("Launch on RunPod", () => {
     assert.match(page, /<script src="\/ui\/assets\/runpod-launch\.js" defer><\/script>/);
     const js = await s.page("/ui/assets/runpod-launch.js");
     assert.match(js, /Launch · /);
-    // Rigs › Add a rig and Settings › Providers lead here.
+    // Rigs › Add a rig (its wizard's other ways, goal 206) and Settings › Machines lead here.
     assert.match(
       await s.page("/ui/rigs/add"),
-      /href="\/ui\/rigs\/add\/runpod\?cloud=runpod"><span><b>runpod · RunPod/,
+      /<a class="wz-alt" href="\/ui\/rigs\/add\/runpod"><span class="wz-what"><b>Rent a GPU on RunPod<\/b>/,
     );
     assert.match(
       await s.page("/ui/settings/machines"),
