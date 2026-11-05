@@ -77,15 +77,18 @@ export function dc(env, ...args) {
   return out;
 }
 
-/** A service's whole log, its output and its errors: larger than execFileSync's usual buffer. */
 /**
+ * A service's whole log, its output and its errors: larger than execFileSync's usual buffer.
+ * `files`: the compose files (`-f` each) of a stack that has services beyond compose.yaml's,
+ * whose logs compose finds only with them.
  * @param {ComposeEnv} env
  * @param {string} service
+ * @param {string[]} [files]
  */
-export function dcLogs(env, service) {
+export function dcLogs(env, service, files = []) {
   const r = spawnSync(
     /** @type {string} */ (compose[0]),
-    [...compose.slice(1), ...project, "logs", service],
+    [...compose.slice(1), ...project, ...files, "logs", service],
     {
       encoding: "utf8",
       env: { ...process.env, ...env },

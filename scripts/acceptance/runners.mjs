@@ -116,7 +116,7 @@ const giveRunners = async (runners) => {
   check(`the rig's runners set: ${JSON.stringify(runners)}`, r.status === 200, r.body);
 };
 /** @param {string} service @param {string} line */
-const logged = (service, line) => dcLogs(composeEnv, service).includes(line);
+const logged = (service, line) => dcLogs(composeEnv, service, files).includes(line);
 const dump = async () => {
   const all = await events().catch(() => []);
   for (const e of all.slice(-30))
@@ -129,7 +129,7 @@ const dump = async () => {
     "supervisor-r1",
     "supervisor-r2",
   ])
-    console.log(`--- ${s}\n${dcLogs(composeEnv, s).split("\n").slice(-40).join("\n")}`);
+    console.log(`--- ${s}\n${dcLogs(composeEnv, s, files).split("\n").slice(-40).join("\n")}`);
 };
 
 const env = prepare();
@@ -164,7 +164,7 @@ try {
     await until(
       `the core gives ${r} runs once it answers`,
       async () =>
-        dcLogs(composeEnv, "harness")
+        dcLogs(composeEnv, "harness", files)
           .split("\n")
           .some((l) => l.includes("a runner process answers: it takes runs") && l.includes(r)) ||
         undefined,
