@@ -51,6 +51,9 @@ const RIG_WAIT_TRIES = 120;
 /** How often control looks for runner processes it has not given their rig yet: a minute. */
 const RUNNERS_WATCH_MS = 60_000;
 
+/** How many times control gives a runner to a rig that refuses its command. */
+const GIVE_TRIES = 3;
+
 /** Adding a runner process on a cluster (Edit rig, REST or MCP). */
 interface ClusterRunnerRequest {
   rig: string;
@@ -384,7 +387,8 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first =
     return;
   }
   if (!rigSettingsOf(store, r.rig)?.settings) return;
-  store.rigRunners.setGiven(r.rig, r.runner);
+  const tries = (r.spec.given?.tries ?? 0) + 1;
+  store.rigRunners.setGiven(r.rig, r.runner, { at: new Date().toISOString(), tries });
   // The rig's runners as control last asked for them, while that command waits for the rig,
   // else as the rig reported them; less those control took away. Then those control set up for
   // it that neither names yet: two set up together, as Add a rig does, each keep the other.
@@ -409,6 +413,12 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first =
     by,
     true,
   );
+  if (out.state === "sent")
+    store.rigRunners.setGiven(r.rig, r.runner, {
+      at: new Date().toISOString(),
+      tries,
+      command: out.id,
+    });
   store.rigHistory.add(
     r.rig,
     "runner_given",
@@ -418,21 +428,42 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first =
 }
 
 /**
+ * Whether the rig never took a command: it refused it, or its signature ran out first. One the
+ * owner withdrew counts as taken: it is not sent again.
+ */
+function notTaken(store: ControlParts["store"], id: string | undefined): boolean {
+  const c = id ? store.commands.get(id) : undefined;
+  return (
+    c !== undefined &&
+    ["failed", "rejected", "expired"].includes(c.status) &&
+    !(c.outcome as { cancelled_by?: unknown } | null)?.cancelled_by
+  );
+}
+
+/**
  * Control's round of runner processes (goal 206): each control set up and has not given its rig
  * yet is given once the rig reports its settings, such as one set up with a rig whose core came
  * up later, or was set up again, or one whose rig reported while control was away. One the rig,
- * or a change of its settings on the way to it, names already counts as given. The round is one
- * of control's loops, and never keeps control from exiting.
+ * or a change of its settings on the way to it, names already counts as given; one whose
+ * command the rig never took is given again, up to GIVE_TRIES times. Each give is the owner's
+ * who added the runner, as the rig takes its runners from the owner alone. The round is one of
+ * control's loops, and never keeps control from exiting.
  */
 export function watchRunners(parts: ControlParts, everyMs = RUNNERS_WATCH_MS): void {
   const { store } = parts;
   every(parts.loops, "control", "runners", everyMs, async () => {
-    for (const r of store.rigRunners.waiting()) {
+    for (const r of store.rigRunners.running()) {
       const settings = rigSettingsOf(store, r.rig)?.settings;
       if (!settings) continue;
       const named = [...settings.runners, ...(askedRunners(store, r.rig) ?? [])];
-      if (named.some((x) => x.name === r.runner)) store.rigRunners.setGiven(r.rig, r.runner);
-      else await giveRunner(parts, r, "control:runners");
+      const g = r.spec.given;
+      if (named.some((x) => x.name === r.runner)) {
+        if (!g)
+          store.rigRunners.setGiven(r.rig, r.runner, { at: new Date().toISOString(), tries: 0 });
+        continue;
+      }
+      if (!g || (g.tries < GIVE_TRIES && notTaken(store, g.command)))
+        await giveRunner(parts, r, r.created_by);
     }
   });
 }

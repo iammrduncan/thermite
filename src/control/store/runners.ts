@@ -40,8 +40,11 @@ interface RigRunnerSpec {
   cuda?: "13" | undefined;
   /** The pool of each runner it serves, as the rig's `runners` setting gives them. */
   pools: string[];
-  /** When control sent its rig the runners with it, or tried to: the rig's history says how. */
-  givenAt?: string | undefined;
+  /**
+   * Control's gives of it to its rig (watchRunners): when it last sent the rig its runners with
+   * it, that command's id, and how many times it sent them. The rig's history says how each went.
+   */
+  given?: { at: string; tries: number; command?: string | undefined } | undefined;
 }
 
 /** Made by the store's migration to schema version 33. */
@@ -123,26 +126,24 @@ export class RigRunners extends StorePart {
       .run(status, rig, runner);
   }
 
-  /** Set up and running, on any rig, and not given to its rig yet (watchRunners). */
-  waiting(): RigRunner[] {
+  /** Set up and running, on any rig. */
+  running(): RigRunner[] {
     return (
       this.db
         .prepare(
           "select rig, runner, cluster, namespace, placement, spec, status, created_at, created_by from rig_runner where status = 'running' order by rig, runner",
         )
         .all() as unknown as Row[]
-    )
-      .map(read)
-      .filter((r) => !r.spec.givenAt);
+    ).map(read);
   }
 
-  /** Given to its rig now. */
-  setGiven(rig: string, runner: string): void {
+  /** Its gives to its rig, as they stand now. */
+  setGiven(rig: string, runner: string, given: RigRunnerSpec["given"]): void {
     const r = this.get(rig, runner);
     if (!r) return;
     this.db
       .prepare("update rig_runner set spec = ? where rig = ? and runner = ?")
-      .run(JSON.stringify({ ...r.spec, givenAt: new Date().toISOString() }), rig, runner);
+      .run(JSON.stringify({ ...r.spec, given }), rig, runner);
   }
 
   /** Its images, for an update of the rig's images. */

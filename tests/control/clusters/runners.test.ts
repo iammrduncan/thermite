@@ -356,9 +356,21 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       given().map((x) => x.ok),
       [true],
     );
-    // Given once: control's next rounds send nothing more.
+    // As the owner who added it: the rig takes its runners from the owner alone.
+    const first = s.store.commands.pending("core-4")[0]?.envelope;
+    assert.equal(first?.issued_by, s.store.rigRunners.get("core-4", "spark-02")?.created_by);
+    assert.match(String(first?.issued_by), /^owner/);
+    // Given once: control's next rounds send nothing more while the rig has it on the way.
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(sent().length, 1);
+    // A rig that refuses it gets it again, up to three times in all.
+    for (let n = 1; n <= 3; n++) {
+      const id = String(s.store.commands.pending("core-4")[0]?.envelope.id);
+      s.store.commands.confirmApplied("core-4", id, "failed", "{}", new Date().toISOString());
+      for (let i = 0; i < 100 && !sent().length; i++) await new Promise((r) => setTimeout(r, 20));
+      assert.equal(sent().length, n < 3 ? 1 : 0, `after refusal ${n}`);
+    }
+    assert.equal(given().length, 3);
     await owner.close();
   });
 
