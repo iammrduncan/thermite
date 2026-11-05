@@ -49,7 +49,7 @@ The owner then plans the kit of the Spark hill climb with these words, from deta
 
 6. **Ties go down the priorities:** a change equal to the champion on priority 1, within the noise band, and better on priority 2 by at least priority 2's minimum effect, is a win and is promoted; and so on down the list. A change worse on priority 1 never wins on a lower priority.
 7. **Fixed limits are guards:** a guard is measured against the baseline, the current champion or a fixed value; a contract's `hard_constraints` read as guards against a fixed value.
-8. **The run's settings move to an Info tab:** the Overview's right column keeps Now and Recent; The run's facts go to a tab of their own, Info.
+8. **The run's settings move to an Info tab:** the Overview's right column keeps Now and Recent; The run's facts go to a tab of their own, Info, with Where the run started; the list of Champions goes to the Attempts tab (the owner, 2026-11-05).
 
 ## What the code does today (2026-11-05, read before the plan)
 

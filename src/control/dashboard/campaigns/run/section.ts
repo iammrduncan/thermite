@@ -435,10 +435,11 @@ export function runHelpers(dash: Dashboard) {
         : "";
     const facts = `<div class="block" data-part="facts"><div class="head"><h2>The run</h2></div><div class="card"><dl class="facts">${settings}</dl></div></div>`;
     const body =
+      // Info (goal 209): the run's facts and where it started; its champions are on Attempts.
       view === "info"
-        ? facts
+        ? `${facts}${baselineBlock(i, now)}`
         : view === "attempts"
-          ? `${i.attempts.length ? `<div class="card" style="margin-bottom:12px"><div class="card-head"><span class="title">How the judge decided</span><span class="right muted small">${i.attempts.length} attempts</span></div><div style="margin-top:10px">${stackBar(i.verdicts)}</div></div>` : ""}${laneCard}${attemptRows(u, i, newest.slice(0, 300), now)}${i.attempts.length > 300 ? `<div class="muted small" style="margin-top:8px">The newest 300 of ${i.attempts.length}.</div>` : ""}${records}`
+          ? `${ladder}${i.attempts.length ? `<div class="card" style="margin-bottom:12px"><div class="card-head"><span class="title">How the judge decided</span><span class="right muted small">${i.attempts.length} attempts</span></div><div style="margin-top:10px">${stackBar(i.verdicts)}</div></div>` : ""}${laneCard}${attemptRows(u, i, newest.slice(0, 300), now)}${i.attempts.length > 300 ? `<div class="muted small" style="margin-top:8px">The newest 300 of ${i.attempts.length}.</div>` : ""}${records}`
           : view === "prompts"
             ? promptsTab(i, prompts, now)
             : view === "history"
@@ -517,7 +518,6 @@ export function runHelpers(dash: Dashboard) {
 ${metrics}<div class="cols run-cols"><div>
 ${goals}${championHeldOutBlock(i, now)}${research}${judgeQueue}
 <div class="block" data-part="attempts"><div class="head"><h2>Attempts</h2><span class="n">${i.attempts.length}</span><span class="right"><a href="${runHref(i, "attempts")}">All ${i.attempts.length}</a></span></div>${attemptRows(u, i, newest.slice(0, 8), now)}</div>
-${ladder}${baselineBlock(i, now)}
 </div><div class="side">
 <div class="block" data-part="now"><div class="head"><h2>Now</h2></div>${now_}</div>
 <div class="block" data-part="recent"><div class="head"><h2>Recent</h2><span class="right"><a href="${runHref(i, "history")}">Full history</a></span></div>${recent}</div>

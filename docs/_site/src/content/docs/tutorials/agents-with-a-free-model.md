@@ -196,7 +196,7 @@ Choose **Attempts**. Each change the agent submitted is an **attempt**, with one
 | **Declined** | You rejected it |
 | **Champion #2** | It was confirmed faster on fresh runs and became the new best version |
 
-[Outcome words on the dashboard](../reference/verdicts.md#outcome-words-on-the-dashboard) lists every word. Open an attempt to read the judge's reasons. Not every experiment works, and that is normal: the agent's next trial reads the judge's reasons for its last attempts and tries again. When a change is confirmed faster and nothing holds it, it becomes **champion #2**, every later trial starts from it, and the chart in **Metrics**, at the top of the run's **Overview** tab, shows the gain. Lower down, **Where the run started** shows the baseline: the `flops_per_s` the judge measured on each case before any change.
+[Outcome words on the dashboard](../reference/verdicts.md#outcome-words-on-the-dashboard) lists every word. Open an attempt to read the judge's reasons. Not every experiment works, and that is normal: the agent's next trial reads the judge's reasons for its last attempts and tries again. When a change is confirmed faster and nothing holds it, it becomes **champion #2**, every later trial starts from it, and the chart in **Metrics**, at the top of the run's **Overview** tab, shows the gain. On the run's **Info** tab, **Where the run started** shows the baseline: the `flops_per_s` the judge measured on each case before any change.
 
 :::tip[Nothing yet after half an hour?]
 - On **Live**, choose **lane-1**. If it has its green dot and new lines keep coming, the agent is still on its experiment: wait.

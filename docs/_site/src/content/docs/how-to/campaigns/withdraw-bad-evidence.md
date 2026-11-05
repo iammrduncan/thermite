@@ -20,7 +20,7 @@ Decide what is bad: the change itself, or one measurement of it.
 Then check:
 
 - **Which job it was.** The form in step 1 lists the attempt's judge jobs that finished, each with its number and what it did; **Every event**, under **What happened to it** on the attempt's page, shows when each ran. A confirmed win rests on two jobs: its screen and its confirmation. Over REST, the rig's view (`GET /v1/rigs/<rig>/view`) lists the judge's jobs under `judge.jobs`, each with its `id` and `attempt`.
-- **What depends on it.** In a hill climb, the run's **Overview** lists its **Champions**, with the change each one was. A champion that rested on the evidence is reopened, and every champion built on it too.
+- **What depends on it.** In a hill climb, the run's **Attempts** tab lists its **Champions**, with the change each one was. A champion that rested on the evidence is reopened, and every champion built on it too.
 - **The champion's patch.** A champion you already downloaded or that a rig already published keeps its patch in the results repository and on control: nothing is deleted or rewritten there. If you applied it to your project, revert it yourself.
 
 ## 1. See what it reaches

@@ -355,7 +355,7 @@ The campaign's page then has a block **Proposed to you**, above **Your additions
 
 A campaign whose work goes to git can start a new campaign from any of its champions: the new one starts from the champion's commit on the run's champion branch, so a rig that never ran the first campaign can fetch it.
 
-1. On the run's **Overview**, under **Champions**, each champion pushed to git shows its commit, such as `4f1c2a9`, and a **⋯** menu. The line above the chart says where: `In git: thermite/<run>/champion`, how many commits and when the rig last pushed.
+1. On the run's **Attempts** tab, under **Champions**, each champion pushed to git shows its commit, such as `4f1c2a9`, and a **⋯** menu. The line above the list says where: `In git: thermite/<run>/champion`, how many commits and when the rig last pushed.
 2. Press **⋯**, then **Start a campaign from #3**. The menu also has **Copy its commit** and **Download as a patch**.
 3. In the drawer, give the new campaign a **Name**. Under **Contract**, keep **The same as this run's**, or choose **Change it** and edit the contract in the box: control checks it before anything starts, and its `campaign` and `version` become the new campaign's.
 4. Leave **Its runs may read `<campaign>`'s collection** ticked to give the new campaign's runs what the first campaign's runs found in the knowledge base, read only (a grant you can revoke), or untick it to start from nothing.
