@@ -98,20 +98,16 @@ describe("clusters in Providers and Add a rig", () => {
       await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "remove k8s" }),
       /Type "remove k8s-a-1"/,
     );
-    // Its supervisor never reported: refused, until the owner discards what it holds (goal 165).
-    assert.match(
-      await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "remove k8s-a-1" }),
-      /k8s-a-1 still holds results: the rig's supervisor has not reported yet\./,
-    );
+    // It never reported: it holds no result, so "remove" removes it at once (goal 206), with
+    // nothing discarded.
     assert.ok(!f.calls.some((c) => c.args[0] === "delete"));
     assert.match(
-      await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "discard k8s-a-1" }),
+      await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "remove k8s-a-1" }),
       /ok=Removed from the cluster/,
     );
     assert.deepEqual(s.store.auditLog.list(1, { action: "cluster_rig_remove" })[0]?.body, {
       rig: "k8s-a-1",
       cluster: "k8s-a",
-      discarded: "the rig's supervisor has not reported yet",
     });
     assert.ok(
       f.calls.some(
@@ -606,7 +602,7 @@ describe("clusters in Providers and Add a rig", () => {
     const add = await page("/ui/rigs/add");
     assert.match(
       add,
-      /value="cluster:lab\|thermite-slot-3" data-name="thermite-slot-3" data-arch="" data-cpus="6" data-mem="24" data-disk="200"/,
+      /value="cluster:lab\|thermite-slot-3" data-name="thermite-slot-3" data-arch="" data-gpus="0" data-cpus="6" data-mem="24" data-disk="200"/,
     );
     assert.match(add, /name="core_cpus" inputmode="decimal" value="6"/);
     assert.match(add, /name="core_mem" inputmode="decimal" value="24"/);

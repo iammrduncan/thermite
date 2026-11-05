@@ -295,9 +295,14 @@ describe("machines in Providers", () => {
     const add = await s.page("/ui/rigs/add");
     assert.match(add, /name="place" value="machine:box" checked/);
     assert.match(add, /<script src="\/ui\/assets\/add-rig.js" defer>/);
+    // Every field's label has its description; the wizard's steps have more besides.
     const labels = add.match(/class="lb"/g)?.length ?? 0;
-    const tips = add.match(/class="ii" tabindex="0" data-tip="[^"]+"/g)?.length ?? 0;
-    assert.ok(labels > 0 && tips === labels, `${labels} labels, ${tips} with descriptions`);
+    const described =
+      add.match(/class="lb">[^<]*<i class="ii" tabindex="0" data-tip="[^"]+"/g)?.length ?? 0;
+    assert.ok(
+      labels > 0 && described === labels,
+      `${labels} labels, ${described} with descriptions`,
+    );
     // The GPU needs NVIDIA's toolkit first; a bad name or a taken GPU is refused.
     assert.match(
       await s.post("/ui/rigs/add", { machine: "box", rig: "box-a", gpus: "0" }),
