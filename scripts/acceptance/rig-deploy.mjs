@@ -66,8 +66,10 @@ try {
   );
   onHost("chown -R thermite:thermite /home/thermite/.local");
   console.log("loading the rig images into the machine's rootless Podman");
+  // -m: two images in one archive. Without it Podman takes the second name for a tag of the
+  // first, and the supervisor's units would run the harness image.
   execSync(
-    `podman save ${harnessImage} ${supervisorImage} | podman exec -i ${host} su - thermite -c 'podman load -q'`,
+    `podman save -m ${harnessImage} ${supervisorImage} | podman exec -i ${host} su - thermite -c 'podman load -q'`,
     { stdio: ["ignore", "inherit", "inherit"], shell: "/bin/sh" },
   );
   await until("control answers", async () => (await fetch(`${control}/v1/health`)).ok, 120_000);
