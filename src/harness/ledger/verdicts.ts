@@ -102,8 +102,8 @@ export class LedgerVerdicts extends LedgerPart {
     supersedes?: number | undefined;
     /** The main metric's measured values (goal 133): in the event only, for control's pages. */
     values?: unknown;
-    /** The informational metrics' measured values (goal 209): in the event only, as values are. */
-    info?: unknown;
+    /** The plan's other metrics' values (goal 209): in the event only, as values are. */
+    metrics?: unknown;
   }): number {
     return this.tx(() => {
       const a = this.ledger.attempts.get(v.attempt);
@@ -141,7 +141,7 @@ export class LedgerVerdicts extends LedgerPart {
       reasons: clipReason(v.reasons, REASONS_CHARS),
       supersedes: v.supersedes ?? null,
       ...(v.values ? { values: v.values } : {}),
-      ...(Array.isArray(v.info) && v.info.length ? { info: v.info } : {}),
+      ...(Array.isArray(v.metrics) && v.metrics.length ? { metrics: v.metrics } : {}),
       ...(Array.isArray(v.guards) && v.guards.length ? { guards: guardsForEvent(v.guards) } : {}),
     });
     return id;

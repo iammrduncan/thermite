@@ -50,8 +50,11 @@ export interface Decision<V> {
   guards: GuardResult[];
   /** At confirmation, each guard against the run's baseline (goal 115), when it has one. */
   vsStart?: StartGuard[] | undefined;
-  /** The informational metrics' measured values (goal 209), as the main metric's are. */
-  info?: MetricValues[] | undefined;
+  /**
+   * The values of the plan's other metrics (goal 209), as the main metric's are: its lower
+   * priorities and its informational metrics. A guard's are with the guard.
+   */
+  metrics?: MetricValues[] | undefined;
   reasons: string;
 }
 
@@ -132,14 +135,15 @@ function roleGuards(policy: Policy, roles: Roles | undefined): PlannedGuard[] {
   return metricPlan(policy, roles).guards.filter((g) => !g.legacy);
 }
 
-/** The informational metrics' values in these blocks, each one the blocks carry (goal 209). */
-function infoValues(
+/** The plan's lower priorities' and informational metrics' values, each the blocks carry. */
+function otherValues(
   policy: Policy,
   roles: Roles | undefined,
   blocks: readonly Block[],
 ): MetricValues[] {
-  return metricPlan(policy, roles)
-    .info.map((i) => metricValues(blocks, i.metric, policy.cells))
+  const plan = metricPlan(policy, roles);
+  return [...plan.priorities.slice(1).map((p) => p.metric), ...plan.info.map((i) => i.metric)]
+    .map((m) => metricValues(blocks, m, policy.cells))
     .filter((v) => v.cells.length);
 }
 
@@ -445,13 +449,13 @@ export function decideScreen(
     ...guardResults(policy, blocks, alpha),
     ...championGuardResults(extra, blocks, policy.cells, alpha),
   ];
-  const info = infoValues(policy, roles, blocks);
+  const metrics = otherValues(policy, roles, blocks);
   const result = (verdict: ScreenVerdict | undefined, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
-    ...(info.length ? { info } : {}),
+    ...(metrics.length ? { metrics } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 
@@ -525,14 +529,14 @@ export function decideConfirm(
         ...baselineGuardResults(extra, blocks, policy.cells, start),
       ]
     : undefined;
-  const info = infoValues(policy, roles, blocks);
+  const metrics = otherValues(policy, roles, blocks);
   const result = (verdict: ConfirmVerdict, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
     ...(vsStart ? { vsStart } : {}),
-    ...(info.length ? { info } : {}),
+    ...(metrics.length ? { metrics } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 

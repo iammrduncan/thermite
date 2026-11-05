@@ -408,17 +408,24 @@ describe("metric roles (goal 209)", () => {
     );
   });
 
-  test("each verdict carries its informational metrics' values, as the primary's", () => {
-    const roles: Roles = { itl_ms: { kind: "info" } };
-    const d = decideScreen(policy, quiet(3, { gflops: 1.05, itl_ms: 0.9 }), 0, roles);
-    const itl = d.info?.find((v) => v.metric === "itl_ms");
+  test("each verdict carries its lower priorities' and informational metrics' values, as the primary's", () => {
+    const roles: Roles = {
+      itl_ms: { kind: "info" },
+      prefill: { kind: "priority", priority: 2, direction: "max", min_effect: 0.02 },
+    };
+    const d = decideScreen(policy, quiet(3, { gflops: 1.05, itl_ms: 0.9, prefill: 1 }), 0, roles);
+    assert.deepEqual(
+      d.metrics?.map((v) => v.metric),
+      ["prefill", "itl_ms"],
+    );
+    const itl = d.metrics?.find((v) => v.metric === "itl_ms");
     assert.deepEqual(
       itl?.cells.map((c) => c.cell),
       cells,
     );
     assert.ok((itl?.cells[0]?.candidate ?? 0) < (itl?.cells[0]?.reference ?? 0));
-    // None asked for, none given: a contract with no informational metrics carries no info.
-    assert.equal(decideScreen(policy, quiet(3, { gflops: 1.05 })).info, undefined);
+    // None asked for, none given.
+    assert.equal(decideScreen(policy, quiet(3, { gflops: 1.05 })).metrics, undefined);
   });
 
   test("a tie on the primary goes down the priorities: better on the next one beyond its min_effect wins", () => {
