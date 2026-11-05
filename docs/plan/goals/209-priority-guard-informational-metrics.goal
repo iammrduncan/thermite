@@ -1,0 +1,52 @@
+---
+id: "209"
+title: "Priority, guard and informational metrics"
+status: PROPOSED
+version: "0.1.3"
+depends_on: ["208"]
+created: 2026-11-05
+updated: 2026-11-05
+---
+
+# 209 · Priority, guard and informational metrics
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013) · Planning with the owner: no code until the plan is approved.
+
+## Words (the owner, 2026-11-05)
+
+A hill climb's measurements are of three kinds:
+
+- the **primary stat**: the one stat the hill climb climbs;
+- **guard stats**: stats that hold the hill climb accountable, each with its bound: do not fall below this, do not rise above this, do not move outside this many standard deviations, and so on;
+- **informational stats**: stats the owner cares about that never pass or fail a judge's round. For kernel work, for example, inter-token latency.
+
+"Core and runner was a great first terminology setup": these three words are the next, and each means one thing everywhere in Thermite. The owner then chose to keep the word **metric** (decision 1): a kit's metrics are **priority metrics** (the primary first), **guard metrics** and **informational metrics**.
+
+## What
+
+The owner, 2026-11-05:
+
+1. **Defined in kits:** a kit says which of its stats is the primary stat, which are guard stats with their bounds, and which are informational.
+2. **One word for each, everywhere:** the product's screens, its messages, the contract and the documentation use these words, and only these, for these things.
+3. **Seen on a run's main page:** the primary stat, each guard stat against its bound, and the informational stats, for the champion and the attempts.
+
+The owner then plans the kit of the Spark hill climb with these words, from details of their own.
+
+## What Thermite has today (2026-11-05)
+
+- A kit declares its **metrics** (`kit.json` › `metrics`), each with how it is worked out.
+- A hill climb's contract picks among them: `objective.primary` (the metric, its direction and `min_effect`), `objective.secondary` (tie-breaks under the `lexicographic` policy), `guards` (a metric that may regress at most `max_step_regression` per promotion and `max_total_regression` against the baseline), `hard_constraints` (`min` or `max` bounds on a metric) and `monitor_only` (metrics recorded, never judged).
+- So the words in use are "metric", "primary", "secondary", "guard", "hard constraint" and "monitor only"; and the kit lists the metrics, while the contract says what each is for.
+
+## Decisions (the owner, 2026-11-05)
+
+1. **Metric stays:** the word is "metric", as now, in kits, contracts, screens and docs.
+2. **Kinds of metric, pluggable:** the standard kinds are the **priority metrics** (primary, secondary and so on, in order), **guard metrics**, **informational metrics**, and **other** kinds a kit needs. A kit defines its metrics' kinds; a campaign may add metrics and tighten guards.
+3. **Guards are configurable:** a guard is **above** a value, **below** a value or **within** a number of standard deviations, measured **against the baseline** or **against the current champion**. Start with these three kinds and these two references; against the last few champions and other kinds come later, as needed.
+4. **Tie-breaks by priority:** two changes equal on the primary metric are compared on the secondary, and so on down the priority metrics' order.
+
+5. **The run's Overview (chosen on mockups, option B2):** across the top, the priority metrics: the primary in a card with the hill-climb chart the page draws today (each champion's gain over time, a switch between the gain and the metric's own unit, the attempt being judged dashed), the next ones in a smaller card with a sparkline. Under it, one row for each guard metric: its rule, a sparkline of the champions' values with the start dotted, the limit dashed red and an allowed band green, the champion's value, the attempt being judged and the room it has left. Then a tile for each informational metric, with a sparkline of the champions' values. No line about broken guards. Below them, as today: on the left the attempts, then the judge's queue; on the right what each lane, the planner, the judge and the runners do now, then the run's recent events.
+
+## Done when
+
+The plan is approved, built, verified on the lab's test machine, and the pages and changelog use the three words.

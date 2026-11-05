@@ -1,16 +1,16 @@
 ---
 id: "206"
 title: "A rig is a core and its runners"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.3"
 depends_on: []
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # 206 · A rig is a core and its runners
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
 
 ## Words
 
@@ -38,7 +38,7 @@ The owner, 2026-11-04: "We don't need copies of things everywhere we just need r
 ## Why
 
 - **The GPUs do GPU work only.** On the lab's two DGX Sparks the owner wants "core on CPU box and runners on each gb10. Thats super clean. Allows us to use the GB10 to the fullest for the GPU work and model testing." The agents' programs, their workspaces and the core's records stay off the GPUs' machines.
-- **RunPod pays only while a GPU works.** The owner, 2026-10-23, on a kernel challenge scored on an H200: "If we do this we need to have the on demand judge, and on demand for workers" ([100](100-on-demand-gpus.goal)). A runner that exists only while it works is that, for any resource, not RunPod alone.
+- **RunPod pays only while a GPU works.** The owner, 2026-10-23, on a kernel challenge scored on an H200: "If we do this we need to have the on demand judge, and on demand for workers" ([100](../100-on-demand-gpus.goal)). A runner that exists only while it works is that, for any resource, not RunPod alone.
 - **Scale without a pause.** The owner: "later we could scale up and down the runners and not pause the active job... they are independent."
 - **Simpler than goal 205.** Goal 205 put the whole rig on each machine, with copies of the run and a leader chosen among them; the core and its runners need none of that.
 
@@ -48,7 +48,7 @@ The owner, 2026-11-04: "We don't need copies of things everywhere we just need r
 - **A runner is the harness's image started as a runner:** the broker, its roles and isolation as on any rig, and a store of its own for builds, kits and model files, fetched once and kept by their hash. It keeps no run of its own.
 - **What a run carries:** the commits it needs, sent as git bundles of what the runner lacks; the kit, by its commit; the run's model files, which the runner's supervisor fetches from their sources; for a lane's run, the change on its parent commit.
 - **A run's result comes back to the core,** which records it. Agents never reach a runner: only the core asks it, and a lane's run never runs on a runner while the judge measures there.
-- **`run_experiment` and today's dev runs:** both let a lane try its change on real hardware before it submits, and neither counts: nothing a lane measures itself can promote, judge, set the champion or reach a leaderboard; only the judge's measurement, by kit code the agents can't write, counts (agents never judge, [decisions](../decisions.md)). A dev run runs in the live workspace on the rig's own GPU. A `run_experiment` carries only the lane's change on its parent commit, so the runner makes the workspace from them and builds there; what the agent built on the core stays on the core. A build cache for each lane on each runner keeps that fast, as the lanes' compiler caches do today.
+- **`run_experiment` and today's dev runs:** both let a lane try its change on real hardware before it submits, and neither counts: nothing a lane measures itself can promote, judge, set the champion or reach a leaderboard; only the judge's measurement, by kit code the agents can't write, counts (agents never judge, [decisions](../../decisions.md)). A dev run runs in the live workspace on the rig's own GPU. A `run_experiment` carries only the lane's change on its parent commit, so the runner makes the workspace from them and builds there; what the agent built on the core stays on the core. A build cache for each lane on each runner keeps that fast, as the lanes' compiler caches do today.
 
 ## Questions for the mockup (answered 2026-11-04)
 
@@ -65,7 +65,7 @@ The owner, 2026-11-04: "We don't need copies of things everywhere we just need r
 5. **Tests,** and an acceptance check under compose: a core and two runners, a runner added and one removed while a run goes on.
 6. **The two Sparks:** the core on a CPU machine of the lab and a runner on each GB10, with a hill climb.
 
-Runners on RunPod that start for a batch of runs and stop after build on this: goal [100](100-on-demand-gpus.goal).
+Runners on RunPod that start for a batch of runs and stop after build on this: goal [100](../100-on-demand-gpus.goal).
 
 ### Steps 2 and 3, in parts
 
@@ -86,11 +86,11 @@ One part of it stays, as a no-op: control's store had migrations 29 and 30 for f
 
 ## Done when
 
-- [ ] Goal 205's code backed out, with every check passing and the store's version moving forward.
-- [ ] The design, with a mockup of Add a rig, Edit rig and the rig's page, agreed by the owner before control's code.
-- [ ] Items 1 to 7, with tests and the acceptance checks of the parts they touch.
-- [ ] A hill climb on the lab: the core on a CPU machine and a runner on each DGX Spark's GB10, with a kit the harness builds today. The TensorFold recipe's own hill climb follows when its kit is ready, which someone else makes (the owner, 2026-11-04, on goal 205).
-- [ ] Pages: Add a rig, Edit rig, the rig's page, a runner's parts and their network rules, the agents' tools, and the changelog. The settled decision that a rig is one harness container changes in [decisions](../decisions.md).
+- [x] Goal 205's code backed out, with every check passing and the store's version moving forward.
+- [x] The design, with a mockup of Add a rig, Edit rig and the rig's page, agreed by the owner before control's code.
+- [x] Items 1 to 7, with tests and the acceptance checks of the parts they touch.
+- [x] A hill climb on the lab: the core on a CPU machine and a runner on each DGX Spark's GB10, with a kit the harness builds today. The TensorFold recipe's own hill climb follows when its kit is ready, which someone else makes (the owner, 2026-11-04, on goal 205).
+- [x] Pages: Add a rig, Edit rig, the rig's page, a runner's parts and their network rules, the agents' tools, and the changelog. The settled decision that a rig is one harness container changes in [decisions](../../decisions.md).
 
 ## Decisions
 
@@ -135,3 +135,4 @@ One part of it stays, as a no-op: control's store had migrations 29 and 30 for f
 - 2026-11-05: Verified on the lab's test machine: the cluster acceptance check passed (23 of 23) and the runners test file (9 of 9) at 7929d599; the dashboard's cluster tests (8 of 8) and the rig deploy check (12 of 12, the supervisor's key on the bus and the rig removed) at df8e44b1; the runners test file (10 of 10) at 4604a227. With control on 4604a227, the Sparks' rig took both runners a minute after control started, each answering its core, one the judge's and one lane-1's, and its core now measures on its runners' kind of target, CUDA GPUs. Left for step 6: the smoke check on the rig and a hill climb, with the owner, and a model for the rig's agents.
 - 2026-11-05: The owner gave the go for step 6 and chose the other rigs' models for the Sparks' agents: Claude Code, Haiku 5.5 workers and a Sonnet 5.5 planner; the rig's model check passed. Its smoke check's baseline never ran: the judge on the GB10 runner refused to time, as `nvidia-smi` gave no `memory.used`. The GB10 shares the machine's memory and reports none of its own, its total either. The judge's check of a GPU before timing now leaves memory out on such a GPU, and only there: its use, its processes, its heat and its clocks still decide; a card with memory of its own whose use can't be read is still not ready. Add a rig's Workers at a time had the runners' old wait: 20 minutes in memory. Control now keeps it in its store (migration 35) and gives it within a minute of the rig's first report, as the owner who chose it, again up to three times when the rig never took it.
 - 2026-11-05: With the GB10 timing, the Sparks' rig passed its smoke check: all four candidates judged as expected on a GB10 runner, the good one confirmed at +33.8%. A hill climb with agents then ran on it (the core on a CPU machine, the judge on one GB10, lane 1's run_experiment on the other): the planner planned, the lane's first change was built and judged on the judge's runner and promoted (+17.0%, confirmed), and the lane's runs reached the other GB10. But the lane's agent never saw a run's result: before a run goes to a runner, the core reads the lane's change as the lane's user, and the broker ends every process of a user when its command ends, the agent's program included, which runs as the lane's user under Claude Code and OpenCode. The read is now a lane's plain command, as a lane's run on its own machine is, which leaves the lane's other processes running.
+- 2026-11-05: Verified. With the fix rolled, the hill climb went on: the lane's agent ran its change on its runner's GB10 time after time in one session and read each result, then submitted a register-blocked kernel that the judge, on the other GB10, confirmed at +25.9% over the tiling champion (95% interval 24.1% to 27.8%) and promoted; the lane's notes quote what it measured on its runner. The rig's core ran on a CPU machine throughout, with no GPU. The settled decision that a rig is one harness container is marked replaced in part in [decisions](../../decisions.md), and AGENTS.md and the kits and rigs page say a rig is a core and its runners. The other agent programs on runners follow in [208](../208-every-program-on-runners.goal).

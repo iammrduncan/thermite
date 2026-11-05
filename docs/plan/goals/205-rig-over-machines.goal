@@ -10,9 +10,9 @@ updated: 2026-11-04
 
 # 205 · A rig over several machines, with pools of devices for its judge and its workers
 
-**Status:** `DROPPED`, replaced by [206](206-core-and-runners.goal) · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `DROPPED`, replaced by [206](_completed/206-core-and-runners.goal) · **Version:** [v0.1.3](../roadmap.md#v013)
 
-Dropped 2026-11-04: the owner replaced it with a rig made of one core and its runners (goal [206](206-core-and-runners.goal)), and its code was backed out of v0.1.3 for a clean base. What follows is its record as it stood.
+Dropped 2026-11-04: the owner replaced it with a rig made of one core and its runners (goal [206](_completed/206-core-and-runners.goal)), and its code was backed out of v0.1.3 for a clean base. What follows is its record as it stood.
 
 ## Words
 

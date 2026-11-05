@@ -25,7 +25,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 - **State and agents:** the harness owns all research state. Every agent invocation starts fresh from context the harness builds. Parallel workers are isolated, and a central stateless planner assigns their experiments.
 - **Agents never judge.** Measurement, verdicts, completion and promotion live in code the agents cannot write.
 - **Deployment:**
-  - A rig is one harness container plus one supervisor container. A central control service has a dashboard, an API and MCP.
+  - A rig is one core (a harness container plus a supervisor container) and any number of runners, each one target resource such as a GPU of another machine. A central control service has a dashboard, an API and MCP.
   - Everything runs on Kubernetes or under docker-compose / podman-compose.
   - The harness reaches only DNS, the internet and its model endpoint.
   - The supervisor reaches the internet, its harness, control and, optionally, a knowledge base. It handles all git operations.

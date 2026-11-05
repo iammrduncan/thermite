@@ -14,7 +14,7 @@ updated: 2026-11-05
 
 ## Words
 
-As in [206](206-core-and-runners.goal): a **rig** owns one **core** and any number of **runners**; a **runner** owns one target resource. Here the resource is a GPU pod on RunPod, which control launches for the rig and which exists only while the rig has work for it.
+As in [206](_completed/206-core-and-runners.goal): a **rig** owns one **core** and any number of **runners**; a **runner** owns one target resource. Here the resource is a GPU pod on RunPod, which control launches for the rig and which exists only while the rig has work for it.
 
 ## What
 
