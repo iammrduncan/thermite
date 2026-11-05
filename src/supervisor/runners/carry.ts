@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HarnessClient } from "../../common/api/harness.ts";
 import type { Bus } from "../../common/bus/index.ts";
@@ -126,8 +126,6 @@ async function carryOne(c: Carrier, a: QueuedRun): Promise<void> {
     };
   } catch (err) {
     body = { error: errorText(err).slice(0, 4000) };
-  } finally {
-    if (a.kind === "git") rmSync(join(c.outboxDir, a.file), { force: true });
   }
   await c.harness.call(RUN_ANSWER, { params: { id: a.id }, body }).catch((err: unknown) =>
     log("supervisor", "a runner's answer did not reach the harness", {
@@ -143,6 +141,8 @@ export async function carryRunnerAsks(c: Carrier): Promise<void> {
   // a few seconds after its supervisor is no reason to warn.
   let failingSince: number | undefined;
   let said = false;
+  // Its first take since it started takes again what a supervisor took and never answered.
+  let again = true;
   while (!c.stopping()) {
     c.tick?.();
     const began = Date.now();
@@ -150,10 +150,11 @@ export async function carryRunnerAsks(c: Carrier): Promise<void> {
     try {
       asks = (
         await c.harness.call(RUN_ASKS, {
-          query: { wait: TAKE_WAIT_MS },
+          query: { wait: TAKE_WAIT_MS, ...(again ? { again: 1 } : {}) },
           timeoutMs: TAKE_WAIT_MS + 30_000,
         })
       ).asks as QueuedRun[];
+      again = false;
       failingSince = undefined;
       said = false;
     } catch (err) {
@@ -165,7 +166,15 @@ export async function carryRunnerAsks(c: Carrier): Promise<void> {
       await new Promise((r) => setTimeout(r, 5000));
       continue;
     }
-    for (const a of asks) void carryOne(c, a);
+    // One ask that fails to be carried never stops the supervisor: its harness hears why, or
+    // the ask fails at its time.
+    for (const a of asks)
+      carryOne(c, a).catch((err: unknown) =>
+        log("supervisor", "a runner's ask was not carried", {
+          runner: a.runner,
+          error: errorText(err),
+        }),
+      );
     // A take answered empty at once (a harness that doesn't wait) waits a second here instead.
     const quick = 1000 - (Date.now() - began);
     if (!asks.length && quick > 0) await new Promise((r) => setTimeout(r, quick));

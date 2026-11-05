@@ -103,7 +103,8 @@ try {
     user: "thermite",
     private_key: "",
   });
-  let html = await get("/ui/settings");
+  // Machines have their own page, Settings › Machines: its key, host key and installs show there.
+  let html = await get("/ui/settings/machines");
   const pub = /(restrict ssh-ed25519 [A-Za-z0-9+/=]+ thermite test-host)/.exec(html)?.[1];
   execSync(`podman exec -i ${host} sh -c 'cat >> /home/thermite/.ssh/authorized_keys'`, {
     input: `${pub}\n`,
@@ -116,7 +117,7 @@ try {
     /read the machine/.test(trusted),
     trusted,
   );
-  html = await get("/ui/settings");
+  html = await get("/ui/settings/machines");
   // Lingering is off on a fresh machine: control asks, and turns it on after the owner's yes.
   const sha =
     /name="recipe" value="linger"><input type="hidden" name="sha" value="([0-9a-f]{64})"/.exec(
@@ -131,7 +132,7 @@ try {
     "lingering is on",
     async () =>
       /Last install: Lingering for the user's services, allowed by owner:ui, <span class="chip ok">done/.test(
-        await get("/ui/settings"),
+        await get("/ui/settings/machines"),
       ),
     120_000,
     2000,

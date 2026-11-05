@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { QueuedRun, RunAsk } from "../../core/api/harness/runs.ts";
 import type { RunLink } from "./remote-runner.ts";
@@ -8,9 +8,11 @@ import type { RunLink } from "./remote-runner.ts";
  * The core's link to its runners (goal 206): the asks of a runner process wait here until the
  * supervisor takes them (RUN_ASKS), carries each on the bus and brings back the runner's answer
  * (RUN_ANSWER). The harness never reaches its supervisor; the supervisor comes for the asks. A git
- * bundle waits as a file in the outbox, which the supervisor reads and removes. An ask not answered
- * in time fails, and the judge's job with it, which the judge tries again as an infrastructure
- * failure.
+ * bundle waits as a file in the outbox, which the supervisor reads (its outbox is read-only to it),
+ * and which goes once the ask is answered or fails. An ask not answered in time fails, and the
+ * judge's job with it, which the judge tries again as an infrastructure failure. The supervisor's
+ * first take after it starts takes again the asks a supervisor took before and never answered: it
+ * stopped, and nobody carries them.
  */
 
 /** The longest a runner may take to answer: a build or a run of the longest kits. */
@@ -61,7 +63,19 @@ export class RunnerLink {
   }
 
   private put(item: QueuedRun, answerMs = this.answerMs): Promise<unknown> {
-    return new Promise((resolve, reject) => {
+    // A bundle's file goes once its ask ends, answered or not.
+    const done = () => {
+      if (item.kind === "git") rmSync(join(this.outboxDir, item.file), { force: true });
+    };
+    return new Promise((ok, no) => {
+      const resolve = (answer: unknown) => {
+        done();
+        ok(answer);
+      };
+      const reject = (err: Error) => {
+        done();
+        no(err);
+      };
       this.waiting.push({ item, deadline: Date.now() + answerMs, resolve, reject });
       for (const wake of this.wakers.splice(0)) wake();
       // Failed at its time also while no supervisor comes for the asks.
@@ -106,8 +120,16 @@ export class RunnerLink {
       }
   }
 
-  /** The asks waiting, at most `max`, taken by the supervisor; waits up to `waitMs` for one. */
-  async take(waitMs: number, max = 16): Promise<QueuedRun[]> {
+  /**
+   * The asks waiting, at most `max`, taken by the supervisor; waits up to `waitMs` for one.
+   * `again`: the supervisor's first take since it started, which takes again, first, the asks a
+   * supervisor took before and never answered.
+   */
+  async take(waitMs: number, max = 16, again = false): Promise<QueuedRun[]> {
+    if (again) {
+      this.waiting.unshift(...this.taken.values());
+      this.taken.clear();
+    }
     this.expire();
     if (!this.waiting.length && waitMs > 0)
       await new Promise<void>((resolve) => {

@@ -189,7 +189,10 @@ export const QueuedRun = z.discriminatedUnion("kind", [
 ]);
 export type QueuedRun = z.infer<typeof QueuedRun>;
 
-/** The asks waiting, taken by the supervisor; it waits up to `wait` milliseconds for one. */
+/**
+ * The asks waiting, taken by the supervisor; it waits up to `wait` milliseconds for one. `again=1`
+ * on its first take since it started takes again the asks a supervisor took and never answered.
+ */
 export const RUN_ASKS = {
   method: "GET",
   path: "/v1/run-asks",

@@ -65,8 +65,12 @@ try {
     redirect: "manual",
   });
   const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
-  const page = async () => (await fetch(`${control}/ui/settings`, { headers: { cookie } })).text();
-  const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page())?.[1] ?? "";
+  /** @param {string} [path] */
+  const get = async (path = "/ui/settings") =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  // Machines have their own page, Settings › Machines: its key, host key, checks and installs.
+  const page = () => get("/ui/settings/machines");
+  const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await get())?.[1] ?? "";
   /**
    * @param {string} path
    * @param {Record<string, string>} form

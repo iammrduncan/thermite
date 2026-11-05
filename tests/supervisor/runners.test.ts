@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -145,6 +145,7 @@ describe("a runner process reached over the bus (goal 206)", () => {
     });
     return {
       to: link.to("spark-02"),
+      outboxDir,
       stop: () => {
         stopped = true;
       },
@@ -197,11 +198,38 @@ describe("a runner process reached over the bus (goal 206)", () => {
     try {
       const bundle = Buffer.alloc(7 * 1024 * 1024);
       for (let i = 0; i < bundle.length; i++) bundle[i] = i % 251;
+      // The supervisor's outbox is read-only to it: it reads the bundle, and the harness, which
+      // owns the outbox, removes it once the ask is answered.
       await w.to.sendGit("proj", "a".repeat(40), bundle);
       assert.ok(took && Buffer.from(took).equals(bundle), "the runner's harness has it whole");
+      assert.deepEqual(readdirSync(join(w.outboxDir, ".runs")), [], "the bundle is gone");
     } finally {
       w.stop();
     }
+  });
+
+  test("a supervisor that starts again takes again the asks it took and never answered", async () => {
+    const outboxDir = mkdtempSync(join(tmpdir(), "thermite-again-"));
+    const link = new RunnerLink({ outboxDir });
+    const bundle = Buffer.from("a bundle");
+    const sent = link.to("spark-02").sendGit("proj", "b".repeat(40), bundle);
+    const asked = link.to("spark-02").ask({ op: "info" });
+    // A supervisor takes both, then stops before it answers.
+    const first = await link.take(0);
+    assert.equal(first.length, 2);
+    assert.deepEqual(await link.take(0), [], "taken: not offered again on a later take");
+    // The next one's first take has them again, the bundle's file still there to read.
+    const again = await link.take(0, 16, true);
+    assert.deepEqual(
+      again.map((a) => a.id),
+      first.map((a) => a.id),
+    );
+    const git = again.find((a) => a.kind === "git");
+    assert.ok(git?.kind === "git" && existsSync(join(outboxDir, git.file)));
+    for (const a of again) link.answer(a.id, { answer: { ok: true } });
+    assert.deepEqual(await asked, { ok: true });
+    await sent;
+    assert.ok(git?.kind === "git" && !existsSync(join(outboxDir, git.file)));
   });
 
   test("a runner's supervisor fetches a run's model file from its source, and its harness takes it in", async () => {
