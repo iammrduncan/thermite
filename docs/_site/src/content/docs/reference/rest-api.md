@@ -348,7 +348,7 @@ Each refusal is in the [audit log](#audit-log-actions) as `refused`, with the ro
 
 ### A rig's runners on clusters
 
-A runner process that control sets up for a rig on a Kubernetes cluster, as **Edit rig**'s **Add a runner** does ([Give a rig runners on other machines](../how-to/install/runners.md)): its harness and supervisor, started as a runner on one node, with one GPU or none, a volume and a token of their own. The token registers the runner's key on the message bus and does nothing else. Control sets it up in the background, then sends the rig its `runners` with it ([A rig's settings](#a-rigs-settings)); the rig's **History** says how each step went.
+A runner process that control sets up for a rig on a Kubernetes cluster, as **Edit rig**'s **Add a runner** does ([Give a rig runners on other machines](../how-to/install/runners.md)): its harness and supervisor, started as a runner on one node, with one GPU or none, a volume and a token of their own. The token registers the runner's key on the message bus and does nothing else. Control sets it up in the background, then sends the rig its `runners` with it ([A rig's settings](#a-rigs-settings)): at once if the rig reports, or within a minute of its first report; the rig's **History** says how each step went.
 
 | Route | Token | What it does | Request | Answer |
 | --- | --- | --- | --- | --- |

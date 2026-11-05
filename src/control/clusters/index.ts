@@ -59,4 +59,5 @@ export {
   dropRunners,
   removeRunner,
   rigReportsSettings,
+  watchRunners,
 } from "./runners.ts";

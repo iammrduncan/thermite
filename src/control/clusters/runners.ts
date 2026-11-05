@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
+import { every } from "../../common/health.ts";
 import { RIG_NAME_RULE } from "../../core/ids.ts";
 import { RunnerSetting } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
@@ -43,9 +44,12 @@ import { clusterTarget, NS } from "./rigs.ts";
  * away, the rig hears first, so the core fails its run under way cleanly, then its objects go.
  */
 
-/** How long a runner set up with its rig waits for the rig's first report: 20 minutes. */
+/** How long Add a rig's Workers at a time waits for the rig's first report: 20 minutes. */
 const RIG_WAIT_MS = 10_000;
 const RIG_WAIT_TRIES = 120;
+
+/** How often control looks for runner processes it has not given their rig yet: a minute. */
+const RUNNERS_WATCH_MS = 60_000;
 
 /** Adding a runner process on a cluster (Edit rig, REST or MCP). */
 interface ClusterRunnerRequest {
@@ -343,12 +347,12 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
     store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
     return;
   }
-  await giveRunner(parts, r, by);
+  await giveRunner(parts, r, by, true);
 }
 
 /**
  * Whether a rig reports its settings, waiting up to 20 minutes for one control is setting up: a
- * rig takes its runners and Add a rig's Workers at a time only then.
+ * rig takes Add a rig's Workers at a time only then.
  */
 export async function rigReportsSettings(parts: ControlParts, rig: string): Promise<boolean> {
   for (let t = 0; t < RIG_WAIT_TRIES && !rigSettingsOf(parts.store, rig)?.settings; t++)
@@ -356,25 +360,35 @@ export async function rigReportsSettings(parts: ControlParts, rig: string): Prom
   return Boolean(rigSettingsOf(parts.store, rig)?.settings);
 }
 
-/** Gives a runner process control set up to its rig, once the rig reports its settings. */
-async function giveRunner(parts: ControlParts, r: RigRunner, by: string) {
+/** The rig's runners in the change of its settings control asked for last, while it waits. */
+function askedRunners(store: ControlParts["store"], rig: string) {
+  return (
+    store.commands
+      .pending(rig)
+      .map((c) => c.envelope)
+      .filter((e) => e.kind === "rig_settings" && "runners" in (e.payload as object))
+      .at(-1)?.payload as { runners: { name: string; pools: string[] }[] } | undefined
+  )?.runners;
+}
+
+/**
+ * Gives a runner process control set up to its rig, if the rig reports its settings. One whose
+ * rig has not reported yet waits: control's round of runners gives it once the rig does
+ * (watchRunners). `first`: its setup just ended, and a rig that cannot take it says why.
+ */
+async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first = false) {
   const { store } = parts;
-  const reported = await rigReportsSettings(parts, r.rig);
   const now = runnersNow(parts, r.rig);
-  if (typeof now === "string" || !reported) {
-    const why = typeof now === "string" ? now : `${r.rig} has not reported its settings yet`;
-    store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${why}`);
+  if (typeof now === "string") {
+    if (first) store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${now}`);
     return;
   }
+  if (!rigSettingsOf(store, r.rig)?.settings) return;
+  store.rigRunners.setGiven(r.rig, r.runner);
   // The rig's runners as control last asked for them, while that command waits for the rig,
   // else as the rig reported them; less those control took away. Then those control set up for
   // it that neither names yet: two set up together, as Add a rig does, each keep the other.
-  const asked = store.commands
-    .pending(r.rig)
-    .map((c) => c.envelope)
-    .filter((e) => e.kind === "rig_settings" && "runners" in (e.payload as object))
-    .at(-1)?.payload as { runners: typeof now } | undefined;
-  const base = (asked?.runners ?? now).filter(
+  const base = (askedRunners(store, r.rig) ?? now).filter(
     (x) => store.rigRunners.get(r.rig, x.name)?.status !== "removed",
   );
   const listed = new Set(base.map((x) => x.name));
@@ -401,6 +415,26 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string) {
     out.state !== "refused",
     `${r.runner}: ${out.state === "refused" ? out.error : out.said}`,
   );
+}
+
+/**
+ * Control's round of runner processes (goal 206): each control set up and has not given its rig
+ * yet is given once the rig reports its settings, such as one set up with a rig whose core came
+ * up later, or was set up again, or one whose rig reported while control was away. One the rig,
+ * or a change of its settings on the way to it, names already counts as given. The round is one
+ * of control's loops, and never keeps control from exiting.
+ */
+export function watchRunners(parts: ControlParts, everyMs = RUNNERS_WATCH_MS): void {
+  const { store } = parts;
+  every(parts.loops, "control", "runners", everyMs, async () => {
+    for (const r of store.rigRunners.waiting()) {
+      const settings = rigSettingsOf(store, r.rig)?.settings;
+      if (!settings) continue;
+      const named = [...settings.runners, ...(askedRunners(store, r.rig) ?? [])];
+      if (named.some((x) => x.name === r.runner)) store.rigRunners.setGiven(r.rig, r.runner);
+      else await giveRunner(parts, r, "control:runners");
+    }
+  });
 }
 
 /** Deletes what control set up for a runner process on its cluster; why not, in words. */
@@ -700,7 +734,7 @@ async function deployMachineRunner(parts: ControlParts, r: RigRunner, token: str
     store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
     return;
   }
-  await giveRunner(parts, r, by);
+  await giveRunner(parts, r, by, true);
 }
 
 /** Moves a runner process on a machine onto control's images: its units written again. */

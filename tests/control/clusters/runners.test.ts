@@ -51,9 +51,9 @@ const envOf = (o: Obj | undefined) =>
   );
 
 /** Control with a cluster, and the rig core-1 reporting its settings, with no runners yet. */
-async function withRig() {
+async function withRig(o: { runnersWatchMs?: number } = {}) {
   const f = fakeCluster();
-  const s = await control(f.k);
+  const s = await control(f.k, o);
   assert.match(
     await s.post("/ui/settings/add", {
       type: "k8s",
@@ -306,6 +306,59 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
         { name: "spark-03", pools: ["shared"] },
       ],
     });
+    await owner.close();
+  });
+
+  test("a runner set up before its rig's core reports is given once it does", async () => {
+    const { f, s } = await withRig({ runnersWatchMs: 20 });
+    const owner = await mcpWith(s.api, ADMIN);
+    // A core that has not reported yet, as one whose setup failed and was done again later.
+    const core = await owner.call("add_cluster_rig", { rig: "core-4", cluster: "k8s-a" });
+    assert.equal(core.error, false, JSON.stringify(core.body));
+    await settle(f, 1);
+    const added = await owner.call("add_cluster_runner", {
+      rig: "core-4",
+      runner: "spark-02",
+      cluster: "k8s-a",
+      node: "gpu-node-1",
+      gpus: 1,
+      pool: "judge",
+    });
+    assert.equal(added.error, false, JSON.stringify(added.body));
+    await settle(f, 2);
+    const sent = () =>
+      s.store.commands
+        .pending("core-4")
+        .filter((c) => c.envelope.kind === "rig_settings")
+        .map((c) => c.envelope.payload);
+    for (
+      let i = 0;
+      i < 20 && s.store.rigRunners.get("core-4", "spark-02")?.status !== "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual(sent(), [], "nothing goes to a rig that does not report its settings");
+    const given = () => s.store.rigHistory.list("core-4").filter((x) => x.step === "runner_given");
+    assert.deepEqual(given(), [], "and its history shows no failure: the runner waits");
+    await ingestReport(s.store, {
+      rig: "core-4",
+      ledger_id: "ledger-core-4",
+      cursor: 0,
+      next: 0,
+      generated_at: new Date().toISOString(),
+      events: [],
+      summary: { settings: { lanes: 1, promotion: "auto", runners: [] } },
+    });
+    for (let i = 0; i < 100 && !sent().length; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(sent(), [{ runners: [{ name: "spark-02", pools: ["judge"] }] }]);
+    assert.deepEqual(
+      given().map((x) => x.ok),
+      [true],
+    );
+    // Given once: control's next rounds send nothing more.
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(sent().length, 1);
     await owner.close();
   });
 

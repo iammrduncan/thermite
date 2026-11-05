@@ -239,6 +239,7 @@ export async function control(
     tag?: string;
     publicUrl?: string | null;
     drainWatchMs?: number;
+    runnersWatchMs?: number;
     /** False: control has no CUDA 13 harness image (goal 132). */
     cuda13?: boolean;
   } = {},
@@ -252,6 +253,7 @@ export async function control(
       secrets,
       clusterKubectl: k,
       ...(o.drainWatchMs ? { drainWatchMs: o.drainWatchMs } : {}),
+      ...(o.runnersWatchMs ? { runnersWatchMs: o.runnersWatchMs } : {}),
       publicUrl: o.publicUrl === null ? undefined : (o.publicUrl ?? "https://control.example.com"),
       rigImages: {
         harness: `registry.example.com/harness:${tag}`,
