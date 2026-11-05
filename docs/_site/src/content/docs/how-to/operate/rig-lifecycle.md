@@ -204,6 +204,8 @@ Then, in the **Set up by control** block, open "Remove it from …", type `remov
 
 Control refuses the remove while any result waits on the rig: the page says `rig-1 still holds results:`, what waits, and to export first. A rig whose results can't leave, such as one whose supervisor is broken, is removed with `discard rig-1` typed instead of `remove rig-1`: what it held is lost, and the audit log's `machine_rig_remove` or `cluster_rig_remove` entry says what had not left (`discarded`).
 
+A rig whose setup failed before it ever reported, such as one whose pods the cluster refused, says so at the top of its page: "Control could not set rig-1 up on cluster-1.", with the error of its last failed step, and **Remove the rig** in plain sight. It holds no result, so `remove rig-1` removes it at once: control deletes what it made for the rig and its runners and frees the place, and you add the rig again under another name. The Rigs list shows it as **Setup failed** until then.
+
 **Joined:** run the **Remove** command from the rig's page, there. Then retire it.
 
 **The compose stack:** `docker compose down` stops it. `docker compose down -v` also deletes its volumes, with control's state and every result not pushed elsewhere.

@@ -191,6 +191,32 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     );
   });
 
+  test("a rig whose setup failed says why at the top of its page, and is removed with no export", async () => {
+    const { f, s } = await withRig();
+    const owner = await mcpWith(s.api, ADMIN);
+    await owner.call("add_cluster_rig", { rig: "core-9", cluster: "k8s-a" });
+    await owner.close();
+    await settle(f, 1);
+    s.store.clusters.setRigStatus("core-9", "failed");
+    s.store.rigHistory.add(
+      "core-9",
+      "deploy",
+      false,
+      "Error from server (Forbidden): pods here run only on node-a",
+    );
+    const page = await s.page("/ui/rigs/core-9");
+    assert.match(
+      page,
+      /data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set core-9 up on k8s-a\.<\/b> Error from server \(Forbidden\): pods here run only on node-a<\/p>/,
+    );
+    assert.match(page, /action="\/ui\/rigs\/core-9\/cluster\/remove"/);
+    // It never reported: it holds no result, and "remove core-9" removes it.
+    await s.post("/ui/rigs/core-9/cluster/remove", { confirm: "remove core-9" });
+    for (let i = 0; i < 100 && s.store.clusters.rig("core-9")?.status !== "removed"; i++)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.equal(s.store.clusters.rig("core-9")?.status, "removed");
+  });
+
   test("two runners set up together are both given to the rig", async () => {
     const { s, sent } = await withRig();
     const owner = await mcpWith(s.api, ADMIN);

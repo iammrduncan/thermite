@@ -120,7 +120,9 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(onCluster.cluster)} · ${esc(onCluster.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
+        onCluster.status === "failed"
+          ? `${setupFailedCard(onCluster.rig, onCluster.cluster, `/ui/rigs/${encodeURIComponent(onCluster.rig)}/cluster/remove`, csrf(c))}${flash}${clusterPlacedBlock(onCluster, csrf(c))}`
+          : `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
         vs,
       );
     if (!u && joined) return joinedPage(c, joined, flash);
@@ -157,7 +159,9 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(placed.machine)} · ${esc(placed.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
+        placed.status === "failed"
+          ? `${setupFailedCard(placed.rig, placed.machine, `/ui/rigs/${encodeURIComponent(placed.rig)}/machine/remove`, csrf(c))}${flash}${placedBlock(placed, csrf(c))}`
+          : `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
         vs,
       );
     if (!u)
@@ -486,6 +490,19 @@ ${rp ? "" : events}
       vs,
     );
   });
+
+  /**
+   * A rig whose setup failed before it ever reported (goal 206): why, from its last failed step,
+   * and Remove the rig in plain sight, which deletes what control made for it and its runners
+   * there and frees the place, so that it can be added again under another name.
+   */
+  const setupFailedCard = (rig: string, where: string, removeUrl: string, t: string) => {
+    const failed = store.rigHistory
+      .list(rig)
+      .filter((x) => !x.ok)
+      .at(-1);
+    return `<div class="card warn" style="margin-bottom:16px" data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set ${esc(rig)} up on ${esc(where)}.</b>${failed?.detail ? ` ${esc(failed.detail)}` : " Its steps below say why."}</p><p class="small">Remove it to start again: control deletes what it made for the rig and its runners and frees the place, and you add the rig again under another name. It never reported, so it holds no result to export first.</p><form method="post" action="${removeUrl}" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${t}"><input name="confirm" placeholder="type: remove ${esc(rig)}" aria-label="Type remove ${esc(rig)} to remove it"><button class="danger solid">Remove the rig</button></form></div>`;
+  };
 
   // The blocks a rig's place adds to its page: control's setup, on a cluster or a machine, and
   // pull mode.
