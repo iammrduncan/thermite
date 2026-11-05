@@ -296,6 +296,7 @@ export async function checkCluster(
   t: ClusterTarget,
   slots: string[],
   reach: ReachEntry[] = [],
+  image?: string | undefined,
 ): Promise<ClusterFacts> {
   const version = await k.kubectl(t, ["version", "-o", "json"]);
   if (version.code !== 0)
@@ -345,7 +346,7 @@ export async function checkCluster(
     const net = await slotNetwork(k, t, s, labels, reach);
     const quotas = await k.kubectl(t, ["get", "resourcequota", "-n", s, "-o", "json"]);
     const usable = can.stdout.trim() === "yes";
-    const rule = usable ? await slotNodes(k, t, s, labels, nodeList) : {};
+    const rule = usable && image ? await slotNodes(k, t, s, labels, nodeList, image) : {};
     out.slots.push({
       namespace: s,
       usable,
@@ -384,7 +385,8 @@ export function nodeInSlot(
 /**
  * The nodes a slot takes pods on, when its rules name some (goal 206): the cluster's own answer to
  * a dry run of a Deployment there, which its admission rules check and which creates nothing, with
- * no node, then on each ready node. A slot that takes one with no node takes any; one that takes
+ * no node, then on each ready node. Its image is control's own harness image (`image`), which a
+ * slot's rules take as they take a rig's; a dry run pulls nothing. A slot that takes one with no node takes any; one that takes
  * none, whatever the node, refuses for another reason, which the rig's setup then says.
  */
 async function slotNodes(
@@ -393,12 +395,13 @@ async function slotNodes(
   slot: string,
   labels: Record<string, string>,
   nodes: ClusterNode[],
+  image: string,
 ): Promise<{ nodes?: string[]; why?: string }> {
   const probe = (node?: string) => {
     const meta = { name: "thermite-node-probe", labels };
     const pod = {
       ...(node ? { nodeSelector: { "kubernetes.io/hostname": node } } : {}),
-      containers: [{ name: "probe", image: "registry.k8s.io/pause:3.10" }],
+      containers: [{ name: "probe", image }],
     };
     const deployment = {
       apiVersion: "apps/v1",

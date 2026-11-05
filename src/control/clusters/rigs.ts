@@ -58,11 +58,13 @@ export async function checkClusterNow(parts: ControlParts, name: string): Promis
   const c = store.clusters.get(name);
   if (!c) return "no such cluster";
   try {
+    // The slots' node rules are read with control's own harness image, which slots take.
     const facts = await checkCluster(
       parts.kube,
       clusterTarget(parts, c),
       c.slots,
       store.reachable.list(),
+      parts.rigImages?.harness,
     );
     store.clusters.setFacts(name, { facts });
     // Each slot's rig takes what its slot's rules open and let in now, for its page.

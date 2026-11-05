@@ -257,9 +257,12 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     const slot = facts?.slots[0];
     assert.deepEqual(slot?.nodes, ["gpu-node-1"]);
     assert.match(slot?.node_rule ?? "", /pods here run only on gpu-node-1/);
-    assert.ok(
-      f.calls.some((c) => c.args.join(" ") === "create --dry-run=server -n thermite-slot-1 -f -"),
+    const probes = f.calls.filter(
+      (c) => c.args.join(" ") === "create --dry-run=server -n thermite-slot-1 -f -",
     );
+    assert.ok(probes.length >= 2, "with no node, then on each node");
+    // With control's own harness image, which a slot's rules take as they take a rig's.
+    assert.match(probes[0]?.stdin ?? "", /"image":"registry\.example\.com\/harness:1"/);
     assert.ok(!f.calls.some((c) => c.args[0] === "apply"), "nothing applied");
     // Add a rig offers its one node; a rig there with none given goes on it.
     assert.match(
