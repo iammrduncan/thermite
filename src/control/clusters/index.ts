@@ -46,6 +46,7 @@ export {
   checkClusterRig,
   NS,
   rigWork,
+  setClusterRigUpAgain,
   setClusterSlots,
   workWords,
 } from "./rigs.ts";

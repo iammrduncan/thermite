@@ -292,6 +292,14 @@ export class Clusters extends StorePart {
    * The images a rig on a cluster now runs, after an image update, and how its agent programs ran
    * as its deployments were written.
    */
+  /** The node a rig control set up runs on, for its setup again (goal 206); none: any node. */
+  setRigNode(rig: string, node: string | undefined): void {
+    const r = this.rig(rig);
+    if (!r) return;
+    const spec: ClusterRig["spec"] = { ...r.spec, node };
+    this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
+  }
+
   setRigImages(
     rig: string,
     images: ClusterRig["spec"]["images"],

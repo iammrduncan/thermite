@@ -210,6 +210,16 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       /data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set core-9 up on k8s-a\.<\/b> Error from server \(Forbidden\): pods here run only on node-a<\/p>/,
     );
     assert.match(page, /action="\/ui\/rigs\/core-9\/cluster\/remove"/);
+    // Set up again on a node, as a slot that names its nodes needs: a new token, applied again.
+    assert.match(page, /action="\/ui\/rigs\/core-9\/cluster\/again"/);
+    const applies = f.calls.filter((c) => c.args[0] === "apply").length;
+    assert.match(
+      await s.post("/ui/rigs/core-9/cluster/again", { node: "gpu-node-1" }),
+      /Control sets core-9 up again on gpu-node-1/,
+    );
+    assert.equal(s.store.clusters.rig("core-9")?.spec.node, "gpu-node-1");
+    await settle(f, applies + 1);
+    assert.ok(f.calls.filter((c) => c.args[0] === "apply").length > applies, "applied again");
     // It never reported: it holds no result, and "remove core-9" removes it.
     await s.post("/ui/rigs/core-9/cluster/remove", { confirm: "remove core-9" });
     for (let i = 0; i < 100 && s.store.clusters.rig("core-9")?.status !== "removed"; i++)

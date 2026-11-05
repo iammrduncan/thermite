@@ -8,6 +8,7 @@ import {
   cancelDrain,
   dropRunners,
   setClusterRigResources,
+  setClusterRigUpAgain,
   updateRigImages,
 } from "../../clusters/index.ts";
 import { notSent } from "../../command-progress.ts";
@@ -201,6 +202,12 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
         wait: false,
         owner: true,
       });
+      return "error" in done ? back("error", done.error) : back("ok", done.ok);
+    }
+    // A setup that failed before its first report, done again on another node (goal 206).
+    if (action === "again") {
+      const node = String((await c.req.parseBody()).node ?? "").trim();
+      const done = await setClusterRigUpAgain(parts, r.rig, node || undefined, "owner:ui");
       return "error" in done ? back("error", done.error) : back("ok", done.ok);
     }
     if (!["stop", "start", "restart", "remove"].includes(action))

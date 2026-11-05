@@ -317,6 +317,51 @@ export const clusterPlan = (
   reach: parts.store.reachable.list(),
 });
 
+/**
+ * Sets up again a rig whose setup on a cluster failed before it ever reported (goal 206), on the
+ * node given (none: any node with room): a new token, and its objects applied again. Its runners
+ * stay. Says why not, in words.
+ */
+export async function setClusterRigUpAgain(
+  parts: ControlParts,
+  rig: string,
+  node: string | undefined,
+  by: string,
+): Promise<{ ok: string } | { error: string }> {
+  const { store } = parts;
+  const r = store.clusters.rig(rig);
+  if (!r) return { error: `Control didn't set ${rig} up on a cluster.` };
+  if (r.status !== "failed" || store.reportedRigs.list().some((x) => x.id === rig))
+    return {
+      error: `${rig}'s setup did not fail before its first report: nothing to set up again.`,
+    };
+  const k = store.clusters.get(r.cluster);
+  if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
+  const facts = k.facts as ClusterFacts | null;
+  if (node && facts?.nodes.length && !facts.nodes.some((n) => n.name === node && n.ready))
+    return { error: `${k.name} has no ready node ${node}.` };
+  if (!parts.publicUrl) return { error: "Control's address for rigs is not set." };
+  if (!parts.rigBus) return { error: NO_RIG_BUS };
+  store.clusters.setRigNode(rig, node || undefined);
+  const token = newToken();
+  if (store.enrollments.rig(rig)) store.enrollments.rotateToken(rig, token.sha256, by);
+  else store.enrollments.enroll(rig, token.sha256, by);
+  store.clusters.setRigStatus(rig, "deploying");
+  store.rigHistory.add(rig, "set_up_again", true, node ? `on ${node}` : "on any node with room");
+  store.auditLog.add(by, "cluster_rig_set_up_again", { rig, node: node ?? null });
+  const again = store.clusters.rig(rig) as ClusterRig;
+  void inBackground(
+    store,
+    "cluster",
+    rig,
+    "applied",
+    deployClusterRig(parts, again, k, token.token),
+  );
+  return {
+    ok: `Control sets ${rig} up again${node ? ` on ${node}` : ""}: its page follows each step.`,
+  };
+}
+
 /** Sets a rig up on a cluster, in the background: one apply, then the first report. */
 async function deployClusterRig(
   parts: ControlParts,

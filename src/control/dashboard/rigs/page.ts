@@ -1,6 +1,12 @@
 import type { Hono } from "hono";
 import { offBus, offBusFix } from "../../bus/index.ts";
-import { resourcesWords, rigWork, sizeWords, workWords } from "../../clusters/index.ts";
+import {
+  type ClusterFacts,
+  resourcesWords,
+  rigWork,
+  sizeWords,
+  workWords,
+} from "../../clusters/index.ts";
 import {
   checkRow,
   checkRowsOf,
@@ -121,7 +127,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           active: "rigs",
         },
         onCluster.status === "failed"
-          ? `${setupFailedCard(onCluster.rig, onCluster.cluster, `/ui/rigs/${encodeURIComponent(onCluster.rig)}/cluster/remove`, csrf(c))}${flash}${clusterPlacedBlock(onCluster, csrf(c))}`
+          ? `${setupFailedCard(onCluster.rig, onCluster.cluster, `/ui/rigs/${encodeURIComponent(onCluster.rig)}/cluster/remove`, csrf(c), againOnNode(onCluster, csrf(c)))}${flash}${clusterPlacedBlock(onCluster, csrf(c))}`
           : `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
         vs,
       );
@@ -496,12 +502,28 @@ ${rp ? "" : events}
    * and Remove the rig in plain sight, which deletes what control made for it and its runners
    * there and frees the place, so that it can be added again under another name.
    */
-  const setupFailedCard = (rig: string, where: string, removeUrl: string, t: string) => {
+  /**
+   * For a rig on a cluster whose setup failed: set it up again on a node chosen, which keeps its
+   * name and runners, as a slot that takes pods only on nodes it names needs (goal 206).
+   */
+  const againOnNode = (r: ClusterRig, t: string) => {
+    const nodes = ((store.clusters.get(r.cluster)?.facts as ClusterFacts | null)?.nodes ?? [])
+      .filter((n) => n.ready)
+      .map((n) => n.name);
+    return `<form method="post" action="/ui/rigs/${encodeURIComponent(r.rig)}/cluster/again" class="row" style="gap:8px;margin-bottom:10px"><input type="hidden" name="csrf" value="${t}"><label class="small">Node <select name="node"><option value="">any node with room</option>${nodes.map((n) => `<option value="${esc(n)}"${n === r.spec.node ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label><button class="primary">Set it up again</button><span class="muted small">Keeps its name and its runners. A slot that takes pods only on nodes it names needs one of those.</span></form>`;
+  };
+  const setupFailedCard = (
+    rig: string,
+    where: string,
+    removeUrl: string,
+    t: string,
+    again = "",
+  ) => {
     const failed = store.rigHistory
       .list(rig)
       .filter((x) => !x.ok)
       .at(-1);
-    return `<div class="card warn" style="margin-bottom:16px" data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set ${esc(rig)} up on ${esc(where)}.</b>${failed?.detail ? ` ${esc(failed.detail)}` : " Its steps below say why."}</p><p class="small">Remove it to start again: control deletes what it made for the rig and its runners and frees the place, and you add the rig again under another name. It never reported, so it holds no result to export first.</p><form method="post" action="${removeUrl}" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${t}"><input name="confirm" placeholder="type: remove ${esc(rig)}" aria-label="Type remove ${esc(rig)} to remove it"><button class="danger solid">Remove the rig</button></form></div>`;
+    return `<div class="card warn" style="margin-bottom:16px" data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set ${esc(rig)} up on ${esc(where)}.</b>${failed?.detail ? ` ${esc(failed.detail)}` : " Its steps below say why."}</p>${again ? `<p class="small" style="margin-bottom:6px">Set it up again, on another node if its place needs one:</p>${again}<p class="small">Or remove it to start again under another name: control deletes what it made for the rig and its runners and frees the place. It never reported, so it holds no result to export first.</p>` : `<p class="small">Remove it to start again: control deletes what it made for the rig and its runners and frees the place, and you add the rig again under another name. It never reported, so it holds no result to export first.</p>`}<form method="post" action="${removeUrl}" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${t}"><input name="confirm" placeholder="type: remove ${esc(rig)}" aria-label="Type remove ${esc(rig)} to remove it"><button class="danger solid">Remove the rig</button></form></div>`;
   };
 
   // The blocks a rig's place adds to its page: control's setup, on a cluster or a machine, and
