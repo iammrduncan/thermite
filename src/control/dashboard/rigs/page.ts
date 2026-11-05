@@ -507,10 +507,14 @@ ${rp ? "" : events}
    * name and runners, as a slot that takes pods only on nodes it names needs (goal 206).
    */
   const againOnNode = (r: ClusterRig, t: string) => {
-    const nodes = ((store.clusters.get(r.cluster)?.facts as ClusterFacts | null)?.nodes ?? [])
-      .filter((n) => n.ready)
-      .map((n) => n.name);
-    return `<form method="post" action="/ui/rigs/${encodeURIComponent(r.rig)}/cluster/again" class="row" style="gap:8px;margin-bottom:10px"><input type="hidden" name="csrf" value="${t}"><label class="small">Node <select name="node"><option value="">any node with room</option>${nodes.map((n) => `<option value="${esc(n)}"${n === r.spec.node ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label><button class="primary">Set it up again</button><span class="muted small">Keeps its name and its runners. A slot that takes pods only on nodes it names needs one of those.</span></form>`;
+    const facts = store.clusters.get(r.cluster)?.facts as ClusterFacts | null | undefined;
+    // A slot whose rules take pods only on nodes they name offers those alone.
+    const only = facts?.slots.find((x) => x.namespace === r.namespace)?.nodes;
+    const nodes = only?.length
+      ? only
+      : (facts?.nodes ?? []).filter((n) => n.ready).map((n) => n.name);
+    const pick = r.spec.node && nodes.includes(r.spec.node) ? r.spec.node : only?.[0];
+    return `<form method="post" action="/ui/rigs/${encodeURIComponent(r.rig)}/cluster/again" class="row" style="gap:8px;margin-bottom:10px"><input type="hidden" name="csrf" value="${t}"><label class="small">Node <select name="node">${only?.length ? "" : `<option value="">any node with room</option>`}${nodes.map((n) => `<option value="${esc(n)}"${n === pick ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label><button class="primary">Set it up again</button><span class="muted small">Keeps its name and its runners. A slot that takes pods only on nodes it names needs one of those.</span></form>`;
   };
   const setupFailedCard = (
     rig: string,

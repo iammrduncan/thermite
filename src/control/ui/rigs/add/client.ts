@@ -96,11 +96,14 @@ export const ADD_RIG_JS = `
       form.elements.core_disk.value = picked.dataset.disk || "100";
     }
     // The core's node: the chosen cluster's nodes only.
+    // A slot whose rules take pods only on nodes they name offers those alone, the first chosen.
     const nodeSel = form.elements.core_node;
     if (nodeSel) {
       const cluster = picked ? picked.dataset.cluster || "" : "";
-      for (const o of nodeSel.options) if (o.value) o.hidden = o.dataset.cluster !== cluster;
-      if (nodeSel.value && nodeSel.selectedOptions[0].hidden) nodeSel.value = "";
+      const only = picked && picked.dataset.nodes ? picked.dataset.nodes.split(" ") : null;
+      for (const o of nodeSel.options)
+        o.hidden = o.value ? o.dataset.cluster !== cluster || (!!only && !only.includes(o.value)) : !!only;
+      if (nodeSel.selectedOptions[0] && nodeSel.selectedOptions[0].hidden) nodeSel.value = only ? only[0] : "";
     }
     // A rig of one machine: the GPUs of its place, and none of another's.
     let ticked = 0;

@@ -38,6 +38,8 @@ export function fakeCluster(
     nodeArch?: string;
     /** What kubectl prints for one deployment by name; default: the supervisor's, in JSON. */
     deploymentStdout?: string;
+    /** Slots whose rules take pods only on these nodes, as an admission rule refuses others. */
+    slotNodes?: Record<string, string[]>;
   } = {},
 ) {
   const calls: { args: string[]; stdin?: string }[] = [];
@@ -120,6 +122,19 @@ export function fakeCluster(
         return o.slices
           ? ok(JSON.stringify({ items: o.slices }))
           : { code: 1, stdout: "", stderr: "Error from server (Forbidden): resourceslices" };
+      // A dry run in a slot whose rules name its nodes: refused but on one of those (goal 206).
+      const dry = /^create --dry-run=server -n (\S+) -f -$/.exec(a);
+      const named = dry ? o.slotNodes?.[dry[1] as string] : undefined;
+      if (named) {
+        const node = /"kubernetes\.io\/hostname":"([^"]+)"/.exec(stdin ?? "")?.[1];
+        return node && named.includes(node)
+          ? ok("deployment.apps/thermite-node-probe created (server dry run)")
+          : {
+              code: 1,
+              stdout: "",
+              stderr: `Error from server (Forbidden): admission webhook denied the request: pods here run only on ${named.join(",")}`,
+            };
+      }
       if (a === "get storageclass -o json")
         return ok(
           JSON.stringify({

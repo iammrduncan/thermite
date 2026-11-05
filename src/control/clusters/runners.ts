@@ -22,7 +22,7 @@ import {
 import { fingerprint, type Machine, RIG_ID, type RigRunner } from "../store/index.ts";
 import { rigSettingsOf } from "../views/index.ts";
 import { cudaFor, cudaOfPlace } from "./cuda.ts";
-import { type ClusterFacts, HARNESS_LABELS, slotNetwork } from "./facts.ts";
+import { type ClusterFacts, HARNESS_LABELS, nodeInSlot, slotNetwork } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
 import {
   asList,
@@ -216,7 +216,7 @@ export async function addClusterRunner(
     return fail("Name the DRA device class, such as gpu.nvidia.com.");
   if (gpus && mode.startsWith("dra:") && !facts.device_classes.includes(deviceClass ?? ""))
     return fail(`${k.name} has no DRA device class ${deviceClass}.`);
-  const node = i.node || undefined;
+  let node = i.node || undefined;
   if (node && facts.nodes.length && !facts.nodes.some((n) => n.name === node))
     return fail(`${k.name} has no node ${node} that control can see.`);
   if (gpus && !deviceClass && node && !facts.nodes.some((n) => n.name === node && n.gpus >= 1))
@@ -241,6 +241,14 @@ export async function addClusterRunner(
       store.rigRunners.onCluster(k.name).find((r) => r.namespace === namespace && r.rig !== rig)
         ?.rig;
     if (other) return fail(`The slot ${namespace} holds the rig ${other}.`);
+    // A slot whose rules take pods only on nodes they name: one of those, its GPU's if known.
+    const placed = nodeInSlot(
+      slot,
+      node,
+      deviceClass ? facts.gpu_classes?.[deviceClass]?.node : undefined,
+    );
+    if ("error" in placed) return fail(placed.error);
+    node = placed.node;
     quota = slot.quota;
     const net = await slotNetwork(
       parts.kube,

@@ -49,6 +49,12 @@ export interface ClusterSlot {
   ingress_why?: string | undefined;
   /** What the slot's quota allows a rig (limits, else requests), when control can read it. */
   quota?: SlotQuota | undefined;
+  /**
+   * The nodes the slot takes pods on, when its rules name some (goal 206), and the cluster's
+   * words for its rule; none: any node, or control can't tell.
+   */
+  nodes?: string[] | undefined;
+  node_rule?: string | undefined;
 }
 
 /**
@@ -338,18 +344,85 @@ export async function checkCluster(
     const labels = by ? { ...HARNESS_LABELS, "app.kubernetes.io/instance": by } : HARNESS_LABELS;
     const net = await slotNetwork(k, t, s, labels, reach);
     const quotas = await k.kubectl(t, ["get", "resourcequota", "-n", s, "-o", "json"]);
+    const usable = can.stdout.trim() === "yes";
+    const rule = usable ? await slotNodes(k, t, s, labels, nodeList) : {};
     out.slots.push({
       namespace: s,
-      usable: can.stdout.trim() === "yes",
+      usable,
       used_by: by,
       network_ok: net.ok,
       network_why: net.why,
       ...(net.openings.length ? { openings: net.openings } : {}),
       ...(net.ingress ? { ingress_ok: net.ingress.ok, ingress_why: net.ingress.why } : {}),
       quota: quotas.code === 0 ? slotQuota(quotas.stdout) : undefined,
+      ...(rule.nodes ? { nodes: rule.nodes, node_rule: rule.why } : {}),
     });
   }
   return out;
+}
+
+/**
+ * The node of a rig or a runner in a slot whose rules name its nodes (goal 206): the one given,
+ * if the slot takes it; else `prefer` (a DRA class's GPU's node), if the slot takes it; else the
+ * slot's one node; else why not, in words. A slot that names none takes any.
+ */
+export function nodeInSlot(
+  slot: ClusterSlot | undefined,
+  node: string | undefined,
+  prefer?: string | undefined,
+): { node: string | undefined } | { error: string } {
+  const allowed = slot?.nodes;
+  if (!slot || !allowed?.length) return { node };
+  const why = {
+    error: `The slot ${slot.namespace} takes pods only on ${allowed.join(", ")}: choose one of them as the node.`,
+  };
+  if (node) return allowed.includes(node) ? { node } : why;
+  if (prefer && allowed.includes(prefer)) return { node: prefer };
+  return allowed.length === 1 ? { node: allowed[0] } : why;
+}
+
+/**
+ * The nodes a slot takes pods on, when its rules name some (goal 206): the cluster's own answer to
+ * a dry run of a Deployment there, which its admission rules check and which creates nothing, with
+ * no node, then on each ready node. A slot that takes one with no node takes any; one that takes
+ * none, whatever the node, refuses for another reason, which the rig's setup then says.
+ */
+async function slotNodes(
+  k: ClusterKubectl,
+  t: ClusterTarget,
+  slot: string,
+  labels: Record<string, string>,
+  nodes: ClusterNode[],
+): Promise<{ nodes?: string[]; why?: string }> {
+  const probe = (node?: string) => {
+    const meta = { name: "thermite-node-probe", labels };
+    const pod = {
+      ...(node ? { nodeSelector: { "kubernetes.io/hostname": node } } : {}),
+      containers: [{ name: "probe", image: "registry.k8s.io/pause:3.10" }],
+    };
+    const deployment = {
+      apiVersion: "apps/v1",
+      kind: "Deployment",
+      metadata: meta,
+      spec: {
+        replicas: 0,
+        selector: { matchLabels: labels },
+        template: { metadata: meta, spec: pod },
+      },
+    };
+    return k.kubectl(
+      t,
+      ["create", "--dry-run=server", "-n", slot, "-f", "-"],
+      JSON.stringify(deployment),
+      30_000,
+    );
+  };
+  const any = await probe();
+  if (any.code === 0 || !nodes.length) return {};
+  const ok: string[] = [];
+  for (const n of nodes.filter((x) => x.ready))
+    if ((await probe(n.name)).code === 0) ok.push(n.name);
+  return ok.length ? { nodes: ok, why: kubeError(any) } : {};
 }
 
 /** A short line about the cluster, for the Providers list. */

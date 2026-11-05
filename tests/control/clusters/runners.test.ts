@@ -233,6 +233,50 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     );
   });
 
+  test("a slot whose rules take pods only on a node it names: control finds it and puts the rig there", async () => {
+    const f = fakeCluster({
+      canCreateNamespaces: false,
+      slots: { "thermite-slot-1": true },
+      slotNodes: { "thermite-slot-1": ["gpu-node-1"] },
+    });
+    const s = await control(f.k);
+    assert.match(
+      await s.post("/ui/settings/add", {
+        type: "k8s",
+        name: "lab",
+        kubeconfig: KUBECONFIG,
+        placement: "slot",
+        slots: "thermite-slot-1",
+      }),
+      /"lab" is added and checked/,
+    );
+    // The check asked the cluster with a dry run, which creates nothing.
+    const facts = s.store.clusters.get("lab")?.facts as
+      | { slots: { nodes?: string[]; node_rule?: string }[] }
+      | undefined;
+    const slot = facts?.slots[0];
+    assert.deepEqual(slot?.nodes, ["gpu-node-1"]);
+    assert.match(slot?.node_rule ?? "", /pods here run only on gpu-node-1/);
+    assert.ok(
+      f.calls.some((c) => c.args.join(" ") === "create --dry-run=server -n thermite-slot-1 -f -"),
+    );
+    assert.ok(!f.calls.some((c) => c.args[0] === "apply"), "nothing applied");
+    // Add a rig offers its one node; a rig there with none given goes on it.
+    assert.match(
+      await s.page("/ui/rigs/add"),
+      /value="cluster:lab\|thermite-slot-1"[^>]*data-nodes="gpu-node-1"/,
+    );
+    assert.equal(
+      await s.post("/ui/rigs/add", {
+        kind: "many",
+        place: "cluster:lab|thermite-slot-1",
+        rig: "core-n",
+      }),
+      "/ui/rigs/core-n",
+    );
+    assert.equal(s.store.clusters.rig("core-n")?.spec.node, "gpu-node-1");
+  });
+
   test("two runners set up together are both given to the rig", async () => {
     const { s, sent } = await withRig();
     const owner = await mcpWith(s.api, ADMIN);

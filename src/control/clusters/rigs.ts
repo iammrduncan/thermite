@@ -25,6 +25,7 @@ import {
   type ClusterSlot,
   checkCluster,
   HARNESS_LABELS,
+  nodeInSlot,
   slotNetwork,
 } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
@@ -174,7 +175,7 @@ export async function addClusterRig(
     return fail(
       `No node of ${k.name} offers ${gpus} GPU${gpus === 1 ? "" : "s"} through the device plugin.`,
     );
-  const node = i.node || undefined;
+  let node = i.node || undefined;
   if (node && facts.nodes.length && !facts.nodes.some((n) => n.name === node))
     return fail(`${k.name} has no node ${node} that control can see.`);
   const storageClass = i.storageClass || undefined;
@@ -196,6 +197,10 @@ export async function addClusterRig(
     namespace = i.slot ?? "";
     const slot = facts.slots.find((s) => s.namespace === namespace && s.usable && !s.used_by);
     if (!slot) return fail("Choose a free slot.");
+    // A slot whose rules take pods only on nodes they name: one of those (goal 206).
+    const placed = nodeInSlot(slot, node);
+    if ("error" in placed) return fail(placed.error);
+    node = placed.node;
     slotQuota = slot.quota;
     if (
       store.clusters.rigs(k.name).some((r) => r.namespace === namespace && r.status !== "removed")
@@ -249,9 +254,7 @@ export async function addClusterRig(
   if (i.cuda === "13" && !gpus)
     return fail("A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.");
   // Left out: the CUDA its GPUs take, where control can tell (an arm64 node, a Blackwell GPU).
-  const cuda = gpus
-    ? (i.cuda ?? cudaOfPlace(facts, { deviceClass, node: i.node })?.cuda)
-    : undefined;
+  const cuda = gpus ? (i.cuda ?? cudaOfPlace(facts, { deviceClass, node })?.cuda) : undefined;
   const images = controlImages(parts, gpus, cuda);
   if (typeof images === "string") return fail(images);
   const token = newToken();
@@ -325,7 +328,7 @@ export const clusterPlan = (
 export async function setClusterRigUpAgain(
   parts: ControlParts,
   rig: string,
-  node: string | undefined,
+  asked: string | undefined,
   by: string,
 ): Promise<{ ok: string } | { error: string }> {
   const { store } = parts;
@@ -338,8 +341,16 @@ export async function setClusterRigUpAgain(
   const k = store.clusters.get(r.cluster);
   if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
   const facts = k.facts as ClusterFacts | null;
+  let node = asked;
   if (node && facts?.nodes.length && !facts.nodes.some((n) => n.name === node && n.ready))
     return { error: `${k.name} has no ready node ${node}.` };
+  // A slot whose rules take pods only on nodes they name: one of those (goal 206).
+  const placed = nodeInSlot(
+    facts?.slots.find((x) => x.namespace === r.namespace),
+    node,
+  );
+  if ("error" in placed) return { error: placed.error };
+  node = placed.node;
   if (!parts.publicUrl) return { error: "Control's address for rigs is not set." };
   if (!parts.rigBus) return { error: NO_RIG_BUS };
   store.clusters.setRigNode(rig, node || undefined);

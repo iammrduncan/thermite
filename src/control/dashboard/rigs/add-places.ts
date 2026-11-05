@@ -123,6 +123,8 @@ interface CorePlace {
   gpus: number;
   /** A cluster's place: the cluster, whose ready nodes the core may be pinned to. */
   cluster?: string | undefined;
+  /** A slot whose rules take pods only on nodes they name: those (goal 206). */
+  nodes?: string[] | undefined;
 }
 
 /** Every place the rig's core can go, a not-ready one with why. */
@@ -197,6 +199,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
         arch: "",
         gpus: devices,
         cluster: k.name,
+        nodes: s.nodes,
       });
     }
   }
@@ -361,7 +364,9 @@ export function runnerGroups(
       }
       // NVIDIA's device plugin: each node's GPUs, as many as the slot's quota allows.
       let room = q ? (q.gpus ?? Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
-      for (const n of f.nodes.filter((x) => x.ready && x.gpus > 0)) {
+      for (const n of f.nodes.filter(
+        (x) => x.ready && x.gpus > 0 && (!s?.nodes || s.nodes.includes(x.name)),
+      )) {
         const g = nodeGroup(n.name);
         for (let i = 0; i < n.gpus && room > 0; i++, room--)
           g.gpus.push({
@@ -437,7 +442,7 @@ export function coreRows(places: CorePlace[], wanted: string | undefined): strin
       const size = p.size
         ? ` data-cpus="${esc(p.size.cpus)}" data-mem="${esc(p.size.memoryGi)}" data-disk="${esc(p.size.diskGb)}"`
         : "";
-      return `<label class="ar-place${p.why ? " dis" : ""}${checked ? " on" : ""}"><input type="radio" name="place" value="${esc(p.value)}"${p.why ? " disabled" : checked ? " checked" : ""} data-name="${esc(p.name)}" data-arch="${esc(p.arch)}" data-gpus="${p.gpus}"${size}${p.cluster ? ` data-cluster="${esc(p.cluster)}"` : ""}><span class="ar-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(p.where)}</span>${p.checked && !p.why ? ` <span class="chip ok">${esc(p.checked)}</span>` : ""} <span class="chip info" data-core-chip hidden>the core</span></span><span class="muted small">${esc(p.why ? `Not ready: ${p.why}. Fix it under Settings › Machines.` : p.facts)}</span></span></label>`;
+      return `<label class="ar-place${p.why ? " dis" : ""}${checked ? " on" : ""}"><input type="radio" name="place" value="${esc(p.value)}"${p.why ? " disabled" : checked ? " checked" : ""} data-name="${esc(p.name)}" data-arch="${esc(p.arch)}" data-gpus="${p.gpus}"${size}${p.cluster ? ` data-cluster="${esc(p.cluster)}"` : ""}${p.nodes?.length ? ` data-nodes="${esc(p.nodes.join(" "))}"` : ""}><span class="ar-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(p.where)}</span>${p.checked && !p.why ? ` <span class="chip ok">${esc(p.checked)}</span>` : ""} <span class="chip info" data-core-chip hidden>the core</span></span><span class="muted small">${esc(p.why ? `Not ready: ${p.why}. Fix it under Settings › Machines.` : p.facts)}</span></span></label>`;
     })
     .join("");
 }
