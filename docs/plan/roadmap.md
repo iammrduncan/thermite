@@ -186,6 +186,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [207](goals/207-runpod-runners.goal) A RunPod GPU as a rig's runner, launched while it works · `PROPOSED`
 - [208](goals/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `PROPOSED`
 - [209](goals/209-priority-guard-informational-metrics.goal) Priority, guard and informational metrics: in kits, one word each everywhere, on a run's page · `IN_PROGRESS`
+- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`
 - [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `DROPPED`, replaced by 206
 
 **Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
