@@ -108,6 +108,7 @@ describe("clusters in Providers and Add a rig", () => {
     assert.deepEqual(s.store.auditLog.list(1, { action: "cluster_rig_remove" })[0]?.body, {
       rig: "k8s-a-1",
       cluster: "k8s-a",
+      discarded: null,
     });
     assert.ok(
       f.calls.some(
