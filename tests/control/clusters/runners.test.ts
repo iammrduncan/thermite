@@ -215,6 +215,12 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     for (let i = 0; i < 100 && s.store.clusters.rig("core-9")?.status !== "removed"; i++)
       await new Promise((r) => setTimeout(r, 20));
     assert.equal(s.store.clusters.rig("core-9")?.status, "removed");
+    // A removed rig keeps its name: Add a rig's name step knows it is taken before it sends.
+    assert.match(await s.page("/ui/rigs/add"), /data-taken="\[[^"]*&quot;core-9&quot;/);
+    assert.match(
+      await s.post("/ui/rigs/add", { kind: "many", place: "cluster:k8s-a", rig: "core-9" }),
+      /There is a rig named core-9 already/,
+    );
   });
 
   test("two runners set up together are both given to the rig", async () => {

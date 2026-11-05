@@ -67,6 +67,7 @@ export {
   NO_RIG_BUS,
   type RigImages,
   rigBusOf,
+  rigNamesTaken,
   rigSetupView,
   rigTaken,
   SETUP_STEPS,

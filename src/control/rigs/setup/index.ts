@@ -119,6 +119,21 @@ export const rigTaken = (parts: ControlParts, rig: string) =>
   Boolean(parts.store.joinedRigs.get(rig)) ||
   parts.views().some((u) => u.id === rig);
 
+/**
+ * Every rig's name control knows, removed and retired ones too, which no new rig may take: Add a
+ * rig's name step says so before it sends (goal 206).
+ */
+export const rigNamesTaken = (parts: ControlParts): string[] =>
+  [
+    ...new Set([
+      "add",
+      ...parts.store.enrollments.rigs().map((r) => r.rig),
+      ...parts.store.machines.rigs().map((r) => r.rig),
+      ...parts.store.clusters.rigs().map((r) => r.rig),
+      ...parts.views().map((u) => u.id),
+    ]),
+  ].sort();
+
 // The judge's share as typed in a form, by the one rule of clusters/resources.ts.
 export const judgeShare = (raw: string, n: number) =>
   judgeShareOf(raw ? Number(raw) : undefined, n);

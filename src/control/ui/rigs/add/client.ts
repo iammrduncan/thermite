@@ -258,6 +258,18 @@ export const ADD_RIG_JS = `
   const TITLE = (st, kind) => ({ kind: "Kind of rig", where: kind === "many" ? "The core" : "Where", join: "Where", gpus: "GPUs", runners: "Runners", name: "Name and create" })[st];
   let at = 0;
   const RIG = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
+  // The names control knows, removed rigs' too: a new rig may take none of them.
+  let taken = [];
+  try { taken = JSON.parse(form.dataset.taken || "[]"); } catch {}
+  const nameSays = () => {
+    const name = form.elements.rig.value.trim();
+    const say = form.querySelector("[data-name-say]");
+    const why = !name ? "" : taken.includes(name)
+      ? "There is a rig named " + name + " already: a removed rig keeps its name, so choose another."
+      : RIG.test(name) ? "" : "2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit.";
+    if (say) { say.textContent = why; say.hidden = !why; }
+    return !why && !!name;
+  };
   const valid = (st) => {
     const kind = kindNow();
     const place = (form.querySelector('input[name="place"]:checked') || {}).value || "";
@@ -265,7 +277,7 @@ export const ADD_RIG_JS = `
     if (st === "where") return !!place && !place.startsWith("join:");
     if (st === "join") return place === "join:machine" || (place === "join:namespace" && !!form.elements.j_namespace.value.trim());
     if (st === "runners" || st === "gpus") return !stop;
-    if (st === "name") return RIG.test(form.elements.rig.value.trim()) && !stop;
+    if (st === "name") return nameSays() && !stop;
     return true;
   };
   function nav() {

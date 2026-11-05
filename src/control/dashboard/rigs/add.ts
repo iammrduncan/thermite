@@ -6,7 +6,14 @@ import { addClusterRig, leastRigSize, NS, SUPERVISOR_SHARE } from "../../cluster
 import { newToken } from "../../credential.ts";
 import type { JoinedSpec, JoinForm } from "../../join.ts";
 import { deployScript, MAX_RIG_GPUS, type MachineFacts, tail } from "../../machines/index.ts";
-import { awaitFirstReport, judgeShare, NO_RIG_BUS, rigBusOf, rigTaken } from "../../rigs/index.ts";
+import {
+  awaitFirstReport,
+  judgeShare,
+  NO_RIG_BUS,
+  rigBusOf,
+  rigNamesTaken,
+  rigTaken,
+} from "../../rigs/index.ts";
 import {
   fingerprint,
   type JoinedRig,
@@ -154,7 +161,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
         active: "rigs",
       },
       `${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not created.</b> ${esc(error)}</div>` : ""}${blocked ? `<div class="card warn" style="margin-bottom:16px">${esc(blocked)}</div>` : ""}
-<form id="add-rig" class="wz-form" method="post" action="/ui/rigs/add" autocomplete="off" data-img-cpu="${esc(images?.harness ?? "")}" data-img-cuda12="${esc(images?.harnessCuda ?? "")}" data-img-cuda13="${esc(images?.harnessCuda13 ?? "")}"><input type="hidden" name="csrf" value="${t}">
+<form id="add-rig" class="wz-form" method="post" action="/ui/rigs/add" autocomplete="off" data-taken="${esc(JSON.stringify(rigNamesTaken(parts)))}" data-img-cpu="${esc(images?.harness ?? "")}" data-img-cuda12="${esc(images?.harnessCuda ?? "")}" data-img-cuda13="${esc(images?.harnessCuda13 ?? "")}"><input type="hidden" name="csrf" value="${t}">
 <ol class="wz-steps" id="wz-steps" aria-label="Steps" hidden></ol>
 <section class="wz" data-step="kind"><div class="wz-head"><h2>What kind of rig?</h2><p class="lead">A rig is where Thermite's agents work and its judge measures their changes. ${tip("A rig runs a campaign's lanes, the agents that try changes, and its judge, which measures each change against the champion. Its results go to control.")}</p></div>
 <div class="wz-kinds" role="radiogroup" aria-label="Kind of rig">
@@ -189,7 +196,7 @@ ${runnerPicker(groups)}
 ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</section>
 <section class="wz" data-step="name"><div class="wz-head"><h2>Name it and create it</h2><p class="lead">Check what the rig will be, then create it. Control sets it up, and its page follows each step.</p></div>
 <div class="g3">
-<label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-b"></label>
+<label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-b"><span class="small bad" data-name-say hidden></span></label>
 <div class="fd" style="grid-column:span 2">${infoLabel("Images", "The images control deploys, as set where control is deployed: the CPU harness image, and the CUDA one for GPUs, as control reads them: 13 for Blackwell and the DGX Spark's GB10 on arm64, 12 for Pascal to Hopper on amd64.")}<span class="small ar-img">${images ? `<span class="mono" id="ar-core-img">${esc(images.harness)}</span><span data-for-kind="many"> · runners: <span class="mono" id="ar-run-img">none chosen</span></span>` : "none configured"}</span></div>
 <div class="fd" style="grid-column:span 3">${infoLabel("Message bus", "Where the rig reaches control's message bus, over TLS, for its reports, commands, live lines and config (THERMITE_NATS_PUBLIC_URL). Every machine and cluster it runs on must reach this port, or the rig never reports, and is shown broken.")}<span class="mono small">${parts.rigBus ? esc(parts.rigBus.url) : "none: control can't set a rig up"}</span></div>
 </div>
