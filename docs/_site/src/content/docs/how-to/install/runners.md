@@ -20,7 +20,7 @@ Each runner is in one pool. A runner takes one run at a time, so a measurement n
 | `shared` | The judge and every lane, in turn, first come, first served |
 | `lane-1` to `lane-16` | That lane alone: its `run_experiment`. The judge never measures there |
 
-A lane runs on its own runner first, then on a shared one; a lane that no runner serves runs on the core's machine. What a lane runs never counts: only the judge's measurement does.
+A lane runs on its own runner first, then on a shared one; a lane that no runner serves runs on the core's machine. What a lane runs never counts: only the judge's measurement does. On a runner, each `run_experiment` starts on a fresh copy of the lane's starting point with its change applied, its files the agent made and never staged too: what an earlier run built there is not kept, and the answer says so: `It ran on a fresh copy of your starting point with your change applied: what an earlier run built there is not kept, so build and run in the same command`. Reading the change leaves the lane's own git index as the agent left it, so a submission carries only its editable paths.
 
 ## When you add the rig
 

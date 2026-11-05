@@ -248,22 +248,40 @@ describe("agent scheduler", () => {
       parent: env.seed,
       token: "tok",
     });
-    const { mkdirSync } = await import("node:fs");
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { execFileSync } = await import("node:child_process");
     const cwd = `${env.paths.scratchDir}/lanes/lane-1/ws/repo`;
     mkdirSync(cwd, { recursive: true });
+    // The lane's workspace: a commit, a file it changed, and one it made and never staged.
+    const git = (...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8" });
+    git("init", "-q");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "start",
+    );
+    writeFileSync(`${cwd}/kernel.cu`, "old\n");
+    git("add", "kernel.cu");
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "kernel");
+    writeFileSync(`${cwd}/kernel.cu`, "new\n");
+    writeFileSync(`${cwd}/scratch_test.cu`, "a test of its own\n");
     const asked: Record<string, unknown>[] = [];
     const runner = {
       separated: true,
-      run: async (req: Record<string, unknown>) => {
+      // Runs the command it is given, here, as the broker would as the lane's user.
+      run: async (req: { argv: string[]; cwd: string } & Record<string, unknown>) => {
         asked.push(req);
-        return {
-          exitCode: 0,
-          signal: null,
-          wallMs: 1,
-          peakRssBytes: 0,
-          stdout: "a change",
-          stderr: "",
-        };
+        const stdout = execFileSync(req.argv[0] as string, req.argv.slice(1), {
+          cwd: req.cwd,
+          encoding: "utf8",
+        });
+        return { exitCode: 0, signal: null, wallMs: 1, peakRssBytes: 0, stdout, stderr: "" };
       },
       killRole: async () => {
         throw new Error("a run on another machine ends none of the lane's processes here");
@@ -287,15 +305,24 @@ describe("agent scheduler", () => {
     const out = (await dev.run({ lane: "lane-1", command: "make test", cwd }, "t-r")) as {
       ran: boolean;
       runner?: string;
+      note?: string;
     };
     assert.equal(out.ran, true);
     assert.equal(out.runner, "gb10-1");
+    // Each run starts on a fresh copy there, and the lane is told so (goal 208).
+    assert.match(String(out.note), /fresh copy .*build and run in the same command/);
     // The lane's user runs its agent's program too (Claude Code, OpenCode): a run that ends
     // every process of its user would end the agent's session with it.
     assert.equal(asked.length, 1);
     assert.equal(asked[0]?.role, "lane-1");
     assert.equal(asked[0]?.keepBackground, true);
-    assert.equal(sent[0]?.patch.toString(), "a change");
+    // The change goes whole, the file it never staged too; the lane's own index stays as it
+    // was, so its submission, which stages its editable paths alone, carries nothing more.
+    const patch = sent[0]?.patch.toString() ?? "";
+    assert.match(patch, /\+new/);
+    assert.match(patch, /scratch_test\.cu/);
+    assert.equal(git("diff", "--cached", "--name-only"), "");
+    assert.match(git("status", "--porcelain"), /\?\? scratch_test\.cu/);
     assert.equal(sent[0]?.command, "make test");
     await dev.settle("lane-1");
   });

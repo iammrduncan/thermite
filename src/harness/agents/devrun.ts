@@ -41,6 +41,17 @@ interface RemoteLanes {
   trialEnded(trial: string): Promise<void>;
 }
 
+/**
+ * A lane's change as `git diff --binary` gives it against its commit, untracked files included,
+ * read through an index of its own in the repository's git folder, removed after.
+ */
+const CHANGE_READ =
+  'i="$(git rev-parse --git-dir)/thermite-run-index"; rm -f "$i"; GIT_INDEX_FILE="$i" git read-tree HEAD && GIT_INDEX_FILE="$i" git add -A && GIT_INDEX_FILE="$i" git diff --cached --binary; s=$?; rm -f "$i"; exit $s';
+
+/** What a lane is told with each run on a runner of another machine (goal 208). */
+const REMOTE_NOTE =
+  "diagnostic only: this number never counts. It ran on a fresh copy of your starting point with your change applied: what an earlier run built there is not kept, so build and run in the same command";
+
 export class DevRuns {
   /** True while a dev run holds the device; the judge checks it before leasing a job. */
   active = false;
@@ -149,10 +160,12 @@ export class DevRuns {
       .split(sep)
       .slice(0, join(this.scratchDir, "lanes", req.lane).split(sep).length + 2);
     // As a lane's plain command: the lane's user also runs its agent's program (Claude Code,
-    // OpenCode), which a run that ends every process of its user would end with it.
+    // OpenCode), which a run that ends every process of its user would end with it. Read through
+    // an index of its own, so the lane's own stays as the agent left it: a submission stages its
+    // editable paths alone, and a file this read staged would ride along (goal 208).
     const change = await this.runner.run({
       role: req.lane as Role,
-      argv: ["sh", "-c", "git add -A && git diff --cached --binary"],
+      argv: ["sh", "-c", CHANGE_READ],
       cwd: root.join(sep),
       env: laneCacheEnv(this.scratchDir, req.lane),
       rssLimitBytes: limits.rssMib * 1024 * 1024,
@@ -202,7 +215,7 @@ export class DevRuns {
           command: req.command.slice(0, 300),
           ...(typeof o.runner === "string" ? { runner: o.runner } : {}),
         });
-      return r;
+      return o.wall_ms === undefined ? r : { ...r, note: REMOTE_NOTE };
     } finally {
       if (this.remoteWaits.get(req.lane) === wait) this.remoteWaits.delete(req.lane);
     }
