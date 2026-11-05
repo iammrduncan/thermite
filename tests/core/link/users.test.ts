@@ -122,8 +122,10 @@ describe("who may do what on the message bus", () => {
   });
 
   test("a runner may take its core's asks on its own subject and answer each, and nothing else (goal 206)", () => {
+    // It answers on a reply subject of its own in its core's inbox: never another runner's, nor
+    // the rest of the core's inbox (the server's answers to the core, its commands, its config).
     assert.deepEqual(runnerPermissions("rig-a", "box-2"), {
-      publish: { allow: [] },
+      publish: { allow: ["_INBOX.rig.rig-a.runner.box-2.*"] },
       subscribe: { allow: ["thermite.rig.rig-a.runner.box-2.run"] },
       allow_responses: true,
     });

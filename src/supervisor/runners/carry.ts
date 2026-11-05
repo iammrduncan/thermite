@@ -13,6 +13,7 @@ import {
   type RunnerRequest,
   runnerSubject,
 } from "../../core/link/runners.ts";
+import { runnerReplyPrefix } from "../../core/link/users.ts";
 
 /**
  * The core's supervisor carries its harness's asks of its runners (goal 206): it takes them
@@ -39,7 +40,10 @@ interface Carrier {
 
 /** Sends one request to a runner's supervisor and reads its reply. */
 async function send(c: Carrier, runner: string, r: RunnerRequest, timeoutMs: number) {
-  const data = await c.bus.request(runnerSubject(c.rig, runner), JSON.stringify(r), timeoutMs);
+  // Its answer comes on the runner's own reply subject, which only its user may publish to.
+  const data = await c.bus.request(runnerSubject(c.rig, runner), JSON.stringify(r), timeoutMs, {
+    reply: runnerReplyPrefix(c.rig, runner),
+  });
   return JSON.parse(Buffer.from(data).toString("utf8")) as RunnerReply;
 }
 

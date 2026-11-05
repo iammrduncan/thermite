@@ -126,13 +126,22 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
 }
 
 /**
+ * Where a rig's core takes a runner's answers (goal 206): under its own inbox, a subject of that
+ * runner's own, which the runner's user may publish to and no other runner's may.
+ */
+export function runnerReplyPrefix(rig: string, runner: string): string {
+  return `${rigInboxPrefix(rig)}.runner.${runner}`;
+}
+
+/**
  * What a runner's user may do (goal 206): take its core's asks on its own subject (runners.ts) and
- * answer each, once. Nothing else: no stream, no other rig's or runner's subject, no ask of
- * control.
+ * answer each on its own reply subject in the core's inbox (runnerReplyPrefix), where the core
+ * asks for its answers. Nothing else: no stream, no other rig's or runner's subject, no other
+ * part of the core's inbox, no ask of control.
  */
 export function runnerPermissions(rig: string, runner: string): Permissions {
   return {
-    publish: { allow: [] },
+    publish: { allow: [`${runnerReplyPrefix(rig, runner)}.*`] },
     subscribe: { allow: [runnerSubject(rig, runner)] },
     allow_responses: true,
   };
