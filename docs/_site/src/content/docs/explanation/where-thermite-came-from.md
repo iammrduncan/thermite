@@ -26,7 +26,7 @@ A change that loses on the headline number can still hold an idea worth reading 
 
 When the record of a campaign lives in the process that shows it, a restart loses the history of what was tried.
 
-**In Thermite:** each rig keeps a ledger, a database that survives restarts and is the authority on what happened. Control keeps its own store of everything the rigs report. A rig keeps researching while control is down, and its reports catch up when control is back. → [How the parts fit together](how-it-fits-together.md)
+**In Thermite:** each rig keeps a ledger, a database that survives restarts and is the authority on what happened. Control keeps its own store of everything the rigs report. A rig keeps researching while control is down, and its reports catch up when control is back. → [How the parts fit together](how-it-fits-together.mdx)
 
 ## Supervisors bolted on through a terminal
 

@@ -1,0 +1,323 @@
+---
+// The header's "Use cases" menu: every field, every persona and the featured study, one click
+// from any of the site's own pages. Without scripts it is a plain link to the overview.
+import { useCasePages } from "../../data/use-case-pages";
+import { fields, modes, personaHref, personas } from "../../data/use-cases.mjs";
+import AudienceIcon from "./AudienceIcon.astro";
+import FieldIcon from "./FieldIcon.astro";
+
+interface Props {
+  current?: boolean;
+}
+const { current } = Astro.props;
+const cases = await useCasePages();
+const count = (key: string) => cases.filter((c) => c.field === key).length;
+const withCases = fields.filter((f) => count(f.key) > 0);
+const byMode = modes.map((m) => ({ ...m, n: cases.filter((c) => c.mode === m.key).length })).filter((m) => m.n > 0);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+---
+
+<div class="ucm" data-ucm>
+  <a class="trigger" href="/use-cases/" aria-current={current ? "page" : undefined} aria-expanded="false" aria-haspopup="true" data-ucm-trigger>
+    Use cases
+    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"></path></svg>
+  </a>
+  <div class="panel" data-ucm-panel hidden>
+    <div class="cols">
+      <div class="col fields-col">
+        <p class="label">By field</p>
+        <ul class="fields">
+          {
+            withCases.map((f) => (
+              <li>
+                <a href={`/use-cases/${f.key}/`}>
+                  <FieldIcon name={f.key} />
+                  <span class="name">{f.short ?? f.label}</span>
+                  <span class="n">{count(f.key)}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div class="col side">
+        <p class="label">By who you are</p>
+        <ul class="people">
+          {
+            personas.map((p) => (
+              <li>
+                <a href={personaHref(p.key)}>
+                  <AudienceIcon name={p.key} />
+                  <span class="name">{p.name}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <a class="feature" href="/studies/qwen3-8-27b-on-a-p100/">
+          <span class="label">Case study</span>
+          <span class="big">3.89×</span>
+          <span class="what">Qwen3.8-27B on a $100 GPU, with tensorless: 131 changes judged, 28 kept.</span>
+          <span class="go">Read the study</span>
+        </a>
+      </div>
+    </div>
+    <div class="foot">
+      <a class="all" href="/use-cases/#all">All {cases.length} use cases</a>
+      <span class="by-mode">
+        {
+          byMode.map((m) => (
+            <a href={`/use-cases/?mode=${m.key}#all`}>
+              {cap(m.label)} <span class="n">{m.n}</span>
+            </a>
+          ))
+        }
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Opens on click, and on hover where there is a mouse; closes on Escape, on a click outside it
+  // and when the pointer leaves. The trigger stays a link: a second click, or a click with no
+  // script, opens the overview.
+  for (const root of document.querySelectorAll<HTMLElement>("[data-ucm]")) {
+    const trigger = root.querySelector<HTMLAnchorElement>("[data-ucm-trigger]");
+    const panel = root.querySelector<HTMLElement>("[data-ucm-panel]");
+    if (!trigger || !panel) continue;
+    let timer = 0;
+    const set = (open: boolean) => {
+      panel.hidden = !open;
+      trigger.setAttribute("aria-expanded", String(open));
+    };
+    trigger.addEventListener("click", (e) => {
+      if (panel.hidden) {
+        e.preventDefault();
+        set(true);
+      }
+    });
+    const hover = window.matchMedia("(hover: hover) and (pointer: fine)");
+    root.addEventListener("pointerenter", () => {
+      if (!hover.matches) return;
+      window.clearTimeout(timer);
+      set(true);
+    });
+    root.addEventListener("pointerleave", () => {
+      if (!hover.matches) return;
+      timer = window.setTimeout(() => set(false), 180);
+    });
+    document.addEventListener("click", (e) => {
+      if (!root.contains(e.target as Node)) set(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !panel.hidden) {
+        set(false);
+        trigger.focus();
+      }
+    });
+    root.addEventListener("focusout", (e) => {
+      if (!root.contains(e.relatedTarget as Node | null)) set(false);
+    });
+  }
+</script>
+
+<style>
+  .ucm {
+    position: relative;
+  }
+  .trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.93rem;
+    white-space: nowrap;
+  }
+  .trigger:hover,
+  .trigger[aria-current="page"],
+  .trigger[aria-expanded="true"] {
+    color: var(--ink);
+  }
+  .trigger svg {
+    width: 0.7rem;
+    height: 0.7rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s;
+  }
+  .trigger[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .panel {
+    position: absolute;
+    top: calc(100% + 1.1rem);
+    left: -1.5rem;
+    z-index: 60;
+    width: min(44rem, calc(100vw - 2rem));
+    padding: 1.1rem;
+    border: 1px solid var(--rule-2);
+    border-radius: 16px;
+    background: var(--bg);
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.45);
+  }
+  .panel[hidden] {
+    display: none;
+  }
+  /* A bridge over the gap between the trigger and the panel, so the pointer can cross it. */
+  .panel::before {
+    content: "";
+    position: absolute;
+    inset: -1.2rem 0 auto;
+    height: 1.2rem;
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 0.25rem;
+  }
+  .side {
+    display: flex;
+    flex-direction: column;
+    padding-left: 1.25rem;
+    border-left: 1px solid var(--rule);
+  }
+  .label {
+    margin: 0 0 0.5rem 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 560;
+    color: var(--muted);
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.1rem;
+  }
+  li a {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.32rem 0.4rem;
+    border-radius: 9px;
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+  li a:hover {
+    background: var(--panel-2);
+    color: var(--ink);
+  }
+  li :global(.fi),
+  li :global(.ai) {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 8px;
+  }
+  li :global(.fi svg) {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+  li :global(.ai svg) {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+  .name {
+    flex: 1;
+  }
+  .n {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--dim);
+  }
+  .feature {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.9rem;
+    padding: 0.9rem;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: var(--panel);
+    text-decoration: none;
+  }
+  .feature:hover {
+    border-color: var(--rule-2);
+    background: var(--panel-2);
+  }
+  .feature .label {
+    margin: 0 0 0.3rem;
+  }
+  .big {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+  .what {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .go {
+    margin-top: auto;
+    padding-top: 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 560;
+    color: var(--ink-2);
+  }
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+    margin-top: 0.9rem;
+    padding: 0.7rem 0.4rem 0.1rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.88rem;
+  }
+  .foot a {
+    color: var(--ink-2);
+    text-decoration: none;
+  }
+  .foot a:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+  .all {
+    font-weight: 560;
+  }
+  .by-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1rem;
+  }
+  @media (max-width: 52rem) {
+    .panel {
+      position: fixed;
+      top: 3.75rem;
+      left: 0.75rem;
+      right: 0.75rem;
+      width: auto;
+      max-height: calc(100vh - 4.5rem);
+      overflow-y: auto;
+    }
+    .cols {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .side {
+      padding-left: 0;
+      border-left: 0;
+    }
+  }
+</style>

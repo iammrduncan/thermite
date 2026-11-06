@@ -1,0 +1,168 @@
+---
+title: "Qwen3.8-27B on a $100 GPU, 3.9× faster"
+description: "How four Thermite campaigns, run with tensorless, took Qwen3.8-27B on one Tesla P100 from 7.7 to 30 tokens a second with its quality held, and shipped it in one command."
+type: study
+study:
+  field: ai
+  personas: [local-ai, startups]
+  modes: [goal, climb]
+  metric: "3.89×"
+  metricLabel: "faster decode on one Tesla P100"
+  summary: "Four campaigns tuned an inference engine for Qwen3.8-27B on a $100 GPU: 131 changes judged in the decode climb, 28 kept, and the model's answers held where they started."
+  partner: tensorless
+sidebar:
+  order: 1
+  label: "Qwen3.8-27B on a P100"
+---
+
+import Stats from "../../../components/Stats.astro";
+import Partners from "../../../components/studies/Partners.astro";
+import ClimbChart from "../../../components/studies/ClimbChart.astro";
+import tensorless from "../../../assets/partners/tensorless.svg";
+
+<Partners
+  thermiteRole="ran the research: agents proposed, the judge decided"
+  partner={{
+    name: "tensorless",
+    href: "https://tensorless.dev",
+    logo: tensorless,
+    role: "made the format, and ships the engine and the model",
+  }}
+/>
+
+The Tesla P100 is a data-centre GPU from 2016 that sells used for about $100. Its 16 GB holds a 27-billion-parameter model at 3 bits with a long context, but it lacks the integer dot-product instruction that today's low-bit kernels rely on, so most engines run it slowly. [tensorless](https://tensorless.dev) set out to make it fast. Thermite did the research: four campaigns, in which AI agents proposed changes to the inference engine and a judge they could not touch measured each one on a real P100.
+
+<Stats
+  items={[
+    { value: "3.89×", label: "decode speed, start to finish", note: "7.74 → 30.06 tok/s" },
+    { value: "1.14×", label: "the speed of a standard 3-bit file", note: "on the same card, in the same runs" },
+    { value: "131", label: "changes judged in five days", note: "28 confirmed wins" },
+    { value: "+16%", label: "prompt speed so far, decode held", note: "the fourth campaign, still running" },
+  ]}
+  caption="Measured by Thermite's judge on one Tesla P100-PCIE-16GB. Decode: 256 greedy tokens after a cold prompt of about 600 tokens."
+/>
+
+## Run the result
+
+The engine that came out of the research is tensorless's engine-v0.1.0. On a Linux machine with a P100, install the launcher and start the model:
+
+```sh frame="none"
+curl -fsSL https://tensorless.dev/install.sh | sh
+tensorless run iamMrDuncan/Qwen3.8-27B-PN3-GGUF
+```
+
+It serves an OpenAI-compatible API on `127.0.0.1:8080`, with the whole model and a 65,536-token context on the card. Before the release, tensorless measured the published image on a P100 at **30.03 tokens a second** with `tensorless bench`. Its [first-model tutorial](https://tensorless.dev/docs/tutorials/first-model/) has the steps, and its [receipts](https://tensorless.dev/docs/reference/receipts/) every measurement.
+
+## Where it started
+
+Earlier campaigns had tuned the engine's kernels for the standard llama.cpp weight types. The best file, **Q3Floor** (Unsloth's 3-bit Qwen3.8-27B with no tensor below 3 bits), reached about 26 tokens a second, and those campaigns found what held it there: on the P100, the cost of each token is set by the work of unpacking every weight, not only by how many bits are read. The standard formats were designed for other GPUs.
+
+So tensorless designed a weight format for this card: **PN**, in which each GPU lane decodes one packed 32-bit word in its registers, exactly ([Why a P100-native weight format](https://tensorless.dev/docs/explanation/pn-format/)). It made **Qwen3.8-27B-PN3**, 12.1 GiB. Then three questions were open. Could the engine run it at all? Was its quality good enough? And was it faster?
+
+Each question became a campaign, and each campaign took the [mode](../explanation/campaign-modes.md) that fits its question. Each one started from the last one's best version:
+
+| Campaign | Mode | Dates (2026) | Result |
+| --- | --- | --- | --- |
+| 1. Support the format | Goal | 15–22 October | Every goal met; 7.74 tokens a second |
+| 2. The quality gate | Goal | 22–23 October | 11 of 12 goals met; the miss explained, and accepted |
+| 3. Decode speed | Hill climb | 24–29 October | 3.89×: 30.06 tokens a second, 1.14× Q3Floor |
+| 4. Prompt speed | Hill climb | From 2 November | +16% so far, with decode held within 1%; running |
+
+## Campaign 1: teach the engine a new format
+
+A [goal campaign](../explanation/campaign-modes.md) works until every required goal passes, and the judge checks each one. This one had nine, in plain words:
+
+- The engine builds for the P100, and decodes the format's test blocks and all 400 of the model's PN tensors bit for bit, on the CPU and on the GPU.
+- Its matrix multiplies match an exact sum within 5e-3, at every shape the model uses.
+- The whole model loads onto the card with a 65,536-token context and at least 512 MiB to spare.
+- Its outputs match an exact fp32 reference: KL divergence within 2.593e-3 and the same top token at 98% of positions or more, on inputs the agents never saw.
+- Its perplexity is sane, it is faster than a slow fallback, and Q3Floor's output does not change.
+
+The agents met every goal over four runs in a week, and the judge confirmed them twice. The champion decoded at **7.74 tokens a second**: correct, but slow.
+
+The campaign also taught its author something about the [kit](../explanation/kits.md), the trusted code that builds and measures each change. The first kit measured perplexity with tools built from the change's own code, so a change could, in principle, alter its own measurement. From Campaign 2 on, the kit built its measuring tools from a fixed commit, and the contract closed their folders to the agents. A kit is code you trust; read what it runs.
+
+## Campaign 2: an honest "no"
+
+The second goal campaign asked whether Qwen3.8-27B-PN3 passes the quality gate Q3Floor had passed, with both models in the same run, on the same card and the same build. It met 11 of its 12 goals:
+
+| Check | Qwen3.8-27B-PN3 | Q3Floor | Bar | Verdict |
+| --- | ---: | ---: | --- | --- |
+| Perplexity, 2,048-token context | 2.5494 | 2.5682 | ≤ 1.005 × Q3Floor | met (0.993×) |
+| Decode-path perplexity, code at 32K | 1.38147 | 1.37773 | ≤ 1.005 × Q3Floor | met (1.003×) |
+| Decode-path perplexity, prose at 32K | 6.07793 | 5.65357 | ≤ 1.005 × Q3Floor | **unmet (1.075×)** |
+| Needle recall at 32K and 65K | 8 of 8 | exact | exact | met |
+| Task screen, 26 cases | 23 | 23 | at most 1 fewer | met |
+
+The worker agents then went after the miss. In a [development run](../explanation/agents-lanes-planner.md#one-trial), whose numbers never count, they measured the format's own fp32 reference path on the same text: 6.07572. The fast kernels account for 0.5% of the gap; the rest belongs to the quantization, not to the engine.
+
+The judge's verdict stood: the goal was unmet. Thermite never moves a bar on its own. The owner read the evidence, accepted the quality, and moved on to speed, which was the question that mattered. [Decide what waits for you](../how-to/campaigns/decide-what-waits.md) shows where such a decision is made.
+
+## Campaign 3: the decode hill climb
+
+A [hill climb](../explanation/campaign-modes.md) pushes one number as far as it will go, with guards so that nothing else gets worse. Here the number was Qwen3.8-27B-PN3's decode speed on the judge's P100. The kit timed it from outside the engine, on its own clock: 256 greedy tokens after a cold prompt of about 600 tokens, once for a code prompt and once for prose. Short cases mean a block takes minutes, not the hour that a cold 32K prompt would have cost, so the judge could weigh many changes a day.
+
+Every change had to hold these guards, against the climb's starting point:
+
+| Guard | Bar |
+| --- | --- |
+| Qwen3.8-27B-PN3's outputs | KL divergence within 2.593e-3 over 128 forced prose tokens, the same top token at 95% of positions or more, and decode-path perplexity within 0.25% |
+| Q3Floor's output | Bit-identical greedy text in every block. Q3Floor shares most of the engine's code, so a change aimed at PN that broke it was caught |
+| The format | The test blocks and one real tensor of each PN class, decoded bit for bit on the CPU and the GPU |
+| Memory | Every weight on the card, with the whole 65,536-token context allocated and 512 MiB free |
+| The measuring tools | Built from a fixed commit, out of the agents' reach |
+| A hidden prompt | At confirmation, a prose prompt the agents never saw may run no more than 1% slower than the champion |
+
+A change that looked faster was timed against the champion in alternating blocks on the same card. A win then had to hold up again on three fresh blocks and the hidden prompt, by at least 1%, before it became the new **champion**. Each judge card timed the champion against itself every day, to learn its own noise: the spread of one block was 0.05% to 0.36%. A gain of more than 15% waited for the **auditor**, an AI model that reads the change for anything that games the measurement. [Why agents never judge](../explanation/why-agents-never-judge.md) follows a change through these steps.
+
+<ClimbChart />
+
+In five days the judge weighed **131 changes**. 28 were confirmed wins, 48 were slower, 39 made no real difference, 12 broke a guard and 4 were inconclusive. 27 of the wins became champions. The owner declined one, which arrived without its numerics evidence; the same change came back with a full correctness check and became champion 3.
+
+The climb ended at **30.06 tokens a second** on the code prompt and 30.18 on prose: **3.89× its start**. In the same runs, Q3Floor decoded at 26.30. The owner paused the run there, with the note "hit 30 tok/s target".
+
+Almost all of the gain came from the PN matrix-vector kernels that decode each token. The wins read like a GPU tuning notebook: stage the activations in shared memory once and reuse them across rows, load wider words, decode the 3-bit codes with fewer instructions, fit the work to the P100's 56 multiprocessors, and fuse the normalizations around them.
+
+### The agents and what they used
+
+The search ran in two **lanes**, each with its own copy of the code and its own development GPU, while two more P100s judged. A **planner** gave each lane its next experiment from one shared queue, and **teachers** read the results and the champion's code and added ideas.
+
+| Role | Models |
+| --- | --- |
+| Workers, who write the changes | DeepSeek V4.1 Flash, served on the lab's own GPUs (32 trials, 8 wins), then Claude Haiku 5.5 (247 trials, 20 wins) |
+| Planner | GPT 6.1 Sol, then Claude Sonnet 5.5 |
+| Teachers | GPT 6.1 Sol and Claude Opus 5.5, merged by Claude Sonnet 5.5 |
+| Auditor | GPT 6.1 Sol, then Claude Opus 5.5 |
+
+Together they made 18,776 model calls: 1.61 billion tokens in, 90% of them from the providers' caches, and 24.7 million out. All of it ran on a Claude subscription, a ChatGPT subscription and the lab's own model server, so there was no per-token bill. [Choose a model](../how-to/models/choose-a-model.md) compares those options.
+
+## Campaign 4: prompt speed, with decode held
+
+The fourth campaign is a hill climb on how fast Qwen3.8-27B-PN3 reads a prompt: a cold prompt of about 4,100 tokens. It starts from Campaign 3's champion, holds its decode speed within 1%, and keeps every guard of Campaign 3. Its numerics check now reads a 2,350-token prompt first, so that a change to prompt reading reaches it. Its agents read everything Campaign 3 recorded, through a [grant](../how-to/campaigns/use-past-research.md#let-a-campaign-read-anothers-collection) on Thermite's knowledge base.
+
+On 3 November 2026 at 17:46 UTC, it had judged 24 changes, confirmed 4 wins, and taken prompt reading from **120.5 to 139.2 tokens a second** (+16.1%), with decode still at 29.9. It is still running.
+
+## What has not been measured yet
+
+A hill climb finds changes that help the case it measures. These are still open:
+
+- **Long contexts.** Campaign 3's champion has not been timed at 32K and 65K tokens. At its start, Qwen3.8-27B-PN3 decoded at about 7.5 tokens a second there, against Q3Floor's 24.5. Attention costs more of each token at depth, so expect less than 30.
+- **Speculative decoding.** It has not been tried on Qwen3.8-27B-PN3.
+- **Quality on the champion.** The climb held the champion's outputs to its starting point, and that starting point was gated against Q3Floor in Campaign 2. No separate quality run has been made on the champion.
+
+tensorless keeps the same list in its [known limits](https://tensorless.dev/docs/project/known-limits/).
+
+## From research to one command
+
+Thermite keeps each champion as a git commit, with every attempt and the judge's reasons beside it. tensorless took Campaign 3's champion and released its engine unchanged, except for six comment lines that pointed into the research repository. It built one container image for the P100, measured that image on a real card, and published a recipe that names the exact image, model file and settings that were measured. The models are on [Hugging Face](https://huggingface.co/collections/iamMrDuncan/tensorless). [Where the engine comes from](https://tensorless.dev/docs/explanation/the-engine/) tells it from tensorless's side.
+
+## What to take into your own campaigns
+
+- **Give each question the mode that fits it.** Goal campaigns first: does it work, and is it good enough? Then hill climbs, to make it fast. [Choose a campaign mode](../how-to/campaigns/choose-a-mode.md).
+- **Guard what you are not optimizing.** Hold the outputs to the starting point, and keep a second model bit-identical, so that a change that breaks a shared path is caught. [Write a contract](../how-to/campaigns/write-a-contract.md#2-write-a-hill-climb).
+- **Keep the measuring tools out of reach.** Build them from a fixed commit, and leave their folders out of the paths agents may change. [Write a kit](../how-to/campaigns/write-a-kit.md).
+- **Measure short, often.** Short cases let the judge weigh many changes a day; time the long case in a separate run.
+- **Let each campaign start where the last one ended.** Seed it from the last champion, and let it read the last campaign's knowledge. [Use past research](../how-to/campaigns/use-past-research.md).
+- **Expect an honest "no".** A goal campaign can end with a goal unmet and the evidence for why. A person decides what happens next.
+
+Try it on your own project: [Install on one machine](../tutorials/first-run.md) takes about twenty minutes, and [LLM inference optimization](../use-cases/ai/inference-speed.md) shows other campaigns to run on models and GPUs.

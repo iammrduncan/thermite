@@ -13,7 +13,7 @@ The dashboard shows what the agents' model calls used and cost in four places:
 - **Metrics**, in the main navigation after **Rigs** (address `/ui/metrics`): its first tab, **Model use**, the whole system's, by model and by campaign, for today, the last 7 days or all. Its other tabs, **Bus**, **Control**, **Storage** and **Rigs**, show the system itself ([Metrics: the system view](system-view.md)).
 - **Settings › Model prices**: each model's price, which the cost uses.
 
-Code counts every call where it is made, never an agent ([The model usage records](../explanation/how-it-fits-together.md#the-model-usage-records)). Control sums the records when a page is drawn. The REST route [`GET /v1/usage`](rest-api.md#model-usage) and the MCP tool [`model_usage`](mcp-tools.md#model_usage) give the same numbers. Every label and column with an **i** says what its number means when you hover it.
+Code counts every call where it is made, never an agent ([The model usage records](../explanation/how-it-fits-together.mdx#the-model-usage-records)). Control sums the records when a page is drawn. The REST route [`GET /v1/usage`](rest-api.md#model-usage) and the MCP tool [`model_usage`](mcp-tools.md#model_usage) give the same numbers. Every label and column with an **i** says what its number means when you hover it.
 
 ## The words
 

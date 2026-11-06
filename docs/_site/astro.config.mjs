@@ -8,6 +8,8 @@ import { defineConfig } from "astro/config";
 import mermaid from "astro-mermaid";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { fathom } from "./src/analytics.mjs";
+import { fields as useCaseFields } from "./src/data/use-cases.mjs";
 import { pageIndex } from "./src/page-index.mjs";
 import { remarkRelativeLinks } from "./src/plugins/remark-relative-links.mjs";
 
@@ -16,14 +18,12 @@ const base = "/";
 const repo = "https://github.com/iammrduncan/thermite";
 // The version of Thermite the pages describe, shown beside the title: the root package.json's.
 const version = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
-// Fathom Analytics counts page views without cookies, only on the site's own domain (not on
-// pages.dev or a local preview).
-const fathom = { src: "https://cdn.usefathom.com/script.js", site: "RNENIVAD", domain: "usethermite.com" };
 
 export default defineConfig({
   site,
   base,
   outDir: "../../.dev/site",
+  devToolbar: { enabled: false },
   vite: {
     // Mermaid is one large script, loaded only on pages with a diagram.
     build: { chunkSizeWarningLimit: 4096 },
@@ -51,15 +51,8 @@ export default defineConfig({
         // the icon iOS shows for a saved page.
         { tag: "link", attrs: { rel: "icon", href: "/favicon.ico", sizes: "32x32" } },
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
-        {
-          tag: "script",
-          attrs: {
-            src: fathom.src,
-            "data-site": fathom.site,
-            "data-included-domains": fathom.domain,
-            defer: true,
-          },
-        },
+        // Fathom Analytics (src/analytics.mjs).
+        { tag: "script", attrs: fathom },
       ],
       social: [
         { icon: "github", label: "GitHub", href: repo },
@@ -81,6 +74,25 @@ export default defineConfig({
           ],
         },
         { label: "Start here", link: "/start-here/" },
+        // What Thermite can be used for, and what it has done: each overview is one of the site's own
+        // pages (src/pages/), and the full pages are here. The use cases are grouped by field, from
+        // the list the overview reads too.
+        {
+          label: "Use cases",
+          items: [
+            { label: "Overview", link: "/use-cases/" },
+            { label: "Who it's for", items: [{ autogenerate: { directory: "use-cases/for" } }] },
+            ...useCaseFields.map((f) => ({
+              label: f.label,
+              collapsed: true,
+              items: [{ autogenerate: { directory: `use-cases/${f.key}` } }],
+            })),
+          ],
+        },
+        {
+          label: "Studies",
+          items: [{ label: "Overview", link: "/studies/" }, { autogenerate: { directory: "studies" } }],
+        },
         {
           label: "Tutorials",
           items: ["tutorials/first-goal-campaign", "tutorials/your-own-project"],
@@ -116,6 +128,8 @@ export default defineConfig({
           errorOnRelativeLinks: false,
           // Tutorials link to the dashboard on the reader's own computer.
           errorOnLocalLinks: false,
+          // The site's own pages (src/pages/) are not Starlight's, so the validator can't see them.
+          exclude: ["/", "/use-cases/", "/studies/"],
         }),
         starlightLlmsTxt({
           projectName: "Thermite",
@@ -124,6 +138,17 @@ export default defineConfig({
             "Thermite is an autoresearch harness. AI agents propose changes to a project; a judge the agents cannot touch measures each change and keeps the best. Many campaigns run at once on a fleet of rigs, and one control service shows and steers all of them.",
           details: pageIndex({ site, base }),
           customSets: [
+            {
+              label: "Use cases",
+              paths: ["use-cases/**"],
+              description:
+                "what Thermite can be used for, by field (software, AI, science, healthcare, agriculture, energy, operations, robotics, finance), and who it is for",
+            },
+            {
+              label: "Studies",
+              paths: ["studies/**"],
+              description: "campaigns Thermite has run, with their measured results",
+            },
             {
               label: "Tutorials",
               paths: ["tutorials/**"],

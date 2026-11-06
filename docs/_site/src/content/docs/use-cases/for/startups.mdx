@@ -1,0 +1,72 @@
+---
+title: "Thermite for startups"
+description: "Run Thermite on rented or owned GPUs within a budget you set, with every result verified by an independent judge before it reaches production."
+type: use-case
+sidebar:
+  order: 3
+  label: "Startups"
+---
+
+import { LinkCard } from "@astrojs/starlight/components";
+
+Startups depend on a small number of metrics: cost per request, model accuracy, engine throughput. There are more ideas to test against each of them than people to test them. Thermite runs those experiments continuously on GPUs you rent by the hour or machines you own, and an independent judge verifies every result, so what you ship is what was measured, with a record you can show customers and investors.
+
+## Use cases
+
+Each of these runs on hardware you rent or own, with a budget you set.
+
+- **Software:** [Code performance optimization](../software/faster-code.md)
+- **Software:** [Codebase migration](../software/migrations.md)
+- **Software:** [Technology evaluation](../software/technology-evaluation.md)
+- **AI and machine learning:** [LLM inference optimization](../ai/inference-speed.md)
+- **AI and machine learning:** [LLM application quality](../ai/llm-quality.md)
+- **AI and machine learning:** [Model and method landscape](../ai/method-landscape.md)
+- **AI and machine learning:** [Fitting a model to your hardware](../ai/hardware-fit.md)
+- **Science:** [Simulation speed and accuracy](../science/simulations.md)
+- **Science:** [Data from the literature](../science/literature-data.md)
+- **Healthcare and life sciences:** [Medical image segmentation](../healthcare/imaging.md)
+- **Healthcare and life sciences:** [FHIR API conformance](../healthcare/fhir-conformance.md)
+- **Agriculture:** [Greenhouse climate control](../agriculture/greenhouses.md)
+- **Agriculture:** [Agronomic trial evidence](../agriculture/trial-evidence.md)
+- **Energy and buildings:** [Building energy control](../energy/buildings.md)
+- **Energy and buildings:** [Interconnection and market rules](../energy/interconnection.md)
+- **Energy and buildings:** [Building simulation validation](../energy/simulation-validation.md)
+- **Operations and logistics:** [Cluster and job scheduling](../operations/scheduling.md)
+- **Operations and logistics:** [Vehicle routing](../operations/routing.md)
+- **Operations and logistics:** [Supply chain mapping](../operations/supply-chain-mapping.md)
+- **Operations and logistics:** [Staff rostering](../operations/rostering.md)
+- **Robotics:** [Robot reward design](../robotics/rewards.md)
+- **Robotics:** [ROS 1 to ROS 2 migration](../robotics/ros2-migration.md)
+- **Finance:** [Trading strategy research](../finance/strategies.md)
+- **Finance:** [Research from public filings](../finance/filings-research.md)
+- **Finance:** [Pricing model validation](../finance/model-validation.md)
+
+## Why it fits
+
+- **Rent the GPU, not a platform.** Control launches a rig on RunPod for you, with a spend limit, and stops or terminates it when you say; its results reach control before it goes ([Add a rig on RunPod](../../how-to/install/runpod-rig.md)). A machine of your own joins over SSH ([Add a rig on a machine](../../how-to/install/rig-on-a-machine.md)).
+- **You set the spend.** Nothing stops a campaign by default. Set a stop time, a limit on judging hours on the device, or a limit on money spent on the model, and a spent budget pauses the run until you decide ([Set a budget or a stop time](../../how-to/campaigns/budget-and-stop-time.md)).
+- **Every win is confirmed before it counts.** The judge measures each change beside the best version so far, confirms a gain on fresh runs and on cases the agents never saw, and keeps its reasons. A change that is faster but wrong never becomes the best version ([Why agents never judge](../../explanation/why-agents-never-judge.md)).
+- **Many campaigns at once.** One control runs campaigns on many rigs, and one campaign can run on several rigs to check a result on another machine ([Run a campaign on several rigs](../../how-to/campaigns/several-rigs.md)).
+- **The result is yours, in your repository.** Take the best version as a patch, or as a commit on the run's branch in your own repository ([Take the result](../../how-to/campaigns/take-the-result.md)). Your code goes to your rigs and your model endpoint, and nowhere else.
+- **Wire it into your tools.** A REST API, MCP and the `thermite` command line start, watch and steer campaigns, so your own scripts and AI assistants can too ([Script Thermite with the REST API](../../how-to/automate/rest-api.md)).
+
+## Get started
+
+1. [Install on one machine](../../tutorials/first-run.md): about twenty minutes, and the judge's smoke check shows a dozen known changes, cheats among them, getting their expected verdicts.
+2. [Add a rig on RunPod](../../how-to/install/runpod-rig.md) with a spend limit, or on a machine you own.
+3. [Write a kit](../../how-to/campaigns/write-a-kit.md) for the number that matters, and [test it](../../how-to/campaigns/test-a-kit.md) with known changes before any agent sees it.
+4. [Write a contract](../../how-to/campaigns/write-a-contract.md) with the guards your customers care about, and [set a budget](../../how-to/campaigns/budget-and-stop-time.md).
+5. Start the campaign, and [take the result](../../how-to/campaigns/take-the-result.md) when you are happy with it.
+
+## What to know first
+
+- **One owner for each installation.** A team shares one control, which one owner signs in to; scripts and assistants get tokens of their own ([Tokens and roles](../../reference/tokens.md)).
+- **API keys for a team.** A Claude or ChatGPT plan may serve only its owner's own Thermite; a Thermite that several people use takes API keys ([Choose a model](../../how-to/models/choose-a-model.md)).
+- **Agents run code that a model wrote.** On RunPod, Thermite adds no network rules, so that code can reach the internet. Read [the security model](../../explanation/security-model.md) and [Known limits](../../reference/known-limits.md).
+- **Thermite is 0.x.** Versions make no upgrade promise yet. It is open source under the Apache License 2.0.
+
+<LinkCard
+  title="See the record of a real campaign"
+  description="Qwen3.8-27B on a $100 GPU: 131 changes judged in five days, 28 kept, on a Claude plan, a ChatGPT plan and a local model server."
+  href="/studies/qwen3-8-27b-on-a-p100/"
+/>

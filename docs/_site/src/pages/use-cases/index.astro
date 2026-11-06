@@ -1,0 +1,601 @@
+---
+// The use cases' overview: a tile for each field (each with its own page, use-cases/[field].astro),
+// the personas, and every use case in one list with a search and filters. Each use case and each
+// persona has its full page in the documentation (use-cases/), where llms.txt carries it too.
+import AudienceIcon from "../../components/site/AudienceIcon.astro";
+import Cmd from "../../components/site/Cmd.astro";
+import FieldIcon from "../../components/site/FieldIcon.astro";
+import { useCasePages } from "../../data/use-case-pages";
+import { fields, modes, personaHref, personas } from "../../data/use-cases.mjs";
+import Site from "../../layouts/Site.astro";
+
+const cases = await useCasePages();
+const modeLabel = Object.fromEntries(modes.map((m) => [m.key, m.label]));
+const fieldShort = Object.fromEntries(fields.map((f) => [f.key, f.short ?? f.label]));
+const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
+const byField = fields
+  .map((f) => ({ ...f, cases: cases.filter((c) => c.field === f.key) }))
+  .filter((f) => f.cases.length > 0);
+const count = (key: string) => cases.filter((c) => c.personas.includes(key)).length;
+const modeCount = (key: string) => cases.filter((c) => c.mode === key).length;
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const useCases = (n: number) => `${n} use case${n === 1 ? "" : "s"}`;
+// What each mode is for, in one line: the question each answers on Campaign modes.
+const modeLine: Record<string, string> = {
+  climb: "Push one number as far as it goes, with everything else held to its starting values.",
+  goal: "Reach a list of goals, each passed by the kit's own test or a review panel, and stop.",
+  research: "Answer hard questions from hundreds of sources, each quote checked against its archived page.",
+};
+---
+
+<Site
+  title="Use cases: what you can point Thermite at"
+  description="What Thermite can be used for, in software, AI, science, healthcare, agriculture, energy, operations, robotics and finance, and for whom: local AI enthusiasts, solo builders, startups and enterprises."
+  section="use-cases"
+>
+  <section class="hero">
+    <div class="wrap">
+      <h1 class="h1">Autoresearch for any measurable problem.</h1>
+      <p class="lede">
+        Thermite applies wherever code can judge the work: a number to improve, a list of goals to reach, or questions to
+        answer from sources it checks. Explore use cases by field, by audience or by campaign mode.
+      </p>
+      <div class="btns">
+        <a class="btn primary" href="#fields">Browse by field</a>
+        <a class="btn" href="#all">Search use cases</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="fields">
+    <div class="wrap">
+      <div class="head">
+        <h2 class="h2">Use cases by field</h2>
+      </div>
+      <div class="tiles">
+        {
+          byField.map((f) => (
+            <div class="tile">
+              <a class="tile-head" href={`/use-cases/${f.key}/`}>
+                <FieldIcon name={f.key} />
+                <span class="tile-name">{f.label}</span>
+              </a>
+              <p class="small">{f.blurb}</p>
+              <ul>
+                {f.cases.map((c) => (
+                  <li>
+                    <a href={c.href}>{c.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        }
+      </div>
+      <a class="own" href="/tutorials/your-own-project/">
+        <span>
+          <b>Don't see your field?</b> Thermite works with any project that a program can build, run and measure, and
+          any question that sources can answer.
+        </span>
+        <span class="own-go">Start on your own project</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="section" id="modes">
+    <div class="wrap">
+      <div class="head">
+        <h2 class="h2">Use cases by campaign mode</h2>
+      </div>
+      <div class="grid three">
+        {
+          modes.map((m) => (
+            <div class="card mode">
+              <h3 class="h3">{cap(m.label)}</h3>
+              <p>{modeLine[m.key]}</p>
+              <div class="links">
+                <a href={`?mode=${m.key}#all`} data-show-mode={m.key}>
+                  View {useCases(modeCount(m.key))}
+                </a>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="who">
+    <div class="wrap">
+      <div class="head">
+        <h2 class="h2">Who Thermite is for</h2>
+      </div>
+      <div class="grid four">
+        {
+          personas.map((p) => (
+            <div class="card persona">
+              <AudienceIcon name={p.key} />
+              <h3 class="h3">{p.name}</h3>
+              <p>{p.pitch}</p>
+              <div class="links">
+                <a href={personaHref(p.key)}>
+                  Read the guide
+                </a>
+                <a href={`?for=${p.key}#all`} data-show={p.key}>
+                  View {useCases(count(p.key))}
+                </a>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="all">
+    <div class="wrap">
+      <div class="head">
+        <h2 class="h2">Search all use cases</h2>
+      </div>
+      <div class="finder" data-finder hidden>
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+          <span class="sr-only">Search the use cases</span>
+          <input type="search" placeholder="Search: GPU, genome, routing, backtest…" data-q />
+        </label>
+        <select data-field aria-label="Field">
+          <option value="all">Every field</option>
+          {byField.map((f) => <option value={f.key}>{f.short ?? f.label}</option>)}
+        </select>
+        <select data-persona aria-label="Who it's for">
+          <option value="all">Everyone</option>
+          {personas.map((p) => <option value={p.key}>{p.name}</option>)}
+        </select>
+        <select data-mode aria-label="Campaign mode">
+          <option value="all">Every mode</option>
+          {modes.map((m) => <option value={m.key}>{cap(m.label)}</option>)}
+        </select>
+      </div>
+      <p class="count small" aria-live="polite" data-shown>{cases.length} use cases</p>
+      <ul class="rows" data-rows>
+        {
+          cases.map((c) => (
+            <li
+              data-field={c.field}
+              data-personas={c.personas.join(" ")}
+              data-mode={c.mode}
+              data-text={`${c.title} ${c.summary} ${c.measure.join(" ")} ${fieldShort[c.field]}`.toLowerCase()}
+            >
+              <a href={c.href}>
+                <span class="r-title">{c.title}</span>
+                <span class="r-field small">{fieldShort[c.field]}</span>
+                <span class={`tag ${c.mode}`}>{modeLabel[c.mode]}</span>
+                <span class="r-for small">{c.personas.map((p) => personaShort[p]).join(" · ")}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="empty small" data-empty hidden>
+        No use cases match these filters. <button type="button" data-reset>Clear filters</button>
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <a class="study" href="/studies/qwen3-8-27b-on-a-p100/">
+        <span class="eyebrow">Case study</span>
+        <span class="study-num">3.89×</span>
+        <span class="study-text">
+          <b>Qwen3.8-27B on a $100 GPU.</b> Four campaigns, 131 changes judged in the decode climb, 28 kept, the model's
+          answers held.
+        </span>
+        <span class="study-go">Read the study</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="section last">
+    <div class="wrap">
+      <div class="cta">
+        <h2 class="h2">Twenty minutes to a first verdict.</h2>
+        <p class="lede">Install it on one computer, or ask your own AI agent to:</p>
+        <Cmd prompt="›" text="Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt" />
+        <div class="btns">
+          <a class="btn primary" href="/tutorials/first-run/">Install on one machine</a>
+          <a class="btn" href="/tutorials/your-own-project/">Start on your own project</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Site>
+
+<script>
+  // The finder: a search over each use case's words, a field, a persona and a mode, kept in the
+  // address (?q=…&field=…&for=…&mode=…) so a link can open it filtered. Without scripts, the list shows them all.
+  const finder = document.querySelector<HTMLElement>("[data-finder]");
+  const q = document.querySelector<HTMLInputElement>("input[data-q]");
+  const fieldSel = document.querySelector<HTMLSelectElement>("select[data-field]");
+  const personaSel = document.querySelector<HTMLSelectElement>("select[data-persona]");
+  const modeSel = document.querySelector<HTMLSelectElement>("select[data-mode]");
+  const rows = [...document.querySelectorAll<HTMLElement>("[data-rows] > li")];
+  const empty = document.querySelector<HTMLElement>("[data-empty]");
+  if (finder && q && fieldSel && personaSel && modeSel) {
+    finder.hidden = false;
+    const params = new URLSearchParams(location.search);
+    const pick = (sel: HTMLSelectElement, v: string | null) => {
+      sel.value = v && [...sel.options].some((o) => o.value === v) ? v : "all";
+    };
+    q.value = params.get("q") ?? "";
+    pick(fieldSel, params.get("field"));
+    pick(personaSel, params.get("for"));
+    pick(modeSel, params.get("mode"));
+    const apply = (write: boolean) => {
+      const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let n = 0;
+      for (const row of rows) {
+        const ok =
+          (fieldSel.value === "all" || row.dataset.field === fieldSel.value) &&
+          (personaSel.value === "all" || (row.dataset.personas ?? "").split(" ").includes(personaSel.value)) &&
+          (modeSel.value === "all" || row.dataset.mode === modeSel.value) &&
+          words.every((w) => (row.dataset.text ?? "").includes(w));
+        row.hidden = !ok;
+        if (ok) n++;
+      }
+      if (empty) empty.hidden = n > 0;
+      const shown = document.querySelector("[data-shown]");
+      if (shown) shown.textContent = `${n} of ${rows.length} use cases`;
+      if (write) {
+        const s = new URLSearchParams();
+        if (q.value) s.set("q", q.value);
+        if (fieldSel.value !== "all") s.set("field", fieldSel.value);
+        if (personaSel.value !== "all") s.set("for", personaSel.value);
+        if (modeSel.value !== "all") s.set("mode", modeSel.value);
+        const str = s.toString();
+        history.replaceState(null, "", `${location.pathname}${str ? `?${str}` : ""}${location.hash}`);
+      }
+    };
+    q.addEventListener("input", () => apply(true));
+    fieldSel.addEventListener("change", () => apply(true));
+    personaSel.addEventListener("change", () => apply(true));
+    modeSel.addEventListener("change", () => apply(true));
+    const showOnly = (persona: string, mode: string) => {
+      q.value = "";
+      fieldSel.value = "all";
+      personaSel.value = persona;
+      modeSel.value = mode;
+      apply(true);
+    };
+    document.querySelector("[data-reset]")?.addEventListener("click", () => showOnly("all", "all"));
+    const jump = (a: HTMLAnchorElement, persona: string, mode: string) =>
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        showOnly(persona, mode);
+        document.getElementById("all")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-show]")) jump(a, a.dataset.show ?? "all", "all");
+    for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-show-mode]"))
+      jump(a, "all", a.dataset.showMode ?? "all");
+    apply(false);
+  }
+</script>
+
+<style>
+  .hero {
+    padding-block: clamp(3rem, 7vw, 5rem) clamp(2rem, 4vw, 3rem);
+  }
+  .hero .h1 {
+    max-width: 52rem;
+  }
+  .hero .lede {
+    max-width: 44rem;
+  }
+  .hero .btns {
+    margin-top: 1.6rem;
+  }
+  section[id] {
+    scroll-margin-top: 4rem;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 1rem;
+  }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1.3rem 1.1rem;
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+    background: var(--panel);
+    transition: border-color 0.2s;
+  }
+  .tile:hover {
+    border-color: var(--rule-2);
+  }
+  .tile-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+  }
+  .tile-name {
+    flex: 1;
+    font-family: var(--display);
+    font-size: 1.12rem;
+    font-weight: 620;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .tile-head:hover .tile-name {
+    color: var(--accent);
+  }
+  .tile > .small {
+    margin: 0.7rem 0 0;
+    line-height: 1.5;
+  }
+  .tile ul {
+    list-style: none;
+    margin: 0.9rem 0 0;
+    padding: 0.8rem 0 0;
+    border-top: 1px solid var(--rule);
+    display: grid;
+    gap: 0.4rem;
+  }
+  .tile li a {
+    display: block;
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+  .tile li a:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+  .own {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1.5rem;
+    margin-top: 1rem;
+    padding: 1rem 1.3rem;
+    border: 1px dashed var(--rule-2);
+    border-radius: 16px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .own b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .own-go {
+    color: var(--ink-2);
+    font-weight: 560;
+    white-space: nowrap;
+  }
+  .own:hover {
+    border-color: var(--accent);
+  }
+  .count {
+    margin: 0 0 0.6rem;
+  }
+  .persona .h3 {
+    margin-top: 1rem;
+  }
+  .links {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+  }
+  .links a {
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 560;
+  }
+  .links a + a {
+    color: var(--muted);
+    font-weight: 450;
+  }
+  .links a:hover {
+    text-decoration: underline;
+  }
+  .finder[hidden] {
+    display: none;
+  }
+  .finder {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .search {
+    position: relative;
+    flex: 1 1 18rem;
+  }
+  .search svg {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    width: 1rem;
+    height: 1rem;
+    transform: translateY(-50%);
+    fill: none;
+    stroke: var(--dim);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .search input,
+  .finder select,
+  .empty button {
+    width: 100%;
+    font: inherit;
+    font-size: 0.92rem;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    padding: 0.6rem 0.9rem;
+  }
+  .search input {
+    padding-left: 2.4rem;
+  }
+  .search input:focus,
+  .finder select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .finder select {
+    width: auto;
+    flex: 1 1 10rem;
+    max-width: 16rem;
+    padding-right: 2rem;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position:
+      calc(100% - 1rem) 55%,
+      calc(100% - 0.7rem) 55%;
+    background-size: 0.3rem 0.3rem;
+    background-repeat: no-repeat;
+    cursor: pointer;
+  }
+  .rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .rows li + li {
+    border-top: 1px solid var(--rule);
+  }
+  .rows li[hidden] {
+    display: none;
+  }
+  .rows a {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 8.5rem 6.5rem minmax(0, 14rem);
+    gap: 1rem;
+    align-items: center;
+    padding: 0.8rem 1.1rem;
+    text-decoration: none;
+  }
+  .rows a:hover {
+    background: var(--panel-2);
+  }
+  .r-title {
+    color: var(--ink);
+    font-weight: 540;
+  }
+  .rows a:hover .r-title {
+    color: var(--accent);
+  }
+  .rows .tag {
+    justify-self: start;
+  }
+  .r-for {
+    color: var(--dim);
+  }
+  .empty[hidden] {
+    display: none;
+  }
+  .empty button {
+    width: auto;
+    padding: 0.3rem 0.8rem;
+    margin-left: 0.4rem;
+    cursor: pointer;
+  }
+  .study {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    gap: 1.5rem;
+    align-items: center;
+    padding: 1.4rem 1.6rem;
+    border: 1px solid var(--rule-2);
+    border-radius: 16px;
+    background: var(--panel);
+    text-decoration: none;
+  }
+  .study .eyebrow {
+    margin: 0;
+  }
+  .study-num {
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.03em;
+  }
+  .study-text {
+    color: var(--muted);
+  }
+  .study-text b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .study-go {
+    color: var(--ink-2);
+    font-weight: 560;
+    white-space: nowrap;
+  }
+  .last {
+    padding-top: 0;
+    border-top: 0 !important;
+  }
+  .cta .cmd {
+    margin-top: 1.25rem;
+  }
+  @media (max-width: 40rem) {
+    .finder select {
+      max-width: none;
+    }
+    .persona {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 0.9rem;
+      padding: 1.1rem;
+    }
+    .persona > :not(:first-child) {
+      grid-column: 2;
+    }
+    .persona :global(.ai) {
+      grid-row: span 4;
+      width: 2.4rem;
+      height: 2.4rem;
+    }
+    .persona .h3 {
+      margin-top: 0;
+    }
+    .persona p {
+      margin-top: 0.3rem;
+      font-size: 0.9rem;
+    }
+    .links {
+      margin-top: 0.6rem;
+    }
+  }
+  @media (max-width: 52rem) {
+    .rows a {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.35rem 0.8rem;
+    }
+    .r-title {
+      grid-column: 1 / -1;
+    }
+    .r-for {
+      grid-column: 1 / -1;
+    }
+    .study {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .study .eyebrow,
+    .study-go {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

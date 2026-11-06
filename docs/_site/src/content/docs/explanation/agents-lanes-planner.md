@@ -62,7 +62,7 @@ An experiment is always in one of five states:
 | `done` | **Tried** | Its trial ended: with its attempt and the judge's verdict, or with no attempt and why |
 | `dropped` | **Tried** | Someone dropped it, and said why. It stays in the log |
 
-The queue is research state, so it lives in the harness's ledger, like the attempts and verdicts. Every change writes the experiment and one event, with who made it, in one step. Control builds the **Experiments** tab from those events, as it builds everything else from the rig's signed reports ([How the parts fit together](how-it-fits-together.md#the-experiment-queues-records)).
+The queue is research state, so it lives in the harness's ledger, like the attempts and verdicts. Every change writes the experiment and one event, with who made it, in one step. Control builds the **Experiments** tab from those events, as it builds everything else from the rig's signed reports ([How the parts fit together](how-it-fits-together.mdx#the-experiment-queues-records)).
 
 ### Where experiments come from
 
@@ -201,7 +201,7 @@ A trial is where an agent works. Each one follows the same path:
 
 An experiment's text reaches the worker whoever added it: the owner, the planner, an advisor or another lane. It is work to try, never a verdict. The "Added by" line asks the worker to weigh an advisor's or a lane's words as a suggestion, not to obey them: the contract, the judge and the owner's messages are what decide. The judge measures the result like any other change.
 
-The owner can also write to a lane while its trial runs. A Pi worker reads the message at its next step, between two calls to the model. In Claude Code and Codex, Thermite's hooks give the agent the message inside its turn: after the next tool it runs, or, when it stops, as the reason to go on. In OpenCode, Thermite's plugin steers the message into the session when the agent starts its next tool, and OpenCode takes it in after that tool. A message still waiting when the program's run ends goes in when the harness continues the session. After a submission, no worker takes a message. The lane's next trial reads it in its brief, where it can still act on it. [How the parts fit together](how-it-fits-together.md#the-owners-messages) has the whole picture.
+The owner can also write to a lane while its trial runs. A Pi worker reads the message at its next step, between two calls to the model. In Claude Code and Codex, Thermite's hooks give the agent the message inside its turn: after the next tool it runs, or, when it stops, as the reason to go on. In OpenCode, Thermite's plugin steers the message into the session when the agent starts its next tool, and OpenCode takes it in after that tool. A message still waiting when the program's run ends goes in when the harness continues the session. After a submission, no worker takes a message. The lane's next trial reads it in its brief, where it can still act on it. [How the parts fit together](how-it-fits-together.mdx#the-owners-messages) has the whole picture.
 
 A **development run** is an agent's own run of a command with its change on the target the judge measures on, to test or profile the change: its `run_experiment` tool (`thermite-trial run-experiment` in a program), beside `submit_experiment`, which sends the change to the judge. Its numbers are marked "diagnostic only" and never count. [Sharing a device](sharing-a-device.md) explains how the judge and the agents take turns.
 

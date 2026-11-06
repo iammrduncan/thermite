@@ -1,0 +1,224 @@
+---
+// The case studies' listing. Each study's full page is in the documentation (studies/), where
+// llms.txt and the Markdown copies carry it too.
+import ClimbReplay from "../components/site/ClimbReplay.astro";
+import FieldIcon from "../components/site/FieldIcon.astro";
+import Partners from "../components/site/Partners.astro";
+import { studyPages } from "../data/study-pages";
+import { fields, modes, personas } from "../data/use-cases.mjs";
+import Site from "../layouts/Site.astro";
+
+const study = "/studies/qwen3-8-27b-on-a-p100/";
+const stats = [
+  { value: "3.89×", label: "faster decode, 7.74 → 30.06 tokens a second" },
+  { value: "131", label: "changes judged in the decode climb, 28 kept" },
+  { value: "$100", label: "the GPU: one used Tesla P100" },
+];
+const studies = await studyPages();
+const fieldLabel = Object.fromEntries(fields.map((f) => [f.key, f.label]));
+const modeLabel = Object.fromEntries(modes.map((m) => [m.key, m.label]));
+const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
+---
+
+<Site
+  title="Case studies: real Thermite campaigns, with the judge's numbers"
+  description="Real campaigns Thermite has run: the question, the modes, the judge's own numbers, what the agents found, and what was not measured."
+  section="studies"
+>
+  <section class="hero">
+    <div class="wrap">
+      <h1 class="h1">Case studies</h1>
+      <p class="lede">Campaigns Thermite has run, from the first question to the last verdict, with the judge's own numbers.</p>
+    </div>
+  </section>
+
+  <section class="feature-wrap">
+    <div class="wrap">
+      <article class="feature">
+        <div class="feature-text">
+          <Partners />
+          <h2 class="h2"><a href={study}>Qwen3.8-27B on a $100 GPU, 3.9× faster</a></h2>
+          <p class="lede">
+            Four campaigns tuned an inference engine for Qwen3.8-27B on one Tesla P100: two goal campaigns made the new
+            weight format work and hold its quality, then two hill climbs made it fast, with the model's answers held
+            where they started. tensorless ships the result in one command.
+          </p>
+          <dl class="stats">
+            {
+              stats.map((st) => (
+                <div>
+                  <dt>{st.value}</dt>
+                  <dd>{st.label}</dd>
+                </div>
+              ))
+            }
+          </dl>
+          <div class="btns">
+            <a class="btn primary" href={study}>Read the study</a>
+            <a class="btn" href="https://tensorless.dev">Run it with tensorless</a>
+          </div>
+        </div>
+        <div class="feature-art">
+          <ClimbReplay compact />
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section" id="all">
+    <div class="wrap">
+      <div class="head">
+        <h2 class="h2">All case studies</h2>
+      </div>
+      <div class="grid cards">
+        {
+          studies.map((st) => (
+            <a class="card st" href={st.href}>
+              <div class="top">
+                <FieldIcon name={st.field} />
+                <span class="small">{fieldLabel[st.field]}</span>
+              </div>
+              <p class="metric">{st.metric}</p>
+              <p class="metric-label">{st.metricLabel}</p>
+              <h3 class="h3">{st.title}</h3>
+              <p>{st.summary}</p>
+              <div class="tags">
+                {st.modes.map((m) => (
+                  <span class={`tag ${m}`}>{modeLabel[m]}</span>
+                ))}
+              </div>
+              <p class="for small">
+                {st.personas.map((p) => personaShort[p]).join(" · ")}
+                {st.partner && ` · with ${st.partner}`}
+              </p>
+              <span class="go">
+                Read the study
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section last">
+    <div class="wrap">
+      <div class="cta">
+        <h2 class="h2">Share a campaign</h2>
+        <p class="lede">Ran a campaign worth a case study? Bring its results to the Hackers in the Loop Discord.</p>
+        <div class="btns">
+          <a class="btn primary" href="https://discord.gg/3Qs2uejUf9">Join the Discord</a>
+          <a class="btn" href="/use-cases/">See the use cases</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Site>
+
+<style>
+  .hero {
+    padding-block: clamp(3rem, 7vw, 5.5rem) clamp(2rem, 4vw, 3rem);
+  }
+  .hero .h1 {
+    max-width: 50rem;
+  }
+  .feature-wrap {
+    padding-bottom: clamp(4rem, 8vw, 6rem);
+  }
+  .feature {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: center;
+    padding: clamp(1.4rem, 3vw, 2.25rem);
+    border: 1px solid var(--rule-2);
+    border-radius: 24px;
+    background: var(--panel);
+  }
+  @media (max-width: 62rem) {
+    .feature {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .feature .h2 {
+    margin-top: 1rem;
+    font-size: clamp(1.7rem, 3vw, 2.4rem);
+  }
+  .feature .h2 a {
+    text-decoration: none;
+  }
+  .feature .h2 a:hover {
+    color: var(--accent);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0 0;
+    padding: 1.1rem 0;
+    border-block: 1px solid var(--rule);
+  }
+  .stats dt {
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  .stats dd {
+    margin: 0.25rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  }
+  .st {
+    display: flex;
+    flex-direction: column;
+  }
+  .st .top {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .st .metric {
+    margin: 1.2rem 0 0;
+    font-size: 2.4rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--ink);
+    letter-spacing: -0.03em;
+  }
+  .st .metric-label {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+  }
+  .st .h3 {
+    margin-top: 1.1rem;
+    font-size: 1.15rem;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 1rem;
+  }
+  .st .for {
+    margin: 0.8rem 0 0;
+    color: var(--dim);
+  }
+  .st .go {
+    margin-top: auto;
+    padding-top: 1rem;
+  }
+  @media (max-width: 30rem) {
+    .stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .last {
+    padding-top: 0;
+    border-top: 0 !important;
+  }
+</style>

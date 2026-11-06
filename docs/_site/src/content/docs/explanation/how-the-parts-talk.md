@@ -6,7 +6,7 @@ sidebar:
   order: 3
 ---
 
-[How the parts fit together](how-it-fits-together.md) explains what control, a rig and its targets are, and why a rig dials out. This page goes one level down. It follows each channel between the parts: what travels on it, which side starts it, how often it runs by default, and so how long a change takes to reach the other side. The settings it names are in [Settings](../reference/settings.md), and [Trust](trust.md) explains the signatures that every command and report carries.
+[How the parts fit together](how-it-fits-together.mdx) explains what control, a rig and its targets are, and why a rig dials out. This page goes one level down. It follows each channel between the parts: what travels on it, which side starts it, how often it runs by default, and so how long a change takes to reach the other side. The settings it names are in [Settings](../reference/settings.md), and [Trust](trust.md) explains the signatures that every command and report carries.
 
 ```mermaid
 flowchart LR
@@ -295,7 +295,7 @@ The research itself never waits on these channels. A rig runs its trials and jud
 
 ## Where to read more
 
-- [How the parts fit together](how-it-fits-together.md): control, a rig and targets.
+- [How the parts fit together](how-it-fits-together.mdx): control, a rig and targets.
 - [Trust](trust.md): signed commands, signed reports and pinned keys.
 - [Isolation](isolation.md): the users inside a rig.
 - [Settings](../reference/settings.md): each interval above.

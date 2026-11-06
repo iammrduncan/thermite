@@ -1,0 +1,58 @@
+---
+// A small line drawing for each field of the use cases, in the accent colour.
+interface Props {
+  name: string;
+}
+const { name } = Astro.props;
+const paths: Record<string, string[]> = {
+  software: ["M8 7l-5 5 5 5", "M16 7l5 5-5 5", "M13.5 4.5l-3 15"],
+  ai: [
+    "M7 7h10v10H7z",
+    "M10 10h4v4h-4z",
+    "M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4",
+  ],
+  science: ["M9 3h6", "M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3", "M7.5 15h9"],
+  healthcare: ["M3 12h4l2-5 4 10 2-5h6"],
+  agriculture: [
+    "M12 21v-9",
+    "M12 12c0-4 3-7 7-7 0 4-3 7-7 7Z",
+    "M12 15c0-3-2.5-5.5-6-5.5 0 3.3 2.5 5.5 6 5.5Z",
+    "M6 21h12",
+  ],
+  energy: ["M13 3L5 13.5h6L10 21l8-10.5h-6L13 3Z"],
+  operations: [
+    "M5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM19 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
+    "M5 15V9.5A2.5 2.5 0 0 1 7.5 7h9.5",
+    "M7 17h9.5a2.5 2.5 0 0 0 2.5-2.5V11",
+  ],
+  robotics: ["M6 9h12v10H6z", "M12 9V5", "M10.5 4h3", "M9.5 13.5h.01M14.5 13.5h.01", "M9.5 16.5h5", "M3 12v4M21 12v4"],
+  finance: ["M4 4v16h16", "M7 15l4-4 3 3 5-6", "M15 8h4v4"],
+};
+const d = paths[name] ?? [];
+---
+
+<span class="fi" aria-hidden="true">
+  <svg viewBox="0 0 24 24">{d.map((p) => <path d={p} />)}</svg>
+</span>
+
+<style>
+  .fi {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 11px;
+    background: var(--panel-2);
+    color: var(--ink-2);
+  }
+  svg {
+    width: 1.35rem;
+    height: 1.35rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+</style>

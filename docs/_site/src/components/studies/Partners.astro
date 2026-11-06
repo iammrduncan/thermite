@@ -1,0 +1,86 @@
+---
+// The byline of a joint study: Thermite's flame beside the partner's logo, each linked to its
+// site, and one line on who did what.
+import { Image } from "astro:assets";
+import thermite from "../../assets/logo.svg";
+
+interface Props {
+  partner: { name: string; href: string; logo: ImageMetadata; role: string };
+  thermiteRole: string;
+}
+const { partner, thermiteRole } = Astro.props;
+---
+
+<aside class="partners not-content" aria-label={`A joint study by Thermite and ${partner.name}`}>
+  <p class="kicker">A joint study</p>
+  <div class="row">
+    <a class="who" href="/">
+      <Image src={thermite} alt="" width={44} height={44} />
+      <span><b>Thermite</b><small>{thermiteRole}</small></span>
+    </a>
+    <span class="x" aria-hidden="true">×</span>
+    <a class="who" href={partner.href}>
+      <Image src={partner.logo} alt="" width={44} height={44} />
+      <span><b>{partner.name}</b><small>{partner.role}</small></span>
+    </a>
+  </div>
+</aside>
+
+<style>
+  .partners {
+    margin: 0 0 1.75rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+  }
+  .kicker {
+    margin: 0 0 0.6rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    color: var(--sl-color-gray-3);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+  }
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1 1 14rem;
+    color: inherit;
+    text-decoration: none;
+  }
+  .who img {
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .who span {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
+  .who b {
+    font-size: var(--sl-text-lg);
+    color: var(--sl-color-white);
+  }
+  .who:hover b {
+    color: var(--sl-color-accent);
+  }
+  .who small {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+  .x {
+    font-size: var(--sl-text-xl);
+    color: var(--sl-color-gray-3);
+  }
+  @media (max-width: 40rem) {
+    .x {
+      display: none;
+    }
+  }
+</style>

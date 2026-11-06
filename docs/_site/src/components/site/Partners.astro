@@ -1,0 +1,42 @@
+---
+// "Thermite × tensorless": the lockup of a joint study, each name linked to its site.
+import Thermite from "../../assets/logo.svg?raw";
+import Tensorless from "../../assets/partners/tensorless.svg?raw";
+---
+
+<p class="lockup">
+  <a href="/" aria-label="Thermite"><span set:html={Thermite} /><b>Thermite</b></a>
+  <span class="x" aria-hidden="true">×</span>
+  <a href="https://tensorless.dev" aria-label="tensorless"><span set:html={Tensorless} /><b>tensorless</b></a>
+</p>
+
+<style>
+  .lockup {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 0.9rem;
+    margin: 0;
+  }
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+  }
+  a :global(svg) {
+    width: 26px;
+    height: 26px;
+  }
+  b {
+    font-family: var(--display);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+  a:hover b {
+    color: var(--accent);
+  }
+  .x {
+    color: var(--dim);
+  }
+</style>

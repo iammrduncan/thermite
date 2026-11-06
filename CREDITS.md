@@ -232,12 +232,14 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 | [starlight-links-validator](https://github.com/HiDeoo/starlight-links-validator) and [starlight-llms-txt](https://github.com/delucis/starlight-llms-txt) | HiDeoo; Chris Swithinbank | MIT |
 | [sharp](https://github.com/lovell/sharp) (images) | Lovell Fuller | Apache-2.0; its libvips binaries are LGPL-3.0-or-later, used only to build the site |
 | [Lightning CSS](https://github.com/parcel-bundler/lightningcss), through Vite | The Parcel project | MPL-2.0, used only to build the site |
+| The site's own pages' fonts, served from the site: [Geist and Geist Mono](https://github.com/vercel/geist-font), packaged by [Fontsource](https://github.com/fontsource/fontsource) | Vercel; the Fontsource project | The fonts OFL-1.1; Fontsource's packaging MIT |
 
 `docs/_site/package-lock.json` lists every package, with its licence and version.
 
 ## Design
 
 - **The dashboard's look** follows [Magnesium](https://github.com/iammrduncan/magnesium) (MIT), the maintainers' agent dashboard, which is a fork of [T3 Code](https://github.com/pingdotgg/t3code) (MIT, © 2026 T3 Tools Inc.): its design tokens, its status words, its tiles and its session board. The colour values are those of [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss)'s palette (MIT).
+- **The site's own pages** (the home page and the overviews of the use cases and studies) follow the home pages of the maintainers' [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh): a frame of their own beside the docs, a command to copy, numbered steps, and a picture drawn from real data. The replay of a real climb and the ledger are Thermite's own.
 - **The icons and the flame** are Thermite's own.
 
 ## Standards and guides
@@ -271,8 +273,329 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 
 [Podman](https://github.com/containers/podman), [Docker](https://www.docker.com/) and their compose tools; [Kubernetes](https://github.com/kubernetes/kubernetes) and [kind](https://github.com/kubernetes-sigs/kind) (Apache-2.0 each), with systemd's Quadlet units for rigs on machines; [NVIDIA's device plugin](https://github.com/NVIDIA/k8s-device-plugin) and [DRA driver](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu) (Apache-2.0); [NVIDIA's container toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) (Apache-2.0), which gives containers the GPUs, through its runtime for Docker and its CDI spec for Podman, and which `thermite doctor` and `thermite local init` check for; Fedora's and Debian's images as stand-in machines; [uv](https://github.com/astral-sh/uv) (Apache-2.0 OR MIT) to run the statistics reference script; and Chrome, which takes the documentation's screenshots. A manual long-run test starts its research from two Wikipedia articles (CC BY-SA 4.0), which it fetches when it runs.
 
+## What the studies report on
+
+The site's [studies](https://usethermite.com/studies/) tell campaigns that Thermite ran. They report on these works; Thermite uses none of their code, weights or data.
+
+- [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) (the Qwen team, Alibaba, Apache-2.0): the model of the first study, Qwen3.8-27B on a $100 GPU.
+- [unsloth/Qwen3.8-27B-GGUF](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF) (Unsloth, Apache-2.0): its UD-IQ3_XXS file is most of Q3Floor, the standard 3-bit model that the first study compares against.
+
+## What the use cases cite
+
+The site's [use cases](https://usethermite.com/use-cases/) say what Thermite can be pointed at. Each cites published work by others as background, as theirs and not Thermite's, and names tools that a kit could wrap. Thermite uses none of their code, weights or data. Works already credited above are cited or named there too: FunSearch, AlphaEvolve, the AI Scientist, METR's report on reward hacking, GEPA, Karpathy's autoresearch, TechCrunch's report on Sakana's AI CUDA Engineer, llama.cpp and ggml, vLLM, ExLlamaV3, AWQ, Ollama, Qwen3.8-27B, Hugging Face, CUDA, Kubernetes, Ubuntu, TypeScript, Python, SciPy, CMake, the Model Context Protocol, GRADE and Claude Code.
+
+**Software.**
+
+- [Performance: 53% faster parse+render, 61% fewer allocations](https://github.com/Shopify/liquid/pull/2056) (2026), Tobi Lütke, a pull request to Shopify's Liquid (MIT): an agent loop's speed-up of a template engine, cited on Code performance optimization.
+- [90% Failure Rate: Why GPT-4o Can't Optimize Code (And What We Built Instead)](https://hackernoon.com/90percent-failure-rate-why-gpt-4o-cant-optimize-code-and-what-we-built-instead) (2026), Saurabh Misra (Codeflash), © the author: how many proposed optimizations were incorrect, on the same page.
+- [How Airbnb Used LLMs to Accelerate Test Migration](https://www.infoq.com/news/2025/03/airbnb-llm-test-migration/) (2025), InfoQ, © C4Media: a large test migration, on Codebase migration.
+- [ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases](https://arxiv.org/abs/2510.20270) (2025), Zhong, Raghunathan, Carlini, CC BY 4.0: how often models edit tests to pass them, on the same page.
+- [perf](https://perfwiki.github.io/main/), the Linux kernel developers, GPL-2.0: named on Code performance optimization.
+- [FlameGraph](https://github.com/brendangregg/FlameGraph), Brendan Gregg, CDDL-1.0: named on Code performance optimization.
+- [Google Benchmark](https://github.com/google/benchmark), Google, Apache-2.0: named on Code performance optimization.
+- [JMH](https://github.com/openjdk/jmh), the OpenJDK project, GPL-2.0 with the Classpath Exception: named on Code performance optimization.
+- [Criterion.rs](https://github.com/criterion-rs/criterion.rs), Jorge Aparicio and the maintainers, MIT or Apache-2.0: named on Code performance optimization.
+- [pytest-benchmark](https://github.com/ionelmc/pytest-benchmark), Ionel Cristian Mărieș, BSD-2-Clause: named on Code performance optimization.
+- [hyperfine](https://github.com/sharkdp/hyperfine), David Peter, MIT or Apache-2.0: named on Code performance optimization.
+- [Spring Boot](https://github.com/spring-projects/spring-boot), the Spring team, Apache-2.0: named on Codebase migration.
+- [Spring Boot 3.0 Migration Guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.0-Migration-Guide), the Spring Boot team, no licence stated: cited on Codebase migration.
+- [Spring Security](https://github.com/spring-projects/spring-security), the Spring team, Apache-2.0: named on Codebase migration.
+- [Hibernate ORM](https://github.com/hibernate/hibernate-orm), the Hibernate team, Apache-2.0: named on Codebase migration.
+- [OpenJDK](https://openjdk.org/), Oracle and the OpenJDK community, GPL-2.0 with the Classpath Exception: named on Codebase migration.
+- [Apache Maven](https://maven.apache.org/), The Apache Software Foundation, Apache-2.0: named on Codebase migration.
+- [OpenRewrite](https://github.com/openrewrite/rewrite), Moderne and contributors, Apache-2.0 (core); some recipes under Moderne licences: named on Codebase migration.
+- [PIT](https://pitest.org/), Henry Coles, Apache-2.0: named on Codebase migration.
+- [Enzyme](https://github.com/enzymejs/enzyme), Airbnb and contributors, MIT: named on Codebase migration.
+- [React Testing Library](https://github.com/testing-library/react-testing-library), Kent C. Dodds and contributors, MIT: named on Codebase migration.
+- [Jest](https://github.com/jestjs/jest), Meta Platforms and contributors, MIT: named on Codebase migration.
+- [How is Google using AI for internal code migrations?](https://arxiv.org/abs/2501.06972) (2025), Nikolov, Codecasa, Sjovall et al., CC BY 4.0: cited on Codebase migration.
+- [Jepsen's analyses](https://jepsen.io/analyses), Kyle Kingsbury (Jepsen, LLC), © Jepsen, LLC: consistency tests of distributed databases, named on Technology evaluation and used as its starting link.
+- [Jepsen: PostgreSQL 12.3](https://jepsen.io/analyses/postgresql-12.3) (2020), Kyle Kingsbury (Jepsen, LLC), © Jepsen, LLC: serializable transactions that were not serializable, cited on Technology evaluation.
+- [PostgreSQL](https://www.postgresql.org/), the PostgreSQL Global Development Group, PostgreSQL License: named on Technology evaluation.
+- [CockroachDB](https://github.com/cockroachdb/cockroach), Cockroach Labs, CockroachDB Software License: named on Technology evaluation.
+- [Enterprise license announcement](https://www.cockroachlabs.com/blog/enterprise-license-announcement/) (2024), Spencer Kimball (Cockroach Labs), © Cockroach Labs: the retirement of CockroachDB Core, cited on Technology evaluation.
+- [YugabyteDB](https://github.com/yugabyte/yugabyte-db), Yugabyte, Apache-2.0 for the core database and the Polyform Free Trial License 1.0.0 for some components: named on Technology evaluation.
+- [TiDB](https://github.com/pingcap/tidb), PingCAP, Apache-2.0: named on Technology evaluation.
+- [A List of Post-mortems](https://github.com/danluu/post-mortems), Dan Luu and contributors, no licence stated: a starting link on Technology evaluation.
+- [Gemini Deep Research](https://gemini.google/overview/deep-research/), Google, a service under Google's terms: how long a typical task runs, cited on Technology evaluation.
+
+**AI and machine learning.**
+
+- [nanochat](https://github.com/karpathy/nanochat) (2025), Andrej Karpathy, MIT: its leaderboard's time to train a GPT-2-level model, on Model training efficiency.
+- [DSPy](https://github.com/stanfordnlp/dspy), Stanford NLP, MIT: named on LLM application quality.
+- [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685) (2023), Zheng, Chiang, Sheng et al., arXiv non-exclusive licence: cited on LLM application quality.
+- [AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978) (2023), Lin, Tang, Tang et al., arXiv non-exclusive licence: named on LLM inference optimization.
+- [GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323) (2022), Frantar, Ashkboos, Hoefler, Alistarh, CC BY 4.0: named on LLM inference optimization.
+- [modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), Keller Jordan and contributors, MIT: cited on Model training efficiency.
+- [FineWeb](https://huggingface.co/datasets/HuggingFaceFW/fineweb), Hugging Face, ODC-By: named on Model training efficiency.
+- [Muon: An optimizer for hidden layers in neural networks](https://kellerjordan.github.io/posts/muon/) (2024), Keller Jordan et al., repository MIT: named on Model training efficiency.
+- [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101) (2017), Loshchilov, Hutter, arXiv non-exclusive licence: named on Model training efficiency.
+- [RULER: What's the Real Context Size of Your Long-Context Language Models?](https://arxiv.org/abs/2404.06654) (2024), Hsieh, Sun, Kriman et al. (NVIDIA), CC BY 4.0, with [its code](https://github.com/NVIDIA/RULER) (Apache-2.0): a long-context benchmark, cited on Model and method landscape.
+- [HELMET: How to Evaluate Long-Context Language Models Effectively and Thoroughly](https://arxiv.org/abs/2410.02694) (2024), Yen, Gao, Hou et al., arXiv non-exclusive licence, with [its code](https://github.com/princeton-nlp/HELMET) (MIT): cited on Model and method landscape.
+- [NoLiMa: Long-Context Evaluation Beyond Literal Matching](https://arxiv.org/abs/2502.05167) (2025), Modarressi, Deilamsalehy, Dernoncourt et al. (Adobe Research), CC BY-NC-SA 4.0, with [its code and data](https://github.com/adobe-research/NoLiMa) (Adobe Research License): cited on Model and method landscape.
+- [LongBench v2](https://arxiv.org/abs/2412.15204) (2024), Bai, Tu, Zhang et al. (THUDM), arXiv non-exclusive licence, with [LongBench](https://github.com/THUDM/LongBench) (MIT): named on Model and method landscape.
+- [A Careful Examination of Large Language Model Performance on Grade School Arithmetic](https://arxiv.org/abs/2405.00332) (GSM1k, 2024), Zhang, Da, Lee et al., CC BY 4.0: test-set contamination, cited on Model and method landscape.
+- [The Leaderboard Illusion](https://arxiv.org/abs/2504.20879) (2025), Singh, Nan, Wang et al., CC BY-SA 4.0: private variants tested before a leaderboard release, cited on Model and method landscape.
+- [GSM8K](https://github.com/openai/grade-school-math), from [Training Verifiers to Solve Math Word Problems](https://arxiv.org/abs/2110.14168) (2021), Cobbe, Kosaraju, Bavarian et al. (OpenAI), MIT: named on Model and method landscape.
+- [YaRN: Efficient Context Window Extension of Large Language Models](https://arxiv.org/abs/2309.00071) (2023), Peng, Quesnelle, Fan and Shippole, CC BY 4.0: named on Model and method landscape.
+- [Gemma 4 31B](https://huggingface.co/google/gemma-4-31B-it), Google DeepMind, Apache-2.0: named on Model and method landscape.
+- [Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct), Meta, Llama 4 Community License Agreement: named on Model and method landscape.
+- [Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B), the Qwen team (Alibaba), Apache-2.0: named on Fitting a model to your hardware.
+- [Qwen_Qwen3-32B-GGUF](https://huggingface.co/bartowski/Qwen_Qwen3-32B-GGUF), bartowski, Apache-2.0: quantized files and their sizes, named on Fitting a model to your hardware.
+- [Qwen3-0.6B-GGUF](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF), the Qwen team (Alibaba), Apache-2.0: a draft model, named on Fitting a model to your hardware.
+- [nvidia-smi](https://developer.nvidia.com/system-management-interface), NVIDIA, shipped with the NVIDIA driver, no licence stated: named on Fitting a model to your hardware.
+- [WikiText](https://huggingface.co/datasets/Salesforce/wikitext), from [Pointer Sentinel Mixture Models](https://arxiv.org/abs/1609.07843) (2016), Merity, Xiong, Bradbury and Socher (Salesforce), CC BY-SA 3.0 and GFDL: Wikitext-2, named on Fitting a model to your hardware.
+- [Chatbot Arena: An Open Platform for Evaluating LLMs by Human Preference](https://arxiv.org/abs/2403.04132) (2024), Chiang, Zheng, Sheng et al. (LMSYS), arXiv non-exclusive licence: the leaderboard The Leaderboard Illusion studied, named on Model and method landscape.
+
+**Science.**
+
+- [Mathematical exploration and discovery at scale](https://arxiv.org/abs/2511.02864) (2025), Georgiev, Gómez-Serrano, Tao and Wagner, CC BY 4.0: AlphaEvolve cheating a numerical scoring function, on Mathematical discovery.
+- [CodePDE: An Inference Framework for LLM-driven PDE Solver Generation](https://arxiv.org/abs/2505.08783) (2025), Li, Marwah, Shen et al., CC BY 4.0: solvers written by language models, and how many fail a convergence test, on Simulation speed and accuracy.
+- [Weak baselines and reporting biases lead to overoptimism in machine learning for fluid-related partial differential equations](https://arxiv.org/abs/2407.07218) (2024), McGreivy and Hakim, CC BY 4.0: weak baselines, on the same page.
+- [Fabrication and errors in the bibliographic citations generated by ChatGPT](https://doi.org/10.1038/s41598-023-41032-5) (2023), Walters and Wilder, *Scientific Reports*, CC BY 4.0: fabricated citations, on Literature review.
+- [Kosmos: An AI Scientist for Autonomous Discovery](https://arxiv.org/abs/2511.02824) (2025), Mitchener, Yiu, Chang et al., CC BY 4.0: experts' ratings of an AI scientist's statements, on the same page.
+- [CaDiCaL](https://github.com/arminbiere/cadical), Biere, Fazekas, Fleury, Froleyks et al., MIT: named on Mathematical discovery.
+- [Kissat](https://github.com/arminbiere/kissat), Biere, Fleury, Pollitt, MIT: named on Mathematical discovery.
+- [Schur Number Five](https://arxiv.org/abs/1711.08076) (2017), Marijn J. H. Heule, arXiv non-exclusive licence: cited on Mathematical discovery.
+- [LAMMPS](https://github.com/lammps/lammps), the LAMMPS developers (Sandia National Laboratories), GPL-2.0: named on Simulation speed and accuracy.
+- [GROMACS](https://gitlab.com/gromacs/gromacs), and its [user guide on reproducibility](https://manual.gromacs.org/current/user-guide/managing-simulations.html), the GROMACS development team, LGPL-2.1: named and quoted on Simulation speed and accuracy.
+- [OpenFOAM](https://github.com/OpenFOAM/OpenFOAM-dev), the OpenFOAM Foundation, GPL-3.0: named on Simulation speed and accuracy.
+- [PETSc](https://gitlab.com/petsc/petsc), UChicago Argonne and the PETSc developers, BSD-2-Clause: named on Simulation speed and accuracy.
+- [hypre](https://github.com/hypre-space/hypre) (BoomerAMG), Lawrence Livermore National Laboratory and contributors, Apache-2.0 or MIT: named on Simulation speed and accuracy.
+- [OpenMP API](https://www.openmp.org/specifications/), OpenMP Architecture Review Board, © OpenMP: named on Simulation speed and accuracy.
+- [Google Scholar](https://scholar.google.com/), Google, service: named on Literature review.
+- [PubMed](https://pubmed.ncbi.nlm.nih.gov/), US National Library of Medicine, US government service: named on Literature review, and with MEDLINE on Clinical evidence review.
+- [Scopus](https://www.scopus.com/), Elsevier, subscription service: named on Literature review.
+- [Zotero](https://github.com/zotero/zotero), Corporation for Digital Scholarship, AGPL-3.0: named on Literature review.
+- [Cochrane Handbook for Systematic Reviews of Interventions, chapter 4](https://www.cochrane.org/authors/handbooks-and-manuals/handbook/current/chapter-04) (v6.5.1), Higgins, Thomas, Chandler et al. (eds.), © The Cochrane Collaboration: cited on Literature review.
+- [The PRISMA 2020 statement](https://doi.org/10.1136/bmj.n71) (2021), Page, McKenzie, Bossuyt et al., BMJ, CC BY 4.0: cited on Literature review and Clinical evidence review.
+- [Analysis of the time and workers needed to conduct systematic reviews of medical interventions](https://doi.org/10.1136/bmjopen-2016-012545) (2017), Borah, Brown, Capers, Kaiser, BMJ Open, CC BY-NC 4.0: cited on Literature review and Clinical evidence review.
+- [An open-access database and analysis tool for perovskite solar cells based on the FAIR data principles](https://doi.org/10.1038/s41560-021-00941-3) (2022), Jacobsson, Hultqvist, García-Fernández et al., CC BY 4.0: a database built by hand from over 15,000 papers, cited on Data from the literature.
+- [The Perovskite Database](https://www.perovskitedatabase.com/), the Perovskite Database Project, data CC BY 4.0 and code MIT: named on Data from the literature.
+- [Consensus statement for stability assessment and reporting for perovskite photovoltaics based on ISOS procedures](https://doi.org/10.1038/s41560-019-0529-5) (2020), Khenkin et al., CC BY 4.0: named on Data from the literature.
+- [ChemDataExtractor](https://github.com/mcs07/ChemDataExtractor), Matt Swain and the Molecular Engineering Group, University of Cambridge, MIT, with [its paper](https://doi.org/10.1021/acs.jcim.6b00207) (2016), Swain and Cole, © American Chemical Society: named on Data from the literature.
+- [A database of battery materials auto-generated using ChemDataExtractor](https://doi.org/10.1038/s41597-020-00602-2) (2020), Huang and Cole, CC BY 4.0: cited on Data from the literature.
+- [NIST/ARPA-E Database of Novel and Emerging Adsorbent Materials](https://adsorption.nist.gov/isodb/index.php), NIST, © U.S. Department of Commerce: cited on Data from the literature.
+- [Web of Science](https://www.webofscience.com/), Clarivate, a subscription service: named on Data from the literature.
+- [Elsevier Developer Portal](https://dev.elsevier.com/), Elsevier, API terms: its data-mining APIs, named on Data from the literature.
+- [Royal Society of Chemistry](https://www.rsc.org/), access on request: its data-mining access, named on Data from the literature.
+- [Nature](https://www.nature.com/), Springer Nature, each article under its own licence: its article pages, named on Data from the literature.
+- [WebPlotDigitizer](https://github.com/automeris-io/WebPlotDigitizer), Ankit Rohatgi, AGPL-3.0: named on Data from the literature.
+- [Artifact Review and Badging, Version 1.1](https://www.acm.org/publications/policies/artifact-review-and-badging-current) (2020), ACM, © ACM: cited on Reproducing published results.
+- [AEA Data and Code Availability Policy](https://www.aeaweb.org/journals/data/data-code-policy), the American Economic Association, © AEA: named on Reproducing published results.
+- [Machine Learning Reproducibility Challenge](https://reproml.org/), its organizers, no licence stated: named on Reproducing published results.
+- [A large-scale study on research code quality and execution](https://doi.org/10.1038/s41597-022-01143-6) (2022), Trisovic, Lau, Pasquier et al., CC BY 4.0: how often R code runs, cited on Reproducing published results.
+- [Harvard Dataverse](https://dataverse.harvard.edu/), Harvard University (IQSS), a service: named on Reproducing published results.
+- [Zenodo](https://zenodo.org/), CERN, a service: named on Reproducing published results.
+- [Code Ocean](https://codeocean.com/), Code Ocean, Inc., a service: named on Reproducing published results.
+- [CORE-Bench](https://arxiv.org/abs/2409.11363) (2024), Siegel, Kapoor, Nadgir, Stroebl and Narayanan, CC BY 4.0, with [HAL's CORE-Bench Hard leaderboard](https://hal.cs.princeton.edu/corebench_hard) (Princeton University): cited on Reproducing published results.
+- [PaperBench: Evaluating AI's Ability to Replicate AI Research](https://arxiv.org/abs/2504.01848) (2025), Starace, Jaffe, Sherburn et al. (OpenAI), CC BY 4.0: cited on Reproducing published results.
+- [R](https://www.r-project.org/), the R Foundation, GPL-2 or GPL-3: named on Reproducing published results.
+- [renv](https://github.com/rstudio/renv), Posit, MIT: named on Reproducing published results.
+- [MATLAB](https://www.mathworks.com/products/matlab.html), MathWorks, proprietary: named on Reproducing published results.
+- [Stata](https://www.stata.com/), StataCorp, proprietary: named on Reproducing published results.
+- [OpenAlex](https://openalex.org/), OurResearch, data CC0: named on Literature review.
+- [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/), Crossref, metadata free to use: named on Literature review.
+- [Retraction Watch database](https://www.crossref.org/documentation/retrieve-metadata/retraction-watch/), Crossref (acquired in 2023), made public: cited on Literature review.
+- [ScienceDirect](https://www.sciencedirect.com/), Elsevier, a subscription service: named on Literature review.
+- [A benchmark of batch-effect correction methods for single-cell RNA sequencing data](https://doi.org/10.1186/s13059-019-1850-9) (2020), Tran, Ang, Chevrier et al., CC BY: cited on Literature review.
+- [Benchmarking atlas-level data integration in single-cell genomics](https://doi.org/10.1038/s41592-021-01336-8) (2022), Luecken, Büttner, Chaichoompu et al., CC BY: cited on Literature review.
+- [scib](https://github.com/theislab/scib), the Theis lab, MIT: named on Literature review.
+- [Harmony](https://github.com/immunogenomics/harmony), the immunogenomics group, GPL-3: named on Literature review.
+- [LIGER](https://github.com/welch-lab/liger), the Welch lab, GPL-3.0: named on Literature review.
+- [Seurat](https://github.com/satijalab/seurat), the Satija lab, MIT: named on Literature review.
+- [scvi-tools](https://github.com/scverse/scvi-tools), with scVI and scANVI, scverse, BSD-3-Clause: named on Literature review.
+- [Scanorama](https://github.com/brianhie/scanorama), Brian Hie, MIT: named on Literature review.
+- [scGen](https://github.com/theislab/scgen), the Theis lab, GPL-3.0: named on Literature review.
+- [NumPy](https://github.com/numpy/numpy), the NumPy developers, BSD-3-Clause: its 1.24 release, which removed `np.float`, named on Reproducing published results.
+- [arXiv](https://arxiv.org/), Cornell University, a service, each paper under its own licence: its HTML versions of papers, named on Model and method landscape, Data from the literature, Reproducing published results, Literature review and Pricing model validation.
+
+**Healthcare and life sciences.**
+
+- [Accelerating genomic workflows using NVIDIA Parabricks](https://doi.org/10.1186/s12859-023-05292-2) (2023), O'Connell, Yosufzai, Campbell et al., *BMC Bioinformatics*, CC BY 4.0: CPU and GPU run times of variant calling, on Genomics pipeline acceleration.
+- [Is manual software optimization a thing of the past?](https://arxiv.org/abs/2609.37849) (2026), Poličar, Špendl, Hočevar, arXiv non-exclusive licence: an agent's speed-ups of bioinformatics methods, on the same page.
+- [PrecisionFDA Truth Challenge V2](https://doi.org/10.1016/j.xgen.2022.100129) (2022), Olson, Wagner, McDaniel et al., *Cell Genomics*, CC BY 4.0: samples held back against overfitting, on the same page.
+- [Genome in a Bottle](https://www.nist.gov/programs-projects/genome-bottle), NIST and the Genome in a Bottle Consortium, data of the US government, not subject to copyright in the US: the truth sets, named on the same page.
+- [hap.py](https://github.com/Illumina/hap.py), Illumina, BSD-2-Clause: the tool that scores calls against a truth set, named on the same page.
+- [nnU-Net Revisited: A Call for Rigorous Validation in 3D Medical Image Segmentation](https://arxiv.org/abs/2404.09556) (2024), Isensee, Wald, Ulrich et al., CC BY 4.0: claims that fail against strong baselines, on Medical image segmentation.
+- [Camyla: Scaling Autonomous Research in Medical Image Segmentation](https://arxiv.org/abs/2604.10696) (2026), Gao, Li, Yuan et al., arXiv non-exclusive licence: an agent system's segmentation models, on the same page.
+- [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), Isensee, Jaeger, Kohl et al. (MIC-DKFZ), Apache-2.0: named as a starting point, and its residual-encoder presets cited for training times and Dice on KiTS, on the same page.
+- [Use of MIMIC Data with Large Language Models and Online Services](https://physionet.org/news/post/llm-responsible-use/) (2025), PhysioNet (MIT Laboratory for Computational Physiology), © MIT LCP: its rule against sending its data through APIs, on Clinical note de-identification.
+- [SHIELD: A Diverse Clinical Note Dataset and Distilled Small Language Models for Enterprise-Scale De-identification](https://arxiv.org/abs/2605.03301) (2026), Posada, Love, Datta et al., arXiv non-exclusive licence: a small de-identification model's scores, on the same page.
+- [Hallucination Rates and Reference Accuracy of ChatGPT and Bard for Systematic Reviews](https://doi.org/10.2196/53164) (2024), Chelli, Descamps, Lavoué et al., *JMIR*, CC BY 4.0: hallucinated references, on Clinical evidence review.
+- [Automation of Systematic Reviews with Large Language Models](https://doi.org/10.1101/2025.06.13.25329541) (2025), Cao, Arora, Cento et al., medRxiv preprint, CC BY 4.0: otto-SR's reviews, on the same page.
+- [BWA-MEM2](https://github.com/bwa-mem2/bwa-mem2), Intel Corporation, Heng Li, MIT: named on Genomics pipeline acceleration.
+- [samtools](https://github.com/samtools/samtools), Genome Research Ltd, MIT/Expat: named on Genomics pipeline acceleration.
+- [GATK](https://github.com/broadinstitute/gatk) (HaplotypeCaller), Broad Institute, Apache-2.0: named on Genomics pipeline acceleration.
+- [DeepVariant](https://github.com/google/deepvariant), Google, BSD-3-Clause: named on Genomics pipeline acceleration.
+- [Nextflow](https://github.com/nextflow-io/nextflow), Seqera and the Nextflow contributors, Apache-2.0: named on Genomics pipeline acceleration.
+- [nf-core/sarek](https://github.com/nf-core/sarek), the nf-core community, MIT: named on Genomics pipeline acceleration.
+- [Slurm](https://github.com/SchedMD/slurm), SchedMD, GPL-2.0: named on Genomics pipeline acceleration and Cluster and job scheduling.
+- [MONAI](https://github.com/Project-MONAI/MONAI), Project MONAI contributors, Apache-2.0: named on Medical image segmentation.
+- [PyTorch](https://github.com/pytorch/pytorch), the PyTorch Foundation and contributors (originally Facebook), BSD-style (3-clause): named on Medical image segmentation and Reproducing published results.
+- [The Medical Segmentation Decathlon](https://doi.org/10.1038/s41467-022-30695-9) (2022), Antonelli, Reinke, Bakas et al., Nature Communications, article CC BY 4.0, data CC BY-SA 4.0: named and quoted on Medical image segmentation.
+- [KiTS23](https://kits-challenge.org/kits23/), Heller, Wood, Isensee et al., data CC BY-NC-SA 4.0: named on Medical image segmentation.
+- [45 CFR 164.514, HIPAA de-identification](https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164/subpart-E/section-164.514), US Department of Health and Human Services, US government work: named on Clinical note de-identification.
+- [Philter](https://github.com/BCHSI/philter-ucsf), Norgeot, Muenzen, Peterson et al. (UCSF), BSD-3-Clause; [its paper](https://doi.org/10.1038/s41746-020-0258-y) CC BY 4.0: named on Clinical note de-identification.
+- [Presidio](https://github.com/data-privacy-stack/presidio), Presidio contributors (started at Microsoft), MIT: named on Clinical note de-identification.
+- [Annotating longitudinal clinical narratives for de-identification: the 2014 i2b2/UTHealth corpus](https://doi.org/10.1016/j.jbi.2015.07.020) (2015), Stubbs and Uzuner, © Elsevier: cited on Clinical note de-identification.
+- [The n2c2 NLP research data sets](https://n2c2.dbmi.hms.harvard.edu/data-sets), Harvard DBMI, data use agreement: named on Clinical note de-identification.
+- [Automatic detection of protected health information from clinic narratives](https://doi.org/10.1016/j.jbi.2015.06.015) (2015), Yang and Garibaldi, © Elsevier: cited on Clinical note de-identification.
+- [GDPR, Regulation (EU) 2016/679](https://eur-lex.europa.eu/eli/reg/2016/679/oj), European Union, EU legal text: named on Clinical note de-identification.
+- [Cochrane Handbook for Systematic Reviews of Interventions](https://www.cochrane.org/authors/handbooks-and-manuals/handbook/current), Higgins, Thomas, Chandler et al. (eds.), © The Cochrane Collaboration: named on Clinical evidence review.
+- [RoB 2](https://doi.org/10.1136/bmj.l4898) (2019), Sterne, Savović, Page et al., BMJ, tool CC BY-NC-ND 4.0: named on Clinical evidence review.
+- [PubMed Central](https://pmc.ncbi.nlm.nih.gov/), US National Library of Medicine, each article under its own licence: named on Clinical evidence review, Literature review, Data from the literature and Agronomic trial evidence.
+- [Europe PMC](https://europepmc.org/), EMBL-EBI, each article under its own licence: named on Clinical evidence review, Literature review and Data from the literature.
+- [CENTRAL](https://www.cochranelibrary.com/central), Cochrane, subscription: named on Clinical evidence review.
+- [Embase](https://www.embase.com/), Elsevier, subscription: named on Clinical evidence review.
+- [ONC Health IT Certification Program](https://www.healthit.gov/topic/certification-ehrs/about-onc-health-it-certification-program) and its [§ 170.315(g)(10) test method](https://www.healthit.gov/test-method/standardized-api-patient-and-population-services), ASTP/ONC (US HHS), US government work: cited on FHIR API conformance.
+- [ONC Certification (g)(10) Standardized API Test Kit](https://github.com/onc-healthit/onc-certification-g10-test-kit), ONC, produced by MITRE, Apache-2.0: cited on FHIR API conformance.
+- [Inferno](https://inferno-framework.github.io/) ([inferno-core](https://github.com/inferno-framework/inferno-core)), with its [US Core Test Kit](https://github.com/inferno-framework/us-core-test-kit) and [Bulk Data Access Test Kit](https://github.com/inferno-framework/bulk-data-test-kit), The MITRE Corporation, Apache-2.0: cited on FHIR API conformance.
+- [HL7 FHIR Validator](https://hl7.org/fhir/validator/) ([org.hl7.fhir.core](https://github.com/hapifhir/org.hl7.fhir.core)), HL7 International and the HAPI FHIR contributors, Apache-2.0: named on FHIR API conformance.
+- [HL7 FHIR R4](https://hl7.org/fhir/R4/), HL7 International, CC0: named on FHIR API conformance.
+- [US Core Implementation Guide](https://hl7.org/fhir/us/core/STU6.1/) (6.1.0, with 7.0.0 and 8.0.1), HL7 International, used by permission of HL7: named on FHIR API conformance.
+- [SMART App Launch](https://hl7.org/fhir/smart-app-launch/STU2/) and the [Bulk Data Access Implementation Guide](https://hl7.org/fhir/uv/bulkdata/STU2/), HL7 International and Boston Children's Hospital, © HL7: named on FHIR API conformance.
+- [USCDI](https://isp.healthit.gov/united-states-core-data-interoperability-uscdi), ASTP/ONC, US government work: named on FHIR API conformance.
+- [Synthea](https://github.com/synthetichealth/synthea), The MITRE Corporation, Apache-2.0: synthetic patients from a seed, cited on FHIR API conformance.
+- [LOINC](https://loinc.org/), the Regenstrief Institute, the LOINC licence: named on FHIR API conformance.
+- [UMLS](https://www.nlm.nih.gov/research/umls/), the US National Library of Medicine, the UMLS licence: named on FHIR API conformance.
+- [tx.fhir.org](https://tx.fhir.org/), HL7's FHIR terminology development server, no licence stated: named on FHIR API conformance.
+- [NDJSON](https://github.com/ndjson/ndjson-spec), the ndjson-spec authors, no licence stated: named on FHIR API conformance.
+- [ClinicalTrials.gov](https://clinicaltrials.gov/) and [its API](https://clinicaltrials.gov/api/oas/v2), the US National Library of Medicine, a US government service: cited on Clinical evidence review.
+- [ISRCTN registry](https://www.isrctn.com/), BioMed Central (Springer Nature), its terms allow citing each record with attribution: named on Clinical evidence review.
+- [WHO International Clinical Trials Registry Platform](https://www.who.int/clinical-trials-registry-platform), the World Health Organization, WHO's terms of use: named on Clinical evidence review.
+- [Compliance with legal requirement to report clinical trial results on ClinicalTrials.gov](https://doi.org/10.1016/S0140-6736(19)33220-9) (2020), DeVito, Bacon and Goldacre, The Lancet, © Elsevier: cited on Clinical evidence review.
+- [COMPare: a prospective cohort study correcting and monitoring 58 misreported trials in real time](https://doi.org/10.1186/s13063-019-3173-2) (2019), Goldacre, Drysdale, Dale et al., CC BY: cited on Clinical evidence review.
+
+**Agriculture.**
+
+- [The New Agronomists: Language Models are Experts in Crop Management](https://arxiv.org/abs/2403.19839) (2024), Wu, Lai, Chen et al., arXiv non-exclusive licence: a policy's water, nitrogen and yield in a crop simulator, on Irrigation and fertiliser planning.
+- [Nitrogen management with reinforcement learning and crop growth models](https://doi.org/10.1017/eds.2023.28) (2023), Kallenberg, Overweg, van Bree et al. (CropGym), *Environmental Data Science*, CC BY 4.0: a crop model whose nitrogen loss ignored timing, and the cap on the agent's doses that it needed, on the same page.
+- [gym-DSSAT](https://gitlab.inria.fr/rgautron/gym_dssat_pdi), Gautron and Padrón, BSD-3-Clause, and [DSSAT-CSM](https://github.com/DSSAT/dssat-csm-os), the DSSAT Foundation, BSD-3-Clause: the crop simulator, named on the same page.
+- [Cherry Tomato Production in Intelligent Greenhouses](https://doi.org/10.3390/s20226430) (2020), Hemming, Zwart, Elings et al., *Sensors*, CC BY 4.0: the Autonomous Greenhouse Challenge's results, on Greenhouse climate control.
+- [GL-Gym (GreenLight-Gym)](https://github.com/BartvLaatum/GreenLight-Gym2), van Laatum, van Henten, Boersma, AGPL-3.0: a greenhouse simulator, named on the same page.
+- [Using machine learning for crop yield prediction in the past or the future](https://doi.org/10.3389/fpls.2023.1128388) (2023), Morales and Villalobos, *Frontiers in Plant Science*, CC BY 4.0: random splits against future years, on Crop yield forecasting.
+- [CY-Bench](https://github.com/WUR-AI/AgML-CY-Bench), Kallenberg, Paudel, Baja et al. (AgML), EUPL-1.2, each data source under its own licence: a benchmark that leaves whole years out, on the same page.
+- [FAO Irrigation and Drainage Paper 56: Crop evapotranspiration](https://www.fao.org/4/x0490e/x0490e00.htm) (1998), Allen, Pereira, Raes and Smith; FAO, © FAO: named on Irrigation and fertiliser planning.
+- [APSIM](https://github.com/APSIMInitiative/ApsimX), APSIM Initiative, APSIM General Use Licence: named on Irrigation and fertiliser planning.
+- [AquaCrop](https://www.fao.org/aquacrop/en/), FAO; source © KU Leuven, BSD-3-Clause: named on Irrigation and fertiliser planning.
+- [PCSE](https://github.com/ajwdewit/pcse) (WOFOST, LINTUL-3), Allard de Wit, Wageningen Environmental Research, EUPL 1.1 or later: named on Irrigation and fertiliser planning.
+- [GreenLight](https://github.com/davkat1/GreenLight), David Katzin and contributors, BSD-3-Clause-Clear: named on Greenhouse climate control.
+- [GreenLight – An open source model for greenhouses with supplemental lighting](https://doi.org/10.1016/j.biosystemseng.2020.03.010) (2020), Katzin, van Mourik, Kempkes, van Henten, CC BY 4.0: cited on Greenhouse climate control.
+- [JRC MARS Bulletin](https://joint-research-centre.ec.europa.eu/projects-and-activities/crop-monitoring-and-yield-forecasting_en), European Commission JRC, © EU, CC BY 4.0 reuse: named on Crop yield forecasting.
+- [The Yield Forecasting Program of NASS](https://www.nass.usda.gov/Publications/Methodology_and_Data_Quality/Advanced_Topics/Yield%20Forecasting%20Program%20of%20NASS_2023.pdf) (2023), USDA NASS, US government work: cited on Crop yield forecasting.
+- [Corn Nitrogen Rate Calculator](https://www.cornnratecalc.org/), soil fertility specialists of Corn Belt universities (Illinois, Indiana, Iowa, Michigan, Minnesota, Ohio, Wisconsin), no licence stated: the MRTN approach, cited on Agronomic trial evidence.
+- [N-FACT](https://stories.cals.iastate.edu/2025/05/new-tool-helps-find-goldilocks-nitrogen-level), the Iowa Nitrogen Initiative at Iowa State University, no licence stated: named on Agronomic trial evidence.
+- [SARE](https://www.sare.org/) and its [project reports](https://projects.sare.org/), Sustainable Agriculture Research and Education (USDA NIFA), © SARE: named on Agronomic trial evidence.
+- [Cover Crop Economics: Opportunities to Improve Your Bottom Line in Row Crops](https://www.sare.org/resources/cover-crop-economics/) (2019), Myers, Weber and Tellatin (SARE Outreach), © SARE: cited on Agronomic trial evidence.
+- [USDA Agricultural Research Service](https://www.ars.usda.gov/), USDA, US government work: named on Agronomic trial evidence.
+- [Practical Farmers of Iowa](https://practicalfarmers.org/) and its report [Winter Cereal Rye Cover Crop Effect on Cash Crop Yield](https://practicalfarmers.org/resources/research-reports/winter-cereal-rye-cover-crop-effect-on-cash-crop-yield-4/) (2020), with Iowa Learning Farms, © Practical Farmers of Iowa: cited on Agronomic trial evidence.
+- [Iowa Learning Farms](https://www.iowalearningfarms.org/), Iowa State University, © Iowa Learning Farms: named on Agronomic trial evidence.
+- [Nebraska On-Farm Research Network](https://on-farm-research.unl.edu/), University of Nebraska–Lincoln, Nebraska Extension, no licence stated: cited on Agronomic trial evidence.
+- [Iowa State University Research and Demonstration Farms Progress Reports](https://iastatedigitalpress.com/farmreports/), including [Enhancing Corn Yield in a Winter Cereal Rye Cover Crop System in Southeast Iowa](https://iastatedigitalpress.com/farmreports/article/id/790) (2017), Lundvall, Patel and Sawyer (Iowa State University Digital Press), all rights reserved: cited on Agronomic trial evidence.
+- [Iowa Nutrient Reduction Strategy](https://www.nutrientstrategy.iastate.edu/), Iowa State University with Iowa's agriculture and natural resources departments, no licence stated: named on Agronomic trial evidence.
+- [A critical review of the impacts of cover crops on nitrogen leaching, net greenhouse gas balance and crop productivity](https://doi.org/10.1111/gcb.14644) (2019), Abdalla, Hastings, Cheng et al., CC BY 4.0: cited on Agronomic trial evidence.
+- [When do cover crops reduce nitrate leaching? A global meta-analysis](https://doi.org/10.1111/gcb.16269) (2022), Nouri, Lukas, Singh et al., CC BY 4.0: cited on Agronomic trial evidence.
+- [A meta-analysis of hairy vetch as a previous cover crop for maize](https://doi.org/10.1016/j.heliyon.2023.e22621) (2023), Rodriguez, Vargas, Correndo et al., CC BY-NC-ND 4.0: cited on Agronomic trial evidence.
+
+**Energy and buildings.**
+
+- [The CityLearn Challenge 2022: Overview, Results, and Lessons Learned](https://proceedings.mlr.press/v220/nweye23a.html) (2023), Nweye, Nagy, Mohanty et al., PMLR, © the authors: a challenge scored on buildings the teams never saw, on Building energy control.
+- [Large Language Models for HVAC Operations in Building Energy Systems: A Critical Review](https://arxiv.org/abs/2609.05314) (2026), Neubauer, Hong, Li et al., arXiv non-exclusive licence: where language models fit in building control, on the same page.
+- [BOPTEST](https://github.com/ibpsa/project1-boptest), IBPSA Project 1, BSD-3-Clause (revised): building test cases, named on the same page.
+- [ASHRAE Guideline 36, High-Performance Sequences of Operation for HVAC Systems](https://www.ashrae.org/news/ashraejournal/guideline-36-2021-what-s-new-and-why-it-s-important), ASHRAE, © ASHRAE, a paid standard: named on Building energy control.
+- [Modelica Buildings Library](https://github.com/lbl-srg/modelica-buildings), Modelica Association, IBPSA, LBNL and contributors, BSD-3-Clause (modified): named on Building energy control, and on Building simulation validation.
+- [Modelica Language Specification](https://github.com/modelica/ModelicaSpecification), Modelica Association, CC BY-SA 4.0: named on Building energy control.
+- [EnergyPlus](https://github.com/NatLabRockies/EnergyPlus), US DOE; University of Illinois, LBNL, ORNL and contributors, BSD-3-like: named on Building energy control, and on Building simulation validation.
+- [CityLearn](https://github.com/citylearn-project/CityLearn), the CityLearn project, MIT: named on Building energy control.
+- [Improvements to Generator Interconnection Procedures and Agreements, Order No. 2023](https://www.federalregister.gov/documents/2023/09/06/2023-16628/improvements-to-generator-interconnection-procedures-and-agreements) (2023) and [Order No. 2023-A](https://www.federalregister.gov/documents/2024/04/16/2024-06563/improvements-to-generator-interconnection-procedures-and-agreements) (2024), the Federal Energy Regulatory Commission, US government work: cited on Interconnection and market rules.
+- [govinfo](https://www.govinfo.gov/), the US Government Publishing Office, US government works: named on Interconnection and market rules.
+- [FERC eLibrary](https://elibrary.ferc.gov/eLibrary/search), the Federal Energy Regulatory Commission, no licence stated: named on Interconnection and market rules.
+- [Queued Up: 2026 Edition](https://eta-publications.lbl.gov/publications/queued-2026-edition-characteristics) (2026), Rand, Cheyette, Talley et al. (Lawrence Berkeley National Laboratory), its data CC BY 4.0: interconnection queue completion rates and durations, cited on Interconnection and market rules.
+- The grid operators' interconnection pages: [CAISO](https://www.caiso.com/generation-transmission/generation/generator-interconnection), [ISO New England](https://www.iso-ne.com/system-planning/interconnection-service), [MISO](https://www.misoenergy.org/planning/resource-utilization/GI_Queue/) (with its queue data), [NYISO](https://www.nyiso.com/interconnections), [PJM](https://www.pjm.com/planning/service-requests) (© PJM), [SPP](https://www.spp.org/engineering/generator-interconnection/) and [ERCOT's Planning Guide](https://www.ercot.com/mktrules/guides/planning/current), each no licence stated unless marked: named on Interconnection and market rules.
+- [CPUC Electric Rule 21](https://www.cpuc.ca.gov/Rule21), the California Public Utilities Commission, no licence stated: named on Interconnection and market rules.
+- [New York Standardized Interconnection Requirements](https://dps.ny.gov/distributed-generation-information), the New York State Department of Public Service, no licence stated: named on Interconnection and market rules.
+- [ANSI/ASHRAE Standard 140-2023, Method of Test for Evaluating Building Performance Simulation Software](https://www.ashrae.org/technical-resources/bookstore/ashrae-building-energy-simulation-and-performance-modeling-resources), ASHRAE, © ASHRAE, a paid standard, with its free [Addendum a](https://www.ashrae.org/file%20library/technical%20resources/standards%20and%20guidelines/standards%20addenda/140_2023_a_20250829.pdf) (2025), [Addendum b](https://www.ashrae.org/file%20library/technical%20resources/standards%20and%20guidelines/standards%20addenda/140_2023_b_20260424.pdf) (2026) and the [Standards Actions of 14 August 2026](https://www.ashrae.org/file%20library/technical%20resources/standards%20and%20guidelines/standards%20actions/sa-aug_14_2026.pdf): cited on Building simulation validation.
+- [Addendum at to ANSI/ASHRAE/IES Standard 90.1-2022](https://www.ashrae.org/file%20library/technical%20resources/standards%20and%20guidelines/standards%20addenda/90_1_2022_at_20250311.pdf) (2025), ASHRAE and IES, © ASHRAE: cited on Building simulation validation.
+- [BESTEST-GSR](https://github.com/NatLabRockies/BESTEST-GSR), the National Laboratory of the Rockies (Alliance for Energy Innovation), a BSD-style licence: named on Building simulation validation.
+- [OpenStudio](https://github.com/NatLabRockies/OpenStudio), the National Laboratory of the Rockies (Alliance for Energy Innovation), a BSD-style licence: named on Building simulation validation.
+
+**Operations and logistics.**
+
+- [An In-depth Study of LLM Contributions to the Bin Packing Problem](https://arxiv.org/abs/2510.27353) (2025), Herrmann and Pallez, CC BY 4.0: heuristics that "are not robust to variations in the data distribution", on Cluster and job scheduling.
+- [VRPAgent: LLM-Driven Discovery of Heuristic Operators for Vehicle Routing Problems](https://arxiv.org/abs/2510.07073) (2025), Hottung, Berto, Hua et al., arXiv non-exclusive licence: moves that beat a leading routing solver, on Vehicle routing.
+- [PyVRP](https://github.com/PyVRP/PyVRP), Wouda, Lan, Kool, MIT: a routing solver, named on the same page.
+- [kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator), Kubernetes SIGs, Apache-2.0: named on Cluster and job scheduling.
+- [Google cluster-usage traces](https://github.com/google/cluster-data), Google, CC BY 4.0: named on Cluster and job scheduling.
+- [Benchmarks for basic scheduling problems](https://doi.org/10.1016/0377-2217(93)90182-M) (1993), É. Taillard, EJOR, © Elsevier: named on Cluster and job scheduling.
+- [A heuristic algorithm for the m-machine, n-job flow-shop sequencing problem](https://doi.org/10.1016/0305-0483(83)90088-9) (1983), Nawaz, Enscore, Ham, Omega, © Elsevier: named on Cluster and job scheduling.
+- [A simple and effective iterated greedy algorithm for the permutation flowshop scheduling problem](https://doi.org/10.1016/j.ejor.2005.12.009) (2007), Ruiz, Stützle, EJOR, © Elsevier: named on Cluster and job scheduling.
+- [OR-Tools](https://github.com/google/or-tools), Google, Apache-2.0: named on Vehicle routing, and its CP-SAT solver on Staff rostering.
+- [HGS-CVRP](https://github.com/vidalt/HGS-CVRP), Thibaut Vidal, MIT: named on Vehicle routing.
+- [CVRPLIB](https://galgos.inf.puc-rio.br/cvrplib/), PUC-Rio Galgos group, terms of use, no licence stated: named on Vehicle routing.
+- [New benchmark instances for the Capacitated Vehicle Routing Problem](https://doi.org/10.1016/j.ejor.2016.08.012) (2017), Uchoa, Pecin, Pessoa et al., EJOR, © Elsevier: named on Vehicle routing.
+- [UFLPA Entity List](https://www.dhs.gov/uflpa-entity-list), DHS for the Forced Labor Enforcement Task Force, US government work: named on Supply chain mapping.
+- [Uyghur Forced Labor Prevention Act, Public Law 117-78](https://www.govinfo.gov/content/pkg/PLAW-117publ78/html/PLAW-117publ78.htm), the US Congress, public domain: named on Supply chain mapping.
+- [UFLPA Strategy](https://www.dhs.gov/uflpa-strategy) and its updates, the Forced Labor Enforcement Task Force (DHS), US government work: named on Supply chain mapping.
+- U.S. Customs and Border Protection's [UFLPA page](https://www.cbp.gov/trade/forced-labor/UFLPA), [FAQs: UFLPA Enforcement](https://www.cbp.gov/trade/forced-labor/faqs-uflpa-enforcement), [Forced Labor Enforcement Operational Guidance for Importers](https://www.cbp.gov/document/guidance/cbp-forced-labor-enforcement-operational-guidance-importers) and [Withhold Release Orders and Findings](https://www.cbp.gov/trade/forced-labor/withhold-release-orders-and-findings), public domain unless marked: cited on Supply chain mapping.
+- [Federal Register](https://www.federalregister.gov/) and [its API](https://www.federalregister.gov/developers/documentation/api/v1), the Office of the Federal Register and the GPO, US government work: named on Supply chain mapping.
+- [Modern slavery statement registry](https://modern-slavery-statement-registry.service.gov.uk/), the UK Home Office, no licence stated: cited on Supply chain mapping.
+- [Conflict Minerals Reporting Template](https://www.responsiblemineralsinitiative.org/reporting-templates/cmrt/) and the [Responsible Minerals Assurance Process](https://www.responsiblemineralsinitiative.org/responsible-minerals-assurance-process/), the Responsible Minerals Initiative, RMI's terms: named on Supply chain mapping.
+- [Form SD and EDGAR](https://www.sec.gov/resources-small-businesses/small-business-compliance-guides/conflict-minerals-disclosure), the U.S. Securities and Exchange Commission, public information: named on Supply chain mapping.
+- The EU's [Forced Labour Regulation (EU) 2024/3015](https://single-market-economy.ec.europa.eu/single-market/goods/forced-labour-regulation/what-forced-labour-regulation-and-how-does-it-work_en), [Conflict Minerals Regulation (EU) 2017/821](https://policy.trade.ec.europa.eu/development-and-sustainability/conflict-minerals-regulation_en) and [Corporate Sustainability Due Diligence Directive (EU) 2024/1760](https://commission.europa.eu/topics/business-and-industry/company-law-and-corporate-governance/corporate-sustainability-due-diligence_en), the European Union, the Commission's pages CC BY 4.0: named on Supply chain mapping.
+- [Working Time Directive 2003/88/EC](https://employment-social-affairs.ec.europa.eu/policies-and-activities/rights-work/labour-law/working-conditions/working-time-directive_en), the European Commission's page, CC BY 4.0: cited on Staff rostering.
+- [INRC-II: The Second International Nurse Rostering Competition](https://mobiz.vives.be/inrc2/), Dang, De Causmaecker, Ceschia, Schaerf and Haspeslagh, no licence stated, with [its rules](https://arxiv.org/abs/1501.04177) (2015, arXiv non-exclusive licence) and [its report](https://link.springer.com/article/10.1007/s10479-018-2816-0) (2019, © Springer Nature): cited on Staff rostering.
+- [Shift Scheduling Benchmark Data Sets](https://www.schedulingbenchmarks.org/), from Burke and Curtois's and Qu and Curtois's work, no licence stated: instances and best known solutions, cited on Staff rostering.
+- [Timefold Solver](https://github.com/TimefoldAI/timefold-solver), Timefold, Apache-2.0: named on Staff rostering.
+- [HiGHS](https://github.com/ERGO-Code/HiGHS), the HiGHS team, MIT: named on Staff rostering.
+
+**Robotics.**
+
+- [Eureka: Human-Level Reward Design via Coding Large Language Models](https://arxiv.org/abs/2310.12931) (2023), Ma, Liang, Wang et al., arXiv non-exclusive licence: reward functions written by a language model and scored apart, on Robot reward design.
+- [Specification gaming: the flip side of AI ingenuity](https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/) (2020), Krakovna, Uesato, Mikulik et al. (DeepMind), © Google DeepMind: examples of agents gaming their rewards, on the same page.
+- [MuJoCo Playground](https://github.com/google-deepmind/mujoco_playground), Zakka, Tabanpour, Liao et al. (Google DeepMind), Apache-2.0: a GPU robot simulator, whose PandaPickCube training settings and Go1 reward terms are described on the same page.
+- [Isaac Lab](https://github.com/isaac-sim/IsaacLab), The Isaac Lab Project Developers, BSD-3-Clause: named on Robot reward design.
+- [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347) (2017), Schulman, Wolski, Dhariwal, Radford, Klimov, arXiv non-exclusive licence: named on Robot reward design.
+- [ROS 1](https://github.com/ros/ros_comm) (Noetic, with catkin, roscpp, rospy and rostest), Open Robotics and contributors, BSD-3-Clause: named on ROS 1 to ROS 2 migration.
+- [ROS 2](https://github.com/ros2/ros2) (Jazzy, Lyrical and Humble, with ament, rclcpp and rclpy), Open Robotics and contributors, Apache-2.0 for the core, each package under its own licence: named on ROS 1 to ROS 2 migration.
+- [ROS 2 Documentation](https://docs.ros.org/en/jazzy/), with its migration guides and its launch_testing tutorial, Open Robotics, CC BY 4.0: cited on ROS 1 to ROS 2 migration.
+- [Upcoming ROS 1 End of Life](https://www.ros.org/blog/noetic-eol/), Open Robotics, no licence stated: cited on ROS 1 to ROS 2 migration.
+- [REP 2000](https://reps.openrobotics.org/rep-2000/), the ROS 2 platform tiers, the REP authors, public domain: named on ROS 1 to ROS 2 migration.
+- [ros1_bridge](https://github.com/ros2/ros1_bridge), the ROS 2 project, Apache-2.0: cited on ROS 1 to ROS 2 migration.
+- [colcon](https://github.com/colcon/colcon-core), the colcon contributors, Apache-2.0: named on ROS 1 to ROS 2 migration.
+- [launch_testing](https://github.com/ros2/launch), the ROS 2 project, Apache-2.0: named on ROS 1 to ROS 2 migration.
+- [rosbag2](https://github.com/ros2/rosbag2), the ROS 2 project, Apache-2.0: named on ROS 1 to ROS 2 migration.
+- [Gazebo](https://github.com/gazebosim/gz-sim) (Harmonic and Jetty), Open Robotics, Apache-2.0: named on ROS 1 to ROS 2 migration.
+- [Gazebo Classic](https://github.com/gazebosim/gazebo-classic), the Open Source Robotics Foundation, Apache-2.0, and its [end-of-life notice](https://discourse.openrobotics.org/t/gazebo-classic-11-has-reached-end-of-life-x-post-gazebo-sim-community/41852) (2025): cited on ROS 1 to ROS 2 migration.
+- [SDFormat](https://github.com/gazebosim/sdformat), Open Robotics, Apache-2.0: named on ROS 1 to ROS 2 migration.
+- [ros_gz](https://github.com/gazebosim/ros_gz), Open Robotics, Apache-2.0: named on ROS 1 to ROS 2 migration.
+- [Nav2](https://github.com/ros-navigation/navigation2), with its DWB, Regulated Pure Pursuit and MPPI controllers, the ros-navigation project, Apache-2.0, LGPL-2.1-or-later and BSD-3-Clause by package: named on ROS 1 to ROS 2 migration.
+- [The ROS 1 navigation stack](https://github.com/ros-planning/navigation) (move_base and AMCL), ros-planning, BSD and LGPL by package: named on ROS 1 to ROS 2 migration.
+- [MoveIt](https://github.com/moveit/moveit) and [MoveIt 2](https://github.com/moveit/moveit2), the MoveIt maintainers, BSD-3-Clause: named on ROS 1 to ROS 2 migration.
+
+**Finance.**
+
+- [R&D-Agent-Quant: A Multi-Agent Framework for Data-Centric Factors and Model Joint Optimization](https://arxiv.org/abs/2505.15155) (2025), Li, Yang, Yang et al., CC BY-NC-SA 4.0: an agent's returns on a period it was not tuned on, on Trading strategy research.
+- [Pseudo-Mathematics and Financial Charlatanism: The Effects of Backtest Overfitting on Out-of-Sample Performance](https://doi.org/10.1090/noti1105) (2014), Bailey, Borwein, López de Prado and Zhu, *Notices of the AMS*, © the American Mathematical Society: how many configurations a backtest can bear, on the same page.
+- [QuantLib](https://github.com/lballabio/QuantLib), the QuantLib contributors, a BSD-style licence: a pricing library, named on Pricing and risk engine performance, and its Heston stochastic local volatility models on Pricing model validation.
+- [Qlib](https://github.com/microsoft/qlib), Microsoft, MIT: named on Trading strategy research.
+- [The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting and Non-Normality](https://papers.ssrn.com/abstract=2460551) (2014), Bailey and López de Prado, Journal of Portfolio Management, © the authors: named on Trading strategy research.
+- [The Probability of Backtest Overfitting](https://doi.org/10.21314/JCF.2016.322) (2017), Bailey, Borwein, López de Prado and Zhu, Journal of Computational Finance, © Infopro Digital: named on Trading strategy research.
+- [Open Source Risk Engine](https://github.com/OpenSourceRisk/Engine), Quaternion Risk Management and Acadia, Modified BSD: named on Pricing and risk engine performance.
+- [STAC-A2](https://docs.stacresearch.com/a2), Strategic Technology Analysis Center (STAC), proprietary, results for subscribers: named on Pricing and risk engine performance.
+- [Smoking Adjoints: fast evaluation of Greeks in Monte Carlo calculations](https://ora.ox.ac.uk/objects/uuid:f536b1a8-c988-4bda-9c5f-a322652139fd) (2005), Giles and Glasserman, Oxford University Research Archive terms: named on Pricing and risk engine performance.
+- [Accessing EDGAR Data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data) and [EDGAR Application Programming Interfaces](https://www.sec.gov/search-filings/edgar-application-programming-interfaces) (data.sec.gov: company concepts, company facts and frames), the U.S. Securities and Exchange Commission, US government work: the rules for automated access and the XBRL data, cited on Research from public filings.
+- [Regulation S-K, Item 1406](https://www.ecfr.gov/current/title-17/chapter-II/part-229/subpart-229.1400/section-229.1406), with [govinfo's 2025 edition](https://www.govinfo.gov/content/pkg/CFR-2025-title17-vol3/xml/CFR-2025-title17-vol3-sec229-1406.xml), the SEC, US government work: the disclosure of uninsured deposits, cited on Research from public filings.
+- [SEC staff letter to Stock Yards Bancorp](https://www.sec.gov/Archives/edgar/data/835324/000000000024013437/filename2.txt) (2024), the SEC's Division of Corporation Finance, US government work: cited on Research from public filings.
+- [FDIC BankFind Suite API](https://api.fdic.gov/banks/docs/), the Federal Deposit Insurance Corporation, no licence stated: Call Report figures by bank, named on Research from public filings.
+- [FinanceBench: A New Benchmark for Financial Question Answering](https://arxiv.org/abs/2311.11944) (2023), Islam, Kannappan, Kiela, Qian, Scherrer and Vidgen, CC BY-NC-ND 4.0: how often models answered questions on filings wrongly, cited on Research from public filings.
+- [SR 26-2: Revised Guidance on Model Risk Management](https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm) (2026), with [its attachment](https://www.federalreserve.gov/supervisionreg/srletters/SR2602a1.pdf), the Board of Governors of the Federal Reserve System, the OCC and the FDIC, US government work: the validation a model needs, which replaced SR 11-7, cited on Pricing model validation.
+- [A Closed-Form Solution for Options with Stochastic Volatility with Applications to Bond and Currency Options](https://doi.org/10.1093/rfs/6.2.327) (1993), Steven L. Heston, © Oxford University Press: the Heston model, named on Pricing model validation.
+
 ## The maintainers' own public projects
 
+- [tensorless](https://github.com/iammrduncan/tensorless) (Apache-2.0), at [tensorless.dev](https://tensorless.dev): the partner of the first study. It made the PN weight format and Qwen3.8-27B-PN3, and ships the engine that the study's campaigns tuned; the study cites its published receipts and pages, and the study and the site's own pages show its logo. Its home page was also studied for the site's own pages, above.
+- [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0, as fxbot.sh states), at [fxbot.sh](https://fxbot.sh): its home page, studied for the site's own pages, above.
 - [Magnesium](https://github.com/iammrduncan/magnesium) (MIT): the dashboard's design, above, and its notes on Claude and Codex sign-in, read for subscriptions.
 - [skills](https://github.com/iammrduncan/skills) (MIT): the maintainers' skills for coding agents, among them the ones for Simplified Technical English and for writing documentation.
 
@@ -282,6 +605,7 @@ Thermite's repository holds no code, text or data copied from another project, e
 
 - the licence texts it ships with programs in its images: `containers/control/kubectl/LICENSE` (Apache-2.0, from Kubernetes), `containers/harness/opencode/LICENSE` (MIT, © 2025 opencode), and `containers/harness/codex/LICENSE` and `NOTICE` (Apache-2.0, © 2025 OpenAI, with the Ratatui notice above);
 - the dashboard's colour tokens, from T3 Code through Magnesium, above;
+- tensorless's logo, Bitsy, on the first study's page and on the site's own pages: `docs/_site/src/assets/partners/tensorless.svg` (Apache-2.0, from the maintainers' own tensorless, above);
 - the statistics tests' reference values, numbers computed with SciPy (`tests/helpers/data/stats-reference.json`).
 
 The maintainers' own tooling in `.agents/` carries its own notices, such as [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT).

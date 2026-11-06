@@ -1,0 +1,123 @@
+---
+// Four of the decode hill climb's 27 champions, with where it started, from the judge's ledger.
+// The numbers are src/data/decode-climb.json's.
+import data from "../../data/decode-climb.json";
+
+const start = Date.parse(data.start);
+const when = (minutes: number) =>
+  new Date(start + minutes * 60000).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  });
+const champions = data.champions as [number, number, number, number][];
+const pick = [2, 11, 20, 28].map((seq) => champions.find((c) => c[1] === seq)!);
+---
+
+<figure class="ledger">
+  <figcaption>
+    <b>Decode speed of the champion, from the judge's ledger</b>
+    <span>Qwen3.8-27B-PN3 on one Tesla P100. Each champion's speed is the start's, multiplied by every gain the judge confirmed.</span>
+  </figcaption>
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Time (UTC)</th>
+        <th scope="col">Version</th>
+        <th scope="col" class="num">Gain</th>
+        <th scope="col" class="num">Tokens a second</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{when(0)}</td>
+        <td>Starting point</td>
+        <td class="num"></td>
+        <td class="num">{data.seed.toFixed(1)}</td>
+      </tr>
+      {
+        pick.map((c) => (
+          <tr>
+            <td>{when(c[0])}</td>
+            <td>Champion {c[1]}</td>
+            <td class="num">+{c[2].toFixed(2)}%</td>
+            <td class="num">{c[3].toFixed(1)}</td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+  <p class="note">Champion 20 was the first to pass Q3Floor, the best standard 3-bit file, at {data.reference} tokens a second.</p>
+</figure>
+
+<style>
+  .ledger {
+    margin: 0;
+    padding: 1.3rem 1.4rem 1.2rem;
+    border: 1px solid var(--rule-2);
+    border-radius: 16px;
+    background: var(--panel);
+    color: var(--ink-2);
+    font-size: 0.9rem;
+  }
+  figcaption b {
+    display: block;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  figcaption span {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+  table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    padding: 0 0 0.45rem;
+    border-bottom: 1px solid var(--rule-2);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-align: left;
+  }
+  td {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  th + th,
+  td + td {
+    padding-left: 0.75rem;
+  }
+  .num {
+    text-align: right;
+  }
+  td:last-child {
+    color: var(--ink);
+    font-weight: 560;
+  }
+  .note {
+    margin: 0.75rem 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  @media (max-width: 26rem) {
+    th:first-child,
+    td:first-child {
+      display: none;
+    }
+    th + th,
+    td + td {
+      padding-left: 0;
+    }
+  }
+</style>

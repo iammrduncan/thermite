@@ -1,0 +1,82 @@
+---
+title: "Thermite for enterprises"
+description: "Run Thermite on your own clusters and machines, with your own models, images and repositories: agents propose, a judge your team controls decides, and every command and result is signed and kept."
+type: use-case
+sidebar:
+  order: 4
+  label: "Enterprises"
+---
+
+import { LinkCard } from "@astrojs/starlight/components";
+
+Performance, inference and platform teams already run the loop that Thermite automates: change something, measure it, keep it if it is better. Agents can run that loop around the clock, but a team can only use what it can trust and govern. Thermite is built for that: agents only propose, code your team controls measures and decides, and every step is signed and recorded. It runs where your code and data already are.
+
+## Use cases
+
+Each of these runs on machines and clusters you control, with your own repositories, data and model endpoint.
+
+- **Software:** [Code performance optimization](../software/faster-code.md)
+- **Software:** [Codebase migration](../software/migrations.md)
+- **Software:** [Technology evaluation](../software/technology-evaluation.md)
+- **AI and machine learning:** [LLM application quality](../ai/llm-quality.md)
+- **AI and machine learning:** [Model and method landscape](../ai/method-landscape.md)
+- **Science:** [Simulation speed and accuracy](../science/simulations.md)
+- **Science:** [Literature review](../science/literature.md)
+- **Science:** [Data from the literature](../science/literature-data.md)
+- **Science:** [Reproducing published results](../science/reproduction.md)
+- **Healthcare and life sciences:** [Genomics pipeline acceleration](../healthcare/genomics.md)
+- **Healthcare and life sciences:** [Medical image segmentation](../healthcare/imaging.md)
+- **Healthcare and life sciences:** [Clinical note de-identification](../healthcare/clinical-notes.md)
+- **Healthcare and life sciences:** [Clinical evidence review](../healthcare/evidence-reviews.md)
+- **Healthcare and life sciences:** [FHIR API conformance](../healthcare/fhir-conformance.md)
+- **Agriculture:** [Irrigation and fertiliser planning](../agriculture/crop-management.md)
+- **Agriculture:** [Greenhouse climate control](../agriculture/greenhouses.md)
+- **Agriculture:** [Crop yield forecasting](../agriculture/yield-forecasts.md)
+- **Agriculture:** [Agronomic trial evidence](../agriculture/trial-evidence.md)
+- **Energy and buildings:** [Building energy control](../energy/buildings.md)
+- **Energy and buildings:** [Interconnection and market rules](../energy/interconnection.md)
+- **Energy and buildings:** [Building simulation validation](../energy/simulation-validation.md)
+- **Operations and logistics:** [Cluster and job scheduling](../operations/scheduling.md)
+- **Operations and logistics:** [Supply chain mapping](../operations/supply-chain-mapping.md)
+- **Operations and logistics:** [Staff rostering](../operations/rostering.md)
+- **Robotics:** [ROS 1 to ROS 2 migration](../robotics/ros2-migration.md)
+- **Finance:** [Pricing and risk engine performance](../finance/pricing.md)
+- **Finance:** [Research from public filings](../finance/filings-research.md)
+- **Finance:** [Pricing model validation](../finance/model-validation.md)
+
+## Governance built in
+
+- **Separation of duties, enforced.** Agents run as operating-system users that can neither read nor change the judge. The judge builds, runs and measures each change under users of its own, and only its verdict promotes a change. "The agent says it is faster" and "it is faster" stay separate ([Why agents never judge](../../explanation/why-agents-never-judge.md), [Isolation inside a rig](../../explanation/isolation.md)).
+- **Signed commands, signed results.** Control signs every command it sends a rig, and the rig's harness signs every report. The supervisor in between carries both and can forge neither ([Trust between control and rigs](../../explanation/trust.md)).
+- **A complete record.** Each rig's ledger keeps every experiment, attempt, measurement and verdict, with the judge's reasons. Control keeps a copy of every rig's events, exports their results, and backs them up ([Back up and restore control](../../how-to/operate/backup-and-restore.md)). Retention policies remove only what you choose, where and when you say ([Remove what Thermite keeps](../../how-to/operate/retention-policies.md)).
+- **People decide what matters.** Choose what waits for a person: new champions, audits, reviews and "not possible" endings. On a rig with an auditor, a model reads a surprisingly large win for anything that games the measurement before it is kept ([Decide what waits for you](../../how-to/campaigns/decide-what-waits.md)).
+- **Roles for people, scripts and agents.** One owner signs in to the dashboard and approves. Operator and agent tokens let scripts and AI assistants watch and steer, but never decide; a reader token lets a metrics scraper such as Prometheus read `/metrics` ([Tokens and roles](../../reference/tokens.md)).
+- **Keys go only where they are used.** Control seals every key, sign-in and kubeconfig you give it, and hands a rig only what that rig uses ([Who holds your keys](../../explanation/who-holds-your-keys.md)).
+
+## On your infrastructure
+
+- **Kubernetes, your way.** Control sets a rig up in a namespace it creates, or in a slot your platform team made with a namespaced role and a resource quota. Network rules keep the harness to DNS, public addresses and the addresses you list, and the rig's isolation check fails if a lane can reach the cluster's API server ([Add a rig on a Kubernetes cluster](../../how-to/install/rig-on-a-cluster.md)).
+- **Machines and cloud GPUs.** Control also sets rigs up on machines over SSH, and launches them on RunPod with a spend limit.
+- **Your images, repositories and models.** Build Thermite's images into your own registry, give rigs your private repositories with deploy keys, and point the agents at your own model endpoint or gateway ([Push the images to your own registry](../../how-to/install/own-registry.md), [Use a private repository](../../how-to/campaigns/private-repository.md), [Choose a model](../../how-to/models/choose-a-model.md)).
+- **One place to see every campaign.** One dashboard shows every campaign on every rig, with model use and cost per run. A REST API, MCP and the `thermite` command line give your tools the same actions ([Script Thermite with the REST API](../../how-to/automate/rest-api.md)).
+
+## What to know first
+
+- **One owner for each installation.** Thermite is self-hosted and built for one researcher or one lab, not for separate customers sharing one installation. Each team runs its own control. There is no single sign-on.
+- **API keys for shared use.** A Claude or ChatGPT plan may serve only its owner's own Thermite; a Thermite that several people use takes API keys.
+- **Agents run code that a model wrote.** The harness reaches only DNS, the internet and its model endpoint, and on Kubernetes your network rules narrow that. On RunPod, Thermite adds no network rules. Read [the security model](../../explanation/security-model.md) and [Known limits](../../reference/known-limits.md).
+- **Thermite is 0.x.** Versions make no upgrade promise yet. It is open source under the Apache License 2.0.
+
+## Evaluate it
+
+1. Read [the security model](../../explanation/security-model.md): what each part can reach and what it trusts.
+2. [Install on one machine](../../tutorials/first-run.md) and watch the judge's smoke check give a dozen known cheats their expected verdicts.
+3. [Run the stack](../../how-to/install/one-machine.md) on a machine your team controls, with [images from your own registry](../../how-to/install/own-registry.md).
+4. [Add a rig on your cluster](../../how-to/install/rig-on-a-cluster.md), in a slot your platform team made.
+5. Give a pilot project its [kit](../../how-to/campaigns/write-a-kit.md) and [contract](../../how-to/campaigns/write-a-contract.md), and choose [what waits for you](../../how-to/campaigns/decide-what-waits.md).
+
+<LinkCard
+  title="See the record of a real campaign"
+  description="Qwen3.8-27B on a $100 GPU: four campaigns, every verdict with its reasons, guards on every win, and what was not measured."
+  href="/studies/qwen3-8-27b-on-a-p100/"
+/>

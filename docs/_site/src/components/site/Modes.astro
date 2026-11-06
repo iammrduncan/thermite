@@ -1,0 +1,151 @@
+---
+// Thermite's three campaign modes, each with a small drawing of what it does.
+---
+
+<div class="grid three modes">
+  <a class="card" href="/explanation/campaign-modes/">
+    <svg class="art" viewBox="0 0 220 90" aria-hidden="true">
+      <path class="grid-l" d="M10 80H210M10 55H210M10 30H210"></path>
+      <path class="dash" d="M10 34H210"></path>
+      <path class="area" d="M10 74H52V66H78V54H104V47H126V40H150V33H176V27H210V80H10Z"></path>
+      <path class="line" d="M10 74H52V66H78V54H104V47H126V40H150V33H176V27H210"></path>
+      <circle class="dot gold" cx="52" cy="66" r="3"></circle><circle class="dot gold" cx="104" cy="47" r="3"></circle><circle class="dot gold" cx="176" cy="27" r="3"></circle>
+      <circle class="dot slow" cx="66" cy="76" r="2.4"></circle><circle class="dot slow" cx="118" cy="60" r="2.4"></circle><circle class="dot flat" cx="140" cy="41" r="2.4"></circle><circle class="dot flat" cx="190" cy="28" r="2.4"></circle>
+    </svg>
+    <h3 class="h3">Hill climb</h3>
+    <p>
+      Push one number as far as it will go: speed, size, accuracy, a score. Guards hold everything else where it
+      started. It runs until you stop it.
+    </p>
+    <p class="eg">For example: tokens a second on your GPU.</p>
+  </a>
+  <a class="card" href="/explanation/campaign-modes/">
+    <svg class="art" viewBox="0 0 220 90" aria-hidden="true">
+      <g class="check on"><rect x="14" y="10" width="16" height="16" rx="4"></rect><path d="M18 18l3.5 3.5L27 14"></path></g>
+      <rect class="bar on" x="40" y="15" width="120" height="6" rx="3"></rect>
+      <g class="check on"><rect x="14" y="37" width="16" height="16" rx="4"></rect><path d="M18 45l3.5 3.5L27 41"></path></g>
+      <rect class="bar on" x="40" y="42" width="92" height="6" rx="3"></rect>
+      <g class="check"><rect x="14" y="64" width="16" height="16" rx="4"></rect></g>
+      <rect class="bar" x="40" y="69" width="140" height="6" rx="3"></rect>
+    </svg>
+    <h3 class="h3">Goal</h3>
+    <p>
+      List what the result must do, as checks: it builds, it loads the model, its answers match. Agents work
+      until every goal passes, or the evidence shows it can't.
+    </p>
+    <p class="eg">For example: support a new quantized format.</p>
+  </a>
+  <a class="card" href="/explanation/campaign-modes/">
+    <svg class="art" viewBox="0 0 220 90" aria-hidden="true">
+      <rect class="page" x="10" y="8" width="120" height="74" rx="6"></rect>
+      <rect class="bar" x="22" y="22" width="90" height="5" rx="2.5"></rect>
+      <rect class="quote" x="22" y="35" width="78" height="5" rx="2.5"></rect>
+      <rect class="bar" x="22" y="48" width="96" height="5" rx="2.5"></rect>
+      <rect class="bar" x="22" y="61" width="60" height="5" rx="2.5"></rect>
+      <path class="link" d="M100 37C130 37 140 45 156 45"></path>
+      <rect class="claim" x="156" y="30" width="56" height="30" rx="6"></rect>
+      <path class="tick" d="M172 45l5 5 10-10"></path>
+    </svg>
+    <h3 class="h3">Research</h3>
+    <p>
+      Ask your questions. Agents read for hours or days, with no limit unless you set one, and code finds every
+      quote, word for word, in the page it came from. You get a paper, and every page read as a corpus that later
+      campaigns search.
+    </p>
+    <p class="eg">For example: which papers improve 2-bit decoding?</p>
+  </a>
+</div>
+
+<style>
+  .art {
+    width: 100%;
+    height: auto;
+    margin-bottom: 1.1rem;
+    padding: 0.6rem;
+    border-radius: 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--rule);
+  }
+  .grid-l {
+    stroke: var(--rule-2);
+    stroke-width: 1;
+    fill: none;
+  }
+  .dash {
+    stroke: var(--dim);
+    stroke-dasharray: 3 4;
+    fill: none;
+  }
+  .area {
+    fill: var(--accent-soft);
+  }
+  .line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+  .dot.gold {
+    fill: var(--gold);
+  }
+  .dot.slow {
+    fill: color-mix(in srgb, var(--accent) 55%, var(--dim));
+    opacity: 0.7;
+  }
+  .dot.flat {
+    fill: var(--dim);
+  }
+  .check rect {
+    fill: none;
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+  }
+  .check.on rect {
+    fill: color-mix(in srgb, var(--teal) 16%, transparent);
+    stroke: var(--teal);
+  }
+  .check path {
+    fill: none;
+    stroke: var(--teal);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .bar {
+    fill: var(--rule-2);
+  }
+  .bar.on {
+    fill: color-mix(in srgb, var(--teal) 45%, var(--rule-2));
+  }
+  .page {
+    fill: var(--panel);
+    stroke: var(--rule-2);
+  }
+  .quote {
+    fill: color-mix(in srgb, var(--gold) 60%, transparent);
+  }
+  .link {
+    fill: none;
+    stroke: var(--gold);
+    stroke-width: 1.4;
+    stroke-dasharray: 3 3;
+  }
+  .claim {
+    fill: color-mix(in srgb, var(--gold) 12%, transparent);
+    stroke: var(--gold);
+  }
+  .tick {
+    fill: none;
+    stroke: var(--gold);
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .h3 {
+    margin-top: 0.7rem;
+  }
+  .eg {
+    font-style: italic;
+    color: var(--dim) !important;
+  }
+</style>
