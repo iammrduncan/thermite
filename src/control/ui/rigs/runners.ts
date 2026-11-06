@@ -229,8 +229,9 @@ function jobWords(holder: string | null): string {
 
 /**
  * Edit rig's runners (goal 206), as the approved mockup has them: each runner process with where
- * it is, whether it answers, its GPU, its pool, what it runs now and Remove, which asks first and
- * says what happens to that run; then Add a runner, a free GPU of a machine or cluster control
+ * it is, whether it answers, its GPU, its pool, what it runs now and Remove, which marks it to
+ * leave on Save changes and says in its row what happens to that run, with Keep it to undo it
+ * (the form's own Save changes and Cancel decide); then Add a runner, a free GPU of a machine or cluster control
  * knows in a pool, set up on Save changes; then one you started yourself, by its name. The whole
  * list goes to the rig as its `runners` setting, which its core takes while it works.
  */
@@ -251,10 +252,10 @@ export function runnersFields(u: RigView, settings: RigSettings, at: RunnerPlace
         .join("");
       const busy = holders.filter(Boolean);
       const nowText = busy.length ? busy.map((h) => nowHtml(u, h)).join("<br>") : "Nothing now.";
-      const ask = job
-        ? `${p.name} is at work: on save, ${job}. No verdict is lost and nothing counts against the change.`
-        : `${p.name} leaves the rig on save. Nothing runs there now.`;
-      return `<div class="er-row" data-runner-row="${esc(p.name)}" data-job="${esc(job)}" data-product="${esc(placed?.product ?? "")}"><span class="er-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(placed?.where ?? "started by you")}</span> ${stateChip(seen, now)}</span><span class="small muted">${esc(placed?.gpu ?? `${p.pools.length} runner${p.pools.length > 1 ? "s" : ""}`)}</span></span><span class="er-pools">${pools}</span><span class="small" data-runner-now>${nowText}</span><span class="er-btns"><label class="btn er-rm"><input type="checkbox" name="runner_remove__${esc(p.name)}" value="1" data-runner="${esc(p.name)}"> Remove</label><button type="button" class="sm" data-keep hidden>Keep it</button></span><div class="er-ask" data-ask hidden role="alert"><span>${esc(ask)}</span><button type="button" class="sm" data-ask-cancel>Cancel</button><button type="button" class="sm danger" data-ask-go>Remove ${esc(p.name)}</button></div></div>`;
+      const leaves = job
+        ? `Leaves when you save: ${job}. No verdict is lost and nothing counts against the change.`
+        : "Leaves when you save. Nothing runs there now.";
+      return `<div class="er-row" data-runner-row="${esc(p.name)}" data-job="${esc(job)}" data-leaves="${esc(leaves)}" data-product="${esc(placed?.product ?? "")}"><span class="er-what"><span><b>${esc(p.name)}</b> <span class="chip">${esc(placed?.where ?? "started by you")}</span> ${stateChip(seen, now)}</span><span class="small muted">${esc(placed?.gpu ?? `${p.pools.length} runner${p.pools.length > 1 ? "s" : ""}`)}</span></span><span class="er-pools">${pools}</span><span class="small" data-runner-now>${nowText}</span><span class="er-btns"><label class="btn er-rm"><input type="checkbox" name="runner_remove__${esc(p.name)}" value="1" data-runner="${esc(p.name)}"> Remove</label><button type="button" class="sm" data-keep hidden>Keep it</button></span></div>`;
     })
     .join("");
   const add = at.add.length

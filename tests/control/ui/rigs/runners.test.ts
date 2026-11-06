@@ -176,7 +176,8 @@ describe("a rig's runners in control (goal 206)", () => {
       ],
       judgeOnRunners: true,
     });
-    // Each runner: where it is, whether it answers, its GPU, and Remove, which asks first.
+    // Each runner: where it is, whether it answers, its GPU, and Remove, which marks it to leave
+    // on Save changes; its row then says what happens to its run. No question of its own.
     assert.match(
       html,
       /<b>box-2<\/b> <span class="chip">started by you<\/span> <span class="chip ok"/,
@@ -188,9 +189,10 @@ describe("a rig's runners in control (goal 206)", () => {
     assert.match(html, /NVIDIA GB10 · DRA class gb10/);
     assert.match(
       html,
-      /box-2 is at work: on save, the judge&#39;s job goes back to the judge&#39;s queue and starts again on another of its runners; lane 2&#39;s run_experiment stops, and lane 2 is told to run it again\. No verdict is lost|box-2 is at work: on save, the judge's job goes back to the judge's queue and starts again on another of its runners; lane 2's run_experiment stops, and lane 2 is told to run it again\. No verdict is lost/,
+      /data-leaves="Leaves when you save: the judge(&#39;|')s job goes back to the judge(&#39;|')s queue and starts again on another of its runners; lane 2(&#39;|')s run_experiment stops, and lane 2 is told to run it again\. No verdict is lost/,
     );
-    assert.match(html, /box-3 leaves the rig on save\. Nothing runs there now\./);
+    assert.match(html, /data-leaves="Leaves when you save\. Nothing runs there now\."/);
+    assert.doesNotMatch(html, /data-ask/);
     assert.match(
       html,
       /<option value="box-9=k8s-a\|slot-5\|\|dra%3Agb10" data-product="NVIDIA GB10">/,

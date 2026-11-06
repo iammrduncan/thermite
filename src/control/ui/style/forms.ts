@@ -56,8 +56,7 @@ export const FORMS = `/* Edit rig: one row per part, with its switch. */
 .er-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .er-pools { display: flex; flex-direction: column; gap: 6px; }
 .er-pools select { height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: var(--control-radius); background: var(--card); font-size: 13px; width: 100%; }
 .er-btns { display: flex; gap: 6px; justify-content: flex-end; } .er-rm { cursor: pointer; }
-.er-ask { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 10px 12px; border-radius: var(--control-radius); background: var(--warning-surface); color: var(--warning-foreground); font-size: 13px; }
-.er-ask > span { flex: 1 1 420px; }
+.er-row [hidden] { display: none !important; }
 .er-add { display: flex; flex-wrap: wrap; gap: 0 16px; align-items: flex-end; padding: 12px 14px 0; margin-top: 10px; } .er-add .fd:first-child { flex: 1 1 320px; } .er-add .fd:nth-child(2) { width: 240px; } .er-add button { margin-bottom: 14px; }
 @media (max-width: 720px) { .er-row { grid-template-columns: minmax(0, 1fr); } .er-btns { justify-content: flex-start; } }
 .sw { position: relative; display: inline-block; width: 40px; height: 22px; margin-top: 2px; }

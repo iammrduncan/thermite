@@ -29,7 +29,8 @@ export const EDIT_RIG_JS = `
   const after = (el) => !!table && !!(table.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
 
   // ---------------------------------------------------------------- runners (goal 206)
-  // Each runner's Remove asks first and says what happens to its run; Keep it undoes it. Add puts
+  // Each runner's Remove marks it to leave on Save changes, and its row says what happens to its
+  // run; Keep it undoes it: the form's own Save changes and Cancel decide. Add puts
   // a free GPU in the list, with its pool, for Save changes to set up. The notes say what would
   // go wrong. Without the script, Remove is a box to tick and Add a runner's choice is added.
   const escR = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -51,9 +52,9 @@ export const EDIT_RIG_JS = `
       const box = row.querySelector("[data-runner]"), now = row.querySelector("[data-runner-now]");
       if (now.dataset.was === undefined) now.dataset.was = now.innerHTML;
       const moved = $$("[data-runner-pool]", row).find((x) => x.value !== start.get(x));
-      now.innerHTML = box.checked ? "Leaves when you save." : moved ? escR("Moves to " + poolPhrase(moved.value) + " when you save" + (row.dataset.job ? ": " + row.dataset.job : "") + ".") : now.dataset.was;
+      now.innerHTML = box.checked ? escR(row.dataset.leaves || "Leaves when you save.") : moved ? escR("Moves to " + poolPhrase(moved.value) + " when you save" + (row.dataset.job ? ": " + row.dataset.job : "") + ".") : now.dataset.was;
       row.classList.toggle("gone", box.checked);
-      row.querySelector(".er-rm").hidden = box.checked || !row.querySelector("[data-ask]").hidden;
+      row.querySelector(".er-rm").hidden = box.checked;
       row.querySelector("[data-keep]").hidden = !box.checked;
     }
     const count = $("[data-runner-count]");
@@ -90,19 +91,13 @@ export const EDIT_RIG_JS = `
     const row = t.closest("[data-runner-row]");
     if (t.closest(".er-rm") && row) {
       e.preventDefault();
-      row.querySelector("[data-ask]").hidden = false;
-      t.closest(".er-rm").hidden = true;
-      row.querySelector("[data-ask-go]").focus();
-    } else if (t.closest("[data-ask-cancel]") && row) {
-      row.querySelector("[data-ask]").hidden = true;
-      drawRunners();
-    } else if (t.closest("[data-ask-go]") && row) {
-      row.querySelector("[data-ask]").hidden = true;
       row.querySelector("[data-runner]").checked = true;
       changed();
+      row.querySelector("[data-keep]").focus();
     } else if (t.closest("[data-keep]") && row) {
       row.querySelector("[data-runner]").checked = false;
       changed();
+      row.querySelector(".er-rm").focus();
     } else if (t.closest("[data-add-btn]") && addAt && addAt.value) {
       const o = addAt.selectedOptions[0], name = addAt.value.split("=")[0], k = nextNew++;
       const fresh = document.createElement("div");
