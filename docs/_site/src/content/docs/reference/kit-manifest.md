@@ -74,6 +74,7 @@ Unknown fields are refused at every level.
 | `run.timeout_s` | integer from 1 to 86400 | 300 | A run's time limit, in seconds, for each cell that sets none of its own |
 | `run.rss_mib` | integer ≥ 1 | 1024 | A run's memory limit, in MiB; with a driver, the driver's and the candidate's each |
 | `run.disk_mib` | integer ≥ 1 | 256 | A run's disk limit, in MiB; with a driver, the driver's and the candidate's each |
+| `run.processes` | integer from 16 to 65536 | the role's: 256 | The candidate's processes and threads at once (`RLIMIT_NPROC`), for an engine whose thread pools need more. The driver keeps 256. A thread the limit refuses fails its program in its own way, such as Zig's `SystemResources` |
 | `metrics` | object | required | What the judge measures. See [Metrics](#metrics) |
 | `check.command` | list of text, at least one | required | The check's command and arguments. See [Check output](#check-output) |
 | `check.timeout_s` | integer from 1 to 86400 | 120 | The check's time limit, in seconds |
@@ -266,7 +267,7 @@ Some measurements need a program of the kit's beside the candidate: to send it r
 | Memory: the summed resident memory of the user's processes, sampled every 100 ms | `build.rss_mib` | `run.rss_mib` | none |
 | Disk: the working folder, sampled every 500 ms | `build.disk_mib` | `run.disk_mib` | none |
 | Files: 50,000 or more files and folders, or folders nested 128 deep, count as over the disk limit | yes | yes | none |
-| Processes and threads (`RLIMIT_NPROC`) | 512 | 256 | 256 |
+| Processes and threads (`RLIMIT_NPROC`) | 512 | 256, or `run.processes` for the candidate | 256 |
 | Output kept: the last part of standard output and standard error | 64 KiB | 64 KiB | 64 KiB |
 
 When a build or run goes over a limit, every process of its user is ended. Processes still alive when the main process exits are ended too, and the files the user left in `/tmp`, `/var/tmp` and `/dev/shm` are removed. After a timeout, the judge waits up to 15 seconds more for the output to close. These limits end one build, run or check; they never end a campaign. With a driver, the driver and the candidate each have the run's limits; the run is over when the driver ends, and every process of the candidate's user is ended then.

@@ -103,6 +103,11 @@ const KitFields = z.strictObject({
     timeout_s: Seconds.default(300),
     rss_mib: Mib.default(1024),
     disk_mib: Mib.default(256),
+    /**
+     * The candidate's processes and threads at once (RLIMIT_NPROC), for an engine whose thread
+     * pools need more than a role's 256; unset: the role's.
+     */
+    processes: z.number().int().min(16).max(65_536).optional(),
   }),
   /**
    * The scores the judge measures, never anything the candidate prints:

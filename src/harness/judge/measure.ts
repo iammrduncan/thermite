@@ -211,6 +211,7 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
       role: runRole,
       argv: expandArgv(ctx.kit.run.command, vars(work)),
       ...limits(work),
+      ...(ctx.kit.run.processes !== undefined ? { nproc: ctx.kit.run.processes } : {}),
     };
     let outcome: RunOutcome;
     if (driver) {

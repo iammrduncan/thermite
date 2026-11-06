@@ -64,6 +64,9 @@ async function drivenRun(o: {
   check?: string;
   metrics?: Record<string, unknown>;
   uses?: ReadonlySet<string>;
+  processes?: number;
+  /** Each pair's candidate's process limit, as the runner was asked. */
+  nprocs?: (number | undefined)[];
 }): Promise<{
   r: ArmRun;
   ms: number;
@@ -95,14 +98,21 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], value: r.value, c
       command: [node, "{kit:run/candidate.mjs}"],
       driver: [node, "{kit:run/driver.mjs}", "{params_json}", "{out}"],
       timeout_s: 20,
+      ...(o.processes !== undefined ? { processes: o.processes } : {}),
     },
     metrics: o.metrics ?? { time: { from: "time" } },
     check: { command: [node, "{kit:check.mjs}", "{out}"] },
   });
   const started = Date.now();
+  const runner = new LocalRunner(scratch);
+  const pair = runner.runPair.bind(runner);
+  runner.runPair = (driver, candidate) => {
+    o.nprocs?.push(candidate.nproc);
+    return pair(driver, candidate);
+  };
   const r = await runArm(
     {
-      runner: new LocalRunner(scratch),
+      runner,
       store: { verify: () => [] } as unknown as BuildStore,
       kit: k,
       kitDir: kit,
@@ -137,6 +147,27 @@ describe("a kit's driver beside the candidate", () => {
     assert.equal(r.check.details.value, 25);
     assert.match(String(r.check.details.cwd), /\/check$/);
     assert.ok(r.metrics.time && r.metrics.time > 0);
+  });
+
+  test("a kit's run may raise its candidate's process limit, for an engine's thread pools", async () => {
+    const nprocs: (number | undefined)[] = [];
+    const { r } = await drivenRun({ candidate: SQUARES, driver: DRIVER, processes: 4096, nprocs });
+    assert.equal(r.kind, "ok", JSON.stringify(r));
+    const plain: (number | undefined)[] = [];
+    await drivenRun({ candidate: SQUARES, driver: DRIVER, nprocs: plain });
+    assert.deepEqual([nprocs, plain], [[4096], [undefined]], "unset: the role's own");
+    assert.throws(() =>
+      KitSchema.parse({
+        schema_version: 1,
+        name: "k",
+        target: "cpu",
+        build: { command: ["true"], outputs: ["x"] },
+        cells: { c: {} },
+        run: { command: ["true"], processes: 8 },
+        metrics: {},
+        check: { command: ["true"] },
+      }),
+    );
   });
 
   test("the run ends when the driver's does: a candidate that would go on is ended", async () => {
