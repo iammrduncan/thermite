@@ -62,6 +62,9 @@ export function addRigRunnersChosen(f: Record<string, unknown>): {
   pool: string;
   /** Its volume on a cluster, in GB; none: the default. */
   storageGi?: number | undefined;
+  /** Its CPUs and memory on a cluster, both or neither; none: the namespace's defaults. */
+  cpus?: number | undefined;
+  memoryGi?: number | undefined;
 }[] {
   const one = (k: string) => {
     const v = f[k];
@@ -192,6 +195,11 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
   if (one("add_at")) asked.push([one("add_at"), one("add_pool") || "shared"]);
   // A runner's volume on a cluster can't grow later: a model and its builds need room from the start.
   const storageGi = Number(one("add_storage_gi"));
+  // Its CPUs and memory: without them a slot's defaults apply, which may be far too small for a
+  // model's engine. Both or neither, as control sets them up.
+  const cpus = Number(one("add_cpus"));
+  const memoryGi = Number(one("add_memory_gib"));
+  const sized = cpus > 0 && memoryGi > 0;
   const out: ReturnType<typeof addRigRunnersChosen> = [];
   for (const [value, pool] of asked) {
     const cut = value.indexOf("=");
@@ -205,6 +213,7 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
       mode: (at.kind === "cluster" ? at.mode : undefined) ?? "device-plugin",
       pool,
       ...(Number.isInteger(storageGi) && storageGi > 0 ? { storageGi } : {}),
+      ...(sized ? { cpus, memoryGi } : {}),
     });
   }
   return out;

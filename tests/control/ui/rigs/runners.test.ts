@@ -227,9 +227,18 @@ describe("a rig's runners in control (goal 206)", () => {
       add_storage_gi: "300",
     });
     assert.deepEqual(
-      sized.map((r) => [r.runner, r.pool, r.storageGi]),
-      [["sp-a", "lane-2", 300]],
+      sized.map((r) => [r.runner, r.pool, r.storageGi, r.cpus, r.memoryGi]),
+      [["sp-a", "lane-2", 300, undefined, undefined]],
     );
+    // Its CPUs and memory, both or neither.
+    const big = runnersAdded({
+      runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10",
+      add_cpus: "17",
+      add_memory_gib: "110",
+    });
+    assert.deepEqual([big[0]?.cpus, big[0]?.memoryGi], [17, 110]);
+    const half = runnersAdded({ runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10", add_cpus: "17" });
+    assert.deepEqual([half[0]?.cpus, half[0]?.memoryGi], [undefined, undefined]);
     for (const given of ["", "0", "-5", "1.5", "lots"])
       assert.equal(
         runnersAdded({ runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10", add_storage_gi: given })[0]
