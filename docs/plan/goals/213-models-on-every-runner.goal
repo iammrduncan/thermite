@@ -1,0 +1,31 @@
+---
+id: "213"
+title: "A run's model files wherever it runs, however large"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-06
+updated: 2026-11-06
+---
+
+# 213 · A run's model files wherever it runs, however large
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## Why (found in use, 2026-11-06)
+
+A contract's `models` are files with a SHA-256 and a source. The judge's runs reach them read-only, as `{models:<sha256>}` in the kit's run and check, and a runner of another machine fetches those it lacks before the judge's first job there (`src/harness/judge/remote-runner.ts`). Two gaps show with a model of about 95 GiB in 33 files:
+
+1. **A lane's own runs get no model files.** `run_experiment` on the core or on a lane's runner (`src/harness/runner/host.ts`, `laneRun`) has no path to them. A worker who changes an inference engine can't serve the model to try the change before it submits.
+2. **A large fetch is cut at three hours.** The core waits at most `RUNNER_ANSWER_MS` (3 h) for a runner's fetch. At about 180 Mbit/s one runner takes about 1.2 h; three at once on one link may take longer, and the job then fails, though the download goes on and resumes from its `.part`.
+
+## What
+
+1. A lane's runs, on the core and on its runner, reach the run's model files read-only, at a path the lane's brief and `run_experiment`'s answer name; a lane's runner fetches those it lacks as the judge's does, before the lane's first run there.
+2. A model fetch is not bound by an ask's time limit: the core waits while the runner reports progress (bytes so far), and gives up only when progress stops, saying so in words. A second ask for a file already being fetched joins that fetch instead of writing the same `.part`.
+3. The rig's page and the run's live view show each runner's fetch as it goes.
+
+## Done when
+
+- Tests for a lane's run on the core and on a runner with model files; a fetch longer than the old limit that ends, and one that stalls and fails in words; and two asks for one file.
+- The runners page and the kit reference say where a lane's runs find the model files.
