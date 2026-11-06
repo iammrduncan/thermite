@@ -219,7 +219,7 @@ Placeholders go inside the arguments of `run.command`, `run.driver` and `check.c
 | `{params_json}` | The run's copy of the cell's parameters, as a JSON object; the driver gets a copy of its own | The judge's own copy, in the check's folder |
 | `{out}` | The run's output folder, which it may write; with a driver, the driver's alone | The same outputs, moved to the check's folder, to read |
 | `{kit}` | The run's read-only copy of the `run.copy` paths | The kit itself |
-| `{models}` | The imported [model files](glossary.md) (data files such as a model's weights), one read-only file per SHA-256: `{models:<sha256>}` is one | The same |
+| `{models}` | The imported [model files](glossary.md) (data files such as a model's weights), one read-only file per SHA-256: `{models:<sha256>}` is one. A lane's own runs (`run_experiment`) reach the same files read-only, by the paths the worker's brief lists, on the core and on a runner ([Model files on a rig](model-files.md#on-a-rigs-runners)) | The same |
 
 ## Processes
 
