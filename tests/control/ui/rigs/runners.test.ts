@@ -218,6 +218,25 @@ describe("a rig's runners in control (goal 206)", () => {
     assert.deepEqual(runnersWanted(settings, {}), settings.runners, "nothing asked: as it is");
   });
 
+  test("Edit rig: each runner added gets the volume Add a runner gives, or the default (goal 213)", () => {
+    const sized = runnersAdded({
+      runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10",
+      runner_new_pool__0: "lane-2",
+      add_storage_gi: "300",
+    });
+    assert.deepEqual(
+      sized.map((r) => [r.runner, r.pool, r.storageGi]),
+      [["sp-a", "lane-2", 300]],
+    );
+    for (const given of ["", "0", "-5", "1.5", "lots"])
+      assert.equal(
+        runnersAdded({ runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10", add_storage_gi: given })[0]
+          ?.storageGi,
+        undefined,
+        `${JSON.stringify(given)}: the default`,
+      );
+  });
+
   test("Edit rig: the runners Add put in the list, and one chosen but not put there", () => {
     const added = runnersAdded({
       runner_new__0: "sp-a=k8s-a|slot-5||dra%3Agb10",

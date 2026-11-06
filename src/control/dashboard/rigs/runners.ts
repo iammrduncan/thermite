@@ -60,6 +60,8 @@ export function addRigRunnersChosen(f: Record<string, unknown>): {
   gpus: number;
   mode: string;
   pool: string;
+  /** Its volume on a cluster, in GB; none: the default. */
+  storageGi?: number | undefined;
 }[] {
   const one = (k: string) => {
     const v = f[k];
@@ -176,7 +178,8 @@ export function runnerPlaces(store: ControlStore, rig: string, names: string[]):
 /**
  * The runners Edit rig adds (goal 206): each one Add put in the list (`runner_new__<n>`: its
  * name, `=`, its place; with `runner_new_pool__<n>`), and one chosen in Add a runner and not put
- * there, with its pool. Each name once.
+ * there, with its pool. Each name once, each with the volume Add a runner gives (goal 213), when
+ * it gives one.
  */
 export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addRigRunnersChosen> {
   const one = (k: string) => {
@@ -187,6 +190,8 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
     .filter((k) => /^runner_new__\d+$/.test(k))
     .map((k) => [one(k), one(k.replace("runner_new__", "runner_new_pool__"))] as const);
   if (one("add_at")) asked.push([one("add_at"), one("add_pool") || "shared"]);
+  // A runner's volume on a cluster can't grow later: a model and its builds need room from the start.
+  const storageGi = Number(one("add_storage_gi"));
   const out: ReturnType<typeof addRigRunnersChosen> = [];
   for (const [value, pool] of asked) {
     const cut = value.indexOf("=");
@@ -199,6 +204,7 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
       gpus: 1,
       mode: (at.kind === "cluster" ? at.mode : undefined) ?? "device-plugin",
       pool,
+      ...(Number.isInteger(storageGi) && storageGi > 0 ? { storageGi } : {}),
     });
   }
   return out;
