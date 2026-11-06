@@ -370,6 +370,8 @@ export async function isolationSelftest(opts: {
       if (readsResearch(role))
         mine.push({ name: "research-read", op: "readable", path: research.claim });
       if (role !== "builder") mine.push({ name: "build-work", op: "list", path: buildWork });
+      // A folder moved into another of its own, as a build's cache does: the fence must allow it.
+      mine.push({ name: "move-across", op: "move", path: cwd });
       if (cached && role !== "lane-1")
         mine.push({ name: "lane-cache", op: "list", path: laneCache });
       // The rig's network rules hold for the whole pod: the lane's plain commands try them once.

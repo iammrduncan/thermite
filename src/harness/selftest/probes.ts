@@ -17,6 +17,7 @@ export interface Probe {
     | "readable"
     | "reachable"
     | "gpus"
+    | "move"
     | "runpod"
     | "sealed"
     | "environ"
@@ -32,6 +33,7 @@ export interface Probe {
 
 const FAILURES = [
   "ALLOWED",
+  "UNMOVABLE",
   "UNREADABLE",
   "UNREACHABLE",
   "WRONG",
@@ -43,7 +45,7 @@ const FAILURES = [
 
 /**
  * A result that fails the selftest: a probe that must be refused got through (ALLOWED), one that
- * must succeed did not (UNREADABLE, UNREACHABLE), the wrong cards or user (WRONG ...), something
+ * must succeed did not (UNREADABLE, UNREACHABLE, UNMOVABLE), the wrong cards or user (WRONG ...), something
  * found that must not be there (FOUND, OPENED), something missing (MISSING), or a probe that
  * failed to run.
  */
@@ -60,7 +62,9 @@ export function isFailure(result: string): boolean {
  * sealed" when the folder holds only what a sealed snapshot holds, as inspectSnapshotFolder
  * (broker/snapshot/) looks, and "FOUND" with the first thing that is not. `connect` opens a TCP
  * connection to `path` on port `expect`, after the other probes: one that is made is "ALLOWED";
- * one refused, unreachable or not answered in 3 s passes.
+ * one refused, unreachable or not answered in 3 s passes. `move` moves a folder into another
+ * folder of `path`, the role's own, as a build's cache does (Zig's, for one): "moves", or
+ * "UNMOVABLE" with why.
  */
 export const PROBE = `
 const fs = require("node:fs");
@@ -148,6 +152,17 @@ for (const p of probes) {
       out[p.name] = found.length ? "FOUND " + found.slice(0, 8).join(", ") : "none";
     } catch (e) {
       out[p.name] = "failed: " + (e.code || String(e));
+    }
+    continue;
+  }
+  if (p.op === "move") {
+    try {
+      fs.mkdirSync(p.path + "/move-a/x", { recursive: true });
+      fs.mkdirSync(p.path + "/move-b", { recursive: true });
+      fs.renameSync(p.path + "/move-a/x", p.path + "/move-b/x");
+      out[p.name] = "moves";
+    } catch (e) {
+      out[p.name] = "UNMOVABLE " + (e.code || String(e));
     }
     continue;
   }

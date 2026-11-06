@@ -173,6 +173,7 @@ Where the rig keeps a sealed snapshot of its state on the host's volume (`THERMI
 | `research-read` | The workers' users (`lane-1`, `agent-1`) and the planner's (`planner`) | Read the claim's file in that research folder |
 | `device:<own card>` and the control nodes | Each role with a GPU of its own (dedicated GPUs only) | Open its own card and the shared control nodes |
 | `visible-gpus` | Each role with a GPU of its own | `nvidia-smi -L` lists exactly that role's card |
+| `move-across` | Every role | Move a folder into another folder of its own working folder, as a build's cache does (Zig's, for one): `moves` |
 
 On a rig with one shared device, the `run` user and development runs are not probed for devices. See [Sharing a device](../explanation/sharing-a-device.md).
 
@@ -215,12 +216,12 @@ Each result reads as a role's does: the error it met, such as `EACCES` or `EPERM
 
 ### Results
 
-Each probe's result is the error the operation met (refused, as it must be), `readable` or `reachable` (succeeded, where it must), `sees <ids>` (`visible-gpus` listed exactly the role's card), or one of these failures:
+Each probe's result is the error the operation met (refused, as it must be), `readable`, `reachable` or `moves` (succeeded, where it must), `sees <ids>` (`visible-gpus` listed exactly the role's card), or one of these failures:
 
 | Marker | Meaning |
 | --- | --- |
 | `ALLOWED` | A probe that must be refused succeeded |
-| `UNREADABLE <error>`, `UNREACHABLE <error>` | A probe that must succeed was refused |
+| `UNREADABLE <error>`, `UNREACHABLE <error>`, `UNMOVABLE <error>` | A probe that must succeed was refused. `UNMOVABLE EXDEV` on one filesystem: the GPU fence refused a move between folders |
 | `WRONG GPUS <ids>` | `nvidia-smi` showed other cards than the role's own |
 | `FOUND <what>` | Something that must not be there: a RunPod variable, the enrollment code, the snapshot key, a set-id file, a file with capabilities, or a file in the snapshot folder that is not sealed |
 | `OPENED <nodes>` | The supervisor's user opened a GPU device node |
