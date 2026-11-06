@@ -35,7 +35,8 @@ function linked(reply: (q: QueuedRun) => { answer?: unknown; error?: string } | 
 }
 
 const service = {
-  ledger: {},
+  // A lane's run here belongs to no run with model files (goal 213).
+  ledger: { trials: { get: () => undefined } },
   mirrorFor: (repo: string) => `/mirrors/${repo}`,
   paths: { scratchDir: "/scratch" },
 } as unknown as HarnessService;
