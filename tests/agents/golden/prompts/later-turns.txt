@@ -1,5 +1,5 @@
-# worker in Pi: it stopped without calling submit (worker, pi)
-You have not called submit yet. Keep working with your tools: make your change, build and test it, then call submit once. If you find no change worth judging, say why in one sentence.
+# worker in Pi: it stopped without calling submit_experiment (worker, pi)
+You have not called submit_experiment yet. Keep working with your tools: make your change, build and test it, then call submit_experiment once. If you find no change worth judging, say why in one sentence.
 # worker in Pi: its turns are nearly spent (worker, pi)
 10 turns are left in this trial. Build and test what you have, then submit your best working change now, listing anything unfinished in known_flaws. A trial that ends without a submission is lost. If this trial measures rather than changes the code, record what you measured now as notes, with the numbers, before you start another measurement: what a trial does not record is lost when it ends.
 # worker in Pi: its time is nearly spent (worker, pi)
@@ -19,7 +19,7 @@ A message from the campaign's owner, who is watching this session:
 
 Prefer a change a reader can follow.
 # worker in a program: its run ended without a submission, with two owner's messages (worker, codex)
-You have not submitted yet. Keep working: make your change, build and test it, then run `thermite-trial submit --hypothesis "..."` once. If you find no change worth judging, say why in one sentence.
+You have not submitted yet. Keep working: make your change, build and test it, then run `thermite-trial submit-experiment --hypothesis "..."` once. If you find no change worth judging, say why in one sentence.
 
 A message from the campaign's owner: Try tiling.
 

@@ -1,7 +1,8 @@
 # The secret scan's settings (gitleaks 8.30.1; CI pins the version). The scan uses gitleaks'
-# default rules. Each allowlist below skips one fake, key-shaped value that the tests or scripts
-# use: a finding is skipped only when its rule, its file and its exact value all match.
-# A new fake value gets its own entry here, never a wider pattern.
+# default rules. Each allowlist below skips one key-shaped value that is not a secret: a fake one
+# the tests or scripts use, or words of a page the generic rule misreads. A finding is skipped
+# only when its rule, its file and its exact value all match. A new value gets its own entry here,
+# never a wider pattern.
 title = "Thermite secret scan"
 
 [extend]
@@ -78,3 +79,12 @@ regexes = [
   '''^19464f76c542507e3b7ce329a45e50ac97689e204a4daa03360b8e2e2069a0a3$''',
   '''^753bc26ec4df7d2d13bf26a2e61d5bcfaf56c1eda659618fbbea2c136c6d65ad$''',
 ]
+
+# Prose the generic rule reads as a key: "... 65K tokens. At its start, Qwen3.8-27B-PN3 decoded ...",
+# the word "tokens", a comma, then a model's public name. Skipped by that exact name, in that page only.
+[[allowlists]]
+description = "A model's public name after the word tokens in the P100 study page"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^docs/_site/src/content/docs/studies/qwen3-8-27b-on-a-p100\.mdx$''']
+regexes = ['''^Qwen3\.8-27B-PN3$''']

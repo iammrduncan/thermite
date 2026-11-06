@@ -10,6 +10,7 @@ import {
   registerAddClusterRig,
   registerClusterRigs,
   registerReachableAddresses,
+  registerRunners,
 } from "./clusters.ts";
 import { registerCommands } from "./commands.ts";
 import { type McpOptions, type Role, toolContext } from "./context.ts";
@@ -70,6 +71,8 @@ function buildServer(store: ControlStore, opts: McpOptions, actor: string, role:
     registerKits(tools);
     registerCampaignSettings(tools);
     registerClusterRigs(tools);
+    // A rig's runner processes on clusters (goal 206): the owner's.
+    registerRunners(tools);
     registerReachableAddresses(tools);
     registerRetention(tools);
     registerMcpServers(tools);

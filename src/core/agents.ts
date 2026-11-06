@@ -85,6 +85,17 @@ export const ADVISOR_ROLES = ["teachers", "auditor", "review_panel"] as const;
 export type AdvisorRole = (typeof ADVISOR_ROLES)[number];
 
 /**
+ * Why a run in this status gets no teachers' round on request, or "" (goal 194): the teachers
+ * review only a running run. Control and the rig's harness refuse in these words.
+ */
+export function teachersRoundRefusal(run: string, status: string): string {
+  if (status === "running") return "";
+  return status === "paused"
+    ? `${run} is paused: resume it first, and its teachers review it at their next round.`
+    : `${run} is ${status}: its teachers review only a running run.`;
+}
+
+/**
  * How an owner's message reached a trial's agent, as its read receipt says (goal 169):
  * - `brief`: in the trial's first message;
  * - `next-call`: in Pi, as a turn of its own before the agent's next model call;

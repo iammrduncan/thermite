@@ -8,7 +8,9 @@ import { MAX_RIG_GPUS } from "../machines/index.ts";
 import type { ControlParts } from "../parts.ts";
 import {
   awaitFirstReport,
+  type CudaVersion,
   controlAddress,
+  controlImages,
   judgeShare,
   NO_RIG_BUS,
   rigBusOf,
@@ -17,11 +19,13 @@ import {
 } from "../rigs/index.ts";
 import { type Cluster, type ClusterRig, RIG_ID } from "../store/index.ts";
 import { programModeOf } from "../views/index.ts";
+import { cudaOfPlace } from "./cuda.ts";
 import {
   type ClusterFacts,
   type ClusterSlot,
   checkCluster,
   HARNESS_LABELS,
+  nodeInSlot,
   slotNetwork,
 } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
@@ -54,11 +58,13 @@ export async function checkClusterNow(parts: ControlParts, name: string): Promis
   const c = store.clusters.get(name);
   if (!c) return "no such cluster";
   try {
+    // The slots' node rules are read with control's own harness image, which slots take.
     const facts = await checkCluster(
       parts.kube,
       clusterTarget(parts, c),
       c.slots,
       store.reachable.list(),
+      parts.rigImages?.harness,
     );
     store.clusters.setFacts(name, { facts });
     // Each slot's rig takes what its slot's rules open and let in now, for its page.
@@ -123,6 +129,10 @@ export interface ClusterRigRequest {
   /** The rig's CPUs and memory; default: what the slot's quota allows, else none. */
   cpus?: number | undefined;
   memoryGi?: number | undefined;
+  /** The CUDA harness its GPUs take (goal 132); default 12. */
+  cuda?: CudaVersion | undefined;
+  /** Its judge measures on its runners of other machines alone (goal 206): a core with no GPU. */
+  judgeOnRunners?: boolean | undefined;
 }
 
 /**
@@ -145,7 +155,8 @@ export async function addClusterRig(
   if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
   if (!k) return fail("Choose a machine or a cluster.");
   const facts = k.facts as ClusterFacts | null;
-  if (!facts || k.check_error) return fail(`${k.name} is not ready: check it under Providers.`);
+  if (!facts || k.check_error)
+    return fail(`${k.name} is not ready: check it under Settings › Machines.`);
   const gpus = i.gpus;
   if (!Number.isInteger(gpus) || gpus < 0 || gpus > MAX_RIG_GPUS)
     return fail(`A rig takes from none to ${MAX_RIG_GPUS} GPUs.`);
@@ -166,7 +177,7 @@ export async function addClusterRig(
     return fail(
       `No node of ${k.name} offers ${gpus} GPU${gpus === 1 ? "" : "s"} through the device plugin.`,
     );
-  const node = i.node || undefined;
+  let node = i.node || undefined;
   if (node && facts.nodes.length && !facts.nodes.some((n) => n.name === node))
     return fail(`${k.name} has no node ${node} that control can see.`);
   const storageClass = i.storageClass || undefined;
@@ -188,6 +199,10 @@ export async function addClusterRig(
     namespace = i.slot ?? "";
     const slot = facts.slots.find((s) => s.namespace === namespace && s.usable && !s.used_by);
     if (!slot) return fail("Choose a free slot.");
+    // A slot whose rules take pods only on nodes they name: one of those (goal 206).
+    const placed = nodeInSlot(slot, node);
+    if ("error" in placed) return fail(placed.error);
+    node = placed.node;
     slotQuota = slot.quota;
     if (
       store.clusters.rigs(k.name).some((r) => r.namespace === namespace && r.status !== "removed")
@@ -238,8 +253,12 @@ export async function addClusterRig(
   // GPUs: what the slot's quota allows through the device plugin, or of the DRA device class.
   const devices = quotaRefusal(namespace, slotQuota, { gpus, deviceClass });
   if (devices) return fail(devices);
-  if (gpus && !parts.rigImages.harnessCuda)
-    return fail("Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).");
+  if (i.cuda === "13" && !gpus)
+    return fail("A rig with no GPUs runs the CPU harness: leave out cuda, or give it GPUs.");
+  // Left out: the CUDA its GPUs take, where control can tell (an arm64 node, a Blackwell GPU).
+  const cuda = gpus ? (i.cuda ?? cudaOfPlace(facts, { deviceClass, node })?.cuda) : undefined;
+  const images = controlImages(parts, gpus, cuda);
+  if (typeof images === "string") return fail(images);
   const token = newToken();
   store.enrollments.enroll(rig, token.sha256, by);
   store.clusters.addRig({
@@ -257,10 +276,9 @@ export async function addClusterRig(
       storageGi,
       resources,
       programMode,
-      images: {
-        harness: gpus ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
-        supervisor: parts.rigImages.supervisor,
-      },
+      images,
+      ...(cuda === "13" ? { cuda: "13" as const } : {}),
+      ...(i.judgeOnRunners ? { judgeOnRunners: true } : {}),
       controlUrl: controlAddress(parts),
       ...(openings.length ? { openings } : {}),
       ...(ingress ? { ingress } : {}),
@@ -298,10 +316,64 @@ export const clusterPlan = (
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
   programMode,
+  judgeOnRunners: r.spec.judgeOnRunners,
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
   reach: parts.store.reachable.list(),
 });
+
+/**
+ * Sets up again a rig whose setup on a cluster failed before it ever reported (goal 206), on the
+ * node given (none: any node with room): a new token, and its objects applied again. Its runners
+ * stay. Says why not, in words.
+ */
+export async function setClusterRigUpAgain(
+  parts: ControlParts,
+  rig: string,
+  asked: string | undefined,
+  by: string,
+): Promise<{ ok: string } | { error: string }> {
+  const { store } = parts;
+  const r = store.clusters.rig(rig);
+  if (!r) return { error: `Control didn't set ${rig} up on a cluster.` };
+  if (r.status !== "failed" || store.reportedRigs.list().some((x) => x.id === rig))
+    return {
+      error: `${rig}'s setup did not fail before its first report: nothing to set up again.`,
+    };
+  const k = store.clusters.get(r.cluster);
+  if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
+  const facts = k.facts as ClusterFacts | null;
+  let node = asked;
+  if (node && facts?.nodes.length && !facts.nodes.some((n) => n.name === node && n.ready))
+    return { error: `${k.name} has no ready node ${node}.` };
+  // A slot whose rules take pods only on nodes they name: one of those (goal 206).
+  const placed = nodeInSlot(
+    facts?.slots.find((x) => x.namespace === r.namespace),
+    node,
+  );
+  if ("error" in placed) return { error: placed.error };
+  node = placed.node;
+  if (!parts.publicUrl) return { error: "Control's address for rigs is not set." };
+  if (!parts.rigBus) return { error: NO_RIG_BUS };
+  store.clusters.setRigNode(rig, node || undefined);
+  const token = newToken();
+  if (store.enrollments.rig(rig)) store.enrollments.rotateToken(rig, token.sha256, by);
+  else store.enrollments.enroll(rig, token.sha256, by);
+  store.clusters.setRigStatus(rig, "deploying");
+  store.rigHistory.add(rig, "set_up_again", true, node ? `on ${node}` : "on any node with room");
+  store.auditLog.add(by, "cluster_rig_set_up_again", { rig, node: node ?? null });
+  const again = store.clusters.rig(rig) as ClusterRig;
+  void inBackground(
+    store,
+    "cluster",
+    rig,
+    "applied",
+    deployClusterRig(parts, again, k, token.token),
+  );
+  return {
+    ok: `Control sets ${rig} up again${node ? ` on ${node}` : ""}: its page follows each step.`,
+  };
+}
 
 /** Sets a rig up on a cluster, in the background: one apply, then the first report. */
 async function deployClusterRig(
@@ -449,7 +521,7 @@ export async function checkClusterRig(
 ): Promise<{ ok: boolean; words: string }> {
   const r = parts.store.clusters.rig(rig);
   const k = r ? parts.store.clusters.get(r.cluster) : undefined;
-  if (!r || !k) return { ok: false, words: "The cluster is no longer in Settings › Providers." };
+  if (!r || !k) return { ok: false, words: "The cluster is no longer in Settings › Machines." };
   const n = clusterNames(rig);
   const out = await parts.kube.kubectl(
     clusterTarget(parts, k),

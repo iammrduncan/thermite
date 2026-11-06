@@ -299,6 +299,10 @@ export function takingModel(
   );
 }
 
+/** Why Check is off while a rig takes its new model, on hover (goal 191). */
+export const TAKING_WHY =
+  "The rig is taking its new model: it checks the model itself once it has it, within a minute.";
+
 /** Where the page follows a rig taking a new model. */
 export const modelFollowUrl = (rig: string): string =>
   `/ui/rigs/${encodeURIComponent(rig)}/model.json`;

@@ -12,9 +12,11 @@ Set a limit when you want one, and always before agents use a paid model key.
 
 | Limit | Where you set it | What it counts | Where it works |
 | --- | --- | --- | --- |
-| A stop time | **Stop after (hours)** on the **New campaign** page, or `budget.wall_hours` in the contract | Hours since the run was created, paused time included | Every rig |
+| A stop time | **Stop after (hours)** on the **New campaign** page, or `budget.wall_hours` in the contract | Hours the run worked: from its creation, without the time it was paused, its agents could not work, its rig drained or its harness did not run | Every rig |
 | Device hours | `budget.device_hours` in the contract | Hours the judge's jobs for the run took, each from its start to its end | Every rig |
 | Model spend | `budget.llm_usd` in the contract | Dollars of the tokens that the workers' [trials](../../reference/glossary.md) used, at the token prices the rig was given | Only on a rig that has both token prices: the local stack, once you set them |
+
+Pausing a run costs it none of its stop time: the hours count only while it works, as a research run's clock does.
 
 A limit pauses only a run with agents that has a model. A run with no agents, such as a [try](../../reference/glossary.md) of the kit or a run started with `--agents off`, is never paused by a limit.
 
@@ -66,7 +68,15 @@ A research campaign ends by itself instead: after `min_duration`, when the revie
 
 ## Go on after a limit
 
-Resuming doesn't help: the run is still over its limit, so it is paused again at once. No command changes a run's limits ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)). Start a new run instead. Its limits count from zero.
+A run its stop time paused can go on with more hours:
+
+1. Open the run's page, or its **Live**. Its header has **Add hours** beside **⋯**.
+2. Press **Add hours**, type the hours to add in **Hours to add** (24 unless you change it), and press **Add hours and resume**.
+3. Once the rig has taken it, within a minute, the run is running again, and its **History** says `You added 24 hours: the run may work 72 hours in all, and it resumed.`
+
+Over MCP or REST, send [`add_run_hours`](../../reference/signed-commands.md#add_run_hours) `{"run": "<run>", "hours": 24}`; a running run takes hours this way too. Resume alone doesn't help: the run is still over its hours, so it is paused again at once.
+
+The other limits, device hours and model spend, can't be raised on a run ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)). For those, start a new run instead. Its limits count from zero.
 
 - **From the command line:** to change a limit, edit `budget` and raise the contract's `version`. Then assign a new run with `--seed-commit` and the old run's champion, so the new run starts where the old one stopped. The champion's attempt page shows its full commit under **Commit**.
 - **On the dashboard:** **Start a run**, on the campaign's page, starts a new run with the same limits, counted from zero. It starts from the latest saved version's starting commit or, for a campaign started from the command line, with its newest assignment's contract and commit: not from the old champion. To change **Stop after (hours)**, fill in the **New campaign** page again with the same **Campaign name**: this saves a new version, and later runs use it. To go on from the old champion, [take the result](take-the-result.md), commit it on a branch of your project, and give that branch in **Start from** in the new version.

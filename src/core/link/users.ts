@@ -10,6 +10,7 @@ import { kbFileSubject } from "./kb-files.ts";
 import { LEAF_ADDRESS, LEAF_JS_API, LEAF_PORT, leafAccount, leafTlsName } from "./leaf.ts";
 import { LIVE_RUNS_PER_RIG, liveSubject, rigLiveSubject } from "./live.ts";
 import { reportSubject } from "./report.ts";
+import { runnerSubject, runnersSubject } from "./runners.ts";
 
 /**
  * Who may do what on the message bus (goal 168): only control, its backups and the rigs'
@@ -61,10 +62,14 @@ export function rigInboxPrefix(rig: string): string {
   return `_INBOX.rig.${rig}`;
 }
 
-/** What a user may publish to and subscribe to: these subjects, and nothing else. */
+/**
+ * What a user may publish to and subscribe to: these subjects, and nothing else. With
+ * `allow_responses`, it may also answer each request it takes, once.
+ */
 export interface Permissions {
   publish: { allow: string[] };
   subscribe: { allow: string[] };
+  allow_responses?: boolean | undefined;
 }
 
 /** The JetStream API's subjects: the server answers a request on these. */
@@ -112,9 +117,33 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
         kbAskSubject("search", rig),
         kbAskSubject("read", rig),
         ...RIG_ASK_KINDS.map((kind) => rigAskSubject(rig, kind)),
+        // A rig's core asks its runners (goal 206): any runner of its own rig.
+        runnersSubject(rig),
       ],
     },
     subscribe: { allow: [`${rigInboxPrefix(rig)}.>`] },
+  };
+}
+
+/**
+ * Where a rig's core takes a runner's answers (goal 206): under its own inbox, a subject of that
+ * runner's own, which the runner's user may publish to and no other runner's may.
+ */
+export function runnerReplyPrefix(rig: string, runner: string): string {
+  return `${rigInboxPrefix(rig)}.runner.${runner}`;
+}
+
+/**
+ * What a runner's user may do (goal 206): take its core's asks on its own subject (runners.ts) and
+ * answer each on its own reply subject in the core's inbox (runnerReplyPrefix), where the core
+ * asks for its answers. Nothing else: no stream, no other rig's or runner's subject, no other
+ * part of the core's inbox, no ask of control.
+ */
+export function runnerPermissions(rig: string, runner: string): Permissions {
+  return {
+    publish: { allow: [`${runnerReplyPrefix(rig, runner)}.*`] },
+    subscribe: { allow: [runnerSubject(rig, runner)] },
+    allow_responses: true,
   };
 }
 
@@ -203,6 +232,8 @@ export interface BusUserKeys {
   system: string;
   backup?: string | undefined;
   rigs: readonly { rig: string; key: string; runs?: readonly string[] | undefined }[];
+  /** The runner processes of rigs whose supervisors registered a key (goal 206). */
+  runners?: readonly { rig: string; runner: string; key: string }[] | undefined;
   /** The rigs on RunPod whose pod's server control's server dials as a leaf node, if any. */
   leaf?: LeafRigs | undefined;
 }
@@ -245,7 +276,10 @@ interface LeafService {
  * across a leaf connection bound to an account without JetStream of its own.
  */
 export function leafServices(rig: string, runs: readonly string[] = []): LeafService[] {
-  return rigPermissions(rig, runs).publish.allow.map((subject) => ({
+  // A rig on RunPod is one machine: it asks no runner of another (goal 206).
+  const runners = runnersSubject(rig);
+  const allow = rigPermissions(rig, runs).publish.allow.filter((s) => s !== runners);
+  return allow.map((subject) => ({
     subject,
     ...(subject.startsWith(`${API}.`)
       ? { local: `${LEAF_JS_API}${subject.slice(API.length)}` }
@@ -316,7 +350,16 @@ function leafParts(leaf: LeafRigs | undefined) {
  */
 export function usersFile(u: BusUserKeys): string {
   const backup = u.backup === undefined ? [] : [u.backup];
-  for (const key of [u.control, u.system, ...backup, ...u.rigs.map((r) => r.key)])
+  const runners = [...(u.runners ?? [])].sort((a, b) =>
+    `${a.rig}/${a.runner}` < `${b.rig}/${b.runner}` ? -1 : 1,
+  );
+  for (const key of [
+    u.control,
+    u.system,
+    ...backup,
+    ...u.rigs.map((r) => r.key),
+    ...runners.map((r) => r.key),
+  ])
     if (!isUserKey(key)) throw new Error("not a NATS user key for the bus's users file");
   const rigs = [...u.rigs].sort((a, b) => (a.rig < b.rig ? -1 : a.rig > b.rig ? 1 : 0));
   const leaf = leafParts(u.leaf);
@@ -327,6 +370,7 @@ export function usersFile(u: BusUserKeys): string {
         { nkey: u.control, permissions: controlPermissions() },
         ...backup.map((nkey) => ({ nkey, permissions: backupPermissions() })),
         ...rigs.map((r) => ({ nkey: r.key, permissions: rigPermissions(r.rig, r.runs) })),
+        ...runners.map((r) => ({ nkey: r.key, permissions: runnerPermissions(r.rig, r.runner) })),
       ],
       ...(leaf.exports.length ? { exports: leaf.exports } : {}),
     },

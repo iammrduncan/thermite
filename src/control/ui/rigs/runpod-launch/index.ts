@@ -12,7 +12,7 @@ export { RUNPOD_LAUNCH_JS } from "./client.ts";
  * control's image is chosen. Without the script the form still works: the server checks it all.
  */
 
-/** A RunPod account in Providers, as the launch page needs it. */
+/** A RunPod account in Settings › Machines, as the launch page needs it. */
 export interface LaunchCloud {
   name: string;
   key_hint: string;

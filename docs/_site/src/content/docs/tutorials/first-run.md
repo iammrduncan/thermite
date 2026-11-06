@@ -38,7 +38,7 @@ cd thermite
 curl -fsSLO https://github.com/iammrduncan/thermite/releases/latest/download/compose.yaml
 ```
 
-The folder now holds one file, `compose.yaml`. It says which containers make up Thermite and which images they run. Its first line names the release, such as `# Thermite 0.1.2`. Each image is pinned to the exact build of that release, so every computer that uses this file runs the same Thermite.
+The folder now holds one file, `compose.yaml`. It says which containers make up Thermite and which images they run. Its first line names the release, such as `# Thermite 0.1.3`. Each image is pinned to the exact build of that release, so every computer that uses this file runs the same Thermite.
 
 Check that the file is the release's own. The notes of the [latest release](https://github.com/iammrduncan/thermite/releases/latest) give its SHA-256 and the command that checks it: `echo "<sha-256>  compose.yaml" | sha256sum -c -` on Linux, or with `shasum -a 256 -c -` in place of `sha256sum -c -` on macOS. It prints `compose.yaml: OK`. If it prints `FAILED`, don't use the file: download it again.
 
@@ -150,7 +150,7 @@ Now give the judge something to judge. The **Judge smoke** check submits thirtee
 
    **Judge smoke** shows **passed**, with `smoke on smoke-cpu: all 13 candidates were judged as expected (run check-smoke-…)`, and **Run it** comes back. Until then, it shows **running**, and the row changes by itself when the result comes. The rig reports to control about once a minute, so the result can show a minute after the check ended, as `passed 1m ago`.
 
-   On a machine whose timing is noisy, such as a virtual machine that shares its host, it can show **passed** with `smoke on smoke-cpu: 12 of 13 candidates were judged as expected; the no-op came out inconclusive, not neutral` and the note `The timing on this machine is noisy. Results here need more repeats.` The judge works; the note means campaigns here need more repeats to tell small changes apart. Go on with the tutorial. In step 7, the no-op then counts as inconclusive, not neutral. See [Judge smoke passed with a note](../how-to/operate/troubleshoot.md#judge-smoke-passed-with-a-note).
+   On a machine whose timing is noisy, such as a virtual machine that shares its host, it can show **passed** with `smoke on smoke-cpu: 12 of 13 candidates were judged as expected; the no-op came out inconclusive, not neutral` and the note `The timing on this machine is noisy. Results here need more repeats.` The judge works; the note means campaigns here need more repeats to tell small changes apart. The check also takes longer there, up to half an hour, because the judge measures each change it can't call yet as many times as it may. Go on with the tutorial. In step 7, the no-op then counts as inconclusive, not neutral. See [Judge smoke passed with a note](../how-to/operate/troubleshoot.md#judge-smoke-passed-with-a-note).
 
    If it shows **failed**, the sentence beside it says why. The usual reason on a laptop is a computer too busy for fair timing: close other heavy programs and press **Run it** again. See [A check failed](../how-to/operate/troubleshoot.md#a-check-failed).
 

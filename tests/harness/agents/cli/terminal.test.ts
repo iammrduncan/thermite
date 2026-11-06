@@ -27,6 +27,7 @@ import type { ConsoleLater, TrialConsole } from "../../../../src/agents/cli/cons
 import { RoleTerminal } from "../../../../src/agents/cli/terminal.ts";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import { messageText, type Prompt } from "../../../../src/agents/prompt.ts";
+import { MIRROR_EVERY_MS } from "../../../../src/agents/terminal/host.ts";
 import { SETSID } from "../../../../src/agents/terminal/pty.ts";
 import { signEnvelope } from "../../../../src/core/commands.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
@@ -211,7 +212,9 @@ async function trial(
       sent: (p) => sent.push(p),
       env: { FAKE_TUI_SCRIPT: a.script },
       pollMs: 20,
-      afterSubmitMs: 100,
+      // A few of the host's copies of the session log, so the turn's start has reached the loop before
+      // it ends the program (a trial waits 5 s); one copy's wait was a race on a slow machine.
+      afterSubmitMs: 4 * MIRROR_EVERY_MS,
       terminal: true,
       ...more,
     },

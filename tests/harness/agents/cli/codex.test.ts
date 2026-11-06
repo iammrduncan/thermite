@@ -224,7 +224,7 @@ describe("the Codex CLI", () => {
     assert.ok(!`${a.join(" ")}${c}`.includes(ACCESS), "the access token is in neither");
     assert.equal(tomlString('a"b\\c\nd\u007f'), '"a\\"b\\\\c\\u000ad\\u007f"');
     assert.doesNotMatch(WORKER_CODEX_SYSTEM, /set timeout to 0/);
-    assert.match(WORKER_CODEX_SYSTEM, /thermite-trial submit --hypothesis/);
+    assert.match(WORKER_CODEX_SYSTEM, /thermite-trial submit-experiment --hypothesis/);
     assert.match(WORKER_CODEX_SYSTEM, /keep field notes with "thermite-trial note --kind KIND/);
     const limits = limitsNote(laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }), "Codex");
     assert.match(limits, /Codex itself included\./);

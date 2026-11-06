@@ -9,12 +9,23 @@ import type { ClusterRig } from "../../store/index.ts";
  * GPUs, the wait for its first report, and each step of its history in words.
  */
 
-/** The images a rig control sets up runs: the harness (CPU, and CUDA for GPU rigs), the supervisor. */
+/**
+ * The images a rig control sets up runs: the harness (CPU; CUDA 12 for GPU rigs, and CUDA 13 for
+ * a cluster rig that asks for it, goal 132), the supervisor.
+ */
 export interface RigImages {
   harness: string;
   harnessCuda?: string | undefined;
+  harnessCuda13?: string | undefined;
   supervisor: string;
 }
+
+/**
+ * The CUDA harness a GPU rig takes (goal 132): "12", the CUDA 12 image, Pascal to Hopper on amd64;
+ * "13", the CUDA 13 image, Turing to Blackwell and the DGX Spark on arm64.
+ */
+export const CUDA_VERSIONS = ["12", "13"] as const;
+export type CudaVersion = (typeof CUDA_VERSIONS)[number];
 
 /** The steps of an update, in words (the rig's page and its history), as update.ts records them. */
 export const UPDATE_STEP_WORDS: Record<string, string> = {
@@ -65,6 +76,18 @@ export const STEP_WORDS: Record<string, string> = {
   bus_key_refused: "Its new key on the message bus refused: another rig or control holds it",
   seal_key_refused: "Its new seal key refused: another rig holds it",
   bus_keys_seen: "You saw the change of its keys on the message bus",
+  // Its runner processes (goal 206).
+  runner_bus_key: "A runner's key on the message bus registered",
+  runner_added: "A runner added: control sets it up",
+  runner_applied: "A runner's objects applied in the cluster",
+  runner_given: "A runner given to the rig: its core takes runs there once it answers",
+  runner_removed: "A runner taken away",
+  runner_images: "A runner's deployments applied with new images",
+  workers_given: "Its Workers at a time sent, as Add a rig chose, once it reported its settings",
+  set_up_again: "Set up again after a failed setup, with a new token",
+  runner_answers: "A runner answered the rig's core: it takes runs of its pool",
+  runner_away: "A runner stopped answering: its run under way was tried again",
+  runner_back: "A runner answers again: it takes runs of its pool",
   bus_registered: "It registered its keys on the message bus with control",
   bus_off:
     "It calls control over HTTP with no keys on the message bus: it is broken until it is set up again",
@@ -97,21 +120,41 @@ export const rigTaken = (parts: ControlParts, rig: string) =>
   Boolean(parts.store.joinedRigs.get(rig)) ||
   parts.views().some((u) => u.id === rig);
 
+/**
+ * Every rig's name control knows, removed and retired ones too, which no new rig may take: Add a
+ * rig's name step says so before it sends (goal 206).
+ */
+export const rigNamesTaken = (parts: ControlParts): string[] =>
+  [
+    ...new Set([
+      "add",
+      ...parts.store.enrollments.rigs().map((r) => r.rig),
+      ...parts.store.machines.rigs().map((r) => r.rig),
+      ...parts.store.clusters.rigs().map((r) => r.rig),
+      ...parts.views().map((u) => u.id),
+    ]),
+  ].sort();
+
 // The judge's share as typed in a form, by the one rule of clusters/resources.ts.
 export const judgeShare = (raw: string, n: number) =>
   judgeShareOf(raw ? Number(raw) : undefined, n);
 
-/** The images control deploys for a rig with these GPUs, or why it has none. */
+/** The images control deploys for a rig with these GPUs, on its CUDA (default 12), or why it has none. */
 export const controlImages = (
   parts: ControlParts,
   gpus: number,
+  cuda: CudaVersion = "12",
 ): ClusterRig["spec"]["images"] | string => {
   const images = parts.rigImages;
   if (!images) return "Control has no rig images configured.";
-  if (gpus && !images.harnessCuda)
+  if (gpus && cuda === "13" && !images.harnessCuda13)
+    return "Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).";
+  if (gpus && cuda === "12" && !images.harnessCuda)
     return "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).";
   return {
-    harness: gpus ? (images.harnessCuda as string) : images.harness,
+    harness: !gpus
+      ? images.harness
+      : ((cuda === "13" ? images.harnessCuda13 : images.harnessCuda) as string),
     supervisor: images.supervisor,
   };
 };

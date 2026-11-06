@@ -126,7 +126,7 @@ describe("control dashboard", () => {
     assert.equal(current?.contextWindow, 262144);
     assert.equal(statSync(join(dir, "model-route.json")).mode & 0o777, 0o600);
     await s.relay();
-    page = await (await s.get("/ui/settings/routes")).text();
+    page = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(page, /Its agents run under Pi with deepseek-v4\.1-flash-free from opencode\./);
     const rig = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(rig, /The agents now use model route &quot;opencode&quot;/);
@@ -180,7 +180,7 @@ describe("control dashboard", () => {
     assert.equal(zen?.api, "opencode");
     assert.equal(zen?.apiKey, "");
     await s.relay();
-    page = await (await s.get("/ui/settings/routes")).text();
+    page = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(page, /Its agents run under OpenCode v2 with free-model-free from zen\./);
     // A planner given OpenCode's own models runs through OpenCode too; cleared, it follows the workers.
     s.store.agentModels.assignRole("rig-a", "planner", {
@@ -194,8 +194,9 @@ describe("control dashboard", () => {
     assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.planner(), undefined);
     // A provider added as OpenAI-compatible at OpenCode's own endpoint, with its key, is OpenCode's
-    // own too: under OpenCode it runs through OpenCode's built-in provider (no key sent); under Pi,
-    // its key serves its paid models, and its free models are refused there.
+    // own too: its free models run through OpenCode's built-in provider (no key sent), and are
+    // refused under Pi; its paid models run anywhere with its key, through the harness's proxy,
+    // under OpenCode too (issue 26).
     await s.post("/ui/settings/providers", {
       csrf,
       name: "oc-key",
@@ -234,6 +235,50 @@ describe("control dashboard", () => {
       route: { type: string; api_key: string };
     };
     assert.deepEqual([paid.route.type, paid.route.api_key], ["openai", "test-oc-key-0002"]);
+    await s.post("/ui/settings/rigs", {
+      csrf,
+      rig: "rig-a",
+      choice: "oc-key|paid-model",
+      harness: "opencode",
+    });
+    const paidUnderOpencode = (await s.rigConfig("model-route")) as unknown as {
+      route: { type: string; api_key: string; harness: string };
+    };
+    assert.deepEqual(
+      [
+        paidUnderOpencode.route.type,
+        paidUnderOpencode.route.api_key,
+        paidUnderOpencode.route.harness,
+      ],
+      ["openai", "test-oc-key-0002", "opencode"],
+    );
+    // OpenCode's own provider given its key: the same (issue 26). Its paid model runs in Pi with
+    // the key; under OpenCode too, through the proxy; its free model still runs keyless in
+    // OpenCode's own client.
+    await s.post("/ui/settings/providers", {
+      csrf,
+      name: "zen-key",
+      type: "opencode",
+      base_url: "",
+      api_key: "test-oc-key-0003",
+    });
+    for (const [harness, model, want] of [
+      ["pi", "paid-model", ["openai", "test-oc-key-0003"]],
+      ["opencode", "paid-model", ["openai", "test-oc-key-0003"]],
+      ["opencode", "free-model-free", ["opencode", ""]],
+    ] as const) {
+      const r = await s.post("/ui/settings/rigs", {
+        csrf,
+        rig: "rig-a",
+        choice: `zen-key|${model}`,
+        harness,
+      });
+      assert.doesNotMatch(where(r), /run only in/, `${model} under ${harness}`);
+      const got = (await s.rigConfig("model-route")) as unknown as {
+        route: { type: string; api_key: string };
+      };
+      assert.deepEqual([got.route.type, got.route.api_key], [...want], `${model} under ${harness}`);
+    }
     // Any other provider works under OpenCode too (through the harness's key-adding proxy).
     await s.post("/ui/settings/rigs", {
       csrf,

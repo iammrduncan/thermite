@@ -12,7 +12,7 @@ A **rig** can check itself in three ways. Each check runs inside the rig's **har
 | --- | --- | --- | --- | --- | --- | --- |
 | Model route | `model` | **Model route** | The rig's model answers with a correct tool call, through the same harness its agents use | A model route | 120 s | No |
 | Isolation | `isolation` | **Isolation** | Each role's user is refused what it must not reach, and reaches what it must | The broker: the harness container running as root | 30 s for each role | Yes |
-| Smoke | `smoke` | **Judge smoke** | The judge gives each change in a known set its expected verdict, on the rig's own device | A `cpu` or `cuda-gpu` target, and the smoke kits in the image | 3 hours for the whole check | Yes |
+| Smoke | `smoke` | **Judge smoke** | The judge gives each change in a known set its expected verdict, on the rig's own device, or on its runners for a core that judges on them alone ([runners](../how-to/install/runners.md)), with the smoke kit of their kind | A `cpu` or `cuda-gpu` target, and the smoke kits in the image | 3 hours for the whole check | Yes |
 
 ## How a check runs
 
@@ -49,7 +49,7 @@ When the harness restarts during a check, it records the check as finished with 
   | Refused: the rig did not run the command | The last result | `Not run: the rig refused it at 03:41 UTC.` and the rig's reason, such as `Not now: …` | **Run it** |
   | Expired: the rig did not take the command before its signature ran out | The last result | `Not run: the rig did not take it before 04:41 UTC.` | **Run it** |
 
-  A run of the check that started after the command, or that still runs, shows in place of the command: the rig ran it by itself, or it will refuse the command while it runs. **Providers › Harness and model for each rig** says the same of the model check in its rig's row, such as `Its model check was sent to the rig at 03:41 UTC. It starts when the rig takes it.` or `Its model check is running · 12 s.`, and its **Check** button is off meanwhile.
+  A run of the check that started after the command, or that still runs, shows in place of the command: the rig ran it by itself, or it will refuse the command while it runs. The rig's page says the same of the model check under **The agents' model**, such as `Its model check was sent to the rig at 03:41 UTC. It starts when the rig takes it.` or `Its model check is running · 12 s.`, and its **Check** button is off meanwhile.
 - The rig's history, and `checks` in `GET /v1/rigs/<rig>/view` on the [REST API](rest-api.md).
 - The MCP tool `recent_events`. See [MCP tools](mcp-tools.md).
 
@@ -72,15 +72,15 @@ While the workers' model check fails, no trial or plan of the rig's run starts, 
 
 | Summary | Meaning |
 | --- | --- |
-| `<model> answered with a correct tool call in <s> s` | Passed (Pi). OpenCode, Claude Code and Codex add ` (OpenCode)`, ` (Claude Code)` or ` (Codex)` |
-| `<model> failed the tool-call check: no answer in 120 s (is the model up?)` | No answer in time |
+| `<model> answered with a correct tool call in <s> s, its first token after <t> s` | Passed (Pi). OpenCode, Claude Code and Codex add ` (OpenCode)`, ` (Claude Code)` or ` (Codex)` and give no first token's time |
+| `<model> failed the tool-call check: no answer in <n> s: the model is down, or busy with other requests for longer than the check waits (the rig's check time on Edit rig sets how long)` | No answer in the check's time: 120 s, or the rig's `check_seconds`. In OpenCode, Claude Code and Codex the words follow `failed the tool-call check in <program>:` |
 | `<model> failed the tool-call check: it called the tool with "<x>", not "<word>"` | A tool call with the wrong word |
 | `<model> failed the tool-call check: no tool call: <error>` | The request failed with an error |
 | `<model> failed the tool-call check: no tool call (stop: <reason>); it wrote: <text>` | The model answered without calling the tool. `; it wrote: <text>` appears only when it wrote some text |
 | `<model> failed the tool-call check in OpenCode: <why>` | Failed in OpenCode. `<why>` is the last error, `its tool call did not print the word`, or `no tool call; it wrote: <text>` |
 | `<model> failed the tool-call check in Claude Code: <why>` | Failed in Claude Code. `<why>` can also be `the subscription's usage window is full until <time>` |
 | `<model> failed the tool-call check in Codex: <why>` | Failed in Codex. `<why>` is the last error, `its tool call did not print the word`, or `no tool call; it wrote: <text>` |
-| `no model route: set one on control's settings page (or in the rig's settings)` | The rig has no model route. See [Connect a model provider](../how-to/models/connect-a-provider.md) |
+| `no model route yet: a rig given one by control takes it within a minute and checks it itself; else set one on control's settings page (or in the rig's settings)` | The rig has no model route. If control just gave it one, wait: the rig checks it once it has it. Else see [Connect a model provider](../how-to/models/connect-a-provider.md) |
 
 ## Isolation check
 
@@ -173,6 +173,7 @@ Where the rig keeps a sealed snapshot of its state on the host's volume (`THERMI
 | `research-read` | The workers' users (`lane-1`, `agent-1`) and the planner's (`planner`) | Read the claim's file in that research folder |
 | `device:<own card>` and the control nodes | Each role with a GPU of its own (dedicated GPUs only) | Open its own card and the shared control nodes |
 | `visible-gpus` | Each role with a GPU of its own | `nvidia-smi -L` lists exactly that role's card |
+| `move-across` | Every role | Move a folder into another folder of its own working folder, as a build's cache does (Zig's, for one): `moves` |
 
 On a rig with one shared device, the `run` user and development runs are not probed for devices. See [Sharing a device](../explanation/sharing-a-device.md).
 
@@ -215,12 +216,12 @@ Each result reads as a role's does: the error it met, such as `EACCES` or `EPERM
 
 ### Results
 
-Each probe's result is the error the operation met (refused, as it must be), `readable` or `reachable` (succeeded, where it must), `sees <ids>` (`visible-gpus` listed exactly the role's card), or one of these failures:
+Each probe's result is the error the operation met (refused, as it must be), `readable`, `reachable` or `moves` (succeeded, where it must), `sees <ids>` (`visible-gpus` listed exactly the role's card), or one of these failures:
 
 | Marker | Meaning |
 | --- | --- |
 | `ALLOWED` | A probe that must be refused succeeded |
-| `UNREADABLE <error>`, `UNREACHABLE <error>` | A probe that must succeed was refused |
+| `UNREADABLE <error>`, `UNREACHABLE <error>`, `UNMOVABLE <error>` | A probe that must succeed was refused. `UNMOVABLE EXDEV` on one filesystem: the GPU fence refused a move between folders |
 | `WRONG GPUS <ids>` | `nvidia-smi` showed other cards than the role's own |
 | `FOUND <what>` | Something that must not be there: a RunPod variable, the enrollment code, the snapshot key, a set-id file, a file with capabilities, or a file in the snapshot folder that is not sealed |
 | `OPENED <nodes>` | The supervisor's user opened a GPU device node |

@@ -1,0 +1,42 @@
+---
+id: "199"
+title: "The judge copies a job's files once, and checks the disk before it times"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 199 · The judge copies a job's files once, and checks the disk before it times
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+From [issue 50](https://github.com/iammrduncan/thermite/issues/50), the field report's second request. The judge's measure step copies the run's files (about 0.7 GB with inputs and weights there) before every timed run and deletes them after. On a nearly full disk, runs took 33 to 47 s instead of 2.5 s, early timings spiked up to five times, and one 4-hour run was lost to noise. Readiness checks the GPU, CPU load and throttling, not the disk.
+
+1. **Once per job:** the files are copied once into a read-only folder the judge owns, checked against a hash manifest before each timed run, with fresh work and output folders. Both arms get the same file-cache state before they are timed.
+2. **Disk readiness:** free space on the runs' folder and dirty pages are part of timing readiness, with why when they hold a job back.
+3. **Its record:** each result keeps its phase timings and disk figures, so noise can be explained afterwards.
+
+## Why
+
+Noise from the judge's own copying looks like the candidate's, and it cost real runs.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests, and the judge acceptance check passing.
+- [ ] Pages: How the judge measures, the judge's settings, Troubleshoot, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/199-judge-files-once-disk-ready.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

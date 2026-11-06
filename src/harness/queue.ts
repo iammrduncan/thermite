@@ -3,7 +3,13 @@ import { ExperimentText, type QueuePosition } from "../core/commands.ts";
 import { DIRECTION_NAME, directionOf, RESEARCH_TASK_KINDS } from "../core/directions.ts";
 import { newExperimentId } from "../core/ids.ts";
 import { labelledQuestion } from "../core/research-check.ts";
-import { type ExperimentRow, type Ledger, LedgerError } from "./ledger/index.ts";
+import { FINAL_LIFECYCLES, WON_VERDICTS } from "../core/verdicts.ts";
+import {
+  type ExperimentRow,
+  type ExperimentTry,
+  type Ledger,
+  LedgerError,
+} from "./ledger/index.ts";
 
 /**
  * Each run's experiment queue (goal 064): the experiments still to try, in order, and the log
@@ -12,6 +18,11 @@ import { type ExperimentRow, type Ledger, LedgerError } from "./ledger/index.ts"
  * States: `proposed` (a lane's idea, waiting for the planner or the owner), `queued` (up next,
  * in order), `assigned` (a lane's trial works on it), `done` (its trial ended: its attempt, or
  * no attempt and why) and `dropped` (with who dropped it and why).
+ *
+ * Tries (goal 214): an experiment may get more than one trial (`tries`, 1 by default). A try that
+ * ends without a win (no attempt, or an attempt the judge settles without one) sends the same
+ * experiment back to the top, with the try kept (`experiment_try`), until a try wins or none is
+ * left. A lane that tried it gets it again only when every lane of the run has.
  *
  * Writers: the owner (signed commands), the planner (it coordinates: it gives queued work to
  * lanes without overlap, and adds, moves, drops and accepts experiments), the advisors (add and
@@ -23,6 +34,28 @@ import { type ExperimentRow, type Ledger, LedgerError } from "./ledger/index.ts"
  */
 
 export type Experiment = ExperimentRow;
+
+/**
+ * An attempt's lifecycles that end its experiment's tries (goal 214): a win, a win that waits for
+ * the owner, or one the owner decided. Any other final lifecycle uses a try.
+ */
+const ENDS_TRIES: ReadonlySet<string> = new Set([
+  "promoted",
+  "awaiting_approval",
+  "audit_blocked",
+  "declined",
+]);
+
+/** An experiment's tries as an agent reads them (goal 214), when it gets more than one. */
+interface TriesBrief {
+  /** How many trials it gets. */
+  of: number;
+  /** Its try now (in progress or done) or next (up next), from 1. */
+  try: number;
+  /** The lanes that tried it, in the order they did. */
+  lanes: string[];
+  earlier: { n: number; lane: string | null; result: string; verdict?: string; cause?: string }[];
+}
 
 /** An experiment's text, as every writer gives it (the same limits as the owner's commands). */
 export const ExperimentInput = z.object({
@@ -80,6 +113,8 @@ export interface BriefExperiment {
    * restarted, the run was paused), how many and the last one's cause (goal 079).
    */
   returned?: { times: number; cause: string };
+  /** Its tries, when it gets more than one (goal 214). */
+  tries?: TriesBrief;
 }
 
 export interface QueueBrief {
@@ -200,6 +235,40 @@ export class ExperimentQueue {
     return id ? this.get(id) : undefined;
   }
 
+  /** An experiment's tries that ended without a win (goal 214), the first first. */
+  earlier(id: string): ExperimentTry[] {
+    return this.ledger.experiments.triesOf(id);
+  }
+
+  /**
+   * Whether a lane may take an experiment (goal 214): not one it tried already while a lane of the
+   * run's `lanes` has not tried it yet. Every lane may take one that gets one try.
+   */
+  takes(x: Pick<Experiment, "id" | "tries">, lane: string, lanes: readonly string[]): boolean {
+    if ((x.tries ?? 1) <= 1) return true;
+    const tried = new Set(this.earlier(x.id).flatMap((t) => (t.lane ? [t.lane] : [])));
+    return !tried.has(lane) || lanes.every((l) => tried.has(l));
+  }
+
+  /** An experiment's tries in its brief (goal 214); undefined for one that gets one try. */
+  triesBrief(x: Experiment, clip: (s: string, n: number) => string): TriesBrief | undefined {
+    const of = x.tries ?? 1;
+    if (of <= 1) return undefined;
+    const earlier = this.earlier(x.id);
+    return {
+      of,
+      try: earlier.length + 1,
+      lanes: earlier.flatMap((t) => (t.lane ? [t.lane] : [])),
+      earlier: earlier.map((t) => ({
+        n: t.n,
+        lane: t.lane,
+        result: t.result,
+        ...(t.verdict ? { verdict: t.verdict } : {}),
+        ...(t.cause ? { cause: clip(t.cause, 400) } : {}),
+      })),
+    };
+  }
+
   /**
    * The queue as an agent reads it (the planner, the teachers): up next in order, the
    * lanes' ideas, what each lane is on, and the newest tried with their results (the judge's
@@ -215,6 +284,7 @@ export class ExperimentQueue {
       ...(x.why ? { why: clip(x.why, 400) } : {}),
       ...(typeof x.question === "number" ? { question: x.question } : {}),
       by: x.added_by,
+      ...((x.tries ?? 1) > 1 ? { tries: this.triesBrief(x, clip) } : {}),
     });
     const judged = (attempt: string) => {
       const v = this.ledger.verdicts.current(attempt);
@@ -312,6 +382,19 @@ export class ExperimentQueue {
     return labelled !== undefined && has(labelled) ? labelled : null;
   }
 
+  /**
+   * How many trials an experiment gets (goal 214): 1 when not given. A research run's tasks get
+   * one each: a task's trial ends with what it found, never a win to try again for.
+   */
+  private triesFor(run: string, given: number | undefined): number {
+    if (given === undefined || given === 1) return 1;
+    if (!Number.isInteger(given) || given < 1 || given > 10)
+      throw new LedgerError("invalid", "tries is a whole number from 1 to 10");
+    if (this.ledger.runs.get(run)?.mode === "research")
+      throw new LedgerError("invalid", "a research run's task gets one try: leave out tries");
+    return given;
+  }
+
   /** The owner's, the planner's, an advisor's or a lane's new experiment. */
   add(
     run: string,
@@ -339,12 +422,15 @@ export class ExperimentQueue {
        * "Question N (index K)" names it; other runs' experiments name none.
        */
       question?: number | null | undefined;
+      /** How many trials it gets (goal 214); 1 when left out. */
+      tries?: number | undefined;
     },
     actor: string,
   ): Experiment {
     const text = ExperimentInput.parse(input);
     const state = input.state ?? "queued";
     const question = this.questionFor(run, input.question, text.title, input.from !== undefined);
+    const tries = this.triesFor(run, input.tries);
     const x: Row = {
       id: newExperimentId(),
       run,
@@ -365,6 +451,7 @@ export class ExperimentQueue {
       from_id: input.from?.id ?? null,
       question,
       yield: null,
+      tries,
     };
     const rows = state === "queued" ? this.reorder(run, x, { place: input.position }) : [x];
     this.ledger.experiments.write(rows, {
@@ -378,6 +465,7 @@ export class ExperimentQueue {
         ...(x.direction ? { direction: x.direction } : {}),
         ...(x.why ? { why: x.why } : {}),
         ...(question !== null ? { question } : {}),
+        ...(tries > 1 ? { tries } : {}),
         by: input.by,
         state,
         ...(state === "queued" && input.position !== undefined ? { position: input.position } : {}),
@@ -436,11 +524,11 @@ export class ExperimentQueue {
     return this.require(run, id);
   }
 
-  /** New words for an experiment still waiting (proposed or queued). */
+  /** New words, or a new number of tries (goal 214), for an experiment still waiting. */
   edit(
     run: string,
     id: string,
-    change: Partial<ExperimentInput>,
+    change: Partial<ExperimentInput> & { tries?: number | undefined },
     o: { by: string },
     actor: string,
   ): Experiment {
@@ -451,12 +539,20 @@ export class ExperimentQueue {
         `experiment ${id} is ${x.state}: only proposed or queued experiments can be edited`,
       );
     const c = ExperimentInput.partial().parse(change);
+    const tries = change.tries === undefined ? undefined : this.triesFor(run, change.tries);
+    const used = tries === undefined ? 0 : this.earlier(id).length;
+    if (tries !== undefined && tries <= used)
+      throw new LedgerError(
+        "invalid",
+        `experiment ${id} was tried ${used} time${used === 1 ? "" : "s"} already: give it more than ${used} tries`,
+      );
     const row: Row = {
       ...strip(x),
       ...(c.title !== undefined ? { title: c.title } : {}),
       ...(c.details !== undefined ? { details: c.details } : {}),
       ...(c.direction !== undefined ? { direction: c.direction } : {}),
       ...(c.why !== undefined ? { why: c.why } : {}),
+      ...(tries !== undefined ? { tries } : {}),
     };
     this.ledger.experiments.write([row], {
       actor,
@@ -469,6 +565,7 @@ export class ExperimentQueue {
         ...(c.details !== undefined ? { details: c.details } : {}),
         ...(c.direction !== undefined ? { direction: c.direction } : {}),
         ...(c.why !== undefined ? { why: c.why } : {}),
+        ...(tries !== undefined ? { tries } : {}),
       },
     });
     return this.require(run, id);
@@ -525,7 +622,8 @@ export class ExperimentQueue {
 
   /**
    * A trial ended: its experiment is done, with its attempt or why there is none ("submitted",
-   * "no_attempt", or the trial's stopped reason). Nothing happens for a trial with no experiment.
+   * "no_attempt", or the trial's stopped reason). With no attempt and tries left (goal 214), it
+   * goes back to the top for its next try instead. Nothing happens for a trial with no experiment.
    */
   finish(
     trial: string,
@@ -542,6 +640,12 @@ export class ExperimentQueue {
     const x = this.forTrial(trial);
     if (x?.state !== "assigned") return undefined;
     const cause = o.cause?.trim().slice(0, 2000) || null;
+    if (!o.attempt && this.triesLeft(x) > 0)
+      return this.retry(
+        x,
+        { lane: x.lane, trial, attempt: null, result: o.result, verdict: null, cause },
+        actor,
+      );
     const row: Row = {
       ...strip(x),
       state: "done",
@@ -565,6 +669,84 @@ export class ExperimentQueue {
       },
     });
     return this.require(x.run, x.id);
+  }
+
+  /** How many more tries an experiment gets after the one it is on or just ended (goal 214). */
+  private triesLeft(x: Experiment): number {
+    return (x.tries ?? 1) - this.earlier(x.id).length - 1;
+  }
+
+  /**
+   * A try ended without a win and tries are left (goal 214): the same experiment goes back to the
+   * top of the queue, with the try kept (lane, trial, attempt, result, verdict and cause) and one
+   * event, `experiment_retried`.
+   */
+  private retry(x: Experiment, t: Omit<ExperimentTry, "n" | "at">, actor: string): Experiment {
+    const n = this.earlier(x.id).length + 1;
+    const row: Row = {
+      ...strip(x),
+      state: "queued",
+      lane: null,
+      trial: null,
+      attempt: null,
+      result: null,
+      cause: null,
+    };
+    this.ledger.experiments.write(
+      this.reorder(x.run, row, { place: "top" }),
+      {
+        actor,
+        kind: "experiment_retried",
+        run: x.run,
+        body: {
+          id: x.id,
+          try: n,
+          tries: x.tries ?? 1,
+          lane: t.lane,
+          trial: t.trial,
+          ...(t.attempt ? { attempt: t.attempt } : {}),
+          result: t.result,
+          ...(t.verdict ? { verdict: t.verdict } : {}),
+          ...(t.cause ? { cause: t.cause.slice(0, 500) } : {}),
+          position: "top",
+        },
+      },
+      { ...t, n },
+    );
+    return this.require(x.run, x.id);
+  }
+
+  /**
+   * The run's experiments whose attempt the judge settled without a win, with tries left (goal
+   * 214), go back to the top of the queue, the oldest last so it ends up first. An attempt still
+   * being judged, a win, a win that waits for the owner and one the owner decided stay as they
+   * are. Returns those that went back.
+   */
+  retrySettled(run: string, actor: string): Experiment[] {
+    const out: Experiment[] = [];
+    for (const x of this.ledger.experiments.doneWithTriesLeft(run).reverse()) {
+      const attempt = x.attempt as string;
+      const lifecycle = String(this.ledger.attempts.get(attempt)?.lifecycle ?? "");
+      if (!FINAL_LIFECYCLES.has(lifecycle) || ENDS_TRIES.has(lifecycle)) continue;
+      const v = this.ledger.verdicts.current(attempt);
+      if (v && WON_VERDICTS.includes(v.verdict)) continue;
+      const reasons = v ? this.ledger.verdicts.get(v.id)?.reasons : undefined;
+      out.push(
+        this.retry(
+          x,
+          {
+            lane: x.lane,
+            trial: x.trial ?? "",
+            attempt,
+            result: x.result ?? "submitted",
+            verdict: v?.verdict ?? lifecycle,
+            cause: reasons?.trim().slice(0, 2000) || x.cause || null,
+          },
+          actor,
+        ),
+      );
+    }
+    return out;
   }
 
   /**

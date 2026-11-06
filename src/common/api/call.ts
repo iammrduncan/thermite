@@ -1,3 +1,5 @@
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import {
   type AnswerOf,
   type BodyOf,
@@ -82,6 +84,58 @@ export interface CallInput<R extends Route> {
 }
 
 /**
+ * The longest a call may wait through Node's fetch: its undici ends a call whose answer's headers,
+ * or a pause in its body, take more than 300 seconds, whatever the call's own signal says, as
+ * "fetch failed". A call allowed longer, such as a runner's measured run, goes by longFetch.
+ */
+const FETCH_OWN_LIMIT_MS = 290_000;
+
+/** What a call needs of an answer. */
+type Answered = Pick<Response, "status" | "text">;
+
+/**
+ * One call by node:http or node:https, bounded by its signal alone (its reason, a TimeoutError
+ * for AbortSignal.timeout, is what it rejects with): no time limit of its own.
+ */
+export function longFetch(url: string, init: RequestInit): Promise<Answered> {
+  return new Promise((resolve, reject) => {
+    const signal = init.signal ?? undefined;
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const u = new URL(url);
+    const send = u.protocol === "https:" ? httpsRequest : httpRequest;
+    const done = (err?: unknown) => {
+      signal?.removeEventListener("abort", abort);
+      if (err !== undefined) reject(err);
+    };
+    const req = send(
+      u,
+      { method: init.method ?? "GET", headers: init.headers as Record<string, string> },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("error", done);
+        res.on("end", () => {
+          done();
+          const body = Buffer.concat(chunks).toString("utf8");
+          resolve({ status: res.statusCode ?? 0, text: async () => body });
+        });
+      },
+    );
+    const abort = () => {
+      req.destroy();
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    req.on("error", done);
+    if (init.body !== undefined && init.body !== null) req.write(init.body as string | Uint8Array);
+    req.end();
+  });
+}
+
+/**
  * The time limit of a call that sends a body of many megabytes (a kit's bundle, a champion's
  * patch, up to 64 MiB): 30 minutes, as a git call's, so a slow link still gets it there.
  */
@@ -130,7 +184,8 @@ export async function callRoute<R extends Route>(
   let status: number;
   let text: string;
   try {
-    const res = await (t.fetchImpl ?? fetch)(url, {
+    const send = t.fetchImpl ?? (timeoutMs > FETCH_OWN_LIMIT_MS ? longFetch : fetch);
+    const res = await send(url, {
       method: route.method,
       headers,
       ...(body !== undefined ? { body } : {}),

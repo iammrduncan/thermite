@@ -6,7 +6,9 @@ import {
   actOnClusterRig,
   type ClusterRigAction,
   cancelDrain,
+  dropRunners,
   setClusterRigResources,
+  setClusterRigUpAgain,
   updateRigImages,
 } from "../../clusters/index.ts";
 import { notSent } from "../../command-progress.ts";
@@ -202,6 +204,12 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       });
       return "error" in done ? back("error", done.error) : back("ok", done.ok);
     }
+    // A setup that failed before its first report, done again on another node (goal 206).
+    if (action === "again") {
+      const node = String((await c.req.parseBody()).node ?? "").trim();
+      const done = await setClusterRigUpAgain(parts, r.rig, node || undefined, "owner:ui");
+      return "error" in done ? back("error", done.error) : back("ok", done.ok);
+    }
     if (!["stop", "start", "restart", "remove"].includes(action))
       return back("error", "No such action.");
     const f = await c.req.parseBody();
@@ -225,7 +233,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       action === "remove" ? removeCheck(store, r.rig, String(f.confirm ?? "").trim()) : null;
     if (removing && "refused" in removing) return back("error", removing.refused);
     const m = store.machines.get(r.machine);
-    if (!m) return back("error", `The machine ${r.machine} is no longer in Providers.`);
+    if (!m) return back("error", `The machine ${r.machine} is no longer in Settings › Machines.`);
     try {
       const out = await ssh.sshScript(
         {
@@ -250,7 +258,11 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       r.rig,
       action === "stop" ? "stopped" : action === "remove" ? "removed" : "running",
     );
-    if (action === "remove") store.enrollments.retire(r.rig, "owner:ui");
+    if (action === "remove") {
+      store.enrollments.retire(r.rig, "owner:ui");
+      // Its runner processes on clusters go with it (goal 206).
+      await dropRunners(parts, r.rig, "owner:ui");
+    }
     store.auditLog.add("owner:ui", `machine_rig_${action}`, {
       rig: r.rig,
       machine: r.machine,

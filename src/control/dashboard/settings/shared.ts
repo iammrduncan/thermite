@@ -23,7 +23,8 @@ export const modelPrefix = (type: ProviderType) =>
 /** Back to a Settings area (goal 181), with what happened said there; Providers by default. */
 export const settingsUrl = (k: "ok" | "error", m: string, area = "") =>
   `/ui/settings${area ? `/${area}` : ""}?${k}=${encodeURIComponent(m)}`;
-export const machineUrl = (k: "ok" | "error", m: string) => settingsUrl(k, m);
+/** Back to Settings › Machines (goal 203), after an action on a machine, a cluster or a GPU cloud. */
+export const machineUrl = (k: "ok" | "error", m: string) => settingsUrl(k, m, "machines");
 export const usd = (n: number | null) => (n === null ? "–" : `$${n.toFixed(2)}`);
 /** The add form's box for a cluster whose connection control can't check, and its words. */
 export const UNCHECKED_LABEL = "I accept that this cluster's connection isn't checked";

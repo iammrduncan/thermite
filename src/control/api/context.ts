@@ -107,6 +107,10 @@ export interface ControlOptions {
   clusterKubectl?: ClusterKubectl | undefined;
   /** How often a draining rig's report is looked at (goal 079; tests make it short). */
   drainWatchMs?: number | undefined;
+  /** How often control looks for runner processes to give their rig (tests make it short). */
+  runnersWatchMs?: number | undefined;
+  /** How often control looks for Add a rig's Workers at a time to give a new rig (tests too). */
+  workersWatchMs?: number | undefined;
   /** How control reaches GPU clouds' APIs (tests give their own). */
   cloudFetch?: typeof fetch | undefined;
   /** Test pods on GPU clouds; control's loop advances them (main.ts). Made here when not given. */
@@ -258,7 +262,11 @@ export function apiContext(
         return c.json({ error: "unauthorized" }, 401);
     } else {
       const token = bearer(c.req.header("authorization"));
-      if (!store.enrollments.tokenMatches(rig, token))
+      // A runner process control set up has a token of its own, for its own route alone: its
+      // registration on the bus (goal 206).
+      const runner = c.req.param("runner");
+      const own = runner !== undefined && store.rigRunners.tokenMatches(rig, runner, token);
+      if (!own && !store.enrollments.tokenMatches(rig, token))
         return c.json({ error: "unauthorized" }, 401);
       // A retired rig is refused until the owner brings it back, whatever token it holds.
       if (store.retired.get(rig)) return c.json({ error: "this rig is retired in control" }, 403);
@@ -267,7 +275,8 @@ export function apiContext(
     // build makes is from before version checks: unknown, and never refused for it.
     const route = c.req.path.slice(`/v1/rigs/${encodeURIComponent(rig)}/`.length);
     const supervisorBuild = buildFromHeaders((h) => c.req.header(h));
-    if (supervisorBuild || route === "supervisor")
+    // A runner's supervisor is not the rig's: its build is not the rig's supervisor's.
+    if (c.req.param("runner") === undefined && (supervisorBuild || route === "supervisor"))
       store.builds.setRig(rig, "supervisor", supervisorBuild);
     const refused = checkRig(store, rig, control);
     if (refused) {

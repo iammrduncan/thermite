@@ -20,6 +20,7 @@ import { editRigRoutes } from "./rigs/edit.ts";
 import { joinedRigRoutes } from "./rigs/joined.ts";
 import { rigListRoutes } from "./rigs/list.ts";
 import { rigPageRoutes } from "./rigs/page.ts";
+import { runnerRoutes } from "./rigs/runners.ts";
 import { runpodRigRoutes } from "./rigs/runpod.ts";
 import { rigStateRoutes } from "./rigs/state.ts";
 import { rigWeeklyRoutes } from "./rigs/weekly.ts";
@@ -82,6 +83,7 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   machineRoutes(app, dash);
   providerRoutes(app, dash);
   editRigRoutes(app, dash);
+  runnerRoutes(app, dash);
   commandRoutes(app, dash);
   return app;
 }

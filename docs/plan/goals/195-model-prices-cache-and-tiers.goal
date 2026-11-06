@@ -1,0 +1,43 @@
+---
+id: "195"
+title: "Model prices: a price for cache writes, and prices by request size"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 195 · Model prices: a price for cache writes, and prices by request size
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+From [issue 41](https://github.com/iammrduncan/thermite/issues/41). Thermite gives each model one flat price in three parts: tokens in, cached in and out. A provider can charge more: writing tokens to the prompt cache has its own price, and a request above a context size can cost several times as much. A user's cost on the dashboard was about half of the provider's bill for the same month.
+
+1. **A cache-write price,** on **Model prices** and in the listed prices, used where the usage records report cache writes.
+2. **Prices by request size:** a model's prices may change above a number of tokens in, as the provider lists them.
+3. **What can't be priced says so:** records that don't report cache writes, or a request's size, are priced as today, and the cost card says how many.
+
+## Why
+
+A budget in dollars (goal [123](123-budgets-made-simple.goal)) holds only if the cost is right.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests against the issue's numbers.
+- [ ] Pages: Model prices, the cost card's reference, the MCP tools (`model_usage`, `set_model_price`), and the changelog.
+- [ ] Issue 41 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/195-model-prices-cache-and-tiers.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

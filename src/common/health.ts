@@ -13,8 +13,15 @@ import { log, logError, logWarn } from "./log.ts";
 export class Loops {
   private readonly loops = new Map<
     string,
-    { limitMs: number; last: number; busy?: (() => string | undefined) | undefined }
+    {
+      limitMs: number;
+      last: number;
+      busy?: (() => string | undefined) | undefined;
+      /** Which add it was, so that a loop that ends removes only its own. */
+      added: number;
+    }
   >();
+  private adds = 0;
   private readonly now: () => number;
 
   constructor(now: () => number = Date.now) {
@@ -25,8 +32,18 @@ export class Loops {
    * A loop to watch, counted from now: it comes around every `periodMs` and is late past its
    * limit. `busy` says what it waits on now, when that work has no time limit.
    */
-  add(name: string, periodMs: number, busy?: () => string | undefined): void {
-    this.loops.set(name, { limitMs: loopLimitMs(periodMs), last: this.now(), busy });
+  add(name: string, periodMs: number, busy?: () => string | undefined): number {
+    const added = ++this.adds;
+    this.loops.set(name, { limitMs: loopLimitMs(periodMs), last: this.now(), busy, added });
+    return added;
+  }
+
+  /**
+   * A loop that ended for good, such as the judge's on a runner that left the rig: not watched.
+   * `added`: only if it is still that add's, not a loop of the same name added since.
+   */
+  remove(name: string, added?: number): void {
+    if (added === undefined || this.loops.get(name)?.added === added) this.loops.delete(name);
   }
 
   /** The loop came around. A loop must be added before it ticks: one that is not is a bug. */

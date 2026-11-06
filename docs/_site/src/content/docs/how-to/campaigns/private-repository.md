@@ -6,7 +6,7 @@ sidebar:
   order: 6
 ---
 
-A [rig](../../reference/glossary.md) fetches your project and your [kit](../../reference/glossary.md) itself, from their git repositories. For a private repository, set up **Git access** once on control: a deploy key that control makes, or an access token you paste. Then choose it on the **New campaign** page. Each access is for one host, such as `github.com`: control uses it for that host only, and gives it to a rig only while a run assigned to that rig that names it is live, waiting for the rig or taken by it and not closed.
+A [rig](../../reference/glossary.md) fetches your project and your [kit](../../reference/glossary.md) itself, from their git repositories. For a private repository, set up **Git access** once on control: a deploy key that control makes, or an access token you paste. Then choose it on the **New campaign** page. Each access is for one host, such as `github.com`: control uses it for that host only, and gives it to a rig only while a run assigned to that rig that names it is live, waiting for the rig or taken by it and not closed. Where a network lets out port 443 alone, a deploy key for `github.com` also reaches GitHub's SSH on port 443, `ssh://git@ssh.github.com:443/you/project.git`, and one for `gitlab.com` reaches `ssh://git@altssh.gitlab.com:443/you/project.git`, as those hosts document; control's own connections go out on 443 only in a deployment that allows nothing else.
 
 The **New campaign** page is the one place made for naming a Git access. From the command line, see [From the command line](#from-the-command-line).
 

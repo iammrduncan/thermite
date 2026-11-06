@@ -1,5 +1,6 @@
-import type { z } from "zod";
+import { z } from "zod";
 import type { CommandPayloads } from "./commands.ts";
+import { MAX_LANES, RIG_ID } from "./ids.ts";
 
 /**
  * The rig's own settings, changed from its Edit page through a signed owner command
@@ -34,6 +35,11 @@ export interface RigSettings {
    */
   quiet_minutes: number | null;
   /**
+   * How long the model check waits for the model's answer, in seconds (goal 150); null: 120. It
+   * limits the check only, never a trial or a model call.
+   */
+  check_seconds: number | null;
+  /**
    * How a trial's agent program runs (goal 169): in its own terminal, held by the terminal host
    * (a worker in Pi draws its Pi view there), or headless.
    */
@@ -44,7 +50,48 @@ export interface RigSettings {
    * rest are the agents'. Null: the rig's default. A change restarts the harness to regroup them.
    */
   judge_gpus: number | null;
+  /**
+   * The rig's runner processes on its other machines (goal 206), each with the pool of each runner
+   * it serves, in its order. The core takes a change at once: a runner added joins its pools when
+   * it answers, and one taken away fails its run, which the judge tries again and a lane is told
+   * of. Empty: the core runs on its own machine alone.
+   */
+  runners: RunnerSetting[];
 }
+
+/**
+ * A runner's pool (goal 206): the judge's, one lane's (`lane-2`), or shared by the judge and every
+ * lane, first come, first served.
+ */
+export type RunnerPool = "judge" | "shared" | `lane-${number}`;
+
+/** A pool's name: judge, shared or lane-1 to lane-MAX_LANES. */
+const POOL = new RegExp(
+  `^(?:judge|shared|lane-(?:${Array.from({ length: MAX_LANES }, (_, i) => i + 1).join("|")}))$`,
+);
+
+/** The most runners one runner process serves, and runner processes one rig has. */
+export const RUNNERS_PER_PROCESS = 8;
+export const RUNNER_PROCESSES = 16;
+
+/** A runner process of the rig and the pool of each runner it serves, in its order. */
+export const RunnerSetting = z.strictObject({
+  name: z.string().regex(RIG_ID),
+  pools: z
+    .array(z.string().regex(POOL, `a pool is judge, shared or lane-1 to lane-${MAX_LANES}`))
+    .min(1)
+    .max(RUNNERS_PER_PROCESS),
+});
+export interface RunnerSetting {
+  name: string;
+  pools: RunnerPool[];
+}
+
+/** A rig's runner processes, each named once. */
+export const RunnerSettings = z
+  .array(RunnerSetting)
+  .max(RUNNER_PROCESSES)
+  .refine((l) => new Set(l.map((r) => r.name)).size === l.length, "a runner process is named once");
 
 /** How a trial's agent program may run: in its own terminal UI, or headless. */
 export const PROGRAM_MODES = ["terminal", "headless"] as const;

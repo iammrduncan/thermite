@@ -1,0 +1,27 @@
+---
+id: "210"
+title: "The first change a run's judge measures reads high"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-05
+updated: 2026-11-05
+---
+
+# 210 · The first change a run's judge measures reads high
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014) · For the owner to weigh: a question about the judge, found while checking goal 209.
+
+## What was seen (2026-11-05)
+
+The judge acceptance check runs a smoke campaign's known candidates under compose, on a noisy virtual machine. In three of its kept runs there, one before goal 209 and two after, the first candidate the judge measured at nine blocks was the no-op, and it read positive in all six of its checks: +2.66% to +9.16%. The other candidates' readings scattered around zero. The no-op's verdict was `inconclusive` each time, as the machine's noise (an A/A block sigma of 8.48% to 21.4%) is too wide for it to reach `neutral` in nine blocks.
+
+Goal 209 did not cause it: the check's contract has no metric roles, so its judge decides as before, and the same reading is on record before goal 209.
+
+## The question
+
+Is the first change a run's judge measures biased upward, against the champion it is interleaved with, when the order holds across runs? Possible causes to rule in or out: the device or the machine warming up after the baseline and the A/A calibration; caches the champion's runs fill for the change's; the order of the arms in the first blocks.
+
+## Done when
+
+The owner has decided whether to look into it; if so, the cause is found on a quiet machine and, where it is the judge's, fixed with a test.

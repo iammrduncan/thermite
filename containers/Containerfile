@@ -11,7 +11,7 @@
 # The harness's default base is the Node image (CPU rigs). GPU rigs build it with BASE_IMAGE set
 # to a CUDA devel image: CUDA 12 for Pascal to Hopper, CUDA 13 (which dropped Maxwell, Pascal and
 # Volta) for Turing to Blackwell (goal 132).
-ARG NODE_IMAGE=docker.io/library/node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
+ARG NODE_IMAGE=docker.io/library/node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 ARG BASE_IMAGE=${NODE_IMAGE}
 # The programs the images carry, each at one pinned release. OpenCode v2, in the harness and the
 # supervisor, with its release's MIT LICENSE (containers/harness/opencode/; update it with the
@@ -274,11 +274,15 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 # program on its own terminal, goal 169). No bubblewrap: the agents and the advisors
 # run Claude Code with its own sandbox off (src/agents/programs/claude-code/index.ts says why).
 # The base's system packages are upgraded first, so each build takes the distribution's fixes
-# (goal 125).
-RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
- && apt-get install -y --no-install-recommends git tini ca-certificates gcc g++ libc6-dev make \
-      cmake ninja-build ccache python3 python3-numpy \
+# (goal 125). HARNESS_KEEP_BASE=1 keeps a base image's packages as its publisher built them, for
+# a project measured in that publisher's environment (such as NVIDIA's PyTorch container): no
+# upgrade, and what the base has already is not installed again at a newer version.
+ARG HARNESS_KEEP_BASE=0
+RUN keep=$(if [ "$HARNESS_KEEP_BASE" = 1 ]; then echo --no-upgrade; fi) \
+ && apt-get update \
+ && if [ -z "$keep" ]; then DEBIAN_FRONTEND=noninteractive apt-get upgrade -y; fi \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $keep git tini \
+      ca-certificates gcc g++ libc6-dev make cmake ninja-build ccache python3 python3-numpy \
  && (command -v setpriv >/dev/null || apt-get install -y --no-install-recommends setpriv) \
  && command -v setpriv && command -v prlimit && command -v taskset && command -v setsid \
  && rm -rf /var/lib/apt/lists/*

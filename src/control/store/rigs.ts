@@ -176,6 +176,9 @@ export class ReportedRigs extends StorePart {
    * this summary, at the report's time.
    */
   noteReport(report: IngestReport, now: string): void {
+    const before = this.db.prepare("select summary from rig where id = ?").get(report.rig) as
+      | Row
+      | undefined;
     this.db
       .prepare(
         `insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at)
@@ -191,6 +194,43 @@ export class ReportedRigs extends StorePart {
         canonicalJson(report.summary ?? {}),
         report.generated_at ?? now,
       );
+    this.noteRunners(
+      report.rig,
+      before ? JSON.parse(String(before.summary)) : undefined,
+      report.summary,
+    );
+  }
+
+  /**
+   * The rig's history lines for its runners (goal 206), from two reports in a row: a runner
+   * process that answers its core for the first time, one that stopped answering, and one that
+   * answers again.
+   */
+  private noteRunners(rig: string, was: unknown, now: unknown): void {
+    type P = { name?: unknown; up?: unknown; why?: unknown; away_since?: unknown };
+    const processes = (s: unknown): P[] => {
+      const r = (s as { runners?: { processes?: unknown } } | undefined)?.runners?.processes;
+      return Array.isArray(r) ? (r as P[]) : [];
+    };
+    const old = new Map(processes(was).map((p) => [String(p.name), p]));
+    for (const p of processes(now)) {
+      const name = String(p.name);
+      const o = old.get(name);
+      if (p.up === true && o?.up !== true)
+        this.store.rigHistory.add(
+          rig,
+          o?.away_since ? "runner_back" : "runner_answers",
+          true,
+          name,
+        );
+      else if (p.up !== true && o?.up === true && p.away_since)
+        this.store.rigHistory.add(
+          rig,
+          "runner_away",
+          false,
+          `${name}: ${typeof p.why === "string" ? p.why : "it stopped answering"}`,
+        );
+    }
   }
 
   /**

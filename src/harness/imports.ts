@@ -3,6 +3,7 @@ import {
   chmodSync,
   createReadStream,
   createWriteStream,
+  existsSync,
   mkdirSync,
   realpathSync,
   renameSync,
@@ -35,6 +36,19 @@ export function resolveInbox(inboxDir: string, rel: string): string {
   }
   if (!real.startsWith(root + sep)) throw new ImportError(`symlink escapes inbox: ${rel}`);
   return real;
+}
+
+/**
+ * Whether a relative inbox path names a file there (goal 213): false when it is missing; a path or
+ * a symlink out of the inbox is refused, as resolveInbox refuses it.
+ */
+export function inInbox(inboxDir: string, rel: string): boolean {
+  const root = realpathSync(inboxDir);
+  if (!resolve(root, rel).startsWith(root + sep))
+    throw new ImportError(`path escapes inbox: ${rel}`);
+  if (!existsSync(resolve(root, rel))) return false;
+  resolveInbox(inboxDir, rel);
+  return true;
 }
 
 /**

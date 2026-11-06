@@ -12,8 +12,7 @@ import {
   agentsModelMissing,
   giveRigModel,
   harnessKept,
-  opencodeOnlyModel,
-  researchNeedsOpencode,
+  researchModelRefusal,
   sendSplit,
   splitFor,
 } from "../../rigs/index.ts";
@@ -259,13 +258,13 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     let startValue = String(f.start_value ?? "start");
     const chosen = String(f.agents_model ?? "").trim();
     let modelNote = "";
-    // Checked before the rig is given anything: OpenCode's free models work only in OpenCode.
-    const researchModel =
+    // Checked before the rig is given anything: OpenCode's free models work only in OpenCode, and
+    // a Claude subscription only in Claude Code, where no research worker runs (goal 190).
+    const researchRefused =
       draft.mode === "research" && startValue === "start"
-        ? opencodeOnlyModel(store, rig, chosen || undefined, String(f.agents_harness ?? ""))
+        ? researchModelRefusal(store, rig, chosen || undefined, String(f.agents_harness ?? ""))
         : undefined;
-    if (researchModel)
-      return newCampaignPage(c, { draft, errors: [researchNeedsOpencode(rig.id, researchModel)] });
+    if (researchRefused) return newCampaignPage(c, { draft, errors: [researchRefused] });
     if (chosen) {
       const given = giveRigModel(
         store,
@@ -279,7 +278,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       // Not on the rig yet: it arrives within a minute. Starting now would fail the first trials.
       if (startValue === "start" && !sameModel(rig.model?.model, model)) {
         startValue = "save";
-        modelNote = `${rig.id} takes ${model} within a minute. Settings › Rigs' models shows the rig taking it until then; then start the run here.`;
+        modelNote = `${rig.id} takes ${model} within a minute. The rig's page shows it taking the model until then; then start the run here.`;
       }
     }
     // Control gave the rig a model it has not taken yet: saved now, started once it has.
@@ -291,7 +290,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       !sameModel(rig.model?.model, pending.model)
     ) {
       startValue = "save";
-      modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then). Then start the run here.`;
+      modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; the rig's page shows it taking the model until then). Then start the run here.`;
     }
     if (!chosen && startValue === "start" && agentsModelMissing(store, rig))
       return newCampaignPage(c, {

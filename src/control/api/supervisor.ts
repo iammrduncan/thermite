@@ -1,9 +1,10 @@
 import type { Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { BadInput, jsonBody, Refusal } from "../../common/errors.ts";
-import { REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
+import { REGISTER, RUNNER_REGISTER, SupervisorFigures } from "../../core/api/control/rigs.ts";
+import { RIG_ID, RIG_NAME_RULE } from "../../core/ids.ts";
 import { isSealKey, SEAL_KEY_WORDS } from "../../core/link/config.ts";
-import { isUserKey, USER_KEY_WORDS } from "../../core/link/users.ts";
+import { isUserKey, USER_KEY_WORDS, userKeyFingerprint } from "../../core/link/users.ts";
 import {
   type BusUsers,
   busKeyHolder,
@@ -76,4 +77,29 @@ export function supervisorRoutes(
     if (takeRigSealKey(store, rig, sealKey) !== "same") void deps.busConfig?.write();
     return c.json({ ok: true, reports: reportPlace(store, rig) });
   });
+
+  // A runner process of the rig (goal 206): its key gets the runner's user on the bus, which takes
+  // only its core's asks on its own subject. A key another holds is refused, as a rig's is.
+  app.post(
+    RUNNER_REGISTER.path,
+    rigAuth,
+    bodyLimit({ maxSize: RUNNER_REGISTER.maxBytes }),
+    async (c) => {
+      const rig = c.req.param("rig");
+      const runner = c.req.param("runner");
+      if (!RIG_ID.test(runner)) throw new BadInput(`a runner's name is ${RIG_NAME_RULE}`);
+      const { bus_key: key } = RUNNER_REGISTER.body.parse(await jsonBody(c.req));
+      if (!isUserKey(key)) throw new BadInput(`bus_key is not ${USER_KEY_WORDS}`);
+      if (store.busKeys.runnerKey(rig, runner) === key) return c.json({ ok: true });
+      const holder = busKeyHolder(store, rig, key, deps.busUsers?.ownKeys() ?? []);
+      if (holder || store.busKeys.rigKey(rig) === key) {
+        noteKeyRefused(store, rig, "bus_key", key, holder ?? `rig ${rig}`);
+        throw new Refusal(keyHeldWords("bus_key"));
+      }
+      store.busKeys.setRunnerKey(rig, runner, key);
+      store.rigHistory.add(rig, "runner_bus_key", true, `${runner}: ${userKeyFingerprint(key)}`);
+      await deps.busUsers?.sync();
+      return c.json({ ok: true });
+    },
+  );
 }

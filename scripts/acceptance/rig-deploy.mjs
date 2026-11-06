@@ -9,7 +9,7 @@
 // The rig's images are the ones compose builds, loaded into the machine's rootless Podman. The
 // rig's supervisor reports over the message bus (compose's nats service, on the same network), over
 // TLS, trusting control's authority, which control hands it with its files.
-// Usage: COMPOSE="podman compose" node scripts/acceptance/rig-deploy.mjs (Podman only).
+// KEEP=1 keeps the stack and the stand-in after the run. Usage: COMPOSE="podman compose" node scripts/acceptance/rig-deploy.mjs (Podman only).
 import { execSync } from "node:child_process";
 import { acceptanceChecks } from "./lib/checks.mjs";
 import { control, dc, devInit, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
@@ -66,8 +66,10 @@ try {
   );
   onHost("chown -R thermite:thermite /home/thermite/.local");
   console.log("loading the rig images into the machine's rootless Podman");
+  // -m: two images in one archive. Without it Podman takes the second name for a tag of the
+  // first, and the supervisor's units would run the harness image.
   execSync(
-    `podman save ${harnessImage} ${supervisorImage} | podman exec -i ${host} su - thermite -c 'podman load -q'`,
+    `podman save -m ${harnessImage} ${supervisorImage} | podman exec -i ${host} su - thermite -c 'podman load -q'`,
     { stdio: ["ignore", "inherit", "inherit"], shell: "/bin/sh" },
   );
   await until("control answers", async () => (await fetch(`${control}/v1/health`)).ok, 120_000);
@@ -103,7 +105,8 @@ try {
     user: "thermite",
     private_key: "",
   });
-  let html = await get("/ui/settings");
+  // Machines have their own page, Settings › Machines: its key, host key and installs show there.
+  let html = await get("/ui/settings/machines");
   const pub = /(restrict ssh-ed25519 [A-Za-z0-9+/=]+ thermite test-host)/.exec(html)?.[1];
   execSync(`podman exec -i ${host} sh -c 'cat >> /home/thermite/.ssh/authorized_keys'`, {
     input: `${pub}\n`,
@@ -116,7 +119,7 @@ try {
     /read the machine/.test(trusted),
     trusted,
   );
-  html = await get("/ui/settings");
+  html = await get("/ui/settings/machines");
   // Lingering is off on a fresh machine: control asks, and turns it on after the owner's yes.
   const sha =
     /name="recipe" value="linger"><input type="hidden" name="sha" value="([0-9a-f]{64})"/.exec(
@@ -131,7 +134,7 @@ try {
     "lingering is on",
     async () =>
       /Last install: Lingering for the user's services, allowed by owner:ui, <span class="chip ok">done/.test(
-        await get("/ui/settings"),
+        await get("/ui/settings/machines"),
       ),
     120_000,
     2000,
@@ -178,17 +181,28 @@ try {
       /First report reached control/.test(reported),
     reported.length < 400 ? reported : undefined,
   );
+  // Each part on its own, so that a failure says which.
+  const unit = onHost(
+    "cat /home/thermite/.config/containers/systemd/thermite-box-rig-1-supervisor.container",
+  );
+  const busParts = {
+    key_registered: /Its key on the message bus registered/.test(reported),
+    unit_names_the_bus: /THERMITE_NATS_URL=nats:\/\/nats:4222/.test(unit),
+    authority_written: /BEGIN CERTIFICATE/.test(
+      onHost("cat /home/thermite/.local/share/thermite/rigs/box-rig-1/bus/bus-ca.pem"),
+    ),
+  };
   check(
     "the rig's supervisor registered its key on the bus, and its units name the bus and control's authority",
-    /Its key on the message bus registered/.test(reported) &&
-      /THERMITE_NATS_URL=nats:\/\/nats:4222/.test(
-        onHost(
-          "cat /home/thermite/.config/containers/systemd/thermite-box-rig-1-supervisor.container",
-        ),
-      ) &&
-      /BEGIN CERTIFICATE/.test(
-        onHost("cat /home/thermite/.local/share/thermite/rigs/box-rig-1/bus/bus-ca.pem"),
-      ),
+    Object.values(busParts).every(Boolean),
+    {
+      ...busParts,
+      bus_line: unit.split("\n").find((l) => l.includes("THERMITE_NATS_URL")) ?? null,
+      steps: reported
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .match(/Set up by control[\s\S]{0,900}/)?.[0],
+    },
   );
   check(
     "the rig's services run as the machine user's systemd units",
@@ -217,8 +231,15 @@ try {
 } catch (err) {
   check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
-  cleanup();
-  dc(env, "down", "-v");
+  // KEEP=1 keeps the stack and the stand-in machine for a look after a failure.
+  if (process.env.KEEP === "1")
+    console.log(
+      `KEEP=1: kept the stack and the stand-in machine ${host}: podman exec -it ${host} bash; remove them with podman rm -f ${host} and the compose down`,
+    );
+  else {
+    cleanup();
+    dc(env, "down", "-v");
+  }
 }
 const ok = results.every((r) => r.ok);
 console.log(ok ? "rig deploy acceptance: OK" : "rig deploy acceptance: FAILED");

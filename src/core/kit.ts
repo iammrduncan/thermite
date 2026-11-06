@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { type Contract, ID_PATTERN } from "./contract.ts";
 import { McpUses } from "./mcp.ts";
+import { metricPlan, planProblems } from "./metric-plan.ts";
+import { MetricRole, roleProblems, zeroProblems } from "./metric-roles.ts";
 import { normalizePath } from "./paths.ts";
 
 /**
@@ -101,6 +103,11 @@ const KitFields = z.strictObject({
     timeout_s: Seconds.default(300),
     rss_mib: Mib.default(1024),
     disk_mib: Mib.default(256),
+    /**
+     * The candidate's processes and threads at once (RLIMIT_NPROC), for an engine whose thread
+     * pools need more than a role's 256; unset: the role's.
+     */
+    processes: z.number().int().min(16).max(65_536).optional(),
   }),
   /**
    * The scores the judge measures, never anything the candidate prints:
@@ -108,18 +115,29 @@ const KitFields = z.strictObject({
    *   {unit, from: "time"}         the run's wall time in seconds, from the judge's clock;
    *   {unit, from: "check", field} a number the kit's check (the judge's own program) works out
    *                                from the run's outputs, such as accuracy or size.
-   * Each must come out above zero: the judge compares runs by their ratio.
+   * Each must come out above zero: the judge compares runs by their ratio. A check's metric that
+   * is 0 when nothing is wrong, such as a divergence or a count of failures, says
+   * `may_be_zero: true` (goal 211): it may be 0, and then only an informational metric or a guard
+   * against a fixed value, which compare values, never ratios. Each may also say
+   * what it is for (goal 209, core/metric-roles.ts): its kind, priority, guard or info, with a
+   * priority metric's place, direction and min_effect, and any metric's guards.
    */
   metrics: z.record(
     z.string().min(1),
     z.union([
-      z.strictObject({ unit: z.string().min(1), work: z.string().min(1) }),
-      z.strictObject({ unit: z.string().min(1).default("s"), from: z.literal("time") }),
+      z.strictObject({ unit: z.string().min(1), work: z.string().min(1), ...MetricRole }),
+      z.strictObject({
+        unit: z.string().min(1).default("s"),
+        from: z.literal("time"),
+        ...MetricRole,
+      }),
       z.strictObject({
         // Unitless is common here: an accuracy, a ratio.
         unit: z.string().default(""),
         from: z.literal("check"),
         field: z.string().min(1),
+        may_be_zero: z.literal(true).optional(),
+        ...MetricRole,
       }),
     ]),
   ),
@@ -159,6 +177,24 @@ const KitFields = z.strictObject({
 });
 
 export const KitSchema = KitFields.superRefine((kit, ctx) => {
+  // Each metric's role holds, and no two priority metrics share a place.
+  const places = new Map<number, string>();
+  for (const [name, m] of Object.entries(kit.metrics)) {
+    for (const message of roleProblems(name, m))
+      ctx.addIssue({ code: "custom", path: ["metrics", name], message });
+    if ("may_be_zero" in m && m.may_be_zero)
+      for (const message of zeroProblems(name, m))
+        ctx.addIssue({ code: "custom", path: ["metrics", name], message });
+    if (m.kind !== "priority" || m.priority === undefined) continue;
+    const other = places.get(m.priority);
+    if (other)
+      ctx.addIssue({
+        code: "custom",
+        path: ["metrics", name, "priority"],
+        message: `${name} and ${other} are both priority ${m.priority}: give each its own place`,
+      });
+    places.set(m.priority, name);
+  }
   // Gates name other verifiers, and never form a cycle.
   const names = Object.keys(kit.verifiers);
   for (const [name, v] of Object.entries(kit.verifiers)) {
@@ -263,13 +299,12 @@ export function paramsText(params: Record<string, number | string | boolean>): s
  * kit's other metrics it keeps where a run reports them, and a run without them is not invalid.
  * A research contract measures none.
  */
-export function contractMetrics(contract: Contract): Set<string> {
+export function contractMetrics(contract: Contract, kit?: Pick<Kit, "metrics">): Set<string> {
   const out = new Set<string>();
   if (contract.mode === "hill_climb") {
-    out.add(contract.objective.primary.metric);
-    for (const s of contract.objective.secondary) out.add(s.metric);
-    for (const g of contract.guards) out.add(g.metric);
-    for (const h of contract.hard_constraints) if (h.kind !== "check") out.add(h.metric);
+    const plan = metricPlan(contract, kit?.metrics);
+    for (const p of plan.priorities) out.add(p.metric);
+    for (const g of plan.guards) out.add(g.metric);
   }
   if (contract.mode === "goal")
     for (const g of contract.goals)
@@ -300,6 +335,7 @@ export function kitProblems(contract: Contract, kit: Kit, targetType?: string): 
     for (const g of contract.guards) metric(g.metric, "a guard");
     for (const h of contract.hard_constraints)
       if (h.kind !== "check") metric(h.metric, "a hard constraint");
+    out.push(...planProblems(contract, kit.metrics));
   }
   if (contract.mode === "goal") {
     for (const c of contract.held_out_cells) cell(c, "held_out_cells");
@@ -318,7 +354,7 @@ export function kitProblems(contract: Contract, kit: Kit, targetType?: string): 
   // number above zero, would fail every run as an infrastructure error (whose words would carry
   // the cell's parameters and time), so it is refused here. A rate the contract does not use is
   // left out of a run whose cell has no such parameter.
-  const used = contractMetrics(contract);
+  const used = contractMetrics(contract, kit);
   const rates = Object.entries(kit.metrics).flatMap(([name, m]) =>
     "work" in m && used.has(name) ? [{ name, work: m.work }] : [],
   );

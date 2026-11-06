@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { errorText, Refusal } from "../../common/errors.ts";
-import { ADVISOR_ROLES, type AdvisorRole } from "../../core/agents.ts";
+import { ADVISOR_ROLES, type AdvisorRole, teachersRoundRefusal } from "../../core/agents.ts";
 import { canonicalJson } from "../../core/canonical.ts";
 import {
   COMMAND_MAX_BYTES,
@@ -24,11 +24,20 @@ import {
   keepAssignedCampaign,
   savedSettingsRefusal,
 } from "../campaigns/index.ts";
+import { takingModel } from "../command-progress.ts";
 import { controlDiskOf } from "../disk.ts";
 import { mcpRefusal } from "../mcp-servers/index.ts";
+import { rigHasTeachers } from "../rigs/index.ts";
 import { usedRunRefusal } from "../run-names.ts";
 import type { ControlStore } from "../store/index.ts";
-import { currentChampion, findRun, type RigView, type RunView, rigView } from "../views/index.ts";
+import {
+  currentChampion,
+  findRun,
+  type RigView,
+  type RunView,
+  rigSettingsOf,
+  rigView,
+} from "../views/index.ts";
 import { publishCommand, unpublishCommand } from "./bus.ts";
 import { commandRig } from "./rig.ts";
 import { agentAssignRefusal, gitAccessRefusal } from "./sources.ts";
@@ -169,6 +178,45 @@ export function archivedRefusal(
         : undefined;
   if (typeof campaign !== "string" || !store.archive.get(campaign)) return "";
   return `${campaign} is archived. Unarchive it first.`;
+}
+
+/**
+ * Why control refuses a model check now, or "" (goal 191, issue 44): while the rig takes the model
+ * control gave it, it has no route to check yet, and it checks the new one itself once it has it.
+ */
+export function modelCheckRefusal(store: ControlStore, rig: string, p: { check: string }): string {
+  if (p.check !== "model") return "";
+  const want = store.agentModels.byRig()[rig];
+  if (!takingModel(rigView(store, rig)?.model ?? null, want)) return "";
+  return want
+    ? `${rig} is taking ${want.model} now: it checks the model itself once it has it, within a minute. Check it again after that.`
+    : `${rig} is going back to its own settings now: it checks its model itself once it has them, within a minute. Check it again after that.`;
+}
+
+/**
+ * Why control refuses a teachers' round before signing it, or "" (goal 194, issue 53): the run must
+ * be running, on a rig with teachers, switched on. From the rig's reports; what they don't show
+ * yet is the rig's to check, and its harness refuses a run that is not running.
+ */
+export function teachersRoundAsked(store: ControlStore, rig: string, p: { run: string }): string {
+  // A status the rig has not reported yet ("unknown") is the rig's to check.
+  const status = rigView(store, rig)?.runs.find((x) => x.id === p.run)?.status;
+  const refused =
+    status === "paused" || status === "closed" ? teachersRoundRefusal(p.run, status) : "";
+  if (refused) return refused;
+  if (rigHasTeachers(store, rig) === false)
+    return `${rig} has no teachers: give them a model on Edit rig.`;
+  if (rigSettingsOf(store, rig)?.settings?.teachers === false)
+    return `${rig}'s teachers are off: switch them on on Edit rig.`;
+  return "";
+}
+
+/** Why control refuses a command for a run its rig reports closed, or "" (goal 198). */
+function closedRefusal(store: ControlStore, rig: string, p: { run: string }): string {
+  const run = rigView(store, rig)?.runs.find((x) => x.id === p.run);
+  return run?.status === "closed"
+    ? `${p.run} is closed: start a new run of its campaign instead.`
+    : "";
 }
 
 /**
@@ -317,6 +365,48 @@ export function issueCommand(
   auditChange(store, signed);
   publishCommand(store, signed);
   return { id: signed.envelope.id };
+}
+
+/**
+ * A teachers' round now (goal 194), as the MCP tool and the REST route ask for it: one signed
+ * start_teachers_round to the run's rig, refused in words before signing (teachersRoundAsked).
+ */
+export function startTeachersRound(
+  store: ControlStore,
+  privateKeyPem: string,
+  a: { run: string; issuedBy: string },
+): { started: true; id: string; rig: string; said: string } {
+  const payload = { run: a.run };
+  const rig = commandRig(store, "start_teachers_round", undefined, payload);
+  const { id } = issueCommand(store, privateKeyPem, {
+    rig,
+    kind: "start_teachers_round",
+    payload,
+    issuedBy: a.issuedBy,
+  });
+  const said = `${rig}'s teachers review ${a.run} within a minute, or when a round under way ends.`;
+  return { started: true, id, rig, said };
+}
+
+/**
+ * More hours of work for a run (goal 198), as the MCP tool and the REST route ask for them: one
+ * signed add_run_hours to the run's rig, refused in words before signing for a closed run.
+ */
+export function addRunHours(
+  store: ControlStore,
+  privateKeyPem: string,
+  a: { run: string; hours: number; issuedBy: string },
+): { id: string; rig: string; said: string } {
+  const payload = { run: a.run, hours: a.hours };
+  const rig = commandRig(store, "add_run_hours", undefined, payload);
+  const { id } = issueCommand(store, privateKeyPem, {
+    rig,
+    kind: "add_run_hours",
+    payload,
+    issuedBy: a.issuedBy,
+  });
+  const said = `${rig} adds ${a.hours} hours to ${a.run} within a minute: a run whose hours ran out resumes.`;
+  return { id, rig, said };
 }
 
 /**
@@ -474,7 +564,13 @@ export function prepareCommand(
         ? hypothesisStatusRefusal(store, rig, payload)
         : input.kind === "assign_campaign"
           ? usedRunRefusal(store, payload as { run: string })
-          : "";
+          : input.kind === "rig_check"
+            ? modelCheckRefusal(store, rig, payload as { check: string })
+            : input.kind === "start_teachers_round"
+              ? teachersRoundAsked(store, rig, payload as { run: string })
+              : input.kind === "add_run_hours"
+                ? closedRefusal(store, rig, payload as { run: string })
+                : "";
   if (ruled) throw new Error(ruled);
   const now = Date.now();
   const signed = signEnvelope(

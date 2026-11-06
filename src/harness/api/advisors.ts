@@ -75,6 +75,9 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
         // The planner's round left the queue below its target (goal 081): the teachers' round
         // starts at once, not on the clock. Null: the queue is at its target, or none applies.
         queue_low: service.queueLow(i.id),
+        // The owner's request for a round now (goal 194): it starts one, as a message does.
+        teachers_asked:
+          service.ledger.events.newest("teachers_round_requested", { subject: i.id })?.id ?? null,
       })),
     }),
   );

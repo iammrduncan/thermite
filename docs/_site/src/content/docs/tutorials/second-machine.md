@@ -44,8 +44,8 @@ It takes about thirty minutes, most of it the second machine downloading the ima
 
 ## 2. Add the machine
 
-1. Open the dashboard and press the cog at the foot of the sidebar: **Settings › Providers** opens.
-2. Under **Add a provider**, set **Type** to **A machine over SSH**, and fill in a **Name** such as `machine-2`, its **Address**, the **SSH port** (usually 22) and the **User**, `thermite`. Leave **Private key** empty: control makes one.
+1. Open the dashboard, press the cog at the foot of the sidebar, then **Machines** under **Rigs**, and press **Add a machine**.
+2. Choose **A computer over SSH**, and fill in a **Name** such as `machine-2`, its **Address**, the **SSH port** (usually 22) and the **User**, `thermite`. Leave **Private key** empty: control makes one.
 3. Press **Add and read its host key**.
 
 The machine's row opens, with a line that starts with `restrict`: the public half of control's key.
@@ -60,10 +60,11 @@ Control logs in and reads the machine: its system, GPUs, Podman and whether it r
 ## 4. Add the rig
 
 1. Open **Rigs** in the sidebar, then press **Add a rig**.
-2. Under **1 · Where**, choose **machine-2 · a machine over SSH**.
-3. Under **2 · GPUs and resources**, tick its GPUs, if it has any. With none, the rig measures on the CPU.
-4. Under **3 · Name and start**, give a **Rig name**, such as `rig-2`. **Message bus** shows the address the rig will reach, such as `nats://control.example.com:4222`.
-5. Press **Create the rig**.
+2. Under **What kind of rig?**, choose **One machine**, then **Next**.
+3. Under **Where does it run?**, choose **machine-2** (over SSH), then **Next**.
+4. Under **Which GPUs does it use?**, leave its GPUs ticked, if it has any. With none, the rig measures on the CPU. Press **Next**.
+5. Under **Name it and create it**, give a **Rig name**, such as `rig-2`. **Message bus** shows the address the rig will reach, such as `nats://control.example.com:4222`.
+6. Press **Create the rig**.
 
 You land on the rig's page. Its **Set up by control** block ticks off each step as it comes: enrolled, files and services written and started, its key on the message bus registered, first report. The first download of the images takes most of the time. When the last step is ticked, press **refresh**: the page says `rig-2 is live`.
 

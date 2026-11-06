@@ -1,0 +1,40 @@
+---
+id: "211"
+title: "A metric may be zero"
+status: VERIFIED
+version: "0.1.3"
+depends_on: ["209"]
+created: 2026-11-06
+updated: 2026-11-06
+---
+
+# 211 · A metric may be zero
+
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
+
+## Why (found in use, 2026-11-06)
+
+A kit's metrics must come out above zero today (`kit.json` › `metrics`): the judge compares a change with its reference by their ratio. Some measurements are zero when nothing is wrong: a divergence from a reference output, a count of mismatched tokens or failed checks. A change to an inference engine that leaves every output the same has a divergence of exactly 0, and today the kit can't report it.
+
+## What
+
+1. A metric whose roles are only guards against a fixed value (`against: "value"`) or informational may come out at zero. Its value guards compare it with their limits, as now.
+2. A priority metric, or a guard against the baseline or the champion, still compares by ratio, so it must stay above zero; a kit that gives such a role to a metric that may be zero is refused in words.
+3. Where the judge or a page shows a metric as candidate against reference (a run's Metrics block, an attempt's values, the verdict events), a zero shows as a value, never as a ratio of 0 to 0.
+
+## Progress
+
+- 2026-11-06: built. A check's metric says `"may_be_zero": true` to take a 0 (`src/core/kit.ts`); the measurement takes it, and refuses a negative or a missing field in words (`src/harness/judge/measure.ts`). Such a metric may be informational or held by guards against a value: the kit refuses it as a priority metric or with a guard against the baseline or the champion (`zeroProblems`, `src/core/metric-roles.ts`), and the check of an assignment refuses a contract that gives it such a role (`planProblems`, `src/core/metric-plan.ts`). The judge's value guards, informational values and the run page's metrics already compare values, and show a zero as a value. Tests: `tests/core/metric-plan.test.ts`, `tests/harness/judge/measure.test.ts`. Page: [the kit manifest](../../../_site/src/content/docs/reference/kit-manifest.md#what-each-metric-is-for).
+
+## Done when
+
+- The kit schema and the judge take a zero for such metrics, with tests for each rule above.
+- The kit manifest reference and the verdicts reference say which metrics may be zero, and why.
+
+## Verified (2026-11-06)
+
+The lab's test machine ran `tests/core/metric-plan.test.ts` and `tests/harness/judge/measure.test.ts` at b8235825: 13 of 13 pass, and 66 of 66 with goal 213's files beside them. The kit manifest and the verdicts reference say which metrics may be zero, and why; the contract reference says a campaign can't give one a ratio role.
+
+## Found after (2026-11-06)
+
+The first run of a kit with guards held at 0 on a GPU (two counts of mismatched replies, on a DGX Spark runner) measured a whole block, and the judge refused it: `implausible: mismatched_replies is 0; draft_mismatch is 0`. The CUDA target's own plausibility check refused every value at or below zero; the tests above ran on the CPU target, whose check refuses only non-finite values. Since 6fbf1491 it refuses negative and non-finite values alone: the judge's measure already takes a zero only from a metric that may be zero.

@@ -3,8 +3,8 @@
  * where it runs and control's look there (place.ts, watch.ts), its move onto control's images
  * (update.ts), its settings (settings.ts), its agents' models (agent-models.ts, model.ts), the
  * model routes they get with their keys (model-routes.ts), its GPU split (gpu-split.ts), its
- * supervisor's figures (figures.ts), its return from retirement (retire.ts), and its
- * subscription's weekly limit (weekly.ts).
+ * supervisor's figures (figures.ts), its return from retirement (retire.ts), its
+ * subscription's weekly limit (weekly.ts), and Add a rig's Workers at a time (workers.ts).
  */
 
 export { takeFigures } from "./figures.ts";
@@ -15,6 +15,7 @@ export {
   type AgentModelPlan,
   advisorRoutesOf,
   advisorsFileOf,
+  agentModelsOf,
   agentsModelMissing,
   applyAgentModel,
   checkAgentModel,
@@ -26,10 +27,10 @@ export {
   modelRoutesOf,
   neededHarness,
   opencodeOnly,
-  opencodeOnlyModel,
   RigModelBody,
   type RouteParts,
-  researchNeedsOpencode,
+  researchModelRefusal,
+  rigHasTeachers,
   rigModelAnswer,
   rigModelFields,
   rigModelRequest,
@@ -40,6 +41,8 @@ export {
 export { checkRigPlace } from "./place.ts";
 export { bringBackRig } from "./retire.ts";
 export {
+  CHECK_TIP,
+  checkField,
   PROGRAM_MODE_TIP,
   programModeField,
   QUIET_TIP,
@@ -56,12 +59,15 @@ export {
 } from "./settings.ts";
 export {
   awaitFirstReport,
+  CUDA_VERSIONS,
+  type CudaVersion,
   controlAddress,
   controlImages,
   judgeShare,
   NO_RIG_BUS,
   type RigImages,
   rigBusOf,
+  rigNamesTaken,
   rigSetupView,
   rigTaken,
   SETUP_STEPS,
@@ -72,3 +78,4 @@ export {
 export { RigUpdates, rigVersionWords } from "./update.ts";
 export { checkQuietRigs } from "./watch.ts";
 export { WEEKLY_MODEL_STEP, WEEKLY_WAIT_STEP, weeklyLimit } from "./weekly.ts";
+export { chooseWorkers, watchWorkers } from "./workers.ts";

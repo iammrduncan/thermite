@@ -30,8 +30,21 @@ export function fakeCluster(
     nodeGpus?: number;
     /** DRA device classes (default: the cluster has no DRA). */
     deviceClasses?: string[];
+    /** Each class's spec, such as its selectors (goal 132). */
+    deviceClassSpecs?: Record<string, unknown>;
+    /** The cluster's resource slices; none: control may not read them. */
+    slices?: unknown[];
+    /** The node's architecture label (kubernetes.io/arch); none: no label. */
+    nodeArch?: string;
     /** What kubectl prints for one deployment by name; default: the supervisor's, in JSON. */
     deploymentStdout?: string;
+    /** Slots whose rules take pods only on these nodes, as an admission rule refuses others. */
+    slotNodes?: Record<string, string[]>;
+    /**
+     * What a slot's control-managed deployments say of their owner: the first one's instance and
+     * part-of labels, as kubectl's jsonpath prints them; none: the slot holds nothing.
+     */
+    slotUsers?: Record<string, string>;
   } = {},
 ) {
   const calls: { args: string[]; stdin?: string }[] = [];
@@ -79,7 +92,10 @@ export function fakeCluster(
           JSON.stringify({
             items: [
               {
-                metadata: { name: "gpu-node-1" },
+                metadata: {
+                  name: "gpu-node-1",
+                  ...(o.nodeArch ? { labels: { "kubernetes.io/arch": o.nodeArch } } : {}),
+                },
                 status: {
                   allocatable: {
                     cpu: "16",
@@ -94,12 +110,36 @@ export function fakeCluster(
         );
       if (a === "get deviceclasses -o json")
         return o.deviceClasses
-          ? ok(JSON.stringify({ items: o.deviceClasses.map((name) => ({ metadata: { name } })) }))
+          ? ok(
+              JSON.stringify({
+                items: o.deviceClasses.map((name) => ({
+                  metadata: { name },
+                  ...(o.deviceClassSpecs?.[name] ? { spec: o.deviceClassSpecs[name] } : {}),
+                })),
+              }),
+            )
           : {
               code: 1,
               stdout: "",
               stderr: 'error: the server doesn\'t have a resource type "deviceclasses"',
             };
+      if (a === "get resourceslices -o json")
+        return o.slices
+          ? ok(JSON.stringify({ items: o.slices }))
+          : { code: 1, stdout: "", stderr: "Error from server (Forbidden): resourceslices" };
+      // A dry run in a slot whose rules name its nodes: refused but on one of those (goal 206).
+      const dry = /^create --dry-run=server -n (\S+) -f -$/.exec(a);
+      const named = dry ? o.slotNodes?.[dry[1] as string] : undefined;
+      if (named) {
+        const node = /"kubernetes\.io\/hostname":"([^"]+)"/.exec(stdin ?? "")?.[1];
+        return node && named.includes(node)
+          ? ok("deployment.apps/thermite-node-probe created (server dry run)")
+          : {
+              code: 1,
+              stdout: "",
+              stderr: `Error from server (Forbidden): admission webhook denied the request: pods here run only on ${named.join(",")}`,
+            };
+      }
       if (a === "get storageclass -o json")
         return ok(
           JSON.stringify({
@@ -117,7 +157,8 @@ export function fakeCluster(
         return ok(o.canCreateNamespaces === false ? "no\n" : "yes\n");
       const slot = /^auth can-i create deployments -n (\S+)$/.exec(a);
       if (slot) return ok(o.slots?.[slot[1] as string] ? "yes\n" : "no\n");
-      if (args[0] === "get" && args[1] === "deployments") return ok("");
+      if (args[0] === "get" && args[1] === "deployments")
+        return ok(o.slotUsers?.[args[3] ?? ""] ?? "");
       // One deployment by name: the supervisor, with the control address it was deployed with.
       if (args[0] === "get" && args[1] === "deployment" && args[3] === "-n" && o.deploymentStdout)
         return ok(o.deploymentStdout);
@@ -204,6 +245,10 @@ export async function control(
     tag?: string;
     publicUrl?: string | null;
     drainWatchMs?: number;
+    runnersWatchMs?: number;
+    workersWatchMs?: number;
+    /** False: control has no CUDA 13 harness image (goal 132). */
+    cuda13?: boolean;
   } = {},
 ) {
   const secrets = o.secrets ?? SecretBox.ephemeral();
@@ -215,10 +260,15 @@ export async function control(
       secrets,
       clusterKubectl: k,
       ...(o.drainWatchMs ? { drainWatchMs: o.drainWatchMs } : {}),
+      ...(o.runnersWatchMs ? { runnersWatchMs: o.runnersWatchMs } : {}),
+      ...(o.workersWatchMs ? { workersWatchMs: o.workersWatchMs } : {}),
       publicUrl: o.publicUrl === null ? undefined : (o.publicUrl ?? "https://control.example.com"),
       rigImages: {
         harness: `registry.example.com/harness:${tag}`,
         harnessCuda: `registry.example.com/harness-cuda:${tag}`,
+        ...(o.cuda13 === false
+          ? {}
+          : { harnessCuda13: `registry.example.com/harness-cuda13:${tag}` }),
         supervisor: `registry.example.com/supervisor:${tag}`,
       },
     },

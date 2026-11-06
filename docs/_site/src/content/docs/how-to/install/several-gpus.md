@@ -22,18 +22,17 @@ A [rig](../../reference/glossary.md) with one GPU shares it: while the judge mea
 
 ## When you add the rig
 
-**Rigs › Add a rig**, under **2 · GPUs and resources**:
+On **Rigs › Add a rig**, a rig of **One machine** takes the GPUs ticked under **Which GPUs does it use?**, and **GPUs for the judge** sets the judge's share; on a machine the lowest-numbered are the judge's. A GPU another rig or runner uses says so and can't be ticked. A rig of **Several machines** makes each GPU of another machine a runner of its own, one **+ Add a runner** each, in a pool: as many as the judge should measure on are **The judge's**, and the rest the lanes', each a lane's or **Shared** ([Give a rig runners on other machines](runners.md)).
 
 | Where the rig goes | Choose the GPUs | Choose the judge's share |
 | --- | --- | --- |
 | A machine over SSH ([guide](rig-on-a-machine.md)) | Tick each GPU. The lowest-numbered are the judge's | **GPUs for the judge** |
-| A Kubernetes cluster ([guide](rig-on-a-cluster.md)) | **GPUs**: how many the harness pod asks for, and **GPUs through** | **GPUs for the judge** |
+| A Kubernetes cluster ([guide](rig-on-a-cluster.md)) | Tick GPUs of one node and one way | **GPUs for the judge** |
 | A machine you join yourself ([guide](join-a-rig.md)) | **GPUs on the machine**: their numbers as `nvidia-smi` lists them, such as `0,1,2,3` | **GPUs for the judge** |
 | A namespace you join yourself | **GPUs**: up to 8 | **GPUs for the judge** |
+| A cluster, over MCP's `add_cluster_rig` | `gpus`, and `gpu_mode` | `judge_gpus` |
 
-Leave **GPUs for the judge** empty for half. The note under the fields says what you chose, for example "Judge: GPU 0, 1. Agents' test runs: GPU 2, 3. They never wait for each other." A share control would refuse, such as 10 of 12 GPUs, shows control's refusal there instead: "With 12 GPUs the judge takes 1 to 8 of them, and the agents at most 8." A GPU named twice is refused with "Name each GPU once."
-
-On a machine, a GPU that another rig control set up there already uses shows "used by rig …" and can't be ticked.
+Leave **GPUs for the judge** empty for half. The note under the fields says what you chose, for example "Judge: GPU 0, 1. Agents' test runs: GPU 2, 3." A share control would refuse, such as 10 of 12 GPUs, shows control's refusal there instead: "With 12 GPUs the judge takes 1 to 8 of them, and the agents at most 8." A GPU named twice is refused with "Name each GPU once."
 
 The local stack's rig is not added there: it gets every NVIDIA GPU of its machine, up to 16, from `compose.gpu.yaml`, which `thermite local init` writes. With 2 to 9 GPUs the judge gets 1 and the agents the rest; with 10 or more, the agents get 8 and the judge the rest ([Use the machine's NVIDIA GPUs](one-machine.md#use-the-machines-nvidia-gpus)). Change the split as below.
 

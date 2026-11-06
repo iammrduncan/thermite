@@ -6,7 +6,7 @@ import { log } from "../../../common/log.ts";
 import { BRIEF_FILE, briefFile, briefSection } from "../../../core/brief.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { NOTES_ARE_DATA, notesText } from "../../journal.ts";
-import { baselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
+import { baselineOf, baselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
 import { briefingText } from "../../knowledge.ts";
 import { messageText } from "../../messages.ts";
 import type { Experiment } from "../../queue.ts";
@@ -116,6 +116,12 @@ export function withOwnerSections(
   return [...sections, ...renderOwnerMessages(kept.map(messageText), waiting.map(messageText))];
 }
 
+/** An experiment's tries for its trial's brief (goal 214), when it gets more than one. */
+function triesOf(sched: SchedulerContext, x: Experiment) {
+  const t = sched.o.service.queue.triesBrief(x, clipReason);
+  return t ? { tries: { try: t.try, of: t.of, earlier: t.earlier } } : {};
+}
+
 /** The worker's brief (goal 166): gathered only from the ledger and this lane's own history. */
 export function brief(
   sched: SchedulerContext,
@@ -160,7 +166,7 @@ export function brief(
     lane: a.lane,
     title: contract.title,
     mode: contract.mode,
-    objective: objectiveOf(contract),
+    objective: objectiveOf(contract, baselineOf(sched.ledger, run)?.plan),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : undefined,
     forbiddenPatterns: "forbidden_patterns" in contract ? contract.forbidden_patterns : [],
     start,
@@ -174,6 +180,7 @@ export function brief(
       ...(x.details ? { details: x.details } : {}),
       ...(x.why ? { why: x.why } : {}),
       addedBy: x.added_by,
+      ...triesOf(sched, x),
     },
     setup: setup
       ? {

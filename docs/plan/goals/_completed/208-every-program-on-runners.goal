@@ -1,0 +1,41 @@
+---
+id: "208"
+title: "Every agent program on a rig of runners"
+status: VERIFIED
+version: "0.1.3"
+depends_on: ["206"]
+created: 2026-11-05
+updated: 2026-11-06
+---
+
+# 208 · Every agent program on a rig of runners
+
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
+
+## Words
+
+As in [206](206-core-and-runners.goal): a **rig** owns one **core** and any number of **runners**. The **agent programs** are the four a lane's worker runs in: Claude Code, Codex, Pi and OpenCode.
+
+## What
+
+The owner, 2026-11-05, closing goal 206: get the smoke hill climb working on the Sparks' rig for Claude Code, Codex, Pi and OpenCode, before the kit for the Spark hill climb is planned ([209](../209-priority-guard-informational-metrics.goal)).
+
+Goal 206's hill climb ran one program, Claude Code. Each program runs in the core and reaches its lane's runner only through `run_experiment`, in its own way: Claude Code, Codex and OpenCode through `thermite-trial` in their shell, as the lane's user; Pi through its tools, from the harness. The first run on runners showed that a path can work for one and fail for another: the core's read of a lane's change ended every process of the lane's user, Claude Code's included, and would have spared Pi.
+
+For each program, one short hill climb of the smoke CUDA project on the Sparks' rig, its lane's runs on one GB10 and the judge on the other:
+
+1. the worker's `run_experiment` runs on its lane's runner, and the worker reads its result;
+2. its change is built, judged on the judge's runner and promoted or refused, as on one machine;
+3. what fails is fixed in Thermite, with a test, and that program's run again.
+
+## Done when
+
+- each of the four programs has a hill climb on the Sparks' rig in which its worker read a `run_experiment` result from its runner and submitted a change the judge judged there;
+- each fix has its test, run on the lab's test machine, and the pages say what changed.
+
+## Progress
+
+- 2026-11-05: Claude Code's run is goal 206's: two changes confirmed and promoted on the Sparks' rig, the second made from the lane's own runs on its runner. Codex's model check passed on the rig (GPT-6.1 Sol through a ChatGPT plan), but its run could not start from Start a run: control refused it, as the rig "measures on cpu". The core, which judges on its runners alone, took its runners' kind of target for its judge, yet still reported the target it found at its start, its own machine's CPU; goal 206's first run had started through a raw assignment, which this check does not cover. The core now reports its runners' target, the first runner's identity, once it takes their kind.
+- 2026-11-05: Codex passed: on the Sparks' rig, with Start a run now accepting it, its worker (GPT-6.1 Sol) timed its tiling change on its runner's GB10 and the judge, on the other, confirmed it at +17.0% and promoted it. Pi (a free model on OpenRouter, as the lab's own endpoint no longer serves the model control lists for it) ran its tests on its runner, but lost turns twice to Thermite. Its first submission was refused (`path not editable`) for a test file it had made and never staged: the core read the lane's change with `git add -A` in the lane's own index, so the submission, which stages only the editable paths, carried it too. And a binary one run built was gone in the next, as each run on a runner starts from a fresh copy. The read now goes through an index of its own, and each run's answer says that it started fresh.
+- 2026-11-06: Pi passed with the fix rolled: its worker (the same free model on OpenRouter) ran its change on its runner, and the judge, on the other GB10, confirmed its tiling change at +17.1% (95% interval 15.3% to 18.9%), with the held-out check passing, and promoted it; its later submissions carried only the kernel. OpenCode passed: OpenCode's own free model had reached its free usage limit, so its worker ran in OpenCode with that OpenRouter model; it built its change on its runner with `run_experiment`, and the judge confirmed its tiling change at +16.3% (13.1% to 19.6%) and promoted it.
+- 2026-11-06: Verified. Each of the four programs read `run_experiment` results from its lane's runner and submitted a change the judge confirmed and promoted on the other GB10. The fixes on the way (the core reports its runners' target; a lane's run on a runner leaves its git index alone; each run's answer says it started fresh) each have their test, run on the lab's test machine, and the [runners page](../../../_site/src/content/docs/how-to/install/runners.md) says what changed.

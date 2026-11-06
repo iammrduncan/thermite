@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS } from "../schema/index.ts";
+import { EXPERIMENT_TRIES } from "./experiments.ts";
 import { PROMPT_TABLE, PROMPT_TURN_COLUMN } from "./prompts.ts";
 import { publicNames } from "./public-names.ts";
 import { eventRunColumn, RUN_END_EXPORTS_FROM } from "./runs.ts";
@@ -34,4 +35,6 @@ export const LEDGER_MIGRATIONS: readonly (string | ((db: DatabaseSync) => void))
   // 29: the public names in the rows a ledger may change: a run's note, directions, the rules'
   // and the field notes' kinds, source notes (public-names.ts).
   publicNames,
+  // 30: how many trials each experiment gets, and its tries that ended without a win (goal 214).
+  EXPERIMENT_TRIES,
 ];

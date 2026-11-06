@@ -8,7 +8,7 @@ sidebar:
 
 Control can set a [rig](../../reference/glossary.md) up on a Linux machine it reaches over SSH. It reads the machine, installs what is missing if you allow it, writes the rig's services and starts them. Apart from one line in `authorized_keys`, you do nothing on the machine.
 
-You add the machine once under **Settings › Providers**, then add as many rigs there as it has room for under **Rigs › Add a rig**.
+You add the machine once under **Settings › Machines**, then add as many rigs there as it has room for under **Rigs › Add a rig**.
 
 :::note[What these rigs don't have yet]
 Rigs that control sets up, on a machine, on a cluster or with a join command, get only the few settings listed in [Rigs that control sets up](../../reference/settings.md#rigs-that-control-sets-up). Compared with the local stack, they have:
@@ -31,9 +31,8 @@ Rigs that control sets up, on a machine, on a cluster or with a join command, ge
 
 ## 1. Add the machine
 
-1. Press the cog at the foot of the sidebar to open **Settings › Providers**.
-2. Under **Add a provider**, fill in:
-   - **Type:** A machine over SSH
+1. Press the cog at the foot of the sidebar to open **Settings**, then **Machines** under **Rigs**, and press **Add a machine**.
+2. Choose **A computer over SSH**, and fill in:
    - **Name:** the name Thermite shows for it, such as `gpu-host-1`
    - **Address:** its host name or IP address, as control reaches it
    - **SSH port:** usually 22
@@ -91,11 +90,14 @@ All three need sudo without a password; otherwise the row says "the user can't s
 
 ## 5. Add the rig
 
+Add a rig is a wizard: one step at a time, with **Back** and **Next**. Each field has an "i" that says what it means, and each step links to its page here.
+
 1. Open **Rigs** in the sidebar, then press **Add a rig**.
-2. Under **1 · Where**, choose **gpu-host-1 · a machine over SSH**. A machine that is not ready says why, for example "Not ready: Podman is missing. Fix it under Settings › Providers."
-3. Under **2 · GPUs and resources**, tick the GPUs the rig uses. None: the rig measures on the CPU. One: the judge and the agents share it. Several: the lowest-numbered are the judge's, half by default; set **GPUs for the judge** to change that. A GPU another rig uses shows "used by rig …". See [Give a rig several GPUs](several-gpus.md).
-4. Under **3 · Name and start**, give a **Rig name**: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It can't change later. **Images** shows what control will run, and **Message bus** where the rig will reach control's message bus: the machine must reach that port, since a rig talks to control only on the bus. When control has no address for rigs on its bus, **Message bus** says `none: control can't set a rig up`, and **Create the rig** is refused: `Control has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or the host of THERMITE_CONTROL_PUBLIC_URL with port 4222), so a rig could not reach it: a rig works only on the bus.`
-5. Press **Create the rig**.
+2. Under **What kind of rig?**, choose **One machine** and press **Next**. (A rig whose agents run on one machine and whose GPUs are on others is **Several machines**: see [Give a rig runners on other machines](runners.md).)
+3. Under **Where does it run?**, choose **gpu-host-1** (over SSH). A machine that is not ready says why, for example "Not ready: Podman is missing. Fix it under Settings › Machines." Press **Next**.
+4. Under **Which GPUs does it use?**, tick the GPUs the rig uses; all its free ones are ticked at first. None: the rig measures on the CPU. One: the judge and the agents share it. Several: the lowest-numbered are the judge's, half by default; set **GPUs for the judge** to change that. A GPU another rig uses shows "used by …". See [Give a rig several GPUs](several-gpus.md). Press **Next**.
+5. Under **Name it and create it**, give a **Rig name**: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It can't change later. A name control knows already, a removed rig's too, says so under the field, "There is a rig named rig-1 already: a removed rig keeps its name, so choose another.", and **Create the rig** stays off. **Images** shows what control will run, and **Message bus** where the rig will reach control's message bus: the machine must reach that port, since a rig talks to control only on the bus. When control has no address for rigs on its bus, **Message bus** says `none: control can't set a rig up`, and **Create the rig** is refused: `Control has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or the host of THERMITE_CONTROL_PUBLIC_URL with port 4222), so a rig could not reach it: a rig works only on the bus.` **What this rig will be** says where it runs and how its GPUs are split.
+6. Press **Create the rig**.
 
 ## 6. Watch it start
 
@@ -135,5 +137,5 @@ The rig keeps the images it was set up with. When control runs a newer version, 
 Next, [check the rig](../operate/check-a-rig.md): **Isolation** has already run at start; run **Judge smoke**. Then [give it a model](../models/connect-a-provider.md).
 
 :::caution
-Keep the machine in **Settings › Providers** while rigs that control set up there remain. Control needs it to stop, start or remove them, and says "The machine gpu-host-1 is no longer in Providers." without it.
+Keep the machine in **Settings › Machines** while rigs that control set up there remain. Control needs it to stop, start or remove them, and says "The machine gpu-host-1 is no longer in Settings › Machines." without it.
 :::

@@ -41,6 +41,8 @@ export const SETTINGS = {
     auditor: z.boolean().optional(),
     review: z.boolean().optional(),
     program_mode: z.enum(PROGRAM_MODES).optional(),
+    /** A core that never judges itself (goal 213): its runners fetch a run's model files. */
+    models_on_runners: z.boolean().optional(),
   }),
 } as const satisfies Route;
 

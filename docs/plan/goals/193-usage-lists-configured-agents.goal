@@ -1,0 +1,49 @@
+---
+id: "193"
+title: "The usage table lists every agent with a model, with no calls yet when it has none"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 193 · The usage table lists every agent with a model, with no calls yet when it has none
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+From [issue 52](https://github.com/iammrduncan/thermite/issues/52), the owner's, 2026-11-03. A run's usage table (**By agent and model**) has a row only for an agent that made a model call. On the test rig, the Codex teacher never sent anything to its model (fixed in v0.1.2), so it had no row: a teacher that never works looked the same as one never set up.
+
+1. **A row for each agent the rig gives a model to:** the workers, the planner, each teacher, the merged by model, the auditor, the review panel and the research writers, with its model and program.
+2. **No calls yet.** An agent with no records shows **no calls yet** in place of its figures, with why where Thermite knows it: the advisor's newest `has no answer` line on Live, or its last error.
+3. **Over MCP:** `model_usage` lists each such agent with zero records and `configured: true`.
+
+## Why
+
+An agent that is set up but never works should stand out at a glance.
+
+## Done when
+
+- [x] Items 1 to 3, with tests: tests/control/usage-agents.test.ts. Passing on the lab's test machine is still to come.
+- [x] A mockup the owner agrees to, before the table changes: "Build it as drawn", 2026-11-04.
+- [x] Pages: the run page's reference, the MCP tools, and the changelog. Also the REST API's usage report.
+- [ ] Issue 52 closed with its commit.
+
+## Decisions
+
+- 2026-11-04, the owner, from the mockup ("Build it as drawn"): each agent the rig gives a model to has a row in a run's **Stats** table; one with no calls shows **No calls yet** in place of its figures, on a tinted row, with why: its newest "has no answer" line on Live, else what its role waits for. `model_usage` gives the same lines with `configured: true` and `why`.
+- 2026-11-04: in building, three changes from the mockup. A part switched off on Edit rig is a why Thermite knows, and comes first. The merged by model's line says it works after a round of two teachers in which at least one gave a review (the advisors file's rule), where the mockup said both. Over MCP each line keeps the report's `name` (`Teachers`), as lines with records have it, and gives `why_at`, Live's time, beside `why`.
+- 2026-11-04: Live's why is known only for the advisors control gives a model to, whose names on Live control knows (teacher-1, teacher-2, merged-by, auditor, reviewer-1 to 3, synthesizer, final-writer). An advisor from the rig's own file has a name control is not told, so its row says when it works. The rig's newest advisor error (`last_error` in the supervisor's figures) names no advisor, so it is not used.
+- 2026-11-04: the rows show only for one run over all its time and not for a closed run: for part of the time an agent may have worked before it, and a closed run's rig may give its agents other models now. A record counts as the agent's model by `sameModel`, so Claude Code's own names for a subscription's models match.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-04: Researched and verified on v0.1.3 (73d0d166): the Stats table (ui/usage.ts runStatsTab) drew only `by_agent_model`, made of records (core/usage.ts usageReport), so an agent with a model and no call had no row. Control keeps what is needed: each agent's model (rigs/model/request.ts agentModelsOf), the advisors file the supervisor reports (advisorsFileOf), the rig's settings, and each rig's Live lines (store/live.ts).
+- 2026-11-04: Mockup made and approved. Built: core/usage.ts withConfigured; control/usage-agents.ts configuredAgents, with store/live.ts noAnswers for Live's why; usage-report.ts usageData adds the lines for one run over all its time; the Stats table's **No calls yet** rows; the `model_usage` description. Typecheck, lint, the size, import and loose-ends checks pass; the tests run on the lab's test machine.
+
+---
+
+Run with `/goal Complete docs/plan/goals/193-usage-lists-configured-agents.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

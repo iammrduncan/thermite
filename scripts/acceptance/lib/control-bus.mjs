@@ -11,7 +11,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { engine, natsInitRun, natsService, sh } from "./smoke-env.mjs";
+import { engine, natsInitRun, natsService, rmFast, sh } from "./smoke-env.mjs";
 
 const { natsBus } = await import("../../../src/common/bus/index.ts");
 const { buildInfo } = await import("../../../src/common/build-info.ts");
@@ -124,7 +124,7 @@ export async function startControlBus({ name, port, secrets }) {
     /** Removes the server, its network and its store, and control's files. */
     remove: async () => {
       await bus.close().catch(() => {});
-      quiet(["rm", "-f", "-v", "-t", "3", box]);
+      quiet([...rmFast, "-v", box]);
       quiet(["network", "rm", "-f", net]);
       quiet(["volume", "rm", "-f", storeVolume]);
       rmSync(work, { recursive: true, force: true });

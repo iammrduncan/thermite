@@ -36,6 +36,21 @@ export function gitHost(url: string): string | undefined {
   }
 }
 
+/**
+ * The hosts that serve a Git host's SSH on port 443, as their providers document them, for a network
+ * that lets out 443 alone: ssh://git@ssh.github.com:443/<owner>/<repo>.git reaches github.com.
+ */
+const SSH_OVER_443: Readonly<Record<string, string>> = {
+  "ssh.github.com": "github.com",
+  "altssh.gitlab.com": "gitlab.com",
+};
+
+/** Whether `url` is on `host`, a Git access's host, directly or through its SSH on port 443. */
+export function onGitHost(url: string, host: string): boolean {
+  const from = gitHost(url);
+  return from !== undefined && (from === host || SSH_OVER_443[from] === host);
+}
+
 /** Runs `fn` with the environment git needs for `auth`, then removes what it wrote. */
 export async function withGitAuth<T>(
   auth: GitAuth | undefined,

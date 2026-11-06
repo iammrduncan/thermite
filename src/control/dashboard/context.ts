@@ -3,10 +3,11 @@ import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { buildInfo } from "../../common/build-info.ts";
 import { sameSecret } from "../../common/secrets.ts";
+import { ADD_HOURS_MAX, HOURS_SPENT } from "../../core/contract.ts";
 import { McpServers } from "../mcp-servers/index.ts";
 import type { PageOptions } from "../pages.ts";
 import { ChatGPTLogins } from "../providers/index.ts";
-import { RigUpdates } from "../rigs/index.ts";
+import { RigUpdates, rigHasTeachers } from "../rigs/index.ts";
 import { SESSION_DAYS } from "../settings.ts";
 import type { ControlStore } from "../store/index.ts";
 import { infoLabel } from "../ui/campaigns/new/index.ts";
@@ -17,6 +18,7 @@ import {
   type RigView,
   type RunOnRig,
   type RunView,
+  rigSettingsOf,
   runCampaign,
 } from "../views/index.ts";
 
@@ -24,6 +26,14 @@ const DAY_MS = 24 * 3_600_000;
 /** What Close run does, in its ⋯ menu on a run's page (goal 087). */
 const CLOSE_RUN_WORDS =
   "The run ends for good: nothing more starts, and it can't be resumed. Its results stay.";
+/** What Add hours does (goal 198), and its field's tip. */
+const HOURS_WORDS =
+  "The run used all the hours of its stop time. It goes on from where it stopped, for the hours you add. Time it is paused doesn't count.";
+const HOURS_TIP =
+  "Hours of work to add to the run's stop time, 1 to 8760. They count as its stop time does: only while the run works.";
+/** What Start a teachers' round does, in a run's ⋯ menu (goal 194). */
+const TEACHERS_ROUND_WORDS =
+  "The teachers review the run now, from its brief, and give their advice, as at a timed round. The next timed round counts from this one. Your messages to them stay as they are.";
 const CLOSE_WHY_TIP =
   "Why you close the run, up to 500 characters. The run keeps it: it shows wherever the run's state does, in its History and in the rig's export.";
 // biome-ignore lint/suspicious/noExplicitAny: any route's context
@@ -132,6 +142,8 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       extra?: string;
       /** Off while what it sent waits for the rig (a check's Sent, Running…). */
       disabled?: boolean;
+      /** Why it is off, on hover. */
+      why?: string;
     },
   ) =>
     `<form class="inline" method="post" action="/ui/commands"><input type="hidden" name="csrf" value="${csrf(c)}"><input type="hidden" name="rig" value="${esc(f.rig)}"><input type="hidden" name="kind" value="${esc(f.kind)}">${Object.entries(
@@ -140,7 +152,7 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
       .join(
         "",
-      )}${f.back ? `<input type="hidden" name="back" value="${esc(f.back)}">` : ""}${f.extra ?? ""}<button class="${f.cls ?? ""}"${f.disabled ? " disabled" : ""}>${esc(f.label)}</button></form>`;
+      )}${f.back ? `<input type="hidden" name="back" value="${esc(f.back)}">` : ""}${f.extra ?? ""}<button class="${f.cls ?? ""}"${f.disabled ? " disabled" : ""}${f.disabled && f.why ? ` title="${esc(f.why)}"` : ""}>${esc(f.label)}</button></form>`;
 
   /** Pause, with an optional reason the run keeps (it shows wherever the run's state does). */
   const pauseMenu = (c: Ctx, rig: string, run: string, back: string, cls = "") =>
@@ -152,18 +164,39 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
   const closeForm = (c: Ctx, rig: string, run: string, back: string) =>
     `<form method="post" action="/ui/commands" class="stack close-run"><input type="hidden" name="csrf" value="${csrf(c)}"><input type="hidden" name="rig" value="${esc(rig)}"><input type="hidden" name="kind" value="close_run"><input type="hidden" name="run" value="${esc(run)}"><input type="hidden" name="back" value="${esc(back)}"><div class="small"><b>Close run.</b> <span class="muted">${CLOSE_RUN_WORDS}</span></div><label>${infoLabel("Why", CLOSE_WHY_TIP)}<input name="reason" required maxlength="500" placeholder="such as: another run finished the work"></label><input name="confirm" placeholder="type: close ${esc(run)}" data-confirm="close ${esc(run)}" aria-label="Type close ${esc(run)} to confirm"><button class="danger">Close the run</button></form>`;
   /**
-   * ⋯ in a run's header: Restart the lanes, for a running run with agents (the run's header and
-   * Live's), and, with `close` (the run's page), Close run for a run not closed yet (goal 087).
+   * ⋯ in a run's header: Restart the lanes and Start a teachers' round (goal 194), for a running
+   * run with agents (the run's header and Live's), and, with `close` (the run's page), Close run
+   * for a run not closed yet (goal 087).
    */
   const moreMenu = (c: Ctx, rig: string, r: RunView, back: string, cls = "", close = false) => {
-    const restart =
-      r.status === "running" && r.has_agents !== false
-        ? `${cmdForm(c, { rig, kind: "reset_workers", fields: { run: r.id }, label: "Restart the lanes", cls, back })}<div class="muted small">Ends the lanes' running trials now and the current round: every lane starts again from the champion. Nothing the judge decided is lost.</div>`
-        : "";
+    const working = r.status === "running" && r.has_agents !== false;
+    const restart = working
+      ? `${cmdForm(c, { rig, kind: "reset_workers", fields: { run: r.id }, label: "Restart the lanes", cls, back })}<div class="muted small">Ends the lanes' running trials now and the current round: every lane starts again from the champion. Nothing the judge decided is lost.</div>`
+      : "";
+    // Off, with why, on a rig without teachers or with its teachers off: control refuses it there.
+    const noRound =
+      rigHasTeachers(store, rig) === false
+        ? "This rig has no teachers: give them a model on Edit rig."
+        : rigSettingsOf(store, rig)?.settings?.teachers === false
+          ? "This rig's teachers are off: switch them on on Edit rig."
+          : "";
+    const round = working
+      ? `${cmdForm(c, { rig, kind: "start_teachers_round", fields: { run: r.id }, label: "Start a teachers' round", cls, back, disabled: !!noRound, why: noRound })}<div class="muted small">${esc(noRound || TEACHERS_ROUND_WORDS)}</div>`
+      : "";
     const closing = close && r.status !== "closed" ? closeForm(c, rig, r.id, back) : "";
-    if (!restart && !closing) return "";
-    return `<details class="menu"><summary class="btn${cls ? ` ${cls}` : ""}" title="More">⋯</summary><div class="menu-pop">${restart}${restart && closing ? `<div class="divider" style="margin:2px 0"></div>` : ""}${closing}</div></details>`;
+    const items = [restart, round, closing].filter(Boolean);
+    const hours = hoursMenu(c, rig, r, back, cls);
+    if (!items.length) return hours;
+    return `${hours}<details class="menu"><summary class="btn${cls ? ` ${cls}` : ""}" title="More">⋯</summary><div class="menu-pop">${items.join(`<div class="divider" style="margin:2px 0"></div>`)}</div></details>`;
   };
+  /**
+   * Add hours (goal 198), beside ⋯ on a run its hours paused: more hours of work, and it resumes.
+   * Resume alone would pause it again at once.
+   */
+  const hoursMenu = (c: Ctx, rig: string, r: RunView, back: string, cls = "") =>
+    r.status === "paused" && r.pause_reason === HOURS_SPENT
+      ? `<details class="menu"><summary class="btn primary${cls ? ` ${cls}` : ""}">Add hours</summary><div class="menu-pop">${cmdForm(c, { rig, kind: "add_run_hours", fields: { run: r.id }, label: "Add hours and resume", cls: "sm", back, extra: `<label class="fd" style="margin-bottom:6px">${infoLabel("Hours to add", HOURS_TIP)}<input name="hours" type="number" min="1" max="${ADD_HOURS_MAX}" step="1" value="24" required></label>` })}<div class="muted small">${HOURS_WORDS}</div></div></details>`
+      : "";
   const forms = (c: Ctx): Forms => ({
     cmd: (f) => cmdForm(c, f),
     csrf: csrf(c),

@@ -1,0 +1,44 @@
+---
+id: "197"
+title: "The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 197 · The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+1. **A cap** ([issue 30](https://github.com/iammrduncan/thermite/issues/30)): a run's queue had 500 experiments and grew faster than its lanes could try them. A run setting caps the queue; at the cap, a new idea replaces the weakest waiting one, or is refused with why. No cap unless set.
+2. **Worker and judge queues** ([issue 20](https://github.com/iammrduncan/thermite/issues/20)): the experiments a worker sends to the judge carry the worker's own measurements, shown in the judge's queue, so the owner can move a promising one to the next judge slot. A mockup first.
+
+## Why
+
+An unbounded queue buries its best ideas, and the judge's queue hides what the workers already saw.
+
+## Constraints
+
+- **No default caps.** The cap is off unless the owner sets it.
+
+## Done when
+
+- [ ] Items 1 and 2, with tests and the owner's agreed mockup for item 2.
+- [ ] Pages: Choose what runs next, the run's Experiments tab, the MCP tools, and the changelog.
+- [ ] Issues 30 and 20 closed with their commits.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/197-experiment-queue-cap-and-split.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

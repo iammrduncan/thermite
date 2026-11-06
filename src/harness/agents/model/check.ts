@@ -28,7 +28,7 @@ type Reply = {
  * time, the reply's stop reason and token use, and whether the reply carried thinking: what a
  * new or changed model server most often gets wrong (no tool calls, a cut-off reply, a refusal).
  */
-// One short tool call: a route that has not answered in two minutes is not working.
+// One short tool call, within the rig's check time (goal 150): 120 s unless the rig sets one.
 export async function checkModel(cfg: ModelConfig, timeoutMs = 120_000): Promise<RigCheckReport> {
   const { models, model, thinkingLevel } = buildModel(cfg);
   const word = `thermite-${Math.random().toString(36).slice(2, 8)}`;
@@ -55,6 +55,11 @@ export async function checkModel(cfg: ModelConfig, timeoutMs = 120_000): Promise
     streamFn: models.streamSimple.bind(models),
   });
   const started = Date.now();
+  // When the model's reply began to stream: a slow model shows before it fails (goal 150).
+  let firstAt: number | undefined;
+  agent.subscribe((event) => {
+    if (firstAt === undefined && event.type === "message_update") firstAt = Date.now();
+  });
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
@@ -79,6 +84,7 @@ export async function checkModel(cfg: ModelConfig, timeoutMs = 120_000): Promise
     model: cfg.model,
     base_url: cfg.baseUrl,
     seconds: Math.round(ms / 100) / 10,
+    first_token_seconds: firstAt !== undefined ? Math.round((firstAt - started) / 100) / 10 : null,
     stop: reply?.stopReason ?? null,
     error: reply?.errorMessage ?? thrown ?? null,
     tokens_in: reply?.usage?.input ?? null,
@@ -92,12 +98,12 @@ export async function checkModel(cfg: ModelConfig, timeoutMs = 120_000): Promise
   if (echoed === word) {
     return {
       ok: true,
-      summary: `${cfg.model} answered with a correct tool call in ${detail.seconds} s`,
+      summary: `${cfg.model} answered with a correct tool call in ${detail.seconds} s${detail.first_token_seconds !== null ? `, its first token after ${detail.first_token_seconds} s` : ""}`,
       detail,
     };
   }
   const why = timedOut
-    ? `no answer in ${Math.round(timeoutMs / 1000)} s (is the model up?)`
+    ? noAnswerWords(timeoutMs)
     : echoed !== undefined
       ? `it called the tool with "${echoed.slice(0, 80)}", not "${word}"`
       : detail.error
@@ -105,3 +111,10 @@ export async function checkModel(cfg: ModelConfig, timeoutMs = 120_000): Promise
         : `no tool call (stop: ${detail.stop ?? "none"})${text ? `; it wrote: ${text.slice(0, 200)}` : ""}`;
   return { ok: false, summary: `${cfg.model} failed the tool-call check: ${why}`, detail };
 }
+
+/**
+ * A model check with no answer in its time, in words that don't guess the cause (goal 150): the
+ * model may be down, or up and busy for longer than the check waits.
+ */
+export const noAnswerWords = (timeoutMs: number): string =>
+  `no answer in ${Math.round(timeoutMs / 1000)} s: the model is down, or busy with other requests for longer than the check waits (the rig's check time on Edit rig sets how long)`;

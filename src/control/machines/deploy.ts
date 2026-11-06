@@ -15,7 +15,15 @@ import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
  */
 
 export interface RigPlan {
+  /** The rig's name, or a runner process's (goal 206): its files, units and volumes go by it. */
   rig: string;
+  /**
+   * A runner process of a rig (goal 206): `rig` is then its own name for its files and units,
+   * runnerOf its rig's, and runner its name in the rig. Its parts start as a runner, and its
+   * supervisor registers with the runner's own token.
+   */
+  runnerOf?: string | undefined;
+  runner?: string | undefined;
   /** Control as the rig reaches it. */
   controlUrl: string;
   images: { harness: string; supervisor: string };
@@ -28,6 +36,8 @@ export interface RigPlan {
   judgeGpus?: number | undefined;
   /** Control logs in as root: system units and paths instead of the user's. */
   root: boolean;
+  /** Its core judges on its runners alone (goal 206): THERMITE_LOCAL_JUDGE=0. */
+  judgeOnRunners?: boolean | undefined;
   controlPublicKey: string;
   controlFingerprint: string;
   /** The message bus for its supervisor: the one way it reaches control but its registration. */
@@ -87,7 +97,16 @@ export const unitName = (rig: string, part: "harness" | "supervisor") => `thermi
 /** What a rig's units are made of: the rest of a plan is for its first setup. */
 export type UnitPlan = Pick<
   RigPlan,
-  "rig" | "controlUrl" | "images" | "gpus" | "judgeGpus" | "root" | "bus"
+  | "rig"
+  | "runnerOf"
+  | "runner"
+  | "controlUrl"
+  | "images"
+  | "gpus"
+  | "judgeGpus"
+  | "root"
+  | "judgeOnRunners"
+  | "bus"
 >;
 
 /** The Quadlet units, by file name. */
@@ -99,6 +118,9 @@ export function rigUnits(p: UnitPlan): Record<string, string> {
   const egress = `thermite-${p.rig}-egress`;
   const split = gpuSplit(p.gpus.length, p.judgeGpus);
   const gpu = p.gpus.length > 0;
+  // A runner process (goal 206): its rig's name in its settings, and its parts start as a runner.
+  const rigId = p.runnerOf ?? p.rig;
+  const role: Record<string, string> = p.runner ? { THERMITE_ROLE: "runner" } : {};
   const env = (pairs: Record<string, string>) =>
     Object.entries(pairs)
       .map(([k, v]) => `Environment=${k}=${v}`)
@@ -137,9 +159,11 @@ Description=Thermite rig ${p.rig}: harness
 Image=${p.images.harness}
 ContainerName=${h}
 ${env({
-  THERMITE_RIG_ID: p.rig,
+  THERMITE_RIG_ID: rigId,
+  ...role,
   THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
   ...split,
+  ...(p.judgeOnRunners ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
   THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
   THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
 })}
@@ -172,7 +196,8 @@ After=${h}.service
 Image=${p.images.supervisor}
 ContainerName=${s}
 ${env({
-  THERMITE_RIG_ID: p.rig,
+  THERMITE_RIG_ID: rigId,
+  ...(p.runner ? { ...role, THERMITE_RUNNER: p.runner } : {}),
   HARNESS_URL: `http://${h}:8700`,
   CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
   THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",

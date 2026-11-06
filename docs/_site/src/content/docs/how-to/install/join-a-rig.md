@@ -55,12 +55,14 @@ done
 ## 1. Make the join command
 
 1. Open **Rigs** in the sidebar, then press **Add a rig**.
-2. Under **1 · Where**, after "Or run it yourself, where control can't connect:", choose **A machine you set it up on yourself** or **A Kubernetes namespace you apply it to yourself**.
-3. Under **2 · GPUs and resources**:
+2. Under **What kind of rig?**, in **Other ways to add a rig**, choose **Set one up yourself** and press **Next**.
+3. Under **Where do you set it up?**, choose **A machine you set it up on yourself** or **A Kubernetes namespace you apply it to yourself**, and fill in its fields:
    - for a machine, **GPUs on the machine**: the GPUs' numbers as `nvidia-smi` lists them, such as `0,1`. Empty: the rig measures on the CPU;
    - for a namespace, the **Namespace**, the number of **GPUs** (up to 8), **GPUs through** (NVIDIA's device plugin, or DRA with a **DRA device class**), the **Storage class** (empty: the cluster's default) and the **Volume size (GB)** (100 by default);
    - with two or more GPUs, **GPUs for the judge** (half by default). See [Give a rig several GPUs](several-gpus.md).
-4. Under **3 · Name and start**, give a **Rig name** and press **Create the rig**.
+
+   Press **Next**.
+4. Under **Name it and create it**, give a **Rig name** and press **Create the rig**.
 
 The page shows the command once, under "Run this on the machine, as the user the rig should run as." or "Run this where kubectl reaches the cluster, with rights in the namespace …". Below it: "Shown once: copy it now. It works once, until HH:MM UTC." That is one hour after you made it.
 

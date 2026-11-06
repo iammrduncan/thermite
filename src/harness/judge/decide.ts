@@ -1,4 +1,6 @@
 import type { GoalContract, HillClimbContract } from "../../core/contract.ts";
+import { metricPlan, type PlannedGuard, type PlannedPriority } from "../../core/metric-plan.ts";
+import { type GuardRule, guardWords, type MetricRole } from "../../core/metric-roles.ts";
 import {
   type Interval,
   logImprovement,
@@ -30,6 +32,8 @@ export type ConfirmVerdict = "win_confirmed" | "not_confirmed" | "tradeoff" | "i
 
 export interface GuardResult {
   metric: string;
+  /** A guard of the metric roles (goal 209): its bound, which the contract's own guards lack. */
+  rule?: GuardRule | undefined;
   interval: Interval;
   /** ok: confidently within the step margin; violated: confidently beyond it. */
   status: "ok" | "violated" | "unsure";
@@ -46,6 +50,16 @@ export interface Decision<V> {
   guards: GuardResult[];
   /** At confirmation, each guard against the run's baseline (goal 115), when it has one. */
   vsStart?: StartGuard[] | undefined;
+  /**
+   * The values of the plan's other metrics (goal 209), as the main metric's are: its lower
+   * priorities and its informational metrics. A guard's are with the guard.
+   */
+  metrics?: MetricValues[] | undefined;
+  /**
+   * The guards that ask (goal 212) and that the change is past, in words: it is not refused for
+   * them, and a confirmed win then waits for the owner's yes.
+   */
+  asks?: string[] | undefined;
   reasons: string;
 }
 
@@ -98,6 +112,8 @@ export type StartValues = Readonly<Record<string, Readonly<Record<string, StartV
 /** One guard against the baseline: log ratios, positive meaning better than the start. */
 export interface StartGuard {
   metric: string;
+  /** A guard of the metric roles (goal 209): its bound. */
+  rule?: GuardRule | undefined;
   /** The change's values against the starting point's (geometric mean over the cells). */
   estimate: number;
   /** The guard's total allowance. */
@@ -110,8 +126,204 @@ export interface StartGuard {
 
 type Policy = Pick<
   HillClimbContract,
-  "objective" | "guards" | "cells" | "hard_constraints" | "acceptance"
+  "objective" | "guards" | "cells" | "hard_constraints" | "acceptance" | "monitor_only" | "metrics"
 >;
+
+/** A kit's metrics with their roles (goal 209), as the judge has the run's kit. */
+export type Roles = Readonly<Record<string, MetricRole>>;
+
+/**
+ * The guards of the metric roles (goal 209): the kit's and the contract's `metrics`. The
+ * contract's own `guards` and `hard_constraints` are decided as they always were, beside them.
+ */
+function roleGuards(policy: Policy, roles: Roles | undefined): PlannedGuard[] {
+  return metricPlan(policy, roles).guards.filter((g) => !g.legacy);
+}
+
+/** The plan's lower priorities' and informational metrics' values, each the blocks carry. */
+function otherValues(
+  policy: Policy,
+  roles: Roles | undefined,
+  blocks: readonly Block[],
+): MetricValues[] {
+  const plan = metricPlan(policy, roles);
+  return [...plan.priorities.slice(1).map((p) => p.metric), ...plan.info.map((i) => i.metric)]
+    .map((m) => metricValues(blocks, m, policy.cells))
+    .filter((v) => v.cells.length);
+}
+
+/** A metric's spread in the reference's blocks: per cell, the sd of its log values; their mean. */
+function referenceSpread(
+  blocks: readonly Block[],
+  metric: string,
+  cells: readonly string[],
+): number {
+  const sds = cells.map((cell) => {
+    const xs = blocks
+      .map((b) => b.reference[metric]?.[cell])
+      .filter((x): x is number => x !== undefined && x > 0)
+      .map((x) => Math.log(x));
+    if (xs.length < 2) return 0;
+    const m = xs.reduce((a, x) => a + x, 0) / xs.length;
+    return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1));
+  });
+  return sds.reduce((a, x) => a + x, 0) / Math.max(1, sds.length);
+}
+
+/**
+ * The role guards against the champion, on the paired blocks: above, at least the champion less
+ * `by` of it; below, at most the champion plus `by` of it; within, the change no further from
+ * the champion than `by` times the champion's own spread in these blocks. Each is ok when its
+ * interval is wholly inside, violated when wholly outside, unsure otherwise, as the contract's
+ * own guards are.
+ */
+function championGuardResults(
+  guards: readonly PlannedGuard[],
+  blocks: readonly Block[],
+  cells: readonly string[],
+  alpha: number,
+): GuardResult[] {
+  return guards
+    .filter((g) => g.rule.against === "champion")
+    .map((g) => {
+      const by = g.rule.by ?? 0;
+      const values = metricValues(blocks, g.metric, cells);
+      if (g.rule.stay === "within") {
+        const interval = meanInterval(blockEffects(blocks, g.metric, "max", cells), alpha);
+        const lim = by * referenceSpread(blocks, g.metric, cells);
+        const inside = interval.low > -lim && interval.high < lim;
+        const outside = interval.low > lim || interval.high < -lim;
+        const status = inside ? "ok" : outside ? "violated" : "unsure";
+        return { metric: g.metric, rule: g.rule, interval, status, values };
+      }
+      const above = g.rule.stay === "above";
+      const interval = meanInterval(
+        blockEffects(blocks, g.metric, above ? "max" : "min", cells),
+        alpha,
+      );
+      const margin = above ? (by >= 1 ? -Infinity : Math.log(1 - by)) : -Math.log1p(by);
+      const status = interval.low > margin ? "ok" : interval.high < margin ? "violated" : "unsure";
+      return { metric: g.metric, rule: g.rule, interval, status, values };
+    });
+}
+
+/** The role guards against a fixed value: the candidate's mean on each cell holds to it. */
+function valueGuardFailures(
+  guards: readonly PlannedGuard[],
+  blocks: readonly Block[],
+  cells: readonly string[],
+): string[] {
+  const out: string[] = [];
+  for (const g of guards.filter((x) => x.rule.against === "value")) {
+    const v = g.rule.value ?? 0;
+    for (const cell of cells) {
+      const xs = blocks.map((b) => b.candidate[g.metric]?.[cell]);
+      if (xs.some((x) => x === undefined || !Number.isFinite(x))) {
+        out.push(`${g.metric}/${cell}: missing or non-finite`);
+        continue;
+      }
+      const m = (xs as number[]).reduce((a, x) => a + x, 0) / xs.length;
+      if (g.rule.stay === "above" ? m < v : m > v)
+        out.push(`${g.metric}/${cell}: mean ${m} is not ${guardWords(g.rule)}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * The role guards against the baseline, at confirmation: on each cell, the median of the
+ * change's values against the starting point's median, as a log ratio; the guard's estimate is
+ * their mean over the cells, and its noise the start's own spread, as for the contract's own
+ * guards (startGuards). Above is spent when the change is further below the start than `by`
+ * allows and the noise; below, further above it; within, further from it either way than `by`
+ * standard deviations of the start's spread (its MAD × 1.4826). One with no baseline value on
+ * a cell is not checked.
+ */
+function baselineGuardResults(
+  guards: readonly PlannedGuard[],
+  blocks: readonly Block[],
+  cells: readonly string[],
+  start: StartValues,
+): StartGuard[] {
+  const out: StartGuard[] = [];
+  for (const g of guards.filter((x) => x.rule.against === "baseline")) {
+    const effects: number[] = [];
+    const noises: number[] = [];
+    const spreads: number[] = [];
+    for (const cell of cells) {
+      const s = start[cell]?.[g.metric];
+      const xs = blocks
+        .map((b) => b.candidate[g.metric]?.[cell])
+        .filter((x): x is number => x !== undefined && Number.isFinite(x));
+      if (!s || !(s.median > 0) || !xs.length) break;
+      effects.push(Math.log(median(xs) / s.median));
+      noises.push(Math.log1p(Math.abs(s.mad) / s.median));
+      spreads.push(Math.log1p((1.4826 * Math.abs(s.mad)) / s.median));
+    }
+    if (effects.length !== cells.length) continue;
+    const mean = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
+    const change = mean(effects);
+    const by = g.rule.by ?? 0;
+    if (g.rule.stay === "within") {
+      const allowed = by * mean(spreads);
+      out.push({
+        metric: g.metric,
+        rule: g.rule,
+        estimate: change,
+        allowed,
+        noise: 0,
+        spent: Math.abs(change) > allowed,
+      });
+      continue;
+    }
+    const above = g.rule.stay === "above";
+    const estimate = above ? change : -change;
+    const allowed = above ? (by >= 1 ? Infinity : -Math.log(1 - by)) : Math.log1p(by);
+    const noise = mean(noises);
+    out.push({
+      metric: g.metric,
+      rule: g.rule,
+      estimate,
+      allowed,
+      noise,
+      spent: estimate < -(allowed + noise),
+    });
+  }
+  return out;
+}
+
+const median = (xs: number[]) => {
+  const v = [...xs].sort((p, q) => p - q);
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? (v[m] as number) : ((v[m - 1] as number) + (v[m] as number)) / 2;
+};
+
+/**
+ * A tie on the primary broken down the priority metrics (goal 209, the owner, 2026-11-05): the
+ * first lower priority with a min_effect that is not equivalent too decides. Better beyond its
+ * min_effect: a win on it; worse: no win; neither yet: undecided. Equivalent on every one: none.
+ */
+function tieBreak(
+  priorities: readonly PlannedPriority[],
+  blocks: readonly Block[],
+  cells: readonly string[],
+  alpha: number,
+  band: number,
+): { by: PlannedPriority; interval: Interval; outcome: "win" | "worse" | "undecided" } | undefined {
+  for (const p of priorities.slice(1)) {
+    if (p.min_effect === undefined) continue;
+    const interval = meanInterval(blockEffects(blocks, p.metric, p.direction, cells), alpha);
+    if (interval.low > -band && interval.high < band) continue;
+    const outcome =
+      interval.low > 0 && interval.estimate >= toLog(p.min_effect)
+        ? "win"
+        : interval.high < 0 || (interval.low > 0 && interval.high < toLog(p.min_effect))
+          ? "worse"
+          : "undecided";
+    return { by: p, interval, outcome };
+  }
+  return undefined;
+}
 
 /** Per-block effect for one metric: the mean log ratio over cells (a geometric mean ratio). */
 export function blockEffects(
@@ -225,6 +437,8 @@ export function decideScreen(
   blocks: readonly Block[],
   /** The rig's calibrated A/A block spread for the primary metric (log ratio), if known. */
   noiseFloor = 0,
+  /** The kit's metrics with their roles (goal 209). */
+  roles?: Roles,
 ): Decision<ScreenVerdict> {
   const { acceptance } = policy;
   const final = blocks.length >= Math.max(...acceptance.looks);
@@ -235,30 +449,59 @@ export function decideScreen(
     alpha,
     noiseFloor,
   );
-  const guards = guardResults(policy, blocks, alpha);
+  const extra = roleGuards(policy, roles);
+  const guards = [
+    ...guardResults(policy, blocks, alpha),
+    ...championGuardResults(extra, blocks, policy.cells, alpha),
+  ];
+  const metrics = otherValues(policy, roles, blocks);
+  // A guard that asks (goal 212) refuses nothing: the change past it goes on, and asks after.
+  const asks = valueGuardFailures(
+    extra.filter((g) => g.rule.ask),
+    blocks,
+    policy.cells,
+  );
   const result = (verdict: ScreenVerdict | undefined, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
+    ...(metrics.length ? { metrics } : {}),
+    ...(asks.length ? { asks } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 
-  const failures = hardConstraintFailures(policy, blocks);
+  const failures = [
+    ...hardConstraintFailures(policy, blocks),
+    ...valueGuardFailures(
+      extra.filter((g) => !g.rule.ask),
+      blocks,
+      policy.cells,
+    ),
+  ];
   if (failures.length) return result("infeasible", `hard constraints: ${failures.join("; ")}`);
 
+  // A win, on the primary or on the lower priority that breaks a tie, holds to the guards.
+  const win = (why: string) => {
+    const violated = guards.filter((g) => g.status === "violated").map((g) => g.metric);
+    if (violated.length) return result("tradeoff", `guards violated: ${violated.join(", ")}`);
+    const unsure = guards.filter((g) => g.status === "unsure").map((g) => g.metric);
+    if (!unsure.length) return result("win_screened", why);
+    if (final) return result("inconclusive", `guards unresolved: ${unsure.join(", ")}`);
+    return result(undefined, `guards unresolved: ${unsure.join(", ")}`);
+  };
   const band = toLog(acceptance.equivalence_band);
-  if (primary.low > -band && primary.high < band) return result("neutral", "equivalent");
+  if (primary.low > -band && primary.high < band) {
+    const tie = tieBreak(metricPlan(policy, roles).priorities, blocks, policy.cells, alpha, band);
+    if (!tie) return result("neutral", "equivalent");
+    const on = `equivalent; ${tie.by.metric} ${describe(tie.interval)}`;
+    if (tie.outcome === "win") return win(`${on}, better beyond its min_effect`);
+    if (tie.outcome === "worse" || final) return result("neutral", on);
+    return result(undefined, `${on}, continue`);
+  }
   if (primary.low > 0) {
     if (primary.high < toLog(min_effect)) return result("neutral", "gain below min_effect");
-    if (primary.estimate >= toLog(min_effect)) {
-      const violated = guards.filter((g) => g.status === "violated").map((g) => g.metric);
-      if (violated.length) return result("tradeoff", `guards violated: ${violated.join(", ")}`);
-      const unsure = guards.filter((g) => g.status === "unsure").map((g) => g.metric);
-      if (!unsure.length) return result("win_screened", "better beyond min_effect");
-      if (final) return result("inconclusive", `guards unresolved: ${unsure.join(", ")}`);
-      return result(undefined, `guards unresolved: ${unsure.join(", ")}`);
-    }
+    if (primary.estimate >= toLog(min_effect)) return win("better beyond min_effect");
   }
   if (primary.high < 0) return result("regress", "worse");
   return result(
@@ -281,6 +524,8 @@ export function decideConfirm(
   noiseFloor = 0,
   /** The run's baseline: the starting point's values on each cell (goal 115). */
   start?: StartValues | undefined,
+  /** The kit's metrics with their roles (goal 209). */
+  roles?: Roles,
 ): Decision<ConfirmVerdict> {
   const alpha = policy.acceptance.alpha_confirm;
   const { metric, direction } = policy.objective.primary;
@@ -289,18 +534,42 @@ export function decideConfirm(
     alpha,
     noiseFloor,
   );
-  const guards = guardResults(policy, blocks, alpha);
-  const vsStart = start ? startGuards(policy, blocks, start) : undefined;
+  const extra = roleGuards(policy, roles);
+  const guards = [
+    ...guardResults(policy, blocks, alpha),
+    ...championGuardResults(extra, blocks, policy.cells, alpha),
+  ];
+  const vsStart = start
+    ? [
+        ...startGuards(policy, blocks, start),
+        ...baselineGuardResults(extra, blocks, policy.cells, start),
+      ]
+    : undefined;
+  const metrics = otherValues(policy, roles, blocks);
+  const asks = valueGuardFailures(
+    extra.filter((g) => g.rule.ask),
+    blocks,
+    policy.cells,
+  );
   const result = (verdict: ConfirmVerdict, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
     ...(vsStart ? { vsStart } : {}),
+    ...(metrics.length ? { metrics } : {}),
+    ...(asks.length ? { asks } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 
-  const failures = hardConstraintFailures(policy, blocks);
+  const failures = [
+    ...hardConstraintFailures(policy, blocks),
+    ...valueGuardFailures(
+      extra.filter((g) => !g.rule.ask),
+      blocks,
+      policy.cells,
+    ),
+  ];
   if (failures.length) return result("infeasible", `hard constraints: ${failures.join("; ")}`);
   const violated = guards.filter((g) => g.status === "violated").map((g) => g.metric);
   if (violated.length) return result("tradeoff", `guards violated: ${violated.join(", ")}`);
@@ -318,16 +587,30 @@ export function decideConfirm(
     return result(
       "tradeoff",
       `the guard's total allowance against the starting point is spent: ${spent
-        .map(
-          (g) =>
-            `${g.metric} ${pct(g.estimate)} against the starting point (allowed -${pct(g.allowed)}, and its noise ${pct(g.noise)})`,
+        .map((g) =>
+          g.rule?.stay === "within"
+            ? `${g.metric} ${pct(g.estimate)} from the starting point (allowed ±${pct(g.allowed)}, ${guardWords(g.rule)})`
+            : `${g.metric} ${pct(g.estimate)} against the starting point (allowed -${pct(g.allowed)}, and its noise ${pct(g.noise)})`,
         )
         .join("; ")}`,
     );
   }
-  if (primary.low <= 0) return result("not_confirmed", "gain not confirmed on fresh data");
+  // A tie on the primary is confirmed on fresh data too, down the priorities (goal 209).
+  const band = toLog(policy.acceptance.equivalence_band);
+  const tied = primary.low > -band && primary.high < band;
+  const tie =
+    primary.low <= 0 && tied
+      ? tieBreak(metricPlan(policy, roles).priorities, blocks, policy.cells, alpha, band)
+      : undefined;
+  if (primary.low <= 0 && tie?.outcome !== "win")
+    return result("not_confirmed", "gain not confirmed on fresh data");
   const unsure = guards.filter((g) => g.status === "unsure").map((g) => g.metric);
   if (unsure.length) return result("not_confirmed", `guards unresolved: ${unsure.join(", ")}`);
+  if (tie)
+    return result(
+      "win_confirmed",
+      `confirmed on fresh data: equivalent on ${metric}; ${tie.by.metric} ${describe(tie.interval)}`,
+    );
   return result("win_confirmed", "confirmed on fresh data");
 }
 

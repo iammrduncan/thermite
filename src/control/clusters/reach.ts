@@ -72,7 +72,7 @@ export function setReachableAddresses(
 /** Applies a rig's two network rules again, with the list as it is now. */
 async function applyNetwork(parts: ControlParts, r: ClusterRig, list: ReachEntry[]): Promise<void> {
   const k = parts.store.clusters.get(r.cluster);
-  if (!k) throw new Error(`the cluster ${r.cluster} is no longer in Providers`);
+  if (!k) throw new Error(`the cluster ${r.cluster} is no longer in Settings › Machines`);
   const objects = clusterRigNetwork({ ...clusterPlan(parts, r), reach: list });
   const out = await parts.kube.kubectl(
     clusterTarget(parts, k),

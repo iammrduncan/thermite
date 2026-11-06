@@ -23,8 +23,8 @@ A test pod is no rig: it runs no campaign. To run one there, see [Run a rig on R
 
 ## 1. Add the RunPod account
 
-1. Press the cog at the foot of the sidebar to open **Settings › Providers**.
-2. Under **Add a provider**, choose **Type:** RunPod (a GPU cloud), a **Name** such as `runpod`, and paste the **RunPod API key**.
+1. Press the cog at the foot of the sidebar to open **Settings**, then **Machines** under **Rigs**, and press **Add a machine**.
+2. Choose **A GPU cloud**, a **Name** such as `runpod`, and paste the **RunPod API key**.
 3. Press **Add and read the account**.
 
 Control reads RunPod's GPU types with their prices and stock, its data centers, your network volumes, your pods, and what your account spent, from RunPod's billing. It starts nothing and spends nothing. The page says `"runpod" is added and read: see what control found below.` A key RunPod refuses is not kept: "Not added: …". Control reads the account again every 15 minutes, and when you press **Read again** on its row.
@@ -57,7 +57,7 @@ curl -s -X POST http://127.0.0.1:8800/v1/gpu-clouds/runpod/tests \
 
 The body's fields are all optional: `gpu`, `cloud_type` (`"SECURE"` or `"COMMUNITY"`), `image`, `disk_gb`, `restart` and `stop_after_minutes`. The answer is the test, with its `id`. A refusal comes back as status 409 with the reason. `GET /v1/gpu-cloud-tests/<id>` follows a test, `POST /v1/gpu-cloud-tests/<id>/end` ends it, and `GET /v1/gpu-clouds/<name>/tests` lists them.
 
-Over MCP, the owner's and the operator's tokens have `runpod_test_start` (with `cloud`, the account's name in Providers such as `runpod`, and the same fields), `runpod_tests` to follow, and `runpod_test_end`. A reader's token can follow with `runpod_tests`. See [MCP tools](../../reference/mcp-tools.md).
+Over MCP, the owner's and the operator's tokens have `runpod_test_start` (with `cloud`, the account's name in **Settings › Machines**, such as `runpod`, and the same fields), `runpod_tests` to follow, and `runpod_test_end`. A reader's token can follow with `runpod_tests`. See [MCP tools](../../reference/mcp-tools.md).
 
 ## 3. Watch it
 
@@ -105,8 +105,8 @@ The card lists the findings in words. A good test reads like this:
 - If removing it fails, the card says "control could not remove pod …: …. It tries again.", and control keeps trying.
 - Without a limit, a pod that never reports keeps running, and keeps costing, until you end it.
 - The card's cost is control's count: RunPod's price per hour times the time the pod ran. RunPod's own bill is the final word; RunPod bills a pod while it runs, and storage while it exists.
-- The account's row shows that bill too. **Spend** gives what the account spent today, this month and in the last 30 days, what its running pods cost per hour, and the last 7 days one by one, all from RunPod's billing. **Thermite's test pods** adds up the cards' costs. It leaves out the rigs control launched on RunPod: each one's page has its own **Spent so far** ([goal 095](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/095-runpod-spend-on-providers.goal) adds them to this row). The month's total is also on the account's line in the **Providers** list, such as `$12.40 spent this month`. If the key may not read billing, **Spend** says `RunPod refused this key for billing: give the key read access to billing to see spend`, and the rest of the row still shows.
+- The account's row shows that bill too. **Spend** gives what the account spent today, this month and in the last 30 days, what its running pods cost per hour, and the last 7 days one by one, all from RunPod's billing. **Thermite's test pods** adds up the cards' costs. It leaves out the rigs control launched on RunPod: each one's page has its own **Spent so far** ([goal 095](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/095-runpod-spend-on-providers.goal) adds them to this row). The month's total is also on the account's line in the **Settings › Machines** list, such as `$12.40 spent this month`. If the key may not read billing, **Spend** says `RunPod refused this key for billing: give the key read access to billing to see spend`, and the rest of the row still shows.
 
 To be sure nothing is left, press **Read again** on the account's row: **Pods** should no longer list `thermite-test-t-1a2b3c4d`.
 
-You can't delete the account from Providers while a test runs: "A test pod is running there: end it first, so its pod is removed."
+You can't delete the account from **Settings › Machines** while a test runs: "A test pod is running there: end it first, so its pod is removed."

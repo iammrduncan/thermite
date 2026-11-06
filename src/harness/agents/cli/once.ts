@@ -16,7 +16,7 @@ import { messageText } from "../../../agents/prompt.ts";
 import { renderModelCheck } from "../../../agents/roles/index.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, Runner } from "../../broker/index.ts";
-import type { RigCheckReport } from "../model/index.ts";
+import { noAnswerWords, type RigCheckReport } from "../model/index.ts";
 import { CHECK_ROLE, PLANNER_ROLE } from "./common.ts";
 import type { TerminalCallLink } from "./program.ts";
 
@@ -256,7 +256,10 @@ export async function cliModelCheck<T extends CliTally>(
       summary: `${model.model} answered with a correct tool call in ${seconds} s (${p.name})`,
       detail,
     };
+  // Its time ran out: the same words as Pi's check (goal 150).
+  const out = t.errors.at(-1) === `no answer in ${Math.round(timeoutMs / 1000)} s`;
   const why =
+    (out ? noAnswerWords(timeoutMs) : undefined) ??
     p.check.why?.(t) ??
     (t.errors.length
       ? t.errors.at(-1)

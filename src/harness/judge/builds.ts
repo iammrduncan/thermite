@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { buildInfo } from "../../common/build-info.ts";
 import { fileSha256, sweepTemp } from "../../common/fs.ts";
 import { log } from "../../common/log.ts";
 import { canonicalJson, sha256Hex } from "../../core/canonical.ts";
@@ -66,6 +67,12 @@ export function toolchainOf(env: NodeJS.ProcessEnv): string {
   });
 }
 
+/** This harness's build, as its version and commit: whose failures a build store reuses. */
+function harnessOf(): string {
+  const b = buildInfo();
+  return `${b.version}@${b.commit ?? "unknown"}`;
+}
+
 /** What a build is made from, and the builder user it is made as. */
 export interface BuildInput {
   repo: string;
@@ -87,10 +94,22 @@ export class BuildStore {
   private readonly runner: Runner;
   private readonly ledger: Ledger;
   private toolchain: string | undefined;
+  /**
+   * The harness build that makes the builds: a failure is reused only by the same one, so a
+   * harness or image that fixes what failed (its sandbox, say) builds the commit again.
+   */
+  private readonly harness: string;
 
-  constructor(stateDir: string, scratchDir: string, runner: Runner, ledger: Ledger) {
+  constructor(
+    stateDir: string,
+    scratchDir: string,
+    runner: Runner,
+    ledger: Ledger,
+    o: { harness?: string } = {},
+  ) {
     this.runner = runner;
     this.ledger = ledger;
+    this.harness = o.harness ?? harnessOf();
     this.storeDir = join(stateDir, "builds");
     this.workDir = join(scratchDir, "builds");
     mkdirSync(this.storeDir, { recursive: true });
@@ -149,8 +168,9 @@ export class BuildStore {
       return { ok: true, dir, manifest, cached: true };
     }
     if (known && !known.ok) {
-      const m = known.manifest as { reason: string; log: string };
-      return { ok: false, key, reason: m.reason, log: m.log, transient: false };
+      const m = known.manifest as { reason: string; log: string; harness?: string };
+      if (m.harness === this.harness)
+        return { ok: false, key, reason: m.reason, log: m.log, transient: false };
     }
 
     const work = join(this.workDir, `${key.slice(0, 16)}-${randomUUID().slice(0, 8)}`);
@@ -192,7 +212,7 @@ export class BuildStore {
           commit: input.commit,
           kitCommit: input.kitCommit,
           ok: false,
-          manifest: { reason, log },
+          manifest: { reason, log, harness: this.harness },
           actor: input.actor,
         });
         return { ok: false, key, reason, log, transient: false };
@@ -214,7 +234,7 @@ export class BuildStore {
           commit: input.commit,
           kitCommit: input.kitCommit,
           ok: false,
-          manifest: { reason, log },
+          manifest: { reason, log, harness: this.harness },
           actor: input.actor,
         });
         return { ok: false, key, reason, log, transient: false };

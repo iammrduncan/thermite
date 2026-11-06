@@ -49,6 +49,7 @@ export const LEDGER_COPY = {
     "epoch",
     "event",
     "experiment",
+    "experiment_try",
     "export",
     "finding",
     "goal",

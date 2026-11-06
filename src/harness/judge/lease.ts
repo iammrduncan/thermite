@@ -44,23 +44,20 @@ export async function whileLeased<T>(
 
 /**
  * The harness's start: blocked jobs get one more try (`jobs.unblock`); then jobs still leased by
- * its executors belonged to a process that died, and go back to the queue (reclaimLeases), where
- * the loss counts; then the queued jobs of closed runs are cancelled, those two may have put back
+ * its executors, those of runners that left the rig meanwhile too, belonged to a process that
+ * died, and go back to the queue (reclaimExecutorLeases), where the loss counts; then the queued jobs of closed runs are cancelled, those two may have put back
  * too. Unblocking first matters (goal 163): a job whose lease the reclaim takes for the third
  * time, one that killed the controller, stays blocked through this start instead of being
  * queued again at once, and so for ever.
  */
 export function jobsAtStart(
   ledger: Ledger,
-  executors: string[],
   log: (msg: string, fields: Record<string, unknown>) => void,
 ): void {
   const unblocked = ledger.jobs.unblock("controller-start");
   if (unblocked.length) log("blocked jobs queued again at start", { jobs: unblocked });
-  for (const id of executors) {
-    const reclaimed = ledger.jobs.reclaimLeases(id, "controller-start");
-    if (reclaimed.length) log("reclaimed leases at start", { executor: id, jobs: reclaimed });
-  }
+  const reclaimed = ledger.jobs.reclaimExecutorLeases("controller-start");
+  if (reclaimed.length) log("reclaimed leases at start", { jobs: reclaimed });
   const cancelled = ledger.jobs.endClosedRuns("controller-start");
   if (cancelled.length) log("cancelled closed runs' jobs at start", { jobs: cancelled });
 }

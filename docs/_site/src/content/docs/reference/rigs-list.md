@@ -14,7 +14,7 @@ The line beside the title counts the rigs, then, when there are any, those that 
 
 The buttons at the right:
 
-- **Launch on RunPod** opens [the launch form](../how-to/install/runpod-rig.md). It shows only when **Settings › Providers** has a RunPod account.
+- **Launch on RunPod** opens [the launch form](../how-to/install/runpod-rig.md). It shows only when **Settings › Machines** has a RunPod account.
 - **Add a rig** opens the ways to add a rig.
 
 ## Filters
@@ -58,6 +58,8 @@ With no rig, the page says `No rig has reported yet.`; a chip with no rig shows 
 | **Stopped** | A rig on RunPod whose pod is stopped. It is not called stale, offline or not reporting: not here, in the status bar, **Overview**'s tallies (`rigs reporting, 1 stopped`), **Live**'s **Idle rigs** or a run's page. **Needs you** shows no card for it. **New campaign** and **Start a run** offer it, and a run started there starts the pod first |
 | **Key to accept** | A new key from the rig waits for you: see [Accept a rig's key](../how-to/operate/accept-a-rig-key.md) |
 | **Getting ready** | A pod launched on RunPod that has not reported yet. It costs money from its launch, so it is listed with its price |
+| **Setting up** | A rig control sets up on a machine or a cluster, before its first report |
+| **Setup failed** | A rig control could not set up: its row says `its setup failed: its page says why`, and **Stale, offline or broken** shows it. Its page's **Set up by control** gives each step and the error |
 
 ## Version
 

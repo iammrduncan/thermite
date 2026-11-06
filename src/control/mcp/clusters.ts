@@ -3,18 +3,23 @@ import { RIG_ID_SENTENCE } from "../../core/ids.ts";
 import { REACH_MAX_ENTRIES, REACH_MAX_PORTS } from "../../core/reach.ts";
 import {
   addClusterRig,
+  addClusterRunner,
   type ClusterResourcesBody,
+  ClusterRunnerBody,
   clusterResourcesFields,
   clusterResourcesRequest,
   clusterRigAction,
+  clusterRunnerRequest,
   HARNESS_LEAST,
   leastRigSize,
+  removeRunner,
   SUPERVISOR_SHARE,
   setClusterRigResources,
   setClusterSlots,
   setReachableAddresses,
   updateRigImages,
 } from "../clusters/index.ts";
+import { CUDA_VERSIONS, type CudaVersion } from "../rigs/index.ts";
 import type { ToolContext } from "./context.ts";
 
 /** Rigs on clusters, as Add a rig and Providers do them: the owner and operators. */
@@ -26,7 +31,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
       "add_cluster_rig",
       {
         title: "Add a rig on a cluster",
-        description: `Adds a rig on a Kubernetes cluster in Providers, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and ${SUPERVISOR_SHARE.terminal.memoryGi} GiB of them and the harness the rest, and a size below ${leastRigSize("terminal").cpus} CPUs and ${leastRigSize("terminal").memoryGi} GiB is refused. The rig's first key may wait for the owner's acceptance.`,
+        description: `Adds a rig on a Kubernetes cluster in Settings › Machines, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and ${SUPERVISOR_SHARE.terminal.memoryGi} GiB of them and the harness the rest, and a size below ${leastRigSize("terminal").cpus} CPUs and ${leastRigSize("terminal").memoryGi} GiB is refused. The rig's first key may wait for the owner's acceptance.`,
         inputSchema: {
           rig: z.string().min(1).describe(RIG_ID_SENTENCE),
           cluster: z.string().min(1),
@@ -39,6 +44,18 @@ export function registerAddClusterRig(tools: ToolContext): void {
           storage_gb: z.number().int().min(1).optional(),
           cpus: z.number().positive().optional(),
           memory_gib: z.number().positive().optional(),
+          cuda: z
+            .enum(CUDA_VERSIONS)
+            .optional()
+            .describe(
+              'For a rig with GPUs, the CUDA harness it runs: "12" (the default: Pascal to Hopper, amd64) or "13" (Turing to Blackwell, and the DGX Spark on arm64). Updates keep it',
+            ),
+          judge_on_runners: z
+            .boolean()
+            .optional()
+            .describe(
+              "True: the rig's judge measures on its runners of other machines alone, never on its own machine: a core with no GPU, whose runners add_cluster_runner adds. Its judge's jobs wait until one of the judge's or the shared pool answers",
+            ),
         },
       },
       audited(
@@ -55,6 +72,8 @@ export function registerAddClusterRig(tools: ToolContext): void {
           storage_gb?: number;
           cpus?: number;
           memory_gib?: number;
+          cuda?: CudaVersion;
+          judge_on_runners?: boolean;
         }) => {
           const r = await addClusterRig(
             opts.parts,
@@ -70,6 +89,8 @@ export function registerAddClusterRig(tools: ToolContext): void {
               storageGi: a.storage_gb,
               cpus: a.cpus,
               memoryGi: a.memory_gib,
+              cuda: a.cuda,
+              judgeOnRunners: a.judge_on_runners,
             },
             actor,
           );
@@ -79,6 +100,44 @@ export function registerAddClusterRig(tools: ToolContext): void {
       ),
     );
   }
+}
+
+/**
+ * A rig's runner processes on clusters (goal 206), as Edit rig's Runners does them: the owner's
+ * alone, as the rig's runners setting is, since they decide where its judge measures.
+ */
+export function registerRunners(tools: ToolContext): void {
+  const { server, opts, actor, role, audited } = tools;
+  if (role !== "owner") return;
+  server.registerTool(
+    "add_cluster_runner",
+    {
+      title: "Add a runner on a cluster",
+      description:
+        "Sets up a runner process for a rig on a Kubernetes cluster in Settings › Machines, as Edit rig's Runners does: a harness and a supervisor started as a runner, on one node, with one GPU or none, a volume and a token of their own. Then control gives it to the rig, whose core takes it while its run goes on: it takes runs of its pool once it answers. A slot may hold the rig's core and its runners, never another rig's. Returns {rig, runner, said}; follow it on the rig's page or with rig_settings.",
+      inputSchema: { rig: z.string().min(1), ...ClusterRunnerBody.shape },
+    },
+    audited("add_cluster_runner", async (a: ClusterRunnerBody & { rig: string }) => {
+      const { rig, ...body } = a;
+      const r = await addClusterRunner(opts.parts, clusterRunnerRequest(rig, body), actor);
+      if ("error" in r) throw new Error(r.error);
+      return r;
+    }),
+  );
+  server.registerTool(
+    "remove_runner",
+    {
+      title: "Take a runner away from a rig",
+      description:
+        "Takes a runner process away from a rig, as Edit rig's Remove does: the rig hears first, so its core stops the runner's run under way, which the judge queues again or its lane is told of; then control removes what it set up on the cluster, and the runner's token stops working. A runner process someone started by hand only leaves the rig. Returns {rig, runner, said}.",
+      inputSchema: { rig: z.string().min(1), runner: z.string().min(1) },
+    },
+    audited("remove_runner", async (a: { rig: string; runner: string }) => {
+      const r = await removeRunner(opts.parts, a.rig, a.runner, actor);
+      if ("error" in r) throw new Error(r.error);
+      return { rig: a.rig, runner: a.runner, said: r.ok };
+    }),
+  );
 }
 
 /**
@@ -166,7 +225,7 @@ export function registerClusterRigs(tools: ToolContext): void {
       {
         title: "Set a cluster's slots",
         description:
-          "For a cluster of pre-made slots in Providers: the namespaces control may use, one rig each. Control reads the cluster again, with each slot's network rules and quota. A slot that holds a rig must stay in the list.",
+          "For a cluster of pre-made slots in Settings › Machines: the namespaces control may use, one rig each. Control reads the cluster again, with each slot's network rules and quota. A slot that holds a rig must stay in the list.",
         inputSchema: { cluster: z.string().min(1), slots: z.array(z.string().min(1)).min(1) },
       },
       audited("set_cluster_slots", async (a: { cluster: string; slots: string[] }) => {

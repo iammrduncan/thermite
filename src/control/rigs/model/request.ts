@@ -370,9 +370,12 @@ export function rigModelChanges(r: RigModelRequest): RoleChange[] {
   ];
 }
 
-/** Whether a provider's model runs only in OpenCode: OpenCode's own (free) models. */
+/**
+ * Whether a provider's model runs only in OpenCode: OpenCode's own free models, and every model of
+ * OpenCode's own provider with no key. With its key, a paid model runs anywhere (issue 26).
+ */
 export const opencodeOnly = (p: ModelProvider, model: string): boolean =>
-  isOpencodeOwn(p) && (p.type === "opencode" || !p.key_sealed || model.endsWith("-free"));
+  isOpencodeOwn(p) && (!p.key_sealed || model.endsWith("-free"));
 
 /**
  * The harness a model needs when the owner chooses none: Claude Code for a Claude subscription,
@@ -481,6 +484,16 @@ export function advisorsFileOf(
   if (advisors === null) return NO_ADVISORS;
   const file = AdvisorsFileSchema.safeParse((advisors as { file?: unknown } | undefined)?.file);
   return file.success ? file.data : undefined;
+}
+
+/**
+ * Whether a rig has teachers (goal 194): models control gave them, or its advisors file's, as its
+ * supervisor reports it; undefined when control can't tell.
+ */
+export function rigHasTeachers(store: ControlStore, rig: string): boolean | undefined {
+  if (agentModelsOf(store, rig).teachers.models.length) return true;
+  const file = advisorsFileOf(store.reportedRigs.supervisor(rig));
+  return file ? file.teachers.length > 0 : undefined;
 }
 
 /** The answer of `rig_models` and its REST twin: each agent's model, and the advisors file's. */

@@ -568,15 +568,18 @@ try {
     "runpod_terminating",
     "runpod_terminated",
   ];
-  // The pod's lifecycle in order; beside it, the bus's steps: its leaf's address and the
-  // supervisor's key registration after each launch and start, and the keys it made.
+  // The pod's lifecycle in order; beside it, the bus's steps: its leaf's address after the launch
+  // (and a start that moved it), the supervisor's key registration after each launch and start,
+  // and the keys it made.
   const lifecycle = history.filter((h) => want.includes(h));
   /** @param {string} step */
   const count = (step) => history.filter((h) => h === step).length;
   check(
     "each change is in the rig's history",
     JSON.stringify(lifecycle) === JSON.stringify(want) &&
-      count("runpod_leaf_address") >= 2 &&
+      // Its leaf's address after the launch, and again after the start when it moved (under
+      // Docker a pod started again keeps its published port, so its address).
+      count("runpod_leaf_address") >= 1 &&
       count("bus_registered") >= 2 &&
       history.includes("bus_key") &&
       history.includes("seal_key") &&

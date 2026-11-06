@@ -12,9 +12,17 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
+import type { HarnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
-import { type GitAuth, gitHost, git as gitRun, withGitAuth } from "../common/git/index.ts";
+import {
+  type GitAuth,
+  gitHost,
+  git as gitRun,
+  onGitHost,
+  withGitAuth,
+} from "../common/git/index.ts";
 import { gitRepoPath } from "../core/api/control/rigs.ts";
+import { SETTINGS } from "../core/api/harness/supervisor.ts";
 import type { SignedCommand } from "../core/commands.ts";
 import { sshCommand } from "./git-export.ts";
 import { downloadModel, ModelDownloads } from "./model-download.ts";
@@ -59,10 +67,20 @@ export interface StagingConfig {
   /** The free space a model download leaves where it lands, in bytes (goal 173); none: 0. */
   floorBytes?: number | undefined;
   /**
+   * Whether the rig's core leaves a run's model files to its runners (goal 213), as its harness
+   * says: then none is downloaded here. None: they are.
+   */
+  modelsOnRunners?: (() => Promise<boolean>) | undefined;
+  /**
    * Tests only: `file://` git sources, and model files at private or local addresses, are
    * fetched. Otherwise they are refused, in words.
    */
   localSources?: boolean | undefined;
+}
+
+/** Whether the rig's harness leaves a run's model files to its runners, as its settings say. */
+export async function modelsLeftToRunners(harness: Pick<HarnessClient, "call">): Promise<boolean> {
+  return (await harness.call(SETTINGS)).models_on_runners === true;
 }
 
 /** What staging says about a command: relay it, wait, or report that its content failed. */
@@ -202,8 +220,14 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
   const imports = ((cmd.envelope.payload as { imports?: unknown[] }).imports ?? []) as Sourced[];
   const root = resolve(cfg.inboxDir);
   const todo: { imp: Sourced; target: string }[] = [];
+  // A core that never judges itself downloads no model file: its runners fetch them (goal 213).
+  const leaveModels =
+    imports.some((i) => i?.source && i.kind === "model") && cfg.modelsOnRunners
+      ? await cfg.modelsOnRunners().catch(() => false)
+      : false;
   for (const imp of imports) {
     if (!imp?.source) continue;
+    if (leaveModels && imp.kind === "model") continue;
     const target = resolve(root, imp.path);
     if (!target.startsWith(root + sep)) continue; // the harness refuses such a path
     if (!(await present(imp, target))) todo.push({ imp, target });
@@ -247,9 +271,19 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
 
 async function present(imp: Sourced, target: string): Promise<boolean> {
   if (!existsSync(target)) return false;
-  // A bundle is checked by the harness (it must hold the commit); a model by its hash, here
-  // once, so a wrong file is replaced rather than relayed.
-  if (imp.kind !== "model") return true;
+  // A bundle at the path is kept when one of its heads is the commit: an earlier run's bundle
+  // of another commit at the same path is fetched again, not relayed for the harness to refuse.
+  // The harness still checks the bundle it gets. A model by its hash, here once, so a wrong file
+  // is replaced rather than relayed.
+  if (imp.kind !== "model")
+    return git(dirname(target), ["bundle", "list-heads", target]).then(
+      (heads) =>
+        heads
+          .toString("utf8")
+          .split("\n")
+          .some((l) => l.split(" ")[0] === imp.commit),
+      () => false,
+    );
   const st = statSync(target);
   const key = `${target}\0${st.size}\0${st.mtimeMs}`;
   if (verified.has(key)) return true;
@@ -318,10 +352,9 @@ async function bundleFromGit(
       throw new Error(`Git access ${access}: this supervisor has no config from control`);
     // Used only on the host control bound it to.
     const { auth, host } = await cfg.gitAccess(access);
-    const from = gitHost(url);
-    if (from !== host)
+    if (!onGitHost(url, host))
       throw new Error(
-        `Git access ${access} is for ${host} only, and ${imp.path} comes from ${from ?? "an address with no host"}`,
+        `Git access ${access} is for ${host} only, and ${imp.path} comes from ${gitHost(url) ?? "an address with no host"}`,
       );
     await withGitAuth(auth, join(dirname(dir), "known_hosts", access), (g) =>
       fetchWith({ ...g.env, GIT_ALLOW_PROTOCOL: g.protocols }),

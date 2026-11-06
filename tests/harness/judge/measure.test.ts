@@ -64,6 +64,9 @@ async function drivenRun(o: {
   check?: string;
   metrics?: Record<string, unknown>;
   uses?: ReadonlySet<string>;
+  processes?: number;
+  /** Each pair's candidate's process limit, as the runner was asked. */
+  nprocs?: (number | undefined)[];
 }): Promise<{
   r: ArmRun;
   ms: number;
@@ -95,14 +98,21 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], value: r.value, c
       command: [node, "{kit:run/candidate.mjs}"],
       driver: [node, "{kit:run/driver.mjs}", "{params_json}", "{out}"],
       timeout_s: 20,
+      ...(o.processes !== undefined ? { processes: o.processes } : {}),
     },
     metrics: o.metrics ?? { time: { from: "time" } },
     check: { command: [node, "{kit:check.mjs}", "{out}"] },
   });
   const started = Date.now();
+  const runner = new LocalRunner(scratch);
+  const pair = runner.runPair.bind(runner);
+  runner.runPair = (driver, candidate) => {
+    o.nprocs?.push(candidate.nproc);
+    return pair(driver, candidate);
+  };
   const r = await runArm(
     {
-      runner: new LocalRunner(scratch),
+      runner,
       store: { verify: () => [] } as unknown as BuildStore,
       kit: k,
       kitDir: kit,
@@ -139,6 +149,27 @@ describe("a kit's driver beside the candidate", () => {
     assert.ok(r.metrics.time && r.metrics.time > 0);
   });
 
+  test("a kit's run may raise its candidate's process limit, for an engine's thread pools", async () => {
+    const nprocs: (number | undefined)[] = [];
+    const { r } = await drivenRun({ candidate: SQUARES, driver: DRIVER, processes: 4096, nprocs });
+    assert.equal(r.kind, "ok", JSON.stringify(r));
+    const plain: (number | undefined)[] = [];
+    await drivenRun({ candidate: SQUARES, driver: DRIVER, nprocs: plain });
+    assert.deepEqual([nprocs, plain], [[4096], [undefined]], "unset: the role's own");
+    assert.throws(() =>
+      KitSchema.parse({
+        schema_version: 1,
+        name: "k",
+        target: "cpu",
+        build: { command: ["true"], outputs: ["x"] },
+        cells: { c: {} },
+        run: { command: ["true"], processes: 8 },
+        metrics: {},
+        check: { command: ["true"] },
+      }),
+    );
+  });
+
   test("the run ends when the driver's does: a candidate that would go on is ended", async () => {
     const forever = `${SQUARES}setInterval(() => {}, 1000);\n`;
     const { r, ms } = await drivenRun({ candidate: forever, driver: DRIVER });
@@ -172,6 +203,44 @@ describe("a kit's driver beside the candidate", () => {
     await assert.rejects(run(new Set(["tokens"])), /kit metric tokens: bad work undefined/);
     // No contract named: every metric of the kit is needed.
     assert.equal((await run()).r.kind, "invalid");
+  });
+
+  test("a metric that may be zero takes a zero; another metric, or a negative value, does not (goal 211)", async () => {
+    const check = (kl: string) => `import { readFileSync } from "node:fs";
+const r = JSON.parse(readFileSync(process.argv[2] + "/result.json", "utf8"));
+process.stdout.write(JSON.stringify({ pass: true, reasons: [], value: r.value, kl: ${kl} }) + "\\n");
+`;
+    const run = (kl: string, mayBeZero: boolean) =>
+      drivenRun({
+        candidate: SQUARES,
+        driver: DRIVER,
+        check: check(kl),
+        metrics: {
+          time: { from: "time" },
+          kl: { from: "check", field: "kl", ...(mayBeZero ? { may_be_zero: true } : {}) },
+        },
+        uses: new Set(["kl"]),
+      });
+    const zero = (await run("0", true)).r;
+    assert.equal(zero.kind, "ok", JSON.stringify(zero));
+    if (zero.kind === "ok") assert.equal(zero.metrics.kl, 0);
+    const refused = (await run("0", false)).r;
+    assert.ok(refused.kind === "invalid" && refused.failure === "metric");
+    assert.equal(
+      refused.kind === "invalid" ? refused.reason : "",
+      "the check reported no kl above zero (got 0)",
+    );
+    const negative = (await run("-0.5", true)).r;
+    assert.equal(
+      negative.kind === "invalid" ? negative.reason : "",
+      "the check reported no kl of zero or above (got -0.5)",
+    );
+    // A field the check left out is no number, even where zero would do.
+    const missing = (await run("null", true)).r;
+    assert.equal(
+      missing.kind === "invalid" ? missing.reason : "",
+      "the check reported no kl of zero or above (got null)",
+    );
   });
 
   test("a driver that fails is the run's crash, with its words", async () => {

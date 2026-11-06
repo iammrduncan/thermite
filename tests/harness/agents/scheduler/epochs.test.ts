@@ -59,7 +59,7 @@ describe("agent scheduler", () => {
       const steps = [
         { name: "write_file", args: { path: "src/kernel/work.mjs", content: kernel } },
         {
-          name: "submit",
+          name: "submit_experiment",
           args: { hypothesis: brief.includes("lane-1") ? "drop waste" : "closed form" },
         },
       ];
@@ -148,7 +148,7 @@ describe("agent scheduler", () => {
       const content = `${FAST_KERNEL}\n// ${Math.random()}\n`;
       const steps = [
         { name: "write_file", args: { path: "src/kernel/work.mjs", content } },
-        { name: "submit", args: { hypothesis: "drop waste" } },
+        { name: "submit_experiment", args: { hypothesis: "drop waste" } },
       ];
       const done = messages.filter((m) => m.role === "tool").length;
       return steps[done] ? { toolCalls: [steps[done]] } : { text: "done" };
@@ -246,7 +246,7 @@ describe("agent scheduler", () => {
       const content = `${FAST_KERNEL}\n// ${Math.random()}\n`;
       const steps = [
         { name: "write_file", args: { path: "src/kernel/work.mjs", content } },
-        { name: "submit", args: { hypothesis: "drop waste" } },
+        { name: "submit_experiment", args: { hypothesis: "drop waste" } },
       ];
       const done = messages.filter((m) => m.role === "tool").length;
       return steps[done] ? { toolCalls: [steps[done]] } : { text: "done" };

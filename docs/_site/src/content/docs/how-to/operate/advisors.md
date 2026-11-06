@@ -170,7 +170,7 @@ A note the rig can't keep never costs the advisor's work: its review, audit or v
 - The limit counts only `openai` runtimes in the file, from their `usd_per_mtok_in` and `usd_per_mtok_out` prices. Without prices, they count as free.
 - `cli` and `claude-code` advisors, and every model given on **Edit rig**, count as $0: they add nothing to the total.
 - When the day's total reaches the limit, every advisor of the rig skips its turns until the next UTC day, wherever its model comes from. The research itself goes on.
-- At the limit, a message you write to the teachers starts no round. The run's **Live** says so once for each new message, under **Advisors**: `the advisors reached the day's spending limit (20 USD): the teachers read your message after midnight UTC`.
+- At the limit, a message you write to the teachers starts no round. The run's **Live** says so once for each new message, under **Advisors**: `the advisors reached the day's spending limit (20 USD): the teachers read your message after midnight UTC`. **Start a teachers' round** starts none either: `the advisors reached the day's spending limit (20 USD): the teachers review run-1 after midnight UTC`.
 - The check comes before each role's turn, so a round can go a little past the limit.
 
 ## Check that they work
@@ -193,6 +193,16 @@ Wait a minute, then press **refresh** in the status bar, the line along the bott
 - The run's **Experiments** tab shows the experiments the advisors added, with **teachers** or **auditor** as who added each one.
 
 A count of errors that grows means a role keeps failing. Each error is a line in **Live** with its reason, such as `audit of …: advisor auditor has no key`, and the supervisor's log has an `advisor error` line with the same reason. When the rig can't record an advisor's experiments and moves at all, the error line starts with `the queue for run-1:`. A move that the rig refuses, for example of an experiment a lane has taken since, shows after `refused:` in the advisor's own line, and the other changes still apply.
+
+## Start a round now
+
+The teachers review each running run every `teacher_minutes`, 60 by default. To have them review a run now, for example after you changed its rules or its queue:
+
+1. Open the run's page, or its **Live**.
+2. Press **⋯** in the header, then **Start a teachers' round**. The menu says `The teachers review the run now, from its brief, and give their advice, as at a timed round. The next timed round counts from this one. Your messages to them stay as they are.`
+3. Within a minute, the run's **Live** shows `the teachers review run-1 now: the owner asked for a round` under **Advisors**, then each teacher's `teacher-a starts, …` line. A round already under way finishes first. The run's **History** says `You asked the teachers for a round now: they review the run within a minute, or when a round under way ends.`
+
+**Start a teachers' round** shows only while a run with agents is running. On a rig with no teachers it is greyed out, and says on hover `This rig has no teachers: give them a model on Edit rig.`; with the teachers off on **Edit rig**, `This rig's teachers are off: switch them on on Edit rig.`. Over MCP, the owner's and the operator's [`start_teachers_round`](../../reference/mcp-tools.md#start_teachers_round) does the same, and over REST [`POST /v1/runs/<run>/teachers-round`](../../reference/rest-api.md#signed-commands).
 
 ## Write to the advisors
 

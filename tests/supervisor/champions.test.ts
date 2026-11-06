@@ -109,7 +109,7 @@ describe("champion patches reach control", () => {
     );
     assert.deepEqual(Buffer.from(await file.arrayBuffer()), patch);
     // The run's page links it, with the commit it applies to.
-    const run = await ui.page("/ui/campaigns/c/runs/r-1");
+    const run = await ui.page("/ui/campaigns/c/runs/r-1/info");
     assert.match(
       run,
       /href="\/ui\/campaigns\/c\/runs\/r-1\/champions\/2\.patch">download champion #2 as a patch<\/a> <span class="muted small">\(applies to bbbbbbbb\)/,
@@ -162,13 +162,14 @@ describe("champion patches reach control", () => {
     });
     assert.equal(sent.status, 201, await sent.clone().text());
     const ui = await signIn(control);
-    const run = await ui.page("/ui/campaigns/c/runs/r-1");
+    const run = await ui.page("/ui/campaigns/c/runs/r-1/info");
     assert.match(
       run,
       /download champion #2 as a patch<\/a> <span class="muted small">\(applies to the folder examples\/matmul-cpu\/project at cccccccc: git apply --directory=examples\/matmul-cpu\/project\)/,
     );
+    // Where it started is in Recent, on the Overview.
     assert.match(
-      run,
+      await ui.page("/ui/campaigns/c/runs/r-1"),
       /started from the folder examples\/matmul-cpu\/project of proj at cccccccc\./,
     );
     // The file is named after the repository's commit, the one its owner has.

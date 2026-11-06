@@ -46,7 +46,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
     const r = store.machines.rig(rig);
     if (!r || r.status === "removed") throw new Error(`Control didn't set ${rig} up on a machine.`);
     const m = store.machines.get(r.machine);
-    if (!m) throw new Error(`The machine ${r.machine} is no longer in Settings › Providers.`);
+    if (!m) throw new Error(`The machine ${r.machine} is no longer in Settings › Machines.`);
     const images = controlImages(parts, r.gpus.length);
     if (typeof images === "string") throw new Error(images);
     if (!parts.publicUrl)
@@ -68,6 +68,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
         gpus: r.gpus,
         judgeGpus: r.judge_gpus,
         root: r.root,
+        judgeOnRunners: r.judge_on_runners,
         bus: parts.rigBus,
       }),
       [],
@@ -93,7 +94,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   /** Moves a rig control set up on a cluster onto control's images; what changed. */
   const updateClusterRig = async (rig: string): Promise<string> => {
     const k = store.clusters.rig(rig);
-    const want = k ? controlImages(parts, k.spec.gpus) : undefined;
+    const want = k ? controlImages(parts, k.spec.gpus, k.spec.cuda) : undefined;
     if (
       k &&
       want &&

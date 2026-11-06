@@ -60,6 +60,16 @@ export interface ClusterRig {
      */
     programMode?: ProgramMode | undefined;
     images: { harness: string; supervisor: string };
+    /**
+     * Its judge measures on its runners of other machines alone, never on its own (goal 206): a
+     * core with no GPU. Its harness has THERMITE_LOCAL_JUDGE=0.
+     */
+    judgeOnRunners?: boolean | undefined;
+    /**
+     * The CUDA harness its GPUs take (goal 132): "13", the CUDA 13 image, which each update to
+     * control's images keeps; none: CUDA 12.
+     */
+    cuda?: "13" | undefined;
     /** Control's address the rig's supervisor reports to, as last deployed (older rigs: unknown). */
     controlUrl?: string | undefined;
     /**
@@ -282,6 +292,14 @@ export class Clusters extends StorePart {
    * The images a rig on a cluster now runs, after an image update, and how its agent programs ran
    * as its deployments were written.
    */
+  /** The node a rig control set up runs on, for its setup again (goal 206); none: any node. */
+  setRigNode(rig: string, node: string | undefined): void {
+    const r = this.rig(rig);
+    if (!r) return;
+    const spec: ClusterRig["spec"] = { ...r.spec, node };
+    this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
+  }
+
   setRigImages(
     rig: string,
     images: ClusterRig["spec"]["images"],

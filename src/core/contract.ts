@@ -5,6 +5,7 @@ import { DURATION_PATTERN, parseDuration } from "./duration.ts";
 import { CampaignId, MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
 import { KbWritesInContract } from "./kb/index.ts";
 import { McpUses } from "./mcp.ts";
+import { MetricRoleSchema, roleProblems } from "./metric-roles.ts";
 import { CONTRACT_KEYS } from "./names.ts";
 import { additionRefusals, RoleAdditions } from "./role-additions.ts";
 
@@ -26,6 +27,14 @@ export const CommitSchema = z
   .string()
   .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, "full git commit id (40 or 64 hex)");
 export const DurationSchema = z.string().regex(DURATION_PATTERN, 'duration like "30m" or "8h"');
+/**
+ * Why a run that has worked its `budget.wall_hours` is paused (goal 198): the owner may add hours
+ * to it (add_run_hours), and it resumes.
+ */
+export const HOURS_SPENT = "the wall-time budget is spent";
+/** The most hours one add_run_hours may add: a year of work. */
+export const ADD_HOURS_MAX = 8760;
+
 const MetricSchema = z.string().min(1);
 const Direction = z.enum(["max", "min"]);
 /** A regular expression that compiles; checked when the contract is validated, not at use. */
@@ -271,6 +280,12 @@ export const HillClimbContract = z.strictObject({
   guards: z.array(Guard).default([]),
   hard_constraints: z.array(HardConstraint).default([]),
   monitor_only: z.array(MetricSchema).default([]),
+  /**
+   * What the campaign adds to its kit's metric roles (goal 209, core/metric-plan.ts): metrics
+   * given a kind, lower priorities, and guards, which may tighten a kit's but never loosen one.
+   * Optional and without a default, so contracts written before keep their hash.
+   */
+  metrics: z.record(MetricSchema, MetricRoleSchema).optional(),
   cells: z.array(z.string().min(1)).min(1),
   held_out_cells: z.array(z.string().min(1)).default([]),
   acceptance: Acceptance,
@@ -445,6 +460,28 @@ export const ContractSchema = z
       ctx.addIssue({ code: "custom", path: ["role_additions"], message: why });
     if (c.mode === "hill_climb" && !c.target) {
       ctx.addIssue({ code: "custom", message: "hill_climb campaigns need a target" });
+    }
+    // The campaign's metric roles: each holds; priority 1 is the objective's primary; its lower
+    // priorities are given one way, objective.secondary or metrics, not both.
+    if (c.mode === "hill_climb" && c.metrics) {
+      const own = Object.entries(c.metrics);
+      for (const [name, r] of own) {
+        for (const message of roleProblems(name, r))
+          ctx.addIssue({ code: "custom", path: ["metrics", name], message });
+        if (r.kind === "priority" && r.priority === 1)
+          ctx.addIssue({
+            code: "custom",
+            path: ["metrics", name, "priority"],
+            message: `priority 1 is the objective's primary, ${c.objective.primary.metric}: give ${name} priority 2 or lower`,
+          });
+      }
+      if (c.objective.secondary.length && own.some(([, r]) => r.kind === "priority"))
+        ctx.addIssue({
+          code: "custom",
+          path: ["metrics"],
+          message:
+            "give the lower priorities one way: objective.secondary, or metrics with kind priority, not both",
+        });
     }
     // A held-out cell runs only at confirmation: one in cells too would be measured at
     // screening, its figures in every verdict.

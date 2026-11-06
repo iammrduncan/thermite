@@ -61,6 +61,8 @@ export const RunRow = z.looseObject({
     .object({ version: z.number(), roles: z.record(z.string(), z.string()) })
     .nullable()
     .optional(),
+  /** The newest request for a teachers' round (its event's id, goal 194); null: none. */
+  teachers_asked: z.number().nullable().optional(),
   queue_low: z
     .looseObject({
       event: z.number(),

@@ -4,7 +4,11 @@
  * The broker starts each role's work through it. It applies a Landlock rule set (an unprivileged
  * Linux sandbox, kept across exec and by every child) that lets the command open files for
  * reading or writing everywhere except the /dev/nvidia* nodes left out: all of them, or every
- * card but the ones named. Other access is unchanged, and file modes still apply. It is the GPU
+ * card but the ones named. Other access is unchanged, and file modes still apply. From Landlock's
+ * second ABI the set also handles moving or linking a file to another folder (REFER), which any
+ * rule set refuses unless a rule grants it, as EXDEV: it is granted everywhere, so a build that
+ * moves its files between folders (Zig's cache, for one) works, and Landlock still refuses a move
+ * that would give a file access it lacks where it is, such as a node left out. It is the GPU
  * fence where the device nodes' owners and modes can't be changed (a GPU cloud whose containers
  * run in a user namespace), and a second fence where they can.
  *
@@ -37,6 +41,10 @@
 #endif
 #ifndef __NR_landlock_restrict_self
 #define __NR_landlock_restrict_self 446
+#endif
+
+#ifndef LANDLOCK_ACCESS_FS_REFER
+#define LANDLOCK_ACCESS_FS_REFER (1ULL << 13)
 #endif
 
 #define ACCESS (LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_WRITE_FILE)
@@ -123,9 +131,19 @@ int main(int argc, char **argv) {
     errno = EOPNOTSUPP;
     die("Landlock");
   }
-  struct landlock_ruleset_attr attr = {.handled_access_fs = ACCESS};
+  /* From ABI 2, moving or linking to another folder: refused by any rule set unless granted. */
+  __u64 refer = abi() >= 2 ? LANDLOCK_ACCESS_FS_REFER : 0;
+  struct landlock_ruleset_attr attr = {.handled_access_fs = ACCESS | refer};
   int ruleset = (int)syscall(__NR_landlock_create_ruleset, &attr, sizeof attr, 0);
   if (ruleset < 0) die("landlock_create_ruleset");
+  if (refer) {
+    int root = open("/", O_PATH | O_CLOEXEC | O_DIRECTORY);
+    if (root < 0) die("/");
+    struct landlock_path_beneath_attr rule = {.allowed_access = refer, .parent_fd = root};
+    if (syscall(__NR_landlock_add_rule, ruleset, LANDLOCK_RULE_PATH_BENEATH, &rule, 0) != 0)
+      die("refer");
+    close(root);
+  }
   /* Everything at the top level but /dev, then everything in /dev but the nodes left out. */
   grant_dir(ruleset, "/", "dev", cards, ncards, control);
   grant_dir(ruleset, "/dev", NULL, cards, ncards, control);

@@ -8,7 +8,7 @@ import { goalChecks } from "../../core/goal/index.ts";
 import { type Kit, KitSchema, kitProblems } from "../../core/kit.ts";
 import { canonicalUses, type McpUse, sameUses, usesWords } from "../../core/mcp.ts";
 import { folderCommit, hasCommit, initMirror, showFile, updateRef } from "../git.ts";
-import { importBundle, importFile, importRoom } from "../imports.ts";
+import { importBundle, importFile, importRoom, inInbox } from "../imports.ts";
 import { ExperimentInput } from "../queue.ts";
 import { startingHypotheses } from "../research/index.ts";
 import type { HarnessService } from "./index.ts";
@@ -55,6 +55,10 @@ async function runImport(
       return { kind: spec.kind, repo, commit: r.commit };
     }
     case "model": {
+      // A core that never judges itself (goal 213): its runners fetch the file and check it by
+      // the signed SHA-256, and the core keeps none, unless its supervisor brought one anyway.
+      if (svc.modelsOnRunners && !inInbox(inboxDir, spec.path))
+        return { kind: "model", name: spec.name, sha256: spec.sha256, on: "runners" };
       const stored = await importFile({
         inboxDir,
         rel: spec.path,
@@ -158,7 +162,8 @@ export async function assignCampaign(
   const imported = [];
   for (const spec of p.imports) imported.push(await runImport(svc, spec, seed.repo, by, inboxDir));
   for (const m of contract.models) {
-    if (!svc.ledger.imports.find("model", { sha256: m.sha256 })) {
+    const onRunners = imported.some((i) => i.on === "runners" && i.sha256 === m.sha256);
+    if (!onRunners && !svc.ledger.imports.find("model", { sha256: m.sha256 })) {
       throw new Refusal(`model ${m.name} (${m.sha256}) has not been imported`);
     }
   }

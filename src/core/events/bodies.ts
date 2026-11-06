@@ -5,8 +5,18 @@ import type { HeldOutCell } from "../held-out.ts";
 import type { KbItemBody, KbItemFile } from "../kb/index.ts";
 import type { AgentPromptBody } from "../prompts.ts";
 import type { RetentionRemoved } from "../retention/index.ts";
-import type { RigSettings } from "../rig-settings.ts";
+import type { RigSettings, RigSettingsChange } from "../rig-settings.ts";
 import type { TerminalOutcome } from "../terminal-input.ts";
+import type {
+  ConclusionDecided,
+  JobRequeued,
+  McpAgents,
+  ModelRouteInfo,
+  PropagationJudged,
+  QueuePosition,
+  ResearchReport,
+  VerdictGuard,
+} from "./body-parts.ts";
 import type { EventKind } from "./kinds.ts";
 
 /**
@@ -84,6 +94,8 @@ export interface EventBodies {
     values?: unknown;
     /** Each guard's status, changes (fractions, positive is better) and values (goal 184). */
     guards?: VerdictGuard[] | undefined;
+    /** The guards that ask and that the change is past, in words (goal 212). */
+    asks?: string[] | undefined;
   };
   /** A confirmed win's guards from its verdict's record, sent once when its event lacked them. */
   verdict_guards: { id: number; guards: VerdictGuard[] };
@@ -319,6 +331,8 @@ export interface EventBodies {
     direction?: string | undefined;
     why?: string | undefined;
     question?: number | undefined;
+    /** How many trials it gets, when more than one (goal 214). */
+    tries?: number | undefined;
     by: string;
     state: "proposed" | "queued";
     position?: QueuePosition | undefined;
@@ -343,6 +357,7 @@ export interface EventBodies {
     details?: string | undefined;
     direction?: string | undefined;
     why?: string | undefined;
+    tries?: number | undefined;
   };
   experiment_dropped: { id: string; by: string; why: string };
   experiment_assigned: { id: string; lane: string; trial: string; by: string; why?: string };
@@ -362,6 +377,22 @@ export interface EventBodies {
     result: string;
     cause: string;
     returns: number;
+    position: string;
+  };
+  /**
+   * A try ended without a win and the experiment has tries left (goal 214): the same experiment
+   * back at the top, with the try that ended (`try` of `tries`).
+   */
+  experiment_retried: {
+    id: string;
+    try: number;
+    tries: number;
+    lane: string | null;
+    trial: string;
+    attempt?: string | undefined;
+    result: string;
+    verdict?: string | undefined;
+    cause?: string | undefined;
     position: string;
   };
   trial_started: {
@@ -400,6 +431,8 @@ export interface EventBodies {
     killed: "timeout" | "memory" | "disk" | null;
     peak_rss_mib: number;
     command: string;
+    /** The runner of another machine it ran on (goal 206); none: the core's own machine. */
+    runner?: string | undefined;
   };
   context_compacted: {
     trial: string | null;
@@ -420,6 +453,9 @@ export interface EventBodies {
     error: string | null;
   };
   workers_reset: Record<string, never>;
+  teachers_round_requested: Record<string, never>;
+  /** Hours the owner added to a run's stop time (goal 198): its hours now, and whether it resumed. */
+  run_hours_added: { hours: number; total: number; resumed: boolean };
   agents_stopped: { kind: string; words: string; by: string; said: string };
   agents_resumed: { why: string };
   agents_wait_for_limit: {
@@ -542,7 +578,7 @@ export interface EventBodies {
   };
   /** What Edit rig changed (the `rig_settings` command's fields), and the settings now. */
   rig_settings_changed: {
-    change: Record<string, string | number | boolean | null | undefined>;
+    change: RigSettingsChange;
     settings: RigSettings;
   };
   /** The harness did not run, `restarted`: found at its start (service/gaps.ts). Not research time. */
@@ -698,79 +734,6 @@ export interface EventBodies {
     /** The paper whole, as the knowledge base keeps its item's file (goal 175). */
     file?: KbItemFile | undefined;
   };
-}
-
-/** A job put back in the queue, or blocked after too many expiries. */
-interface JobRequeued {
-  fence: number;
-  expiries: number;
-  state: string;
-}
-
-/** A guard in a verdict's event (goal 184). */
-interface VerdictGuard {
-  metric: string;
-  status: string;
-  change: number | null;
-  low: number | null;
-  high: number | null;
-  values?: unknown;
-  vs_start?: { change: number | null; spent: boolean } | undefined;
-}
-
-/** A champion from another rig, judged here. */
-interface PropagationJudged {
-  attempt: string;
-  source_rig: unknown;
-  source_run: unknown;
-  source_seq: unknown;
-  tree: unknown;
-  verdict: string;
-}
-
-interface ConclusionDecided {
-  proposal: number;
-  kind: string;
-}
-
-type QueuePosition = number | "end" | "top";
-type McpAgents = "advisors" | "planner" | "workers";
-
-/** The agents' model route, as the harness took it. */
-interface ModelRouteInfo {
-  source: "control" | "environment" | "none";
-  name?: string | undefined;
-  version?: number | undefined;
-  revision?: string | undefined;
-  harness?: Harness | undefined;
-  model?: string | undefined;
-  base_url?: string | undefined;
-  key_hint?: string | undefined;
-}
-
-/** A research run's digest, or its final report. */
-interface ResearchReport {
-  sources: number;
-  domains: number;
-  verified: number;
-  corroborated: number;
-  drafts: number;
-  hypotheses: number;
-  findings: number;
-  draft_findings: number;
-  questions: { question: string; verified: number }[];
-  last_hour: { sources: number; verified: number; questions_covered: number };
-  elapsed_ms: number;
-  min_ms: number;
-  max_ms: number | null;
-  min_verified_claims: number | null;
-  paper?: boolean | undefined;
-  no_paper?: string | undefined;
-  unsupported_numbers: number;
-  /** The report cut to 60,000 characters (cutSaid); the knowledge base gets it whole as `file`. */
-  report: string;
-  /** The report whole, as the knowledge base keeps its item's file (goal 175). */
-  file?: KbItemFile | undefined;
 }
 
 /** A kind's body. */

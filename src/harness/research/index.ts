@@ -2,9 +2,10 @@
  * A research run's records and the rules over them: answer cards (cards.ts), the research folder
  * (folder.ts), the checks research text shares (checks.ts), where each question and hypothesis
  * stands (shares.ts, progress.ts, hypothesis-evidence.ts), fetches refused for good
- * (refusals.ts), the time the agents could not work (blocked.ts), and what the tools tell a worker
- * (worker-words.ts); with the research service (research/), the index its own searches read
- * (search/), the review panel (review/) and the paper (paper/).
+ * (refusals.ts), and what the tools tell a worker (worker-words.ts); with the research service
+ * (research/), the index its own searches read (search/), the review panel (review/) and the
+ * paper (paper/). A run's clock, which leaves out the time its agents could not work, is every
+ * mode's (../run-clock.ts).
  */
 
 export {

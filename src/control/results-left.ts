@@ -169,7 +169,8 @@ export type RemoveCheck = { refused: string } | { discarded: string | null };
 
 /**
  * Whether a rig control set up may be removed, with its volumes and files (goal 165): only once
- * every result has left it, as a terminate or a full reset waits for. `discard <rig>` removes a
+ * every result has left it, as a terminate or a full reset waits for; at once, one that never
+ * reported. `discard <rig>` removes a
  * rig whose results can't leave, such as one whose supervisor is broken; `discarded` then says
  * what had not left, for the audit log.
  */
@@ -177,6 +178,8 @@ export function removeCheck(store: ControlStore, rig: string, typed: string): Re
   const discard = typed === `discard ${rig}`;
   if (!discard && typed !== `remove ${rig}`)
     return { refused: `Type "remove ${rig}" to remove it.` };
+  // A rig that never reported, such as one whose setup failed, holds no result (goal 206).
+  if (!store.reportedRigs.list().some((x) => x.id === rig)) return { discarded: null };
   const all = resultsLeft(store, rig);
   if (all.left) return { discarded: null };
   if (discard) return { discarded: all.why };

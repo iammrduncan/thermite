@@ -18,7 +18,12 @@ import { z } from "zod";
 import { RunAsServer } from "../../../../src/common/run-as/index.ts";
 import { ADVISOR_RUNS_ENV } from "../../../../src/core/advisor-runs.ts";
 import { runAdvisor } from "../../../../src/supervisor/advisors/index.ts";
-import { noAnswer, parseAnswer, runCli } from "../../../../src/supervisor/advisors/runtimes/cli.ts";
+import {
+  noAnswer,
+  notInImage,
+  parseAnswer,
+  runCli,
+} from "../../../../src/supervisor/advisors/runtimes/cli.ts";
 import { testPrompt } from "../../../helpers/advisor-prompt.ts";
 
 /**
@@ -273,4 +278,17 @@ describe("an advisor's answer in its text", () => {
       "no valid answer: I could not finish.",
     );
   });
+});
+
+test("an advisor's program missing from the supervisor's image says so (goal 190)", () => {
+  assert.equal(
+    notInImage("claude", "spawn claude ENOENT"),
+    "Claude Code is not in this supervisor's image: build the supervisor with CLAUDE_CODE_VERSION, as Use a Claude subscription says (spawn claude ENOENT)",
+  );
+  assert.equal(
+    notInImage("/usr/bin/codex", "spawn /usr/bin/codex ENOENT"),
+    "codex is not in this supervisor's image (spawn /usr/bin/codex ENOENT)",
+  );
+  // Any other failure keeps its own words.
+  assert.equal(notInImage("claude", "timed out after 120 s"), "timed out after 120 s");
 });

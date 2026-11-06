@@ -2,6 +2,17 @@ import type { CommandKind } from "../../../core/commands.ts";
 import { exportForm } from "../exports.ts";
 
 /**
+ * A queue form's Tries (goal 214): sent when it is filled in and differs from the number the edit
+ * form started with (`tries_was`). A value that is not a whole number goes as it is, for the
+ * payload's check to refuse in words.
+ */
+function triesField(f: Record<string, unknown>): { tries?: number } {
+  const given = String(f.tries ?? "").trim();
+  if (!given || given === String(f.tries_was ?? "").trim()) return {};
+  return { tries: Number(given) };
+}
+
+/**
  * The payload of each command a dashboard form sends to /ui/commands, from the form's fields.
  * A kind with none here is not available from the dashboard. Rules come from Tell the planner
  * (goal 066): the dashboard sends no redirect of its own.
@@ -17,6 +28,10 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
     end_wait: { run },
     close_run: { run, reason: String(f.reason ?? "").trim() },
     reset_workers: { run },
+    // Start a teachers' round (goal 194), from a run's ⋯ menu.
+    start_teachers_round: { run },
+    // Add hours (goal 198), on a run its hours paused.
+    add_run_hours: { run, hours: Number(f.hours) },
     // Export (goal 103): the run alone, or a full one, as the owner chose (goal 180: no export of
     // what changed).
     export_now: exportForm(f).payload,
@@ -39,6 +54,7 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
       ...(String(f.details ?? "").trim() ? { details: String(f.details).trim() } : {}),
       ...(String(f.direction ?? "").trim() ? { direction: String(f.direction).trim() } : {}),
       ...(String(f.why ?? "").trim() ? { why: String(f.why).trim() } : {}),
+      ...triesField(f),
       position: f.position === "end" ? "end" : "top",
     },
     // Each field as the form has it: emptied details or why are cleared; a title and a
@@ -50,6 +66,7 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
       details: String(f.details ?? "").trim(),
       ...(String(f.direction ?? "").trim() ? { direction: String(f.direction).trim() } : {}),
       why: String(f.why ?? "").trim(),
+      ...triesField(f),
     },
     queue_move: {
       run,

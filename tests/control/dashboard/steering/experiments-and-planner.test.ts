@@ -147,7 +147,7 @@ describe("the run page's Experiments and Planner tabs", () => {
     assert.equal(empty.status, 400);
     assert.match(
       String(((await empty.json()) as { error: string }).error),
-      /^bad queue_edit payload: payload: change at least one of title, details, direction and why/,
+      /^bad queue_edit payload: payload: change at least one of title, details, direction, why and tries/,
     );
     const viaApi = await s.api("POST", "/v1/commands", {
       rig: "rig-a",

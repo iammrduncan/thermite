@@ -1,4 +1,5 @@
 import type { Hardware } from "../../core/hardware.ts";
+import type { GuardRule } from "../../core/metric-roles.ts";
 import type { RigSettings } from "../../core/rig-settings.ts";
 import type { RunpodRigView } from "../runpod/index.ts";
 import type { RigVersions } from "../versions.ts";
@@ -57,8 +58,11 @@ export interface RigView {
   jobs: Record<string, number>;
   runs: RunView[];
   recent: StoredEvent[];
-  /** The judge: its job in progress, its queue and its recent jobs (newest last). */
-  judge: { now: JudgeJob | null; queued: JudgeJob[]; jobs: JudgeJob[] };
+  /**
+   * The judge: its job in progress, every job in progress (one per executor), its queue and its
+   * recent jobs (newest last).
+   */
+  judge: { now: JudgeJob | null; running: JudgeJob[]; queued: JudgeJob[]; jobs: JudgeJob[] };
   /** Each rig check's latest result (model route, isolation, smoke), or that it is running. */
   checks: Record<string, RigCheckView>;
   /** Which model route its agents use, from its signed report (older harnesses send none). */
@@ -67,6 +71,8 @@ export interface RigView {
   settings: RigSettings | null;
   /** A rig whose GPU split control may change (its GPU set and the judge's share now). */
   gpu_split: { set: number; judge: number } | null;
+  /** Its runners of other machines, from its signed report (goal 206); null: none. */
+  runners: RunnersView | null;
   /** A rig the owner launched on a GPU cloud: its pod, its price and what it has cost so far. */
   runpod?: RunpodRigView | undefined;
   /**
@@ -105,6 +111,8 @@ export interface AttemptView {
   values: MetricValues | null;
   /** Its latest verdict's guards: each one's change and values (goal 184). */
   guards: GuardView[];
+  /** Its latest verdict's lower priorities' and informational metrics' values (goal 209). */
+  metrics: MetricValues[];
   hypothesis: string | null;
   recorded_at: string;
   updated_at: string;
@@ -175,6 +183,8 @@ export interface JudgeJob {
   id: string;
   kind: string;
   attempt: string | null;
+  /** The executor that leased it last, such as executor-0 or executor-box-2-0 (goal 206). */
+  by?: string | undefined;
   /** The run it serves (an attempt's run, or the run that was running when it was queued). */
   run: string | null;
   queued_at: string;
@@ -239,12 +249,26 @@ export interface BaselineView {
   guards: { metric: string; direction: string; max_total_regression: number }[];
   /** Each kit metric's unit. */
   units: Record<string, string>;
+  /** The run's metric plan as the judge recorded it (goal 209); null in a baseline from before. */
+  plan: PlanView | null;
   /** Each measured cell: each kit metric's median, median absolute deviation and count. */
   cells: { cell: string; metrics: { metric: string; median: number; mad: number; n: number }[] }[];
   /** What the kit's check kept in the baseline's judge-only folder: each file's size and hash. */
   files: { path: string; bytes: number; sha256: string }[];
   bytes: number;
   summary: string;
+}
+
+/** A run's metric plan (goal 209): its priority, guard and informational metrics. */
+export interface PlanView {
+  priorities: {
+    metric: string;
+    priority: number;
+    direction: "max" | "min";
+    min_effect: number | null;
+  }[];
+  guards: { metric: string; rule: GuardRule; from: string }[];
+  info: { metric: string; kind: string }[];
 }
 
 /** A hill climb in setup (goal 115): the judge could not measure its starting point. */
@@ -646,6 +670,19 @@ export interface ExperimentView {
   cause: string | null;
   /** How many times its trial ended without really trying it, and it came back (goal 079). */
   returns: number;
+  /** How many trials it gets (goal 214); 1: one. */
+  tries: number;
+  /** Its tries that ended without a win, so it came back for another (goal 214), the first first. */
+  earlier: {
+    n: number;
+    lane: string | null;
+    trial: string | null;
+    attempt: string | null;
+    result: string | null;
+    verdict: string | null;
+    cause: string | null;
+    at: string;
+  }[];
   /** A research task's question, as an index from 0 (goal 117); null: none. */
   question: number | null;
   /** What a research task's trial added (goal 117); null until its trial ends with one. */
@@ -683,4 +720,50 @@ export interface MessageView {
    * only the owner's own `redirect` sets again (`directives_left_out`).
    */
   left_out: { kind: string; direction: string | null; at: string }[];
+}
+
+/**
+ * A rig's runners of other machines as its core reports them (goal 206): each runner process,
+ * the pool of each of its runners, whether it takes runs and why not, when it last answered or
+ * since when it is away, and who holds each runner; and who waits for one.
+ */
+export interface RunnersView {
+  processes: {
+    name: string;
+    pools: string[];
+    up: boolean;
+    why: string | null;
+    answered_at: string | null;
+    away_since: string | null;
+    /** What it keeps, as it last answered: its volume's size and free space, its builds and kits. */
+    store: {
+      total_gib: number | null;
+      free_gib: number | null;
+      builds: number;
+      kits: number;
+    } | null;
+    /**
+     * Each runner: its name (`<process>-<place>`), its pool, its holder now, if any, and its
+     * fetch of a run's model files under way (goal 213), as the core last heard of it.
+     */
+    runners: { name: string; pool: string; holder: string | null; fetch: RunnerFetch | null }[];
+  }[];
+  /** Who waits for a runner, in turn: the judge's executors and the lanes. */
+  waiting: string[];
+  /** The same, each with since when; empty from a core that does not say. */
+  waits: { who: string; since: string }[];
+}
+
+/**
+ * A runner's fetch of a run's model files (goal 213): its files and bytes so far, the bytes of
+ * them all (null while a file's size is not known), since when, and when the core last heard.
+ */
+export interface RunnerFetch {
+  run: string;
+  files: number;
+  done: number;
+  bytes: number;
+  total: number | null;
+  since: string;
+  at: string;
 }

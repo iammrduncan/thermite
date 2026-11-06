@@ -10,6 +10,8 @@ const COMMAND: Record<string, string> = {
   resume_run: "resume the run",
   close_run: "close the run",
   reset_workers: "reset the workers",
+  start_teachers_round: "start a teachers' round",
+  add_run_hours: "add hours to the run",
   redirect: "steer the planner",
   accept_review: "decide a review",
   conclude: 'decide a "not possible" proposal',
@@ -189,6 +191,8 @@ function settingsText(change: Record<string, unknown>): string {
         return v === null
           ? "a quiet trial asks you nothing"
           : `a trial quiet for ${n} min asks you`;
+      if (k === "check_seconds")
+        return v === null ? "a model check of 120 s" : `a model check of ${n} s`;
       if (k === "program_mode")
         return v === "terminal"
           ? "agent programs in their own terminal"
@@ -199,9 +203,22 @@ function settingsText(change: Record<string, unknown>): string {
         return v === null
           ? "the judge's usual share of GPUs"
           : `${n} GPU${n === 1 ? "" : "s"} for the judge`;
+      if (k === "runners") return runnersText(v);
       return `${k.replace(/_/g, " ")} ${String(v)}`;
     })
     .join(", ");
+}
+
+/** The rig's runner processes in words (goal 206): `runners box-2 (judge, shared), box-3 (lane-2)`. */
+function runnersText(v: unknown): string {
+  const list = Array.isArray(v) ? (v as { name?: unknown; pools?: unknown }[]) : [];
+  if (!list.length) return "no runners of other machines";
+  return `runners ${list
+    .map(
+      (r) =>
+        `${String(r.name)} (${(Array.isArray(r.pools) ? r.pools : []).map(String).join(", ")})`,
+    )
+    .join(", ")}`;
 }
 
 /** A rig check's name in words. */

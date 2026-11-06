@@ -55,6 +55,8 @@ export interface AdviseState {
    * that already started a teachers' round (goal 081).
    */
   ideasSeen?: Record<string, number> | undefined;
+  /** Per run, the newest request for a round now that already started one (goal 194). */
+  askedSeen?: Record<string, number> | undefined;
   /** Runs already told their teachers read no code because they may fetch any page. */
   codeOffSaid?: Record<string, boolean> | undefined;
   /** Runs already told their teachers read none of the run's research: they may fetch any page. */

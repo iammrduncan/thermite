@@ -1,0 +1,43 @@
+---
+id: "202"
+title: "The 3080 field report: each of its items in a goal"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 202 · The 3080 field report: each of its items in a goal
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+[issue 50](https://github.com/iammrduncan/thermite/issues/50) is a field report of six days of a CUDA kernel hill climb on v0.1.0, with about thirty items in four parts: run budgeting, the judge's measurements, anti-cheat and the contract, and the environment. Its ranked requests 1, 2, 4 and 5 are goals [198](198-budget-counts-working-time.goal), [199](199-judge-files-once-disk-ready.goal), [200](200-plateau-stop.goal) and [201](201-judge-queue-per-run.goal). This goal places the rest:
+
+- **GPU kernel timing** (request 3: CUDA events beside wall time, and a warm-up until stable): a new goal, v0.2.0 or later.
+- **Anti-cheat:** a held-out speedup the contract can require, rules that read the whole changed file, arena poisoning and a device-allocation audit, sampled output checks: with goal [114](114-hill-climb-contract-gaps.goal) or a goal of their own.
+- **Environment:** a newer CUDA 12 base image (goal [132](132-cuda-images-per-gpu.goal)), a retention setting for raw judge outputs, the CDI 0.7.0 note on the compatibility page, models refreshed or warned when an assigned one isn't listed, a worker with no submission after some trials, an exclusive GPU check, and Codex's effort cap.
+- **Continue from a champion** over REST and the dashboard: goal [185](185-a-runs-work-in-git.goal).
+
+## Why
+
+A report this long only helps once each item has a place and an owner.
+
+## Done when
+
+- [ ] Every item of the report placed in a goal, or recorded as not taken, with why.
+- [ ] Issue 50 closed with a comment that lists where each item went.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/202-field-report-3080.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

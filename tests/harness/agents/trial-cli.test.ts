@@ -38,7 +38,7 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
     writeFileSync(join(dir, "notes.txt"), "outside the editable paths\n");
     const calls: { method: string; path: string; body?: unknown }[] = [];
     const out = await trialCli(
-      ["submit", "--hypothesis", "k is 2", "--flaw", "untested on big inputs"],
+      ["submit-experiment", "--hypothesis", "k is 2", "--flaw", "untested on big inputs"],
       { harnessUrl: "http://h", auth: "trial.t", workspace: dir, editablePaths: ["src/**"] },
       async (method, path, body) => {
         calls.push({ method, path, body });
@@ -70,18 +70,21 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
     const never = async () => {
       throw new Error("called");
     };
-    assert.match(await trialCli(["submit", "--hypothesis", "h"], env, never), /no changes inside/);
-    assert.match(await trialCli(["submit"], env, never), /needs --hypothesis/);
+    assert.match(
+      await trialCli(["submit-experiment", "--hypothesis", "h"], env, never),
+      /no changes inside/,
+    );
+    assert.match(await trialCli(["submit-experiment"], env, never), /needs --hypothesis/);
   });
 
-  test("dev-run and status reach their endpoints", async () => {
+  test("run-experiment and status reach their endpoints", async () => {
     const calls: { method: string; path: string; body?: unknown }[] = [];
     const env = { harnessUrl: "http://h", auth: "trial.t", workspace: "/w", editablePaths: [] };
     const call = async (method: string, path: string, body?: unknown) => {
       calls.push({ method, path, body });
       return { ok: true };
     };
-    await trialCli(["dev-run", "--timeout", "30", "--", "nvidia-smi", "-L"], env, call);
+    await trialCli(["run-experiment", "--timeout", "30", "--", "nvidia-smi", "-L"], env, call);
     await trialCli(["status", "a-9"], env, call);
     assert.deepEqual(calls, [
       {

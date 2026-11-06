@@ -1,27 +1,21 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
-import { RIG_ID_SENTENCE } from "../../../core/ids.ts";
+import { MAX_LANES, RIG_ID_SENTENCE } from "../../../core/ids.ts";
 import { inBackground } from "../../background.ts";
-import {
-  addClusterRig,
-  type ClusterFacts,
-  clusterLine,
-  leastRigSize,
-  NS,
-  SUPERVISOR_SHARE,
-} from "../../clusters/index.ts";
+import { addClusterRig, leastRigSize, NS, SUPERVISOR_SHARE } from "../../clusters/index.ts";
 import { newToken } from "../../credential.ts";
 import type { JoinedSpec, JoinForm } from "../../join.ts";
+import { deployScript, MAX_RIG_GPUS, type MachineFacts, tail } from "../../machines/index.ts";
 import {
-  deployScript,
-  factsLine,
-  MAX_RIG_GPUS,
-  type MachineFacts,
-  tail,
-} from "../../machines/index.ts";
-import { awaitFirstReport, judgeShare, NO_RIG_BUS, rigBusOf, rigTaken } from "../../rigs/index.ts";
+  awaitFirstReport,
+  chooseWorkers,
+  judgeShare,
+  NO_RIG_BUS,
+  rigBusOf,
+  rigNamesTaken,
+  rigTaken,
+} from "../../rigs/index.ts";
 import {
-  type Cluster,
   fingerprint,
   type JoinedRig,
   type Machine,
@@ -32,12 +26,30 @@ import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { esc } from "../../ui/components/index.ts";
 import { ADD_RIG_JS } from "../../ui/rigs/add/client.ts";
 import type { Ctx, Dashboard } from "../context.ts";
+import {
+  coreNodeOptions,
+  corePlaces,
+  coreRows,
+  firstPlace,
+  machineNotReady,
+  oneMachineGpus,
+  placeOf,
+  productAt,
+  runnerGroups,
+  runnerPicker,
+} from "./add-places.ts";
+import { addRigRunners, addRigRunnersChosen, runnersAdded } from "./runners.ts";
 import { rigHelpers } from "./shared.ts";
 
+/** The documentation site, which each step of Add a rig links to. */
+const DOCS = "https://usethermite.com";
+
 /**
- * Rigs › Add a rig: on a machine control reaches over SSH, on a cluster, or joined from a place
+ * Rigs › Add a rig (goal 206): a rig's core on a machine control reaches over SSH or on a
+ * cluster, and its runners, each a GPU control knows in a pool; or a rig joined from a place
  * control can't reach.
  */
+
 export function addRigRoutes(app: Hono, dash: Dashboard): void {
   const { csrf, opts, page, parts, ssh, store } = dash;
   const { joinedPage, mintJoin } = rigHelpers(dash);
@@ -53,17 +65,6 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
         .filter((r) => r.status !== "removed")
         .flatMap((r) => r.gpus.map((g) => [g, r.rig] as const)),
     );
-  /** Why a machine can't take a rig now, or nothing. */
-  const notReady = (m: Machine): string | undefined => {
-    const f = m.facts as MachineFacts | null;
-    if (!m.host_keys.length) return "its host key is not trusted yet";
-    if (!f) return "it has not been checked yet";
-    if (m.check_error) return `its last check failed: ${m.check_error}`;
-    if (!f.podman) return "Podman is missing";
-    if (!f.systemd) return "it has no systemd";
-    if (!f.root && f.linger === false) return "lingering is off for its user";
-    return undefined;
-  };
   /** Sets a rig up on a machine, in the background: each step becomes a setup event. */
   const deployRig = async (
     r: MachineRig,
@@ -88,6 +89,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
             gpus: r.gpus,
             judgeGpus: r.judge_gpus,
             root: r.root,
+            judgeOnRunners: r.judge_on_runners,
             controlPublicKey: parts.controlPublicKey,
             controlFingerprint: fingerprint(parts.controlPublicKey),
             bus: rigBusOf(parts),
@@ -116,107 +118,11 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
   app.get("/ui/rigs/add", (c) => {
     const t = csrf(c);
     const error = c.req.query("error");
-    const machines = store.machines.list();
-    const cards = machines
-      .map((m, i) => {
-        const why = notReady(m);
-        const f = m.facts as MachineFacts | null;
-        const used = gpusInUse(m.name);
-        const free = (f?.gpus ?? []).filter((g) => !used.has(g.index)).length;
-        const rigsHere = store.machines.rigs(m.name).filter((r) => r.status !== "removed");
-        const sub = why
-          ? `Not ready: ${why}. Fix it under Settings › Providers.`
-          : `${factsLine(f as MachineFacts)}${rigsHere.length ? ` · runs ${rigsHere.map((r) => r.rig).join(", ")}` : ""}${f?.gpus.length ? ` · ${free} GPU${free === 1 ? "" : "s"} free` : ""}`;
-        return `<label class="ch${why ? " dis" : ""}"><input type="radio" name="place" value="machine:${esc(m.name)}"${why ? " disabled" : i === 0 ? " checked" : ""} style="margin:2px 8px 0 0"><span><b>${esc(m.name)} · a machine over SSH</b><br><span class="muted small">${esc(sub)}</span></span></label>`;
-      })
-      .join("");
-    const gpuLists = machines
-      .map((m) => {
-        const f = m.facts as MachineFacts | null;
-        const used = gpusInUse(m.name);
-        const rows = (f?.gpus ?? [])
-          .map((g) => {
-            const by = used.get(g.index);
-            return `<label class="gr${by ? " used" : ""}"><input type="checkbox" name="gpus" value="${g.index}"${by ? " disabled" : ""}><span><b>GPU ${g.index}</b> · ${esc(g.name)} ${Math.round(g.memory_mib / 1024)} GB</span><span class="muted small">${by ? `used by rig ${esc(by)}` : `free · ${g.busy_pct}% busy · ${g.used_mib} MiB in use`}</span></label>`;
-          })
-          .join("");
-        return `<div data-place="machine:${esc(m.name)}" hidden>${rows ? `<div class="card flat">${rows}</div>` : `<div class="card"><div class="muted">This machine has no NVIDIA GPU: the rig measures on its CPUs.</div></div>`}</div>`;
-      })
-      .join("");
-    // Clusters: how many GPUs and how, which node, which storage, and (for slots) which slot.
-    const clusters = store.clusters.list();
-    const clusterReady = (k: Cluster) => {
-      const f = k.facts as ClusterFacts | null;
-      if (!f) return "it has not been checked yet";
-      if (k.check_error) return `its last check failed: ${k.check_error}`;
-      if (k.placement === "created" && !f.can_create_namespaces)
-        return "control may not create namespaces there";
-      if (k.placement === "slot" && !f.slots.some((s) => s.usable && !s.used_by))
-        return "it has no free slot";
-      return undefined;
-    };
-    const clusterCards = clusters
-      .map((k) => {
-        const why = clusterReady(k);
-        const f = k.facts as ClusterFacts | null;
-        const sub = why
-          ? `Not ready: ${why}. Check it under Settings › Providers.`
-          : `${clusterLine(f as ClusterFacts)} · ${k.placement === "created" ? `rigs get namespace ${k.namespace_pattern}` : `${(f as ClusterFacts).slots.filter((s) => s.usable && !s.used_by).length} free slot(s)`}`;
-        return `<label class="ch${why ? " dis" : ""}"><input type="radio" name="place" value="cluster:${esc(k.name)}"${why ? " disabled" : ""} style="margin:2px 8px 0 0"><span><b>${esc(k.name)} · Kubernetes</b><br><span class="muted small">${esc(sub)}</span></span></label>`;
-      })
-      .join("");
-    const clusterSections = clusters
-      .map((k) => {
-        const f = (k.facts as ClusterFacts | null) ?? {
-          version: "?",
-          nodes: [],
-          device_classes: [],
-          storage_classes: [],
-          can_create_namespaces: false,
-          slots: [],
-        };
-        const kn = esc(k.name);
-        // The free slots' quota fills in the rig's CPUs, memory and volume (the first free one's).
-        const freeQuota = f.slots.find((x) => x.usable && !x.used_by)?.quota;
-        // A slot's role usually can't list nodes or device classes: then the choices are offered
-        // as asked, and the cluster's own rules decide.
-        const restricted = !f.nodes.length;
-        const plugin = restricted || f.nodes.some((n) => n.gpus > 0);
-        const maxGpus = restricted
-          ? 8
-          : Math.min(
-              MAX_RIG_GPUS,
-              Math.max(0, ...f.nodes.map((n) => n.gpus), f.device_classes.length ? 8 : 0),
-            );
-        const opt = (v: string, text: string, on = false) =>
-          `<option value="${esc(v)}"${on ? " selected" : ""}>${esc(text)}</option>`;
-        const def = f.storage_classes.find((s) => s.default)?.name;
-        return `<div data-place="cluster:${kn}" hidden><div class="g3">
-<label class="fd">${infoLabel("GPUs", "How many GPUs the rig's harness pod asks for. One is shared by the judge and the agents; with more, you choose how many are the judge's and the rest are the agents'.")}<select name="k_gpus__${kn}">${Array.from({ length: maxGpus + 1 }, (_, n) => opt(String(n), n === 0 ? "none: the CPU" : String(n), n === Math.min(1, maxGpus))).join("")}</select></label>
-<label class="fd" data-judge-for="k_gpus__${kn}" hidden>${infoLabel("GPUs for the judge", "How many of the rig's GPUs the judge measures on; the rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. Default: half, rounded up.")}<input name="k_judge__${kn}" inputmode="numeric" maxlength="2" placeholder="half"></label>
-<label class="fd">${infoLabel("GPUs through", "NVIDIA's device plugin (nvidia.com/gpu) or DRA (a device class), as the cluster offers them.")}<select name="k_mode__${kn}">${plugin ? opt("device-plugin", "NVIDIA's device plugin") : ""}${f.device_classes.map((d) => opt(`dra:${d}`, `DRA: ${d}`)).join("")}${restricted ? opt("dra", "DRA: a device class you name") : ""}${!plugin && !f.device_classes.length ? opt("device-plugin", "no GPUs offered") : ""}</select></label>
-${restricted ? `<label class="fd">${infoLabel("DRA device class", "Only for DRA in a cluster whose classes control can't list: the device class the cluster's operators named, such as gpu.nvidia.com.")}<input name="k_class__${kn}" maxlength="253" placeholder="gpu.nvidia.com"></label>` : ""}
-<label class="fd">${infoLabel("Node", "Any lets Kubernetes choose. A fixed node keeps the rig on a known machine, which keeps timings comparable between runs.")}<select name="k_node__${kn}">${opt("", "any node with room")}${f.nodes
-          .filter((n) => n.ready)
-          .map((n) =>
-            opt(n.name, `${n.name}${n.gpus ? ` (${n.gpus} GPU${n.gpus === 1 ? "" : "s"})` : ""}`),
-          )
-          .join("")}</select></label>
-<label class="fd">${infoLabel("Storage class", "The class for the rig's volume (its state, builds, inbox and outbox).")}<select name="k_storage__${kn}">${def ? "" : opt("", "the cluster's default")}${f.storage_classes.map((s) => opt(s.name, `${s.name}${s.default ? " (default)" : ""}`, s.name === def)).join("")}</select></label>
-<label class="fd">${infoLabel("Volume size (GB)", "The rig's volume: builds and model files can be large.")}<input name="k_size__${kn}" value="${freeQuota?.storageGi !== undefined ? Math.floor(freeQuota.storageGi) : 100}"></label>
-<label class="fd">${infoLabel("CPUs", "The rig's CPUs: the supervisor gets half a CPU, the harness the rest. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.")}<input name="k_cpus__${kn}" inputmode="decimal" value="${freeQuota?.cpus ?? ""}" placeholder="the namespace's defaults"></label>
-<label class="fd">${infoLabel("Memory (GiB)", `The rig's memory: the supervisor gets ${SUPERVISOR_SHARE.terminal.memoryGi} GiB, since a new rig's agent programs run in their own terminals (${SUPERVISOR_SHARE.headless.memoryGi} GiB once set to Headless on Edit rig), the harness the rest, so at least ${leastRigSize("terminal").memoryGi} GiB. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.`)}<input name="k_mem__${kn}" inputmode="decimal" value="${freeQuota?.memoryGi !== undefined ? Math.floor(freeQuota.memoryGi) : ""}" placeholder="the namespace's defaults"></label>
-${
-  k.placement === "slot"
-    ? `<label class="fd">${infoLabel("Slot", "One of the free slots the cluster's operators made for Thermite.")}<select name="k_slot__${kn}">${f.slots
-        .filter((s) => s.usable && !s.used_by)
-        .map((s) => opt(s.namespace, s.namespace))
-        .join("")}</select></label>`
-    : `<div class="fd">${infoLabel("Namespace", "Control creates it for this rig, with its own network rules.")}<span class="mono small">${esc(k.namespace_pattern)}</span></div>`
-}
-</div></div>`;
-      })
-      .join("");
+    // The place to choose first: one from Settings › Machines' Add a rig here (goal 203).
+    const wanted = c.req.query("place");
+    const places = corePlaces(store);
+    const groups = runnerGroups(store);
+    const first = firstPlace(places, wanted);
     // Rigs you run yourself: one command where the rig goes, for places control can't reach.
     const joinCards = `<label class="ch"><input type="radio" name="place" value="join:machine" style="margin:2px 8px 0 0"><span><b>A machine you set it up on yourself</b><br><span class="muted small">For a machine control can't reach over SSH, such as one behind NAT. You run one command there; it fetches the rig's files from control and starts it. Control can't reach the machine afterwards, so you stop and remove it there too.</span></span></label>
 <label class="ch"><input type="radio" name="place" value="join:namespace" style="margin:2px 8px 0 0"><span><b>A Kubernetes namespace you apply it to yourself</b><br><span class="muted small">For a cluster whose operators give Thermite no kubeconfig. You run one kubectl apply, with your own rights, in a namespace you have. Control holds no credential for the cluster.</span></span></label>`;
@@ -241,6 +147,13 @@ ${
         : !parts.rigBus
           ? NO_RIG_BUS
           : "";
+    const size = first?.size;
+    const tip = (text: string) => `<i class="ii" tabindex="0" data-tip="${esc(text)}">i</i>`;
+    const learn = (path: string, text: string) =>
+      `<a class="wz-learn" href="${DOCS}${path}" target="_blank" rel="noopener">${esc(text)} ↗</a>`;
+    const runpod = store.gpuClouds.list().length
+      ? "/ui/rigs/add/runpod"
+      : "/ui/settings/machines?add=1#add-machine";
     return page(
       c,
       {
@@ -248,52 +161,130 @@ ${
         crumbs: [{ href: "/ui/rigs", text: "Rigs" }],
         active: "rigs",
       },
-      `<p class="run-said">Choose where the rig runs. On a machine or cluster control knows, control connects with the credentials you gave it once, writes the rig's files and services, starts it and looks after it: stop, start, restart, remove. Where control can't connect, you run one command it gives you.</p>
-${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not created.</b> ${esc(error)}</div>` : ""}${blocked ? `<div class="card warn" style="margin-bottom:16px">${esc(blocked)}</div>` : ""}
-<form id="add-rig" method="post" action="/ui/rigs/add" autocomplete="off"><input type="hidden" name="csrf" value="${t}">
-<div class="sec"><h2>1 · Where</h2><p class="lead">A machine or a cluster control knows. They are added, checked and prepared under <a href="/ui/settings">Settings › Providers</a>.</p>
-<div class="stack">${cards}${clusterCards}${cards || clusterCards ? "" : `<div class="card"><div class="empty">No machine or cluster yet.</div></div>`}<a class="ch" href="/ui/settings"><span><b>+ A new machine or cluster</b><br><span class="muted small">A Linux machine control can reach with an SSH key, or a Kubernetes cluster through a kubeconfig. Add it in Providers, then come back.</span></span></a></div>
-<p class="lead" style="margin-top:14px">Or run it yourself, where control can't connect:</p><div class="stack">${joinCards}</div>
-<p class="lead" style="margin-top:14px">Or launch it on a GPU you rent by the hour:</p><div class="stack">${
-        store.gpuClouds
-          .list()
-          .map(
-            (g) =>
-              `<a class="ch" href="/ui/rigs/add/runpod?cloud=${encodeURIComponent(g.name)}"><span><b>${esc(g.name)} · RunPod</b><br><span class="muted small">Control starts a pod with Thermite's rig image, enrolls it and follows its price. RunPod bills it by the second while it runs. Opens Launch on RunPod.</span></span></a>`,
-          )
-          .join("") ||
-        `<a class="ch" href="/ui/settings"><span><b>+ A RunPod account</b><br><span class="muted small">Add it in Providers with an API key that may start pods, then come back to launch a rig on it.</span></span></a>`
-      }</div></div>
-<div class="sec"><h2>2 · GPUs and resources</h2><p class="lead">As control last read the place. One GPU is shared by the judge and the agents. With more, some are the judge's and the rest the agents': half each by default, and on a machine the lowest-numbered GPUs are the judge's.</p>${gpuLists}<label class="fd" id="judge-pick" hidden style="max-width:280px;margin-top:10px">${infoLabel("GPUs for the judge", "How many of the chosen GPUs the judge measures on: the lowest-numbered ones. The rest are the agents' for their own test runs. More judge GPUs check more changes at once; more agent GPUs let more lanes test at once. Default: half, rounded up.")}<input name="judge_gpus" inputmode="numeric" maxlength="2" placeholder="half"></label>${clusterSections}${joinSections}<div class="nc-does" id="gpu-note"></div></div>
-<div class="sec"><h2>3 · Name and start</h2><div class="g3">
-<label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-a"></label>
-<label class="fd" style="grid-column:span 2">${infoLabel("Images", "The Thermite images control deploys, as set where control is deployed. A GPU rig uses the CUDA harness image.")}<span class="mono small">${images ? `${esc(images.harness)}${images.harnessCuda ? `<br>${esc(images.harnessCuda)} (GPU rigs)` : ""}<br>${esc(images.supervisor)}` : "none configured"}</span></label>
-<label class="fd" style="grid-column:span 3">${infoLabel("Message bus", "Where the rig's supervisor reaches control's message bus, over TLS, for its reports, commands, live lines and config (THERMITE_NATS_PUBLIC_URL). The machine or cluster must reach this port, or the rig never reports, and is shown broken.")}<span class="mono small">${parts.rigBus ? esc(parts.rigBus.url) : "none: control can't set a rig up"}</span></label>
+      `${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not created.</b> ${esc(error)}</div>` : ""}${blocked ? `<div class="card warn" style="margin-bottom:16px">${esc(blocked)}</div>` : ""}
+<form id="add-rig" class="wz-form" method="post" action="/ui/rigs/add" autocomplete="off" data-taken="${esc(JSON.stringify(rigNamesTaken(parts)))}" data-img-cpu="${esc(images?.harness ?? "")}" data-img-cuda12="${esc(images?.harnessCuda ?? "")}" data-img-cuda13="${esc(images?.harnessCuda13 ?? "")}"><input type="hidden" name="csrf" value="${t}">
+<ol class="wz-steps" id="wz-steps" aria-label="Steps" hidden></ol>
+<section class="wz" data-step="kind"><div class="wz-head"><h2>What kind of rig?</h2><p class="lead">A rig is where Thermite's agents work and its judge measures their changes. ${tip("A rig runs a campaign's lanes, the agents that try changes, and its judge, which measures each change against the champion. Its results go to control.")}</p></div>
+<div class="wz-kinds" role="radiogroup" aria-label="Kind of rig">
+<label class="wz-kind"><input type="radio" name="kind" value="one"><b>One machine</b><span class="muted small">Everything on one machine or one cluster slot: the agents, the run's records, and the GPUs the judge measures on. The simplest setup.</span><span class="wz-pic">[ gpu-box-1 · 4 × Tesla P100 ]</span></label>
+<label class="wz-kind"><input type="radio" name="kind" value="many"><b>Several machines</b><span class="muted small">The agents and the run's records on one machine, and GPUs of other machines where the judge measures and the lanes try their changes. For example, a CPU box with a DGX Spark's GPU on each side.</span><span class="wz-pic">[ cpu-box ]──┬── spark-1 · GB10
+            └── spark-2 · GB10</span></label>
 </div>
-<div class="card hl"><p class="sum" id="add-sum">Control will enroll the rig, write its files and services on the machine, start it, and wait for its first report.</p><div class="act"><button class="primary big"${blocked ? " disabled" : ""}>Create the rig</button></div></div></div>
+<div class="wz-others-h">Other ways to add a rig</div>
+<div class="wz-other"><label class="wz-alt"><input type="radio" name="kind" value="join"><span class="wz-what"><b>Set one up yourself</b><span class="muted small">Where control can't connect: you run one command there.</span></span><span class="wz-go">›</span></label><a class="wz-alt" href="${runpod}"><span class="wz-what"><b>Rent a GPU on RunPod</b><span class="muted small">Billed by the second while it runs.</span></span><span class="wz-go">›</span></a></div>
+${learn("/how-to/install/runners/", "Which kind do I need? On the docs site")}</section>
+<section class="wz" data-step="where"><div class="wz-head"><h2 data-for-kind="one many">Where does it run?</h2><p class="lead" data-for-kind="one">A machine control reaches over SSH, or a slot of a Kubernetes cluster. ${tip("Machines and clusters are added and checked under Settings › Machines. A place that is not ready says why.")}</p><p class="lead" data-for-kind="many">The core keeps the run: its records, the planner, every lane's agent program and the judge's decisions. It needs no GPU, so a CPU machine keeps every GPU free for runs. ${tip("A rig of several machines is a core and its runners. The core thinks and records; each runner is one GPU of another machine, where the judge measures and the lanes try their changes.")}</p></div>
+<div class="card flat" role="radiogroup" aria-label="Where it runs">${places.length ? coreRows(places, wanted) : `<div class="empty">No machine or cluster yet. Add one under <a href="/ui/settings/machines?add=1#add-machine">Settings › Machines</a>.</div>`}</div>
+<span class="muted small">Not listed? <a href="/ui/settings/machines?add=1#add-machine">Add a machine or a cluster under Settings › Machines</a>.</span>
+<div class="g3" data-core-size${size ? "" : " hidden"}>
+<label class="fd">${infoLabel("Node", "The node it runs on. Any lets Kubernetes choose; a slot whose rules take pods only on nodes they name needs one of those.")}<select name="core_node"><option value="">any node with room</option>${coreNodeOptions(store)}</select></label>
+<label class="fd">${infoLabel("CPUs", "Its CPUs: the supervisor gets half a CPU, and the harness the rest, for the planner, the agents' programs and their builds. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.")}<input name="core_cpus" inputmode="decimal" value="${esc(size?.cpus ?? "")}" placeholder="the namespace's defaults"></label>
+<label class="fd">${infoLabel("Memory (GiB)", `Its memory: the supervisor gets ${SUPERVISOR_SHARE.terminal.memoryGi} GiB, since a new rig's agent programs run in their own terminals, and the harness the rest, so at least ${leastRigSize("terminal").memoryGi} GiB. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.`)}<input name="core_mem" inputmode="decimal" value="${esc(size?.memoryGi ?? "")}" placeholder="the namespace's defaults"></label>
+<label class="fd">${infoLabel("Disk (GB)", "Its volume: the run's records, every lane's workspace, builds and the exports it sends.")}<input name="core_disk" inputmode="numeric" value="${esc(size?.diskGb ?? "100")}"></label>
+</div>
+<p class="muted small" data-core-machine${first?.value.startsWith("machine:") ? "" : " hidden"}>On a machine over SSH, it takes the CPUs and memory it needs, and keeps its volume on the machine's disk.</p>
+<div class="wz-learns" data-for-kind="one">${learn("/how-to/install/rig-on-a-machine/", "Add a rig on a machine")}${learn("/how-to/install/rig-on-a-cluster/", "Add a rig on a cluster")}</div><div class="wz-learns" data-for-kind="many">${learn("/how-to/install/runners/", "Give a rig runners on other machines")}</div></section>
+<section class="wz" data-step="join"><div class="wz-head"><h2>Where do you set it up?</h2><p class="lead">Control gives you one command, shown once, which you run where the rig goes. ${tip("For a machine control can't reach over SSH, such as one behind NAT, or a cluster whose operators give Thermite no kubeconfig.")}</p></div>
+<div class="stack">${joinCards}</div>${joinSections}<div class="nc-does" id="gpu-note" hidden></div>
+${learn("/how-to/install/join-a-rig/", "Join a rig yourself")}</section>
+<section class="wz" data-step="gpus"><div class="wz-head"><h2>Which GPUs does it use?</h2><p class="lead">Tick the GPUs it uses. ${tip("One GPU is shared: while the judge measures, the agents' own test runs wait, so its timings stay clean. With two or more, some are the judge's and the rest the agents', and neither waits for the other. A rig on a cluster takes its GPUs from one node.")}</p></div>
+${oneMachineGpus(store, places, groups)}
+<label class="fd" data-judge-share hidden style="max-width:240px">${infoLabel("GPUs for the judge", "How many of the ticked GPUs the judge measures on; the rest are the agents' for their own test runs. More for the judge checks more changes at once; more for the agents lets more lanes test at once. Empty: half, rounded up.")}<input name="judge_gpus" inputmode="numeric" maxlength="2" placeholder="half"></label>
+${learn("/how-to/install/several-gpus/", "Give a rig several GPUs")}</section>
+<section class="wz" data-step="runners"><div class="wz-head"><h2>Which GPUs are its runners? <span class="muted small" id="ar-count">0 chosen</span></h2><p class="lead">Add a runner for each GPU of another machine the rig uses: its machine, its GPU and its pool. ${tip("A runner takes one run at a time, so a measurement never shares its GPU. The judge's pool: only the judge measures there. Shared: the judge and every lane, in turn. A lane's: only that lane tries its changes there.")}</p></div>
+${runnerPicker(groups)}
+<label class="fd" style="max-width:200px">${infoLabel("Workers at a time", `How many lanes work at once: 1 to ${MAX_LANES}. A lane's own runner serves only that lane.`)}<input name="lanes" type="number" min="1" max="${MAX_LANES}" value="2"></label>
+${learn("/how-to/install/runners/", "Pools, and what each runner does")}</section>
+<section class="wz" data-step="name"><div class="wz-head"><h2>Name it and create it</h2><p class="lead">Check what the rig will be, then create it. Control sets it up, and its page follows each step.</p></div>
+<div class="g3">
+<label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-b"><span class="small bad" data-name-say hidden></span></label>
+<div class="fd" style="grid-column:span 2">${infoLabel("Images", "The images control deploys, as set where control is deployed: the CPU harness image, and the CUDA one for GPUs, as control reads them: 13 for Blackwell and the DGX Spark's GB10 on arm64, 12 for Pascal to Hopper on amd64.")}<span class="small ar-img">${images ? `<span class="mono" id="ar-core-img">${esc(images.harness)}</span><span data-for-kind="many"> · runners: <span class="mono" id="ar-run-img">none chosen</span></span>` : "none configured"}</span></div>
+<div class="fd" style="grid-column:span 3">${infoLabel("Message bus", "Where the rig reaches control's message bus, over TLS, for its reports, commands, live lines and config (THERMITE_NATS_PUBLIC_URL). Every machine and cluster it runs on must reach this port, or the rig never reports, and is shown broken.")}<span class="mono small">${parts.rigBus ? esc(parts.rigBus.url) : "none: control can't set a rig up"}</span></div>
+</div>
+<section class="card ar-sum" aria-label="What this rig will be" aria-live="polite"><h2>What this rig will be</h2><ul id="add-sum"><li>Choose the kind of rig, where it runs and its GPUs.</li></ul><div id="ar-notes"></div></section></section>
+<div class="wz-nav"><button type="button" id="wz-back" hidden>Back</button><span class="wz-end"><a class="btn" href="/ui/rigs">Cancel</a><button type="button" class="primary" id="wz-next" hidden>Next</button><button class="primary" id="ar-create"${blocked ? " disabled" : ""}>Create the rig</button></span></div>
 </form>
 <script src="/ui/assets/add-rig.js" defer></script>`,
     );
   });
+  /**
+   * The runners Add a rig chose and its Workers at a time (goal 206), checked before anything is
+   * set up: a core with no GPU of its own (`coreGpus`) needs a runner for its judge, once it has
+   * any, and a rig's runners are of one kind, so its verdicts compare. Refused in words.
+   */
+  const runnersPlan = (f: Record<string, unknown>, coreGpus: number) => {
+    // The rows of + Add a runner, and an older form's list of every GPU with its pool.
+    const chosen = [...runnersAdded(f), ...addRigRunnersChosen(f)];
+    const raw = String([f.lanes ?? ""].flat()[0] ?? "").trim();
+    const lanes = raw ? Number(raw) : undefined;
+    if (lanes !== undefined && !(Number.isInteger(lanes) && lanes >= 1 && lanes <= MAX_LANES))
+      return `Workers at a time is a whole number from 1 to ${MAX_LANES}.`;
+    const judged = chosen.some((r) => r.pool === "judge" || r.pool === "shared");
+    if (chosen.length && !judged && !coreGpus)
+      return "Give the judge a runner, its own or a shared one: the core has no GPU to measure on.";
+    const kinds = [...new Set(chosen.map((r) => productAt(store, r.at)).filter(Boolean))];
+    if (kinds.length > 1)
+      return `The runners are of ${kinds.length === 2 ? "two" : kinds.length} kinds, ${kinds.slice(0, -1).join(", ")} and ${kinds.at(-1)}: a rig measures on one kind of target, so its verdicts compare. Use one kind, or make a rig for each.`;
+    if (new Set(chosen.map((r) => r.runner)).size !== chosen.length)
+      return "Name each runner once.";
+    return { chosen, lanes, judgeOnRunners: judged && !coreGpus };
+  };
+  /** Sets up the runners a new rig chose and sends its Workers at a time; says what was refused. */
+  const startRunners = async (
+    c: Ctx,
+    rig: string,
+    placement: "machine" | "cluster",
+    plan: Exclude<ReturnType<typeof runnersPlan>, string>,
+  ) => {
+    const refused = await addRigRunners(parts, rig, plan.chosen);
+    if (plan.lanes !== undefined)
+      void inBackground(
+        store,
+        placement,
+        rig,
+        "workers_given",
+        chooseWorkers(parts, rig, plan.lanes, "owner:ui"),
+      );
+    return c.redirect(
+      `/ui/rigs/${encodeURIComponent(rig)}${refused ? `?error=${encodeURIComponent(`The rig is being set up, but a runner was not added: ${refused}`)}` : ""}`,
+      303,
+    );
+  };
   app.post("/ui/rigs/add", async (c) => {
     const f = await c.req.parseBody({ all: true });
     const fail = (why: string) => c.redirect(`/ui/rigs/add?error=${encodeURIComponent(why)}`, 303);
+    // The wizard's kind of rig: each takes only its own steps' fields, as the steps it skipped
+    // still send theirs. None, from an older form: every field counts.
+    const kind = String(f.kind ?? "");
+    const drop = (keep: (k: string) => boolean) => {
+      for (const k of Object.keys(f)) if (!keep(k)) delete f[k];
+    };
+    if (kind === "one") drop((k) => !/^(runner_new|ar_)/.test(k) && k !== "lanes");
+    if (kind === "many") drop((k) => !["gpus", "one_gpu", "judge_gpus"].includes(k));
+    if (kind === "join" && !String(f.place ?? "").startsWith("join:"))
+      return fail("Choose where you set the rig up: a machine or a Kubernetes namespace.");
+    if ((kind === "one" || kind === "many") && String(f.place ?? "").startsWith("join:"))
+      return fail("Choose where the rig runs: a machine or a slot control knows.");
     const rig = String(f.rig ?? "").trim();
     const place = String(f.place ?? (f.machine ? `machine:${String(f.machine)}` : ""));
     if (place.startsWith("cluster:")) return addClusterRigFrom(c, f, rig, place.slice(8), fail);
     if (place.startsWith("join:")) return addJoinedRigFrom(c, f, rig, place.slice(5), fail);
     const m = store.machines.get(place.startsWith("machine:") ? place.slice(8) : "");
+    // The core's own GPUs: none from Add a rig, which makes each GPU a runner; an older form's
+    // still count.
     const gpus = [f.gpus ?? []]
       .flat()
       .map((x) => Number(x))
       .sort((a, b) => a - b);
+    const plan = runnersPlan(f, gpus.length);
+    if (typeof plan === "string") return fail(plan);
     if (!parts.rigImages) return fail("Control has no rig images configured.");
     if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
     if (!parts.rigBus) return fail(NO_RIG_BUS);
     if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
     if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
     if (!m) return fail("Choose a machine.");
-    const why = notReady(m);
+    const why = machineNotReady(m);
     if (why) return fail(`${m.name} is not ready: ${why}.`);
     const facts = m.facts as MachineFacts;
     const used = gpusInUse(m.name);
@@ -324,46 +315,74 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
       judge_gpus: judge,
       images,
       root: facts.root,
+      judge_on_runners: plan.judgeOnRunners,
       created_by: "owner:ui",
     };
     store.machines.addRig(placed);
     store.rigHistory.add(rig, "enrolled", true);
     const r = store.machines.rig(rig) as MachineRig;
     void inBackground(store, "machine", rig, "deploy", deployRig(r, m, token.token));
-    return c.redirect(`/ui/rigs/${encodeURIComponent(rig)}`, 303);
+    // Its runners (goal 206), which it takes once it reports.
+    return startRunners(c, rig, "machine", plan);
   });
   const addClusterRigFrom = async (
     c: Ctx,
     f: Record<string, unknown>,
     rig: string,
-    name: string,
+    place: string,
     fail: (why: string) => Response,
   ) => {
+    // cluster:<k>|<slot> for a slot, as Add a rig's rows send it; an older form sent the slot
+    // and the core's size in fields named for the cluster, and its GPUs, which still count.
+    const [name = "", slot] = place.split("|");
     const one = (key: string) => {
-      const v = f[`${key}__${name}`];
+      const v = f[key] ?? f[`${key}__${name}`];
       return String(Array.isArray(v) ? v[0] : (v ?? "")).trim();
     };
-    const num = (key: string) => (one(key) ? Number(one(key)) : undefined);
+    const num = (key: string, old: string) => {
+      const v = one(key) || one(old);
+      return v ? Number(v) : undefined;
+    };
+    // A rig of one machine's GPUs (the wizard): each one ticked, from one node and one way.
+    const ticked = [f.one_gpu ?? []].flat().map(String).filter(Boolean);
+    const at = ticked.length ? placeOf(ticked[0] as string) : undefined;
+    if (ticked.some((x) => x !== ticked[0]))
+      return fail(
+        "A rig on a cluster takes its GPUs from one node and one way: tick GPUs of one row only.",
+      );
+    if (at && (at.kind !== "cluster" || at.cluster !== name || (at.slot ?? "") !== (slot ?? "")))
+      return fail("Those GPUs are not in the place chosen for the rig.");
+    const gpus = at ? ticked.length : Number(one("k_gpus") || "0");
+    const node =
+      (at?.kind === "cluster" ? at.node : undefined) || one("core_node") || one("k_node");
+    if (at?.kind === "cluster" && at.node && one("core_node") && one("core_node") !== at.node)
+      return fail(`The GPUs ticked are on ${at.node}: choose that node for the rig, or any node.`);
+    const plan = runnersPlan(f, gpus);
+    if (typeof plan === "string") return fail(plan);
     const r = await addClusterRig(
       parts,
       {
         rig,
         cluster: name,
-        slot: one("k_slot") || undefined,
-        gpus: Number(one("k_gpus") || "0"),
-        judgeGpus: one("k_judge") || undefined,
-        mode: one("k_mode") || "device-plugin",
+        slot: slot || one("k_slot") || undefined,
+        gpus,
+        judgeGpus: one("judge_gpus") || one("k_judge") || undefined,
+        mode: (at?.kind === "cluster" ? at.mode : undefined) || one("k_mode") || "device-plugin",
         deviceClass: one("k_class") || undefined,
-        node: one("k_node") || undefined,
+        node: node || undefined,
         storageClass: one("k_storage") || undefined,
-        storageGi: Number(one("k_size") || "100"),
-        cpus: num("k_cpus"),
-        memoryGi: num("k_mem"),
+        // The CUDA harness the owner chose (goal 132), for a rig with GPUs of its own; with none
+        // chosen, control's reading of the GPU.
+        cuda: gpus > 0 && one("k_cuda") ? (one("k_cuda") === "13" ? "13" : "12") : undefined,
+        storageGi: num("core_disk", "k_size") ?? 100,
+        cpus: num("core_cpus", "k_cpus"),
+        memoryGi: num("core_mem", "k_mem"),
+        judgeOnRunners: plan.judgeOnRunners,
       },
       "owner:ui",
     );
     if ("error" in r) return fail(r.error);
-    return c.redirect(`/ui/rigs/${encodeURIComponent(r.rig)}`, 303);
+    return startRunners(c, r.rig, "cluster", plan);
   };
   const DRA_CLASS = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
   /** Add a rig you join yourself: checks the choices, then shows its join command once. */

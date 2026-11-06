@@ -57,7 +57,7 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 
 ### A command about one run
 
-A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
+A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `start_teachers_round`, `add_run_hours`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
 
 Control refuses, before it signs:
 
@@ -130,7 +130,7 @@ The harness checks every command in this order. A command that fails a check mar
 | It is not being applied right now | None: the harness answers `in_progress`, and the bus hands the command to the supervisor again 5 seconds later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
-The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `start_teachers_round`, which asks a run's teachers for a round now, `add_run_hours`, which adds hours to a run's stop time, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
 
 A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`; its `command` event carries the same to control.
 
@@ -139,12 +139,14 @@ A command that passes these checks and that the harness then refuses is `failed`
 | Kind | Dashboard (`owner:ui`) | REST and `thermite` (`owner:api`) | MCP owner (`owner:mcp`) | MCP operator (`owner:operator`) | MCP agent (`agent:mcp`) | Owner only |
 | --- | --- | --- | --- | --- | --- | --- |
 | `assign_campaign` | **New campaign**; **Start the run** in the **Start a run** panel of a campaign's page | Yes; `thermite assign` | Yes | Yes | Yes | |
-| `rig_check` | **Run it** in a rig's **Checks**; **Check** on **Settings › Rigs' models** | Yes | Yes | Yes | Yes | |
+| `rig_check` | **Run it** in a rig's **Checks** | Yes | Yes | Yes | Yes | |
 | `pause_run` | **Pause**, then **Pause the run** in its menu, in a run's header, in the header of the run's **Live**, and on the run's card under **At work now** | Yes | Yes | Yes | Yes | |
 | `resume_run` | **Resume** in a run's header, in the header of the run's **Live**, and on a paused run's row under **Earlier runs** | Yes | Yes | Yes | Yes | |
 | `close_run` | **⋯**, then **Close the run**, in the header of a run's page, while the run is running or paused | Yes | Yes | No | No | Yes |
 | `redirect` | None: on the dashboard, rules come from **Tell the planner**, a `message_agent` to the planner, which makes them | Yes | Yes | Yes | Yes | |
 | `reset_workers` | **Restart the lanes**, under **⋯** in the header of a running run with agents, on its page and in Live | Yes | Yes | Yes | Yes | |
+| `add_run_hours` | **Add hours**, then **Add hours and resume**, beside **⋯** in the header of a run its hours paused, on its page and in Live | Yes; `POST /v1/runs/<run>/hours` | Yes; `add_run_hours` | Yes; `add_run_hours` | No | Yes |
+| `start_teachers_round` | **Start a teachers' round**, under **⋯** in the header of a running run with agents, on its page and in Live | Yes; `POST /v1/runs/<run>/teachers-round` | Yes; `start_teachers_round` | Yes; `start_teachers_round` | No | Yes |
 | `export_now` | **Export** in the header of a rig's page or a run's page, with **Full export** (`full: true`), or, on a run's page, **This run** (`run`) | Yes | Yes | Yes | Yes | |
 | `drain_rig` | **Update to these images**, **Try the update again** and **Give it control's new address** on the page of a rig at work set up on a cluster, and **Call the update off**; **Save changes** on **Edit rig** with a new number of GPUs, CPUs or memory for such a rig, and **Call the change off**; control issues it as the caller. **End the drain** in the [drain card](rig-page.md#the-drain-card) of a draining rig's page | Yes (`POST /v1/commands`): the rig drains, but its page shows no update waiting, and it stays drained until `drain: false` or a restart; `POST /v1/rigs/<rig>/cluster/resources` | `update_rig_images`, `set_cluster_rig_resources` | `update_rig_images`, `set_cluster_rig_resources` | No | |
 | `stop_trial` | **Stop this trial…**, then **Stop the trial**, in a stuck trial's card under **Needs you** ([Stuck trials](../how-to/campaigns/decide-what-waits.md#stuck-trials)), and under a trial a draining rig waits for, on the rig's page ([The trials it waits for](rig-page.md#the-trials-it-waits-for)) | Yes | Yes | Yes | No | Yes |
@@ -170,7 +172,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | `log_level` | None | Yes (`POST /v1/commands`); `thermite log-level harness` or `supervisor` | Yes | Yes | No | Yes |
 | `wipe_state` | Only as a step of a full reset | No: `wipe_state is issued only by a full reset` | No | No | No | Yes |
 
-Control's own lists decide what each MCP role may issue; the harness's owner-only check is a second gate behind them. The operator acts for the owner, so its `owner:operator` passes that gate for `message_agent`, `unkeep_message`, the six queue kinds, `stop_trial`, `end_wait`, `log_level` and the `rig_settings` that `set_rig_settings` sends. The operator's list has no `close_run`, `approve_promotion`, `decline_promotion`, `hypothesis_status` or `invalidate_evidence`. For `invalidate_evidence` the harness refuses `owner:operator` itself too: `invalidate_evidence is the owner's own to issue, not owner:operator's`. So it does for `terminal_input`, which control also refuses before it signs, from any issuer but the owner: `Only the owner types into an agent's terminal: send the agents a message.` During the owner's full reset of a rig, MCP's `issue_command` and `propagate_champion` refuse an agent's token for that rig: `<rig> is being reset by the owner`. [Tokens and roles](tokens.md) describes each token.
+Control's own lists decide what each MCP role may issue; the harness's owner-only check is a second gate behind them. The operator acts for the owner, so its `owner:operator` passes that gate for `message_agent`, `unkeep_message`, the six queue kinds, `stop_trial`, `end_wait`, `start_teachers_round`, `add_run_hours`, `log_level` and the `rig_settings` that `set_rig_settings` sends. The operator's list has no `close_run`, `approve_promotion`, `decline_promotion`, `hypothesis_status` or `invalidate_evidence`. For `invalidate_evidence` the harness refuses `owner:operator` itself too: `invalidate_evidence is the owner's own to issue, not owner:operator's`. So it does for `terminal_input`, which control also refuses before it signs, from any issuer but the owner: `Only the owner types into an agent's terminal: send the agents a message.` During the owner's full reset of a rig, MCP's `issue_command` and `propagate_champion` refuse an agent's token for that rig: `<rig> is being reset by the owner`. [Tokens and roles](tokens.md) describes each token.
 
 On the dashboard, only an experiment up next has **Edit**: a lane's idea's words change only over the REST API, the command line or MCP. [Choose what runs next](../how-to/campaigns/choose-what-runs-next.md) walks through the **Experiments** and **Planner** tabs.
 
@@ -259,7 +261,7 @@ Starts one of the rig's [checks](rig-checks.md).
 | `check` | `model`, `isolation` or `smoke` | required | Which check |
 | `force` | boolean | `false` | Run it even though the rig is busy. Isolation and smoke want an idle rig; forcing may end running trials |
 
-Result: `{"check", "id", "started": true}`. The finding arrives later as a `rig_check_finished` event. Refusals: `this rig cannot run the <check> check`, `the <check> check is still running`, `not now: <why>`.
+Result: `{"check", "id", "started": true}`. The finding arrives later as a `rig_check_finished` event. Refusals: `this rig cannot run the <check> check`, `the <check> check is still running`, `not now: <why>`. Control refuses a `model` check while the rig takes the model control gave it, before signing: `<rig> is taking <model> now: it checks the model itself once it has it, within a minute. Check it again after that.` (or `<rig> is going back to its own settings now: …`).
 
 ### `pause_run`
 
@@ -350,6 +352,29 @@ The dashboard calls directives **rules**. It sends no `redirect`: on a run's **P
 The harness records `workers_reset` and tells the scheduler: the run's running trials end at once, and then the current [epoch](glossary.md) (a round, on the dashboard), before the next one is planned, and every lane starts again from the champion. The ledger keeps which resets were finished, so a reset that a restart cut off is finished when the harness starts again. The experiment each ended trial was on goes back to the top of the run's queue, the same experiment with its author and its why, and counts the return (`returns`) with its cause; its `experiment_returned` event has `{id, lane, trial, result: "interrupted", cause, returns, position: "top"}`. Result: `{"run", "reset": true}`.
 
 The run page's **History** says "You restarted the lanes: their trials ended, and every lane starts again from the champion." (with the issuer's name in place of "You" for the agent's token), and, for each experiment, `"<title>" went back to the top of the queue: its trial on <lane> was interrupted (<cause>).` The dashboard offers **Restart the lanes** only on a running run with agents: a run without agents (a try, a rig check) has no lanes.
+
+### `add_run_hours`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run |
+| `hours` | number, more than 0, at most 8760 | The hours of work to add |
+
+Gives a run more hours of work: its stop time, the contract's [`budget.wall_hours`](contract.md), grows by `hours`, counted as the stop time counts them, only while the run works. The harness records `run_hours_added`, `{hours, total, resumed}`: the hours added, the run's hours now, and whether it resumed. A run that its hours paused (`the wall-time budget is spent`) resumes, as for [`resume_run`](#resume_run), and pauses any other running run on the rig; a run paused for another reason, or running, keeps its status. Result: `{"run", "hours", "total", "resumed", "event"}`.
+
+Refused in words: `<run> is closed: start a new run of its campaign instead`, which control also refuses before it signs; `<run> has no stop time (budget.wall_hours): it never stops for its hours, so there are none to add`; and hours that would still leave the run past its hours: `<run> has worked 50.2 of its 48 hours: add more than 2.2`. The run page's **History** says "You added 24 hours: the run may work 72 hours in all, and it resumed." The dashboard offers **Add hours** on a run its hours paused: Resume alone would pause it again at once. Over MCP the owner's and the operator's [`add_run_hours`](mcp-tools.md#add_run_hours) sends it, and over REST [`POST /v1/runs/<run>/hours`](rest-api.md#signed-commands).
+
+### `start_teachers_round`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run |
+
+Asks a running run's teachers for a round now: the same round their timer starts every [`teacher_minutes`](advisors-file.md#top-level). The harness refuses a run that is not running: `<run> is paused: resume it first, and its teachers review it at their next round.`, or `<run> is closed: its teachers review only a running run.` It records `teachers_round_requested`, with an empty body. Result: `{"run", "asked": true, "event"}`, `event` being that event's id.
+
+The rig's supervisor reads the run's newest request with its other reasons for a round ([What each role gets](advisors-file.md#what-each-role-gets)): between rounds it looks every 5 seconds, and a round under way finishes first. In that round the teachers review the run from its brief and give their advice, as at a timed round, and the next timed round counts from this one. Each request starts one round. The owner's messages to the teachers stay as they are: the round reads those waiting, as any round does. When the advisors have reached the day's [spending limit](advisors-file.md#spending), a request starts no round, and the run's live view says once `the advisors reached the day's spending limit (<limit> USD): the teachers review <run> after midnight UTC`.
+
+Control refuses it before it signs it: a run its rig reports paused or closed, in the harness's words; `<rig> has no teachers: give them a model on Edit rig.`, for a rig with no teachers, neither from control nor in its [advisors file](advisors-file.md); and `<rig>'s teachers are off: switch them on on Edit rig.` Before the rig's supervisor has reported its advisors, control can't tell, and signs it. As the round starts, the run's live view says `the teachers review <run> now: the owner asked for a round`. The run page's **History** says "You asked the teachers for a round now: they review the run within a minute, or when a round under way ends." The dashboard offers **Start a teachers' round** only on a running run with agents; on a rig with no teachers or with its teachers off, it is greyed out and says why. Over MCP the owner's and the operator's [`start_teachers_round`](mcp-tools.md#start_teachers_round) tool sends it, and over REST [`POST /v1/runs/<run>/teachers-round`](rest-api.md#signed-commands).
 
 ### `message_agent`
 
@@ -450,9 +475,10 @@ Adds an experiment to the run's **experiment queue**. Each run has its own queue
 | `details` | text up to 4000 characters | none | More about it |
 | `direction` | text, 1 to 80 characters, trimmed | none | Its direction: in your own words, or a direction's name. Written as `:name:`, it is kept without the colons |
 | `why` | text up to 2000 characters | none | Why it is worth trying. The planner reads it, and so does the worker whose lane gets the experiment |
+| `tries` | whole number from 1 to 10 | 1 | How many trials it gets before it counts as tried. A try that ends without a win sends it back to the top, to a lane that has not tried it while one has not; a win ends its tries early ([An experiment tried more than once](../explanation/agents-lanes-planner.md#an-experiment-tried-more-than-once)). A research run's task gets one: the harness refuses more with `a research run's task gets one try: leave out tries` |
 | `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | `"end"` | Where it goes among the queued experiments |
 
-The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `direction`, `why` and `details` when they are not empty. It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
+The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `direction`, `why` and `details` when they are not empty, and **Tries** as `tries` (not on a research run's page). It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
 
 These rules hold for the five queue kinds:
 
@@ -461,7 +487,9 @@ These rules hold for the five queue kinds:
 - The harness refuses a run it doesn't have (`no run <run>`), a closed run (`run <run> is closed: its queue and rules no longer change`), and an experiment the run doesn't have (`no experiment <id> in run <run>`).
 - The harness writes the experiment and one event in one step. The event's actor is `control:<issued_by>`, such as `control:owner:ui`, and its `by` is `owner`, whoever issued the command.
 
-The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now. Event: `experiment_added`, `{id, title, details?, direction?, why?, question?, by, state, position}`. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
+The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now, with `"tries": <n>` for one that gets more than one try. Event: `experiment_added`, `{id, title, details?, direction?, why?, question?, tries?, by, state, position}`, `tries` only above 1.
+
+Each try of an experiment with tries left that ends without a win is the event `experiment_retried`, `{id, try, tries, lane, trial, attempt?, result, verdict?, cause?, position: "top"}`: `try` is the try that ended, `result` how its trial ended (`submitted`, `no_attempt`, or the trial's stopped reason), `verdict` its attempt's verdict, and `cause` how its trial ended in words, or the judge's reasons for the verdict, cut to 500 characters. The same experiment is up next again, at the top. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
 
 ### `queue_move`
 
@@ -477,19 +505,20 @@ Moves an experiment that is up next to another place.
 
 ### `queue_edit`
 
-Changes the words of an experiment that still waits: one up next, or a lane's idea.
+Changes the words, or the number of tries, of an experiment that still waits: one up next, or a lane's idea.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `run` | lowercase id | The run |
 | `id` | experiment id | The experiment |
-| `title`, `details`, `direction`, `why` | as for `queue_add` | The new words. Give at least one; the others stay as they are |
+| `title`, `details`, `direction`, `why` | as for `queue_add` | The new words. Give at least one of these or `tries`; the others stay as they are |
+| `tries` | as for `queue_add` | Its new number of tries. It must be above the tries it used: the harness refuses it with `experiment <id> was tried <n> times already: give it more than <n> tries` |
 
 An empty `details` or `why` clears it; `title` and `direction` cannot be empty.
 
-**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`direction`) and **Why**. **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `direction` only when they are not empty, so an emptied one keeps its old words. A lane's idea has no **Edit** on the dashboard.
+**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`direction`) and **Why**, and its **Tries** (not on a research run's page). **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `direction` only when they are not empty, so an emptied one keeps its old words, and `tries` only when you changed it. A lane's idea has no **Edit** on the dashboard.
 
-Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, direction and why`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
+Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, direction, why and tries`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
 
 ### `queue_drop`
 
@@ -661,13 +690,15 @@ The rig's own settings, as on its **Edit rig** page. Only the fields that change
 | `trial_minutes` | 1 to 1440, or `null` | A trial's length when its contract sets none. `null`: none |
 | `max_turns` | 1 to 100000, or `null` | A limit on each trial's model turns. `null`: no limit |
 | `quiet_minutes` | 1 to 1440, or `null` | After how many minutes without a line a trial asks the owner under **Needs you**. `null`: never. Nothing ends the trial |
+| `check_seconds` | 10 to 3600, or `null` | How long the model check waits for the model's answer. `null`: 120. It limits the check only. A rig whose harness is older reports none, and Edit rig's field is off there |
 | `program_mode` | `terminal` or `headless` | How a worker's trial runs Claude Code, Codex, OpenCode or Pi: `terminal` (the default), in the program's own terminal UI, which the harness's terminal host holds, and a worker in Pi in its Pi view there; `headless`, one headless run of the program for each turn, and a worker in Pi with no view. A trial keeps the mode it started with. A rig whose harness is older reports no mode and runs headless. See [Agents in their own terminal](../explanation/agents-lanes-planner.md#agents-in-their-own-terminal) |
 | `promotion` | `auto` or `owner_approval` | The rig's promotion rule, for runs that set none |
 | `judge_gpus` | 1 to 8, or `null` | On a rig given its set of GPUs, how many are the judge's. `null`: the rig's default. A change restarts the harness to regroup the cards |
+| `runners` | at most 16 `{name, pools}` | The rig's runner processes on its other machines, all of them, each named once, with the pool of each of its 1 to 8 runners: `judge`, `shared` or `lane-1` to `lane-16`. The core takes it while it works: a runner process added joins its pools and takes runs once it answers; one left out, or given other pools, leaves, and its run under way fails, which the judge queues again and a lane is told of |
 
 The harness keeps the settings, applies them at once and reports them, with a `rig_settings_changed` event that holds the change and the settings after it. Result: `{"settings": <all the rig's settings>}`.
 
-The **History** of the run at work at the time says what changed, such as "You changed the rig's settings: the planner off, 3 lanes, no turn limit." Each field reads as `the judge`, `the workers`, `the planner`, `the auditor`, `the teachers`, `the review panel` or `exports` with `on` or `off`; `<n> lanes` (`1 lane`); `trials of <n> min`; `at most <n> turns a trial` or `no turn limit`; `agent programs in their own terminal` or `agent programs headless`; `confirmed wins kept at once` or `confirmed wins wait for you`; and `<n> GPUs for the judge` (`1 GPU for the judge`) or `the judge's usual share of GPUs`.
+The **History** of the run at work at the time says what changed, such as "You changed the rig's settings: the planner off, 3 lanes, no turn limit." Each field reads as `the judge`, `the workers`, `the planner`, `the auditor`, `the teachers`, `the review panel` or `exports` with `on` or `off`; `<n> lanes` (`1 lane`); `trials of <n> min`; `at most <n> turns a trial` or `no turn limit`; `agent programs in their own terminal` or `agent programs headless`; `confirmed wins kept at once` or `confirmed wins wait for you`; `<n> GPUs for the judge` (`1 GPU for the judge`) or `the judge's usual share of GPUs`; and `runners <name> (<pools>), …` or `no runners of other machines`.
 
 ### `accept_review`
 
@@ -820,7 +851,7 @@ The level one part of the rig writes its log lines at, from now on: the harness'
 | `{"control": "kits/<name>"}` | `kit_bundle` | A kit that control keeps: one the **New campaign** page wrote, or a kit repository written elsewhere that the owner gave control as a git bundle ([`POST /v1/kits/<name>`](rest-api.md#kits-control-keeps), MCP's [`kit_add`](mcp-tools.md#kit_add) or [`thermite kit add`](command-line.md#kit-add)). The supervisor fetches the commit from control, as the rig, and writes it to `path` as a bundle. Any commit of the kit's history fetches, and so does an old head that a forced replacement left |
 | `{"url": "<URL>"}` | `model` | An `http://` or `https://` address on the internet, up to 4000 characters. The supervisor downloads the file and keeps it only with the import's `sha256`, reporting its progress. See [Model files on a rig](model-files.md) |
 
-Only the owner's and the operator's tokens may name a source to fetch, a Git access or MCP servers in an `assign_campaign`; an agent's token may assign a campaign whose imports are in the rig's inbox already, or are kits control keeps. The supervisor fetches a command's sources only once its harness has checked control's signature on the command; a command the harness refuses is never staged, and goes on to the harness, which refuses it with its reason. A source that cannot be fetched makes the command `failed` with `{"error": "staging: <reason>"}`. Without a source, the file must already be in the inbox.
+Only the owner's and the operator's tokens may name a source to fetch, a Git access or MCP servers in an `assign_campaign`; an agent's token may assign a campaign whose imports are in the rig's inbox already, or are kits control keeps. The supervisor fetches a command's sources only once its harness has checked control's signature on the command; a command the harness refuses is never staged, and goes on to the harness, which refuses it with its reason. A source that cannot be fetched makes the command `failed` with `{"error": "staging: <reason>"}`. A bundle already at an import's `path` is relayed as it is only when one of its heads is the import's commit; one of another commit, such as an earlier run's at the same path, is fetched again from the source. Without a source, the file must already be in the inbox.
 
 The harness refuses an import with: `path escapes inbox: <path>`, `not found in inbox: <path>`, `symlink escapes inbox: <path>`, `sha256 mismatch for <path>: expected <hash>, got <hash>`, or `bundle does not contain commit <commit>`.
 

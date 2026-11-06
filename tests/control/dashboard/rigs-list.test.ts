@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import { RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { rigsListBody } from "../../../src/control/ui/rigs/list.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { controlOnly, signIn } from "../../helpers/control-stack.ts";
@@ -324,6 +325,36 @@ describe("the Rigs list", () => {
     // The update and its steps, and the checks, are on the rig's page only.
     assert.doesNotMatch(list, /Update to 0\.1\.0|\/update"|model route|judge smoke/);
     assert.match(list, /Checks, keys, history and the update are on each rig's page\./);
+  });
+
+  test("a rig control sets up shows before its first report, and one whose setup failed (goal 206)", () => {
+    const html = rigsListBody({
+      rows: [
+        {
+          id: "spark-rig",
+          where: { kind: "Cluster", name: "k8s-a" },
+          keyPending: false,
+          setup: "failed",
+        },
+        {
+          id: "box-rig",
+          where: { kind: "Machine", name: "box" },
+          keyPending: false,
+          setup: "starting",
+        },
+      ],
+      filter: "all",
+      control: { version: "0.1.3", commit: null, protocol: 1, oldest_protocol: 1 } as never,
+      staleAfterMs: 120_000,
+      offlineAfterMs: 600_000,
+      now: Date.now(),
+    });
+    assert.match(
+      html,
+      /<span class="chip bad">Setup failed<\/span>[\s\S]*spark-rig[\s\S]*its setup failed: its page says why/,
+    );
+    assert.match(html, /<span class="chip info">Setting up<\/span>[\s\S]*box-rig/);
+    assert.match(html, /data-href="\/ui\/rigs\/spark-rig"/);
   });
 
   test("the filter chips count and narrow the rows; a row opens its rig", async () => {

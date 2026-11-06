@@ -4,7 +4,7 @@ import type { Ledger } from "../ledger/index.ts";
 /**
  * Time the harness did not run: the host slept, its container was paused or stopped, or it
  * crashed. Its agents could not work then, so a research run's clock leaves it out, as it leaves
- * out a drain (research/blocked.ts). Nothing else records it: the run stays `running` meanwhile,
+ * out a drain (run-clock.ts), and so does every run's wall-time budget (goal 198). Nothing else records it: the run stays `running` meanwhile,
  * and a wait for a rate limit ends at the time it named, however long the harness stood still.
  * The ledger keeps each gap as `harness_gap`, from the last moment the harness is known to have
  * run to the moment it ran again.

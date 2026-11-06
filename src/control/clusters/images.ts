@@ -17,6 +17,7 @@ import {
   undrain,
   workWords,
 } from "./rigs.ts";
+import { updateRunnerImages } from "./runners.ts";
 
 /**
  * Moves a rig control set up on a cluster onto control's current images (its page, or MCP's
@@ -48,11 +49,11 @@ export async function updateRigImages(
         "Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.",
     };
   if (!parts.rigBus) return { error: NO_RIG_BUS };
-  const images = controlImages(parts, r.spec.gpus);
+  const images = controlImages(parts, r.spec.gpus, r.spec.cuda);
   if (typeof images === "string") return { error: images };
   const old = r.spec.images;
   const k = store.clusters.get(r.cluster);
-  if (!k) return { error: `The cluster ${r.cluster} is no longer in Providers.` };
+  if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
   // A drain for a change to its GPUs, CPUs or memory (goal 118) is that change's.
   if (r.status === "draining" && r.pending)
     return {
@@ -151,6 +152,8 @@ export async function updateRigImages(
     return { error: kubeError(out) };
   }
   store.clusters.setRigImages(rig, images, programMode, controlAddress(parts));
+  // Its runner processes on clusters move with it (goal 206).
+  await updateRunnerImages(parts, rig);
   const changed =
     [
       old.harness !== images.harness ? `harness ${old.harness} → ${images.harness}` : "",

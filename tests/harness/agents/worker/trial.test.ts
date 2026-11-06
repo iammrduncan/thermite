@@ -39,7 +39,10 @@ describe("worker trial", () => {
               "node -e \"import('./src/kernel/work.mjs').then(m => console.log(m.work(14)))\"",
           },
         },
-        { name: "submit", args: { hypothesis: "remove the wasted inner loop", known_flaws: [] } },
+        {
+          name: "submit_experiment",
+          args: { hypothesis: "remove the wasted inner loop", known_flaws: [] },
+        },
       ];
       const next = steps[done];
       return next ? { toolCalls: [next] } : { text: "done" };
@@ -110,7 +113,9 @@ describe("worker trial", () => {
           ],
         };
       return {
-        toolCalls: [{ name: "submit", args: { hypothesis: "less work", known_flaws: [] } }],
+        toolCalls: [
+          { name: "submit_experiment", args: { hypothesis: "less work", known_flaws: [] } },
+        ],
       };
     });
     const r = await runTrial(
@@ -180,7 +185,9 @@ describe("worker trial", () => {
           ],
         };
       return {
-        toolCalls: [{ name: "submit", args: { hypothesis: "as the owner said", known_flaws: [] } }],
+        toolCalls: [
+          { name: "submit_experiment", args: { hypothesis: "as the owner said", known_flaws: [] } },
+        ],
       };
     });
     const lines: { kind: string; text: string }[] = [];

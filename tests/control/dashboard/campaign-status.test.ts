@@ -159,8 +159,9 @@ describe("status words of runs and campaigns, and judge-only runs (goal 099)", (
       /<b>Judge only:<\/b> No workers run\. The judge checks the champion; the advisors' ideas wait in the queue for a run with workers\./,
     );
     assert.match(run, /· goal · judge only · <span class="label info">/);
+    // The run's facts are on its Info tab (goal 209).
     assert.match(
-      run,
+      await c.page("/ui/campaigns/quality/runs/j-1/info"),
       /<dt>Agents<\/dt><dd>None: judge only\. No workers run; changes come from people<\/dd>/,
     );
     const exp = await c.page("/ui/campaigns/quality/runs/j-1/experiments");

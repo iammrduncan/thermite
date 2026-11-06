@@ -80,7 +80,8 @@ describe("an optional limit on a worker's notes in one reply (goal 147)", () => 
             { name: "write_file", args: { path: "src/kernel/work.mjs", content: FAST_KERNEL } },
           ],
         };
-      if (tools.length === 6) return { toolCalls: [{ name: "submit", args: { hypothesis: "h" } }] };
+      if (tools.length === 6)
+        return { toolCalls: [{ name: "submit_experiment", args: { hypothesis: "h" } }] };
       return { text: "done" };
     });
     const kept: NoteRequest[] = [];

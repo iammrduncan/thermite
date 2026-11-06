@@ -40,6 +40,7 @@ const MEASUREMENT: RegExp[] = [
   /\b(?:run|rerun|write|execute|perform)\s+(?:(?:a|an|the|some|our|its|these|those|new)\s+){0,2}litmus\b/i,
   /\b(?:matched\s+control|smallest\s+discriminating\s+experiment|expected\s+gain)\b/i,
   /\bdev[- ]runs?\b/i,
+  /\brun[_-]experiments?\b/i,
 ];
 
 /** The first words of a text that ask for a measurement, or undefined when it asks for none. */

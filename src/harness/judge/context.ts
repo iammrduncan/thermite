@@ -1,25 +1,34 @@
-import { chmodSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { errorText } from "../../common/errors.ts";
 import { logError } from "../../common/log.ts";
 import type { Contract, GoalContract, HillClimbContract } from "../../core/contract.ts";
 import type { EventToRecord } from "../../core/events/bodies.ts";
 import { contractMetrics, type Kit } from "../../core/kit.ts";
 import { toFraction } from "../../core/stats.ts";
-import { builderRole, checkerRole, driverRole, type Runner, runRole } from "../broker/index.ts";
+import type { Runner } from "../broker/index.ts";
 import type { JobRow, Ledger } from "../ledger/index.ts";
 import type { HarnessService } from "../service/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
 import { BASELINE_BLOCKS, type Baseline, baselineDir, baselineOf } from "./baseline.ts";
-import { BuildStore } from "./builds.ts";
+import { CoreRunner } from "./core-runner.ts";
 import type { Decision } from "./decide.ts";
 import { recordInfraFailure } from "./failure.ts";
 import { HELD_OUT_INFRA } from "./held-out.ts";
 import { exportKit, loadKit } from "./kits.ts";
 import { whileLeased } from "./lease.ts";
-import type { Arm, ArmRun, MeasureContext } from "./measure.ts";
+import type { Arm, ArmRun } from "./measure.ts";
 import type { PortFound } from "./ports.ts";
 import { clipReason, REASONS_CHARS } from "./reasons.ts";
+import type { MeasureSpec, RigRunner } from "./runner.ts";
+import { RunnerAway } from "./runner-link.ts";
+
+/** A run's kit: loaded, its folder here, and its repository and commit, which name it anywhere. */
+interface KitAt {
+  kit: Kit;
+  dir: string;
+  repo: string;
+  commit: string;
+}
 
 /**
  * What the judge's jobs share: the judge's options, its errors, a job's outcome (Finish) and
@@ -52,6 +61,17 @@ export interface JudgeOptions {
    * card than its screen's, and runs are timed by the card's own user.
    */
   card?: { index: number; uuid: string; count: number } | undefined;
+  /**
+   * The runner the judge builds and measures on (goal 206); without one, the core's own, on the
+   * card above.
+   */
+  target?: RigRunner | undefined;
+  /**
+   * A runner of another machine takes one run at a time (goal 206): the judge holds it for each
+   * job, in turn with the lanes on a shared one, and on a shared one waits for a job first. The
+   * hold gives nothing when the runner left the rig.
+   */
+  slot?: { shared: boolean; hold(): Promise<(() => void) | undefined> } | undefined;
 }
 
 export class InfraError extends Error {}
@@ -123,7 +143,8 @@ export class Stop extends Error {
 export class JudgeContext {
   readonly o: Required<JudgeOptions>;
   readonly ledger: Ledger;
-  readonly store: BuildStore;
+  /** The runner it builds and measures on. */
+  readonly target: RigRunner;
   /** The job this judge holds: its lease is renewed while a build runs (lease.ts). */
   holding: JobRow | undefined;
 
@@ -137,11 +158,20 @@ export class JudgeContext {
       deviceGate: undefined,
       baselineBlocks: BASELINE_BLOCKS,
       card: undefined,
+      target: undefined,
+      slot: undefined,
       ...opts,
     } as Required<JudgeOptions>;
     this.ledger = opts.service.ledger;
-    const { stateDir, scratchDir } = opts.service.paths;
-    this.store = new BuildStore(stateDir, scratchDir, opts.runner, this.ledger);
+    this.target =
+      opts.target ??
+      new CoreRunner({
+        runner: opts.runner,
+        driver: opts.driver,
+        paths: opts.service.paths,
+        ledger: this.ledger,
+        index: opts.card?.index ?? 0,
+      });
   }
 
   /** A line for control's live view of the judge. */
@@ -168,35 +198,40 @@ export class JudgeContext {
     recordInfraFailure(this.ledger, job, reason, { owner: this.o.owner, spec: this.spec(job) });
   }
 
-  async kitFor(contract: Contract): Promise<{ kit: Kit; dir: string; commit: string }> {
+  async kitFor(contract: Contract): Promise<KitAt> {
     const ref = contract.project.kit;
     if (!ref) throw new InfraError(`contract ${contract.campaign} names no kit`);
-    const mirror = this.o.service.mirrorFor(`kit-${ref.repo}`);
-    const dir = await exportKit(this.o.service.paths.stateDir, mirror, ref.commit);
+    const repo = `kit-${ref.repo}`;
+    const dir = await exportKit(
+      this.o.service.paths.stateDir,
+      this.o.service.mirrorFor(repo),
+      ref.commit,
+    );
     const kit = loadKit(dir);
-    if (kit.target !== this.o.driver.type) {
+    if (kit.target !== this.target.driver.type) {
       throw new InfraError(
-        `kit ${kit.name} measures ${kit.target}, this rig has ${this.o.driver.type}`,
+        `kit ${kit.name} measures ${kit.target}, this rig has ${this.target.driver.type}`,
       );
     }
-    return { kit, dir, commit: ref.commit };
+    return { kit, dir, repo, commit: ref.commit };
   }
 
-  private async build(run: string, commit: string, k: { kit: Kit; dir: string; commit: string }) {
+  private async build(run: string, commit: string, k: KitAt) {
     const inst = this.ledger.runs.get(run);
     if (!inst) throw new InfraError(`no run ${run}`);
     const started = Date.now();
     this.note(`build ${commit.slice(0, 12)}: started`, run);
     const ensure = () =>
-      this.store.ensure({
+      this.target.build({
         repo: inst.seed_repo,
         mirror: this.o.service.mirrorFor(inst.seed_repo),
         commit,
         kit: k.kit,
         kitDir: k.dir,
+        kitRepo: k.repo,
         kitCommit: k.commit,
         actor: this.o.owner,
-        role: builderRole(this.o.card?.index ?? 0),
+        run,
       });
     const h = this.holding;
     const renew = () => h && this.ledger.jobs.heartbeat(h.id, h.fence, this.o.leaseMs);
@@ -208,12 +243,7 @@ export class JudgeContext {
     return b;
   }
 
-  async armFor(
-    name: Arm["name"],
-    run: string,
-    commit: string,
-    k: { kit: Kit; dir: string; commit: string },
-  ): Promise<Arm> {
+  async armFor(name: Arm["name"], run: string, commit: string, k: KitAt): Promise<Arm> {
     const b = await this.build(run, commit, k);
     if (!b.ok) {
       // The starting point's baseline (goal 115) is judged as a candidate is: a build that fails
@@ -234,36 +264,19 @@ export class JudgeContext {
   }
 
   /**
-   * The folder a baseline job's checks write the baseline's files to: `<scratch>/runs/job-<id>/
-   * baseline`, made empty and handed to the job's card's checker. The job keeps what it holds
-   * (keepBaselineDir), then removes it.
+   * The folder a baseline job's checks write the baseline's files to: the runner's, made empty and
+   * handed to its checker. The job keeps what it holds (the runner's keepBaseline), then removes it.
    */
-  async baselineWork(job: JobRow): Promise<string> {
-    const runs = join(this.o.service.paths.scratchDir, "runs");
-    const dir = join(runs, `job-${job.id}`, "baseline");
-    // An earlier try of the same job left its folder: it starts empty again.
-    if (existsSync(dir)) await this.o.runner.remove(dir);
-    mkdirSync(dir, { recursive: true });
-    for (const d of [runs, join(runs, `job-${job.id}`)]) chmodSync(d, 0o711);
-    await this.o.runner.handOver(dir, checkerRole(this.o.card?.index ?? 0));
-    return dir;
+  baselineWork(job: JobRow): Promise<string> {
+    return this.target.baselineWork(job.id);
   }
 
   /**
-   * A job's measuring context. A hill climb's check gets the run's baseline folder (goal 115):
-   * `baselineDir`, the folder a baseline job writes, or else the sealed folder of the run's
-   * baseline, read-only. The job's card gives the users its runs, drivers and checks run as.
+   * What a job's runs need: its kit, and for a hill climb's check, the run's baseline folder (goal
+   * 115): the one a baseline job's checks write now, or else the sealed folder of the run's
+   * baseline, read-only. The runner makes the folders and gives the card's users from it.
    */
-  context(
-    k: { kit: Kit; dir: string },
-    job: JobRow,
-    baselineDirNow?: string | undefined,
-  ): MeasureContext {
-    const runsDir = join(this.o.service.paths.scratchDir, "runs", `job-${job.id}`);
-    mkdirSync(runsDir, { recursive: true });
-    // Reachable by exact (unguessable) path only: no role may list in-flight runs.
-    chmodSync(join(this.o.service.paths.scratchDir, "runs"), 0o711);
-    chmodSync(runsDir, 0o711);
+  context(k: KitAt, job: JobRow, baselineDirNow?: string | undefined): MeasureSpec {
     const run = this.jobRun(job);
     // No contract, no held-out mask: the job stops as an infrastructure failure, never measuring
     // on cells it would have hidden (goal 163).
@@ -274,26 +287,28 @@ export class JudgeContext {
       if (baselineDirNow || !run || contract?.mode !== "hill_climb") return undefined;
       const b = baselineOf(this.ledger, run);
       const dir = b ? baselineDir(this.o.service.paths.stateDir, run, b.job) : undefined;
-      return dir && existsSync(dir) ? dir : undefined;
+      return dir && existsSync(dir) && b ? { kept: dir, run, job: b.job } : undefined;
     })();
-    const folder = baselineDirNow ?? sealed;
+    const baseline = baselineDirNow ? { written: baselineDirNow } : sealed;
     return {
-      runner: this.o.runner,
-      store: this.store,
+      job: job.id,
+      ...(run ? { run } : {}),
       kit: k.kit,
       kitDir: k.dir,
-      runsDir,
-      modelsDir: join(this.o.service.paths.stateDir, "models"),
-      ...(folder ? { baselineDir: folder } : {}),
-      ...(contract ? { uses: contractMetrics(contract) } : {}),
-      runRole: runRole(this.o.card?.index ?? 0),
-      checkerRole: checkerRole(this.o.card?.index ?? 0),
-      driverRole: driverRole(this.o.card?.index ?? 0),
+      kitRepo: k.repo,
+      kitCommit: k.commit,
+      ...(baseline ? { baseline } : {}),
+      ...(contract ? { uses: contractMetrics(contract, k.kit) } : {}),
       note: (arm, cell, outcome) =>
         held.has(cell)
           ? this.note(`held-out run ${++heldRuns} done`, run)
           : this.note(`${arm} · ${cell}: ${outcome}`, run),
     };
+  }
+
+  /** One run of an arm on a cell, on the judge's runner. */
+  async measure(spec: MeasureSpec, arm: Arm, cell: string): Promise<ArmRun> {
+    return (await this.target.measure(spec, arm, cell)).run;
   }
 
   /**
@@ -305,7 +320,7 @@ export class JudgeContext {
     // The baseline's reasons name the cell: they tell the workers in setup what to fix.
     const on = arm.name === "baseline" && cell ? `cell ${cell}: ` : "";
     if (r.kind === "ok") {
-      const implausible = this.o.driver.plausibility(r.metrics);
+      const implausible = this.target.driver.plausibility(r.metrics);
       if (implausible.length === 0) return;
       if (judged) throw new Stop("invalid", `${on}implausible: ${implausible.join("; ")}`);
       throw new InfraError(`${arm.name} implausible: ${implausible.join("; ")}`);
@@ -320,19 +335,33 @@ export class JudgeContext {
       ciLow: toFraction(d.primary.low),
       ciHigh: toFraction(d.primary.high),
       values: d.values,
-      guards: d.guards.map((g) => {
-        // At confirmation, the guard against the run's baseline too (goal 115): a log ratio.
-        const s = d.vsStart?.find((x) => x.metric === g.metric);
-        return {
-          metric: g.metric,
-          status: g.status,
-          estimate: g.interval.estimate,
-          low: g.interval.low,
-          high: g.interval.high,
-          values: g.values,
-          ...(s ? { vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent } } : {}),
-        };
-      }),
+      metrics: d.metrics,
+      asks: d.asks,
+      guards: [
+        ...d.guards.map((g) => {
+          // At confirmation, the guard against the run's baseline too (goal 115): a log ratio.
+          const s = d.vsStart?.find((x) => x.metric === g.metric && !x.rule);
+          return {
+            metric: g.metric,
+            status: g.status,
+            estimate: g.interval.estimate,
+            low: g.interval.low,
+            high: g.interval.high,
+            values: g.values,
+            ...(g.rule ? { rule: g.rule } : {}),
+            ...(s ? { vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent } } : {}),
+          };
+        }),
+        // A role guard against the baseline alone (goal 209): its own entry, with its bound.
+        ...(d.vsStart ?? [])
+          .filter((s) => s.rule)
+          .map((s) => ({
+            metric: s.metric,
+            status: s.spent ? "violated" : "ok",
+            rule: s.rule,
+            vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent },
+          })),
+      ],
     };
   }
 
@@ -367,7 +396,8 @@ export class JudgeContext {
     try {
       return await pass();
     } catch (err) {
-      if (err instanceof FixedInfraError) throw err;
+      // A runner that went away (goal 206) is named in fixed words: its job goes back to the queue.
+      if (err instanceof FixedInfraError || err instanceof RunnerAway) throw err;
       logError("judge", "held-out pass failed", {
         job: job.id,
         attempt: job.attempt,

@@ -31,4 +31,4 @@ export { KIND_WORDS, type ProviderErrorKind } from "./provider-errors.ts";
 export { type Evidence, evidenceOf, Registry } from "./registry.ts";
 export { SAME_ANSWER } from "./repeats.ts";
 export { endWait, holdUntil, Scheduler } from "./scheduler/index.ts";
-export { laneCacheDir, laneCacheEnv } from "./workspace.ts";
+export { laneCacheDir, laneCacheEnv, prepareWorkspace } from "./workspace.ts";

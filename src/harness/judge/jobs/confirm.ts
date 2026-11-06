@@ -19,7 +19,8 @@ import {
   heldOutResult,
   heldOutWords,
 } from "../held-out.ts";
-import { type Arm, type MeasureContext, runArm } from "../measure.ts";
+import type { Arm } from "../measure.ts";
+import type { MeasureSpec } from "../runner.ts";
 
 /**
  * The confirm job, and what happens to a win it confirms. A hill climb's screened win is measured
@@ -69,6 +70,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
       guardTotals(judge.ledger, run),
       judge.noiseFloor(run),
       start,
+      k.kit.metrics,
     );
     let verdict: string = d.verdict ?? "not_confirmed";
     let reasons = d.reasons;
@@ -114,7 +116,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
 async function heldOut(
   judge: JudgeContext,
   job: JobRow,
-  ctx: MeasureContext,
+  ctx: MeasureSpec,
   cand: Arm,
   champ: Arm,
   contract: HillClimbContract,
@@ -132,8 +134,8 @@ async function heldOut(
     const rv: number[] = [];
     let failed: HeldOutKind | undefined;
     for (let rep = 0; rep < 3 && !failed; rep++) {
-      const c = await runArm(ctx, cand, cell);
-      const r = await runArm(ctx, champ, cell);
+      const c = await judge.measure(ctx, cand, cell);
+      const r = await judge.measure(ctx, champ, cell);
       if (r.kind !== "ok") {
         // An opaque reason: details of held-out cells never leave promotion code.
         logWarn("judge", "champion failed on a held-out cell", { job: job.id, reason: r.reason });

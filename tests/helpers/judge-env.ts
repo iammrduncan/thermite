@@ -10,11 +10,19 @@ import {
   type SupervisedResult,
   type SupervisedRun,
 } from "../../src/harness/broker/process.ts";
-import { LocalRunner, type RunOutcome, type RunRequest } from "../../src/harness/broker/runner.ts";
+import {
+  LocalRunner,
+  type Runner,
+  type RunOutcome,
+  type RunRequest,
+} from "../../src/harness/broker/runner.ts";
+import { CoreRunner } from "../../src/harness/judge/core-runner.ts";
 import { Judge, type PromotionPolicy } from "../../src/harness/judge/judge.ts";
+import type { RigRunner } from "../../src/harness/judge/runner.ts";
 import { Ledger } from "../../src/harness/ledger/index.ts";
 import { HarnessService } from "../../src/harness/service/index.ts";
 import { CpuDriver } from "../../src/harness/targets/cpu.ts";
+import type { TargetDriver } from "../../src/harness/targets/driver.ts";
 
 /**
  * A throwaway harness with a small Node-based project and kit, for judge tests that run on any
@@ -278,6 +286,24 @@ export function makeJudgeEnv(
      * the stand-in runner answers them (StandInRunner).
      */
     realRuns?: boolean | undefined;
+    /**
+     * The judge's runner, made from the core's own (goal 206): a test sees what reaches it, or
+     * gives a runner of another process, made with the core's service and its test's folder.
+     */
+    wrapRunner?:
+      | ((
+          core: RigRunner,
+          made: {
+            service: HarnessService;
+            ledger: Ledger;
+            root: string;
+            processes: Runner;
+            driver: TargetDriver;
+          },
+        ) => RigRunner)
+      | undefined;
+    /** The clock the ledger and the service go by; none: the computer's. */
+    clock?: (() => Date) | undefined;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "thermite-judge-"));
@@ -330,7 +356,7 @@ export function makeJudgeEnv(
   }
 
   const keys = generateSigningKeys();
-  const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
+  const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"), opts.clock);
   const rig = opts.rig ?? "rig-a";
   const service = new HarnessService({
     rig,
@@ -339,6 +365,7 @@ export function makeJudgeEnv(
     controlPublicKeyPem: keys.publicKeyPem,
     rigKeys: generateSigningKeys(),
     promotion: opts.promotion ?? "auto",
+    ...(opts.clock ? { clock: opts.clock } : {}),
   });
   const goalContract = opts.goal
     ? {
@@ -439,16 +466,26 @@ export function makeJudgeEnv(
   );
 
   const standIn = opts.realRuns ? undefined : new StandInRunner(paths.scratchDir);
+  const processes = standIn ?? new LocalRunner(paths.scratchDir);
+  // Host load is not what these tests are about (the judge refuses a loaded CPU; see cpu.test).
+  const driver = opts.neverReady
+    ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
+    : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY });
   const judge = new Judge({
     service,
-    runner: standIn ?? new LocalRunner(paths.scratchDir),
-    // Host load is not what these tests are about (the judge refuses a loaded CPU; see cpu.test).
-    driver: opts.neverReady
-      ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
-      : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
+    runner: processes,
+    driver,
     owner: "judge-test",
     readyRetries: 0,
     calibrationBlocks: 0,
+    ...(opts.wrapRunner
+      ? {
+          target: opts.wrapRunner(
+            new CoreRunner({ runner: processes, driver, paths, ledger, index: 0 }),
+            { service, ledger, root, processes, driver },
+          ),
+        }
+      : {}),
   });
 
   /** A change to the kernel, as a patch from the project's root (its folder, if it has one). */

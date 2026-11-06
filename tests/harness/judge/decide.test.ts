@@ -11,6 +11,7 @@ import {
   decideScreen,
   decideThresholdGoal,
   goalDelta,
+  type Roles,
 } from "../../../src/harness/judge/decide.ts";
 import { goalFixture, hillClimbFixture } from "../../helpers/fixtures.ts";
 import { forCases, normals } from "../../helpers/property.ts";
@@ -334,5 +335,159 @@ describe("screening's properties, on seeded random cases", () => {
         if (loud === "regress") assert.equal(quiet, "regress");
       },
     );
+  });
+});
+
+describe("metric roles (goal 209)", () => {
+  const policy = hillClimb({ guards: [] });
+  const cells = policy.cells;
+  const quiet = (n: number, effects: Record<string, number>, seed = 3) =>
+    blocks(n, cells, effects, 0.0005, seed);
+
+  test("a kit's guard against the champion refuses a gain that breaks it, in its own words", () => {
+    const roles: Roles = {
+      mem_mib: { kind: "guard", guards: [{ stay: "below", against: "champion", by: 0.05 }] },
+    };
+    const held = decideScreen(policy, quiet(3, { gflops: 1.05, mem_mib: 1.02 }), 0, roles);
+    assert.equal(held.verdict, "win_screened", held.reasons);
+    const broke = decideScreen(policy, quiet(3, { gflops: 1.05, mem_mib: 1.1 }), 0, roles);
+    assert.equal(broke.verdict, "tradeoff", broke.reasons);
+    const g = broke.guards.find((x) => x.metric === "mem_mib");
+    assert.equal(g?.status, "violated");
+    assert.deepEqual(g?.rule, { stay: "below", against: "champion", by: 0.05 });
+  });
+
+  test("within some standard deviations of the champion: its own spread in the same blocks", () => {
+    const roles: Roles = {
+      ppl: { kind: "guard", guards: [{ stay: "within", against: "champion", by: 3 }] },
+    };
+    const same = decideScreen(policy, quiet(9, { gflops: 1.05, ppl: 1 }), 0, roles);
+    assert.equal(same.verdict, "win_screened", same.reasons);
+    const moved = decideScreen(policy, quiet(9, { gflops: 1.05, ppl: 1.01 }), 0, roles);
+    assert.equal(moved.verdict, "tradeoff", moved.reasons);
+  });
+
+  test("a guard that asks lets a change past it go on, and the confirmed win names it for the owner (goal 212)", () => {
+    // A divergence that must stay at 0, or the owner decides; never past 50 at all.
+    const roles: Roles = {
+      kl: {
+        kind: "guard",
+        guards: [
+          { stay: "below", against: "value", value: 0, ask: true },
+          { stay: "below", against: "value", value: 50 },
+        ],
+      },
+    };
+    // At 0: nothing asks.
+    const exact = decideConfirm(policy, quiet(5, { gflops: 1.05, kl: 0 }), {}, 0, undefined, roles);
+    assert.equal(exact.verdict, "win_confirmed", exact.reasons);
+    assert.equal(exact.asks, undefined);
+    // Between 0 and 50: screened and confirmed as better, with the guard that asks named.
+    const drift = quiet(5, { gflops: 1.05, kl: 0.2 });
+    const screened = decideScreen(policy, drift.slice(0, 3), 0, roles);
+    assert.equal(screened.verdict, "win_screened", screened.reasons);
+    const confirmed = decideConfirm(policy, drift, {}, 0, undefined, roles);
+    assert.equal(confirmed.verdict, "win_confirmed", confirmed.reasons);
+    assert.ok(confirmed.asks?.length);
+    for (const a of confirmed.asks ?? [])
+      assert.match(a, /^kl\/n\d+: mean [\d.]+ is not at most 0$/);
+    // Past 50: refused, as a guard that does not ask refuses.
+    const far = decideConfirm(policy, quiet(5, { gflops: 1.05, kl: 1 }), {}, 0, undefined, roles);
+    assert.equal(far.verdict, "infeasible", far.reasons);
+    assert.match(far.reasons, /kl\/n\d+: mean .* is not at most 50/);
+  });
+
+  test("a guard against a fixed value refuses a change past it, as a hard limit does", () => {
+    const roles: Roles = {
+      peak_gib: { kind: "guard", guards: [{ stay: "below", against: "value", value: 105 }] },
+    };
+    assert.equal(
+      decideScreen(policy, quiet(3, { gflops: 1.05, peak_gib: 1 }), 0, roles).verdict,
+      "win_screened",
+    );
+    const over = decideScreen(policy, quiet(3, { gflops: 1.05, peak_gib: 1.1 }), 0, roles);
+    assert.equal(over.verdict, "infeasible", over.reasons);
+    assert.match(over.reasons, /peak_gib\/n256: mean .* is not at most 105/);
+  });
+
+  test("against the baseline, at confirmation: within its spread, or the allowance is spent", () => {
+    const roles: Roles = {
+      ppl: { kind: "guard", guards: [{ stay: "within", against: "baseline", by: 3 }] },
+    };
+    const start = Object.fromEntries(
+      cells.map((c) => [
+        c,
+        { gflops: { median: 100, mad: 0.05 }, ppl: { median: 100, mad: 0.05 } },
+      ]),
+    );
+    const held = decideConfirm(policy, quiet(5, { gflops: 1.05, ppl: 1 }, 9), {}, 0, start, roles);
+    assert.equal(held.verdict, "win_confirmed", held.reasons);
+    assert.equal(held.vsStart?.find((g) => g.metric === "ppl")?.spent, false);
+    const drifted = decideConfirm(
+      policy,
+      quiet(5, { gflops: 1.05, ppl: 1.01 }, 9),
+      {},
+      0,
+      start,
+      roles,
+    );
+    assert.equal(drifted.verdict, "tradeoff", drifted.reasons);
+    assert.match(
+      drifted.reasons,
+      /ppl .* from the starting point \(allowed ±.*within 3 standard deviations of the baseline\)/,
+    );
+  });
+
+  test("each verdict carries its lower priorities' and informational metrics' values, as the primary's", () => {
+    const roles: Roles = {
+      itl_ms: { kind: "info" },
+      prefill: { kind: "priority", priority: 2, direction: "max", min_effect: 0.02 },
+    };
+    const d = decideScreen(policy, quiet(3, { gflops: 1.05, itl_ms: 0.9, prefill: 1 }), 0, roles);
+    assert.deepEqual(
+      d.metrics?.map((v) => v.metric),
+      ["prefill", "itl_ms"],
+    );
+    const itl = d.metrics?.find((v) => v.metric === "itl_ms");
+    assert.deepEqual(
+      itl?.cells.map((c) => c.cell),
+      cells,
+    );
+    assert.ok((itl?.cells[0]?.candidate ?? 0) < (itl?.cells[0]?.reference ?? 0));
+    // None asked for, none given.
+    assert.equal(decideScreen(policy, quiet(3, { gflops: 1.05 })).metrics, undefined);
+  });
+
+  test("a tie on the primary goes down the priorities: better on the next one beyond its min_effect wins", () => {
+    const roles: Roles = {
+      prefill: { kind: "priority", priority: 2, direction: "max", min_effect: 0.02 },
+    };
+    const tie = decideScreen(policy, quiet(3, { gflops: 1, prefill: 1.05 }), 0, roles);
+    assert.equal(tie.verdict, "win_screened", tie.reasons);
+    assert.match(tie.reasons, /^equivalent; prefill .*, better beyond its min_effect/);
+    const confirmed = decideConfirm(
+      policy,
+      quiet(5, { gflops: 1, prefill: 1.05 }, 9),
+      {},
+      0,
+      undefined,
+      roles,
+    );
+    assert.equal(confirmed.verdict, "win_confirmed", confirmed.reasons);
+    assert.match(confirmed.reasons, /equivalent on gflops; prefill/);
+    // Worse on the next priority: still no win.
+    assert.equal(
+      decideScreen(policy, quiet(3, { gflops: 1, prefill: 0.95 }), 0, roles).verdict,
+      "neutral",
+    );
+    // A secondary written before, with no min_effect of its own, breaks no tie, as before.
+    const before = hillClimb({
+      guards: [],
+      objective: {
+        primary: { metric: "gflops", direction: "max", min_effect: 0.01 },
+        secondary: [{ metric: "prefill", direction: "max" }],
+      },
+    });
+    assert.equal(decideScreen(before, quiet(3, { gflops: 1, prefill: 1.05 })).verdict, "neutral");
   });
 });

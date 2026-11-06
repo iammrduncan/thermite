@@ -15,8 +15,8 @@ import { apiCall } from "./api-call.ts";
  * the trial's own token (THERMITE_TRIAL_AUTH), which binds every call to the trial and stops
  * working when the trial ends.
  *
- *   thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
- *   thermite-trial dev-run [--timeout SECONDS] -- COMMAND...
+ *   thermite-trial submit-experiment --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
+ *   thermite-trial run-experiment [--timeout SECONDS] -- COMMAND...
  *   thermite-trial status ATTEMPT
  *   thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]
  *   thermite-trial note --kind KIND [--about TYPE:ID] TEXT
@@ -24,8 +24,8 @@ import { apiCall } from "./api-call.ts";
  */
 
 const USAGE = `usage:
-  thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
-  thermite-trial dev-run [--timeout SECONDS] -- COMMAND...
+  thermite-trial submit-experiment --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
+  thermite-trial run-experiment [--timeout SECONDS] -- COMMAND...
   thermite-trial status ATTEMPT
   thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]
   ${NOTE_USAGE}
@@ -39,8 +39,9 @@ const USAGE = `usage:
  * list` is a guess at a command, and would otherwise propose an experiment titled "list".
  */
 const COMMAND_WORDS = new Set([
+  "submit-experiment",
+  "run-experiment",
   "submit",
-  "dev-run",
   "status",
   "idea",
   "note",
@@ -157,9 +158,9 @@ export async function trialCli(
     return researchOutput(await call("POST", `/v1/research/${req.op}`, req.body));
   }
   const { flags, rest } = parseArgs(args);
-  if (cmd === "submit") {
+  if (cmd === "submit-experiment") {
     const hypothesis = flags.hypothesis?.[0]?.trim();
-    if (!hypothesis) return `error: submit needs --hypothesis\n${USAGE}`;
+    if (!hypothesis) return `error: submit-experiment needs --hypothesis\n${USAGE}`;
     const patch = patchOf(env.workspace, env.editablePaths);
     if (!patch.trim())
       return `error: there are no changes inside the editable paths (${env.editablePaths.join(", ")})`;
@@ -171,9 +172,9 @@ export async function trialCli(
     })) as { attempt: string; lifecycle: string; violations?: string[] };
     return `submitted ${out.attempt}: ${out.lifecycle}${out.violations?.length ? `; refused: ${out.violations.join("; ")}` : ""}. The trial ends with this submission.`;
   }
-  if (cmd === "dev-run") {
+  if (cmd === "run-experiment") {
     const command = rest.join(" ").trim();
-    if (!command) return `error: dev-run needs a command after --\n${USAGE}`;
+    if (!command) return `error: run-experiment needs a command after --\n${USAGE}`;
     const timeout = Number(flags.timeout?.[0]);
     const out = await call("POST", "/v1/dev-runs", {
       command,

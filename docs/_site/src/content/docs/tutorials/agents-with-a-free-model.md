@@ -30,29 +30,27 @@ A **provider** is where your agents' models come from. OpenCode is a program tha
    - **Base URL** and **API key**: leave them empty.
 3. Press **Add and list its models**.
 
-A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig on Rigs' models.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **runs in the OpenCode harness**.
+A green line says `"opencode" is saved and lists` a number of models, then `Give one to a rig on its Edit rig.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **OpenCode's own, with no key: its free models, in the OpenCode harness**.
 
 ## 2. Give the rig a free model
 
-Press **Rigs' models** in the left navigation. Under **Harness and model for each rig**, the row for `local-1` says `Its agents have no model: they wait.`
+Press **Back to Thermite** at the top of the left navigation, then **Rigs** in the sidebar, then `local-1`, and press **Edit rig**. Under **2 · The agents**, the **Workers** line's **Model** says `none: can't run`: the rig has no model yet.
 
-1. In its first list, choose **OpenCode v2**. This is the **worker harness**: the program the agents work in. (It is not the rig's `harness` container, which runs it.) OpenCode's free models run only in OpenCode's own program.
-2. In its second list, under **opencode (OpenCode harness only)**, choose the first model whose name ends in `-free`. Those are the models OpenCode serves without a key. OpenCode decides which they are, and the list changes over time.
-3. Press **Use**.
+1. In its **Model** list, under **opencode (OpenCode's own free models: OpenCode only)**, choose the first model whose name ends in `-free`. Those are the models OpenCode serves without a key. OpenCode decides which they are, and the list changes over time.
+2. In its **Runs in** list, choose **OpenCode v2**. This is the **worker harness**: the program the agents work in. (It is not the rig's `harness` container, which runs it.) OpenCode's free models run only in OpenCode's own program.
+3. Press **Save changes**.
 
-A green line at the top of the page says that `local-1` takes your model from `"opencode"` under OpenCode v2 within a minute, and checks it. The row for `local-1` shows `taking` and your model's name.
+The rig's page opens, with a green line at its top: `Control sent a new model to local-1. The rig takes the change in less than one minute.` Its block **The agents' model** shows `taking` and your model's name.
 
 ## 3. Check that the model works
 
 The rig checks a new model by itself. It asks the model, through the worker harness, to run one command, and the answer must come back as a correct tool call. That is how agents work: by calling tools.
 
-Wait a minute or two, and stay on the page: the row follows the rig by itself, with no refresh. Once the rig takes the model, the row says that its agents run under OpenCode v2 with your model from `opencode`. Below that, `Its model check is running ·` and the time so far, then:
+Wait a minute or two, and stay on the page: **The agents' model** follows the rig by itself, with no refresh. Once the rig takes the model, it says that its agents run under OpenCode v2 with your model from `opencode`. Below that, `Its model check is running ·` and the time so far, then:
 
 `Its model check passed … ago:` your model's name, then `answered with a correct tool call in` some seconds `(OpenCode)`.
 
-If it says **FAILED** instead, the rest of the sentence says why, such as `Rate limit exceeded. Please try again later.` when the free model is busy, or `Model unavailable:` and the model's name when OpenCode no longer serves it, though its list still names it. Choose another model whose name ends in `-free`, press **Use**, and wait again. It can take a few tries to find one that answers. **Check** runs the check again at any time.
-
-The rig's own page shows the same result: open **Rigs**, then `local-1`, and under **Checks**, **Model route** says **passed**, with the same sentence.
+If it says **FAILED** instead, the rest of the sentence says why, such as `Rate limit exceeded. Please try again later.` when the free model is busy, or `Model unavailable:` and the model's name when OpenCode no longer serves it, though its list still names it. Choose another model whose name ends in `-free` on **Edit rig**, press **Save changes**, and wait again. It can take a few tries to find one that answers. **Run it** on **Model route**, under **Checks** on the same page, runs the check again at any time, and **Model route** says **passed** with the same sentence.
 
 ## 4. Get the sample and pack its kit
 
@@ -65,12 +63,12 @@ The dashboard takes a kit as one file. In a terminal in your `thermite` folder, 
 
 ```sh
 cd ..
-git clone --branch v0.1.2 https://github.com/iammrduncan/thermite.git thermite-source
+git clone --branch v0.1.3 https://github.com/iammrduncan/thermite.git thermite-source
 cd thermite-source
 tar -czf matmul-cpu-kit.tar.gz -C examples/matmul-cpu kit
 ```
 
-`v0.1.2` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.2`. If yours names another one, put a `v` before it and use it in place of `v0.1.2`, here and in step 6.
+`v0.1.3` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.3`. If yours names another one, put a `v` before it and use it in place of `v0.1.3`, here and in step 6.
 
 The last command prints nothing. Your `thermite-source` folder now holds the file `matmul-cpu-kit.tar.gz`.
 
@@ -94,10 +92,10 @@ The sample is one folder of Thermite's repository. Your rig fetches the whole re
 On **3 Project**:
 
 1. **Repository**: `https://github.com/iammrduncan/thermite.git`
-2. **Start from**: `v0.1.2`, the release of step 4. The sample then matches your images.
+2. **Start from**: `v0.1.3`, the release of step 4. The sample then matches your images.
 3. **Folder in the repository**: `examples/matmul-cpu/project`
 4. **Repository access**: keep **Public: no key**.
-5. Press **Look it up**. Control reads the folder's file names and says `Found: v0.1.2 is at`, a short commit id, then `· 4 files in examples/matmul-cpu/project. Rigs fetch it from there.` Every run starts from exactly that commit.
+5. Press **Look it up**. Control reads the folder's file names and says `Found: v0.1.3 is at`, a short commit id, then `· 4 files in examples/matmul-cpu/project. Rigs fetch it from there.` Every run starts from exactly that commit.
 6. **Files the agents may change**: `src/kernel/**`. The path is inside the folder, and `**` matches every file below `src/kernel`. A change to any other file is refused before it is built.
 7. Open **Advanced**, below that field. In **Lines never allowed**, type these three lines:
 
@@ -198,7 +196,7 @@ Choose **Attempts**. Each change the agent submitted is an **attempt**, with one
 | **Declined** | You rejected it |
 | **Champion #2** | It was confirmed faster on fresh runs and became the new best version |
 
-[Outcome words on the dashboard](../reference/verdicts.md#outcome-words-on-the-dashboard) lists every word. Open an attempt to read the judge's reasons. Not every experiment works, and that is normal: the agent's next trial reads the judge's reasons for its last attempts and tries again. When a change is confirmed faster and nothing holds it, it becomes **champion #2**, every later trial starts from it, and the **Champions** chart on the run's **Overview** tab shows the gain. Above that chart, **Where the run started** shows the baseline: the `flops_per_s` the judge measured on each case before any change.
+[Outcome words on the dashboard](../reference/verdicts.md#outcome-words-on-the-dashboard) lists every word. Open an attempt to read the judge's reasons. Not every experiment works, and that is normal: the agent's next trial reads the judge's reasons for its last attempts and tries again. When a change is confirmed faster and nothing holds it, it becomes **champion #2**, every later trial starts from it, and the chart in **Metrics**, at the top of the run's **Overview** tab, shows the gain. On the run's **Info** tab, **Where the run started** shows the baseline: the `flops_per_s` the judge measured on each case before any change.
 
 :::tip[Nothing yet after half an hour?]
 - On **Live**, choose **lane-1**. If it has its green dot and new lines keep coming, the agent is still on its experiment: wait.

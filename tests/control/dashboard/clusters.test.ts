@@ -47,16 +47,17 @@ describe("clusters in Providers and Add a rig", () => {
     const k = s.store.clusters.get("k8s-a");
     assert.equal(k?.context, "kind-thermite");
     assert.equal(s.secrets.open(k?.kubeconfig_sealed ?? ""), KUBECONFIG.trim());
-    let page = await s.page("/ui/settings");
+    let page = await s.page("/ui/settings/machines");
     assert.match(page, /class="kind r">Cluster</);
     assert.match(page, /Kubernetes v1\.35\.2 · 1 node, 1 with 2 GPUs · storage standard/);
     assert.match(page, /control may create namespaces/);
     assert.ok(!page.includes("secret-kube-token-789"));
-    // Add a rig offers it, with its GPUs, nodes and storage.
+    // Add a rig offers it for the core, and its node's GPUs as runners (goal 206).
     const add = await s.page("/ui/rigs/add");
     assert.match(add, /name="place" value="cluster:k8s-a"/);
-    assert.match(add, /name="k_gpus__k8s-a"/);
-    assert.match(add, /NVIDIA&#39;s device plugin|NVIDIA's device plugin/);
+    assert.match(add, />gpu-node-1 · a node of k8s-a \(16 CPUs · 64 GiB\)<\/option>/);
+    assert.match(add, /<option value="gpu-node-1-1=k8s-a\|\|gpu-node-1\|device-plugin"/);
+    assert.match(add, /<option value="gpu-node-1-2=k8s-a\|\|gpu-node-1\|device-plugin"/);
     assert.equal(
       await s.post("/ui/rigs/add", {
         place: "cluster:k8s-a",
@@ -97,20 +98,17 @@ describe("clusters in Providers and Add a rig", () => {
       await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "remove k8s" }),
       /Type "remove k8s-a-1"/,
     );
-    // Its supervisor never reported: refused, until the owner discards what it holds (goal 165).
-    assert.match(
-      await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "remove k8s-a-1" }),
-      /k8s-a-1 still holds results: the rig's supervisor has not reported yet\./,
-    );
+    // It never reported: it holds no result, so "remove" removes it at once (goal 206), with
+    // nothing discarded.
     assert.ok(!f.calls.some((c) => c.args[0] === "delete"));
     assert.match(
-      await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "discard k8s-a-1" }),
+      await s.post("/ui/rigs/k8s-a-1/cluster/remove", { confirm: "remove k8s-a-1" }),
       /ok=Removed from the cluster/,
     );
     assert.deepEqual(s.store.auditLog.list(1, { action: "cluster_rig_remove" })[0]?.body, {
       rig: "k8s-a-1",
       cluster: "k8s-a",
-      discarded: "the rig's supervisor has not reported yet",
+      discarded: null,
     });
     assert.ok(
       f.calls.some(
@@ -136,7 +134,7 @@ describe("clusters in Providers and Add a rig", () => {
       placement: "slot",
       slots: "thermite-slot-1, thermite-slot-2, thermite-slot-3",
     });
-    const page = await s.page("/ui/settings");
+    const page = await s.page("/ui/settings/machines");
     assert.match(page, /thermite-slot-1: <span class="chip ok">free/);
     assert.match(page, /thermite-slot-2: <span class="chip warn">control may not deploy here/);
     // A slot whose rules don't keep the harness off the cluster is refused.
@@ -601,10 +599,15 @@ describe("clusters in Providers and Add a rig", () => {
       await post("/ui/settings/clusters/lab/slots", { slots: "thermite-slot-2, thermite-slot-3" }),
       /"lab" now has 2 slots, read again/,
     );
+    // Add a rig: each free slot is a place for the core, sized by its quota.
     const add = await page("/ui/rigs/add");
-    assert.match(add, /name="k_cpus__lab" inputmode="decimal" value="6"/);
-    assert.match(add, /name="k_mem__lab" inputmode="decimal" value="24"/);
-    assert.match(add, /name="k_size__lab" value="200"/);
+    assert.match(
+      add,
+      /value="cluster:lab\|thermite-slot-3" data-name="thermite-slot-3" data-arch="" data-gpus="0" data-cpus="6" data-mem="24" data-disk="200"/,
+    );
+    assert.match(add, /name="core_cpus" inputmode="decimal" value="6"/);
+    assert.match(add, /name="core_mem" inputmode="decimal" value="24"/);
+    assert.match(add, /name="core_disk" inputmode="numeric" value="200"/);
 
     // Over MCP, as an operator: a rig in each slot, sized by the quota.
     const client = await mcpClient(api, "operator-token-abcdef");

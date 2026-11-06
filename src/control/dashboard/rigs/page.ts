@@ -1,12 +1,19 @@
 import type { Hono } from "hono";
 import { offBus, offBusFix } from "../../bus/index.ts";
-import { resourcesWords, rigWork, sizeWords, workWords } from "../../clusters/index.ts";
+import {
+  type ClusterFacts,
+  resourcesWords,
+  rigWork,
+  sizeWords,
+  workWords,
+} from "../../clusters/index.ts";
 import {
   checkRow,
   checkRowsOf,
   commandFollowUrl,
   commandProgress,
   modelFollowUrl,
+  TAKING_WHY,
   takingModel,
 } from "../../command-progress.ts";
 import { heldCommands } from "../../issue/index.ts";
@@ -50,6 +57,8 @@ import { runHref } from "../../ui/urls.ts";
 import { span } from "../../ui/words/index.ts";
 import { type RigView, runCampaign } from "../../views/index.ts";
 import type { Ctx, Dashboard } from "../context.ts";
+import { agentsModelBlock } from "./model-line.ts";
+import { coreAndRunners } from "./runners.ts";
 import {
   gpuRoles,
   PLACE_BUSY,
@@ -117,7 +126,9 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(onCluster.cluster)} · ${esc(onCluster.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
+        onCluster.status === "failed"
+          ? `${setupFailedCard(onCluster.rig, onCluster.cluster, `/ui/rigs/${encodeURIComponent(onCluster.rig)}/cluster/remove`, csrf(c), againOnNode(onCluster, csrf(c)))}${flash}${clusterPlacedBlock(onCluster, csrf(c))}`
+          : `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
         vs,
       );
     if (!u && joined) return joinedPage(c, joined, flash);
@@ -154,7 +165,9 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `on ${esc(placed.machine)} · ${esc(placed.status)}`,
           active: "rigs",
         },
-        `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
+        placed.status === "failed"
+          ? `${setupFailedCard(placed.rig, placed.machine, `/ui/rigs/${encodeURIComponent(placed.rig)}/machine/remove`, csrf(c))}${flash}${placedBlock(placed, csrf(c))}`
+          : `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
         vs,
       );
     if (!u)
@@ -297,15 +310,20 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
               what,
               row: rows[k] ?? checkRow(k, undefined, undefined, now),
               now,
-              button: (label, disabled) =>
-                cmdForm(c, {
+              // The model check is off while the rig takes its new model (goal 191).
+              button: (label, disabled) => {
+                const taking =
+                  k === "model" && takingModel(u.model, store.agentModels.byRig()[u.id]);
+                return cmdForm(c, {
                   rig: u.id,
                   kind: "rig_check",
                   fields: { check: k },
                   label,
                   back,
-                  disabled,
-                }),
+                  disabled: disabled || taking,
+                  ...(taking ? { why: TAKING_WHY } : {}),
+                });
+              },
             }),
           )
           .join("");
@@ -462,6 +480,8 @@ ${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b c
 ${rp ? podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>
+${coreAndRunners(store, u, now)}
+${agentsModelBlock(store, u, now)}
 <div class="block" data-part="checks"${takingModel(u.model, store.agentModels.byRig()[u.id]) ? ` data-follow="${esc(modelFollowUrl(u.id))}" data-follow-state="taking"` : ""}><div class="head"><h2>Checks</h2><span class="right">run by the rig itself; each result also goes to its history</span></div><div class="card flat cks">${checkRows}</div></div>
 <div class="block" data-part="runs"><div class="head"><h2>Runs on this rig</h2><span class="n">${u.runs.length}</span>${u.state !== "reporting" || refusedNow ? `<span class="right">as of its last report${neverReported(u) ? "" : `, ${esc(ago(u.last_seen, now))} ago`}</span>` : ""}</div>${runRows ? `<div class="card flat">${runRows}</div>` : `<div class="card"><div class="empty">No campaign assigned.</div></div>`}</div>
 ${rp ? events : ""}
@@ -477,6 +497,39 @@ ${rp ? "" : events}
     );
   });
 
+  /**
+   * A rig whose setup failed before it ever reported (goal 206): why, from its last failed step,
+   * and Remove the rig in plain sight, which deletes what control made for it and its runners
+   * there and frees the place, so that it can be added again under another name.
+   */
+  /**
+   * For a rig on a cluster whose setup failed: set it up again on a node chosen, which keeps its
+   * name and runners, as a slot that takes pods only on nodes it names needs (goal 206).
+   */
+  const againOnNode = (r: ClusterRig, t: string) => {
+    const facts = store.clusters.get(r.cluster)?.facts as ClusterFacts | null | undefined;
+    // A slot whose rules take pods only on nodes they name offers those alone.
+    const only = facts?.slots.find((x) => x.namespace === r.namespace)?.nodes;
+    const nodes = only?.length
+      ? only
+      : (facts?.nodes ?? []).filter((n) => n.ready).map((n) => n.name);
+    const pick = r.spec.node && nodes.includes(r.spec.node) ? r.spec.node : only?.[0];
+    return `<form method="post" action="/ui/rigs/${encodeURIComponent(r.rig)}/cluster/again" class="row" style="gap:8px;margin-bottom:10px"><input type="hidden" name="csrf" value="${t}"><label class="small">Node <select name="node">${only?.length ? "" : `<option value="">any node with room</option>`}${nodes.map((n) => `<option value="${esc(n)}"${n === pick ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label><button class="primary">Set it up again</button><span class="muted small">Keeps its name and its runners. A slot that takes pods only on nodes it names needs one of those.</span></form>`;
+  };
+  const setupFailedCard = (
+    rig: string,
+    where: string,
+    removeUrl: string,
+    t: string,
+    again = "",
+  ) => {
+    const failed = store.rigHistory
+      .list(rig)
+      .filter((x) => !x.ok)
+      .at(-1);
+    return `<div class="card warn" style="margin-bottom:16px" data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set ${esc(rig)} up on ${esc(where)}.</b>${failed?.detail ? ` ${esc(failed.detail)}` : " Its steps below say why."}</p>${again ? `<p class="small" style="margin-bottom:6px">Set it up again, on another node if its place needs one:</p>${again}<p class="small">Or remove it to start again under another name: control deletes what it made for the rig and its runners and frees the place. It never reported, so it holds no result to export first.</p>` : `<p class="small">Remove it to start again: control deletes what it made for the rig and its runners and frees the place, and you add the rig again under another name. It never reported, so it holds no result to export first.</p>`}<form method="post" action="${removeUrl}" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${t}"><input name="confirm" placeholder="type: remove ${esc(rig)}" aria-label="Type remove ${esc(rig)} to remove it"><button class="danger solid">Remove the rig</button></form></div>`;
+  };
+
   // The blocks a rig's place adds to its page: control's setup, on a cluster or a machine, and
   // pull mode.
   /** A rig control set up on a cluster: where, its setup history, and its controls. */
@@ -490,7 +543,7 @@ ${rp ? "" : events}
         ? ""
         : `<div class="act" style="margin-top:10px">${r.status === "stopped" ? act("start", "Start its pods") : act("stop", "Stop its pods")}${act("restart", "Restart them")}</div>
 <details style="margin-top:8px"><summary class="small">Remove it from ${esc(r.cluster)}</summary><div class="small muted" style="margin:6px 0">${r.placement === "created" ? "Deletes its namespace, with everything in it," : "Deletes its deployments, service, volume claim and secret from the slot,"} and retires its token. ${esc(removeWords(r.rig))}</div>${act("remove", "Remove the rig", `<input name="confirm" placeholder="type: remove ${esc(r.rig)}" style="margin-right:6px">`, "sm danger")}</details>`;
-    const want = controlImages(parts, s.gpus);
+    const want = controlImages(parts, s.gpus, s.cuda);
     const keeps =
       "Its volume, tokens, runs and results stay. Running trials and the judge's job under way finish first: the rig starts nothing new meanwhile. Update now skips the wait: a trial in progress then stops, and its experiment goes back to the queue.";
     // New images; or the same ones after a failed update (a retry); or a new address for control.

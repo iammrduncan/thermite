@@ -3,9 +3,11 @@ import {
   PROGRAM_MODE_DEFAULT,
   type ProgramMode,
   type RigSettings,
+  type RunnerSetting,
+  RunnerSettings,
 } from "../../core/rig-settings.ts";
 import type { ControlStore } from "../store/index.ts";
-import type { RigView } from "./types.ts";
+import type { RigView, RunnerFetch, RunnersView } from "./types.ts";
 
 /**
  * What a rig's report says of the rig itself, read loosely (the report is data): its own
@@ -29,11 +31,75 @@ export function readSettings(v: unknown): RigSettings | null {
     trial_minutes: typeof o.trial_minutes === "number" ? o.trial_minutes : null,
     max_turns: typeof o.max_turns === "number" ? o.max_turns : null,
     quiet_minutes: typeof o.quiet_minutes === "number" ? o.quiet_minutes : null,
+    check_seconds: typeof o.check_seconds === "number" ? o.check_seconds : null,
     // A harness that reports none is older than the terminal mode, and runs headless.
     program_mode: o.program_mode === "terminal" ? "terminal" : "headless",
     promotion: o.promotion === "auto" ? "auto" : "owner_approval",
     judge_gpus: typeof o.judge_gpus === "number" ? o.judge_gpus : null,
+    // A harness older than runners reports none (goal 206); a list it reports is the setting's.
+    runners: (RunnerSettings.safeParse(o.runners ?? []).data ?? []) as RunnerSetting[],
   };
+}
+
+/** A rig's runners of other machines from its report (goal 206), read loosely; null: none. */
+export function readRunners(v: unknown): RunnersView | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as { processes?: unknown; waiting?: unknown; waits?: unknown };
+  if (!Array.isArray(o.processes) || !o.processes.length) return null;
+  const str = (x: unknown) => (typeof x === "string" ? x : null);
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  const storeOf = (x: unknown) => {
+    if (!x || typeof x !== "object") return null;
+    const s = x as Record<string, unknown>;
+    return {
+      total_gib: num(s.total_gib),
+      free_gib: num(s.free_gib),
+      builds: num(s.builds) ?? 0,
+      kits: num(s.kits) ?? 0,
+    };
+  };
+  return {
+    processes: o.processes.map((x) => {
+      const p = (x ?? {}) as Record<string, unknown>;
+      return {
+        name: String(p.name ?? ""),
+        pools: Array.isArray(p.pools) ? p.pools.map(String) : [],
+        up: p.up === true,
+        why: str(p.why),
+        answered_at: str(p.answered_at),
+        away_since: str(p.away_since),
+        store: storeOf(p.store),
+        runners: (Array.isArray(p.runners) ? p.runners : []).map((r) => {
+          const q = (r ?? {}) as Record<string, unknown>;
+          return {
+            name: String(q.name ?? ""),
+            pool: String(q.pool ?? ""),
+            holder: str(q.holder),
+            fetch: fetchOf(q.fetch),
+          };
+        }),
+      };
+    }),
+    waiting: Array.isArray(o.waiting) ? o.waiting.map(String) : [],
+    waits: (Array.isArray(o.waits) ? o.waits : []).flatMap((x) => {
+      const w = (x ?? {}) as Record<string, unknown>;
+      const since = str(w.since);
+      return typeof w.who === "string" && since ? [{ who: w.who, since }] : [];
+    }),
+  };
+}
+
+/** A runner's fetch of a run's model files from its core's report (goal 213), read loosely. */
+function fetchOf(v: unknown): RunnerFetch | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null);
+  const files = n(o.files);
+  const done = n(o.done);
+  const bytes = n(o.bytes);
+  if (typeof o.run !== "string" || files === null || done === null || bytes === null) return null;
+  if (typeof o.since !== "string" || typeof o.at !== "string") return null;
+  return { run: o.run, files, done, bytes, total: n(o.total), since: o.since, at: o.at };
 }
 
 /** A rig configured with its GPU set: how many cards, and how many are the judge's now. */

@@ -85,6 +85,20 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "warn",
         { run: String(e.subject) },
       );
+    // Hours added to a run's stop time (goal 198), and whether it resumed.
+    case "run_hours_added":
+      return s(
+        `${who(e.actor)} added ${String(b.hours)} hours: the run may work ${String(b.total)} hours in all${b.resumed ? ", and it resumed" : ""}.`,
+        "",
+        { run: String(e.subject) },
+      );
+    // A teachers' round asked for now (goal 194): the supervisor starts it within a minute.
+    case "teachers_round_requested":
+      return s(
+        `${who(e.actor)} asked the teachers for a round now: they review the run within a minute, or when a round under way ends.`,
+        "",
+        { run: String(e.subject) },
+      );
     // The run's experiment queue (goal 064): what was added, moved, dropped and given out.
     case "experiment_added": {
       // An experiment whose trial was interrupted (or failed) goes back to the queue as a new one
@@ -106,7 +120,7 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
       return s(
         b.from_run
           ? `"${clip(String(b.title ?? ""), 120)}" was copied into the queue from run ${String(b.from_run)}.`
-          : `${who(String(b.by ?? e.actor))} ${b.state === "proposed" ? "proposed" : "added"} "${clip(String(b.title ?? ""), 120)}"${b.state === "proposed" ? " as an idea for the queue" : " to the queue"}.`,
+          : `${who(String(b.by ?? e.actor))} ${b.state === "proposed" ? "proposed" : "added"} "${clip(String(b.title ?? ""), 120)}"${b.state === "proposed" ? " as an idea for the queue" : " to the queue"}${Number(b.tries) > 1 ? `, with ${Number(b.tries)} tries` : ""}.`,
         "",
         { run: String(e.subject) },
       );
@@ -118,6 +132,20 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "",
         { run: String(e.subject) },
       );
+    // A try ended without a win, with tries left (goal 214): the same experiment, back at the top.
+    case "experiment_retried": {
+      const how =
+        b.result === "submitted"
+          ? `its change${b.attempt ? ` ${String(b.attempt)}` : ""} was judged ${String(b.verdict ?? "without a win")}`
+          : b.result === "no_attempt"
+            ? "it submitted no change"
+            : `its trial ended (${String(b.result ?? "").replace(/_/g, " ")})`;
+      return s(
+        `"${clip(title(e.subject, b.id), 120)}" went back to the top of the queue for try ${Number(b.try) + 1} of ${Number(b.tries)}: try ${Number(b.try)}${b.lane ? ` on ${String(b.lane)}` : ""} ended without a win: ${how}${b.cause ? ` (${clip(String(b.cause), 200)})` : ""}.`,
+        "",
+        { run: String(e.subject) },
+      );
+    }
     case "experiment_accepted":
     case "experiment_moved":
     case "experiment_edited":

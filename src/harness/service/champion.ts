@@ -18,7 +18,7 @@ import { decidingRun, requireRun } from "./runs.ts";
  * Why a confirmed win waits for the owner, or undefined (goal 079). Thermite is hands-off by
  * default: a win waits only where the run (or the rig's default) asks: every win (promotion
  * policy "owner_approval"), a gain above `ask_owner.above_gain`, or declared flaws
- * (`ask_owner.declared_flaws`).
+ * (`ask_owner.declared_flaws`); or where a guard that asks is past its bound (goal 212).
  */
 export function ownerAsks(
   svc: HarnessService,
@@ -28,6 +28,10 @@ export function ownerAsks(
 ): string | undefined {
   if (svc.promotionFor(run) === "owner_approval")
     return "you asked to decide every change (promotion: owner approval)";
+  // The win's verdict names the guards that ask and that it is past (goal 212).
+  const asked = svc.ledger.latestEventBody("verdict", String(attempt.id))?.asks;
+  if (Array.isArray(asked) && asked.length)
+    return `a guard asks you before this change is kept: ${asked.map(String).join("; ")}`;
   const ask = svc.askFor(run);
   const flaws = (JSON.parse(String(attempt.known_flaws ?? "[]")) as unknown[]).length;
   if (ask.declared_flaws && flaws > 0)

@@ -36,8 +36,8 @@ import {
 } from "./shared.ts";
 
 /**
- * Settings › Providers' forms: the add form (a machine, a cluster, a GPU cloud, Git access or a
- * model provider), Git access, model providers and subscriptions, MCP servers, model prices and
+ * Settings' forms: the add form (Git access or a model provider on Providers; a machine, a
+ * cluster or a GPU cloud on Machines, goal 203), Git access, model providers and subscriptions, MCP servers, model prices and
  * the rigs' harness and model.
  */
 export function providerRoutes(app: Hono, dash: Dashboard): void {
@@ -75,7 +75,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   const ACCESS_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
   // The add form's cluster, GPU cloud and machine (POST /ui/settings/add, below).
   const addCluster = async (c: Ctx, f: Record<string, unknown>) => {
-    const fail = (m: string) => c.redirect(settingsUrl("error", m), 303);
+    const fail = (m: string) => c.redirect(machineUrl("error", m), 303);
     const name = newName(f.name);
     const kubeconfig = String(f.kubeconfig ?? "").trim();
     let context = String(f.context ?? "").trim();
@@ -129,8 +129,8 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       : "";
     return c.redirect(
       why
-        ? settingsUrl("error", `"${name}" is added, but the check failed: ${why}${careful}`)
-        : settingsUrl(
+        ? machineUrl("error", `"${name}" is added, but the check failed: ${why}${careful}`)
+        : machineUrl(
             "ok",
             `"${name}" is added and checked: see what control found below.${careful}`,
           ),
@@ -138,7 +138,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     );
   };
   const addRunpod = async (c: Ctx, f: Record<string, unknown>) => {
-    const fail = (m: string) => c.redirect(settingsUrl("error", m), 303);
+    const fail = (m: string) => c.redirect(machineUrl("error", m), 303);
     const name = newName(f.name);
     const key = String(f.runpod_key ?? "").trim();
     if (!ACCESS_NAME.test(name))
@@ -160,7 +160,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       return fail(noted(`Not added: ${errorText(err)}.`));
     }
     return c.redirect(
-      settingsUrl("ok", `"${name}" is added and read: see what control found below.`),
+      machineUrl("ok", `"${name}" is added and read: see what control found below.`),
       303,
     );
   };
@@ -386,7 +386,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     return c.redirect(
       settingsUrl(
         "ok",
-        `"${name}" is saved: its ${CLAUDE_MODELS.length} models run only in Claude Code. Choose one for a rig on Rigs' models.`,
+        `"${name}" is saved: its ${CLAUDE_MODELS.length} models run only in Claude Code. Give one to a rig on its Edit rig.`,
       ),
       303,
     );
@@ -437,7 +437,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         ? settingsUrl("error", `"${name}" is signed in, but ${listError}.`)
         : settingsUrl(
             "ok",
-            `"${name}" is signed in: its ${n} model${n === 1 ? "" : "s"} run in Pi, OpenCode v2 or Codex. Choose one for a rig on Rigs' models.`,
+            `"${name}" is signed in: its ${n} model${n === 1 ? "" : "s"} run in Pi, OpenCode v2 or Codex. Give one to a rig on its Edit rig.`,
           ),
       303,
     );
@@ -501,7 +501,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
           )
         : settingsUrl(
             "ok",
-            `"${name}" is saved and lists ${listed} model${listed === 1 ? "" : "s"}. Choose one for a rig on Rigs' models.`,
+            `"${name}" is saved and lists ${listed} model${listed === 1 ? "" : "s"}. Give one to a rig on its Edit rig.`,
           ),
       303,
     );
@@ -659,7 +659,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
               follow: modelFollowUrl(rig),
             })
           : c.json(notSent(m), 400)
-        : c.redirect(settingsUrl(k, m, "routes"), 303);
+        : c.redirect(`/ui/rigs/${encodeURIComponent(rig)}?${k}=${encodeURIComponent(m)}`, 303);
     if (!store.reportedRigs.list().some((x) => x.id === rig))
       return answer("error", "No such rig.");
     if (!choice) {

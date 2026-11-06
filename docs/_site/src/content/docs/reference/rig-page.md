@@ -102,7 +102,7 @@ Control compares the rig's version with its own ([Rig versions](rest-api.md#rig-
 
 When the update can't come from control, the banner says how to do it:
 
-- a rig set up by control whose place is gone or not ready: why, such as `The machine gpu-host-1 is no longer in Settings › Providers, so control can't reach it.`, or control's missing images or address;
+- a rig set up by control whose place is gone or not ready: why, such as `The machine gpu-host-1 is no longer in Settings › Machines, so control can't reach it.`, or control's missing images or address;
 - a rig on RunPod: `Control can't move a pod onto another image. To run 0.2.0, terminate this rig and launch a new one on control's image.`;
 - any other rig: `Pull the 0.2.0 images where the rig runs, and start it again with them.`
 
@@ -169,6 +169,17 @@ A trial that asked again for a refused page has `repeats a refused request` besi
 A key that waits for you has a card under the banners, with its fingerprint and **Accept this key**: see [Accept a rig's key](../how-to/operate/accept-a-rig-key.md).
 
 **At work** lists the runs at work now; a stuck trial's lane has a chip, `quiet for 4 h 24 min` or `repeats the same calls`, that leads to its card under **Needs you** ([Stuck trials](../how-to/campaigns/decide-what-waits.md#stuck-trials)); while the rig drains, each trial it waits for has its facts and **Stop this trial…** under its lane ([The trials it waits for](#the-trials-it-waits-for)). **Checks** lists the rig's three [checks](rig-checks.md), each with **Run it**, and its state: **not run yet**, **sent**, **running** with the time so far, **passed** or **failed**, or why the rig did not run it ([Where results show](rig-checks.md#where-results-show)); for a refused rig it says `Control sends no command to a refused rig, so its checks can't run. Update it first.` **Runs on this rig** lists every run; for a rig that does not report, or that control refuses, its heading says `as of its last report`. **The judge's last jobs** lists its last 8 jobs. A rig on RunPod has **Pod log** under it ([Pod log](#pod-log)).
+
+**The core** and **Runners** show only on a rig with runners on other machines ([Give a rig runners on other machines](../how-to/install/runners.md)).
+
+- **The core** says where the rig's core runs, such as `thermite-slot-2` in `a slot of cluster-1`, with `reporting` and its isolation check, such as `isolation passed 2h ago`; its CPUs, memory and GPUs, its disk, such as `disk 200 GB, 41 GB used`, and its image; and what it keeps: the run's records and the planner, each lane's agent program, and the judge's queue and decisions.
+- **Runners** lists each runner as the rig's core reports it: its name, with its GPU and where control set it up, such as `NVIDIA GB10 · DRA class gb10-gpus · cluster-1 › thermite-slot-2`, or `started by you`; its pool (`the judge's`, `shared` or a lane's); its state; what it runs now; and **Its store**, as the runner last said, such as `41 of 200 GB used · builds 12 · kits 2`. The state is `answers`, with its last check; `away 3m`, with why, such as `the runner box-3 stopped answering; its run was tried again`; `takes no runs`, with why, such as `it measures on cpu, and the rig's other runners on cuda-gpu`; or `joining`, until it first answers. What it runs is `The judge:` and its job, `Lane 2's run_experiment. It never counts.`, or `Nothing`; for a runner away, where its pool's runs go meanwhile, such as `Nothing: lane-1's runs go to box-2-1 meanwhile, and come back once box-3 answers.` While a runner fetches a run's [model files](model-files.md#on-a-rigs-runners), its row also says how far it is, such as `Fetching the model files of flash-1 first: 12 of 33 files, 40.3 of 95.2 GiB, for 9m.`
+- **Waiting for a runner** has a card for the judge's jobs that wait, with the pools they wait on, the jobs, and which runner takes the first next; and one for each lane whose `run_experiment` waits, with how long it has waited, such as `Lane 1's run_experiment, waiting 40s.`, and what it waits for, such as `Its own box-3-0 is away; it takes the next free one of box-2-1, after lane 2's run.`
+- **History**, the runners' lines, gives the last 8 of the rig's history about its runners, newest first: a runner added, set up and given to the rig, one that first answered (`A runner answered the rig's core: it takes runs of its pool`), stopped answering or answers again, one taken away, and Add a rig's **Workers at a time** sent.
+
+**Add or take away runners on Edit rig** opens **Edit rig** at **4 · Where it runs**.
+
+**The agents' model**, above **Checks**, says what the rig's agents run: `Its agents run under Pi with my-model from my-litellm.`, with its context window when capped (`Its context window: 131,072 tokens (capped; the provider allows 204,800).`) and its compaction point; `Its agents use the rig's own settings (my-model, under Pi).`; or `Its agents have no model: they wait.` While the rig takes a model control gave it, a chip says `taking my-model under Pi`, or `going back to its own settings`. Under it, its model check: sent, running (`Its model check is running · 12 s.`), or its result, such as `Its model check passed 1m ago: my-model answered with a correct tool call in 3.2 s`. The block follows the rig by itself while it takes the model and while the check runs. **Change it on Edit rig** opens [Edit rig](../how-to/models/model-per-agent.md), where each agent's model is set.
 
 **What it runs on** shows the rig's hardware, from its signed report. Its **Disk free** is each report's reading of the places the rig writes to, with its floor: `state 40.2 of 100 GiB · scratch 61.0 of 100 GiB · outbox 3.1 of 100 GiB · floor 5 GiB`. A harness older than goal 173 reports it only once, at its start.
 
@@ -255,7 +266,7 @@ A rig on RunPod has **History** in place of **Recent**, with filters: **All**, *
 
 ### Pod log
 
-**Pod log** shows the pod's log as RunPod keeps it: what the rig image printed and RunPod's own steps. Before the rig enrolls, it is the one place that says why a pod runs but never enrolls. Control reads it from RunPod's API (`GET /v2/pods/<pod>/logs`) with the GPU cloud's key from **Settings › Providers**. A read asks for the newest 200 lines and stops once they came, once no line came for 2 seconds, or after 10 seconds.
+**Pod log** shows the pod's log as RunPod keeps it: what the rig image printed and RunPod's own steps. Before the rig enrolls, it is the one place that says why a pod runs but never enrolls. Control reads it from RunPod's API (`GET /v2/pods/<pod>/logs`) with the GPU cloud's key from **Settings › Machines**. A read asks for the newest 200 lines and stops once they came, once no line came for 2 seconds, or after 10 seconds.
 
 | Part | What it shows |
 | --- | --- |

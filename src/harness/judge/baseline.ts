@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { MetricPlan } from "../../core/metric-plan.ts";
 import type { Ledger } from "../ledger/index.ts";
 import { statusEvents } from "../run-status.ts";
 
@@ -77,6 +78,11 @@ export interface Baseline {
   guards: { metric: string; direction: "max" | "min"; max_total_regression: number }[];
   /** Each kit metric's unit. */
   units: Record<string, string>;
+  /**
+   * The run's metric plan (goal 209): its priority, guard and informational metrics, from its
+   * kit and contract, for the agents' brief and the run's page. None in a baseline from before.
+   */
+  plan?: MetricPlan | undefined;
   /** cell -> metric -> value: every kit metric on every measured cell (never a held-out one). */
   cells: Record<string, Record<string, BaselineValue>>;
   /** What the kit's check kept in the baseline's folder, sorted by path. */

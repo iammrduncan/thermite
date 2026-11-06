@@ -1,8 +1,9 @@
 import type { Prompt } from "../../../agents/prompt.ts";
 import { log, logError } from "../../../common/log.ts";
-import type { Contract } from "../../../core/contract.ts";
+import { type Contract, HOURS_SPENT } from "../../../core/contract.ts";
 import { baselineState } from "../../judge/index.ts";
 import type { PreviewAsk } from "../../prompts.ts";
+import { hoursOf, workedTime } from "../../run-clock.ts";
 import type { AgentSignals, StopAsked } from "../../service/index.ts";
 import { type Coordinator, keepsWorking } from "../coordinator.ts";
 import type { Registry } from "../registry.ts";
@@ -176,20 +177,15 @@ export class Scheduler implements AgentSignals {
     const inst = this.run();
     if (!inst || !modelNow(sched)) return false;
     // The contract's wall-time budget ends agent work (the judge still finishes what is queued).
-    const wallHours = inst.contract.budget.wall_hours;
-    const created = sched.ledger.runs.createdAt(inst.id);
+    // It counts the time the run worked (goal 198): not while it was paused, nor while its agents
+    // could not work.
+    const wallHours = hoursOf(sched.ledger, inst.id, inst.contract.budget.wall_hours);
     if (
       wallHours !== undefined &&
-      created &&
-      Date.now() - Date.parse(created) > wallHours * 3_600_000
+      workedTime(sched.ledger, inst.id).elapsed_ms > wallHours * 3_600_000
     ) {
       if (!sched.running.size) {
-        sched.ledger.runs.setStatus(
-          inst.id,
-          "paused",
-          "the wall-time budget is spent",
-          sched.o.owner,
-        );
+        sched.ledger.runs.setStatus(inst.id, "paused", HOURS_SPENT, sched.o.owner);
       }
       return false;
     }
@@ -204,6 +200,16 @@ export class Scheduler implements AgentSignals {
     if (waitingForMcp(sched, inst.id)) return false;
     if (inst.contract.mode === "research") return researchTick(sched, inst.id, inst.contract);
     const { id, contract } = inst;
+    // Tries (goal 214): an experiment whose attempt the judge settled without a win, with tries
+    // left, goes back to the top of the queue before the next plan or trial takes from it.
+    try {
+      sched.o.service.queue.retrySettled(id, sched.o.owner);
+    } catch (err) {
+      logError("scheduler", "experiments with tries left were not sent back", {
+        run: id,
+        error: String(err),
+      });
+    }
     if (contract.mode === "goal" && waitingForConfirmation(sched, id)) return false;
     let epoch = sched.registry.currentEpoch(id);
     // A hill climb's baseline (goal 115): no round is planned and no trial starts until the

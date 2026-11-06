@@ -9,6 +9,7 @@ import { leaseLost } from "./failure.ts";
 import { baseline, calibrate, confirm, evaluate, validate } from "./jobs/index.ts";
 import { queuePort } from "./ports.ts";
 import { clipReason } from "./reasons.ts";
+import { RunnerAway } from "./runner-link.ts";
 
 export type { JudgeOptions, PromotionPolicy } from "./context.ts";
 
@@ -37,6 +38,9 @@ export type { JudgeOptions, PromotionPolicy } from "./context.ts";
  * its goals in goals.ts.
  */
 
+/** The judge's jobs, as it leases them. */
+const JOB_KINDS = ["baseline", "evaluate", "parent_screen", "confirm", "calibrate", "validate"];
+
 export class Judge {
   /** The judge's options, ledger, build store and held job, and the steps every job takes. */
   private readonly judge: JudgeContext;
@@ -58,12 +62,23 @@ export class Judge {
     return this.judge.holding?.id;
   }
 
+  /** True while it waits for its runner of another machine (goal 206), for the health route. */
+  waiting = false;
+
   /** One scheduling step. Returns true when a job was processed. */
   async tick(): Promise<boolean> {
+    // A runner of another machine is held for the step (goal 206): on a shared one, only when a
+    // job waits, so the lanes keep it while the judge has nothing to do.
+    const slot = this.judge.o.slot;
+    if (slot?.shared && !this.judge.ledger.jobs.open(JOB_KINDS)) return false;
+    this.waiting = slot !== undefined;
+    const release = slot ? await slot.hold().finally(() => (this.waiting = false)) : undefined;
+    if (slot && !release) return false;
     try {
       return await this.step();
     } finally {
       this.judge.holding = undefined;
+      release?.();
     }
   }
 
@@ -76,7 +91,7 @@ export class Judge {
     const job = this.judge.ledger.jobs.lease(
       this.judge.o.owner,
       this.judge.o.leaseMs,
-      ["baseline", "evaluate", "parent_screen", "confirm", "calibrate", "validate"],
+      JOB_KINDS,
       this.judge.cards > 1 ? this.judge.o.card?.uuid : undefined,
       waiting,
     );
@@ -98,6 +113,21 @@ export class Judge {
                 : await calibrate(this.judge, job);
     } catch (err) {
       const reason = errorText(err);
+      // Its runner left the rig or stopped answering (goal 206): the job goes back to the queue,
+      // and never counts against the change.
+      if (err instanceof RunnerAway) {
+        log("judge", "a job's runner went away: the job is queued again", {
+          job: job.id,
+          kind: job.kind,
+          error: reason,
+        });
+        this.judge.note(
+          `${job.kind} ${subject}: ${clipReason(reason)}; queued again`,
+          this.judge.jobRun(job),
+        );
+        this.judge.ledger.jobs.reclaimJob(job.id, job.fence, this.judge.o.owner);
+        return true;
+      }
       logError("judge", "job failed", { job: job.id, kind: job.kind, error: reason });
       this.judge.note(
         `${job.kind} ${subject}: failed (${clipReason(reason)})`,

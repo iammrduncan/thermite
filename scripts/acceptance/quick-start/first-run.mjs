@@ -104,10 +104,16 @@ export async function firstRun() {
     status: ran.status,
     text: ran.text.slice(0, 200),
   });
-  const smoke = await checkDone("smoke", 1_200_000);
+  // Minutes on a quiet machine; on a noisy one each change is measured to the judge's last look,
+  // which took 24 minutes on a virtual machine with four cores.
+  const smoke = await checkDone("smoke", 2_700_000);
+  const said = String(smoke.summary);
+  // On a machine whose timing is noisy, such as a virtual machine, the page says the check can
+  // pass with the no-op inconclusive and a note, and to go on.
+  const noisy = said.startsWith(plan.firstRun.smokeNoisy) && said.includes(plan.firstRun.smokeNote);
   check(
     "Judge smoke passed, in the page's words",
-    smoke.ok === true && String(smoke.summary).startsWith(plan.firstRun.smokePassed),
+    smoke.ok === true && (said.startsWith(plan.firstRun.smokePassed) || noisy),
     smoke.summary,
   );
   const smokeRun = (await events()).find(
@@ -152,11 +158,18 @@ export async function firstRun() {
   }
   const same = (/** @type {object} */ x, /** @type {object} */ y) =>
     JSON.stringify(Object.entries(x).sort()) === JSON.stringify(Object.entries(y).sort());
-  check(
-    "How the judge decided counts what the page counts",
-    same(counted, plan.firstRun.verdicts),
-    { counted, page: plan.firstRun.verdicts },
-  );
+  // After a noisy smoke check, the page counts the no-op as inconclusive, not neutral.
+  /** @type {Record<string, number>} */
+  const expected = { ...plan.firstRun.verdicts };
+  if (noisy) {
+    expected.neutral = (expected.neutral ?? 0) - 1;
+    expected.inconclusive = (expected.inconclusive ?? 0) + 1;
+    if (!expected.neutral) delete expected.neutral;
+  }
+  check("How the judge decided counts what the page counts", same(counted, expected), {
+    counted,
+    page: expected,
+  });
 }
 
 /**

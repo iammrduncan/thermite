@@ -60,27 +60,27 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
   );
 
   section("Run your first campaign, 2: give the rig the model");
-  const rows = await page("/ui/settings/routes");
+  const edit = await page(`/ui/rigs/${rig}/edit`);
   check(
-    `the rig's row says "${plan.agents.noModel}"`,
-    pageText(rows.html).includes(plan.agents.noModel),
+    `the workers' Model says "${plan.agents.noModel}"`,
+    pageText(edit.html).includes(plan.agents.noModel),
   );
-  const use = formWith(rows.html, plan.agents.use, `name="rig" value="${rig}"`);
+  const use = formWith(edit.html, plan.agents.use);
   const harness = use.options.harness?.[plan.agents.harness];
   const choice = `${PROVIDER}|${MODEL}`;
   check(
-    `the row offers ${plan.agents.harness} and the scripted model`,
+    `Edit rig offers ${plan.agents.harness} and the scripted model for the workers`,
     Boolean(harness) && Object.values(use.options.choice ?? {}).includes(choice),
     use.options,
   );
-  // The check above stops the test when the row offers no such harness.
+  // The check above stops the test when Edit rig offers no such harness.
   const given = await send(
     use.action,
     new URLSearchParams({ ...use.fields, harness: /** @type {string} */ (harness), choice }),
   );
   check(
-    `Use gives the rig the model under ${plan.agents.harness}`,
-    said(given.location).includes(`under ${plan.agents.harness} within a minute`),
+    `${plan.agents.use} gives the rig the model, in the page's words`,
+    said(given.location).includes(plan.agents.sent),
     { said: said(given.location) || said(given.location, "error") },
   );
 

@@ -1,0 +1,47 @@
+---
+id: "196"
+title: "Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 196 · Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+Four issues about what a hill climb throws away. Each is to find out first, with data from real runs, and then to change; none is decided.
+
+1. **A broken attempt's experiment** ([issue 29](https://github.com/iammrduncan/thermite/issues/29)): a change the judge finds Broken closes its experiment as tried, and the planner sees only the verdict, not the judge's reasons, so a good idea can be lost to a build error. Find how often, then let a fixable fault send it back.
+2. **Gains below `min_effect`** ([issue 36](https://github.com/iammrduncan/thermite/issues/36)): a change measured as clearly better, but smaller than the bar, is `neutral`, and nothing keeps it. Many small gains could add up. Decide whether and how to keep them (goal [121](121-hill-climb-stages.goal)'s stages are near).
+3. **A new run from a champion** ([issue 37](https://github.com/iammrduncan/thermite/issues/37)): it loses the earlier run's quality reference, so the drift allowed from the original code starts again from zero.
+4. **A lower `min_effect` in place** ([issue 38](https://github.com/iammrduncan/thermite/issues/38)): an owner who lowers the bar starts a new run and rebuilds its state by hand. Let the run go on from its champion with its rules, queue and reference.
+
+## Why
+
+Each costs search the run already paid for.
+
+## Constraints
+
+- **Agents never judge.** Whatever keeps a gain, the judge's measurements decide it.
+
+## Done when
+
+- [ ] For each item: what the data shows, the owner's decision, and the change it decides, with tests and pages.
+- [ ] Issues 29, 36, 37 and 38 each closed with their commit, or with the decision not to change.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/196-hill-climbs-keep-what-they-learn.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

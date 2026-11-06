@@ -12,7 +12,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 
 ## Current stage
 
-- v0.1.1 is out (2026-11-03). Work goes on toward v0.1.2, on its branch `v0.1.2`.
+- v0.1.3 is out (2026-11-06). Work goes on toward v0.1.4, on its branch `v0.1.4`.
 - The plans are public, in [docs/plan/](docs/plan/README.md): the [roadmap](docs/plan/roadmap.md), the [release plan](docs/plan/release-v0.1.0.md), the [settled decisions](docs/plan/decisions.md) and one goal for each roadmap item.
 
 ## Settled decisions (summary)
@@ -25,7 +25,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 - **State and agents:** the harness owns all research state. Every agent invocation starts fresh from context the harness builds. Parallel workers are isolated, and a central stateless planner assigns their experiments.
 - **Agents never judge.** Measurement, verdicts, completion and promotion live in code the agents cannot write.
 - **Deployment:**
-  - A rig is one harness container plus one supervisor container. A central control service has a dashboard, an API and MCP.
+  - A rig is one core (a harness container plus a supervisor container) and any number of runners, each one target resource such as a GPU of another machine. A central control service has a dashboard, an API and MCP.
   - Everything runs on Kubernetes or under docker-compose / podman-compose.
   - The harness reaches only DNS, the internet and its model endpoint.
   - The supervisor reaches the internet, its harness, control and, optionally, a knowledge base. It handles all git operations.
@@ -125,6 +125,8 @@ Run from the repository root, and report which ran and which didn't. Before each
   - `COMPOSE="podman compose" npm run acceptance:codex`
 - Terminal host acceptance, after changes to the terminal host (`src/agents/terminal/`), a program's start in its own terminal (each program's `terminal.ts` in `src/agents/programs/`), the trial loop's terminal mode (`src/agents/cli/terminal.ts`), node-pty's build or the harness image. It builds the harness image (`IMAGE=` names one already built; one built with `CLAUDE_CODE_VERSION` checks Claude Code too), starts it as a rig with no network, and has the broker run the host as lane-1: on the fake TUI (`tests/helpers/fake-tui.ts`), on the real Codex CLI and OpenCode against a stand-in model, and on the real Claude Code when the image has it, with each real program's peak memory; then one short trial through the loop's terminal mode for the fake TUI, Codex and OpenCode. `SOURCE=1` runs this working copy's `src/` with the image's packages, with no build:
   - `COMPOSE="podman compose" npm run acceptance:terminal`
+- Runners acceptance, after changes to a rig's core and its runners (goal 206): the runner process (`src/harness/runner/`), the core's runners and pools (`src/harness/judge/pools.ts`, `src/harness/controller/runners.ts`), the link between them on the bus (`src/supervisor/runners/`), the runners' users on the bus or the `runners` rig setting. Control, the rig `local-1` as a core that judges on its runners alone, and `runner-1` and `runner-2` (`compose.runners.yaml`), each with volumes of their own; each runner's supervisor registers its own key with the rig's token. The check gives the rig its runners over REST (`runner-1` the judge's, `runner-2` lane-1's); the lane's `run_experiment` must run on `runner-2` and its submission be judged on `runner-1`, with no build on the core; then, while the judge measures another change on `runner-1`, `runner-1` leaves and `runner-2` becomes shared, and the job must go back to the queue with no verdict against the change and end on `runner-2`:
+  - `COMPOSE="podman compose" npm run acceptance:runners`
 - Backup acceptance, after changes to control's backup and restore, the bus's store or the compose backup service. It starts control and one rig, backs control up while the rig works, restores the backup onto the bus that ran on (its stream kept) and again by the page's steps (the bus's store set aside), refuses a backup newer than the stream, and checks that the events the rig recorded after the backup come back:
   - `COMPOSE="podman compose" npm run acceptance:backup`
 - Steering acceptance (M5), after changes to the supervisor's advisors, audits, propagation, reviews, the lifecycle drivers or full reset. It uses two rigs and a scripted host model; with Podman it also mounts the engine socket (`compose.lifecycle.yaml`) to test restarts. Allow about 20–30 minutes:

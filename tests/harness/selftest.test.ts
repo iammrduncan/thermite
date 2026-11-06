@@ -136,10 +136,20 @@ describe("the isolation selftest's results", () => {
       "FOUND RUNPOD_API_KEY (own)",
       "OPENED /dev/nvidia0",
       "MISSING: no supervisor process",
+      "UNMOVABLE EXDEV",
       "failed: exit 1",
     ])
       assert.equal(isFailure(v), true, v);
-    for (const v of ["EACCES", "ENOENT", "readable", "reachable", "sees GPU-1", "none", "refused"])
+    for (const v of [
+      "EACCES",
+      "ENOENT",
+      "readable",
+      "reachable",
+      "sees GPU-1",
+      "none",
+      "refused",
+      "moves",
+    ])
       assert.equal(isFailure(v), false, v);
   });
 
@@ -342,6 +352,21 @@ describe("the inbox in the isolation selftest", () => {
       });
       assert.deepEqual(JSON.parse(r.stdout), { "inbox-list": "EACCES", "inbox-read": "EACCES" });
     }
+  });
+});
+
+describe("a role's probe that moves a folder into another of its own", () => {
+  test("moves in a folder of its own, as a build's cache does", () => {
+    const dir = mkdtempSync(join(tmpdir(), "move-"));
+    assert.equal(probe([{ name: "move-across", op: "move", path: dir }])["move-across"], "moves");
+    assert.equal(existsSync(join(dir, "move-b", "x")), true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("a move that can't be made fails the selftest, with why", () => {
+    const out = probe([{ name: "move-across", op: "move", path: "/nonexistent-move-probe" }]);
+    assert.match(out["move-across"] as string, /^UNMOVABLE E[A-Z]+/);
+    assert.equal(isFailure(out["move-across"] as string), true);
   });
 });
 

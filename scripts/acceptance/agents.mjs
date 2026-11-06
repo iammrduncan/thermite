@@ -4,7 +4,7 @@
 // real model route is not needed to check the machinery). One epoch on the smoke campaign:
 //   - the planner plans through the model and the plan is valid;
 //   - each lane's worker runs in its own process, edits its workspace as the lane's user through
-//     the broker, builds with the shell tool, uses dev_run, and submits once;
+//     the broker, builds with the shell tool, uses run_experiment, and submits once;
 //   - the judge decides both submissions; control reports the agents' figures;
 //   - a lane's background work runs on across its commands and a dev run, as in a shell;
 //   - no lane process outlives its trial;
@@ -187,7 +187,7 @@ function script(messages, tools) {
         name: "shell",
         args: {
           command:
-            "printf '\\n/* tidied */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'opencode harness: a tidied kernel'",
+            "printf '\\n/* tidied */\\n' >> src/kernel/matmul.c && thermite-trial submit-experiment --hypothesis 'opencode harness: a tidied kernel'",
           timeout: 0,
         },
       },
@@ -260,7 +260,7 @@ function script(messages, tools) {
           },
         },
         { name: "run", args: { command: 'echo "SETID-AFTER $(stat -c %A sg)"; rm -f sg' } },
-        { name: "dev_run", args: { command: "cc --version | head -1" } },
+        { name: "run_experiment", args: { command: "cc --version | head -1" } },
         {
           name: "run",
           args: {
@@ -272,7 +272,7 @@ function script(messages, tools) {
         // another slot, which is refused.
         ...kbScene.piSteps(messages),
         {
-          name: "submit",
+          name: "submit_experiment",
           args: { hypothesis: "i-k-j loop order makes the inner loop contiguous" },
         },
       ]
@@ -414,7 +414,7 @@ try {
     byLane,
   );
   check(
-    "dev_run ran on the device",
+    "run_experiment ran on the device",
     evs.some((e) => e.kind === "dev_run"),
     evs.filter((e) => e.kind === "dev_run").map((e) => e.body),
   );
@@ -511,7 +511,7 @@ try {
   });
   keysSeen.clear();
   const routeCheck = await rigCheck("model");
-  const shown = ["/ui/settings", "/ui/settings/routes", "/ui/rigs/local-1"];
+  const shown = ["/ui/settings", "/ui/rigs/local-1/edit", "/ui/rigs/local-1"];
   const pages = (await Promise.all(shown.map((p) => ui.page(p)))).join("");
   check(
     "a provider from the settings page lists its models, reaches the rig and its model, and its key shows nowhere",

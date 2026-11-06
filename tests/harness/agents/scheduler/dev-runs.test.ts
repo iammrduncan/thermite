@@ -226,13 +226,105 @@ describe("agent scheduler", () => {
       limits,
     )) as { ran: boolean; reason: string };
     assert.equal(behind.ran, false);
-    assert.match(behind.reason, /another lane's dev run held the device/);
+    assert.match(behind.reason, /another lane's run_experiment held the device/);
     const settled = Date.now();
     await dev.settle("lane-2"); // lane-2's trial end does not wait behind lane-1
     assert.ok(Date.now() - settled < 500);
     assert.equal(((await long) as { ran: boolean }).ran, true);
     await new Promise((r) => setTimeout(r, 50));
     assert.equal(seen.length, 5, "the one that gave up never ran");
+  });
+
+  test("a lane another machine's runner serves: its change is read as a plain command, which leaves the lane's agent running (goal 206)", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 1 } });
+    await env.start();
+    const { DevRuns } = await import("../../../../src/harness/agents/devrun.ts");
+    scheduler0(env).registry.startTrial({
+      id: "t-r",
+      run: "js-1",
+      lane: "lane-1",
+      epoch: 1,
+      direction: "f",
+      parent: env.seed,
+      token: "tok",
+    });
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { execFileSync } = await import("node:child_process");
+    const cwd = `${env.paths.scratchDir}/lanes/lane-1/ws/repo`;
+    mkdirSync(cwd, { recursive: true });
+    // The lane's workspace: a commit, a file it changed, and one it made and never staged.
+    const git = (...a: string[]) => execFileSync("git", a, { cwd, encoding: "utf8" });
+    git("init", "-q");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "start",
+    );
+    writeFileSync(`${cwd}/kernel.cu`, "old\n");
+    git("add", "kernel.cu");
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "kernel");
+    writeFileSync(`${cwd}/kernel.cu`, "new\n");
+    writeFileSync(`${cwd}/scratch_test.cu`, "a test of its own\n");
+    const asked: Record<string, unknown>[] = [];
+    const runner = {
+      separated: true,
+      // Runs the command it is given, here, as the broker would as the lane's user.
+      run: async (req: { argv: string[]; cwd: string } & Record<string, unknown>) => {
+        asked.push(req);
+        const stdout = execFileSync(req.argv[0] as string, req.argv.slice(1), {
+          cwd: req.cwd,
+          encoding: "utf8",
+        });
+        return { exitCode: 0, signal: null, wallMs: 1, peakRssBytes: 0, stdout, stderr: "" };
+      },
+      killRole: async () => {
+        throw new Error("a run on another machine ends none of the lane's processes here");
+      },
+    } as unknown as LocalRunner;
+    const dev = new DevRuns({
+      runner,
+      ledger: env.ledger,
+      scratchDir: env.paths.scratchDir,
+      gpu: true,
+    });
+    const sent: { patch: Buffer; command: string }[] = [];
+    dev.remote = {
+      serves: (lane) => lane === "lane-1",
+      laneRun: async (r) => {
+        sent.push(r);
+        return { ran: true, exit: 0, wall_ms: 3, runner: "gb10-1" };
+      },
+      trialEnded: async () => undefined,
+    };
+    const out = (await dev.run({ lane: "lane-1", command: "make test", cwd }, "t-r")) as {
+      ran: boolean;
+      runner?: string;
+      note?: string;
+    };
+    assert.equal(out.ran, true);
+    assert.equal(out.runner, "gb10-1");
+    // Each run starts on a fresh copy there, and the lane is told so (goal 208).
+    assert.match(String(out.note), /fresh copy .*build and run in the same command/);
+    // The lane's user runs its agent's program too (Claude Code, OpenCode): a run that ends
+    // every process of its user would end the agent's session with it.
+    assert.equal(asked.length, 1);
+    assert.equal(asked[0]?.role, "lane-1");
+    assert.equal(asked[0]?.keepBackground, true);
+    // The change goes whole, the file it never staged too; the lane's own index stays as it
+    // was, so its submission, which stages its editable paths alone, carries nothing more.
+    const patch = sent[0]?.patch.toString() ?? "";
+    assert.match(patch, /\+new/);
+    assert.match(patch, /scratch_test\.cu/);
+    assert.equal(git("diff", "--cached", "--name-only"), "");
+    assert.match(git("status", "--porcelain"), /\?\? scratch_test\.cu/);
+    assert.equal(sent[0]?.command, "make test");
+    await dev.settle("lane-1");
   });
 
   test("development cards are a pool: any free card, a wait only when all are busy, one dev run per lane at a time", async () => {

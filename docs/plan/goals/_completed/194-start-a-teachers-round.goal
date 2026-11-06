@@ -1,0 +1,53 @@
+---
+id: "194"
+title: "Start a teachers' round now: an MCP tool, a dashboard action and a signed command"
+status: VERIFIED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-04
+---
+
+# 194 · Start a teachers' round now: an MCP tool, a dashboard action and a signed command
+
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
+
+## What
+
+From [issue 53](https://github.com/iammrduncan/thermite/issues/53), the owner's, 2026-11-03. A teachers' round starts on its own: every `teacher_minutes`, when a planner's round leaves the queue below its target, and when the owner writes to the teachers. There is no way to ask for one now. Writing to the teachers works, but it puts a message in the run's record that was only a trigger.
+
+1. **The command:** a signed command, `start_teachers_round` for a run, that the supervisor takes: the round starts within a few seconds, the next timed round counts from it, and Live says `the teachers review <run> now: the owner asked for a round`.
+2. **Its refusals, with why:** no teachers on the rig, the day's spending limit, a round already under way, the run not running.
+3. **On the dashboard:** **Start a teachers' round** in the run's ⋯ menu, beside **Restart the lanes**, saying what it does before it does it.
+4. **Over MCP:** `start_teachers_round` with `rig` and `run`, answering whether the round started, or why not.
+5. **Later, maybe:** the same for the auditor and the review panel.
+
+## Why
+
+Checking a fix to the teachers, or what they make of a run's state, meant waiting for the timer: on 2026-11-03 a fix waited most of an hour for its round.
+
+## Done when
+
+- [x] Items 1 to 4, with tests of each refusal: `tests/control/issue/teachers-round.test.ts`, `tests/supervisor/advisors/pass/asked.test.ts` and the run page's test, which passed on the lab's test machine (11/11); the hierarchy test, which the full check at 6bc096c6 failed on the MCP tool's `rig`, passed after d38534be (6/6).
+- [x] Pages: the run's page and Live, the MCP tools, the signed commands, Steer a run, and the changelog. Also the REST API, the advisors file, Use advisors, and Limits and pacing.
+- [x] Issue 53 closed with its commit, by the owner's yes, 2026-11-04.
+
+## Decisions
+
+- 2026-11-03, the owner, from the mockup ("Build it as drawn"): **Start a teachers' round** in the run's ⋯ menu, between **Restart the lanes** and **Close run**, for a running run with agents; greyed out, with why, on a rig with no teachers or with them off. MCP's `start_teachers_round {rig?, run}` answers `{started, id, rig, said}`, and REST has `POST /v1/runs/<run>/teachers-round`. Owner and operator only, never an agent: the harness takes it only from an `owner:` issuer.
+- 2026-11-03: a request while a round is under way is not refused: it waits for that round to end, then starts the next. At the day's spending limit it is not refused either: Live says once that the teachers review the run after midnight UTC, as for a message. Item 2's refusals are therefore a run that is not running, a rig with no teachers and a rig with its teachers off; control refuses all three before it signs, and the rig refuses the first again.
+- 2026-11-03: a run whose status control has not had from its rig yet is the rig's to check: control signs the request, and the harness refuses it if the run is not running. Before the rig's supervisor has reported its advisors, control can't tell whether the rig has teachers, and signs it too.
+- 2026-11-04: the MCP tool takes the run alone, `start_teachers_round {run}`, not `{rig?, run}` as drawn: a run's name is unique on control, so no MCP tool takes a rig with a run (goal 170's rule, tests/control/hierarchy.test.ts), and the full check at 6bc096c6 failed on it.
+- Item 5 (the auditor and the review panel) stays for later: neither has a round to start; each works when an audit or review is open.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Researched: no round on request existed (the supervisor's reasons were the timer, an owner's message and `queue_low`). Mockup approved by the owner.
+- 2026-11-04: Built: the signed command `start_teachers_round` and its event `teachers_round_requested`; the harness's runs list for the supervisor gives the newest request as `teachers_asked`, and the supervisor starts one round for each, saved in its state across restarts. Control's refusals, the ⋯ menu item, the MCP tool, the REST route, History's line and the pages. Typecheck, lint, the size, import and loose-ends checks and the docs check pass; the tests run on the lab's test machine.
+- 2026-11-04: its 3 test files passed on the lab's test machine (11/11); the full check at 6bc096c6 failed the hierarchy test on the tool's `rig`, fixed by dropping it. Control ran 6bc096c6 from 01:42Z; the CPU rigs were verified on it at 01:45Z.
+- 2026-11-04: Verified live on a lab rig at 6bc096c6: the owner's request for a round on a running hill climb (event teachers_round_requested at 02:33:34Z) started both teachers' calls 0.25 s later, both programs ran 5 s later, both teachers reviewed with no error, and the round's record, with 2 reviews, 2 rules, 3 experiments and 4 moves, came 4 min 54 s after the request, where the timed round would have waited. Issue 53 closed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/194-start-a-teachers-round.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

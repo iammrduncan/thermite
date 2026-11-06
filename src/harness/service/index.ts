@@ -26,6 +26,7 @@ import type { ControlRoute, ModelSource } from "../agents/index.ts";
 import type { Compactions } from "../compactions.ts";
 import type { DiskWatch } from "../disk.ts";
 import { Journal } from "../journal.ts";
+import type { RunnerLink } from "../judge/index.ts";
 import { KbAsks, KbTools } from "../kb/index.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { type AdvisorRole, OwnerMessages } from "../messages.ts";
@@ -145,6 +146,12 @@ export class HarnessService {
   >();
   /** The rig's own settings (Edit rig): parts on or off, workers at once, limits, promotion. */
   readonly settings: RigSettingsStore;
+  /**
+   * The core never judges on its own machine (THERMITE_LOCAL_JUDGE=0, goal 213): a run's model
+   * files are left to its runners, which fetch them and check each by its SHA-256, and the core
+   * keeps no copy. Its supervisor reads it in the rig's settings and downloads none.
+   */
+  modelsOnRunners = false;
   /** The owner's messages to the run's agents, and who read each one. */
   readonly messages: OwnerMessages;
   /** Each run's experiment queue: what to try next, in order, and what was tried. */
@@ -177,6 +184,16 @@ export class HarnessService {
   readonly kbTools: KbTools;
   /** A rig configured with its GPU set: how many cards, and how many the judge has now. */
   gpuSplit?: { set: number; judge: number } | undefined;
+  /**
+   * The core's link to its runners (goal 206): the judge's asks of a runner process wait in it
+   * for the supervisor to take. None: before the controller makes it.
+   */
+  runners?: RunnerLink | undefined;
+  /**
+   * Its runners of other machines now, for its report (goal 206): each process and its runs;
+   * undefined for a rig with none.
+   */
+  runnersNow?: (() => unknown) | undefined;
   /**
    * A subscription's usage windows as its runtime last reported them (Claude Code's 5-hour and
    * weekly windows), for the rig's report: no tokens, only percent used and reset times; and its
@@ -259,8 +276,11 @@ export class HarnessService {
   get promotion(): "auto" | "owner_approval" {
     return this.settings.get().promotion;
   }
-  /** The rig's target type (cpu, cuda-gpu, ...): an assigned campaign's kit must measure on it. */
-  readonly targetType: string | undefined;
+  /**
+   * The rig's target type (cpu, cuda-gpu, ...): an assigned campaign's kit must measure on it. A
+   * core that judges only on runners of other machines takes theirs (goal 206).
+   */
+  targetType: string | undefined;
 
   constructor(input: {
     rig: string;
@@ -294,10 +314,12 @@ export class HarnessService {
         trial_minutes: null,
         max_turns: null,
         quiet_minutes: null,
+        check_seconds: null,
         program_mode: PROGRAM_MODE_DEFAULT,
         // Hands-off by default (goal 079).
         promotion: input.promotion ?? "auto",
         judge_gpus: null,
+        runners: [],
       });
     this.rig = input.rig;
     this.clock = input.clock ?? (() => new Date());

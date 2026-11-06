@@ -122,14 +122,14 @@ export function liveSessions(store: ControlStore): void {
       {
         source: T1,
         kind: "tool",
-        text: 'dev_run {"command":"./build/bench --cells small,large"}',
+        text: 'run_experiment {"command":"./build/bench --cells small,large"}',
         lane: "lane-1",
         run: "decode-a",
       },
       {
         source: T1,
         kind: "result",
-        text: "dev_run (9120 ms): small 1.21 ms, large 3.87 ms (diagnostic only)",
+        text: "run_experiment (9120 ms): small 1.21 ms, large 3.87 ms (diagnostic only)",
         lane: "lane-1",
         run: "decode-a",
       },

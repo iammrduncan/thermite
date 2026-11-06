@@ -1,0 +1,45 @@
+---
+id: "191"
+title: "Check waits while the rig takes its new model"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: ["150"]
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 191 · Check waits while the rig takes its new model
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+From [issue 44](https://github.com/iammrduncan/thermite/issues/44). On **Settings › Harness and model for each rig**, an owner gave a rig a model with **Use** and pressed **Check** soon after. The check failed: `no model route: set one on control's settings page (or in the rig's settings)`. The rig had not taken the model yet: its supervisor fetches the route on its own timer, and took it 18 s later. The rig then checked the model by itself, and that check passed.
+
+1. **Check is off while the rig takes the model,** on the settings row and on the rig's page, with why on hover: the rig checks the model itself once it has it.
+2. **The harness's words.** A check while the rig has no route, but control has given it one, says "the rig has not taken the model control gave it yet", not "set one".
+
+## Why
+
+The failure was only timing, but on a first try it reads as "the model you picked doesn't work", and its advice sends the owner back to the page where they just set it.
+
+## Done when
+
+- [x] Items 1 and 2, with tests: tests/control/campaigns/start-run.test.ts; the full check at bbe853c1 on the lab's test machine passed (2781 tests side by side, 167 alone).
+- [x] Pages: the Settings reference, the rig's page, Troubleshoot, and the changelog. What they describe is in Connect a provider (Settings › Rigs' models), the rig checks reference and Check a rig (the rig's Checks), the signed commands, Troubleshoot's A check failed, and the changelog.
+- [ ] Issue 44 closed with its commit (bbe853c1): the owner's to close.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Researched and verified on v0.1.3 (f438ddbe): **Check** on Settings' row and the rig page's Checks was off only while a check was sent or running (`disabled: waits`), though both knew the rig was taking its model (command-progress.ts takingModel); a check sent over REST or MCP was signed whatever the rig held; the harness answered `no model route: set one on control's settings page` (harness/controller/checks.ts).
+- 2026-11-03: Built (no tests run on the Mac). Control refuses a model check before signing while the rig takes the model it gave (issue/index.ts modelCheckRefusal), for the dashboard, REST and MCP; **Check** is off then on both pages, with why on hover (dashboard/context.ts cmdForm `why`, command-progress.ts TAKING_WHY). The harness's words say a rig given a model takes it within a minute. Test in tests/control/campaigns/start-run.test.ts. Pages: Connect a provider, the signed commands, rig checks, Check a rig; changelog.
+- 2026-11-04: Validated: the full check at bbe853c1 on the lab's test machine passed (2781 tests side by side, 167 alone). Troubleshoot says why **Check** is off while the rig takes its model. Left: issue 44, the owner's to close.
+
+---
+
+Run with `/goal Complete docs/plan/goals/191-check-while-taking-model.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

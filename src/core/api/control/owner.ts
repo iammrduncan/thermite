@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COMMAND_KINDS, COMMAND_MAX_BYTES, type CommandKind } from "../../commands.ts";
+import { ADD_HOURS_MAX } from "../../contract.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../ids.ts";
 import { ReachBody } from "../../reach.ts";
 import { POD_CONFIG_ENV } from "../../tunnel.ts";
@@ -268,6 +269,34 @@ export const RUN = {
   method: "GET",
   path: "/v1/runs/:run",
   answer: z.looseObject({ id: z.string() }),
+} as const satisfies Route;
+
+/**
+ * A teachers' round now (goal 194): the run's teachers review it within a minute, or when a round
+ * under way ends. Refused in words: a run not running, a rig with no teachers or with them off.
+ */
+export const TEACHERS_ROUND = {
+  method: "POST",
+  path: "/v1/runs/:run/teachers-round",
+  body: Nothing,
+  answer: z.looseObject({
+    started: z.boolean(),
+    id: z.string(),
+    rig: z.string(),
+    said: z.string(),
+  }),
+} as const satisfies Route;
+
+/**
+ * More hours of work for a run (goal 198): its stop time grows by them, and a run its hours had
+ * paused resumes. Refused in words: a closed run, a run with no stop time.
+ */
+export const RUN_HOURS = {
+  method: "POST",
+  path: "/v1/runs/:run/hours",
+  body: z.strictObject({ hours: z.number().positive().max(ADD_HOURS_MAX) }),
+  answer: z.looseObject({ id: z.string(), rig: z.string(), said: z.string() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A run's untried experiments, as a new run of its campaign takes them into its queue. */

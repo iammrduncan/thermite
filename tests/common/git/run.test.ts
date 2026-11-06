@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { GitError, git, gitSync, gitText } from "../../../src/common/git/index.ts";
+import { GitError, git, gitCause, gitSync, gitText } from "../../../src/common/git/index.ts";
 
 test("one git runner: git's own words on a failure, input, a time limit, and an environment of its own (goal 125)", async () => {
   const repo = mkdtempSync(join(tmpdir(), "thermite-git-"));
@@ -40,4 +40,20 @@ test("one git runner: git's own words on a failure, input, a time limit, and an 
     git(["-C", repo, "hash-object", "--stdin"], { timeoutMs: 1000 }),
     /git hash-object failed: no answer within 1 s/,
   );
+});
+
+test("a failed fetch's cause, not git's advice about access rights", () => {
+  const advice =
+    "fatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n";
+  assert.equal(
+    gitCause(`ssh: connect to host github.com port 22: Connection timed out\n${advice}`),
+    "ssh: connect to host github.com port 22: Connection timed out",
+  );
+  assert.equal(gitCause(`ERROR: Repository not found.\n${advice}`), "ERROR: Repository not found.");
+  assert.equal(
+    gitCause("fatal: couldn't find remote ref main\n"),
+    "fatal: couldn't find remote ref main",
+  );
+  // Nothing but the advice: its own last line, as before.
+  assert.equal(gitCause(advice), "and the repository exists.");
 });

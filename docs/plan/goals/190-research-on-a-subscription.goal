@@ -1,0 +1,49 @@
+---
+id: "190"
+title: "Research on a Claude subscription: refused before the run starts, with what to do"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-06
+---
+
+# 190 · Research on a Claude subscription: refused before the run starts, with what to do
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+From [issue 25](https://github.com/iammrduncan/thermite/issues/25). Research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code. An owner whose only model is a Claude subscription can start a research campaign, and every trial then ends at once, with 0 turns. **Edit rig** then refuses the change the error suggests. Goal [061](061-gaps-found-by-the-docs.goal) lists this gap ("a Claude subscription fails only at each trial"), in v0.2.0.
+
+1. **Before the start.** **New campaign**, **Start a run**, `start_run` over MCP and `thermite run start` refuse a research run with agents on a rig whose workers' model is a Claude subscription. They say why and what to do: give the rig's workers another provider's model for research, or start the run with agents off.
+2. **The words in the trial.** A trial that still meets it (a model changed after the start) gives the same words.
+3. **Later, not here:** research workers in Claude Code, which would remove the refusal (goal 061).
+
+The issue's comments add two smaller points to check: the Claude Code compose file's coverage of the second rig, and an advisor's error when its program is not in the image.
+
+## Why
+
+The owner learns of the limit only after the run starts, and the way out the error points to is refused. A refusal before the start costs nothing.
+
+## Done when
+
+- [x] Items 1 and 2, with tests for each place a run starts: tests/control/campaigns/start-run.test.ts; the full check at bbe853c1 on the lab's test machine passed (2781 tests side by side, 167 alone).
+- [x] The two smaller points checked, each fixed or recorded: the second rig's services in Use a Claude subscription, and notInImage's words (tests/supervisor/advisors/runtimes/cli.test.ts).
+- [x] Pages: Start a run, New campaign, the MCP tools, the command line, Use a Claude subscription, and the changelog. The command line's `run start` has Start a run's refusals, as its page says; Troubleshoot's research errors say control refuses both cases before the start.
+- [ ] Issue 25 closed with its commit (290a5b28), and goal 061's item updated (f438ddbe): the issue is the owner's to close.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Researched and verified on v0.1.3 (3a5171e3): control checked one case of a research model before the start, OpenCode's free models in Pi (rigs/model/agents.ts opencodeOnlyModel, used by campaigns/start-run.ts and dashboard/campaigns/new.ts); a Claude subscription was caught only by the harness at each trial (harness/agents/programs.ts researchRefusal). The issue's comments: Use a Claude subscription's override file named only the first rig's services, and an advisor whose program is missing said `spawn claude ENOENT`.
+- 2026-11-03: Built (no tests run on the Mac). researchModelRefusal (rigs/model/agents.ts) refuses both cases before anything is given or signed, for New campaign, Start a run, REST, MCP and `thermite run start` (they share campaigns/start-run.ts); a Claude subscription is found from the model chosen with the start, control's record, or the rig's report (its agents in Claude Code). `thermite assign` is not checked first, as the pages say. notInImage (supervisor/advisors/runtimes/cli.ts) names a program missing from the supervisor's image. Tests: tests/control/campaigns/start-run.test.ts and tests/supervisor/advisors/runtimes/cli.test.ts. Pages: Write a contract, Start a campaign from the dashboard, the MCP tools, the REST API, Use a Claude subscription (the second rig's services; both errors); changelog. Item 3 stays goal 061's.
+- 2026-11-04: Validated: the full check at bbe853c1 on the lab's test machine passed (2781 tests side by side, 167 alone). Left: issue 25, the owner's to close.
+
+---
+
+Run with `/goal Complete docs/plan/goals/190-research-on-a-subscription.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

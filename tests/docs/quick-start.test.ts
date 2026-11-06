@@ -51,6 +51,9 @@ describe("the quick start's pages", () => {
     const all = Number(/all (\d+) candidates/.exec(plan.firstRun.smokePassed)?.[1]);
     const counted = Object.values(plan.firstRun.verdicts).reduce((x, y) => x + y, 0);
     assert.equal(counted, all);
+    // On a noisy machine the check passes with the no-op inconclusive, one short, and a note.
+    assert.match(plan.firstRun.smokeNoisy, new RegExp(`^smoke on .*: ${all - 1} of ${all} `));
+    assert.match(plan.firstRun.smokeNote, /noisy/);
     // The sample: the release tag the source is cloned at is the one the campaign starts from.
     assert.equal(plan.agents.tag, plan.agents.startFrom);
     assert.equal(plan.agents.repository, `${plan.repo}.git`);

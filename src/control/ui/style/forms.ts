@@ -6,6 +6,59 @@ export const FORMS = `/* Edit rig: one row per part, with its switch. */
 .pt { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .pt:last-child { border-bottom: 0; } .pt.locked { opacity: .8; } .pt-off { margin-top: 4px; color: var(--muted-foreground); }
 .pt-state { font-size: 12px; } .pt-state.on { color: var(--success-foreground); } .pt-state.off { color: var(--warning-foreground); }
+/* Edit rig: its runners of other machines (goal 206), one row per runner process. */
+.sec-sub { margin-top: 16px; } .sec-sub h3 { margin: 0 0 4px; font-size: 14px; }
+.rn { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); } .rn:last-child { border-bottom: 0; }
+/* Add a rig (goal 206): the core's places, a row for each runner added, the summary. */
+.ar-place { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); cursor: pointer; }
+.ar-place:first-child { border-top: 0; } .ar-place.on { background: var(--primary-surface); } .ar-place.dis { opacity: .55; cursor: not-allowed; }
+.ar-place input { margin-top: 3px; } .ar-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ar-run { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(0, 1fr) auto; gap: 0 14px; align-items: end; padding: 12px 14px 0; border-bottom: 1px solid var(--border); }
+.ar-run:last-child { border-bottom: 0; } .ar-run .fd, .ar-run > button { margin-bottom: 10px; } .ar-says { grid-column: 1 / -1; margin: -4px 0 12px; }
+.ar-run.judge select.ar-pool { border-color: var(--warning-foreground); color: var(--warning-foreground); font-weight: 600; }
+.ar-run.lane select.ar-pool, .ar-run.shared select.ar-pool { border-color: var(--primary); color: var(--info-foreground); font-weight: 600; }
+@media (max-width: 760px) { .ar-run { grid-template-columns: minmax(0, 1fr); } }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; } .sec-head h2 { font-size: 15px; margin: 0 0 4px; }
+.ar-sum { padding: 14px 16px; margin-bottom: 14px; } .ar-sum h2 { font-size: 15px; margin: 0 0 8px; }
+.ar-sum ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; } .ar-note { margin: 8px 0 0; padding: 8px 12px; font-size: 13px; }
+.ar-end { justify-content: flex-end; }
+/* Add a rig as a wizard (goal 206): its steps, the kinds of rig, and Back and Next. */
+.wz-form { max-width: 980px; display: flex; flex-direction: column; gap: 18px; }
+.wz { display: flex; flex-direction: column; gap: 14px; }
+.wz-head { display: flex; flex-direction: column; gap: 4px; } .wz-head h2 { margin: 0; font-size: 17px; text-wrap: balance; }
+.wz-head .lead { margin: 0; max-width: 76ch; color: var(--muted-foreground); }
+.wz-steps { display: flex; flex-wrap: wrap; gap: 6px 8px; list-style: none; margin: 0; padding: 0; }
+.wz-steps li { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted-foreground); }
+.wz-steps li + li::before { content: "›"; margin-right: 2px; color: var(--input); }
+.wz-steps .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; border: 1px solid var(--input); font-size: 12px; font-weight: 600; }
+.wz-steps .on { color: var(--foreground); font-weight: 600; } .wz-steps .on .n { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+.wz-steps .done .n { background: var(--success-surface); color: var(--success-foreground); border-color: transparent; }
+.wz-kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.wz-kind { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); cursor: pointer; }
+.wz-kind:hover, .wz-alt:hover { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); text-decoration: none; }
+.wz-kind.on, .wz-alt.on { border-color: var(--primary); background: var(--primary-surface); }
+.wz-kind input, .wz-alt input { position: absolute; opacity: 0; pointer-events: none; }
+.wz-kind:focus-within, .wz-alt:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wz-kind b { font-size: 15px; }
+.wz-pic { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted-foreground); white-space: pre; line-height: 1.35; margin-top: 4px; overflow-x: auto; }
+.wz-others-h { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: -6px; }
+.wz-other { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 12px; }
+.wz-alt { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--foreground); font-size: 13px; cursor: pointer; }
+.wz-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .wz-go { margin-left: auto; color: var(--primary); }
+.wz-learn { font-size: 12.5px; } .wz-learns { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.gpu-pick { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px; } .gpu-pick:last-child { border-bottom: 0; } .gpu-pick.dis { opacity: .55; }
+.wz-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
+.wz-end { display: flex; gap: 8px; margin-left: auto; }
+/* Edit rig's 4 · Where it runs (goal 206): the core, each runner's row, Add a runner. */
+.er-core { display: flex; flex-direction: column; gap: 4px; }
+.er-row { display: grid; grid-template-columns: minmax(200px, 1.3fr) minmax(180px, 240px) minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--border); }
+.er-row:first-child { border-top: 0; } .er-row.gone { opacity: .6; } .er-row.gone .er-what b { text-decoration: line-through; } .er-row.new { background: var(--primary-surface); }
+.er-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .er-pools { display: flex; flex-direction: column; gap: 6px; }
+.er-pools select { height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: var(--control-radius); background: var(--card); font-size: 13px; width: 100%; }
+.er-btns { display: flex; gap: 6px; justify-content: flex-end; } .er-rm { cursor: pointer; }
+.er-row [hidden] { display: none !important; }
+.er-add { display: flex; flex-wrap: wrap; gap: 0 16px; align-items: flex-end; padding: 12px 14px 0; margin-top: 10px; } .er-add .fd:first-child { flex: 1 1 320px; } .er-add .fd:nth-child(2) { width: 240px; } .er-add button { margin-bottom: 14px; }
+@media (max-width: 720px) { .er-row { grid-template-columns: minmax(0, 1fr); } .er-btns { justify-content: flex-start; } }
 .sw { position: relative; display: inline-block; width: 40px; height: 22px; margin-top: 2px; }
 .sw input { opacity: 0; width: 0; height: 0; }
 .knob { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: .15s; cursor: pointer; }

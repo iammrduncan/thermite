@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { withGitAuth } from "../../../src/common/git/index.ts";
+import { onGitHost, withGitAuth } from "../../../src/common/git/index.ts";
 import { makeDeployKey } from "../../../src/control/git-keys.ts";
 
 describe("git access for a private repository", () => {
@@ -37,4 +37,13 @@ describe("git access for a private repository", () => {
     });
     await withGitAuth(undefined, undefined, async (g) => assert.deepEqual(g.env, {}));
   });
+});
+
+test("an access for github.com reaches its SSH on port 443 through ssh.github.com, and no other host", () => {
+  assert.equal(onGitHost("ssh://git@ssh.github.com:443/lab/kit.git", "github.com"), true);
+  assert.equal(onGitHost("git@github.com:lab/kit.git", "github.com"), true);
+  assert.equal(onGitHost("ssh://git@altssh.gitlab.com:443/lab/kit.git", "gitlab.com"), true);
+  assert.equal(onGitHost("ssh://git@ssh.github.com:443/lab/kit.git", "gitlab.com"), false);
+  assert.equal(onGitHost("https://github.com.example.net/lab/kit.git", "github.com"), false);
+  assert.equal(onGitHost("not a url", "github.com"), false);
 });

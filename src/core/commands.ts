@@ -8,7 +8,14 @@ import {
 } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
-import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
+import {
+  ADD_HOURS_MAX,
+  CommitSchema,
+  IdSchema,
+  MAX_LANES,
+  MAX_LANES_REASON,
+  Sha256Schema,
+} from "./contract.ts";
 import { directionName } from "./directions.ts";
 import { StructuredDirective } from "./directives.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
@@ -17,7 +24,7 @@ import { LOG_LEVELS, LOG_PARTS } from "./log-levels.ts";
 import { McpUses } from "./mcp.ts";
 import { currentCommand } from "./names.ts";
 import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
-import { PROGRAM_MODES } from "./rig-settings.ts";
+import { PROGRAM_MODES, RunnerSettings } from "./rig-settings.ts";
 import { TerminalInput } from "./terminal-input.ts";
 
 /**
@@ -139,6 +146,8 @@ export const ExperimentText = {
       return inner && directionName(inner) ? inner : s;
     }),
   why: z.string().max(2000),
+  /** How many trials it gets before it counts as tried (goal 214): each on another lane if one can. */
+  tries: z.number().int().min(1).max(10),
 };
 
 /**
@@ -266,6 +275,16 @@ export const CommandPayloads = {
   }),
   reset_workers: z.object({ run: RunId, reseed_commit: CommitSchema.optional() }),
   /**
+   * The owner (or an operator) asks a running run's teachers for a round now (goal 194): the same
+   * round the timer starts, and the next timed one counts from it.
+   */
+  start_teachers_round: z.object({ run: RunId }),
+  /**
+   * The owner (or an operator) gives a run more hours of work (goal 198): its stop time,
+   * `budget.wall_hours`, grows by them, and a run its hours had paused resumes.
+   */
+  add_run_hours: z.object({ run: RunId, hours: z.number().positive().max(ADD_HOURS_MAX) }),
+  /**
    * The owner's message to the run's agents (owner only). `to`: everyone working (`all`: every
    * lane, and the planner of a hill-climb or goal run), a lane, a running worker's trial, the
    * planner, or the advisors (`advisors`: all of them; `teachers`, `auditor` or `panel`). The
@@ -296,6 +315,7 @@ export const CommandPayloads = {
     details: ExperimentText.details.optional(),
     direction: ExperimentText.direction.optional(),
     why: ExperimentText.why.optional(),
+    tries: ExperimentText.tries.optional(),
     position: QueuePosition.default("end"),
   }),
   queue_move: z.strictObject({ run: RunId, id: ExperimentId, position: QueuePosition }),
@@ -307,15 +327,11 @@ export const CommandPayloads = {
       details: ExperimentText.details.optional(),
       direction: ExperimentText.direction.optional(),
       why: ExperimentText.why.optional(),
+      tries: ExperimentText.tries.optional(),
     })
-    .refine(
-      (p) =>
-        p.title !== undefined ||
-        p.details !== undefined ||
-        p.direction !== undefined ||
-        p.why !== undefined,
-      { message: "change at least one of title, details, direction and why" },
-    ),
+    .refine((p) => Object.keys(p).some((k) => k !== "run" && k !== "id"), {
+      message: "change at least one of title, details, direction, why and tries",
+    }),
   queue_drop: z.strictObject({
     run: RunId,
     id: ExperimentId,
@@ -425,11 +441,15 @@ export const CommandPayloads = {
     max_turns: z.number().int().min(1).max(100_000).nullable().optional(),
     /** After how many minutes without a line a trial asks the owner (goal 143); null: never. */
     quiet_minutes: z.number().int().min(1).max(1440).nullable().optional(),
+    /** How long the model check waits for an answer, in seconds (goal 150); null: 120. */
+    check_seconds: z.number().int().min(10).max(3600).nullable().optional(),
     /** How a trial's agent program runs: in its own terminal, or headless (goal 169). */
     program_mode: z.enum(PROGRAM_MODES).optional(),
     promotion: z.enum(["auto", "owner_approval"]).optional(),
     /** How many of the rig's GPUs are the judge's (a rig configured with its GPU set). */
     judge_gpus: z.number().int().min(1).max(8).nullable().optional(),
+    /** The rig's runner processes and their runners' pools, all of them (goal 206). */
+    runners: RunnerSettings.optional(),
   }),
   /**
    * The owner says no to a confirmed win that waits for approval, or to an attempt held for (or
@@ -512,6 +532,8 @@ export const MCP_OPERATOR_KINDS = [
   "unkeep_message",
   "stop_trial",
   "end_wait",
+  "start_teachers_round",
+  "add_run_hours",
   // The experiment queue and the rules for the plan (goal 064): the owner's and operators'.
   "queue_add",
   "queue_move",
@@ -560,6 +582,8 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "hypothesis_status",
   "stop_trial",
   "end_wait",
+  "start_teachers_round",
+  "add_run_hours",
   "invalidate_evidence",
   "terminal_input",
   "retention_run",
@@ -577,6 +601,8 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "close_run",
   "redirect",
   "reset_workers",
+  "start_teachers_round",
+  "add_run_hours",
   "message_agent",
   "unkeep_message",
   "queue_add",

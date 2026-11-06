@@ -106,7 +106,7 @@ const baseline = {
 const RUN = "/ui/campaigns/speed/runs/s-1";
 
 describe("a hill climb's baseline on control (goal 115)", () => {
-  test("waiting: the status line and Overview say the judge measures the starting point first", async () => {
+  test("waiting: the status line says the judge measures the starting point first, and Info waits for it", async () => {
     const c = await control();
     await c.ingest([created, queued]);
     const html = await c.page(RUN);
@@ -114,8 +114,9 @@ describe("a hill climb's baseline on control (goal 115)", () => {
       html,
       /The judge measures the starting point on every case first: no round or trial starts until it has\./,
     );
+    // Where the run started is on the run's Info tab (goal 209).
     assert.match(
-      html,
+      await c.page(`${RUN}/info`),
       /<h2>Where the run started<\/h2><span class="right">waiting for the judge<\/span>/,
     );
     const run = await c.mcp("get_run", { run: "s-1" });
@@ -149,8 +150,9 @@ describe("a hill climb's baseline on control (goal 115)", () => {
       html,
       /The judge could not measure the starting point \(champion #1\): the run is in setup, and the lanes work to make it build and run its cases\./,
     );
-    assert.match(html, /<span class="right">the run is in setup<\/span>/);
-    assert.match(html, /cell small: exit 3: Error: no kernel yet/);
+    const info = await c.page(`${RUN}/info`);
+    assert.match(info, /<span class="right">the run is in setup<\/span>/);
+    assert.match(info, /cell small: exit 3: Error: no kernel yet/);
     const history = await c.page(`${RUN}/history`);
     assert.match(
       history,
@@ -203,7 +205,8 @@ describe("a hill climb's baseline on control (goal 115)", () => {
       html,
       /The judge could not measure the starting point \(champion #1\): the run is in setup/,
     );
-    const block = html.slice(html.indexOf('data-part="baseline"'));
+    const info = await c.page(`${RUN}/info`);
+    const block = info.slice(info.indexOf('data-part="baseline"'));
     assert.match(block, /<h2>Where the run started<\/h2>/);
     // Its main metric and guard, not the other metric, with each value's spread.
     assert.match(

@@ -1,7 +1,8 @@
 import { clip } from "../../../core/kb/index.ts";
+import { GuardRule } from "../../../core/metric-roles.ts";
 import { currentChampion } from "../facts.ts";
 import { frozen } from "../sharing.ts";
-import type { BaselineView } from "../types.ts";
+import type { BaselineView, PlanView } from "../types.ts";
 import type { Handler, Handlers } from "./index.ts";
 
 /**
@@ -9,6 +10,40 @@ import type { Handler, Handlers } from "./index.ts";
  * owner or an audit, champions promoted, reopened and published, and those received from other
  * rigs.
  */
+
+/** A baseline's metric plan (goal 209), each field checked; null when it has none. */
+function planView(raw: unknown): PlanView | null {
+  const p = raw as Record<string, unknown> | null | undefined;
+  if (!p || typeof p !== "object") return null;
+  const list = (x: unknown) =>
+    (Array.isArray(x) ? x : []).slice(0, 50) as Record<string, unknown>[];
+  const name = (x: unknown) => (typeof x === "string" ? clip(x, 200) : undefined);
+  return {
+    priorities: list(p.priorities).flatMap((x, i) => {
+      const metric = name(x.metric);
+      if (!metric) return [];
+      const effect = typeof x.min_effect === "number" && x.min_effect > 0 ? x.min_effect : null;
+      const place = typeof x.priority === "number" ? x.priority : i + 1;
+      return [
+        {
+          metric,
+          priority: place,
+          direction: x.direction === "min" ? ("min" as const) : ("max" as const),
+          min_effect: effect,
+        },
+      ];
+    }),
+    guards: list(p.guards).flatMap((x) => {
+      const metric = name(x.metric);
+      const rule = GuardRule.safeParse(x.rule).data;
+      return metric && rule ? [{ metric, rule, from: x.from === "kit" ? "kit" : "contract" }] : [];
+    }),
+    info: list(p.info).flatMap((x) => {
+      const metric = name(x.metric);
+      return metric ? [{ metric, kind: name(x.kind) ?? "info" }] : [];
+    }),
+  };
+}
 
 /** A hill climb's baseline from its event's body (goal 115), each field checked. */
 function baselineView(at: string, b: Record<string, unknown>): BaselineView {
@@ -45,6 +80,7 @@ function baselineView(at: string, b: Record<string, unknown>): BaselineView {
         .slice(0, 100)
         .map(([k, v]) => [clip(k, 200), txt(v, 40)]),
     ),
+    plan: planView(b.plan),
     cells: Object.entries(cells)
       .slice(0, 200)
       .map(([cell, metrics]) => ({

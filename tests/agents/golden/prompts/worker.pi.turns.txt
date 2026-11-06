@@ -25,4 +25,4 @@ Your most recent turns follow. Go on from where they leave off.
 # turn 6
 The model call failed (429: {"message":"Rate limit reached. Please try again in 1s."}). Continue where you left off.
 # turn 7
-You have not called submit yet. Keep working with your tools: make your change, build and test it, then call submit once. If you find no change worth judging, say why in one sentence.
+You have not called submit_experiment yet. Keep working with your tools: make your change, build and test it, then call submit_experiment once. If you find no change worth judging, say why in one sentence.

@@ -26,7 +26,7 @@ Rigs that control sets up, on a machine, on a cluster or with a join command, ge
 
 ## Before you start
 
-- **Control is ready for rigs elsewhere:** its address (`THERMITE_CONTROL_PUBLIC_URL`), from which it takes its message bus's address for rigs unless `THERMITE_NATS_PUBLIC_URL` names one, and the rig images, plus `THERMITE_RIG_HARNESS_CUDA_IMAGE` for GPU rigs. Without an address for rigs on its bus, control sets up no rig: a rig talks to control only on the bus. See [Let rigs on other machines reach control](one-machine.md#let-rigs-on-other-machines-reach-control).
+- **Control is ready for rigs elsewhere:** its address (`THERMITE_CONTROL_PUBLIC_URL`), from which it takes its message bus's address for rigs unless `THERMITE_NATS_PUBLIC_URL` names one, and the rig images, plus `THERMITE_RIG_HARNESS_CUDA_IMAGE` for GPU rigs, and `THERMITE_RIG_HARNESS_CUDA13_IMAGE` for a rig on Blackwell GPUs or a DGX Spark, which MCP's [`add_cluster_rig`](../../reference/mcp-tools.md#add_cluster_rig) adds with `cuda: "13"`. Without an address for rigs on its bus, control sets up no rig: a rig talks to control only on the bus. See [Let rigs on other machines reach control](one-machine.md#let-rigs-on-other-machines-reach-control).
 - **The cluster's pods can reach control's address and the message bus's port** (4222 on control's host, unless control names another: [Run the message bus](../operate/message-bus.md#let-rigs-on-other-machines-reach-it)), and pull the images. Control adds no image pull secret, so the nodes must be able to pull the images without one ([Push the images to your own registry](own-registry.md)).
 - **A kubeconfig** with everything written inside it: a `token`, or `client-certificate-data` and `client-key-data`, and `certificate-authority-data`. Control refuses a kubeconfig that runs a command to log in (`exec` or an auth-provider), reads files, or goes through a proxy (`proxy-url`). It also refuses one that skips TLS checks (`insecure-skip-tls-verify`) or reaches its API server over plain `http://`, unless you accept that its connection isn't checked (below).
 - **Rights for the kubeconfig:** for namespaces control creates, see [below](#what-created-namespaces-need); for slots, a role in each slot ([below](#what-a-slot-needs)).
@@ -34,7 +34,7 @@ Rigs that control sets up, on a machine, on a cluster or with a join command, ge
 
 ### What created namespaces need
 
-Rights across the cluster, since the namespaces don't exist yet: to create and delete namespaces, and in them to create, change and delete deployments, services, secrets, persistent volume claims and network policies (and resource claim templates for DRA). Control also scales and restarts the deployments to stop, start and restart the rig. To move the rig onto new images, or to change its GPUs, CPUs or memory, it applies the deployments again; with DRA and a new number of GPUs, it also deletes the rig's resource claim template and makes it again, since a template can't change. After a start, a restart or a change, it reads the deployments' status (`get`) until the new pods run. With rights to read nodes, storage classes and device classes, its check of the cluster shows them; without them it shows less. Control never reads pods.
+Rights across the cluster, since the namespaces don't exist yet: to create and delete namespaces, and in them to create, change and delete deployments, services, secrets, persistent volume claims and network policies (and resource claim templates for DRA). To tell which GPU a DRA device class names, control may also read resource slices (`get` and `list` on `resourceslices` in `resource.k8s.io`): without them, control can't tell a Blackwell GPU from an older one, nor which node a DRA class's GPU is on, and a runner on such a GPU takes CUDA 12 unless MCP's `add_cluster_runner` is given `cuda` 13. Control also scales and restarts the deployments to stop, start and restart the rig. To move the rig onto new images, or to change its GPUs, CPUs or memory, it applies the deployments again; with DRA and a new number of GPUs, it also deletes the rig's resource claim template and makes it again, since a template can't change. After a start, a restart or a change, it reads the deployments' status (`get`) until the new pods run. With rights to read nodes, storage classes and device classes, its check of the cluster shows them; without them it shows less. Control never reads pods.
 
 Thermite's own cluster test uses the cluster's admin kubeconfig for this placement, so there is no tested narrower role to copy. If the cluster's operators won't give control rights across the cluster, use slots.
 
@@ -101,9 +101,8 @@ A helper that writes a slot's objects out for the operators is planned ([goal 03
 
 ## 1. Add the cluster
 
-1. Press the cog at the foot of the sidebar to open **Settings › Providers**.
-2. Under **Add a provider**, fill in:
-   - **Type:** A Kubernetes cluster
+1. Press the cog at the foot of the sidebar to open **Settings**, then **Machines** under **Rigs**, and press **Add a machine**.
+2. Choose **A Kubernetes cluster**, and fill in:
    - **Name:** the name Thermite shows for it, such as `cluster-1`
    - **Kubeconfig:** paste it
    - **Context:** which context to use. Empty: its current context
@@ -116,7 +115,7 @@ A helper that writes a slot's objects out for the operators is planned ([goal 03
 Control reads the cluster and changes nothing. The page says `"cluster-1" is added and checked: see what control found below.` The cluster's row shows:
 
 - **Version** and **Nodes**, with each node's GPUs;
-- **GPUs**: NVIDIA's device plugin, DRA device classes, or neither;
+- **GPUs**: NVIDIA's device plugin, DRA device classes, or neither; and, where control may read the cluster's resource slices, the GPU each device class names, by the UUID or the name its selectors give, which sets the CUDA a rig takes;
 - **Storage**: the storage classes, with the default one marked;
 - **Placement**: "control may create namespaces", or each slot with "free", "used by rig …", "refused: …" or "control may not deploy here".
 
@@ -126,19 +125,21 @@ To change the slots later, edit **Slots** on the cluster's row and press **Save 
 
 ## 2. Add the rig
 
-1. Open **Rigs** in the sidebar, then press **Add a rig**.
-2. Under **1 · Where**, choose **cluster-1 · Kubernetes**. A cluster that is not ready says why, for example "control may not create namespaces there" or "it has no free slot".
-3. Under **2 · GPUs and resources**:
-   - **GPUs**: how many the harness pod asks for. **none: the CPU**, one shared by the judge and the agents, or several. With several, **GPUs for the judge** sets the judge's share (half by default). See [Give a rig several GPUs](several-gpus.md).
-   - **GPUs through**: **NVIDIA's device plugin**, or **DRA:** and a device class. Where control can't read the cluster's nodes, as is common in a slot, choose **DRA: a device class you name** and name it in **DRA device class**, such as `gpu.nvidia.com`.
-   - **Node**: **any node with room**, or one node. A fixed node keeps timings comparable between runs.
-   - **Storage class** and **Volume size (GB)**: the rig's one volume, 100 GB by default. It holds the rig's state, builds, inbox and outbox.
-   - **CPUs** and **Memory (GiB)**: both or neither. At least 1.5 CPUs and 8 GiB: a new rig's agent programs run in their own terminals, so the supervisor takes half a CPU and 4 GiB of that for the advisors' terminals, and the harness the rest ([The supervisor's share](#the-supervisors-share)). Empty: the namespace's defaults apply.
-   - **Slot** (slots): one of the free slots. For created namespaces, **Namespace** shows the pattern control names it by, such as `thermite-{rig}`.
-4. Under **3 · Name and start**, give a **Rig name**: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It can't change later.
-5. Press **Create the rig**.
+Add a rig is a wizard: one step at a time, with **Back** and **Next**. Each field has an "i" that says what it means, and each step links to its page here.
 
-In a slot whose network rules don't keep the harness off the cluster, control refuses with "Refused: in the slot thermite-slot-1, …" and says why. Ask the cluster's operators for a rule like the [example above](#what-a-slot-needs).
+1. Open **Rigs** in the sidebar, then press **Add a rig**.
+2. Under **What kind of rig?**, choose **One machine**, for a rig whose agents and GPUs are in one slot or one namespace, and press **Next**. For a rig whose agents run in one place and whose GPUs are on other nodes, choose **Several machines** ([Give a rig runners on other machines](runners.md)).
+3. Under **Where does it run?**, choose the place. A cluster of slots lists each free slot, such as **thermite-slot-2** (a slot of cluster-1), with what its quota allows; a cluster where control creates namespaces is one row, **cluster-1** (Kubernetes · a namespace of its own). A cluster that is not ready says why, for example "control may not create namespaces there" or "it has no free slot". Then:
+   - **Node**: **any node with room**, or one of the cluster's ready nodes. A slot whose rules take pods only on nodes they name offers only those, the first chosen: control's check of the cluster asks it which nodes each slot takes, with a dry run there of a deployment of control's harness image on each node, which the cluster's admission rules check and which creates and pulls nothing. A rig or a runner there with no node given goes on the slot's one node, and a node the slot doesn't take is refused in words, such as `The slot thermite-slot-2 takes pods only on node-a: choose one of them as the node.`
+   - **CPUs** and **Memory (GiB)**: both or neither. Control fills them in from the slot's quota when it can read it. At least 1.5 CPUs and 8 GiB: a new rig's agent programs run in their own terminals, so the supervisor takes half a CPU and 4 GiB of that for the advisors' terminals, and the harness the rest ([The supervisor's share](#the-supervisors-share)). Empty: the namespace's defaults apply.
+   - **Disk (GB)**: the rig's one volume, from the slot's quota, else 100 GB, in the cluster's default storage class. It holds the rig's state, builds, inbox and outbox.
+
+   Press **Next**.
+4. Under **Which GPUs does it use?**, tick its GPUs: a node's GPUs through NVIDIA's device plugin, and in a slot, each DRA device class its quota allows, as many times as it allows (a slot whose quota names no class offers none). A rig on a cluster takes its GPUs from one node and one way, so ticking a GPU of another row unticks the others; the rig goes on that node. With none, it measures on the CPU. With two or more, **GPUs for the judge** sets the judge's share, half by default. The rig runs the CUDA harness its GPUs take, as control reads them: a node's architecture (`kubernetes.io/arch`) and GPU (`nvidia.com/gpu.product`), and a DRA device class's GPU and node when control may read the cluster's resource slices; MCP's `add_cluster_rig` takes `cuda` to choose ([The CUDA harness](../../reference/harness-image.md#the-cuda-harness)). Press **Next**.
+5. Under **Name it and create it**, give a **Rig name**: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It can't change later. A name control knows already, a removed rig's too, says so under the field, "There is a rig named rig-1 already: a removed rig keeps its name, so choose another.", and **Create the rig** stays off. **What this rig will be** says where it runs and how its GPUs are split.
+6. Press **Create the rig**.
+
+In a slot whose network rules don't keep the harness off the cluster, control refuses with "Refused: in the slot thermite-slot-1, …" and says why. A runner refused this way is named in the rig's page's message, "The rig is being set up, but a runner was not added: …", and in its history. Ask the cluster's operators for a rule like the [example above](#what-a-slot-needs).
 
 ## 3. Watch it start
 
@@ -314,7 +315,7 @@ Only a rig on a cluster has this share. The local stack and other compose rigs, 
 
 Over MCP, the owner's and the operator's tokens have five tools for clusters (see [MCP tools](../../reference/mcp-tools.md)):
 
-- `add_cluster_rig` adds a rig on a cluster in Providers, with the same checks as **Add a rig**. Its fields are `rig`, `cluster`, `slot`, `gpus`, `judge_gpus`, `gpu_mode` (`device-plugin` or `dra:<device class>`), `node`, `storage_class`, `storage_gb`, `cpus` and `memory_gib`. It answers with the rig's name and `"status": "deploying"`; follow the rig with `rig_setup` and `list_rigs`.
+- `add_cluster_rig` adds a rig on a cluster in **Settings › Machines**, with the same checks as **Add a rig**. Its fields are `rig`, `cluster`, `slot`, `gpus`, `judge_gpus`, `gpu_mode` (`device-plugin` or `dra:<device class>`), `node`, `storage_class`, `storage_gb`, `cpus` and `memory_gib`. It answers with the rig's name and `"status": "deploying"`; follow the rig with `rig_setup` and `list_rigs`.
 - `set_cluster_slots` replaces the list of slots of a cluster that uses slots. A slot that holds a rig must stay in the list.
 - `cluster_rig` stops, starts or restarts a rig, as the buttons on its page do. Its fields are `rig` and `action`: `stop`, `start` or `restart`. Its answer's `said` is `Stopped.`, `Started.` or `Restarted.` After a start or a restart, follow the rig with `rig_setup`: it says `starting`, then `running` once the pods run and the rig reports, or `failed`. Removing a rig is done on the dashboard.
 - `update_rig_images` moves a rig onto control's images, as **Update to these images**, **Try the update again** and **Give it control's new address** do. Its fields are `rig` and `wait`: by default it drains a rig at work first; `"wait": false` restarts its pods now, also during a drain. Its answer's `said` is one of:

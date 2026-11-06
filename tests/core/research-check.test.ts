@@ -33,6 +33,7 @@ describe("what asks for a measurement (goal 117)", () => {
       ["Matched control: the same kernel without the fence", "Matched control"],
       ["Expected gain: 5% fewer stalls", "Expected gain"],
       ["Use a dev-run to check the occupancy", "dev-run"],
+      ["Check the occupancy with run_experiment", "run_experiment"],
     ];
     for (const [text, words] of cases) assert.equal(measurementIn(text), words, text);
   });

@@ -89,7 +89,7 @@ A GPU is a device file, and whoever can open the file can use the card. The brok
 
 Where the container allows it, the broker puts each device file's owner and permissions back before every run, and at regular intervals.
 
-The **GPU fence** adds a second lock where the kernel supports it: a Landlock rule set on each role's command, which its child processes keep. It leaves out every device file the role may not open. Where the device files' owner and permissions can't be changed inside the container, as on some GPU clouds and under rootless Podman, the fence is the lock that keeps roles off the cards.
+The **GPU fence** adds a second lock where the kernel supports it: a Landlock rule set on each role's command, which its child processes keep. It leaves out every device file the role may not open. It lets the role move and link its files between folders, which a build's cache does, and the kernel still refuses a move that would give a file access it lacks where it is. Where the device files' owner and permissions can't be changed inside the container, as on some GPU clouds and under rootless Podman, the fence is the lock that keeps roles off the cards.
 
 If a rig can't set up its GPU layout this way, it neither times anything nor allows development runs. It never falls back to sharing the cards.
 

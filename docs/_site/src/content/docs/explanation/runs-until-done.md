@@ -78,7 +78,7 @@ When you want a limit, you set it. Each one does exactly what it says, and nothi
 
 | Limit | Where | What it does |
 | --- | --- | --- |
-| Hours since the run started | `budget.wall_hours` in the contract, or **Stop after (hours)** on the **New campaign** page | Agents stop starting trials, and the run is paused once its trials end. Paused time counts too |
+| Hours the run worked | `budget.wall_hours` in the contract, or **Stop after (hours)** on the **New campaign** page | Agents stop starting trials, and the run is paused once its trials end. Paused time does not count, nor time its agents could not work |
 | Hours of judging on the device | `budget.device_hours` in the contract | The same |
 | Money spent on the agents' model | `budget.llm_usd` in the contract, with the model's prices set on the rig (`THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT`). It counts the workers' calls only, not the planner's, and rigs that control sets up can't be given the prices yet ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)) | The same |
 | Turns in one trial | **Turns per trial** on the rig's **Edit rig** page | That one trial ends at the limit; the next one starts |

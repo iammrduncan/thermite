@@ -7,7 +7,7 @@ import {
 } from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
-import { busKeyTables, busSealKeyColumn } from "./bus.ts";
+import { busKeyTables, busSealKeyColumn, runnerBusKeyTable } from "./bus.ts";
 import { clusterUncheckedColumn } from "./clusters.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
@@ -25,14 +25,17 @@ import {
   knowledgeSearch,
   knowledgeSlotNames,
 } from "./kb/index.ts";
+import { machineRigJudgeOnRunners } from "./machines.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { reachableAddressTable } from "./reachable.ts";
 import { copiesPolicyOn, eventFloorTable, retentionTables } from "./retention.ts";
+import { rigRunnerTable } from "./runners.ts";
 import { runRegistryTable } from "./runs.ts";
 import { tunnelLeafColumns } from "./tunnels.ts";
+import { rigWorkersTable } from "./workers.ts";
 
 /**
  * Control's store's schema and its migrations, moved out of store.ts (goal 173). The store's
@@ -596,6 +599,20 @@ function schemaFive(db: DatabaseSync): void {
   db.exec("create index if not exists rig_event_run on rig_event (run, seq)");
 }
 
+/** Goal 205's two migrations, now gone (goal 206): a store that ran them keeps its version. */
+function retired(): void {}
+
+/**
+ * What goal 205's two migrations made, dropped (goal 206): the followers' keys on the bus and a
+ * machine rig's followers. A store that never had them has nothing to drop.
+ */
+function dropFollowers(db: DatabaseSync): void {
+  db.exec("drop table if exists machine_bus_key");
+  const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "followers"))
+    db.exec("alter table machine_rig drop column followers");
+}
+
 /**
  * Control's migrations, in order: the store's schema version is how many have run. A change to
  * the schema is a new function at the end, never an edit of one that has run.
@@ -652,6 +669,18 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   ownSettingsTable,
   // The public names in the knowledge base: field notes' kind other, source notes, directions.
   knowledgePublicNames,
+  // Goal 205's followers' keys on the bus and a machine rig's followers: gone (goal 206).
+  retired,
+  retired,
+  dropFollowers,
+  // Each runner process's key on the bus, of a rig's core and its runners (goal 206).
+  runnerBusKeyTable,
+  // The runner processes control sets up for a rig, each with its own token (goal 206).
+  rigRunnerTable,
+  // A rig control set up on a machine whose core judges on its runners alone (goal 206).
+  machineRigJudgeOnRunners,
+  // Add a rig's Workers at a time, which control gives the new rig once it reports (goal 206).
+  rigWorkersTable,
 ];
 
 /**

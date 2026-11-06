@@ -4,6 +4,7 @@ import { asToken } from "../../../core/directions.ts";
 import { queueTarget } from "../../../core/queue-target.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import { notesData } from "../../journal.ts";
+import { baselineOf } from "../../judge/index.ts";
 import { messageText } from "../../messages.ts";
 import { type Experiment, inDirection } from "../../queue.ts";
 import { type Handout, PLANNER } from "../coordinator.ts";
@@ -150,7 +151,12 @@ export async function planEpoch(
   for (const lane of lanes) {
     if (handout.some((h) => h.lane === lane)) continue;
     const fixed = p.assignments.find((a) => a.lane === lane);
-    let x = sched.coordinator.pick(run, lane, { directives, window: laneCount, exclude: given });
+    let x = sched.coordinator.pick(run, lane, {
+      directives,
+      window: laneCount,
+      exclude: given,
+      lanes,
+    });
     let why = x ? sched.coordinator.whyPicked(run, lane, x, directives) : "";
     if (!x && fixed) {
       x = sched.coordinator.fill(
@@ -296,7 +302,7 @@ export function plannerInput(
     run,
     epoch: n,
     laneCount,
-    objective: objectiveOf(contract),
+    objective: objectiveOf(contract, baselineOf(sched.ledger, run)?.plan),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
     champion: { seq: champion.seq, gain: championGain(sched.ledger, run) },
     registry: sched.registry.directions(run),

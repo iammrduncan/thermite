@@ -543,6 +543,15 @@ export interface UsageReport {
     harness: string;
     provider: string | null;
     model: string;
+    /**
+     * A run's line of an agent its rig gives this model to (goal 193): with records, or with none
+     * and `why`. Left out of a line whose agent the rig no longer gives that model.
+     */
+    configured?: true;
+    /** Why an agent with a model has no records, where Thermite knows it; null: nothing says. */
+    why?: string | null;
+    /** When Live said `why`; null: `why` is not a line of Live. */
+    why_at?: string | null;
   } & UsageSums)[];
   /** A campaign's runs, each with its share of the tokens (in and out), most first. */
   by_run?: ({ rig: string; run: string; share: number } & UsageSums)[] | undefined;
@@ -567,6 +576,67 @@ function groups<K>(
 
 const tokensOf = (s: UsageSums) => s.tokens_in + s.tokens_out;
 
+/** Where an agent stands in the agents' order (USAGE_AGENTS); one not listed comes last. */
+const agentOrder = (a: string) => {
+  const i = (USAGE_AGENTS as readonly string[]).indexOf(a);
+  return i < 0 ? USAGE_AGENTS.length : i;
+};
+
+/** A report's lines by agent and model: in the agents' order, then most tokens first. */
+const byAgentOrder = (
+  a: { agent: string; model: string } & UsageSums,
+  b: { agent: string; model: string } & UsageSums,
+) =>
+  agentOrder(a.agent) - agentOrder(b.agent) ||
+  a.agent.localeCompare(b.agent) ||
+  tokensOf(b) - tokensOf(a) ||
+  a.model.localeCompare(b.model);
+
+/** An agent its run's rig gives a model to (goal 193), and why it made no call, where known. */
+export interface ConfiguredAgent {
+  agent: UsageAgent;
+  harness: UsageHarness;
+  provider: string | null;
+  model: string;
+  why: string | null;
+  /** When Live said `why`; null: `why` is not a line of Live. */
+  why_at: string | null;
+}
+
+/**
+ * A run's report with a line for each agent its rig gives a model to (goal 193, issue 52): a line
+ * with that agent's records of the model, in its program, is marked `configured`; with none, the
+ * agent gets a line of its own with no records and `why`. `same` says whether a recorded model is
+ * the one given (Claude Code records a subscription's model by its own name). The totals stay
+ * as they are: they count records.
+ */
+export function withConfigured(
+  report: UsageReport,
+  agents: readonly ConfiguredAgent[],
+  same: (recorded: string, given: string) => boolean,
+): UsageReport {
+  const lines = report.by_agent_model.map((l) => ({ ...l }));
+  for (const a of agents) {
+    const had = lines.filter(
+      (l) => l.agent === a.agent && l.harness === a.harness && same(l.model, a.model),
+    );
+    for (const l of had) l.configured = true;
+    if (!had.length)
+      lines.push({
+        agent: a.agent,
+        name: AGENT_WORDS[a.agent],
+        harness: a.harness,
+        provider: a.provider,
+        model: a.model,
+        configured: true,
+        why: a.why,
+        why_at: a.why_at,
+        ...sumUsage([]),
+      });
+  }
+  return { ...report, by_agent_model: lines.sort(byAgentOrder) };
+}
+
 /**
  * The sums of some records, and of the pods their runs ran on, in total and by agent, model, run
  * (a campaign) or campaign (all). A pod's spend belongs to no agent or model.
@@ -582,16 +652,12 @@ export function usageReport(
   const total = sumUsage(rows, pods);
   const share = (s: UsageSums) =>
     tokensOf(total) > 0 ? round(tokensOf(s) / tokensOf(total), 4) : 0;
-  const order = (a: string) => {
-    const i = (USAGE_AGENTS as readonly string[]).indexOf(a);
-    return i < 0 ? USAGE_AGENTS.length : i;
-  };
   const byAgent = groups(
     rows,
     (r) => r.agent,
     (r) => r.agent,
   )
-    .sort((a, b) => order(a.key) - order(b.key) || a.key.localeCompare(b.key))
+    .sort((a, b) => agentOrder(a.key) - agentOrder(b.key) || a.key.localeCompare(b.key))
     .map((g) => ({
       agent: g.key,
       name: AGENT_WORDS[g.key as UsageAgent] ?? g.key,
@@ -616,13 +682,7 @@ export function usageReport(
     }),
   )
     .map((g) => ({ ...g.key, ...sumUsage(g.rows) }))
-    .sort(
-      (a, b) =>
-        order(a.agent) - order(b.agent) ||
-        a.agent.localeCompare(b.agent) ||
-        tokensOf(b) - tokensOf(a) ||
-        a.model.localeCompare(b.model),
-    );
+    .sort(byAgentOrder);
   const report: UsageReport = {
     scope,
     period,

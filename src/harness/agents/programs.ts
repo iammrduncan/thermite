@@ -90,8 +90,8 @@ export interface AgentProgram {
   runTrial(t: AgentTrial, link: TrialLink): Promise<TrialResult>;
   /** A planner call through it: its answer. None for Pi, whose planner runs in the controller. */
   ask?(m: ModelConfig, prompt: string, deps: CliOnceDeps, o: CliAskOptions): Promise<string>;
-  /** The model check in it: one correct tool call. */
-  modelCheck(m: ModelConfig, deps: CliOnceDeps): Promise<RigCheckReport>;
+  /** The model check in it: one correct tool call, within `timeoutMs` (goal 150). */
+  modelCheck(m: ModelConfig, deps: CliOnceDeps, timeoutMs?: number): Promise<RigCheckReport>;
 }
 
 /**
@@ -162,7 +162,7 @@ const pi: AgentProgram = {
   plannerFollows: true,
   runsAs: (lane) => lane.replace(/^lane-/, "agent-") as Role,
   runTrial: (t, link) => runPiTrial(t, link),
-  modelCheck: (m) => checkModel(m),
+  modelCheck: (m, _deps, timeoutMs) => checkModel(m, timeoutMs),
 };
 
 /** A program that runs as a command-line program: it takes planner calls of its own. */
@@ -180,7 +180,7 @@ function cli<T extends CliTally>(p: CliProgram<T>, plannerFollows: boolean): Cli
     runsAs: (lane) => lane as Role,
     runTrial: (t, link) => cliTrial(p, t, link),
     ask: (m, prompt, deps, o) => cliAsk(p, m, prompt, deps, o),
-    modelCheck: (m, deps) => cliModelCheck(p, m, deps),
+    modelCheck: (m, deps, timeoutMs) => cliModelCheck(p, m, deps, timeoutMs),
   };
 }
 

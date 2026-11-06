@@ -37,6 +37,11 @@ export const USAGE = `/* goal 075: model use and cost (a run's top and Stats tab
 .ut td .ii { display: inline-grid; margin-right: 5px; vertical-align: -3px; }
 .ut tr.grp td { padding: 5px 10px; background: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted-foreground); }
 .ut tr.u-gpu td { background: color-mix(in srgb, var(--warning) 6%, transparent); }
+/* goal 193: an agent with a model and no call yet, with why in place of its figures. */
+.ut tr.u-none td { background: var(--warning-surface); }
+.ut .u-nc { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--warning-foreground); }
+.ut .u-ncw { display: block; margin-top: 2px; font-size: 12px; color: var(--muted-foreground); max-width: 80ch; white-space: normal; }
+.ut .u-ncw code { font-size: 11.5px; color: var(--foreground); }
 .ut .ush { display: inline-flex; align-items: center; gap: 8px; }
 .ut .ush > i { display: block; width: 48px; height: 5px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .ut .ush > i > b { display: block; height: 100%; background: var(--primary); }

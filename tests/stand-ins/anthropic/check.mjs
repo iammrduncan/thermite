@@ -214,7 +214,7 @@ async function codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal })
   const write = { file_path: join(repo, "src", "value.txt"), content: "2\n" };
   const half = Math.floor(TOKEN.length / 2);
   const bash = {
-    command: `node ${here}/probe.mjs ${TOKEN.slice(0, half)} ${TOKEN.slice(half)} && thermite-trial submit --hypothesis "value two, from the real Claude Code"`,
+    command: `node ${here}/probe.mjs ${TOKEN.slice(0, half)} ${TOKEN.slice(half)} && thermite-trial submit-experiment --hypothesis "value two, from the real Claude Code"`,
   };
   const live = [];
   // The trial's console in its terminal (goal 169): its last screen, kept in memory at its end.

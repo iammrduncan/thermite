@@ -23,6 +23,8 @@ test("a judge-only run's queue says no worker takes it, and how to carry it to a
         by: "teacher",
         direction: "",
         why: "",
+        tries: 1,
+        earlier: [],
         at: "2026-10-21T00:00:00Z",
         updated_at: "2026-10-21T00:00:00Z",
       },

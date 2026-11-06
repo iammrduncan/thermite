@@ -19,7 +19,12 @@ import { type ApiContext, limitOf } from "./context.ts";
  */
 export function rigRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   // The rig's settings (Edit rig), for the supervisor's own parts: its advisors.
-  app.get(SETTINGS.path, supervisor, (c) => c.json(service.settings.get()));
+  app.get(SETTINGS.path, supervisor, (c) =>
+    c.json({
+      ...service.settings.get(),
+      ...(service.modelsOnRunners ? { models_on_runners: true } : {}),
+    }),
+  );
 
   // The agents' model route, as control set it: the supervisor hands it over (key included) and
   // reads back which route is in use (never the key), and whether the harness awaits the routes

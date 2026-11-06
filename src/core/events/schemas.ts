@@ -48,6 +48,9 @@ const experiment = z.object({
   from_run: str,
   question: num,
   returns: num,
+  tries: num,
+  try: num,
+  verdict: str,
   requeued_from: z.object({ result: str }).nullish(),
   yield: z
     .object({
@@ -152,6 +155,7 @@ const BODIES = {
       .object({ metric: str, cells: list({ cell: str, candidate: num, reference: num }) })
       .nullish(),
     guards: list({ metric: str, status: str, change: num, low: num, high: num }),
+    asks: strs.optional(),
   }),
   verdict_guards: z.object({
     id: num,
@@ -349,6 +353,7 @@ const BODIES = {
   experiment_assigned: experiment,
   experiment_finished: experiment,
   experiment_returned: experiment,
+  experiment_retried: experiment,
   trial_started: z.object({ trial: str, lane: str, direction: str, focus: str }),
   trial_finished: z.object({
     trial: str,
@@ -414,7 +419,18 @@ const BODIES = {
   rig_check_started: z.object({ id: str, check: str, force: bool }),
   rig_check_finished: z.object({ id: str, check: str, ok: bool, summary: str, note: str }),
   rig_settings_changed: z.object({
-    change: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]).nullish()),
+    change: z.record(
+      z.string(),
+      z
+        .union([
+          z.string(),
+          z.number(),
+          z.boolean(),
+          // The rig's runner processes (goal 206).
+          z.array(z.object({ name: z.string(), pools: z.array(z.string()) })),
+        ])
+        .nullish(),
+    ),
   }),
   legacy: z.object({ kind: z.string(), bytes: num }),
 

@@ -129,8 +129,8 @@ describe("a Pi worker's repeated calls get a short answer (goal 143)", () => {
     // A short answer keeps what else the answer carries: a call that ends the trial still does.
     const g = new RepeatGuard();
     const end = { ...text("submitted"), terminate: true };
-    g.answer("submit", { hypothesis: "h" }, end);
-    const again = g.answer("submit", { hypothesis: "h" }, end);
+    g.answer("submit_experiment", { hypothesis: "h" }, end);
+    const again = g.answer("submit_experiment", { hypothesis: "h" }, end);
     assert.match(said(again), /^Same call/);
     assert.equal(again.terminate, true);
   });

@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, test } from "node:test";
 import { z } from "zod";
-import { ApiError, type ApiTarget, callRoute } from "../../../src/common/api/call.ts";
+import { ApiError, type ApiTarget, callRoute, longFetch } from "../../../src/common/api/call.ts";
 import type { Route } from "../../../src/core/api/route.ts";
 
 /** A route for the tests: a parameter in its path, a JSON body and an answer with one field read. */
@@ -160,5 +160,47 @@ describe("a call of a route (common/api/call.ts)", () => {
       }),
     );
     assert.equal(own.message, "the test's thing: no answer within 0.1 seconds");
+  });
+
+  test("a call allowed longer than fetch's own 300 seconds goes by node:http, as a runner's measured run does", async (t) => {
+    // A real server that answers a little later, as a run answers once it is measured.
+    const seen: { auth?: string; body: string }[] = [];
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => {
+        body += c;
+      });
+      req.on("end", () => {
+        seen.push({ auth: req.headers.authorization, body });
+        setTimeout(() => res.end(JSON.stringify({ ok: true })), 50);
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    t.after(() => {
+      server.closeAllConnections();
+      server.close();
+    });
+    const target: ApiTarget = {
+      whose: "the test's",
+      url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      token: "tok",
+      timeoutMs: 3 * 3_600_000,
+    };
+    const answer = await callRoute(target, ROUTE, { params: { id: "1" }, body: { n: 7 } });
+    assert.deepEqual(answer, { ok: true });
+    assert.deepEqual(seen, [{ auth: "Bearer tok", body: '{"n":7}' }]);
+  });
+
+  test("a call by node:http ends at its signal, with the signal's reason", async (t) => {
+    const server = createServer(() => undefined);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    t.after(() => {
+      server.closeAllConnections();
+      server.close();
+    });
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    await assert.rejects(longFetch(url, { method: "GET", signal: AbortSignal.timeout(100) }), {
+      name: "TimeoutError",
+    });
   });
 });

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errorText } from "../common/errors.ts";
-import { type GitAuth, gitText, withGitAuth } from "../common/git/index.ts";
+import { type GitAuth, gitCause, gitText, withGitAuth } from "../common/git/index.ts";
 
 /**
  * What the new-campaign page shows about a project before it starts: the commit a branch or tag
@@ -70,7 +70,7 @@ async function probeWith(
       throw new Error(
         /could not read Username|Authentication|403|401/.test(msg)
           ? "control cannot read it without a key: is the repository private?"
-          : `control could not read it: ${msg.split("\n").filter(Boolean).at(-1)?.slice(0, 200)}`,
+          : `control could not read it: ${gitCause(msg)}`,
       );
     }
     const refs = out
@@ -140,7 +140,7 @@ export async function readKitManifest(
         throw new Error(
           /could not read Username|Authentication|403|401/.test(msg)
             ? "control cannot read the kit's repository without a key: is it private?"
-            : `control could not fetch the kit's commit: ${msg.split("\n").filter(Boolean).at(-1)?.slice(0, 200)}`,
+            : `control could not fetch the kit's commit: ${gitCause(msg)}`,
         );
       }
       let text: string;
@@ -241,7 +241,7 @@ export async function pushCheck(
         const msg = errorText(err);
         return /read.only|denied|403|401|not allowed|Authentication|could not read/i.test(msg)
           ? "the repository refused a push with this access: give it write access on the code host, or choose another"
-          : `control could not push there: ${msg.split("\n").filter(Boolean).at(-1)?.slice(0, 200)}`;
+          : `control could not push there: ${gitCause(msg)}`;
       }
     });
   } finally {

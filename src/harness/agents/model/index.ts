@@ -4,7 +4,7 @@
  * change of route run (check.ts). The model client itself is the agents' (src/agents/model/).
  */
 
-export { checkModel, type RigCheckReport } from "./check.ts";
+export { checkModel, noAnswerWords, type RigCheckReport } from "./check.ts";
 export {
   type ControlRoute,
   type ModelInfo,

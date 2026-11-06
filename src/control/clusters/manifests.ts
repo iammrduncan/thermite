@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
@@ -17,6 +18,13 @@ import { CLOSED_RANGES, reachEgress } from "./netcheck.ts";
 
 export interface ClusterRigPlan {
   rig: string;
+  /**
+   * A runner process of the rig (goal 206), not the rig itself: its objects are named and labelled
+   * by runnerUnit, its parts start as a runner, and its supervisor registers with its own token.
+   */
+  runner?: string | undefined;
+  /** Its judge measures on its runners alone (goal 206): THERMITE_LOCAL_JUDGE=0. */
+  judgeOnRunners?: boolean | undefined;
   /**
    * created: control makes the namespace and its network rules; slot: it exists already, with
    * the operators' rules; joined: it exists already, and the operator applies the rig's objects
@@ -122,12 +130,27 @@ export const clusterNames = (rig: string) => ({
   gpus: `thermite-${rig}-gpus`,
 });
 
-const labels = (rig: string, component?: "harness" | "supervisor") => ({
+const labels = (rig: string, component?: "harness" | "supervisor", partOf?: string) => ({
   "app.kubernetes.io/name": "thermite",
   "app.kubernetes.io/instance": rig,
   "app.kubernetes.io/managed-by": "thermite-control",
   ...(component ? { "app.kubernetes.io/component": component } : {}),
+  ...(partOf ? { "app.kubernetes.io/part-of": partOf } : {}),
 });
+
+/**
+ * A runner process's name for what control sets up for it (goal 206): `<rig>-<runner>`, cut and
+ * given a hash of the whole when longer than 40 characters, so that it is a name as a rig's is
+ * and its service's name on a cluster stays within Kubernetes' 63. Its objects' instance label,
+ * or its units on a machine, go by it, never its rig's: what control does to the rig's own leaves
+ * the runner's alone.
+ */
+export function runnerUnit(rig: string, runner: string): string {
+  const unit = `${rig}-${runner}`;
+  if (unit.length <= 40) return unit;
+  const cut = (x: string) => x.slice(0, 15).replace(/-+$/, "");
+  return `${cut(rig)}-${cut(runner)}-${createHash("sha256").update(unit).digest("hex").slice(0, 8)}`;
+}
 
 /**
  * Prepares the shared volume's folders for both pods' users, as the compose images do. It changes
@@ -167,19 +190,23 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
   const res = p.resources ? rigResources(p.resources, p.programMode) : undefined;
   if (p.gpus > 0 && p.gpuMode === "dra" && !p.deviceClass)
     throw new Error("a DRA rig needs its device class");
-  const n = clusterNames(p.rig);
+  // A runner process's objects go by its own name (goal 206); its rig's name is in its settings.
+  const unit = p.runner ? runnerUnit(p.rig, p.runner) : p.rig;
+  const partOf = p.runner ? `thermite-${p.rig}` : undefined;
+  const n = clusterNames(unit);
   const ns = p.namespace;
   const meta = (name: string, component?: "harness" | "supervisor") => ({
     name,
     namespace: ns,
-    labels: labels(p.rig, component),
+    labels: labels(unit, component, partOf),
   });
+  const role: Record<string, string> = p.runner ? { THERMITE_ROLE: "runner" } : {};
   const together = {
     // Both pods share one volume, so they run on one node.
     podAffinity: {
       requiredDuringSchedulingIgnoredDuringExecution: [
         {
-          labelSelector: { matchLabels: { "app.kubernetes.io/instance": p.rig } },
+          labelSelector: { matchLabels: { "app.kubernetes.io/instance": unit } },
           topologyKey: "kubernetes.io/hostname",
         },
       ],
@@ -212,7 +239,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
       strategy: { type: "Recreate" },
       selector: {
         matchLabels: {
-          "app.kubernetes.io/instance": p.rig,
+          "app.kubernetes.io/instance": unit,
           "app.kubernetes.io/component": component,
         },
       },
@@ -222,7 +249,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
       // under the container runtime's default seccomp profile, as compose and Quadlet run them,
       // whatever the kubelet's default.
       template: {
-        metadata: { labels: labels(p.rig, component) },
+        metadata: { labels: labels(unit, component, partOf) },
         spec: {
           automountServiceAccountToken: false,
           enableServiceLinks: false,
@@ -240,7 +267,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     objects.push({
       apiVersion: "v1",
       kind: "Namespace",
-      metadata: { name: ns, labels: labels(p.rig) },
+      metadata: { name: ns, labels: labels(unit, undefined, partOf) },
     });
   objects.push(
     {
@@ -269,7 +296,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
       kind: "Service",
       metadata: meta(n.harness, "harness"),
       spec: {
-        selector: { "app.kubernetes.io/instance": p.rig, "app.kubernetes.io/component": "harness" },
+        selector: { "app.kubernetes.io/instance": unit, "app.kubernetes.io/component": "harness" },
         ports: [{ name: "api", port: 8700, targetPort: 8700 }],
       },
     },
@@ -308,6 +335,8 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           imagePullPolicy: "IfNotPresent",
           env: env({
             THERMITE_RIG_ID: p.rig,
+            ...role,
+            ...(p.judgeOnRunners ? { THERMITE_LOCAL_JUDGE: "0" } : {}),
             THERMITE_TARGET: gpu ? "cuda-gpu" : "cpu",
             ...split,
             THERMITE_CONTROL_PUBKEY_FILE: "/keys/control-signing.pub",
@@ -361,6 +390,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           imagePullPolicy: "IfNotPresent",
           env: env({
             THERMITE_RIG_ID: p.rig,
+            ...(p.runner ? { ...role, THERMITE_RUNNER: p.runner } : {}),
             HARNESS_URL: `http://${n.harness}:8700`,
             CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
             THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
@@ -408,7 +438,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
         spec: {
           podSelector: {
             matchLabels: {
-              "app.kubernetes.io/instance": p.rig,
+              "app.kubernetes.io/instance": unit,
               "app.kubernetes.io/component": "harness",
             },
           },
@@ -419,7 +449,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
                 {
                   podSelector: {
                     matchLabels: {
-                      "app.kubernetes.io/instance": p.rig,
+                      "app.kubernetes.io/instance": unit,
                       "app.kubernetes.io/component": "supervisor",
                     },
                   },
@@ -448,7 +478,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
         spec: {
           podSelector: {
             matchLabels: {
-              "app.kubernetes.io/instance": p.rig,
+              "app.kubernetes.io/instance": unit,
               "app.kubernetes.io/component": "supervisor",
             },
           },

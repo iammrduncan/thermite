@@ -1,4 +1,4 @@
-import { gitHost } from "../../common/git/index.ts";
+import { gitHost, onGitHost } from "../../common/git/index.ts";
 import type { ControlStore } from "../store/index.ts";
 
 /**
@@ -46,9 +46,8 @@ export function gitAccessRefusal(store: ControlStore, payload: unknown): string 
     if (!g.host)
       return `The Git access ${access} is for no host yet: set the host it is for in Settings › Providers.`;
     const url = typeof i.source?.git === "string" ? i.source.git : "";
-    const host = gitHost(url);
-    if (host !== g.host)
-      return `The Git access ${access} is for ${g.host} only, and ${String(i.path ?? "an import")} comes from ${host ?? "an address with no host"}.`;
+    if (!onGitHost(url, g.host))
+      return `The Git access ${access} is for ${g.host} only, and ${String(i.path ?? "an import")} comes from ${gitHost(url) ?? "an address with no host"}.`;
   }
   return "";
 }

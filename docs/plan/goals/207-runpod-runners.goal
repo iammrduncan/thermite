@@ -1,0 +1,42 @@
+---
+id: "207"
+title: "A RunPod GPU as a rig's runner"
+status: PROPOSED
+version: "0.1.4"
+depends_on: ["206"]
+created: 2026-11-05
+updated: 2026-11-06
+---
+
+# 207 · A RunPod GPU as a rig's runner
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## Words
+
+As in [206](_completed/206-core-and-runners.goal): a **rig** owns one **core** and any number of **runners**; a **runner** owns one target resource. Here the resource is a GPU pod on RunPod, which control launches for the rig and which exists only while the rig has work for it.
+
+## What
+
+The owner, 2026-11-05, adding the Sparks' rig on the new Add a rig: "I can't select RunPod as a runner, which seems counter intuitive."
+
+Goal 206 names three kinds of runner, a machine's GPU, a cluster pod and an on-demand RunPod GPU, and builds the first two. This goal builds the third:
+
+1. **Add a rig and Edit rig offer RunPod:** **+ Add a runner** lists each RunPod account under Settings › Machines as a machine, with the GPU types it offers (as Launch on RunPod does), and the runner's pool.
+2. **Control launches the pod as a runner process:** the harness and the supervisor started as a runner (`THERMITE_ROLE=runner`), with a token of its own, in pull mode as a RunPod rig is, so the pod never needs to reach control; its supervisor answers the core's asks on the bus through the pod's leaf node.
+3. **It is billed only while it works:** the pod stops when its pool has had no run for its idle time, and starts again when one waits, as a RunPod rig's idle stop does. A run waits while it starts, and none fails for it.
+4. **The rig's page and Edit rig show it** as any runner, with its price and what it has cost.
+
+## Why
+
+- A rig whose core is on a CPU machine can take a RunPod GPU for its judge or a lane only while it works, without the RunPod rig's whole core on a paid pod.
+- The owner expects it beside machines and clusters on Add a rig.
+
+## Questions for the owner
+
+- Whether the idle stop of a runner pod is its account's setting or the runner's own.
+- Whether a RunPod runner may be the judge's, whose timings then come from a GPU that may differ from launch to launch.
+
+## Progress
+
+- 2026-11-05: Proposed, from the owner's word while adding the Sparks' rig.

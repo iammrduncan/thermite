@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
+  checkField,
   programModeField,
   quietField,
   rigSettingsChange,
 } from "../../../src/control/rigs/settings.ts";
+import type { RunnerSetting } from "../../../src/core/rig-settings.ts";
 import {
   ADMIN,
   controlOnly,
@@ -48,9 +50,11 @@ const DEFAULTS = {
   trial_minutes: 20,
   max_turns: null,
   quiet_minutes: null,
+  check_seconds: null,
   program_mode: "headless",
   promotion: "owner_approval",
   judge_gpus: null,
+  runners: [] as RunnerSetting[],
 } as const;
 
 /**
@@ -116,9 +120,11 @@ const FIELDS: [string, unknown][] = [
   ["trial_minutes", 45],
   ["max_turns", 120],
   ["quiet_minutes", 30],
+  ["check_seconds", 300],
   ["program_mode", "terminal"],
   ["promotion", "auto"],
   ["judge_gpus", 3],
+  ["runners", [{ name: "box-2", pools: ["judge", "shared"] }]],
 ];
 
 describe("Edit rig's settings over REST and MCP", () => {
@@ -177,6 +183,30 @@ describe("Edit rig's settings over REST and MCP", () => {
     assert.deepEqual(rigSettingsChange("rig-a", now, split, { lanes: 17 }), {
       error: "Not saved: lanes: at most 16: a rig has users for lanes 1 to 16 only",
     });
+    // The rig's runner processes (goal 206): the whole list, sent when it differs.
+    const runners = [{ name: "box-2", pools: ["judge", "lane-2"] }];
+    assert.deepEqual(rigSettingsChange("rig-a", now, split, { runners }), {
+      change: { runners },
+    });
+    assert.deepEqual(
+      rigSettingsChange(
+        "rig-a",
+        { ...now, runners: [{ name: "box-2", pools: ["judge", "lane-2"] }] },
+        split,
+        {
+          runners,
+        },
+      ),
+      { change: undefined },
+    );
+    assert.deepEqual(
+      rigSettingsChange("rig-a", now, split, { runners: [{ name: "box-2", pools: ["gpu"] }] }),
+      { error: "Not saved: runners.0.pools.0: a pool is judge, shared or lane-1 to lane-16" },
+    );
+    assert.deepEqual(
+      rigSettingsChange("rig-a", now, split, { runners: [...runners, ...runners] }),
+      { error: "Not saved: runners: a runner process is named once" },
+    );
   });
 
   test("REST: each field sent alone, signed for owner:api, with Edit rig's words", async () => {
@@ -453,6 +483,10 @@ describe("Edit rig's settings over REST and MCP", () => {
         { lanes: 2, promotion: "auto" },
         "Only the owner's token changes a rig's promotion rule: leave out promotion.",
       ],
+      [
+        { runners: [{ name: "box-2", pools: ["shared"] }] },
+        "Only the owner's token changes the machines a rig runs on: leave out runners.",
+      ],
     ] as const) {
       const r = await call(operator, args);
       assert.ok(isError(r));
@@ -546,6 +580,18 @@ test("Edit rig's quiet field is off on a rig whose harness can't take it (goal 1
   assert.match(newer, /value="" placeholder="never"/);
   assert.doesNotMatch(newer, /disabled/);
   assert.match(quietField({ summary: { settings: { quiet_minutes: 20 } } }, 20), /value="20"/);
+});
+
+test("Edit rig's model check time is off on a rig whose harness can't take it (goal 150)", () => {
+  const older = checkField({ summary: { settings: { lanes: 1, quiet_minutes: null } } }, null);
+  assert.match(older, /placeholder="update the rig first"[^>]* disabled>/);
+  const newer = checkField({ summary: { settings: { lanes: 1, check_seconds: null } } }, null);
+  assert.match(
+    newer,
+    /name="check_seconds" type="number" min="10" max="3600" value="" placeholder="120"/,
+  );
+  assert.doesNotMatch(newer, /disabled/);
+  assert.match(checkField({ summary: { settings: { check_seconds: 300 } } }, 300), /value="300"/);
 });
 
 test("Edit rig's choice of how agent programs run is off on a rig whose harness can't take it (goal 169)", () => {

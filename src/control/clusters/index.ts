@@ -8,6 +8,7 @@
  */
 
 export { actOnClusterRig, type ClusterRigAction, clusterRigAction } from "./actions.ts";
+export { cudaFor, cudaOfPlace } from "./cuda.ts";
 export {
   cancelDrain,
   chooseAtDeadline,
@@ -15,7 +16,7 @@ export {
   drainChoices,
   watchDrains,
 } from "./drain.ts";
-export { type ClusterFacts, clusterLine } from "./facts.ts";
+export { type ClusterFacts, clusterLine, quantity } from "./facts.ts";
 export { updateRigImages } from "./images.ts";
 export { type ClusterKubectl, inspectKubeconfig, KUBE_NAME, realKubectl } from "./kubectl.ts";
 export {
@@ -45,6 +46,17 @@ export {
   checkClusterRig,
   NS,
   rigWork,
+  setClusterRigUpAgain,
   setClusterSlots,
   workWords,
 } from "./rigs.ts";
+export {
+  addClusterRunner,
+  addMachineRunner,
+  ClusterRunnerBody,
+  clusterRunnerRequest,
+  dropRunner,
+  dropRunners,
+  removeRunner,
+  watchRunners,
+} from "./runners.ts";

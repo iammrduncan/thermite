@@ -47,7 +47,7 @@ export function piSteps(messages, done) {
   piScene.followed = true;
   const steps = [
     { name: "write_file", args: { path: "src/kernel/matmul.c", content: NOOP } },
-    { name: "submit", args: { hypothesis: "restate the kernel" } },
+    { name: "submit_experiment", args: { hypothesis: "restate the kernel" } },
   ];
   return steps[done - 1]
     ? { toolCalls: [/** @type {ToolCall} */ (steps[done - 1])] }

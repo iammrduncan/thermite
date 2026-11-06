@@ -110,7 +110,10 @@ describe("a trial's clock (goal 144)", () => {
       new Promise<string>((resolve) => {
         finish = resolve;
       });
-    const [run, submit] = clock.wrap([tool("dev_run", slow), tool("submit", slow)]) as AgentTool[];
+    const [run, submit] = clock.wrap([
+      tool("run_experiment", slow),
+      tool("submit_experiment", slow),
+    ]) as AgentTool[];
     const end = new AbortController();
     const waiting = (run as AgentTool).execute("c", {}, end.signal);
     end.abort();
@@ -143,7 +146,7 @@ describe("a trial's clock (goal 144)", () => {
     const fake = await startFakeModel(({ messages }) =>
       messages.some((m) => m.role === "tool")
         ? { text: "waiting" }
-        : { toolCalls: [{ name: "dev_run", args: { command: "./bench", timeout_s: 600 } }] },
+        : { toolCalls: [{ name: "run_experiment", args: { command: "./bench", timeout_s: 600 } }] },
     );
     const asked: unknown[] = [];
     const t0 = Date.now();

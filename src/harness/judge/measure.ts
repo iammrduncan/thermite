@@ -60,7 +60,7 @@ export type ArmRun =
  * How a run failed, as the judge saw it, apart from its reason's text: a held-out cell's record
  * names only this (goal 082). A crash: stopped for time, memory or disk, or it exited with an
  * error. Invalid: its outputs were refused, the kit's check failed, or a metric the check reports
- * was not a number above zero.
+ * was not a number above zero (zero or above, for one that may be zero: goal 211).
  */
 export type CrashFailure = "timeout" | "memory" | "disk" | "exit";
 export type InvalidFailure = "outputs" | "check" | "metric";
@@ -211,6 +211,7 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
       role: runRole,
       argv: expandArgv(ctx.kit.run.command, vars(work)),
       ...limits(work),
+      ...(ctx.kit.run.processes !== undefined ? { nproc: ctx.kit.run.processes } : {}),
     };
     let outcome: RunOutcome;
     if (driver) {
@@ -278,14 +279,17 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
     const needed = (name: string) => !ctx.uses || ctx.uses.has(name);
     for (const [name, m] of Object.entries(ctx.kit.metrics)) {
       if ("from" in m && m.from === "check") {
-        // The judge's check worked it out from the outputs; it must be a number above zero.
-        const v = Number(check.details[m.field]);
-        if (!Number.isFinite(v) || v <= 0) {
+        // The judge's check worked it out from the outputs; it must be a number above zero, or
+        // zero or above for a metric that may be zero (goal 211). A missing field is no number.
+        const raw = check.details[m.field];
+        const v = raw === null || raw === undefined || raw === "" ? Number.NaN : Number(raw);
+        const zeroOk = m.may_be_zero === true;
+        if (!Number.isFinite(v) || v < 0 || (v === 0 && !zeroOk)) {
           if (!needed(name)) continue;
           return {
             kind: "invalid",
             failure: "metric",
-            reason: `the check reported no ${m.field} above zero (got ${JSON.stringify(check.details[m.field] ?? null)})`,
+            reason: `the check reported no ${m.field} ${zeroOk ? "of zero or above" : "above zero"} (got ${JSON.stringify(raw ?? null)})`,
             check,
             outcome,
           };

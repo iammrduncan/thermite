@@ -1,0 +1,45 @@
+---
+id: "192"
+title: "CI's run on a version tag passes every check a runner can run"
+status: IN_PROGRESS
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-04
+---
+
+# 192 · CI's run on a version tag passes every check a runner can run
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+v0.1.2's tag was the first version tag whose CI run was approved. It ran checks that had never run on a runner, and eleven failed. Most were the checks' own faults or Docker's, fixed after the tag (the supervisor had no `host.docker.internal`, the secret scan's made-up values, the machine and RunPod checks, a race in the control check, a flaky test). One is left:
+
+1. **Leaf acceptance under Docker** ([issue 54](https://github.com/iammrduncan/thermite/issues/54)): control's bus server never reaches the pod's server on the check's own network.
+2. **The next tag's run** passes every job it runs: the fast checks, the heavy jobs and every acceptance check a runner can run.
+
+## Why
+
+A version's tag gates its release. A check that fails for its own reasons hides one that fails for Thermite's.
+
+## Done when
+
+- [ ] Item 1, with the check passing under Docker in CI and under Podman.
+- [ ] Item 2: v0.1.3's tag run green.
+- [ ] Issue 54 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Item 1's cause, from CI's log of the v0.1.2 tag run: `nats-server: open /pod/server.conf: permission denied`. The check copied the pod's files into its container as written, and Docker gives copied files to root, so the pod's server, running as another user, could not read its config; it never started, so control's server could not dial it and the supervisor's connection was refused. Control's own files were made readable first (copyBusFiles); the pod's were not. Under rootless Podman the copied files read as the container's own, so it passed there. Fixed: the pod's files are made readable before the copy (scripts/acceptance/leaf.mjs readableTree). Not run here: the check (CI's tag run, or Docker on a test machine).
+- 2026-11-04: Item 1 under Docker: the leaf check passed at ae66a91c on the lab's test machine with docker compose (19 checks, nothing left behind). CI's run on v0.1.3's tag is still to come.
+- 2026-11-04: two tests that time real processes failed once in the full check at 6bc096c6 on the lab's test machine (4 files side by side, 4 CPUs and 6 GB) and passed 3 runs of 3 alone: tests/harness/agents/cli/terminal.test.ts (the owner's input into the fake TUI's terminal, after 5.5 s) and tests/harness/agents/scheduler/queue/returns.test.ts (`reset before the trial started` where it waits for `stopped` or `interrupted`). Either could fail the tag run under load: to watch at the tag, and to make them wait for what they check rather than for time if they fail again.
+
+---
+
+Run with `/goal Complete docs/plan/goals/192-ci-tag-run-green.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -1,5 +1,6 @@
 import type { HillClimbContract } from "../../../core/contract.ts";
 import type { Kit } from "../../../core/kit.ts";
+import { metricPlan } from "../../../core/metric-plan.ts";
 import type { JobRow } from "../../ledger/index.ts";
 import {
   BASELINE_BLOCKS,
@@ -7,10 +8,8 @@ import {
   type BaselineFailure,
   baselineState,
   baselineValue,
-  keepBaselineDir,
   prepareBaselineDir,
   removeBaselineDir,
-  sealBaselineDir,
 } from "../baseline.ts";
 import { runBlocks } from "../blocks.ts";
 import { type Finish, InfraError, type JudgeContext, Stop } from "../context.ts";
@@ -78,10 +77,8 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       count,
       runsPerCell: contract.acceptance.runs_per_cell,
     });
-    await judge.o.runner.reclaim(written);
-    const sealed = sealBaselineDir(written);
+    const sealed = await judge.target.keepBaseline(written, { dir, run, job: job.id });
     if (!sealed.ok) throw new Stop("invalid", sealed.reason);
-    keepBaselineDir(written, dir);
     const body = baselineBody({
       job,
       run,
@@ -128,7 +125,7 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
     };
   } finally {
     // The kept copy is in the state; the checks' folder goes, whoever owns its files.
-    await judge.o.runner.remove(written);
+    await judge.target.remove(written);
   }
 }
 
@@ -183,6 +180,7 @@ function baselineBody(x: {
       max_total_regression: g.max_total_regression,
     })),
     units: Object.fromEntries(Object.entries(kit.metrics).map(([n, m]) => [n, m.unit ?? ""])),
+    plan: metricPlan(contract, kit.metrics),
     cells,
     files: x.files,
     bytes: x.bytes,

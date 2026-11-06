@@ -25,6 +25,28 @@ export interface GitOptions {
   maxBytes?: number | undefined;
 }
 
+/**
+ * The line of a failed git call's words that says what went wrong, at most 200 characters: such as
+ * `ssh: connect to host github.com port 22: Connection timed out` or `ERROR: Repository not found.`,
+ * not the advice git adds after any failure to read a remote ("Please make sure you have the
+ * correct access rights and the repository exists."), which says nothing of the cause.
+ */
+export function gitCause(words: string): string {
+  const advice =
+    /^(fatal: Could not read from remote repository\.|Please make sure you have the correct access rights|and the repository exists\.)$/i;
+  const lines = words
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const telling = lines.filter((l) => !advice.test(l));
+  const cause =
+    telling.find((l) => /^(ssh:|ERROR:|fatal:|error:|remote:)/i.test(l)) ??
+    telling.at(-1) ??
+    lines.at(-1) ??
+    "";
+  return cause.slice(0, 200);
+}
+
 /** Git refused something, or a git call failed: then with its subcommand and git's own words. */
 export class GitError extends Error {
   /** Git's standard error, as it wrote it, when a call failed. */

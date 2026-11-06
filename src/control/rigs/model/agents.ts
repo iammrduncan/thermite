@@ -32,7 +32,7 @@ import {
  * research workers would run in Pi: a research run there could not work. From the model and
  * harness chosen now, else control's record, else the rig's report.
  */
-export const opencodeOnlyModel = (
+const opencodeOnlyModel = (
   store: ControlStore,
   u: RigView,
   chosen?: string,
@@ -62,11 +62,49 @@ export const opencodeOnlyModel = (
     }
   }
   if (!provider || !model || !isOpencodeOwn(provider) || harness === "opencode") return undefined;
-  return provider.type === "opencode" || !provider.key_sealed || model.endsWith("-free")
-    ? model
+  return !provider.key_sealed || model.endsWith("-free") ? model : undefined;
+};
+/**
+ * A rig whose agents' model is a Claude subscription (goal 190, issue 25): it runs only in Claude
+ * Code, and research workers run in Pi or OpenCode, so a research run there could not work. From
+ * the model chosen now, else control's record, else the rig's report (a subscription's agents run
+ * in Claude Code).
+ */
+const subscriptionModel = (
+  store: ControlStore,
+  u: RigView,
+  chosen?: string,
+): string | undefined => {
+  if (chosen) {
+    const [pRaw, mRaw] = chosen.split("|");
+    const p = store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
+    return p?.type === "claude" ? decodeURIComponent(mRaw ?? "") : undefined;
+  }
+  const given = store.agentModels.byRig()[u.id];
+  if (given)
+    return store.modelProviders.get(given.provider)?.type === "claude" ? given.model : undefined;
+  return u.model?.harness === "claude-code" ? (u.model.model ?? "its model") : undefined;
+};
+
+/**
+ * Why a research run with agents could not work on a rig's model, in words, before it starts;
+ * undefined when it can: OpenCode's free models outside OpenCode, or a Claude subscription.
+ */
+export const researchModelRefusal = (
+  store: ControlStore,
+  u: RigView,
+  chosen?: string,
+  picked = "",
+): string | undefined => {
+  const free = opencodeOnlyModel(store, u, chosen, picked);
+  if (free) return researchNeedsOpencode(u.id, free);
+  const sub = subscriptionModel(store, u, chosen);
+  return sub
+    ? `${sub} is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on ${u.id} could not work. Give ${u.id}'s agents another provider's model for research, on its Edit rig page or here.`
     : undefined;
 };
-export const researchNeedsOpencode = (rig: string, model: string) =>
+
+const researchNeedsOpencode = (rig: string, model: string) =>
   `${model} is one of OpenCode's free models, which work only inside OpenCode, and ${rig}'s agents would run in Pi: a research run there could not work. Set the agents' harness to OpenCode, or give the rig a model Pi can use.`;
 /** A rig whose agents have no model: none from control, and the rig reports none. */
 export const agentsModelMissing = (store: ControlStore, u: RigView) =>
@@ -145,12 +183,9 @@ export const giveRigModel = (
       error:
         "Codex runs only with a ChatGPT subscription or an OpenAI-compatible provider: choose Pi or OpenCode v2 for this provider.",
     };
-  // OpenCode's free models (and a keyless OpenCode provider) need its own client.
-  if (
-    harness !== "opencode" &&
-    isOpencodeOwn(p) &&
-    (p.type === "opencode" || !p.key_sealed || model.endsWith("-free"))
-  )
+  // OpenCode's free models (and every model of a keyless OpenCode provider) need its own client;
+  // a paid model with the provider's key runs anywhere, through the harness's proxy (issue 26).
+  if (harness !== "opencode" && isOpencodeOwn(p) && (!p.key_sealed || model.endsWith("-free")))
     return {
       error:
         "OpenCode's free models run only in the OpenCode harness: choose OpenCode v2 for this rig.",

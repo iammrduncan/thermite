@@ -40,7 +40,7 @@ import { createUser } from "@nats-io/nkeys";
 import { connect, errors, nkeyAuthenticator } from "@nats-io/transport-node";
 import { acceptanceChecks } from "./lib/checks.mjs";
 import { eventsPurgeChecks } from "./lib/events-purge.mjs";
-import { engine, natsInitRun, natsService, sh } from "./lib/smoke-env.mjs";
+import { engine, natsInitRun, natsService, rmFast, sh } from "./lib/smoke-env.mjs";
 import { systemFiguresChecks } from "./lib/system-figures.mjs";
 
 // Control's own code, as control runs it (Node.js strips the types of these files).
@@ -98,7 +98,7 @@ writeFileSync(
 
 const cleanup = () => {
   try {
-    sh(engine, ["rm", "-f", "-v", "-t", "3", box]);
+    sh(engine, [...rmFast, "-v", box]);
   } catch {}
   try {
     sh(engine, ["volume", "rm", "-f", storeVolume]);

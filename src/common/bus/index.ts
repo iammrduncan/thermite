@@ -198,6 +198,8 @@ export type ConsumerSettings = Partial<ConsumerConfig> & { durable_name: string 
  */
 export type Handled = undefined | { againInMs: number };
 
+type Reply = { reply?: string | undefined };
+
 export interface Bus {
   /**
    * Publishes one message and waits for the server's ack. A message whose id the stream had within
@@ -301,9 +303,9 @@ export interface Bus {
   /**
    * Sends a request on `subject` and waits up to `timeoutMs` for its one answer (NATS's request
    * and reply, which no stream keeps). It fails when no one serves the subject, on the timeout, or
-   * when the bus can't be reached.
+   * when the bus can't be reached. `reply`: its answer's subject's prefix, the answerer's own.
    */
-  request(subject: string, data: string | Uint8Array, timeoutMs: number): Promise<Uint8Array>;
+  request(subject: string, data: string | Uint8Array, ms: number, o?: Reply): Promise<Uint8Array>;
   /**
    * Answers each request on `subject` (`*` and `>` stand for tokens) with what `answer` gives
    * for it (its subject, the subject its answer goes to, and its data), until the bus is closed,
@@ -746,9 +748,11 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
     async streams(names, o) {
       return streamStates(await connection(), names, o?.counts ?? []);
     },
-    async request(subject, data, timeoutMs) {
+    async request(subject, data, timeoutMs, o) {
       const nc = await connection();
-      const r = await nc.request(subject, data, { timeout: timeoutMs }).catch((err: unknown) => {
+      const reply = o?.reply && `${o.reply}.${randomUUID().replace(/-/g, "")}`;
+      const opts = reply ? { timeout: timeoutMs, noMux: true, reply } : { timeout: timeoutMs };
+      const r = await nc.request(subject, data, opts).catch((err: unknown) => {
         if (err instanceof errors.RequestError && err.isNoResponders())
           throw new Error(`no one answers on ${subject} now`, { cause: err });
         throw err;

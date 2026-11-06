@@ -82,7 +82,7 @@ export class TrialClock {
    * once, so the worker can end and give its result; the harness then stops what the lane still
    * runs. A submission is always waited for: it changes the run's record.
    */
-  wrap(tools: AgentTool[], waitFor: readonly string[] = ["submit"]): AgentTool[] {
+  wrap(tools: AgentTool[], waitFor: readonly string[] = ["submit_experiment"]): AgentTool[] {
     return tools.map((t) => ({
       ...t,
       execute: async (id, params, signal, onUpdate) => {

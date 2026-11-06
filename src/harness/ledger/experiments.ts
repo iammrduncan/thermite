@@ -1,7 +1,29 @@
 import type { EventOf } from "../../core/events/bodies.ts";
 import type { EventKind } from "../../core/names.ts";
 import { LedgerError, LedgerPart, type Row } from "./part.ts";
-import { type ExperimentRow, toExperiment } from "./rows.ts";
+import { type ExperimentRow, type ExperimentTry, toExperiment } from "./rows.ts";
+
+/**
+ * Ledger migration 30 (goal 214): how many trials each experiment gets, and each try that ended
+ * without a win, with its lane, trial, attempt, result, verdict and cause, in the order tried.
+ */
+export const EXPERIMENT_TRIES = `
+alter table experiment add column tries integer not null default 1;
+create table experiment_try (
+  experiment text not null,
+  n integer not null,
+  run text not null,
+  lane text,
+  trial text not null,
+  attempt text,
+  result text not null,
+  verdict text,
+  cause text,
+  at text not null,
+  primary key (experiment, n)
+);
+create index experiment_try_attempt on experiment_try (attempt);
+`;
 
 /** The `experiment` table: the experiment queue's rows. */
 export class LedgerExperiments extends LedgerPart {
@@ -9,25 +31,46 @@ export class LedgerExperiments extends LedgerPart {
    * Every change to a run's experiment queue goes through here: the rows it changes (the
    * experiment, and the queued ones whose place moved) and its one event, in one transaction.
    * A row keeps its creation time, its author and where it came from; its update time is now.
+   * `tried`: the try of the first row that ended without a win, kept with them (goal 214).
    */
   write(
     rows: Omit<ExperimentRow, "created_at" | "updated_at">[],
     event: EventOf<Extract<EventKind, `experiment_${string}`>> & { actor: string; run: string },
+    tried?: Omit<ExperimentTry, "at">,
   ): number {
     return this.tx(() => {
       const now = this.now();
+      const first = rows[0];
+      if (tried && first)
+        this.db
+          .prepare(
+            `insert into experiment_try (experiment, n, run, lane, trial, attempt, result, verdict, cause, at)
+             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            first.id,
+            tried.n,
+            first.run,
+            tried.lane,
+            tried.trial,
+            tried.attempt,
+            tried.result,
+            tried.verdict,
+            tried.cause,
+            now,
+          );
       const upsert = this.db.prepare(
         `insert into experiment (id, run, title, details, direction, why, added_by, state, place, lane,
            trial, attempt, result, dropped_by, dropped_why, from_run, from_id, cause, returns,
-           question, yield, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           question, yield, tries, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict (id) do update set title = excluded.title, details = excluded.details,
            direction = excluded.direction, why = excluded.why, state = excluded.state,
            place = excluded.place, lane = excluded.lane, trial = excluded.trial,
            attempt = excluded.attempt, result = excluded.result, dropped_by = excluded.dropped_by,
            dropped_why = excluded.dropped_why, cause = excluded.cause, returns = excluded.returns,
            question = coalesce(excluded.question, experiment.question),
-           yield = coalesce(excluded.yield, experiment.yield),
+           yield = coalesce(excluded.yield, experiment.yield), tries = excluded.tries,
            updated_at = excluded.updated_at
          where experiment.run = excluded.run`,
       );
@@ -54,6 +97,7 @@ export class LedgerExperiments extends LedgerPart {
           r.returns ?? 0,
           r.question ?? null,
           r.yield ?? null,
+          r.tries ?? 1,
           now,
           now,
         );
@@ -86,13 +130,47 @@ export class LedgerExperiments extends LedgerPart {
     return r ? toExperiment(r) : undefined;
   }
 
-  /** The experiment an attempt came from, if it came from one. */
+  /** The experiment an attempt came from, if it came from one: in its try now, or an earlier one. */
   ofAttempt(attempt: string): ExperimentRow | undefined {
-    const r = this.row<ExperimentRow>(
-      "select * from experiment where attempt = ? order by updated_at desc limit 1",
-      attempt,
-    );
+    const r =
+      this.row<ExperimentRow>(
+        "select * from experiment where attempt = ? order by updated_at desc limit 1",
+        attempt,
+      ) ??
+      this.row<ExperimentRow>(
+        "select e.* from experiment e join experiment_try t on t.experiment = e.id where t.attempt = ? limit 1",
+        attempt,
+      );
     return r ? toExperiment(r) : undefined;
+  }
+
+  /** An experiment's tries that ended without a win (goal 214), the first first. */
+  triesOf(id: string): ExperimentTry[] {
+    return this.rows<Row>("select * from experiment_try where experiment = ? order by n", id).map(
+      (r) => ({
+        n: Number(r.n),
+        lane: r.lane === null ? null : String(r.lane),
+        trial: String(r.trial),
+        attempt: r.attempt === null ? null : String(r.attempt),
+        result: String(r.result),
+        verdict: r.verdict === null ? null : String(r.verdict),
+        cause: r.cause === null ? null : String(r.cause),
+        at: String(r.at),
+      }),
+    );
+  }
+
+  /**
+   * A run's experiments that are done with an attempt and have tries left (goal 214), the oldest
+   * first: each goes back to the queue once the judge settles its attempt without a win.
+   */
+  doneWithTriesLeft(run: string): ExperimentRow[] {
+    return this.rows<ExperimentRow>(
+      `select * from experiment e where e.run = ? and e.state = 'done' and e.attempt is not null
+         and e.tries > 1 + (select count(*) from experiment_try t where t.experiment = e.id)
+       order by e.updated_at, e.rowid`,
+      run,
+    ).map(toExperiment);
   }
 
   /** A lane's newest experiment, if it had one. */

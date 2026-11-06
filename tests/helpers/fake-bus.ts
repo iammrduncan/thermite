@@ -505,6 +505,7 @@ export class FakeBus
     subject: string,
     data: string | Uint8Array,
     _timeoutMs: number,
+    o?: { reply?: string | undefined },
   ): Promise<Uint8Array> {
     if (this.failing || !this.up) throw new Error("TimeoutError: no answer from the server");
     if (this.refuse?.(subject))
@@ -516,7 +517,7 @@ export class FakeBus
     const answer = [...this.served].find(([pattern]) => takes(pattern, subject))?.[1];
     if (!answer) throw new Error(`503: no one serves ${subject}`);
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
-    const reply = `${this.inbox}.${++this.requests}`;
+    const reply = `${o?.reply ?? this.inbox}.${++this.requests}`;
     const out = await answer({ subject, reply, data: bytes });
     if (out === undefined) throw new Error("TimeoutError: no answer to the request");
     return new TextEncoder().encode(out);

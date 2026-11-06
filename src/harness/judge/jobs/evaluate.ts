@@ -4,7 +4,6 @@ import { runBlocks } from "../blocks.ts";
 import { type Finish, InfraError, type JudgeContext, Stop } from "../context.ts";
 import { type Decision, decideScreen, goalDelta } from "../decide.ts";
 import { recordGoals, verifyGoals } from "../goals.ts";
-import { runArm } from "../measure.ts";
 import { olderChampion, parentScreened } from "../ports.ts";
 
 /**
@@ -38,8 +37,8 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
 
     step("gating");
     for (const cell of contract.cells) {
-      judge.judgeRun(cand, await runArm(ctx, cand, cell));
-      judge.judgeRun(champ, await runArm(ctx, champ, cell));
+      judge.judgeRun(cand, await judge.measure(ctx, cand, cell));
+      judge.judgeRun(champ, await judge.measure(ctx, champ, cell));
     }
 
     step("screening");
@@ -54,7 +53,7 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
       runsPerCell: contract.acceptance.runs_per_cell,
       onBlock: (bs) => {
         if (!looks.includes(bs.length)) return false;
-        decision = decideScreen(contract, bs, judge.noiseFloor(run));
+        decision = decideScreen(contract, bs, judge.noiseFloor(run), k.kit.metrics);
         return decision.verdict !== undefined;
       },
     });

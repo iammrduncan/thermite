@@ -15,7 +15,8 @@ const EXPORTS_MS = 5000;
 
 /**
  * The controller's loops: the judging loops, the scheduler's, the exports' and the awake loop, and
- * the stop on SIGTERM or SIGINT. Each ticks the service's `loops` once a round, for the health
+ * the stop on SIGTERM or SIGINT. A judging loop on a runner of another machine (goal 206) starts
+ * when the runner joins (`runJudge`) and ends when it leaves. Each ticks the service's `loops` once a round, for the health
  * route (goal 173): a judge in a job and the scheduler in the planner's call are busy, never late.
  * The exports loop exports each run at its end, and also reads the disk against its floor and ends
  * a drain at its deadline. The awake loop records the time the harness did not run
@@ -37,7 +38,7 @@ export function startLoops({
   executors: Judge[];
   executorIds: string[];
   server: ServerType;
-}): void {
+}): { runJudge: (executor: Judge, id: string, live: () => boolean) => void } {
   const { loops } = service;
   let stopping = false;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -46,11 +47,17 @@ export function startLoops({
   const held = () => service.draining !== undefined || service.disk?.held !== undefined;
   // Three independent loops: a judging job never holds up the scheduler (trials, epochs) or the
   // exports, and a slow planner call never holds up the judge.
-  // One judging loop per judge card.
-  const judgeLoop = async (executor: Judge, id: string) => {
+  // One judging loop per judge card, while it is the rig's.
+  const judgeLoop = async (executor: Judge, id: string, live: () => boolean = () => true) => {
     const name = `judge:${id}`;
-    loops.add(name, JUDGE_IDLE_MS, () => (executor.job ? `job ${executor.job}` : undefined));
-    while (!stopping) {
+    const added = loops.add(name, JUDGE_IDLE_MS, () =>
+      executor.job
+        ? `job ${executor.job}`
+        : executor.waiting
+          ? "waiting for its runner"
+          : undefined,
+    );
+    while (!stopping && live()) {
       let worked = false;
       try {
         // The judge off (Edit rig): jobs wait in the queue, nothing is measured. A draining rig,
@@ -65,6 +72,7 @@ export function startLoops({
       loops.tick(name);
       if (!worked) await sleep(JUDGE_IDLE_MS);
     }
+    loops.remove(name, added);
   };
   const scheduling = async () => {
     loops.add("scheduler", SCHEDULER_MS, () =>
@@ -107,7 +115,7 @@ export function startLoops({
       await sleep(EXPORTS_MS);
     }
   };
-  const running = Promise.all([
+  const running = new Set<Promise<void>>([
     ...executors.map((e, i) => judgeLoop(e, executorIds[i] as string)),
     scheduling(),
     exporting(),
@@ -132,7 +140,10 @@ export function startLoops({
     await scheduler
       .shutdown(`the harness is stopping (${signal})`)
       .catch((err) => log("harness", "trials not recorded at the stop", { error: String(err) }));
-    const ended = await Promise.race([running.then(() => true), sleep(5000).then(() => false)]);
+    const ended = await Promise.race([
+      Promise.all(running).then(() => true),
+      sleep(5000).then(() => false),
+    ]);
     if (ended) ledger.close();
     else
       log(
@@ -143,4 +154,12 @@ export function startLoops({
   };
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));
+  return {
+    runJudge: (executor, id, live) => {
+      if (stopping) return;
+      const loop = judgeLoop(executor, id, live);
+      running.add(loop);
+      void loop.then(() => running.delete(loop));
+    },
+  };
 }

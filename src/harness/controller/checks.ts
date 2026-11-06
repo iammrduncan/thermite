@@ -53,6 +53,9 @@ export function addIsolationCheck(ctx: ControllerContext, service: HarnessServic
   }
 }
 
+/** How long the model check waits for an answer unless the rig's settings say (goal 150). */
+const CHECK_SECONDS = 120;
+
 /** The model check in the program the route names (programs.ts). */
 export function addModelCheck(
   service: HarnessService,
@@ -61,18 +64,40 @@ export function addModelCheck(
   service.rigChecks.model = {
     run: async () => {
       const m = model();
+      // As long as the rig's setting says (goal 150): a busy model can answer after 120 s.
+      const seconds = service.settings.get().check_seconds ?? CHECK_SECONDS;
       return m
-        ? programOf(m).modelCheck(m, once)
+        ? keyHint(m, await programOf(m).modelCheck(m, once, seconds * 1000))
         : {
             ok: false,
             summary:
-              "no model route: set one on control's settings page (or in the rig's settings)",
+              "no model route yet: a rig given one by control takes it within a minute and checks it itself; else set one on control's settings page (or in the rig's settings)",
           };
     },
   };
 }
 
-/** The smoke check: a judge-only campaign from the smoke kit in the image, on this target. */
+/**
+ * A failed check of one of OpenCode's own paid models through OpenCode's own client: control sends
+ * it that way only when the provider has no key, and OpenCode then answers only that the model is
+ * unavailable. The words say what it needs (issue 26).
+ */
+export function keyHint<R extends { ok: boolean; summary: string }>(
+  m: { api?: string | undefined; model: string },
+  r: R,
+): R {
+  if (r.ok || m.api !== "opencode" || m.model.endsWith("-free")) return r;
+  return {
+    ...r,
+    summary: `${r.summary} (OpenCode serves ${m.model} only with its provider's key: add the key to the provider on control's Providers page, or choose a model whose name ends in -free)`,
+  };
+}
+
+/**
+ * The smoke check: a judge-only campaign from the smoke kit in the image, on the rig's target: the
+ * core's own, or its runners' when its judge measures on them alone (goal 206), whose kind the
+ * rig takes once one answers.
+ */
 export function addSmokeCheck(
   ctx: ControllerContext,
   service: HarnessService,
@@ -81,13 +106,15 @@ export function addSmokeCheck(
   const { env, paths } = ctx;
   service.rigChecks.smoke = {
     notNow: () => busyReason(paths.stateDir),
-    run: async () =>
-      smokeCheck({
+    run: async () => {
+      const type = service.targetType ?? driver.type;
+      return smokeCheck({
         service,
-        targetType: driver.type,
-        targetClass: (await driver.identify()).class,
+        targetType: type,
+        targetClass: type === driver.type ? (await driver.identify()).class : type,
         checksDir: checksDir(env),
         scratchDir: paths.scratchDir,
-      }),
+      });
+    },
   };
 }

@@ -29,8 +29,8 @@ describe("control's health and the rigs' (goal 173)", () => {
     let body = (await res.json()) as { ok: boolean; bus: unknown; loops: Record<string, unknown> };
     assert.equal(body.ok, true);
     assert.ok(body.bus);
-    // The drain watch is one of control's loops too.
-    assert.deepEqual(Object.keys(body.loops).sort(), ["drains", "resets"]);
+    // The drain, runner and worker watches are control's loops too.
+    assert.deepEqual(Object.keys(body.loops).sort(), ["drains", "resets", "runners", "workers"]);
     now = 31 * 60_000;
     loops.tick("drains");
     res = await api("GET", "/v1/health");
@@ -67,7 +67,12 @@ describe("control's health and the rigs' (goal 173)", () => {
     for (const token of ["read-token-abcdef", ADMIN]) {
       const r = await probe(token);
       assert.equal(r.status, 200);
-      assert.deepEqual(Object.keys(r.body.loops as object).sort(), ["drains", "resets"]);
+      assert.deepEqual(Object.keys(r.body.loops as object).sort(), [
+        "drains",
+        "resets",
+        "runners",
+        "workers",
+      ]);
       assert.equal((r.body.disk as { floor_gib: number }).floor_gib, 5);
     }
     now = 31 * 60_000;

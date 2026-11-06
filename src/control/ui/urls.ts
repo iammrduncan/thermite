@@ -30,6 +30,7 @@ export const RUN_TABS = [
   "planner",
   "prompts",
   "stats",
+  "info",
 ] as const;
 export type RunTab = (typeof RUN_TABS)[number];
 

@@ -12,6 +12,9 @@ const newestForTeachers = (r: RunRow) => Math.max(0, ...(r.owner_messages_waitin
 /** The newest time a run's queue fell below its target, while it still is (0: none, goal 081). */
 const lowQueue = (r: RunRow) => r.queue_low?.event ?? 0;
 
+/** The newest request for a round now (0: none, goal 194). */
+const asked = (r: RunRow) => r.teachers_asked ?? 0;
+
 /**
  * Whether the owner has written to the teachers of a running run since its last round, or the
  * run's queue fell below its target since (goal 081): the loop then starts the next round at
@@ -30,7 +33,8 @@ export async function teachersCalled(
     (r) =>
       r.status === "running" &&
       (newestForTeachers(r) > (state.ownerSeen?.[r.id] ?? 0) ||
-        lowQueue(r) > (state.ideasSeen?.[r.id] ?? 0)),
+        lowQueue(r) > (state.ideasSeen?.[r.id] ?? 0) ||
+        asked(r) > (state.askedSeen?.[r.id] ?? 0)),
   );
 }
 
@@ -82,6 +86,17 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
     next.limitSaid ??= {};
     const { runs } = await harness.call(RUNS);
     for (const inst of runs.filter((i) => i.status === "running")) {
+      // A request for a round now (goal 194) waits too, said once for each.
+      const req = asked(inst);
+      const reqKey = `${inst.id}#asked`;
+      if (req > Math.max(next.askedSeen[inst.id] ?? 0, next.limitSaid[reqKey] ?? 0)) {
+        next.limitSaid[reqKey] = req;
+        say(
+          inst.id,
+          "status",
+          `the advisors reached the day's spending limit (${limit} USD): the teachers review ${inst.id} after midnight UTC`,
+        );
+      }
       const newest = newestForTeachers(inst);
       if (newest <= Math.max(next.ownerSeen[inst.id] ?? 0, next.limitSaid[inst.id] ?? 0)) continue;
       next.limitSaid[inst.id] = newest;
@@ -100,10 +115,14 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
       // The planner's round left the queue below its target (goal 081): ideas are wanted now.
       const low = lowQueue(inst);
       const wanted = low > (next.ideasSeen[inst.id] ?? 0);
+      // The owner asked for a round now (goal 194).
+      const req = asked(inst);
+      const requested = req > (next.askedSeen[inst.id] ?? 0);
       const last = next.lastTeacherAt[inst.id];
       if (
         !called &&
         !wanted &&
+        !requested &&
         last &&
         now - Date.parse(last) < cfg.advisors.teacher_minutes * 60_000
       )
@@ -113,6 +132,8 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
       if (newest) next.ownerSeen[inst.id] = Math.max(newest, next.ownerSeen[inst.id] ?? 0);
       // So does a queue below its target: the next one waits for a new planner's round.
       if (low) next.ideasSeen[inst.id] = Math.max(low, next.ideasSeen[inst.id] ?? 0);
+      // And a request: one round each.
+      if (req) next.askedSeen[inst.id] = Math.max(req, next.askedSeen[inst.id] ?? 0);
       const q = inst.queue_low;
       const ideasNow =
         wanted && q
@@ -121,11 +142,13 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
       say(
         inst.id,
         "status",
-        called
-          ? `the teachers review ${inst.id} now: the owner wrote to them`
-          : ideasNow
-            ? `the teachers review ${inst.id} now: ${ideasNow}`
-            : `the teachers review ${inst.id}`,
+        requested
+          ? `the teachers review ${inst.id} now: the owner asked for a round`
+          : called
+            ? `the teachers review ${inst.id} now: the owner wrote to them`
+            : ideasNow
+              ? `the teachers review ${inst.id} now: ${ideasNow}`
+              : `the teachers review ${inst.id}`,
       );
       try {
         const briefOf = () => harness.call(BRIEF, { query: { run: inst.id } });
