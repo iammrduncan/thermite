@@ -6,7 +6,7 @@ import type {
   ModelPoll,
   RunAsk,
 } from "../../../src/core/api/harness/runs.ts";
-import { RemoteRunner } from "../../../src/harness/judge/remote-runner.ts";
+import { type FetchProgress, RemoteRunner } from "../../../src/harness/judge/remote-runner.ts";
 import type { Ledger } from "../../../src/harness/ledger/index.ts";
 
 /**
@@ -23,10 +23,14 @@ const MODELS = [
   { name: "tensors/model-2.safetensors", path: "m/2", sha256: B, url: "https://example.com/2" },
 ];
 
-/** A runner whose fetch answers each turn from `turns`, the last repeated; and what it was asked. */
+/**
+ * A runner whose fetch answers each turn from `turns`, the last repeated; what it was asked; and
+ * how the core held the fetch to stand for the rig's report when each turn was asked.
+ */
 function runner(turns: ModelFetchState[][], o: { stallMs?: number } = {}) {
   const polls: ModelPoll[] = [];
   const asks: string[] = [];
+  const held: (FetchProgress | undefined)[] = [];
   const ledger = {
     commands: { modelsOf: () => MODELS },
     trials: { get: () => ({ run: "r-1" }) },
@@ -49,6 +53,7 @@ function runner(turns: ModelFetchState[][], o: { stallMs?: number } = {}) {
           [A, B],
         );
         polls.push(poll);
+        held.push(r.fetch && { ...r.fetch });
         return turns[Math.min(polls.length - 1, turns.length - 1)];
       },
     },
@@ -60,7 +65,7 @@ function runner(turns: ModelFetchState[][], o: { stallMs?: number } = {}) {
     modelPollMs: 1,
     modelStallMs: o.stallMs ?? 60_000,
   });
-  return { r, polls, asks };
+  return { r, polls, asks, held };
 }
 
 const st = (sha256: string, state: ModelFetchState["state"], bytes: number, error?: string) => ({
@@ -101,6 +106,30 @@ describe("a run's model files on a runner of another machine (goal 213)", () => 
     assert.equal(polls.length, 4);
   });
 
+  test("the core holds how the fetch stands for the rig's report, until the files are there", async () => {
+    const { r, held } = runner([
+      [st(A, "fetching", 10), st(B, "queued", 0)],
+      [st(A, "done", 100), st(B, "fetching", 40)],
+      [st(A, "done", 100), st(B, "done", 100)],
+    ]);
+    await build(r);
+    assert.equal(held[0], undefined, "nothing before the first turn");
+    const [first, second] = [held[1], held[2]];
+    assert.deepEqual(first && { ...first, since: "", at: "" }, {
+      run: "r-1",
+      files: 2,
+      done: 0,
+      bytes: 10,
+      total: 200,
+      since: "",
+      at: "",
+    });
+    assert.equal(second?.done, 1);
+    assert.equal(second?.bytes, 140);
+    assert.equal(second?.since, first?.since, "since when it began, kept through its turns");
+    assert.equal(r.fetch, undefined, "none once the files are there");
+  });
+
   test("a fetch with no new byte for the stall time ends in words", async () => {
     const { r } = runner([[st(A, "fetching", 30), st(B, "queued", 0)]], { stallMs: 20 });
     await assert.rejects(
@@ -115,6 +144,7 @@ describe("a run's model files on a runner of another machine (goal 213)", () => 
       build(r),
       /runner spark-2-0 could not fetch the model file tensors\/model-1\.safetensors: HTTP 404/,
     );
+    assert.equal(r.fetch, undefined, "a failed fetch is the job's failure, not one under way");
   });
 
   test("a lane's run is told the files are on their way, and runs once they are there", async () => {
@@ -137,7 +167,10 @@ describe("a run's model files on a runner of another machine (goal 213)", () => 
       first.reason ?? "",
       /on their way to this machine \(1 of 2 files, 0\.0 of 0\.0 GiB; the last try of tensors\/model-2\.safetensors failed: HTTP 503\); run again in a few minutes/,
     );
+    // On the rig's page meanwhile, as the core last heard of it.
+    assert.equal(r.fetch?.done, 1);
     assert.deepEqual(await r.laneRun(run), { ran: true, exit: 0 });
+    assert.equal(r.fetch, undefined);
     // Each lane run begins (or goes on with) the fetch; none waits for it.
     assert.deepEqual(polls, ["start", "start"]);
   });

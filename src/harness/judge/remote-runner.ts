@@ -29,6 +29,21 @@ const MODEL_POLL_MS = 15_000;
 /** How long a fetch may go with no new byte before the core gives up on it, in words. */
 const MODEL_STALL_MS = 15 * 60_000;
 
+/**
+ * A runner's fetch of a run's model files as the core last heard of it (goal 213), for the rig's
+ * report: its files and bytes so far, since when, and when the core last asked.
+ */
+export interface FetchProgress {
+  run: string;
+  files: number;
+  done: number;
+  bytes: number;
+  /** Null while a file's size is not known yet. */
+  total: number | null;
+  since: string;
+  at: string;
+}
+
 /** How the core reaches one runner process. */
 export interface RunLink {
   /** An ask, failed when no answer comes in `answerMs` (the link's own limit when not given). */
@@ -75,6 +90,8 @@ export class RemoteRunner implements RigRunner {
   private readonly implausible = new WeakMap<object, string[]>();
   /** Runs whose model files the runner has. */
   private readonly modelsHeld = new Set<string>();
+  /** Its fetch under way, as last heard; none once the files are there or the fetch failed. */
+  private fetching: FetchProgress | undefined;
 
   constructor(o: RemoteRunnerOptions) {
     this.o = o;
@@ -104,6 +121,11 @@ export class RemoteRunner implements RigRunner {
     this.o.info = { type: info.type, separated: info.separated };
   }
 
+  /** Its fetch of a run's model files under way, as the core last heard of it (goal 213). */
+  get fetch(): FetchProgress | undefined {
+    return this.fetching;
+  }
+
   /**
    * What the core knows the runner holds, forgotten: it answers again after it was away, and may
    * be a new machine by the same name. It is sent what it lacks again.
@@ -112,6 +134,7 @@ export class RemoteRunner implements RigRunner {
     this.sent.clear();
     this.baselines.clear();
     this.modelsHeld.clear();
+    this.fetching = undefined;
   }
 
   /** Sends the runner a commit of one of the core's mirrors, as a bundle of what it lacks, once. */
@@ -210,20 +233,30 @@ export class RemoteRunner implements RigRunner {
   }
 
   /**
-   * One turn of the runner's fetch of `files`: begun (a file under way goes on, one that failed
-   * is tried again) or asked how it stands. A file that failed fails it, in words.
+   * One turn of the runner's fetch of a run's `files`: begun (a file under way goes on, one that
+   * failed is tried again) or asked how it stands, kept for the rig's report until the files are
+   * there. A file that failed fails it, in words.
    */
   private async fetchTurn(
+    run: string,
     files: ModelFetch[],
     poll: ModelPoll,
   ): Promise<{ done: boolean; words: string; got: number }> {
-    const states = ModelFetchState.array().parse(await this.o.link.fetchModels(files, poll));
+    let states: ModelFetchState[];
+    try {
+      states = ModelFetchState.array().parse(await this.o.link.fetchModels(files, poll));
+    } catch (err) {
+      this.fetching = undefined;
+      throw err;
+    }
     const nameOf = (sha: string) => files.find((f) => f.sha256 === sha)?.name ?? sha.slice(0, 12);
     const failed = states.find((x) => x.state === "failed");
-    if (failed)
+    if (failed) {
+      this.fetching = undefined;
       throw new Error(
         `runner ${this.name} could not fetch the model file ${nameOf(failed.sha256)}: ${failed.error ?? "no reason given"}`,
       );
+    }
     const got = states.reduce((n, x) => n + x.bytes, 0);
     const total = states.every((x) => x.total !== null)
       ? states.reduce((n, x) => n + (x.total ?? 0), 0)
@@ -231,7 +264,20 @@ export class RemoteRunner implements RigRunner {
     const done = states.filter((x) => x.state === "done").length;
     const tried = states.find((x) => x.state !== "done" && x.error);
     const words = `${done} of ${files.length} files, ${gib(got)}${total !== null ? ` of ${gib(total)}` : ""} GiB${tried ? `; the last try of ${nameOf(tried.sha256)} failed: ${tried.error}` : ""}`;
-    return { done: states.length >= files.length && done === states.length, words, got };
+    const all = states.length >= files.length && done === states.length;
+    const at = new Date().toISOString();
+    this.fetching = all
+      ? undefined
+      : {
+          run,
+          files: files.length,
+          done,
+          bytes: got,
+          total,
+          since: this.fetching?.run === run ? this.fetching.since : at,
+          at,
+        };
+    return { done: all, words, got };
   }
 
   /**
@@ -245,16 +291,18 @@ export class RemoteRunner implements RigRunner {
     if (!files.length) return;
     const pollMs = this.o.modelPollMs ?? MODEL_POLL_MS;
     const stallMs = this.o.modelStallMs ?? MODEL_STALL_MS;
-    let turn = await this.fetchTurn(files, "start");
+    let turn = await this.fetchTurn(run, files, "start");
     let seen = turn.got;
     let since = Date.now();
     while (!turn.done) {
-      if (Date.now() - since >= stallMs)
+      if (Date.now() - since >= stallMs) {
+        this.fetching = undefined;
         throw new Error(
           `runner ${this.name}'s fetch of the model files stopped at ${turn.words}: nothing came for ${Math.round(stallMs / 60_000)} minutes`,
         );
+      }
       await sleep(pollMs);
-      turn = await this.fetchTurn(files, "status");
+      turn = await this.fetchTurn(run, files, "status");
       if (turn.got > seen) {
         seen = turn.got;
         since = Date.now();
@@ -340,7 +388,7 @@ export class RemoteRunner implements RigRunner {
     const run = this.o.ledger.trials.get(r.trial)?.run;
     const files = run ? await this.modelsMissing(run) : [];
     if (run && files.length) {
-      const turn = await this.fetchTurn(files, "start");
+      const turn = await this.fetchTurn(run, files, "start");
       if (!turn.done)
         return {
           ran: false,

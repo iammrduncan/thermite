@@ -92,6 +92,7 @@ export type {
   JudgeJob,
   MessageView,
   RigView,
+  RunnerFetch,
   RunnersView,
   RunOnRig,
   RunView,

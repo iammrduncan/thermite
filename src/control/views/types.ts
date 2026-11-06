@@ -729,11 +729,28 @@ export interface RunnersView {
       builds: number;
       kits: number;
     } | null;
-    /** Each runner: its name (`<process>-<place>`), its pool, and its holder now, if any. */
-    runners: { name: string; pool: string; holder: string | null }[];
+    /**
+     * Each runner: its name (`<process>-<place>`), its pool, its holder now, if any, and its
+     * fetch of a run's model files under way (goal 213), as the core last heard of it.
+     */
+    runners: { name: string; pool: string; holder: string | null; fetch: RunnerFetch | null }[];
   }[];
   /** Who waits for a runner, in turn: the judge's executors and the lanes. */
   waiting: string[];
   /** The same, each with since when; empty from a core that does not say. */
   waits: { who: string; since: string }[];
+}
+
+/**
+ * A runner's fetch of a run's model files (goal 213): its files and bytes so far, the bytes of
+ * them all (null while a file's size is not known), since when, and when the core last heard.
+ */
+export interface RunnerFetch {
+  run: string;
+  files: number;
+  done: number;
+  bytes: number;
+  total: number | null;
+  since: string;
+  at: string;
 }

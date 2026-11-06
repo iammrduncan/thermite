@@ -2,6 +2,7 @@ import { errorText } from "../../common/errors.ts";
 import { log } from "../../common/log.ts";
 import type { RunnerSetting } from "../../core/rig-settings.ts";
 import {
+  type FetchProgress,
   type Pool,
   RemoteRunner,
   type RunLink,
@@ -133,7 +134,8 @@ export class RunnerHub {
 
   /**
    * The rig's runners for its report to control: each process, whether it takes runs, when it
-   * last answered or since when it is away, and who holds each of its runners; and who waits.
+   * last answered or since when it is away, who holds each of its runners and its fetch of a
+   * run's model files under way (goal 213); and who waits.
    */
   report(): {
     processes: {
@@ -144,7 +146,7 @@ export class RunnerHub {
       answered_at: string | null;
       away_since: string | null;
       store?: RunnerStore;
-      runners: { name: string; pool: string; holder: string | null }[];
+      runners: { name: string; pool: string; holder: string | null; fetch?: FetchProgress }[];
     }[];
     waiting: string[];
     waits: { who: string; since: string }[];
@@ -163,6 +165,7 @@ export class RunnerHub {
           name: r.runner.name,
           pool: r.pool,
           holder: this.pools.holderOf(r.runner) ?? null,
+          ...(r.runner.fetch ? { fetch: r.runner.fetch } : {}),
         })),
       })),
       waiting: this.pools.waiting(),

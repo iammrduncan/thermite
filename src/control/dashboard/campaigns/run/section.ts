@@ -41,6 +41,7 @@ import {
   waitWords,
 } from "../../../ui/operator/index.ts";
 import { promptsTab } from "../../../ui/prompts.ts";
+import { runFetchWords } from "../../../ui/rigs/runners.ts";
 import {
   attemptHref,
   championPatchHref,
@@ -332,6 +333,8 @@ export function runHelpers(dash: Dashboard) {
       esc(waitWords(i, now)),
       // A hill climb's baseline (goal 115): the judge measures the starting point first.
       i.status === "running" ? esc(baselineWords(i)) : "",
+      // A runner's fetch of the run's model files (goal 213), which its first build waits for.
+      i.status === "running" ? esc(runFetchWords(u, i.id, now)) : "",
       judging
         ? `The judge is ${esc(jobText(judging).replace(/^[A-Z]/, (x) => x.toLowerCase()))}.`
         : "",

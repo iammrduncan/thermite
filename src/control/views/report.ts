@@ -7,7 +7,7 @@ import {
   RunnerSettings,
 } from "../../core/rig-settings.ts";
 import type { ControlStore } from "../store/index.ts";
-import type { RigView, RunnersView } from "./types.ts";
+import type { RigView, RunnerFetch, RunnersView } from "./types.ts";
 
 /**
  * What a rig's report says of the rig itself, read loosely (the report is data): its own
@@ -71,7 +71,12 @@ export function readRunners(v: unknown): RunnersView | null {
         store: storeOf(p.store),
         runners: (Array.isArray(p.runners) ? p.runners : []).map((r) => {
           const q = (r ?? {}) as Record<string, unknown>;
-          return { name: String(q.name ?? ""), pool: String(q.pool ?? ""), holder: str(q.holder) };
+          return {
+            name: String(q.name ?? ""),
+            pool: String(q.pool ?? ""),
+            holder: str(q.holder),
+            fetch: fetchOf(q.fetch),
+          };
         }),
       };
     }),
@@ -82,6 +87,19 @@ export function readRunners(v: unknown): RunnersView | null {
       return typeof w.who === "string" && since ? [{ who: w.who, since }] : [];
     }),
   };
+}
+
+/** A runner's fetch of a run's model files from its core's report (goal 213), read loosely. */
+function fetchOf(v: unknown): RunnerFetch | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null);
+  const files = n(o.files);
+  const done = n(o.done);
+  const bytes = n(o.bytes);
+  if (typeof o.run !== "string" || files === null || done === null || bytes === null) return null;
+  if (typeof o.since !== "string" || typeof o.at !== "string") return null;
+  return { run: o.run, files, done, bytes, total: n(o.total), since: o.since, at: o.at };
 }
 
 /** A rig configured with its GPU set: how many cards, and how many are the judge's now. */

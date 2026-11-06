@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { runnersAdded } from "../../../../src/control/dashboard/rigs/runners.ts";
 import {
+  runFetchWords,
   runnersBlock,
   runnersFields,
   runnersWanted,
@@ -156,6 +157,54 @@ describe("a rig's runners in control (goal 206)", () => {
     );
     assert.match(html, /40 of 200 GB used · builds 3 · kits 1/);
     assert.match(html, /Lane 1(&#39;|')s run_experiment, waiting 40s\./);
+  });
+
+  test("a runner's fetch of a run's model files, on the rig's page and the run's line (goal 213)", () => {
+    const fetch = {
+      run: "r-1",
+      files: 33,
+      done: 12,
+      bytes: 21.4 * 2 ** 30,
+      total: 59.8 * 2 ** 30,
+      since: "2026-11-04T19:51:00Z",
+      at: "2026-11-04T19:59:50Z",
+    };
+    const read = (f: unknown) =>
+      ({
+        ...view(undefined),
+        runners: readRunners({
+          processes: [
+            {
+              ...reported.processes[0],
+              runners: [
+                { name: "box-2-0", pool: "judge", holder: "executor-box-2-0", fetch: f },
+                {
+                  name: "box-2-1",
+                  pool: "shared",
+                  holder: null,
+                  fetch: { run: "r-1", files: "lots" },
+                },
+              ],
+            },
+          ],
+        }),
+      }) as RigView;
+    const u = read(fetch);
+    assert.deepEqual(u.runners?.processes[0]?.runners[0]?.fetch, fetch);
+    assert.equal(u.runners?.processes[0]?.runners[1]?.fetch, null, "a malformed one is dropped");
+    const now = Date.parse("2026-11-04T20:00:00Z");
+    assert.match(
+      runnersBlock(u, now),
+      /Fetching the model files of r-1 first: 12 of 33 files, 21\.4 of 59\.8 GiB, for 9m\./,
+    );
+    assert.equal(
+      runFetchWords(u, "r-1", now),
+      "Runner box-2-0 (12 of 33 files, 21.4 of 59.8 GiB, for 9m) fetches the run's model files before it builds or runs.",
+    );
+    assert.equal(runFetchWords(u, "r-2", now), "", "another run's fetch is not this run's");
+    // A size not known yet, and a word the core had a while ago.
+    const old = read({ ...fetch, total: null, at: "2026-11-04T19:55:00Z" });
+    assert.match(runFetchWords(old, "r-1", now), /12 of 33 files, 21\.4 GiB, for 9m, as of 5m ago/);
   });
 
   test("Edit rig: each runner's pool, Remove, and one added by its name", () => {

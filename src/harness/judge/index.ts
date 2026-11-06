@@ -30,6 +30,11 @@ export { copyForRun } from "./measure.ts";
 export { type Pool, RunnerPools } from "./pools.ts";
 export { portReplaced } from "./ports.ts";
 export { clipReason, REASONS_CHARS } from "./reasons.ts";
-export { type LaneRun, RemoteRunner, type RunLink } from "./remote-runner.ts";
+export {
+  type FetchProgress,
+  type LaneRun,
+  RemoteRunner,
+  type RunLink,
+} from "./remote-runner.ts";
 export type { Measured, MeasureSpec, RigRunner, Sealed } from "./runner.ts";
 export { RunnerAway, RunnerLink } from "./runner-link.ts";

@@ -1,5 +1,5 @@
 import type { RigSettings } from "../../../core/rig-settings.ts";
-import type { RigView, RunnersView } from "../../views/index.ts";
+import type { RigView, RunnerFetch, RunnersView } from "../../views/index.ts";
 import { ago, esc, infoLabel } from "../components/index.ts";
 import { jobHtml } from "../operator/index.ts";
 
@@ -37,6 +37,32 @@ function nowHtml(u: RigView, holder: string | null): string {
     return job ? `The judge: ${jobHtml(u, job)}` : "The judge, between two steps of a job";
   }
   return `${esc(holder.replace("lane-", "Lane "))}'s run_experiment. It never counts.`;
+}
+
+/**
+ * A runner's fetch of a run's model files in words (goal 213): files and GiB so far and for how
+ * long, and when the core last heard, once that is more than a minute ago.
+ */
+function fetchWords(f: RunnerFetch, now: number): string {
+  const gib = (n: number) => (n / 2 ** 30).toFixed(1);
+  const heard = now - Date.parse(f.at) > 60_000 ? `, as of ${ago(f.at, now)} ago` : "";
+  return `${f.done} of ${f.files} files, ${gib(f.bytes)}${f.total !== null ? ` of ${gib(f.total)}` : ""} GiB, for ${ago(f.since, now)}${heard}`;
+}
+
+/**
+ * The run's status line on its fetches (goal 213): each runner of the rig that fetches the run's
+ * model files, with how far it is; "" when none does.
+ */
+export function runFetchWords(u: RigView, run: string, now: number): string {
+  const each = (u.runners?.processes ?? []).flatMap((p) =>
+    p.runners.flatMap((x) =>
+      x.fetch && x.fetch.run === run
+        ? [`${p.runners.length === 1 ? p.name : x.name} (${fetchWords(x.fetch, now)})`]
+        : [],
+    ),
+  );
+  if (!each.length) return "";
+  return `${each.length === 1 ? "Runner" : "Runners"} ${listWords(each)} ${each.length === 1 ? "fetches" : "fetch"} the run's model files before ${each.length === 1 ? "it builds or runs" : "they build or run"}.`;
 }
 
 /** A list in words: "a, b and c". */
@@ -157,7 +183,11 @@ export function runnersBlock(
         const sub = placed
           ? `${placed.gpu} · ${placed.where}`
           : `runner process ${p.name}, started by you`;
-        return `<tr><td><b>${esc(name)}</b><br><span class="small muted">${esc(sub)}</span></td><td>${poolChip(x.pool)}</td><td>${stateHtml(p, now)}</td><td>${nowCell(u, p, x.pool, x.holder)}</td><td class="small muted">${storeWords(p)}</td></tr>`;
+        // A fetch of a run's model files (goal 213), which its first build or run waits for.
+        const fetch = x.fetch
+          ? `<br><span class="small" data-fetch>Fetching the model files of ${esc(x.fetch.run)} first: ${esc(fetchWords(x.fetch, now))}.</span>`
+          : "";
+        return `<tr><td><b>${esc(name)}</b><br><span class="small muted">${esc(sub)}</span></td><td>${poolChip(x.pool)}</td><td>${stateHtml(p, now)}</td><td>${nowCell(u, p, x.pool, x.holder)}${fetch}</td><td class="small muted">${storeWords(p)}</td></tr>`;
       }),
     )
     .join("");
