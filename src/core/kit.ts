@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type Contract, ID_PATTERN } from "./contract.ts";
 import { McpUses } from "./mcp.ts";
 import { metricPlan, planProblems } from "./metric-plan.ts";
-import { MetricRole, roleProblems } from "./metric-roles.ts";
+import { MetricRole, roleProblems, zeroProblems } from "./metric-roles.ts";
 import { normalizePath } from "./paths.ts";
 
 /**
@@ -110,7 +110,10 @@ const KitFields = z.strictObject({
    *   {unit, from: "time"}         the run's wall time in seconds, from the judge's clock;
    *   {unit, from: "check", field} a number the kit's check (the judge's own program) works out
    *                                from the run's outputs, such as accuracy or size.
-   * Each must come out above zero: the judge compares runs by their ratio. Each may also say
+   * Each must come out above zero: the judge compares runs by their ratio. A check's metric that
+   * is 0 when nothing is wrong, such as a divergence or a count of failures, says
+   * `may_be_zero: true` (goal 211): it may be 0, and then only an informational metric or a guard
+   * against a fixed value, which compare values, never ratios. Each may also say
    * what it is for (goal 209, core/metric-roles.ts): its kind, priority, guard or info, with a
    * priority metric's place, direction and min_effect, and any metric's guards.
    */
@@ -128,6 +131,7 @@ const KitFields = z.strictObject({
         unit: z.string().default(""),
         from: z.literal("check"),
         field: z.string().min(1),
+        may_be_zero: z.literal(true).optional(),
         ...MetricRole,
       }),
     ]),
@@ -173,6 +177,9 @@ export const KitSchema = KitFields.superRefine((kit, ctx) => {
   for (const [name, m] of Object.entries(kit.metrics)) {
     for (const message of roleProblems(name, m))
       ctx.addIssue({ code: "custom", path: ["metrics", name], message });
+    if ("may_be_zero" in m && m.may_be_zero)
+      for (const message of zeroProblems(name, m))
+        ctx.addIssue({ code: "custom", path: ["metrics", name], message });
     if (m.kind !== "priority" || m.priority === undefined) continue;
     const other = places.get(m.priority);
     if (other)

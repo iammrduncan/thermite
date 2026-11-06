@@ -1,7 +1,7 @@
 ---
 id: "211"
 title: "A metric may be zero"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: ["209"]
 created: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 211 · A metric may be zero
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## Why (found in use, 2026-11-06)
 
@@ -21,6 +21,10 @@ A kit's metrics must come out above zero today (`kit.json` › `metrics`): the j
 1. A metric whose roles are only guards against a fixed value (`against: "value"`) or informational may come out at zero. Its value guards compare it with their limits, as now.
 2. A priority metric, or a guard against the baseline or the champion, still compares by ratio, so it must stay above zero; a kit that gives such a role to a metric that may be zero is refused in words.
 3. Where the judge or a page shows a metric as candidate against reference (a run's Metrics block, an attempt's values, the verdict events), a zero shows as a value, never as a ratio of 0 to 0.
+
+## Progress
+
+- 2026-11-06: built. A check's metric says `"may_be_zero": true` to take a 0 (`src/core/kit.ts`); the measurement takes it, and refuses a negative or a missing field in words (`src/harness/judge/measure.ts`). Such a metric may be informational or held by guards against a value: the kit refuses it as a priority metric or with a guard against the baseline or the champion (`zeroProblems`, `src/core/metric-roles.ts`), and the check of an assignment refuses a contract that gives it such a role (`planProblems`, `src/core/metric-plan.ts`). The judge's value guards, informational values and the run page's metrics already compare values, and show a zero as a value. Tests: `tests/core/metric-plan.test.ts`, `tests/harness/judge/measure.test.ts`. Page: [the kit manifest](../../_site/src/content/docs/reference/kit-manifest.md#what-each-metric-is-for). To verify on the lab's test machine.
 
 ## Done when
 

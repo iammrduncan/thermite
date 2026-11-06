@@ -168,7 +168,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [206](goals/_completed/206-core-and-runners.goal) A rig is a core and its runners: lanes and the judge run their experiments on runners anywhere, shared or dedicated · `VERIFIED`
 - [208](goals/_completed/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `VERIFIED`
 - [209](goals/209-priority-guard-informational-metrics.goal) Priority, guard and informational metrics: in kits, one word each everywhere, on a run's page · `IN_PROGRESS`
-- [211](goals/211-metric-of-zero.goal) A metric may be zero: a guard against a fixed value, or an informational metric, that measures nothing wrong as 0 · `PROPOSED`
+- [211](goals/211-metric-of-zero.goal) A metric may be zero: a guard against a fixed value, or an informational metric, that measures nothing wrong as 0 · `IN_PROGRESS`
 - [212](goals/212-guard-that-asks.goal) A guard that asks: a change past it waits for the owner's yes, with its numbers, instead of being refused · `PROPOSED`
 - [213](goals/213-models-on-every-runner.goal) A run's model files wherever it runs, however large: a lane's runs reach them too, and a long fetch isn't cut at three hours · `IN_PROGRESS`
 - [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`

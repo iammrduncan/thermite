@@ -53,7 +53,8 @@ type Plannable = Pick<
   "objective" | "guards" | "hard_constraints" | "monitor_only" | "metrics"
 >;
 /** A kit's metrics, as kit.json names them, each with its role. */
-type KitMetrics = Record<string, MetricRole>;
+/** A kit's metrics as the plan reads them: their roles, and whether each may be zero (goal 211). */
+type KitMetrics = Record<string, MetricRole & { may_be_zero?: true | undefined }>;
 
 const byPriority = (a: [string, MetricRole], b: [string, MetricRole]) =>
   (a[1].priority ?? 0) - (b[1].priority ?? 0);
@@ -166,6 +167,18 @@ export function planProblems(c: Plannable, kitMetrics: KitMetrics): string[] {
   for (const m of Object.keys(c.metrics ?? {}))
     if (!(m in kitMetrics)) out.push(`metrics names metric ${m}, which the kit does not have`);
   const plan = metricPlan(c, kitMetrics);
+  // A metric that may be zero (goal 211) is compared by its value only, never by its ratio.
+  const zero = (m: string) => kitMetrics[m]?.may_be_zero === true;
+  for (const p of plan.priorities)
+    if (zero(p.metric))
+      out.push(
+        `${p.metric} may be zero, so it can't be a priority metric: the judge compares those by their ratio`,
+      );
+  for (const g of plan.guards)
+    if (g.rule.against !== "value" && zero(g.metric))
+      out.push(
+        `the guard on ${g.metric}, ${guardWords(g.rule)}, compares it by its ratio, and it may be zero: hold it against a value`,
+      );
   for (const g of plan.guards.filter((x) => x.from === "contract")) {
     const loose = (kitMetrics[g.metric]?.guards ?? []).find(
       (k) => k.stay === g.rule.stay && k.against === g.rule.against && !asTight(g.rule, k),

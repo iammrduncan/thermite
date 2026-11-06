@@ -174,6 +174,44 @@ describe("a kit's driver beside the candidate", () => {
     assert.equal((await run()).r.kind, "invalid");
   });
 
+  test("a metric that may be zero takes a zero; another metric, or a negative value, does not (goal 211)", async () => {
+    const check = (kl: string) => `import { readFileSync } from "node:fs";
+const r = JSON.parse(readFileSync(process.argv[2] + "/result.json", "utf8"));
+process.stdout.write(JSON.stringify({ pass: true, reasons: [], value: r.value, kl: ${kl} }) + "\\n");
+`;
+    const run = (kl: string, mayBeZero: boolean) =>
+      drivenRun({
+        candidate: SQUARES,
+        driver: DRIVER,
+        check: check(kl),
+        metrics: {
+          time: { from: "time" },
+          kl: { from: "check", field: "kl", ...(mayBeZero ? { may_be_zero: true } : {}) },
+        },
+        uses: new Set(["kl"]),
+      });
+    const zero = (await run("0", true)).r;
+    assert.equal(zero.kind, "ok", JSON.stringify(zero));
+    if (zero.kind === "ok") assert.equal(zero.metrics.kl, 0);
+    const refused = (await run("0", false)).r;
+    assert.ok(refused.kind === "invalid" && refused.failure === "metric");
+    assert.equal(
+      refused.kind === "invalid" ? refused.reason : "",
+      "the check reported no kl above zero (got 0)",
+    );
+    const negative = (await run("-0.5", true)).r;
+    assert.equal(
+      negative.kind === "invalid" ? negative.reason : "",
+      "the check reported no kl of zero or above (got -0.5)",
+    );
+    // A field the check left out is no number, even where zero would do.
+    const missing = (await run("null", true)).r;
+    assert.equal(
+      missing.kind === "invalid" ? missing.reason : "",
+      "the check reported no kl of zero or above (got null)",
+    );
+  });
+
   test("a driver that fails is the run's crash, with its words", async () => {
     const failing = `process.stderr.write("the candidate never answered\\n"); process.exit(3);\n`;
     const { r } = await drivenRun({ candidate: SQUARES, driver: failing });

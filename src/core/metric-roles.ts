@@ -93,3 +93,22 @@ export function roleProblems(name: string, r: MetricRole): string[] {
   }
   return out;
 }
+
+/**
+ * What a metric that may be zero (goal 211) can't be, in words: a priority metric, or held by a
+ * guard against the baseline or the champion. The judge compares those by their ratio, which a
+ * zero has none of; an informational metric and a guard against a value compare values.
+ */
+export function zeroProblems(name: string, r: MetricRole): string[] {
+  const out: string[] = [];
+  if (r.kind === "priority" || r.priority !== undefined)
+    out.push(
+      `metric ${name} may be zero, so it can't be a priority metric: the judge compares those by their ratio`,
+    );
+  for (const g of r.guards ?? [])
+    if (g.against !== "value")
+      out.push(
+        `metric ${name} may be zero, so its guard can't be against the ${g.against}, which the judge compares by their ratio: hold it against a value`,
+      );
+  return out;
+}

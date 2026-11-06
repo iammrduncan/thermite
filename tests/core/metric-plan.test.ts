@@ -235,6 +235,52 @@ describe("metric plan (goal 209)", () => {
     );
   });
 
+  test("a metric that may be zero is informational or held against a value, never compared by its ratio (goal 211)", () => {
+    const zero = (extra: Record<string, unknown>) => ({
+      unit: "nats",
+      from: "check",
+      field: "kl",
+      may_be_zero: true,
+      ...extra,
+    });
+    // As a value guard, or informational, it is taken.
+    const ok = kitOf({
+      ...roles,
+      kl: zero({ kind: "guard", guards: [{ stay: "below", against: "value", value: 0.001 }] }),
+      mismatches: zero({ field: "mismatches", kind: "info" }),
+    });
+    assert.ok(ok.success, ok.success ? "" : ok.error.message);
+    // As a priority metric, or against the baseline or the champion, it is refused in words.
+    const bad = kitOf({
+      ...roles,
+      kl: zero({ kind: "priority", priority: 3, direction: "min", min_effect: 0.1 }),
+      mismatches: zero({
+        field: "mismatches",
+        kind: "guard",
+        guards: [{ stay: "below", against: "champion", by: 0 }],
+      }),
+    });
+    assert.equal(bad.success, false);
+    const said = bad.success ? [] : bad.error.issues.map((i) => i.message);
+    for (const m of [
+      "metric kl may be zero, so it can't be a priority metric: the judge compares those by their ratio",
+      "metric mismatches may be zero, so its guard can't be against the champion, which the judge compares by their ratio: hold it against a value",
+    ])
+      assert.ok(said.includes(m), `${m}\nnot in:\n${said.join("\n")}`);
+    // A campaign can't make it a priority or a ratio guard either.
+    assert.ok(ok.success);
+    const c = hill({
+      target: { type: "cuda-gpu", class: "gb10" },
+      cells: ["small"],
+      held_out_cells: [],
+      objective: { primary: { metric: "decode_tps", direction: "max", min_effect: 0.02 } },
+      metrics: { kl: { guards: [{ stay: "within", against: "baseline", by: 3 }] } },
+    });
+    assert.deepEqual(kitProblems(c, ok.data), [
+      "the guard on kl, within 3 standard deviations of the baseline, compares it by its ratio, and it may be zero: hold it against a value",
+    ]);
+  });
+
   test("a guard in words", () => {
     assert.equal(
       guardWords({ stay: "above", against: "champion", by: 0.03 }),
