@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type GitAuth, gitHost } from "../common/git/index.ts";
+import { type GitAuth, gitHost, onGitHost } from "../common/git/index.ts";
 import type { SecretBox } from "./secrets.ts";
 import type { ControlStore } from "./store/index.ts";
 
@@ -30,10 +30,9 @@ export function gitAccessFor(
     throw new Error(
       `the Git access ${name} is for no host yet: set the host it is for in Settings › Providers`,
     );
-  const host = gitHost(url);
-  if (host !== g.host)
+  if (!onGitHost(url, g.host))
     throw new Error(
-      `the Git access ${name} is for ${g.host} only, and ${url} is on ${host ?? "no host"}`,
+      `the Git access ${name} is for ${g.host} only, and ${url} is on ${gitHost(url) ?? "no host"}`,
     );
   const secret = secrets.open(g.secret_sealed);
   return {

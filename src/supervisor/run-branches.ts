@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { type GitAuth, gitHost, gitText, withGitAuth } from "../common/git/index.ts";
+import { type GitAuth, gitHost, gitText, onGitHost, withGitAuth } from "../common/git/index.ts";
 import type { RunResults, SignedCommand } from "../core/commands.ts";
 import { commitFiles, verifyExport } from "./git-export.ts";
 
@@ -340,7 +340,7 @@ export async function pushRunBranches(
         git(cfg.repo, ["push", "--quiet", g.git, ...have], env);
       if (g.access) {
         const { auth, host } = await cfg.gitAccess(g.access);
-        if (gitHost(g.git) !== host)
+        if (!onGitHost(g.git, host))
           throw new Error(
             `Git access ${g.access} is for ${host} only, and the run's branches go to ${gitHost(g.git) ?? "an address with no host"}`,
           );

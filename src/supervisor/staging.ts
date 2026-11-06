@@ -14,7 +14,13 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { HarnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
-import { type GitAuth, gitHost, git as gitRun, withGitAuth } from "../common/git/index.ts";
+import {
+  type GitAuth,
+  gitHost,
+  git as gitRun,
+  onGitHost,
+  withGitAuth,
+} from "../common/git/index.ts";
 import { gitRepoPath } from "../core/api/control/rigs.ts";
 import { SETTINGS } from "../core/api/harness/supervisor.ts";
 import type { SignedCommand } from "../core/commands.ts";
@@ -336,10 +342,9 @@ async function bundleFromGit(
       throw new Error(`Git access ${access}: this supervisor has no config from control`);
     // Used only on the host control bound it to.
     const { auth, host } = await cfg.gitAccess(access);
-    const from = gitHost(url);
-    if (from !== host)
+    if (!onGitHost(url, host))
       throw new Error(
-        `Git access ${access} is for ${host} only, and ${imp.path} comes from ${from ?? "an address with no host"}`,
+        `Git access ${access} is for ${host} only, and ${imp.path} comes from ${gitHost(url) ?? "an address with no host"}`,
       );
     await withGitAuth(auth, join(dirname(dir), "known_hosts", access), (g) =>
       fetchWith({ ...g.env, GIT_ALLOW_PROTOCOL: g.protocols }),
