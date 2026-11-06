@@ -149,12 +149,13 @@ A guard is `{"stay": …, "against": …, "by": …}`, or with `"value"` against
 | `against` | `champion`: the champion in force, in the same blocks. `baseline`: the run's [starting point](contract.md#the-baseline). `value`: `value` itself |
 | `by` | A fraction for `above` and `below`, standard deviations for `within`. Not for a guard against a value |
 | `value` | The fixed value, for a guard against one, with `above` or `below` |
+| `ask` | `true`: a change past it is not refused; once confirmed better, it waits for the owner's yes, with the guard and the change's value ([Decide what waits for you](../how-to/campaigns/decide-what-waits.md#choose-what-waits)). For a guard against a value only: one against the baseline or the champion is refused, `metric <metric>, guard <n>: ask is for a guard against a value; one against the champion refuses` |
 
 The judge decides each guard where its reference is:
 
 - **Against the champion**, at every look and at confirmation, on the paired blocks, as a contract's [guard](contract.md#hill-climb) is: clearly past its bound, the verdict is `tradeoff`; not yet clear, screening goes on, and a guard unclear at the end makes it `inconclusive` or `not_confirmed`. For `within`, the spread is the champion's own: the standard deviation of its values in those blocks.
 - **Against the baseline**, at confirmation: the change's median on each case against the baseline's, with the baseline's own spread as its noise; for `within`, the spread is the baseline blocks' median absolute deviation × 1.4826. Past it, the verdict is `tradeoff`: `the guard's total allowance against the starting point is spent: …`.
-- **Against a value**: the change's mean on each case, as a `min` or `max` hard constraint is. Past it, the verdict is `infeasible`: `<metric>/<case>: mean <value> is not at most <value>`.
+- **Against a value**: the change's mean on each case, as a `min` or `max` hard constraint is. Past it, the verdict is `infeasible`: `<metric>/<case>: mean <value> is not at most <value>`. Past a guard that asks, the change is judged on as if it kept it, and the verdict carries `asks`, each case past it in those words; a confirmed win then waits for the owner. The agents' brief says it: `A change that does not keep <metric> <guard> waits for the owner's yes`, and the guard's row on the run's page ends `, or it asks the owner`.
 
 ```json
 "metrics": {

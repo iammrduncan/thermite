@@ -23,6 +23,11 @@ export const GuardRule = z.strictObject({
   by: z.number().nonnegative().optional(),
   /** Against a value: the value. */
   value: z.number().optional(),
+  /**
+   * A guard that asks (goal 212): a change past it is not refused; once confirmed better, it waits
+   * for the owner's yes, with the guard and its value. For now, only against a value.
+   */
+  ask: z.literal(true).optional(),
 });
 export type GuardRule = z.infer<typeof GuardRule>;
 
@@ -53,6 +58,11 @@ export function guardWords(g: GuardRule): string {
   return `at most ${pct} ${g.stay === "above" ? "below" : "above"} ${ref}`;
 }
 
+/** A guard in words, with what happens past it: refused, or waiting for the owner (goal 212). */
+export function guardWordsAsks(g: GuardRule): string {
+  return g.ask ? `${guardWords(g)}, or it asks the owner` : guardWords(g);
+}
+
 /** What is wrong with one metric's entry, in words; empty when it holds. */
 export function roleProblems(name: string, r: MetricRole): string[] {
   const out: string[] = [];
@@ -72,6 +82,8 @@ export function roleProblems(name: string, r: MetricRole): string[] {
     out.push(`${at} is a guard metric: give its guards, each where it must stay`);
   for (const [i, g] of (r.guards ?? []).entries()) {
     const w = `${at}, guard ${i + 1}`;
+    if (g.ask && g.against !== "value")
+      out.push(`${w}: ask is for a guard against a value; one against the ${g.against} refuses`);
     if (g.against === "value") {
       if (g.value === undefined) out.push(`${w}: against a value, give the value`);
       if (g.stay === "within")

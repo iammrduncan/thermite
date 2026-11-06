@@ -55,6 +55,11 @@ export interface Decision<V> {
    * priorities and its informational metrics. A guard's are with the guard.
    */
   metrics?: MetricValues[] | undefined;
+  /**
+   * The guards that ask (goal 212) and that the change is past, in words: it is not refused for
+   * them, and a confirmed win then waits for the owner's yes.
+   */
+  asks?: string[] | undefined;
   reasons: string;
 }
 
@@ -450,18 +455,29 @@ export function decideScreen(
     ...championGuardResults(extra, blocks, policy.cells, alpha),
   ];
   const metrics = otherValues(policy, roles, blocks);
+  // A guard that asks (goal 212) refuses nothing: the change past it goes on, and asks after.
+  const asks = valueGuardFailures(
+    extra.filter((g) => g.rule.ask),
+    blocks,
+    policy.cells,
+  );
   const result = (verdict: ScreenVerdict | undefined, reasons: string) => ({
     verdict,
     primary,
     values: metricValues(blocks, metric, policy.cells),
     guards,
     ...(metrics.length ? { metrics } : {}),
+    ...(asks.length ? { asks } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 
   const failures = [
     ...hardConstraintFailures(policy, blocks),
-    ...valueGuardFailures(extra, blocks, policy.cells),
+    ...valueGuardFailures(
+      extra.filter((g) => !g.rule.ask),
+      blocks,
+      policy.cells,
+    ),
   ];
   if (failures.length) return result("infeasible", `hard constraints: ${failures.join("; ")}`);
 
@@ -530,6 +546,11 @@ export function decideConfirm(
       ]
     : undefined;
   const metrics = otherValues(policy, roles, blocks);
+  const asks = valueGuardFailures(
+    extra.filter((g) => g.rule.ask),
+    blocks,
+    policy.cells,
+  );
   const result = (verdict: ConfirmVerdict, reasons: string) => ({
     verdict,
     primary,
@@ -537,12 +558,17 @@ export function decideConfirm(
     guards,
     ...(vsStart ? { vsStart } : {}),
     ...(metrics.length ? { metrics } : {}),
+    ...(asks.length ? { asks } : {}),
     reasons: `${reasons}; ${metric} ${describe(primary)}`,
   });
 
   const failures = [
     ...hardConstraintFailures(policy, blocks),
-    ...valueGuardFailures(extra, blocks, policy.cells),
+    ...valueGuardFailures(
+      extra.filter((g) => !g.rule.ask),
+      blocks,
+      policy.cells,
+    ),
   ];
   if (failures.length) return result("infeasible", `hard constraints: ${failures.join("; ")}`);
   const violated = guards.filter((g) => g.status === "violated").map((g) => g.metric);

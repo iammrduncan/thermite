@@ -94,6 +94,8 @@ export interface EventBodies {
     values?: unknown;
     /** Each guard's status, changes (fractions, positive is better) and values (goal 184). */
     guards?: VerdictGuard[] | undefined;
+    /** The guards that ask and that the change is past, in words (goal 212). */
+    asks?: string[] | undefined;
   };
   /** A confirmed win's guards from its verdict's record, sent once when its event lacked them. */
   verdict_guards: { id: number; guards: VerdictGuard[] };

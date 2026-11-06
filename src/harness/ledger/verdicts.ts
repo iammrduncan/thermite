@@ -104,6 +104,8 @@ export class LedgerVerdicts extends LedgerPart {
     values?: unknown;
     /** The plan's other metrics' values (goal 209): in the event only, as values are. */
     metrics?: unknown;
+    /** The guards that ask and that the change is past, in words (goal 212): in the event only. */
+    asks?: string[] | undefined;
   }): number {
     return this.tx(() => {
       const a = this.ledger.attempts.get(v.attempt);
@@ -142,6 +144,7 @@ export class LedgerVerdicts extends LedgerPart {
       supersedes: v.supersedes ?? null,
       ...(v.values ? { values: v.values } : {}),
       ...(Array.isArray(v.metrics) && v.metrics.length ? { metrics: v.metrics } : {}),
+      ...(v.asks?.length ? { asks: v.asks } : {}),
       ...(Array.isArray(v.guards) && v.guards.length ? { guards: guardsForEvent(v.guards) } : {}),
     });
     return id;

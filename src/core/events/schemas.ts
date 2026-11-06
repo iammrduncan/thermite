@@ -152,6 +152,7 @@ const BODIES = {
       .object({ metric: str, cells: list({ cell: str, candidate: num, reference: num }) })
       .nullish(),
     guards: list({ metric: str, status: str, change: num, low: num, high: num }),
+    asks: strs.optional(),
   }),
   verdict_guards: z.object({
     id: num,

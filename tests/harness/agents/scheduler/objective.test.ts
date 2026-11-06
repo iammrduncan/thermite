@@ -30,6 +30,23 @@ describe("the agents' objective (goal 209)", () => {
     );
   });
 
+  test("a guard that asks: a change past it waits for the owner's yes (goal 212)", () => {
+    const c = hill({ guards: [] });
+    const plan = metricPlan(c, {
+      kl: {
+        kind: "guard",
+        guards: [
+          { stay: "below", against: "value", value: 0, ask: true },
+          { stay: "below", against: "value", value: 0.001 },
+        ],
+      },
+    });
+    assert.equal(
+      objectiveOf(c, plan),
+      "increase gflops (at least 1.0% to count) on cells n256, n512, without breaking correctness. A change is refused, however much it gains, unless it keeps kl at most 0.001. A change that does not keep kl at most 0 waits for the owner's yes",
+    );
+  });
+
   test("before the baseline, the contract's own guards; none, and the objective is as it was", () => {
     assert.match(
       objectiveOf(hill()),

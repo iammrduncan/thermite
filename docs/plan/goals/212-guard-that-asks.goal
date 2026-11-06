@@ -1,7 +1,7 @@
 ---
 id: "212"
 title: "A guard that asks"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: ["209", "211"]
 created: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 212 · A guard that asks
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## Why (found in use, 2026-11-06)
 
@@ -22,9 +22,13 @@ A guard (goal 209) holds or refuses: a change past its bound is refused, however
 2. A change that keeps every asking guard promotes as the run's promotion says.
 3. Guards that refuse and guards that ask can be on the same metric: for example, a divergence that must stay at 0 or ask, and must never pass a fixed limit at all. Such a change is promoted at 0, waits between 0 and the limit, and is refused past the limit.
 
+## Progress
+
+- 2026-11-06: built for a guard against a value. A guard rule takes `"ask": true` (`core/metric-roles.ts`); one against the baseline or the champion is refused in words for now. The judge does not refuse a change past a guard that asks: at the screen and at confirmation it goes on as if the change kept it, and the decision names each case past it (`asks`, `harness/judge/decide.ts`), which the verdict event carries. At promotion, a confirmed win whose verdict has `asks` waits for the owner whatever the run's rule (`ownerAsks`, `harness/service/champion.ts`), through the waiting win's own path: Needs you shows the reason, `a guard asks you before this change is kept: …`. The agents' brief says which changes wait, and the guard's row on the run's page ends `, or it asks the owner`. Tests: `tests/harness/judge/decide.test.ts`, `tests/harness/service/owner-asks.test.ts`, `tests/harness/agents/scheduler/objective.test.ts`, `tests/core/metric-plan.test.ts`. Pages: the kit manifest, the verdicts reference, [Decide what waits for you](../../_site/src/content/docs/how-to/campaigns/decide-what-waits.md#choose-what-waits). To verify on the lab's test machine.
+
 ## Open
 
-- The field's name and place in the guard rule (`core/metric-roles.ts`), and how the dashboard's Needs you and the run's Attempts tab show the guard that asked.
+- A guard that asks against the baseline or the champion, where the judge decides by an interval (a `tradeoff` today).
 
 ## Done when
 

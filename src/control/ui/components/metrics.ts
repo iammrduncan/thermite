@@ -1,4 +1,4 @@
-import { guardWords } from "../../../core/metric-roles.ts";
+import { guardWordsAsks } from "../../../core/metric-roles.ts";
 import {
   figure,
   type GuardRow,
@@ -141,7 +141,7 @@ function guardRows(m: RunMetrics): string {
     const champ = last(g.points);
     const room = roomLeft(g);
     const past = room?.endsWith("past it");
-    return `<div class="ms-guard"><div><b>${esc(g.metric)}</b><div class="muted small">${esc(guardWords(g.rule))}</div></div>${spark(
+    return `<div class="ms-guard"><div><b>${esc(g.metric)}</b><div class="muted small">${esc(guardWordsAsks(g.rule))}</div></div>${spark(
       g.points.map((p) => p.value),
       {
         w: 320,

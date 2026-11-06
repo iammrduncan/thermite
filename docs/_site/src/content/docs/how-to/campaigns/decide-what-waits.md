@@ -70,13 +70,15 @@ Next to it, **Ask me first about** chooses what else waits for you. All of it is
 | **a review panel's pass of a goal or of a research run's questions** | A subjective goal the review panel passed, or a research run's questions it found answered: see [Reviews](#reviews) | `reviews` | `"reviews": true` |
 | **ending a goal campaign as not possible** | A "not possible" proposal: see [Not possible endings](#not-possible-endings) | `not-possible` | `"not_possible": true` |
 
+A kit or a contract can also make a guard ask instead of refusing, with `"ask": true` on a guard against a value ([guards](../../reference/kit-manifest.md#what-each-metric-is-for)). A change past such a guard is judged as any other, and when it is confirmed better it waits for you, whatever the run's rule. For example, a divergence from the starting point's output held at 0 by a guard that asks, and at most 0.001 by one that refuses: a change that keeps the output exactly the same becomes the champion with no step of yours, one that moves it a little waits for you with its numbers, and one past 0.001 is refused.
+
 A run keeps the choices it started with. A run started with **ask me every time** keeps asking, and so does a run with no rule of its own on a rig whose **Edit rig** says **Ask me for each change**.
 
 The run's **Info** tab shows the rule in force, in the block **The run**, as **Promotion**: `Automatic when the judge confirms, after the auditor's clear when an audit is called for`, `Only with your approval`, or `The rig's default (automatic unless it was set to ask you)`, and then what else it asks you about, such as `. It asks you about a gain above 15%, a change with declared flaws`.
 
 ### Promotions
 
-A change waits for you as **Your decision** only for a cause the row says, after `It waits for you because`: `you asked to decide every change (promotion: owner approval)`, `you asked to decide gains above 15.0%: this one is 21.3%`, or `you asked to decide changes with declared flaws: this one declares 2`. A row that says `The auditor sent this change to you` comes from the auditor's `needs_owner`.
+A change waits for you as **Your decision** only for a cause the row says, after `It waits for you because`: `you asked to decide every change (promotion: owner approval)`, `you asked to decide gains above 15.0%: this one is 21.3%`, `you asked to decide changes with declared flaws: this one declares 2`, or `a guard asks you before this change is kept: kl/n256: mean 0.0002 is not at most 0` for each case past a guard that asks. A row that says `The auditor sent this change to you` comes from the auditor's `needs_owner`.
 
 **Make it the champion** makes the change the next champion: agents start their next work from it. If the champion changed while the change waited, the judge first tests it again against the new champion. If the agent declared flaws, approving accepts them, and the record shows your name. **Reject it** keeps the change from becoming the champion, and the record shows that you rejected it.
 

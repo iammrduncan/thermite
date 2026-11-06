@@ -367,6 +367,36 @@ describe("metric roles (goal 209)", () => {
     assert.equal(moved.verdict, "tradeoff", moved.reasons);
   });
 
+  test("a guard that asks lets a change past it go on, and the confirmed win names it for the owner (goal 212)", () => {
+    // A divergence that must stay at 0, or the owner decides; never past 50 at all.
+    const roles: Roles = {
+      kl: {
+        kind: "guard",
+        guards: [
+          { stay: "below", against: "value", value: 0, ask: true },
+          { stay: "below", against: "value", value: 50 },
+        ],
+      },
+    };
+    // At 0: nothing asks.
+    const exact = decideConfirm(policy, quiet(5, { gflops: 1.05, kl: 0 }), {}, 0, undefined, roles);
+    assert.equal(exact.verdict, "win_confirmed", exact.reasons);
+    assert.equal(exact.asks, undefined);
+    // Between 0 and 50: screened and confirmed as better, with the guard that asks named.
+    const drift = quiet(5, { gflops: 1.05, kl: 0.2 });
+    const screened = decideScreen(policy, drift.slice(0, 3), 0, roles);
+    assert.equal(screened.verdict, "win_screened", screened.reasons);
+    const confirmed = decideConfirm(policy, drift, {}, 0, undefined, roles);
+    assert.equal(confirmed.verdict, "win_confirmed", confirmed.reasons);
+    assert.ok(confirmed.asks?.length);
+    for (const a of confirmed.asks ?? [])
+      assert.match(a, /^kl\/n\d+: mean [\d.]+ is not at most 0$/);
+    // Past 50: refused, as a guard that does not ask refuses.
+    const far = decideConfirm(policy, quiet(5, { gflops: 1.05, kl: 1 }), {}, 0, undefined, roles);
+    assert.equal(far.verdict, "infeasible", far.reasons);
+    assert.match(far.reasons, /kl\/n\d+: mean .* is not at most 50/);
+  });
+
   test("a guard against a fixed value refuses a change past it, as a hard limit does", () => {
     const roles: Roles = {
       peak_gib: { kind: "guard", guards: [{ stay: "below", against: "value", value: 105 }] },

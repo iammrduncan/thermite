@@ -278,13 +278,21 @@ export function objectiveOf(c: Contract, plan?: MetricPlan | undefined): string 
         (x) =>
           `${x.metric} (${x.direction === "max" ? "higher" : "lower"}, at least ${pct(x.min_effect ?? 0)})`,
       );
-    const guards = m.guards.map((g) => `${g.metric} ${guardWords(g.rule)}`);
+    const guards = m.guards
+      .filter((g) => !g.rule.ask)
+      .map((g) => `${g.metric} ${guardWords(g.rule)}`);
+    const asking = m.guards
+      .filter((g) => g.rule.ask)
+      .map((g) => `${g.metric} ${guardWords(g.rule)}`);
     const info = m.info.map((i) => i.metric);
     return [
       `${p.direction === "max" ? "increase" : "decrease"} ${p.metric} (at least ${pct(p.min_effect)} to count) on cells ${c.cells.join(", ")}, without breaking correctness`,
       ...(ties.length ? [`A change equal on ${p.metric} wins by ${ties.join(", then ")}`] : []),
       ...(guards.length
         ? [`A change is refused, however much it gains, unless it keeps ${guards.join("; ")}`]
+        : []),
+      ...(asking.length
+        ? [`A change that does not keep ${asking.join("; ")} waits for the owner's yes`]
         : []),
       ...(info.length ? [`Recorded, never deciding: ${info.join(", ")}`] : []),
     ].join(". ");

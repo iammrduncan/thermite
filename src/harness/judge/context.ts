@@ -336,6 +336,7 @@ export class JudgeContext {
       ciHigh: toFraction(d.primary.high),
       values: d.values,
       metrics: d.metrics,
+      asks: d.asks,
       guards: [
         ...d.guards.map((g) => {
           // At confirmation, the guard against the run's baseline too (goal 115): a log ratio.

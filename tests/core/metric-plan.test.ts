@@ -202,6 +202,12 @@ describe("metric plan (goal 209)", () => {
         guards: [{ stay: "below", against: "champion" }],
       },
       f: { unit: "ms", from: "check", field: "f", kind: "info", direction: "min" },
+      g: {
+        unit: "ms",
+        from: "check",
+        field: "g",
+        guards: [{ stay: "below", against: "champion", by: 0.05, ask: true }],
+      },
     });
     assert.equal(bad.success, false);
     const said = bad.success ? [] : bad.error.issues.map((i) => i.message);
@@ -212,6 +218,7 @@ describe("metric plan (goal 209)", () => {
       "metric d, guard 1: within is against the baseline or the champion, which have a spread",
       "metric e, guard 1: give by, how far it may move, as a fraction",
       "metric f: direction is for a priority metric, and its kind is info",
+      "metric g, guard 1: ask is for a guard against a value; one against the champion refuses",
     ])
       assert.ok(said.includes(m), `${m}\nnot in:\n${said.join("\n")}`);
     const first = parseContract({
