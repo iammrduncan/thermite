@@ -233,6 +233,39 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     );
   });
 
+  test("a slot that holds a rig's runner is that rig's, not one named for the runner (goal 213)", async () => {
+    const f = fakeCluster({
+      canCreateNamespaces: false,
+      slots: { "thermite-slot-5": true, "thermite-slot-6": true },
+      // The runner's objects go by its own name; part-of names its rig. The core's have no part-of.
+      slotUsers: {
+        "thermite-slot-5": "rig-a-gpu-2 thermite-rig-a",
+        "thermite-slot-6": "rig-a ",
+      },
+    });
+    const s = await control(f.k);
+    assert.match(
+      await s.post("/ui/settings/add", {
+        type: "k8s",
+        name: "lab",
+        kubeconfig: KUBECONFIG,
+        placement: "slot",
+        slots: "thermite-slot-5, thermite-slot-6",
+      }),
+      /"lab" is added and checked/,
+    );
+    const facts = s.store.clusters.get("lab")?.facts as
+      | { slots: { namespace: string; used_by?: string }[] }
+      | undefined;
+    assert.deepEqual(
+      facts?.slots.map((x) => [x.namespace, x.used_by]),
+      [
+        ["thermite-slot-5", "rig-a"],
+        ["thermite-slot-6", "rig-a"],
+      ],
+    );
+  });
+
   test("a slot whose rules take pods only on a node it names: control finds it and puts the rig there", async () => {
     const f = fakeCluster({
       canCreateNamespaces: false,

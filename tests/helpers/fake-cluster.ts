@@ -40,6 +40,11 @@ export function fakeCluster(
     deploymentStdout?: string;
     /** Slots whose rules take pods only on these nodes, as an admission rule refuses others. */
     slotNodes?: Record<string, string[]>;
+    /**
+     * What a slot's control-managed deployments say of their owner: the first one's instance and
+     * part-of labels, as kubectl's jsonpath prints them; none: the slot holds nothing.
+     */
+    slotUsers?: Record<string, string>;
   } = {},
 ) {
   const calls: { args: string[]; stdin?: string }[] = [];
@@ -152,7 +157,8 @@ export function fakeCluster(
         return ok(o.canCreateNamespaces === false ? "no\n" : "yes\n");
       const slot = /^auth can-i create deployments -n (\S+)$/.exec(a);
       if (slot) return ok(o.slots?.[slot[1] as string] ? "yes\n" : "no\n");
-      if (args[0] === "get" && args[1] === "deployments") return ok("");
+      if (args[0] === "get" && args[1] === "deployments")
+        return ok(o.slotUsers?.[args[3] ?? ""] ?? "");
       // One deployment by name: the supervisor, with the control address it was deployed with.
       if (args[0] === "get" && args[1] === "deployment" && args[3] === "-n" && o.deploymentStdout)
         return ok(o.deploymentStdout);

@@ -338,11 +338,19 @@ export async function checkCluster(
       "-l",
       "app.kubernetes.io/managed-by=thermite-control",
       "-o",
-      "jsonpath={.items[0].metadata.labels.app\\.kubernetes\\.io/instance}",
+      'jsonpath={.items[0].metadata.labels.app\\.kubernetes\\.io/instance}{" "}{.items[0].metadata.labels.app\\.kubernetes\\.io/part-of}',
     ]);
-    const by = used.code === 0 && used.stdout.trim() ? used.stdout.trim() : undefined;
-    // A slot that holds a rig is read with that rig's labels, as Add a rig read it.
-    const labels = by ? { ...HARNESS_LABELS, "app.kubernetes.io/instance": by } : HARNESS_LABELS;
+    const [unit, partOf] = used.code === 0 ? used.stdout.trim().split(/\s+/) : [];
+    // A runner's objects go by its own name (goal 206); the rig it serves is in part-of, as
+    // thermite-<rig>. A slot that holds a rig's runner is that rig's, so its other GPUs are offered
+    // to it on Edit rig.
+    const by = partOf?.startsWith("thermite-")
+      ? partOf.slice("thermite-".length)
+      : unit || undefined;
+    // A slot that holds a rig is read with its objects' labels, as Add a rig read it.
+    const labels = unit
+      ? { ...HARNESS_LABELS, "app.kubernetes.io/instance": unit }
+      : HARNESS_LABELS;
     const net = await slotNetwork(k, t, s, labels, reach);
     const quotas = await k.kubectl(t, ["get", "resourcequota", "-n", s, "-o", "json"]);
     const usable = can.stdout.trim() === "yes";
