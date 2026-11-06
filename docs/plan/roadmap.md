@@ -166,7 +166,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 **Multi-machine rigs (the owner, 2026-11-06).** A rig is a core and its runners on other machines; every agent program works on them; a kit says what each of its metrics is for; and the fixes a first real campaign on runners needs. The rest of v0.1.3's first plan moved to [v0.1.4](#v014). It is tagged once a campaign on runners has used these.
 
 - [206](goals/_completed/206-core-and-runners.goal) A rig is a core and its runners: lanes and the judge run their experiments on runners anywhere, shared or dedicated · `VERIFIED`
-- [208](goals/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `PROPOSED`
+- [208](goals/_completed/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `VERIFIED`
 - [209](goals/209-priority-guard-informational-metrics.goal) Priority, guard and informational metrics: in kits, one word each everywhere, on a run's page · `IN_PROGRESS`
 - [211](goals/211-metric-of-zero.goal) A metric may be zero: a guard against a fixed value, or an informational metric, that measures nothing wrong as 0 · `PROPOSED`
 - [212](goals/212-guard-that-asks.goal) A guard that asks: a change past it waits for the owner's yes, with its numbers, instead of being refused · `PROPOSED`
