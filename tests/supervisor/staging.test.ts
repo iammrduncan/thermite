@@ -146,6 +146,13 @@ describe("staging sources by reference", () => {
     assert.match(heads, new RegExp(`^${first} refs/thermite/stage/${first}$`));
     // Already there: the next command naming it relays at once, without fetching.
     assert.equal(await stageCommand(cfg, assign("c-2", imports)), "ready");
+    // The same path for another commit, as a later run may name it: the bundle there holds the
+    // first, so it is fetched again, and then holds the second.
+    const second = git(repo, "rev-parse", "HEAD");
+    const next = [{ ...imports[0], commit: second }];
+    assert.equal(await stageCommand(cfg, assign("c-3", next)), "wait");
+    assert.equal(await staged(cfg, assign("c-3", next)), "ready");
+    assert.match(git(root, "bundle", "list-heads", bundle), new RegExp(`^${second} `));
     // Under compose and on a machine the inbox lets other users in (the harness's controller is
     // one of them): the bundle does too.
     assert.equal(statSync(bundle).mode & 0o777, 0o644);

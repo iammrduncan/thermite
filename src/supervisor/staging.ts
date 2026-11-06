@@ -271,9 +271,19 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
 
 async function present(imp: Sourced, target: string): Promise<boolean> {
   if (!existsSync(target)) return false;
-  // A bundle is checked by the harness (it must hold the commit); a model by its hash, here
-  // once, so a wrong file is replaced rather than relayed.
-  if (imp.kind !== "model") return true;
+  // A bundle at the path is kept when one of its heads is the commit: an earlier run's bundle
+  // of another commit at the same path is fetched again, not relayed for the harness to refuse.
+  // The harness still checks the bundle it gets. A model by its hash, here once, so a wrong file
+  // is replaced rather than relayed.
+  if (imp.kind !== "model")
+    return git(dirname(target), ["bundle", "list-heads", target]).then(
+      (heads) =>
+        heads
+          .toString("utf8")
+          .split("\n")
+          .some((l) => l.split(" ")[0] === imp.commit),
+      () => false,
+    );
   const st = statSync(target);
   const key = `${target}\0${st.size}\0${st.mtimeMs}`;
   if (verified.has(key)) return true;

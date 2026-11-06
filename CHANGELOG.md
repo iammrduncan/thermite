@@ -47,6 +47,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 - Under Docker, a rig's supervisor reaches a model server on the same computer at `host.docker.internal`, as control and the harness do: an advisor whose model runs there got no answer through the supervisor's proxy (Podman names the host by itself).
 
 - A role's command may move or link its files between folders under the GPU fence, as a build's cache does: from Landlock's second ABI any rule set refuses that unless a rule grants it, so a Zig build failed with `CrossDevice` (`EXDEV`) on one filesystem. The fence grants it everywhere, and the kernel still refuses a move that would give a file access it lacks where it is. The isolation selftest's new probe `move-across` checks every role can do it. See [Rig checks](docs/_site/src/content/docs/reference/rig-checks.md#probes-that-must-succeed).
+- An assignment whose project or kit has a source and names a bundle path an earlier run used, for another commit, fetches the bundle again: the supervisor relayed the bundle already there, and the harness refused it as `bundle does not contain commit <commit>`. See [Signed commands](docs/_site/src/content/docs/reference/signed-commands.md#imports).
 - A failed build is remembered only for the harness build that met it: after an update to new images the judge builds the commit again, where the failure stayed for that commit and kit, even when the images fixed its cause. See [Build cache](docs/_site/src/content/docs/reference/kit-manifest.md#build-cache).
 
 ### Checks
