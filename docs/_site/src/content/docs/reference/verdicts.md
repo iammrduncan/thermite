@@ -146,7 +146,7 @@ A kind comes from how the judge saw the run fail, never from what the run or the
 
 | Verdict | Meaning | Dashboard says |
 | --- | --- | --- |
-| `invalid` | The change's build failed, or its build or run left files the judge refuses, or the kit's check failed, or a measured value was impossible (for example not a number) | "broken: it failed a correctness check or did not build" |
+| `invalid` | The change's build failed, or its build or run left files the judge refuses, or the kit's check failed, or a measured value was impossible (for example not a number, or 0 for a metric that may not be zero: only a check's metric with `"may_be_zero": true` may be 0, as the judge compares the others by their ratio; see [the kit manifest](kit-manifest.md#metrics)) | "broken: it failed a correctness check or did not build" |
 | `crash_candidate` | The change's run exited with an error or was stopped at a kit limit, or its build was stopped at a kit limit for the second time: the first time, the build may have met a busy host, so the job is an infrastructure failure (`crash_infra`, `build killed (timeout); tried once more`) and runs once more | "crashed when run" |
 | `crash_infra` | Something failed that was not the change's fault, such as the champion's own run or a busy device. The judge tries once more. It never counts against the research | "the rig failed while measuring it (not the change's fault)" |
 | `invalidated` | The owner withdrew the evidence it rested on ([Withdrawn evidence](#withdrawn-evidence)). It supersedes the verdict before it, which stays in the record. Its reasons are the owner's, or `lineage of invalidated evidence: …` for a change built on a withdrawn one | "its evidence was invalidated" |

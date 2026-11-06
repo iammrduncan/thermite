@@ -1,0 +1,40 @@
+---
+id: "212"
+title: "A guard that asks"
+status: VERIFIED
+version: "0.1.3"
+depends_on: ["209", "211"]
+created: 2026-11-06
+updated: 2026-11-06
+---
+
+# 212 · A guard that asks
+
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
+
+## Why (found in use, 2026-11-06)
+
+A guard (goal 209) holds or refuses: a change past its bound is refused, however much it gains. Some bounds are not a yes or no for code to decide. In a hill climb of an inference engine, a change that keeps every output exactly as it was is safe to keep at once; a change that moves the outputs a little may still be good, but a person should look at its numbers first. Today a run can only refuse such a change, or ask the owner about every win (`promotion: owner_approval`).
+
+## What
+
+1. A guard may ask instead of refusing: a change past its bound is not refused. Once the judge confirms it better on its priorities, it waits for the owner's yes, as a win waits today under a run's `ask_owner` (above a gain, or with declared flaws), with the guard, its bound and the change's value shown where the owner decides.
+2. A change that keeps every asking guard promotes as the run's promotion says.
+3. Guards that refuse and guards that ask can be on the same metric: for example, a divergence that must stay at 0 or ask, and must never pass a fixed limit at all. Such a change is promoted at 0, waits between 0 and the limit, and is refused past the limit.
+
+## Progress
+
+- 2026-11-06: built for a guard against a value. A guard rule takes `"ask": true` (`core/metric-roles.ts`); one against the baseline or the champion is refused in words for now. The judge does not refuse a change past a guard that asks: at the screen and at confirmation it goes on as if the change kept it, and the decision names each case past it (`asks`, `harness/judge/decide.ts`), which the verdict event carries. At promotion, a confirmed win whose verdict has `asks` waits for the owner whatever the run's rule (`ownerAsks`, `harness/service/champion.ts`), through the waiting win's own path: Needs you shows the reason, `a guard asks you before this change is kept: …`. The agents' brief says which changes wait, and the guard's row on the run's page ends `, or it asks the owner`. Tests: `tests/harness/judge/decide.test.ts`, `tests/harness/service/owner-asks.test.ts`, `tests/harness/agents/scheduler/objective.test.ts`, `tests/core/metric-plan.test.ts`. Pages: the kit manifest, the verdicts reference, [Decide what waits for you](../../../_site/src/content/docs/how-to/campaigns/decide-what-waits.md#choose-what-waits).
+
+## Not in this goal
+
+- A guard that asks against the baseline or the champion, where the judge decides by an interval (a `tradeoff` today). A later goal, if a campaign needs it.
+
+## Done when
+
+- The judge, the promotion path and the dashboard take an asking guard, with tests for the three cases above.
+- The kit manifest, contract and verdicts references, and the page that says how a win waits for the owner, describe it.
+
+## Verified (2026-11-06)
+
+The lab's test machine ran `tests/harness/judge/decide.test.ts`, `tests/harness/service/owner-asks.test.ts`, `tests/harness/agents/scheduler/objective.test.ts`, `tests/core/metric-plan.test.ts` and `tests/control/views/metrics.test.ts` at 33d787e9: 38 of 38 pass, the three cases among them (kept at the bound: promoted; between the bounds: confirmed and waiting for the owner; past the refusing bound: `infeasible`). The kit manifest, the contract and verdicts references and Decide what waits for you describe it.

@@ -1,7 +1,7 @@
 ---
 id: "211"
 title: "A metric may be zero"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.3"
 depends_on: ["209"]
 created: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 211 · A metric may be zero
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `VERIFIED` · **Version:** [v0.1.3](../../roadmap.md#v013)
 
 ## Why (found in use, 2026-11-06)
 
@@ -24,9 +24,13 @@ A kit's metrics must come out above zero today (`kit.json` › `metrics`): the j
 
 ## Progress
 
-- 2026-11-06: built. A check's metric says `"may_be_zero": true` to take a 0 (`src/core/kit.ts`); the measurement takes it, and refuses a negative or a missing field in words (`src/harness/judge/measure.ts`). Such a metric may be informational or held by guards against a value: the kit refuses it as a priority metric or with a guard against the baseline or the champion (`zeroProblems`, `src/core/metric-roles.ts`), and the check of an assignment refuses a contract that gives it such a role (`planProblems`, `src/core/metric-plan.ts`). The judge's value guards, informational values and the run page's metrics already compare values, and show a zero as a value. Tests: `tests/core/metric-plan.test.ts`, `tests/harness/judge/measure.test.ts`. Page: [the kit manifest](../../_site/src/content/docs/reference/kit-manifest.md#what-each-metric-is-for). To verify on the lab's test machine.
+- 2026-11-06: built. A check's metric says `"may_be_zero": true` to take a 0 (`src/core/kit.ts`); the measurement takes it, and refuses a negative or a missing field in words (`src/harness/judge/measure.ts`). Such a metric may be informational or held by guards against a value: the kit refuses it as a priority metric or with a guard against the baseline or the champion (`zeroProblems`, `src/core/metric-roles.ts`), and the check of an assignment refuses a contract that gives it such a role (`planProblems`, `src/core/metric-plan.ts`). The judge's value guards, informational values and the run page's metrics already compare values, and show a zero as a value. Tests: `tests/core/metric-plan.test.ts`, `tests/harness/judge/measure.test.ts`. Page: [the kit manifest](../../../_site/src/content/docs/reference/kit-manifest.md#what-each-metric-is-for).
 
 ## Done when
 
 - The kit schema and the judge take a zero for such metrics, with tests for each rule above.
 - The kit manifest reference and the verdicts reference say which metrics may be zero, and why.
+
+## Verified (2026-11-06)
+
+The lab's test machine ran `tests/core/metric-plan.test.ts` and `tests/harness/judge/measure.test.ts` at b8235825: 13 of 13 pass, and 66 of 66 with goal 213's files beside them. The kit manifest and the verdicts reference say which metrics may be zero, and why; the contract reference says a campaign can't give one a ratio role.
