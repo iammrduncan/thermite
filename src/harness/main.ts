@@ -88,6 +88,7 @@ async function main(): Promise<void> {
   // rig says it doesn't (THERMITE_LOCAL_JUDGE=0): a core on a machine without a GPU, whose runners
   // may join later.
   const judging = env.THERMITE_LOCAL_JUDGE === "0" ? [] : hardware;
+  service.modelsOnRunners = env.THERMITE_LOCAL_JUDGE === "0";
   const executorIds = reclaimJobs(ledger, judging);
   const parts = agentParts(ctx, ledger, service, targets);
 

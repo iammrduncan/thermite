@@ -441,4 +441,47 @@ describe("model files by URL", () => {
     // The stand-in was asked only for the public file and the hop: never a private address.
     assert.deepEqual(asked, ["https://models.example.com/m.bin", "https://models.example.com/hop"]);
   });
+
+  test("a core that leaves the model files to its runners downloads none (goal 213)", async () => {
+    const { root, inbox, downloads } = setup();
+    let fetched = 0;
+    const fetchImpl: typeof fetch = async () => {
+      fetched++;
+      return new Response("weights");
+    };
+    const model = {
+      kind: "model",
+      path: "models/m",
+      name: "m",
+      sha256: "2".repeat(64),
+      source: { url: "https://models.example.com/m.bin" },
+    };
+    const cmd = {
+      envelope: {
+        v: 1,
+        id: "c-runners",
+        rig: "rig-a",
+        kind: "assign_campaign",
+        issued_by: "owner:api",
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        payload: { run: "run-1", imports: [model] },
+      },
+      signature: "",
+    } as unknown as SignedCommand;
+    const r = await stageCommand(
+      {
+        rig: "rig-a",
+        inboxDir: inbox,
+        resultsRepo: join(root, "home", "results.git"),
+        models: downloads,
+        fetchImpl,
+        modelsOnRunners: async () => true,
+      },
+      cmd,
+    );
+    assert.equal(r, "ready");
+    assert.equal(fetched, 0);
+    assert.equal(existsSync(join(inbox, model.path)), false);
+  });
 });

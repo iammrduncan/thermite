@@ -98,6 +98,45 @@ describe("harness service and API", () => {
     assert.equal(readFileSync(stored, "utf8"), "weights-v1");
   });
 
+  test("a core that never judges itself takes an assignment whose model files are left to its runners (goal 213)", async () => {
+    const sha = "3".repeat(64);
+    const assign = (env: ReturnType<typeof makeHarnessEnv>) => {
+      const base = env.assignPayload();
+      const parsed = parseContract({
+        ...(base.contract as object),
+        models: [{ name: "m.bin", sha256: sha }],
+      });
+      assert.ok(parsed.ok);
+      return env.service.applyCommand(
+        env.sign("assign_campaign", {
+          ...base,
+          contract: parsed.contract,
+          contract_sha: parsed.sha,
+          imports: [
+            ...(base.imports as object[]),
+            // Its supervisor downloaded nothing: no file in the inbox.
+            { kind: "model", path: "models/m.bin", name: "m.bin", sha256: sha },
+          ],
+        }),
+      );
+    };
+    // A core that judges on its own machine needs the file.
+    const judging = makeHarnessEnv();
+    const refused = await assign(judging);
+    assert.ok(refused.status === "applied" && !refused.accepted, JSON.stringify(refused));
+    // One that never does takes the run, with the file left to its runners and no copy kept.
+    const core = makeHarnessEnv();
+    core.service.modelsOnRunners = true;
+    const out = await assign(core);
+    assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
+    assert.match(JSON.stringify(out.result), /"on":"runners"/);
+    assert.equal(core.service.ledger.imports.find("model", { sha256: sha }), undefined);
+    assert.deepEqual(
+      core.service.ledger.commands.modelsOf("smoke-1").map((m) => m.sha256),
+      [sha],
+    );
+  });
+
   test("a run on the harness's own content takes its model from that content, not the inbox (goal 163)", async () => {
     const env = makeHarnessEnv();
     const own = mkdtempSync(join(tmpdir(), "thermite-own-"));

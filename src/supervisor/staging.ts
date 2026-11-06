@@ -12,9 +12,11 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
+import type { HarnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
 import { type GitAuth, gitHost, git as gitRun, withGitAuth } from "../common/git/index.ts";
 import { gitRepoPath } from "../core/api/control/rigs.ts";
+import { SETTINGS } from "../core/api/harness/supervisor.ts";
 import type { SignedCommand } from "../core/commands.ts";
 import { sshCommand } from "./git-export.ts";
 import { downloadModel, ModelDownloads } from "./model-download.ts";
@@ -59,10 +61,20 @@ export interface StagingConfig {
   /** The free space a model download leaves where it lands, in bytes (goal 173); none: 0. */
   floorBytes?: number | undefined;
   /**
+   * Whether the rig's core leaves a run's model files to its runners (goal 213), as its harness
+   * says: then none is downloaded here. None: they are.
+   */
+  modelsOnRunners?: (() => Promise<boolean>) | undefined;
+  /**
    * Tests only: `file://` git sources, and model files at private or local addresses, are
    * fetched. Otherwise they are refused, in words.
    */
   localSources?: boolean | undefined;
+}
+
+/** Whether the rig's harness leaves a run's model files to its runners, as its settings say. */
+export async function modelsLeftToRunners(harness: Pick<HarnessClient, "call">): Promise<boolean> {
+  return (await harness.call(SETTINGS)).models_on_runners === true;
 }
 
 /** What staging says about a command: relay it, wait, or report that its content failed. */
@@ -202,8 +214,14 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
   const imports = ((cmd.envelope.payload as { imports?: unknown[] }).imports ?? []) as Sourced[];
   const root = resolve(cfg.inboxDir);
   const todo: { imp: Sourced; target: string }[] = [];
+  // A core that never judges itself downloads no model file: its runners fetch them (goal 213).
+  const leaveModels =
+    imports.some((i) => i?.source && i.kind === "model") && cfg.modelsOnRunners
+      ? await cfg.modelsOnRunners().catch(() => false)
+      : false;
   for (const imp of imports) {
     if (!imp?.source) continue;
+    if (leaveModels && imp.kind === "model") continue;
     const target = resolve(root, imp.path);
     if (!target.startsWith(root + sep)) continue; // the harness refuses such a path
     if (!(await present(imp, target))) todo.push({ imp, target });

@@ -146,6 +146,12 @@ export class HarnessService {
   >();
   /** The rig's own settings (Edit rig): parts on or off, workers at once, limits, promotion. */
   readonly settings: RigSettingsStore;
+  /**
+   * The core never judges on its own machine (THERMITE_LOCAL_JUDGE=0, goal 213): a run's model
+   * files are left to its runners, which fetch them and check each by its SHA-256, and the core
+   * keeps no copy. Its supervisor reads it in the rig's settings and downloads none.
+   */
+  modelsOnRunners = false;
   /** The owner's messages to the run's agents, and who read each one. */
   readonly messages: OwnerMessages;
   /** Each run's experiment queue: what to try next, in order, and what was tried. */

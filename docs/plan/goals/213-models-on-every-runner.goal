@@ -32,7 +32,8 @@ A contract's `models` are files with a SHA-256 and a source. The judge's runs re
 ## Progress
 
 - 2026-11-06: items 1 and 2 built. The judge's runner fetches a run's model files before its first build there, under the judge's lease; a lane's runner begins the fetch at its first `run_experiment`, which answers at once that the files are on their way, with files and GiB so far. The core asks the runner's supervisor in turns (`poll: start` or `status`), each answered at once, and waits as long as bytes come; a file that fails, or 15 minutes with no byte, fails the job in words. A runner's supervisor fetches one file after another and removes each from its inbox once its harness has taken it. A core on an older image still gets the old answer, which waits for every file. Tests: `tests/harness/judge/remote-models.test.ts` and `tests/supervisor/runners.test.ts`. Pages: [Model files on a rig](../../_site/src/content/docs/reference/model-files.md#on-a-rigs-runners), [Give a rig runners](../../_site/src/content/docs/how-to/install/runners.md).
-- Not yet: item 3 (a runner's fetch on the rig's page and in the run's live view: today its supervisor's lines stay on the runner) and item 4.
+- 2026-11-06: item 4 built (the owner chose the Thermite fix over a larger core). A core with `THERMITE_LOCAL_JUDGE=0` tells its supervisor so in the rig's settings (`models_on_runners`), and its supervisor downloads no model file; its harness takes the assignment with each model file absent from the inbox left to its runners, recording no import of it. Tests: `tests/harness/service.test.ts`, `tests/supervisor/model-download.test.ts`. Pages: [Model files on a rig](../../_site/src/content/docs/reference/model-files.md#on-a-rigs-runners), [Settings](../../_site/src/content/docs/reference/settings.md).
+- Not yet: item 3 (a runner's fetch on the rig's page and in the run's live view: today its supervisor's lines stay on the runner).
 
 ## Done when
 

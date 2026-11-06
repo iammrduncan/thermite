@@ -84,7 +84,7 @@ import { onRetentionTaken, sendSpace } from "./retention.ts";
 import { RunBranches } from "./run-branches.ts";
 import { carryRunnerAsks, startRunnerSupervisor } from "./runners/index.ts";
 import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
-import { stageSigned } from "./staging.ts";
+import { modelsLeftToRunners, stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
 import { startPullMode } from "./tunnel-pod.ts";
 
@@ -233,6 +233,7 @@ async function main(): Promise<void> {
           models,
           hfToken,
           floorBytes,
+          modelsOnRunners: () => modelsLeftToRunners(harness),
         },
         cmd,
         async (c) => {
