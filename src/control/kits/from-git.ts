@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errorText } from "../../common/errors.ts";
-import { gitText, withGitAuth } from "../../common/git/index.ts";
+import { gitCause, gitText, withGitAuth } from "../../common/git/index.ts";
 import type { GitAccessUse } from "../git-access.ts";
 import { KIT_BUNDLE_MAX, KitRefused } from "./repos.ts";
 
@@ -51,7 +51,7 @@ export async function kitBundleFromGit(
         throw new KitRefused(
           /could not read Username|Authentication|403|401|Permission denied/.test(msg)
             ? "control cannot read the kit's repository: is it private? Name a Git access for it"
-            : `control could not fetch ${ref} of the kit's repository: ${msg.split("\n").filter(Boolean).at(-1)?.slice(0, 200)}`,
+            : `control could not fetch ${ref} of the kit's repository: ${gitCause(msg)}`,
         );
       }
       const commit = (await git(["rev-parse", "--verify", "FETCH_HEAD^{commit}"], dir)).trim();
