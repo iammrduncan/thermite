@@ -2,9 +2,9 @@ import { guardWords } from "../../../core/metric-roles.ts";
 import {
   figure,
   type GuardRow,
-  roomLeft,
   type RunMetrics,
   type RunView,
+  roomLeft,
   runMetrics,
 } from "../../views/index.ts";
 import { esc, gainChart } from "./index.ts";

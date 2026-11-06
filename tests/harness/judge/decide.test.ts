@@ -7,11 +7,11 @@ import {
 } from "../../../src/core/contract.ts";
 import {
   type Block,
-  type Roles,
   decideConfirm,
   decideScreen,
   decideThresholdGoal,
   goalDelta,
+  type Roles,
 } from "../../../src/harness/judge/decide.ts";
 import { goalFixture, hillClimbFixture } from "../../helpers/fixtures.ts";
 import { forCases, normals } from "../../helpers/property.ts";
