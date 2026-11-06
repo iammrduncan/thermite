@@ -7,6 +7,12 @@
       "skillPath": "skills/general/anti-slop/SKILL.md",
       "computedHash": "d6b037fc34203dab45d19849d354cc9cfae7623b8c34000c34fb691fa69b07c6"
     },
+    "antislop-ui": {
+      "source": "miqdadbadjuber/anti-slop",
+      "sourceType": "github",
+      "skillPath": "skills/antislop-ui/SKILL.md",
+      "computedHash": "b0e61085d4e70e29b1652d1af873de752509fd006c7ca0acac4a1f4c2f94177f"
+    },
     "engineering": {
       "source": "iammrduncan/skills",
       "sourceType": "github",
