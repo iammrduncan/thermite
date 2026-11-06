@@ -231,6 +231,7 @@ export class JudgeContext {
         kitRepo: k.repo,
         kitCommit: k.commit,
         actor: this.o.owner,
+        run,
       });
     const h = this.holding;
     const renew = () => h && this.ledger.jobs.heartbeat(h.id, h.fence, this.o.leaseMs);

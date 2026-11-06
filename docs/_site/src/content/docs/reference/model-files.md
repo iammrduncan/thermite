@@ -64,6 +64,15 @@ When the connection breaks, the bytes that arrived stay as `<path>.part`. The ne
 
 Two assignments that name the same file at once share one download.
 
+## On a rig's runners
+
+A rig whose judge or lanes run on [runners of other machines](../how-to/install/runners.md) needs each run's model files there too. The core does not send them: each runner's own supervisor downloads them from the import's URL, with the same checks, the first time the judge or a lane needs them there.
+
+- **The judge's runner** fetches them before the judge's first build of the run on it. The core asks the runner how the fetch stands every 15 seconds and waits as long as bytes keep coming, however long that is. When a file fails, or no byte comes for 15 minutes, the judge's job fails in words and the judge tries it again later; the next try goes on from what the download kept.
+- **A lane's runner** begins the fetch at the lane's first `run_experiment` there, and answers at once instead of waiting: `the run's model files are on their way to this machine (12 of 33 files, 40.3 of 95.2 GiB); run again in a few minutes`. Once they are all there, the lane's next run runs.
+- The files come one after another. Each is checked by its SHA-256, taken into the runner's harness, which checks it again, and then removed from the runner's inbox, so a runner keeps each file once, not twice.
+- The judge's runs read them as `{models:<sha256>}`, and a lane's runs open them by the exact paths the worker's brief lists, as on the core.
+
 ## Gated models on Hugging Face
 
 Some models on Hugging Face can be downloaded only with a token from an account that accepted the model's terms. Give the supervisor a token in a file:
@@ -144,6 +153,8 @@ The assignment fails with `staging:` and one of these. Its command shows `failed
 | `<url>: more than 10 redirects` | Too many redirects |
 
 A URL in a message is its scheme, host and path only, so a signed address's query never shows.
+
+On a runner, the judge's job fails with `runner <runner> could not fetch the model file <name>: <error>`, one of the errors above, or with `runner <runner>'s fetch of the model files stopped at <files and GiB so far>: nothing came for 15 minutes`. A lane's run is told the last failure with its files on their way, as [On a rig's runners](#on-a-rigs-runners) shows.
 
 ## Limits
 

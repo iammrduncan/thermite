@@ -17,6 +17,8 @@ import type { RunLink } from "./remote-runner.ts";
 
 /** The longest a runner may take to answer: a build or a run of the longest kits. */
 const RUNNER_ANSWER_MS = 3 * 3_600_000;
+/** The longest a runner may take to say how its fetch of model files stands (goal 213). */
+const POLL_ANSWER_MS = 5 * 60_000;
 
 /**
  * A runner that left the rig or stopped answering (goal 206): its run failed for that alone. The
@@ -56,9 +58,9 @@ export class RunnerLink {
         writeFileSync(join(dir, `${id}.bundle`), bundle, { mode: 0o640 });
         await this.put({ id, runner, kind: "git", repo, commit, file: `.runs/${id}.bundle` });
       },
-      fetchModels: async (models) => {
-        await this.put({ id: randomUUID(), runner, kind: "models", models });
-      },
+      // In turns, each answered at once (goal 213): within a part's time, never a build's.
+      fetchModels: (models, poll) =>
+        this.put({ id: randomUUID(), runner, kind: "models", models, poll }, POLL_ANSWER_MS),
     };
   }
 

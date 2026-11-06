@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -232,14 +232,22 @@ describe("a runner process reached over the bus (goal 206)", () => {
     assert.ok(git?.kind === "git" && !existsSync(join(outboxDir, git.file)));
   });
 
-  test("a runner's supervisor fetches a run's model file from its source, and its harness takes it in", async () => {
+  test("a runner's supervisor fetches a run's model file in turns, its harness takes it in, and the inbox's copy goes (goal 213)", async () => {
     const bytes = Buffer.from("model weights");
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     const inboxDir = mkdtempSync(join(tmpdir(), "thermite-inbox-"));
     let took: unknown;
+    let release = () => {};
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
     const w = wired({
       inboxDir,
-      fetchImpl: (async () => new Response(bytes, { status: 200 })) as typeof fetch,
+      // The source answers only once the test says: the first turn sees the fetch under way.
+      fetchImpl: (async () => {
+        await held;
+        return new Response(bytes, { status: 200 });
+      }) as typeof fetch,
       ask: async (body) => {
         took = body;
         return { ok: true };
@@ -252,9 +260,63 @@ describe("a runner process reached over the bus (goal 206)", () => {
         sha256,
         url: "https://models.example.com/m.bin",
       };
-      await w.to.fetchModels([model]);
-      assert.deepEqual(readFileSync(join(inboxDir, model.path)), bytes);
+      const first = (await w.to.fetchModels([model], "start")) as { state: string }[];
+      assert.equal(first.length, 1);
+      assert.ok(["queued", "fetching"].includes(first[0]?.state ?? ""), JSON.stringify(first));
+      release();
+      let states: { state: string; bytes: number }[] = [];
+      for (let i = 0; i < 100; i++) {
+        states = (await w.to.fetchModels([model], "status")) as typeof states;
+        if (states[0]?.state === "done") break;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      assert.deepEqual(
+        states.map((x) => [x.state, x.bytes]),
+        [["done", bytes.length]],
+      );
       assert.deepEqual(took, { op: "models_take", models: [{ path: model.path, sha256 }] });
+      // Taken in, it leaves the inbox: the harness keeps its own copy.
+      assert.equal(existsSync(join(inboxDir, model.path)), false);
+    } finally {
+      w.stop();
+    }
+  });
+
+  test("a model file that can't be fetched fails in words, and the next start tries it again (goal 213)", async () => {
+    const bytes = Buffer.from("model weights");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const inboxDir = mkdtempSync(join(tmpdir(), "thermite-inbox-"));
+    let up = false;
+    const w = wired({
+      inboxDir,
+      fetchImpl: (async () =>
+        up
+          ? new Response(bytes, { status: 200 })
+          : new Response("gone", { status: 404 })) as typeof fetch,
+      ask: async () => ({ ok: true }),
+    });
+    const until = async (poll: "start" | "status", state: string) => {
+      let s: { state: string; error?: string }[] = [];
+      for (let i = 0; i < 100; i++) {
+        s = (await w.to.fetchModels([model], poll)) as typeof s;
+        poll = "status";
+        if (s[0]?.state === state) return s[0];
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      assert.fail(`never ${state}: ${JSON.stringify(s)}`);
+    };
+    const model = { name: "m", path: "m.bin", sha256, url: "https://models.example.com/m.bin" };
+    try {
+      const failed = await until("start", "failed");
+      assert.match(failed.error ?? "", /404/);
+      // A status alone does not try it again; a start does, and keeps the last failure until it lands.
+      assert.equal(
+        ((await w.to.fetchModels([model], "status")) as { state: string }[])[0]?.state,
+        "failed",
+      );
+      up = true;
+      const done = await until("start", "done");
+      assert.equal(done.error, undefined);
     } finally {
       w.stop();
     }

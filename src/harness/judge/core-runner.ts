@@ -44,7 +44,7 @@ export class CoreRunner implements RigRunner {
     return this.o.runner.separated;
   }
 
-  build({ kitRepo: _, ...input }: RunBuild): Promise<BuildResult> {
+  build({ kitRepo: _, run: _run, ...input }: RunBuild): Promise<BuildResult> {
     return this.store.ensure({ ...input, role: builderRole(this.o.index) });
   }
 

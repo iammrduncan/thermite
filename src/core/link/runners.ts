@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Commit, MirrorName, ModelFetch, RunAsk } from "../api/harness/runs.ts";
+import { Commit, MirrorName, ModelFetch, ModelPoll, RunAsk } from "../api/harness/runs.ts";
 import { RIG_ID } from "../ids.ts";
 
 /**
@@ -57,8 +57,12 @@ export const RunnerRequest = z.discriminatedUnion("kind", [
   }),
   /** The next part of an answer that came in parts. */
   z.object({ kind: z.literal("more"), id: Id, part: Part.min(1) }),
-  /** Model files to fetch from their sources and give the runner process. */
-  z.object({ kind: z.literal("models"), models: z.array(ModelFetch).max(200) }),
+  /** Model files to fetch from their sources and give the runner process; `poll`: in turns. */
+  z.object({
+    kind: z.literal("models"),
+    models: z.array(ModelFetch).max(200),
+    poll: ModelPoll.optional(),
+  }),
 ]);
 export type RunnerRequest = z.infer<typeof RunnerRequest>;
 

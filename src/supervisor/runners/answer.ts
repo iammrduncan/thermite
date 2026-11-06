@@ -13,6 +13,7 @@ import {
   runnerSubject,
 } from "../../core/link/runners.ts";
 import { downloadModel, ModelDownloads } from "../model-download.ts";
+import { ModelFetches } from "./model-fetches.ts";
 
 /**
  * A runner's supervisor answers its core's asks (goal 206): each request on the runner's own
@@ -65,6 +66,19 @@ export async function answerCoreAsks(o: Answerer): Promise<void> {
     held.set(id, { parts, at: Date.now() });
     return JSON.stringify({ more: { id, parts: parts.length }, data: parts[0] });
   };
+  // Model files fetched in turns (goal 213): one fetch for each file, however often it is asked.
+  const fetches = o.inboxDir
+    ? new ModelFetches({
+        inboxDir: o.inboxDir,
+        take: (file) =>
+          o.harness.call(RUN, {
+            body: { op: "models_take", models: [file] },
+            timeoutMs: RUNNER_ASK_TIMEOUT_MS,
+          }),
+        hfToken: o.hfToken,
+        fetchImpl: o.fetchImpl,
+      })
+    : undefined;
   const harnessSays = async (call: () => Promise<unknown>): Promise<RunnerReply> => {
     try {
       return { answer: await call() };
@@ -114,6 +128,7 @@ export async function answerCoreAsks(o: Answerer): Promise<void> {
     if (req.kind === "models") {
       const inbox = o.inboxDir;
       if (!inbox) return JSON.stringify({ error: "this runner fetches no model files" });
+      if (req.poll && fetches) return reply({ answer: fetches.turn(req.models, req.poll) });
       // Each from its source into the inbox, landed only with its SHA-256, then taken in by the
       // harness, which checks it again.
       return reply(

@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
-import type { ModelFetch, RunAsk } from "../../core/api/harness/runs.ts";
+import { setTimeout as sleep } from "node:timers/promises";
+import {
+  type ModelFetch,
+  ModelFetchState,
+  type ModelPoll,
+  type RunAsk,
+} from "../../core/api/harness/runs.ts";
 import { bundleOf } from "../git.ts";
 import type { Ledger } from "../ledger/index.ts";
 import type { Readiness, TargetDriver, TargetIdentity, ThrottleSample } from "../targets/index.ts";
@@ -18,14 +24,23 @@ import type { KeptBaseline, Measured, MeasureSpec, RigRunner, RunBuild, Sealed }
  * and every baseline's files, as it does for its own runner.
  */
 
+/** How often the core asks a runner how its fetch of a run's model files stands (goal 213). */
+const MODEL_POLL_MS = 15_000;
+/** How long a fetch may go with no new byte before the core gives up on it, in words. */
+const MODEL_STALL_MS = 15 * 60_000;
+
 /** How the core reaches one runner process. */
 export interface RunLink {
   /** An ask, failed when no answer comes in `answerMs` (the link's own limit when not given). */
   ask(a: RunAsk, answerMs?: number): Promise<unknown>;
   /** A git bundle for one of the runner's mirrors, which must hold `commit` after. */
   sendGit(repo: string, commit: string, bundle: Buffer): Promise<void>;
-  /** Model files the runner's supervisor fetches from their sources and gives its process. */
-  fetchModels(models: ModelFetch[]): Promise<void>;
+  /**
+   * Model files the runner's supervisor fetches from their sources and gives its process, in
+   * turns (goal 213): `start` begins the fetch, `status` asks how it stands; each answers at once
+   * with every file's state (ModelFetchState).
+   */
+  fetchModels(models: ModelFetch[], poll: ModelPoll): Promise<unknown>;
 }
 
 interface RemoteRunnerOptions {
@@ -43,6 +58,9 @@ interface RemoteRunnerOptions {
   /** The core's mirror of a repository, by its name. */
   mirrorFor: (repo: string) => string;
   scratchDir: string;
+  /** Tests only: how often to ask how a fetch of model files stands, and when it has stalled. */
+  modelPollMs?: number | undefined;
+  modelStallMs?: number | undefined;
 }
 
 export class RemoteRunner implements RigRunner {
@@ -118,6 +136,8 @@ export class RemoteRunner implements RigRunner {
 
   async build(input: RunBuild): Promise<BuildResult> {
     const { kitRepo } = input;
+    // While the judge's lease is renewed for the build (goal 213): a large model takes long.
+    if (input.run) await this.sendModels(input.run);
     await this.sendCommit(input.repo, input.commit);
     await this.sendCommit(kitRepo, input.kitCommit);
     const r = (await this.o.link.ask({
@@ -162,33 +182,83 @@ export class RemoteRunner implements RigRunner {
   }
 
   /**
-   * The run's model files on the runner, once per run: those it lacks, which its supervisor
-   * fetches from their sources (each checked by its SHA-256). A model with no source can't reach
-   * a runner of another machine, and fails the job in words.
+   * The run's model files the runner lacks, each with its source; none once it holds them all. A
+   * model with no source can't reach a runner of another machine, and fails the job in words.
+   */
+  private async modelsMissing(run: string): Promise<ModelFetch[]> {
+    if (this.modelsHeld.has(run)) return [];
+    const models = this.o.ledger.commands.modelsOf(run);
+    const have = models.length
+      ? ((await this.o.link.ask({
+          op: "models_have",
+          sha256s: models.map((m) => m.sha256),
+        })) as { missing: string[] })
+      : { missing: [] };
+    const missing = models.filter((m) => have.missing.includes(m.sha256));
+    const nowhere = missing.filter((m) => !m.url);
+    if (nowhere.length)
+      throw new Error(
+        `the model ${nowhere.map((m) => m.name).join(", ")} came with no source, so a runner of another machine can't fetch it`,
+      );
+    if (!missing.length) this.modelsHeld.add(run);
+    return missing.map((m) => ({
+      name: m.name,
+      path: m.path,
+      sha256: m.sha256,
+      url: String(m.url),
+    }));
+  }
+
+  /**
+   * One turn of the runner's fetch of `files`: begun (a file under way goes on, one that failed
+   * is tried again) or asked how it stands. A file that failed fails it, in words.
+   */
+  private async fetchTurn(
+    files: ModelFetch[],
+    poll: ModelPoll,
+  ): Promise<{ done: boolean; words: string; got: number }> {
+    const states = ModelFetchState.array().parse(await this.o.link.fetchModels(files, poll));
+    const nameOf = (sha: string) => files.find((f) => f.sha256 === sha)?.name ?? sha.slice(0, 12);
+    const failed = states.find((x) => x.state === "failed");
+    if (failed)
+      throw new Error(
+        `runner ${this.name} could not fetch the model file ${nameOf(failed.sha256)}: ${failed.error ?? "no reason given"}`,
+      );
+    const got = states.reduce((n, x) => n + x.bytes, 0);
+    const total = states.every((x) => x.total !== null)
+      ? states.reduce((n, x) => n + (x.total ?? 0), 0)
+      : null;
+    const done = states.filter((x) => x.state === "done").length;
+    const tried = states.find((x) => x.state !== "done" && x.error);
+    const words = `${done} of ${files.length} files, ${gib(got)}${total !== null ? ` of ${gib(total)}` : ""} GiB${tried ? `; the last try of ${nameOf(tried.sha256)} failed: ${tried.error}` : ""}`;
+    return { done: states.length >= files.length && done === states.length, words, got };
+  }
+
+  /**
+   * The run's model files on the runner, once per run (goal 213): those it lacks, which its
+   * supervisor fetches from their sources one after another, each checked by its SHA-256. The core
+   * waits as long as bytes keep coming, however long that is, and fails in words when a file
+   * fails or nothing came for MODEL_STALL_MS.
    */
   private async sendModels(run: string): Promise<void> {
-    if (this.modelsHeld.has(run)) return;
-    const models = this.o.ledger.commands.modelsOf(run);
-    if (models.length) {
-      const have = (await this.o.link.ask({
-        op: "models_have",
-        sha256s: models.map((m) => m.sha256),
-      })) as { missing: string[] };
-      const missing = models.filter((m) => have.missing.includes(m.sha256));
-      const nowhere = missing.filter((m) => !m.url);
-      if (nowhere.length)
+    const files = await this.modelsMissing(run);
+    if (!files.length) return;
+    const pollMs = this.o.modelPollMs ?? MODEL_POLL_MS;
+    const stallMs = this.o.modelStallMs ?? MODEL_STALL_MS;
+    let turn = await this.fetchTurn(files, "start");
+    let seen = turn.got;
+    let since = Date.now();
+    while (!turn.done) {
+      if (Date.now() - since >= stallMs)
         throw new Error(
-          `the model ${nowhere.map((m) => m.name).join(", ")} came with no source, so a runner of another machine can't fetch it`,
+          `runner ${this.name}'s fetch of the model files stopped at ${turn.words}: nothing came for ${Math.round(stallMs / 60_000)} minutes`,
         );
-      if (missing.length)
-        await this.o.link.fetchModels(
-          missing.map((m) => ({
-            name: m.name,
-            path: m.path,
-            sha256: m.sha256,
-            url: String(m.url),
-          })),
-        );
+      await sleep(pollMs);
+      turn = await this.fetchTurn(files, "status");
+      if (turn.got > seen) {
+        seen = turn.got;
+        since = Date.now();
+      }
     }
     this.modelsHeld.add(run);
   }
@@ -265,6 +335,19 @@ export class RemoteRunner implements RigRunner {
    * the runner lacks it. The answer is the run's output, which never counts.
    */
   async laneRun(r: LaneRun): Promise<object> {
+    // The run's model files first (goal 213), never waited for here: a lane is told they are on
+    // their way, and its next run finds them.
+    const run = this.o.ledger.trials.get(r.trial)?.run;
+    const files = run ? await this.modelsMissing(run) : [];
+    if (run && files.length) {
+      const turn = await this.fetchTurn(files, "start");
+      if (!turn.done)
+        return {
+          ran: false,
+          reason: `the run's model files are on their way to this machine (${turn.words}); run again in a few minutes`,
+        };
+      this.modelsHeld.add(run);
+    }
     await this.sendCommit(r.repo, r.parent);
     return (await this.o.link.ask({
       op: "lane_run",
@@ -289,6 +372,9 @@ export class RemoteRunner implements RigRunner {
     await this.o.link.ask({ op: "lane_end", lane, trial });
   }
 }
+
+/** Bytes as GiB, to one place. */
+const gib = (n: number) => (n / 2 ** 30).toFixed(1);
 
 /** A lane's run on a runner of another machine: its change on its parent, and its command. */
 export interface LaneRun {

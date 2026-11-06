@@ -189,7 +189,7 @@ export class RunnerHub {
     const guarded: RunLink = {
       ask: (a, ms) => away() ?? to.ask(a, ms),
       sendGit: (repo, commit, bundle) => away() ?? to.sendGit(repo, commit, bundle),
-      fetchModels: (models) => away() ?? to.fetchModels(models),
+      fetchModels: (models, poll) => away() ?? to.fetchModels(models, poll),
     };
     p.runners = setting.pools.map((pool, card) => ({
       pool,

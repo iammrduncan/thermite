@@ -8,7 +8,7 @@ sidebar:
 
 A [rig](../../reference/glossary.md) is a core and its runners. The core keeps the run: its records, the planner, every lane's agent program and the judge's decisions. A runner is where work runs: one GPU, or a machine's CPUs. A rig of one machine is a core that is also its own runner. This page gives a rig runners on other machines, so that the core can stay on a machine without a GPU and every GPU does GPU work only.
 
-The core asks each runner for its runs through control's message bus, as every rig already reports, so a runner can be anywhere control's bus reaches. A runner keeps no run of its own: the core sends it the commits it lacks, and its supervisor fetches a run's model files from their source.
+The core asks each runner for its runs through control's message bus, as every rig already reports, so a runner can be anywhere control's bus reaches. A runner keeps no run of its own: the core sends it the commits it lacks, and its supervisor fetches a run's model files from their source the first time the judge or a lane needs them there, and keeps each once ([Model files on a rig](../../reference/model-files.md#on-a-rigs-runners)).
 
 ## The pools
 

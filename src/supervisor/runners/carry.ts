@@ -122,8 +122,8 @@ async function carryOne(c: Carrier, a: QueuedRun): Promise<void> {
                 await send(
                   c,
                   a.runner,
-                  { kind: "models", models: a.models },
-                  RUNNER_ASK_TIMEOUT_MS,
+                  { kind: "models", models: a.models, ...(a.poll ? { poll: a.poll } : {}) },
+                  a.poll ? RUNNER_PART_TIMEOUT_MS : RUNNER_ASK_TIMEOUT_MS,
                 ),
               )
             : await sendBundle(c, a),

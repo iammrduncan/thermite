@@ -58,6 +58,24 @@ export const ModelFetch = ModelFile.extend({
 });
 export type ModelFetch = z.infer<typeof ModelFetch>;
 
+/**
+ * A fetch of model files asked in turns (goal 213): `start` begins those not under way (and tries
+ * again those that failed) and answers at once; `status` only answers. Each answer is every file's
+ * state. Without it the ask waits until every file is taken, as before.
+ */
+export const ModelPoll = z.enum(["start", "status"]);
+export type ModelPoll = z.infer<typeof ModelPoll>;
+
+/** How a runner's fetch of one model file stands: bytes so far, and why one failed. */
+export const ModelFetchState = z.object({
+  sha256: Sha256,
+  state: z.enum(["queued", "fetching", "done", "failed"]),
+  bytes: z.number().nonnegative(),
+  total: z.number().nonnegative().nullable(),
+  error: z.string().max(4000).optional(),
+});
+export type ModelFetchState = z.infer<typeof ModelFetchState>;
+
 /** A kept baseline's file: its path in the folder and its bytes. */
 const BaselineFile = z.object({ path: z.string().min(1).max(1024), base64: z.string() });
 
@@ -185,6 +203,7 @@ export const QueuedRun = z.discriminatedUnion("kind", [
     runner: z.string(),
     kind: z.literal("models"),
     models: z.array(ModelFetch).max(200),
+    poll: ModelPoll.optional(),
   }),
 ]);
 export type QueuedRun = z.infer<typeof QueuedRun>;

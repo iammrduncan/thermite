@@ -36,7 +36,11 @@ export interface MeasureSpec {
 }
 
 /** What a build is made from, with the kit's repository, which names it anywhere. */
-export type RunBuild = Omit<BuildInput, "role"> & { kitRepo: string };
+export type RunBuild = Omit<BuildInput, "role"> & {
+  kitRepo: string;
+  /** The run the build is for: a runner of another machine fetches its model files first. */
+  run?: string | undefined;
+};
 
 /** One run of an arm on a cell, and how much of it the runner's CPUs were throttled. */
 export interface Measured {
