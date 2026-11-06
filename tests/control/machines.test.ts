@@ -169,6 +169,32 @@ describe("machines in Providers", () => {
     assert.equal(s.store.machines.get("box"), undefined);
   });
 
+  test("a machine with several host keys is trusted from the form a browser sends", async () => {
+    const m = fakeMachine();
+    const scan = m.ssh.scanHostKeys;
+    m.ssh.scanHostKeys = async (address, port) => [
+      ...(await scan(address, port)),
+      ...parseHostKeys(`${address} ssh-ed25519 ${OTHER}\n`),
+    ];
+    const s = await control(m.ssh);
+    await s.post("/ui/settings/add", {
+      type: "ssh",
+      name: "box",
+      address: "192.0.2.10",
+      port: "22",
+      user: "thermite",
+    });
+    const shown =
+      /name="seen" value="([^"]+)"/.exec(await s.page("/ui/settings/machines"))?.[1] ?? "";
+    assert.equal(shown.split("\n").length, 2);
+    // A browser sends the hidden field's line breaks as CRLF.
+    assert.match(
+      await s.post("/ui/settings/machines/box/trust", { seen: shown.replace(/\n/g, "\r\n") }),
+      /Trusted "box"'s host key and read the machine/,
+    );
+    assert.equal(s.store.machines.get("box")?.host_keys.length, 2);
+  });
+
   test("bad addresses, users and ports are refused before anything connects", async () => {
     const m = fakeMachine();
     const s = await control(m.ssh);
