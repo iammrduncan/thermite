@@ -2,15 +2,15 @@
 id: "207"
 title: "A RunPod GPU as a rig's runner"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: ["206"]
 created: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # 207 · A RunPod GPU as a rig's runner
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## Words
 

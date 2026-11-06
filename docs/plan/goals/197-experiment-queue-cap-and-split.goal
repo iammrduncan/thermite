@@ -2,15 +2,15 @@
 id: "197"
 title: "The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-06
 ---
 
 # 197 · The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

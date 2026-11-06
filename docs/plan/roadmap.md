@@ -163,31 +163,45 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.1.3
 
-**Follow-ups from use: the open issues of its milestone first, then the first release's follow-ups, GPUs on demand and work within a budget.** In the order below. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified. Proposed.
+**Multi-machine rigs (the owner, 2026-11-06).** A rig is a core and its runners on other machines; every agent program works on them; a kit says what each of its metrics is for; and the fixes a first real campaign on runners needs. The rest of v0.1.3's first plan moved to [v0.1.4](#v014). It is tagged once a campaign on runners has used these.
 
-**First, what users hit.** Bugs with a clear fix, and CI's tag run.
+- [206](goals/_completed/206-core-and-runners.goal) A rig is a core and its runners: lanes and the judge run their experiments on runners anywhere, shared or dedicated · `VERIFIED`
+- [208](goals/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `PROPOSED`
+- [209](goals/209-priority-guard-informational-metrics.goal) Priority, guard and informational metrics: in kits, one word each everywhere, on a run's page · `IN_PROGRESS`
+- [211](goals/211-metric-of-zero.goal) A metric may be zero: a guard against a fixed value, or an informational metric, that measures nothing wrong as 0 · `PROPOSED`
+- [212](goals/212-guard-that-asks.goal) A guard that asks: a change past it waits for the owner's yes, with its numbers, instead of being refused · `PROPOSED`
+- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`
+- [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `DROPPED`, replaced by 206
+
+**For the tag.** CI's run on the tag, and the images the runners take.
+
+- [192](goals/192-ci-tag-run-green.goal) CI's run on a version tag passes every check a runner can run (issue 54) · `IN_PROGRESS`
+- [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
+
+**Done on the way.**
+
+- [150](goals/_completed/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `VERIFIED`
+- [194](goals/_completed/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `VERIFIED`
+
+## v0.1.4
+
+**Moved from v0.1.3 (the owner, 2026-11-06).** v0.1.3's first plan, apart from what multi-machine rigs need: follow-ups from use, the open issues of its milestone, the first release's follow-ups, GPUs on demand and work within a budget. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified.
+
+**First, what users hit.** Bugs with a clear fix.
 
 - [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `IN_PROGRESS`
 - [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `IN_PROGRESS`
 - [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
-- [150](goals/_completed/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `VERIFIED`
-- [192](goals/192-ci-tag-run-green.goal) CI's run on a version tag passes every check a runner can run (issue 54) · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-03.**
 
-- [194](goals/_completed/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `VERIFIED`
 - [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-04.**
 
 - [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `IN_PROGRESS`
 - [204](goals/204-quiet-ride-through.goal) A supervisor rides through control's restart quietly · `PROPOSED`
-- [206](goals/_completed/206-core-and-runners.goal) A rig is a core and its runners: lanes and the judge run their experiments on runners anywhere, shared or dedicated · `VERIFIED`
 - [207](goals/207-runpod-runners.goal) A RunPod GPU as a rig's runner, launched while it works · `PROPOSED`
-- [208](goals/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `PROPOSED`
-- [209](goals/209-priority-guard-informational-metrics.goal) Priority, guard and informational metrics: in kits, one word each everywhere, on a run's page · `IN_PROGRESS`
-- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`
-- [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `DROPPED`, replaced by 206
 
 **Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
 
@@ -218,14 +232,11 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [149](goals/149-output-cut-notice.goal) A command's result says its output was cut only when it was · `PROPOSED`
 - [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
 - [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
-- [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
 - [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
 - [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
 - [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
 - [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
 - [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
-
-## v0.1.4
 
 **UI clean-up and UX improvements.** The screens agree with each other, and each one says what you need to know. Proposed.
 

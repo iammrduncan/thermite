@@ -2,15 +2,15 @@
 id: "200"
 title: "A plateau stop: a run ends after a time without a new champion, when the owner sets it"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-06
 ---
 
 # 200 · A plateau stop: a run ends after a time without a new champion, when the owner sets it
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

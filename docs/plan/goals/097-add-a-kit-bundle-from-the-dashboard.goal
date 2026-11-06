@@ -2,15 +2,15 @@
 id: "097"
 title: "Give control a kit bundle from the dashboard"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: ["096"]
 created: 2026-10-22
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 # 097 · Give control a kit bundle from the dashboard
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

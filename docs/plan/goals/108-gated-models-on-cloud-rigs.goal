@@ -2,15 +2,15 @@
 id: "108"
 title: "Gated models on cloud rigs"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: []
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 # 108 · Gated models on cloud rigs
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

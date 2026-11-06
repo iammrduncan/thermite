@@ -2,15 +2,15 @@
 id: "195"
 title: "Model prices: a price for cache writes, and prices by request size"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-06
 ---
 
 # 195 · Model prices: a price for cache writes, and prices by request size
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

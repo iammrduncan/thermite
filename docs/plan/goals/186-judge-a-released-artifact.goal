@@ -2,15 +2,15 @@
 id: "186"
 title: "The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test"
 status: PROPOSED
-version: "0.1.3"
+version: "0.1.4"
 depends_on: []
 created: 2026-11-02
-updated: 2026-11-02
+updated: 2026-11-06
 ---
 
 # 186 · The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

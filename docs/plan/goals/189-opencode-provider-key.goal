@@ -2,15 +2,15 @@
 id: "189"
 title: "OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi"
 status: IN_PROGRESS
-version: "0.1.3"
+version: "0.1.4"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-04
+updated: 2026-11-06
 ---
 
 # 189 · OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
