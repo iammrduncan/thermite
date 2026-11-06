@@ -14,7 +14,7 @@ Thermite is open-source **autoresearch**: AI agents that run experiments in a lo
 > [!WARNING]
 > **Thermite is under heavy development.** It changes every day, and some parts will break. If you don't want to take every update as it comes, pin a release: install from a tagged release's bundle, whose compose file pins every image by digest, and update when you choose. Most of Thermite can be driven from the dashboard, and its REST API and MCP server work well with coding agents, which can help you set it up, test it and run it.
 
-> **Status:** v0.1.2 is out: install it from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.2). A v0.1.1 stack updates to it in place; v0.1.0 breaks from both, so install fresh from it ([changelog](CHANGELOG.md)). Work goes on toward v0.1.3: see the [roadmap](docs/plan/roadmap.md).
+> **Status:** v0.1.3 is out: install it from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.3). A v0.1.1 or v0.1.2 stack updates to it in place; v0.1.0 breaks from them, so install fresh from it ([changelog](CHANGELOG.md)). Work goes on toward v0.1.4: see the [roadmap](docs/plan/roadmap.md).
 
 ![The dashboard's page for one run: its champion's value, its cost and its tokens at the top, where the run started, the champion's gains over time, what each lane works on now, and the run's champion and promotion rule](docs/_site/src/assets/screenshots/run.webp)
 

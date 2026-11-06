@@ -12,7 +12,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 
 ## Current stage
 
-- v0.1.2 is out (2026-11-03). Work goes on toward v0.1.3, on its branch `v0.1.3`.
+- v0.1.3 is out (2026-11-06). Work goes on toward v0.1.4, on its branch `v0.1.4`.
 - The plans are public, in [docs/plan/](docs/plan/README.md): the [roadmap](docs/plan/roadmap.md), the [release plan](docs/plan/release-v0.1.0.md), the [settled decisions](docs/plan/decisions.md) and one goal for each roadmap item.
 
 ## Settled decisions (summary)

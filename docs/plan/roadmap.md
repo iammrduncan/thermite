@@ -163,7 +163,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.1.3
 
-**Multi-machine rigs (the owner, 2026-11-06).** A rig is a core and its runners on other machines; every agent program works on them; a kit says what each of its metrics is for; and the fixes a first real campaign on runners needs. The rest of v0.1.3's first plan moved to [v0.1.4](#v014). It is tagged once a campaign on runners has used these.
+**A rig over several machines, and what a first campaign on it needs.** Released 2026-11-06. A rig is a core and its runners on other machines; every agent program works on them; a kit says what each of its metrics is for; and the fixes a first real campaign on runners needed, on the lab's three DGX Sparks. The rest of v0.1.3's first plan moved to [v0.1.4](#v014).
 
 - [206](goals/_completed/206-core-and-runners.goal) A rig is a core and its runners: lanes and the judge run their experiments on runners anywhere, shared or dedicated · `VERIFIED`
 - [208](goals/_completed/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `VERIFIED`
@@ -171,7 +171,6 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [211](goals/_completed/211-metric-of-zero.goal) A metric may be zero: a guard against a fixed value, or an informational metric, that measures nothing wrong as 0 · `VERIFIED`
 - [212](goals/_completed/212-guard-that-asks.goal) A guard that asks: a change past it waits for the owner's yes, with its numbers, instead of being refused · `VERIFIED`
 - [213](goals/_completed/213-models-on-every-runner.goal) A run's model files wherever it runs, however large: a lane's runs reach them too, and a long fetch isn't cut at three hours · `VERIFIED`
-- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`
 - [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `DROPPED`, replaced by 206
 
 **For the tag.** CI's run on the tag, and the images the runners take.
@@ -187,6 +186,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 ## v0.1.4
 
 **Moved from v0.1.3 (the owner, 2026-11-06).** v0.1.3's first plan, apart from what multi-machine rigs need: follow-ups from use, the open issues of its milestone, the first release's follow-ups, GPUs on demand and work within a budget. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified.
+
+- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`, moved from v0.1.3 at its release: a question for the owner
 
 **First, what users hit.** Bugs with a clear fix.
 
