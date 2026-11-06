@@ -60,6 +60,7 @@ The workflow builds control, the harness images and the supervisor with `THERMIT
 | --- | --- | --- | --- |
 | `NODE_IMAGE` | All three | `docker.io/library/node:22.23.4-bookworm-slim`, pinned by its sha256 digest | The Node.js image every stage starts from |
 | `BASE_IMAGE` | Harness | `NODE_IMAGE` | The harness's final base. GPU rigs set a CUDA 12 or CUDA 13 development image: see [The CUDA harness](#the-cuda-harness) |
+| `HARNESS_KEEP_BASE` | Harness | `0` | `1` keeps `BASE_IMAGE`'s system packages as its publisher built them: no `apt-get upgrade`, and a package the base has already is not installed again at a newer version (`apt-get install --no-upgrade`). For a project measured in its publisher's environment, such as an engine built in NVIDIA's PyTorch container. `0`: the base's packages are upgraded first, as for every image |
 | `OPENCODE_VERSION` | Harness, supervisor | `2.1.4` | The OpenCode release installed |
 | `CLAUDE_CODE_VERSION` | Harness, supervisor | empty | A Claude Code release to install. Empty: Claude Code is not installed |
 | `CODEX_VERSION` | Harness, supervisor | `0.162.1` | The Codex CLI release installed. Empty: the Codex CLI is not installed |

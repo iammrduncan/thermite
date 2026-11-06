@@ -274,11 +274,15 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 # program on its own terminal, goal 169). No bubblewrap: the agents and the advisors
 # run Claude Code with its own sandbox off (src/agents/programs/claude-code/index.ts says why).
 # The base's system packages are upgraded first, so each build takes the distribution's fixes
-# (goal 125).
-RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
- && apt-get install -y --no-install-recommends git tini ca-certificates gcc g++ libc6-dev make \
-      cmake ninja-build ccache python3 python3-numpy \
+# (goal 125). HARNESS_KEEP_BASE=1 keeps a base image's packages as its publisher built them, for
+# a project measured in that publisher's environment (such as NVIDIA's PyTorch container): no
+# upgrade, and what the base has already is not installed again at a newer version.
+ARG HARNESS_KEEP_BASE=0
+RUN keep=$(if [ "$HARNESS_KEEP_BASE" = 1 ]; then echo --no-upgrade; fi) \
+ && apt-get update \
+ && if [ -z "$keep" ]; then DEBIAN_FRONTEND=noninteractive apt-get upgrade -y; fi \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $keep git tini \
+      ca-certificates gcc g++ libc6-dev make cmake ninja-build ccache python3 python3-numpy \
  && (command -v setpriv >/dev/null || apt-get install -y --no-install-recommends setpriv) \
  && command -v setpriv && command -v prlimit && command -v taskset && command -v setsid \
  && rm -rf /var/lib/apt/lists/*
