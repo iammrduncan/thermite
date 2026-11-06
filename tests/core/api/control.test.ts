@@ -20,6 +20,7 @@ const OWNER_ROUTES = routesOf(owner);
 /** Each parameter a path may have, filled as the tunnel's allow-list takes it. */
 const PARAMS = {
   rig: "rig-a",
+  runner: "runner-1",
   id: "c-1",
   run: "r-1",
   attempt: "a-1",
@@ -56,8 +57,13 @@ describe("control's API has one contract (core/api/control/)", () => {
 
   test("pull mode's tunnel lets every route of a rig's through, and no route of the owner's", () => {
     // The allow-list repeats the routes on purpose (what it does not list, it refuses): it agrees.
+    // A runner registers from its own machine, never through a pod's tunnel.
     for (const [name, r] of RIG_ROUTES)
-      assert.ok(tunnelRouteAllowed("rig-a", r.method, pathOf(r, PARAMS)), name);
+      assert.equal(
+        tunnelRouteAllowed("rig-a", r.method, pathOf(r, PARAMS)),
+        r !== rigs.RUNNER_REGISTER,
+        name,
+      );
     assert.ok(
       tunnelRouteAllowed("rig-a", "GET", `${rigs.gitRepoPath("rig-a", "kits/lab-kit")}/info/refs`),
     );

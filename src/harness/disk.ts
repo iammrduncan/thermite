@@ -130,6 +130,8 @@ export class DiskWatch {
         places,
         ...(reason ? { reason } : {}),
       });
+      // The floor began at its event's time: the one a restart reads back.
+      if (low) this.last.since = this.o.ledger.events.newest("rig_disk")?.at ?? now;
       log("harness", low ? "the disk is at its floor" : "the disk has room again", {
         floor_gib: this.o.floorGib,
         places,
