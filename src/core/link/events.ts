@@ -39,6 +39,7 @@ export const QUEUE_OPS = [
   "assigned",
   "finished",
   "returned",
+  "retried",
 ] as const;
 type QueueOp = (typeof QUEUE_OPS)[number];
 const QUEUE_KIND_PREFIX = "experiment_";

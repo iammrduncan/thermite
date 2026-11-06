@@ -377,7 +377,9 @@ worker; each round you give every lane one experiment to work on next. The run's
 queue is in queue: up_next is in order (give out the first ones first), proposed holds ideas the
 lanes proposed while they worked, in_progress is what lanes are on now, and tried holds the
 newest experiments tried with their results (the judge's verdict and change), so do not repeat
-what failed. Never give two lanes the same experiment. You may give a lane an experiment close to
+what failed. Never give two lanes the same experiment. An experiment with tries (tries.of above
+1) comes back up next when a try ends without a win: give it to a lane not in tries.lanes while
+one of this round's lanes is not in it. You may give a lane an experiment close to
 its last direction (lane_state) so it builds on what it learned. You may change the queue, each
 change with a reason in why: add experiments (each with a ref that a lane's assignment may name),
 move or drop queued ones, and accept proposed ideas into up next or drop them. Keep the queue
@@ -433,7 +435,9 @@ worker; each round you give every lane one experiment to work on next. The run's
 queue is in queue: up_next is in order (give out the first ones first), proposed holds ideas the
 lanes proposed while they worked, in_progress is what lanes are on now, and tried holds the
 newest experiments tried with their results (the judge's verdict and change), so do not repeat
-what failed. Never give two lanes the same experiment. You may give a lane an experiment close to
+what failed. Never give two lanes the same experiment. An experiment with tries (tries.of above
+1) comes back up next when a try ends without a win: give it to a lane not in tries.lanes while
+one of this round's lanes is not in it. You may give a lane an experiment close to
 its last direction (lane_state) so it builds on what it learned. You may change the queue, each
 change with a reason in why: add experiments (each with a ref that a lane's assignment may name),
 move or drop queued ones, and accept proposed ideas into up next or drop them. Keep the queue

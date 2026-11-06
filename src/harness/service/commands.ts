@@ -37,7 +37,12 @@ export type CommandOutcome =
   | { status: "in_progress" };
 
 /** What a queue command did, as its result: the experiment, its state and its place. */
-const queueResult = (x: Experiment) => ({ experiment: x.id, state: x.state, position: x.place });
+const queueResult = (x: Experiment) => ({
+  experiment: x.id,
+  state: x.state,
+  position: x.place,
+  ...((x.tries ?? 1) > 1 ? { tries: x.tries } : {}),
+});
 
 /**
  * Control's signed commands, as the harness applies them: each checked against control's key,
@@ -271,6 +276,7 @@ export class Commands {
             details: p.details,
             direction: p.direction,
             why: p.why,
+            tries: p.tries,
             by: "owner",
             position: p.position,
           },

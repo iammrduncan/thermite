@@ -246,6 +246,16 @@ export function validatePlan(
       errors.push(
         `${a.ref.startsWith("@") ? a.ref.slice(1) : `add ${a.ref}`}: the direction "${a.direction}" ${NOT_A_DIRECTION}`,
       );
+  // Tries (goal 214): an experiment a lane tried goes to a lane that has not, while one has not.
+  for (const h of handout) {
+    const t = queued.get(h.experiment)?.tries;
+    if (!t?.lanes.includes(h.lane)) continue;
+    const fresh = lanes.filter((l) => !t.lanes.includes(l));
+    if (fresh.length)
+      errors.push(
+        `${h.lane}: experiment ${h.experiment} was tried on ${h.lane} already (try ${t.try} of ${t.of} is next): give it to ${fresh.join(" or ")}, which has not tried it`,
+      );
+  }
   const twice = handout.filter(
     (h, i) => handout.findIndex((o) => o.experiment === h.experiment) !== i,
   );

@@ -151,7 +151,12 @@ export async function planEpoch(
   for (const lane of lanes) {
     if (handout.some((h) => h.lane === lane)) continue;
     const fixed = p.assignments.find((a) => a.lane === lane);
-    let x = sched.coordinator.pick(run, lane, { directives, window: laneCount, exclude: given });
+    let x = sched.coordinator.pick(run, lane, {
+      directives,
+      window: laneCount,
+      exclude: given,
+      lanes,
+    });
     let why = x ? sched.coordinator.whyPicked(run, lane, x, directives) : "";
     if (!x && fixed) {
       x = sched.coordinator.fill(

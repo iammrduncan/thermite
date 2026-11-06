@@ -62,11 +62,13 @@ An experiment is always in one of five states:
 | `done` | **Tried** | Its trial ended: with its attempt and the judge's verdict, or with no attempt and why |
 | `dropped` | **Tried** | Someone dropped it, and said why. It stays in the log |
 
+An experiment the owner gave more than one try goes from `done` back to `queued` when a try ends without a win ([below](#an-experiment-tried-more-than-once)).
+
 The queue is research state, so it lives in the harness's ledger, like the attempts and verdicts. Every change writes the experiment and one event, with who made it, in one step. Control builds the **Experiments** tab from those events, as it builds everything else from the rig's signed reports ([How the parts fit together](how-it-fits-together.mdx#the-experiment-queues-records)).
 
 ### Where experiments come from
 
-- **The owner** adds experiments, moves them, edits them and drops them, and queues or drops the lanes' ideas: on the **Experiments** tab, or with the commands `queue_add`, `queue_move`, `queue_edit`, `queue_drop` and `queue_accept` over the REST API, the command line or MCP. Each is a [signed command](../reference/signed-commands.md) in the owner's name. An operator's token, which the owner gives an agent that runs campaigns for them, may send them too; an agent's token can't.
+- **The owner** adds experiments, moves them, edits them and drops them, and queues or drops the lanes' ideas: on the **Experiments** tab, or with the commands `queue_add`, `queue_move`, `queue_edit`, `queue_drop` and `queue_accept` over the REST API, the command line or MCP. Each is a [signed command](../reference/signed-commands.md) in the owner's name. An operator's token, which the owner gives an agent that runs campaigns for them, may send them too; an agent's token can't. The owner may give an experiment up to 10 **tries** ([below](#an-experiment-tried-more-than-once)).
 - **The planner** adds experiments, moves them, drops them and queues the lanes' ideas, each with why, and keeps the queue at its target ([below](#keeping-the-queue-at-its-target)). When the queue has nothing for a lane, the fixed rules add one ([below](#when-there-is-no-planner-answer)).
 - **The advisors:** the teachers' main product is a portfolio of new opportunities, each added as an experiment with its mechanism, gain bound, smallest experiment and control, stop condition and evidence, from their reading of the run's code, its evidence and outside sources. They also move queued experiments. The auditor can put a check at the top of the queue when it doubts a result that it can't settle. Advisors never drop an experiment or give out work ([Supervision](supervision.md#the-teachers)).
 - **The lanes:** a worker that sees something worth trying beyond its own experiment proposes it as an **idea**, with `thermite-trial idea` in OpenCode, Claude Code and Codex, or the `idea` tool in Pi. Its trial goes on. A code trial's brief asks its worker to propose each distinct follow-up its work suggests, with why, before it submits or stops. The idea waits as `proposed` until the planner's model or the owner queues it or drops it. When the queue is below its target, the planner queues the distinct ideas itself, with or without its model ([below](#keeping-the-queue-at-its-target)). In a research run, only the planner's model or the owner queues an idea, and the planner only one that names its question.
@@ -75,6 +77,18 @@ The queue is research state, so it lives in the harness's ledger, like the attem
 - **In a research run,** the planner's research tasks, and the gap-driven plan's when the planner's plan gives a lane none ([Research campaigns](#research-campaigns)).
 
 [Choose what a run tries next](../how-to/campaigns/choose-what-runs-next.md) shows the owner's side, step by step.
+
+### An experiment tried more than once
+
+One trial can fail for reasons that are not the idea's: a worker that took a wrong turn, a change that broke the build, a port that missed one file. When the owner knows an idea works, such as a change that already worked on an older version of the project, they give its experiment several **tries**, from 1 (the default) to 10: the **Tries** field on the **Experiments** tab, or `tries` in `queue_add` and `queue_edit`. Only the owner, or an operator for them, sets tries. A research run's tasks get one try each.
+
+- **A try that ends without a win uses a try.** That is a trial with no attempt (no change submitted, an error, the trial's time or turns ran out), or an attempt the judge settles without a win: refused by the static checks, broken, not better, past a guard, a duplicate. When tries are left, the same experiment goes back to the top of the queue, with the try kept: its lane, trial, attempt, result, verdict and cause. With the lanes keeping working while the judge works, the trial ends before its verdict; the experiment goes back once the verdict comes in.
+- **A win ends its tries early:** the attempt promoted, a confirmed win that waits for the owner (an approval, a guard that asks or **Ask me first**), or a win the owner decided on. The tries left are not used.
+- **A trial that never really tried it uses none.** An interrupted trial or the provider's error sends it back as before ([The model provider](../reference/limits-and-pacing.md#the-model-provider)), and the try is not counted.
+- **Each try goes to another lane where one can take it.** A lane that tried the experiment gets it again only when every lane of the run has tried it. The fixed rules skip it for that lane, and code refuses a planner's answer that gives it to that lane while another lane has not tried it.
+- **The next try learns from the last.** The planner sees each experiment's tries, the try that is next and the lanes that tried it. The worker's brief says "This is try 2 of 3 of this experiment" and lists how each earlier try ended, with the judge's reasons for an attempt, so the worker can avoid the same failure.
+
+On the **Experiments** tab, such an experiment shows **try 2 of 3** and a line for each earlier try; **History** says why it came back, such as `"port the patch" went back to the top of the queue for try 2 of 3: try 1 on lane-1 ended without a win: its change a-1 was judged regress (…).` Its event is `experiment_retried`.
 
 ### Why one queue, with the planner as its coordinator
 
@@ -127,6 +141,7 @@ Code checks the answer before anything changes. It refuses an answer that:
 - gives out an experiment that is not up next, not a lane's idea and not added in the same answer, such as one in progress or one already tried;
 - gives out an experiment that the same answer drops;
 - gives the same experiment to two lanes;
+- gives a lane an experiment that lane tried already while another lane of the round has not tried it ([An experiment tried more than once](#an-experiment-tried-more-than-once));
 - has a lane build on its best result when it has none yet;
 - gives out an experiment in a direction that an **Avoid** rule names, or gives no lane one in a direction that an **Always** rule names;
 - moves an experiment that isn't queued, drops one that isn't queued or an idea, or queues something that isn't an idea;

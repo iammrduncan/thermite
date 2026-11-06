@@ -55,6 +55,7 @@ export const EVENT_KINDS = [
   "experiment_edited",
   "experiment_finished",
   "experiment_moved",
+  "experiment_retried",
   "experiment_returned",
   "export_written",
   "direction_added",

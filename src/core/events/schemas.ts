@@ -48,6 +48,9 @@ const experiment = z.object({
   from_run: str,
   question: num,
   returns: num,
+  tries: num,
+  try: num,
+  verdict: str,
   requeued_from: z.object({ result: str }).nullish(),
   yield: z
     .object({
@@ -350,6 +353,7 @@ const BODIES = {
   experiment_assigned: experiment,
   experiment_finished: experiment,
   experiment_returned: experiment,
+  experiment_retried: experiment,
   trial_started: z.object({ trial: str, lane: str, direction: str, focus: str }),
   trial_finished: z.object({
     trial: str,

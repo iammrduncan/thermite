@@ -475,9 +475,10 @@ Adds an experiment to the run's **experiment queue**. Each run has its own queue
 | `details` | text up to 4000 characters | none | More about it |
 | `direction` | text, 1 to 80 characters, trimmed | none | Its direction: in your own words, or a direction's name. Written as `:name:`, it is kept without the colons |
 | `why` | text up to 2000 characters | none | Why it is worth trying. The planner reads it, and so does the worker whose lane gets the experiment |
+| `tries` | whole number from 1 to 10 | 1 | How many trials it gets before it counts as tried. A try that ends without a win sends it back to the top, to a lane that has not tried it while one has not; a win ends its tries early ([An experiment tried more than once](../explanation/agents-lanes-planner.md#an-experiment-tried-more-than-once)). A research run's task gets one: the harness refuses more with `a research run's task gets one try: leave out tries` |
 | `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | `"end"` | Where it goes among the queued experiments |
 
-The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `direction`, `why` and `details` when they are not empty. It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
+The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `direction`, `why` and `details` when they are not empty, and **Tries** as `tries` (not on a research run's page). It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
 
 These rules hold for the five queue kinds:
 
@@ -486,7 +487,9 @@ These rules hold for the five queue kinds:
 - The harness refuses a run it doesn't have (`no run <run>`), a closed run (`run <run> is closed: its queue and rules no longer change`), and an experiment the run doesn't have (`no experiment <id> in run <run>`).
 - The harness writes the experiment and one event in one step. The event's actor is `control:<issued_by>`, such as `control:owner:ui`, and its `by` is `owner`, whoever issued the command.
 
-The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now. Event: `experiment_added`, `{id, title, details?, direction?, why?, question?, by, state, position}`. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
+The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now, with `"tries": <n>` for one that gets more than one try. Event: `experiment_added`, `{id, title, details?, direction?, why?, question?, tries?, by, state, position}`, `tries` only above 1.
+
+Each try of an experiment with tries left that ends without a win is the event `experiment_retried`, `{id, try, tries, lane, trial, attempt?, result, verdict?, cause?, position: "top"}`: `try` is the try that ended, `result` how its trial ended (`submitted`, `no_attempt`, or the trial's stopped reason), `verdict` its attempt's verdict, and `cause` how its trial ended in words, or the judge's reasons for the verdict, cut to 500 characters. The same experiment is up next again, at the top. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
 
 ### `queue_move`
 
@@ -502,19 +505,20 @@ Moves an experiment that is up next to another place.
 
 ### `queue_edit`
 
-Changes the words of an experiment that still waits: one up next, or a lane's idea.
+Changes the words, or the number of tries, of an experiment that still waits: one up next, or a lane's idea.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `run` | lowercase id | The run |
 | `id` | experiment id | The experiment |
-| `title`, `details`, `direction`, `why` | as for `queue_add` | The new words. Give at least one; the others stay as they are |
+| `title`, `details`, `direction`, `why` | as for `queue_add` | The new words. Give at least one of these or `tries`; the others stay as they are |
+| `tries` | as for `queue_add` | Its new number of tries. It must be above the tries it used: the harness refuses it with `experiment <id> was tried <n> times already: give it more than <n> tries` |
 
 An empty `details` or `why` clears it; `title` and `direction` cannot be empty.
 
-**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`direction`) and **Why**. **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `direction` only when they are not empty, so an emptied one keeps its old words. A lane's idea has no **Edit** on the dashboard.
+**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`direction`) and **Why**, and its **Tries** (not on a research run's page). **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `direction` only when they are not empty, so an emptied one keeps its old words, and `tries` only when you changed it. A lane's idea has no **Edit** on the dashboard.
 
-Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, direction and why`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
+Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, direction, why and tries`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
 
 ### `queue_drop`
 

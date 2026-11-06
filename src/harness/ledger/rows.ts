@@ -105,8 +105,29 @@ export interface ExperimentRow {
    * ended, and for other runs' experiments.
    */
   yield?: string | null | undefined;
+  /**
+   * How many trials it gets before it counts as tried (goal 214); 1: one, as before. The tries that
+   * ended without a win are in the `experiment_try` table (ExperimentTry).
+   */
+  tries?: number | undefined;
   created_at: string;
   updated_at: string;
+}
+
+/** One try of an experiment that ended without a win, so it went back for another (goal 214). */
+export interface ExperimentTry {
+  /** Which try it was, from 1. */
+  n: number;
+  lane: string | null;
+  trial: string;
+  attempt: string | null;
+  /** How its trial ended: submitted, no_attempt, or the trial's stopped reason. */
+  result: string;
+  /** Its attempt's verdict, when it had one. */
+  verdict: string | null;
+  /** How its trial ended in words, or the judge's reasons for its attempt's verdict. */
+  cause: string | null;
+  at: string;
 }
 
 /** Background the owner picked from past research for a run, with where it came from. */
@@ -152,6 +173,7 @@ export function toExperiment(r: ExperimentRow): ExperimentRow {
     returns: Number(r.returns ?? 0),
     question: r.question === null || r.question === undefined ? null : Number(r.question),
     yield: r.yield ?? null,
+    tries: Number(r.tries ?? 1),
   };
 }
 

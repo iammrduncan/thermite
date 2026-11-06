@@ -107,7 +107,24 @@ export interface WorkerBriefInput {
   start: string;
   models: readonly { name: string; path: string }[];
   direction: { id: string; description?: string | undefined };
-  experiment: { title: string; details?: string; why?: string; addedBy: string };
+  experiment: {
+    title: string;
+    details?: string;
+    why?: string;
+    addedBy: string;
+    /** Its try now and its earlier tries, when it gets more than one (goal 214). */
+    tries?: {
+      try: number;
+      of: number;
+      earlier: readonly {
+        n: number;
+        lane: string | null;
+        result: string;
+        verdict?: string;
+        cause?: string;
+      }[];
+    };
+  };
   /** A setup trial (goal 115): the starting point the judge could not measure, and why. */
   setup?: { seq: number; commit: string; reasons: string } | undefined;
   /** A goal campaign: what the champion meets, from the judge's check. */
@@ -131,6 +148,27 @@ export interface WorkerBriefInput {
   campaignBrief?: string | undefined;
   /** The background, past research, the run's research folder and field notes, each a part. */
   notesAndPast: readonly string[];
+}
+
+/**
+ * A try of an experiment that gets several (goal 214): which try this is, and how each earlier
+ * one ended, so this trial learns from them instead of repeating them.
+ */
+function triesLines(t: NonNullable<WorkerBriefInput["experiment"]["tries"]>): string {
+  const ended = (e: (typeof t.earlier)[number]) =>
+    e.result === "submitted"
+      ? `its change was judged ${e.verdict ?? "without a win"}`
+      : e.result === "no_attempt"
+        ? "it submitted no change"
+        : `the trial ended (${e.result.replace(/_/g, " ")})`;
+  const earlier = t.earlier.map(
+    (e) =>
+      `- try ${e.n}${e.lane ? ` on ${e.lane}` : ""}: ${ended(e)}${e.cause ? `: ${e.cause}` : ""}`,
+  );
+  return [
+    `This is try ${t.try} of ${t.of} of this experiment.${earlier.length ? ` The earlier ${earlier.length === 1 ? "try" : "tries"} ended without a win; find out why before you repeat it, and take another way where it failed:` : ""}`,
+    ...earlier,
+  ].join("\n");
 }
 
 /**
@@ -178,6 +216,7 @@ export function renderWorkerBrief(i: WorkerBriefInput): Section[] {
       `Focus: ${i.experiment.title}`,
       i.experiment.details ? `Details: ${i.experiment.details}` : "",
       i.experiment.why ? `Why it is worth trying: ${i.experiment.why}` : "",
+      i.experiment.tries ? triesLines(i.experiment.tries) : "",
       // Words from an advisor (which may read the web) or another lane are a suggestion, not an
       // order: the contract, the judge and the owner's messages decide.
       i.experiment.addedBy === "owner" || i.experiment.addedBy === "planner"

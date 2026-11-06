@@ -670,6 +670,19 @@ export interface ExperimentView {
   cause: string | null;
   /** How many times its trial ended without really trying it, and it came back (goal 079). */
   returns: number;
+  /** How many trials it gets (goal 214); 1: one. */
+  tries: number;
+  /** Its tries that ended without a win, so it came back for another (goal 214), the first first. */
+  earlier: {
+    n: number;
+    lane: string | null;
+    trial: string | null;
+    attempt: string | null;
+    result: string | null;
+    verdict: string | null;
+    cause: string | null;
+    at: string;
+  }[];
   /** A research task's question, as an index from 0 (goal 117); null: none. */
   question: number | null;
   /** What a research task's trial added (goal 117); null until its trial ends with one. */

@@ -1,0 +1,41 @@
+---
+id: "214"
+title: "An experiment tried more than once"
+status: IN_PROGRESS
+version: "0.1.3"
+depends_on: ["064", "079"]
+created: 2026-11-06
+updated: 2026-11-06
+---
+
+# 214 · An experiment tried more than once
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## Why (the owner, 2026-11-06)
+
+A campaign may start from changes known to work on an older version of its project, to be carried onto the new one. Each is an experiment for a lane, and a port can fail once for reasons that are not the change's: a worker that took a wrong turn, a build it broke, a file it missed. Today one failed trial ends an experiment: it is `done`, and only a trial that never really tried it (goal 079) sends it back. The owner wants such an experiment tried "at least a certain number of times, passing to different workers", before it counts as failed.
+
+## What
+
+1. An experiment has **tries**, a whole number from 1 to 10, 1 by default (today's behaviour; stored experiments get 1). The owner sets it, or an operator for them: `tries` in `queue_add` and `queue_edit`, and **Tries** on the Experiments tab's add and edit forms. A research run's task gets one try: its trial ends with what it found, never a win to try again for.
+2. **A try that ends without a win uses a try.** A trial with no attempt (no change submitted, an error, its time or turns ran out), or an attempt the judge settles without a win: any final lifecycle but `promoted`, so a static refusal, a broken change, not better, past a guard, a duplicate, not judged. With tries left, the same experiment (not a copy) goes back to the top of the queue, with the try kept: lane, trial, attempt, result, verdict and cause (the trial's words, or the judge's reasons). With `keep_working` the trial ends before its verdict: the experiment is `done` with its attempt, and goes back when the judge settles it.
+3. **A win ends its tries early:** the attempt promoted, a confirmed win waiting for the owner (`awaiting_approval`, `audit_blocked`), or one the owner decided (`declined`).
+4. **A trial that never really tried it uses no try** (goal 079): it goes back as before.
+5. **Each try goes to another lane where one can take it.** A lane that tried an experiment gets it again only when every lane of the run has. The fixed rules' pick skips it for that lane; code refuses a planner's answer that gives it to that lane while another lane of the round has not tried it, in words.
+6. **The next try learns from the last.** The planner's queue shows each experiment's tries (`of`, the `try` next, the `lanes` that tried it and the earlier tries). The worker's brief says `This is try 2 of 3 of this experiment.` and lists how each earlier try ended.
+7. **Records.** Each try that ended is the event `experiment_retried` (`{id, try, tries, lane, trial, attempt?, result, verdict?, cause?, position: "top"}`) and a row of the ledger's `experiment_try` table (migration 30). An earlier try's attempt still names its experiment. Control's view keeps `tries` and `earlier`; the Experiments tab shows **try 2 of 3** and a line for each earlier try; History says why it came back; MCP's `run_queue` gives both.
+
+## Progress
+
+- 2026-11-06: built. `ExperimentQueue` (`harness/queue.ts`): `tries` on `add` and `edit` (refused in words above 10, below the tries used, or above 1 in a research run), `finish` sends a trial with no attempt back while tries are left, `retrySettled` sends back those whose attempt the judge settled without a win, and `takes` holds the lane rule; the scheduler calls `retrySettled` at each step before it plans or starts a trial (`scheduler/index.ts`). The fixed rules' `pick` (`agents/coordinator.ts`) and `validatePlan` (`agents/planner/check.ts`) keep a lane off what it tried; the worker's brief (`agents/roles/worker.ts`) and the planner's text say the tries. The ledger: `experiment.tries` and the `experiment_try` table (`ledger/experiments.ts`, migration 30), copied in a full export. Control: the fold (`views/fold/queue.ts`), the Experiments tab and its forms, History's words, MCP's `issue_command` and `run_queue` descriptions. Tests: `tests/harness/queue/tries.test.ts` (a judged attempt without a win, a win and a win waiting for the owner, no attempt, the commands' limits, control's view and the tab), `tests/harness/agents/scheduler/queue/tries.test.ts` (three tries on two lanes through the fixed rules, the briefs, the planner's refusal). Pages: Agents, lanes and the planner (an experiment tried more than once, the planner's refusals), Choose what a run tries next, Signed commands, MCP tools, Verdicts, Limits and pacing, How the parts fit together, the changelog.
+
+## Not in this goal
+
+- A copied experiment (Start a run's **Copy the untried experiments of**, past research) starts with one try: its tries are the run's own.
+- Tries set by the planner or an advisor: only the owner sets them.
+
+## Done when
+
+- The queue, the scheduler, the planner's check, the brief and control take tries, with tests for each rule above.
+- The pages that describe the queue, its commands and its events describe them.

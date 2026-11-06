@@ -171,6 +171,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [211](goals/_completed/211-metric-of-zero.goal) A metric may be zero: a guard against a fixed value, or an informational metric, that measures nothing wrong as 0 · `VERIFIED`
 - [212](goals/_completed/212-guard-that-asks.goal) A guard that asks: a change past it waits for the owner's yes, with its numbers, instead of being refused · `VERIFIED`
 - [213](goals/_completed/213-models-on-every-runner.goal) A run's model files wherever it runs, however large: a lane's runs reach them too, and a long fetch isn't cut at three hours · `VERIFIED`
+- [214](goals/214-experiment-tried-more-than-once.goal) An experiment tried more than once: tries that end without a win send it back, each to a lane that has not tried it · `IN_PROGRESS`
 - [205](goals/205-rig-over-machines.goal) A rig over several machines, with pools of devices for its judge and its workers · `DROPPED`, replaced by 206
 
 **For the tag.** CI's run on the tag, and the images the runners take.

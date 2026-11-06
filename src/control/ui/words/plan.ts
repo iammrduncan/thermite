@@ -120,7 +120,7 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
       return s(
         b.from_run
           ? `"${clip(String(b.title ?? ""), 120)}" was copied into the queue from run ${String(b.from_run)}.`
-          : `${who(String(b.by ?? e.actor))} ${b.state === "proposed" ? "proposed" : "added"} "${clip(String(b.title ?? ""), 120)}"${b.state === "proposed" ? " as an idea for the queue" : " to the queue"}.`,
+          : `${who(String(b.by ?? e.actor))} ${b.state === "proposed" ? "proposed" : "added"} "${clip(String(b.title ?? ""), 120)}"${b.state === "proposed" ? " as an idea for the queue" : " to the queue"}${Number(b.tries) > 1 ? `, with ${Number(b.tries)} tries` : ""}.`,
         "",
         { run: String(e.subject) },
       );
@@ -132,6 +132,20 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "",
         { run: String(e.subject) },
       );
+    // A try ended without a win, with tries left (goal 214): the same experiment, back at the top.
+    case "experiment_retried": {
+      const how =
+        b.result === "submitted"
+          ? `its change${b.attempt ? ` ${String(b.attempt)}` : ""} was judged ${String(b.verdict ?? "without a win")}`
+          : b.result === "no_attempt"
+            ? "it submitted no change"
+            : `its trial ended (${String(b.result ?? "").replace(/_/g, " ")})`;
+      return s(
+        `"${clip(title(e.subject, b.id), 120)}" went back to the top of the queue for try ${Number(b.try) + 1} of ${Number(b.tries)}: try ${Number(b.try)}${b.lane ? ` on ${String(b.lane)}` : ""} ended without a win: ${how}${b.cause ? ` (${clip(String(b.cause), 200)})` : ""}.`,
+        "",
+        { run: String(e.subject) },
+      );
+    }
     case "experiment_accepted":
     case "experiment_moved":
     case "experiment_edited":

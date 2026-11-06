@@ -55,7 +55,14 @@ export type { LaneFileChange } from "./lane-files.ts";
 export type { MessageRow } from "./messages.ts";
 export { LedgerError } from "./part.ts";
 export type { PromptRow } from "./prompts.ts";
-export type { AttemptInput, BriefingItem, ExperimentRow, JobRow, RunRow } from "./rows.ts";
+export type {
+  AttemptInput,
+  BriefingItem,
+  ExperimentRow,
+  ExperimentTry,
+  JobRow,
+  RunRow,
+} from "./rows.ts";
 export type { SourceRow } from "./sources.ts";
 export type { DirectionStatus, EpochSource } from "./trials.ts";
 export type { InvalidationResult } from "./verdicts.ts";

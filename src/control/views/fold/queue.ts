@@ -59,6 +59,8 @@ function queueEvent(v: RunView, e: StoredEvent): void {
       from_run: str("from_run") ?? null,
       cause: null,
       returns: 0,
+      tries: Number(b.tries) > 1 ? Math.trunc(Number(b.tries)) : 1,
+      earlier: [],
       question: null,
       yield: null,
       at: e.at,
@@ -85,6 +87,7 @@ function queueEvent(v: RunView, e: StoredEvent): void {
       x.details = str("details") ?? x.details;
       x.direction = str("direction") ?? x.direction;
       x.why = str("why") ?? x.why;
+      if (Number(b.tries) >= 1) x.tries = Math.trunc(Number(b.tries));
       break;
     case "experiment_dropped":
       leave(x);
@@ -118,6 +121,27 @@ function queueEvent(v: RunView, e: StoredEvent): void {
       x.returns = Number(b.returns) || x.returns + 1;
       place(x, b.position ?? "top");
       break;
+    // A try ended without a win, with tries left (goal 214): kept, and the same experiment back.
+    case "experiment_retried":
+      x.earlier.push({
+        n: Number(b.try) || x.earlier.length + 1,
+        lane: str("lane") ?? x.lane,
+        trial: str("trial") ?? x.trial,
+        attempt: str("attempt") ?? x.attempt,
+        result: str("result") ?? x.result,
+        verdict: str("verdict") ?? null,
+        cause: str("cause") ?? null,
+        at: e.at,
+      });
+      if (Number(b.tries) >= 1) x.tries = Math.trunc(Number(b.tries));
+      x.state = "queued";
+      x.lane = null;
+      x.trial = null;
+      x.attempt = null;
+      x.result = null;
+      x.cause = null;
+      place(x, b.position ?? "top");
+      break;
   }
 }
 
@@ -132,4 +156,5 @@ export const QUEUE: Handlers = {
   experiment_assigned: experiment,
   experiment_finished: experiment,
   experiment_returned: experiment,
+  experiment_retried: experiment,
 };

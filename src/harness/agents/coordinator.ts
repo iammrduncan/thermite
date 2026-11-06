@@ -22,7 +22,8 @@ import type { Assignment, Registry } from "./registry.ts";
  * The fixed rules: lanes take queued experiments in order, skipping those an AVOID rule names by
  * direction, MANDATE directions first and TRY directions next. Among the next experiments in order
  * (as many as the run has lanes), a lane prefers one in its last direction, so it builds on what
- * it learned. An experiment goes to one lane only.
+ * it learned. An experiment goes to one lane only, and one that gets more than one try goes to a
+ * lane that has not tried it yet while one of the run's lanes has not (goal 214).
  */
 
 /** Who gives out work and changes the queue for the coordinator, in the record. */
@@ -183,11 +184,17 @@ export class Coordinator {
   /**
    * The next experiment for a lane by the fixed rules, or none when nothing queued may go to
    * it. `exclude`: experiments already given to other lanes in this hand-out or this round.
+   * `lanes`: the run's lanes, for the experiments with tries (goal 214); left out, this lane alone.
    */
   pick(
     run: string,
     lane: string,
-    o: { directives: Directive[]; window: number; exclude: Set<string> },
+    o: {
+      directives: Directive[];
+      window: number;
+      exclude: Set<string>;
+      lanes?: readonly string[] | undefined;
+    },
   ): Experiment | undefined {
     const fam = (k: string) =>
       o.directives
@@ -200,7 +207,12 @@ export class Coordinator {
       mandate.some((f) => inDirection(x, f)) ? 0 : tried.some((f) => inDirection(x, f)) ? 1 : 2;
     const candidates = this.queue
       .queued(run)
-      .filter((x) => !o.exclude.has(x.id) && !avoid.some((f) => inDirection(x, f)))
+      .filter(
+        (x) =>
+          !o.exclude.has(x.id) &&
+          !avoid.some((f) => inDirection(x, f)) &&
+          this.queue.takes(x, lane, o.lanes ?? [lane]),
+      )
       .map((x, i) => ({ x, i, r: rank(x) }))
       .sort((a, b) => a.r - b.r || a.i - b.i);
     const first = candidates[0];
@@ -423,7 +435,8 @@ export class Coordinator {
    * of the queue, the same row with its cause (goal 079): a trial interrupted (a reset, a pause, a
    * restart), or one that ended on the provider's error (a rate limit, a 5xx, no credits, a
    * refused key or an unserved model, or calls that failed until the run's agents stopped). Any
-   * other failure is a tried experiment, with its cause.
+   * other failure is a tried experiment, with its cause; one with tries left goes back for its
+   * next try (goal 214), without a try used for a trial that never really tried it.
    */
   finish(
     trial: string,

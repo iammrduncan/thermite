@@ -197,14 +197,15 @@ The planner's own changes, its hand-outs and each trial's result are written ins
 
 | Event | What it records |
 | --- | --- |
-| `experiment_added` | A new experiment: its title, details, direction, why, who added it and its state (`queued`, or `proposed` for a lane's idea). A research task names its `question`, an index from 0. A copied one also names the run it came from. In a ledger from before goal 079, one put back after its trial was interrupted or failed names the experiment it repeats, with that trial, its lane and how it ended (`requeued_from`) |
+| `experiment_added` | A new experiment: its title, details, direction, why, who added it and its state (`queued`, or `proposed` for a lane's idea). A research task names its `question`, an index from 0. One the owner gave more than one try has `tries`. A copied one also names the run it came from. In a ledger from before goal 079, one put back after its trial was interrupted or failed names the experiment it repeats, with that trial, its lane and how it ended (`requeued_from`) |
 | `experiment_accepted` | A lane's idea, queued: by the owner, or by the planner, with why (its model's, or, below the queue's target, the fixed rules') |
 | `experiment_moved` | A new place in the queue |
-| `experiment_edited` | New text |
+| `experiment_edited` | New text, or a new number of tries (`tries`) |
 | `experiment_dropped` | Dropped, with who dropped it and why |
 | `experiment_assigned` | Given to a lane's trial |
 | `experiment_finished` | Its trial ended, with the attempt or the reason there is none, and how the trial ended in words (`cause`). A research task's has its trial's `yield`: `{verified_claims, by_question: [{question, verified_claims, new_domain_claims}], new_domains, domains, findings, card_changes}` |
 | `experiment_returned` | Its trial never really tried it (interrupted, or the model provider's error): the same experiment back at the top, with the trial, its lane, the cause and how many times it came back (`returns`) |
+| `experiment_retried` | A try of an experiment with tries left ended without a win: the same experiment back at the top, with the try that ended (`try` of `tries`), its lane, trial, attempt, result, verdict and cause |
 | `parent_screened` | A change written on an older champion, measured against that champion by the judge's `parent_screen` job: its verdict there, its gain and the effect in words. No verdict of the change's own ([A change written on an older champion](../reference/verdicts.md#a-change-written-on-an-older-champion)) |
 | `port_queued` | A port queued at the top of the run's queue: the change it carries, the champion it goes onto (`onto_seq`), the experiment and why |
 | `planner_handout` | One hand-out: which experiment went to which lane, and why |

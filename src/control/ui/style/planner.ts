@@ -26,7 +26,9 @@ export const PLANNER = `/* The experiment queue and the Planner tab (goal 064) *
 .qsrc.lane { background: color-mix(in srgb, #0e7490 12%, transparent); color: #0e7490; }
 .qdir { font: 500 11.5px var(--font-mono); color: var(--muted-foreground); }
 .qadd { display: grid; grid-template-columns: minmax(0, 1fr) 180px 140px auto; gap: 8px; align-items: end; padding: 12px; border: 1px dashed var(--input); border-radius: 10px; margin-bottom: 10px; }
+.qadd.tries { grid-template-columns: minmax(0, 1fr) 180px 140px 90px auto; }
 .qadd .qwhy-f { grid-column: 1 / -2; }
+.qtry { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--accent); color: var(--foreground); }
 @media (max-width: 760px) { .qadd { grid-template-columns: minmax(0, 1fr); } .qadd .qwhy-f { grid-column: auto; } }
 .qlane { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .qlt { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted-foreground); }

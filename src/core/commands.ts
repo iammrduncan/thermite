@@ -146,6 +146,8 @@ export const ExperimentText = {
       return inner && directionName(inner) ? inner : s;
     }),
   why: z.string().max(2000),
+  /** How many trials it gets before it counts as tried (goal 214): each on another lane if one can. */
+  tries: z.number().int().min(1).max(10),
 };
 
 /**
@@ -313,6 +315,7 @@ export const CommandPayloads = {
     details: ExperimentText.details.optional(),
     direction: ExperimentText.direction.optional(),
     why: ExperimentText.why.optional(),
+    tries: ExperimentText.tries.optional(),
     position: QueuePosition.default("end"),
   }),
   queue_move: z.strictObject({ run: RunId, id: ExperimentId, position: QueuePosition }),
@@ -324,15 +327,11 @@ export const CommandPayloads = {
       details: ExperimentText.details.optional(),
       direction: ExperimentText.direction.optional(),
       why: ExperimentText.why.optional(),
+      tries: ExperimentText.tries.optional(),
     })
-    .refine(
-      (p) =>
-        p.title !== undefined ||
-        p.details !== undefined ||
-        p.direction !== undefined ||
-        p.why !== undefined,
-      { message: "change at least one of title, details, direction and why" },
-    ),
+    .refine((p) => Object.keys(p).some((k) => k !== "run" && k !== "id"), {
+      message: "change at least one of title, details, direction, why and tries",
+    }),
   queue_drop: z.strictObject({
     run: RunId,
     id: ExperimentId,

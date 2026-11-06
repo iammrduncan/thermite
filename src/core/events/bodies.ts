@@ -331,6 +331,8 @@ export interface EventBodies {
     direction?: string | undefined;
     why?: string | undefined;
     question?: number | undefined;
+    /** How many trials it gets, when more than one (goal 214). */
+    tries?: number | undefined;
     by: string;
     state: "proposed" | "queued";
     position?: QueuePosition | undefined;
@@ -355,6 +357,7 @@ export interface EventBodies {
     details?: string | undefined;
     direction?: string | undefined;
     why?: string | undefined;
+    tries?: number | undefined;
   };
   experiment_dropped: { id: string; by: string; why: string };
   experiment_assigned: { id: string; lane: string; trial: string; by: string; why?: string };
@@ -374,6 +377,22 @@ export interface EventBodies {
     result: string;
     cause: string;
     returns: number;
+    position: string;
+  };
+  /**
+   * A try ended without a win and the experiment has tries left (goal 214): the same experiment
+   * back at the top, with the try that ended (`try` of `tries`).
+   */
+  experiment_retried: {
+    id: string;
+    try: number;
+    tries: number;
+    lane: string | null;
+    trial: string;
+    attempt?: string | undefined;
+    result: string;
+    verdict?: string | undefined;
+    cause?: string | undefined;
     position: string;
   };
   trial_started: {

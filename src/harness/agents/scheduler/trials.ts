@@ -9,6 +9,7 @@ import { additionOf } from "../../../core/role-additions.ts";
 import type { Role } from "../../broker/index.ts";
 import type { Experiment, TaskYield } from "../../queue.ts";
 import { focusOf, limitsInForce, PLANNER, resultOf } from "../coordinator.ts";
+import { lanesOf } from "../planner/index.ts";
 import { failedTooLong } from "../provider-errors.ts";
 import type { Assignment, EpochRecord } from "../registry.ts";
 import type { TrialResult } from "../worker/index.ts";
@@ -53,6 +54,7 @@ export function experimentFor(
     directives,
     window: o.laneCount,
     exclude: reserved,
+    lanes: lanesOf(o.laneCount),
   });
   let why = x ? sched.coordinator.whyPicked(run, a.lane, x, directives) : "";
   if (!x) {

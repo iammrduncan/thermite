@@ -200,6 +200,16 @@ export class Scheduler implements AgentSignals {
     if (waitingForMcp(sched, inst.id)) return false;
     if (inst.contract.mode === "research") return researchTick(sched, inst.id, inst.contract);
     const { id, contract } = inst;
+    // Tries (goal 214): an experiment whose attempt the judge settled without a win, with tries
+    // left, goes back to the top of the queue before the next plan or trial takes from it.
+    try {
+      sched.o.service.queue.retrySettled(id, sched.o.owner);
+    } catch (err) {
+      logError("scheduler", "experiments with tries left were not sent back", {
+        run: id,
+        error: String(err),
+      });
+    }
     if (contract.mode === "goal" && waitingForConfirmation(sched, id)) return false;
     let epoch = sched.registry.currentEpoch(id);
     // A hill climb's baseline (goal 115): no round is planned and no trial starts until the
