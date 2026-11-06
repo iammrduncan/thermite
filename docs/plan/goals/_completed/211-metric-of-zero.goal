@@ -34,3 +34,7 @@ A kit's metrics must come out above zero today (`kit.json` › `metrics`): the j
 ## Verified (2026-11-06)
 
 The lab's test machine ran `tests/core/metric-plan.test.ts` and `tests/harness/judge/measure.test.ts` at b8235825: 13 of 13 pass, and 66 of 66 with goal 213's files beside them. The kit manifest and the verdicts reference say which metrics may be zero, and why; the contract reference says a campaign can't give one a ratio role.
+
+## Found after (2026-11-06)
+
+The first run of a kit with guards held at 0 on a GPU (two counts of mismatched replies, on a DGX Spark runner) measured a whole block, and the judge refused it: `implausible: mismatched_replies is 0; draft_mismatch is 0`. The CUDA target's own plausibility check refused every value at or below zero; the tests above ran on the CPU target, whose check refuses only non-finite values. Since 6fbf1491 it refuses negative and non-finite values alone: the judge's measure already takes a zero only from a metric that may be zero.
