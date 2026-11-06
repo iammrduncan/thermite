@@ -257,8 +257,10 @@ export class CudaDriver implements TargetDriver {
   }
 
   plausibility(metrics: Record<string, number>): string[] {
+    // A zero is the kit's to allow: the judge's measure takes one only from a metric that may be
+    // zero (goal 211), such as a count of failures.
     return Object.entries(metrics)
-      .filter(([, v]) => !Number.isFinite(v) || v <= 0)
+      .filter(([, v]) => !Number.isFinite(v) || v < 0)
       .map(([k, v]) => `${k} is ${v}`);
   }
 

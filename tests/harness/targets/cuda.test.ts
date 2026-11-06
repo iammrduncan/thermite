@@ -160,8 +160,10 @@ describe("cuda-gpu driver", () => {
     assert.deepEqual((await off.readyForTiming()).reasons, ["not set up"]);
   });
 
-  test("never a score: zero, negative and non-finite metrics are implausible", () => {
+  test("never a score: negative and non-finite metrics are implausible, and a zero is the kit's", () => {
     const d = new CudaDriver({ targetClass: "x", smi: fake(IDLE, "0x1") });
-    assert.equal(d.plausibility({ a: 1, b: 0, c: Number.NaN }).length, 2);
+    assert.deepEqual(d.plausibility({ a: 1, b: -1, c: Number.NaN }), ["b is -1", "c is NaN"]);
+    // A count of failures of 0: the judge's measure took it only from a metric that may be zero.
+    assert.deepEqual(d.plausibility({ a: 1, mismatched_replies: 0 }), []);
   });
 });
