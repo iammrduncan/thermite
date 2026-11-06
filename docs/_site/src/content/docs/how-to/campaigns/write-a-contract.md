@@ -86,6 +86,19 @@ To keep a second metric from getting worse, add a guard. To refuse a change whos
 
 Here `peak_mib` may get at most 2% worse in one promotion, and at most 5% worse than where the run started: the judge's first job measures the starting point on every cell (the run's [baseline](../../reference/contract.md#the-baseline)), and each confirmation holds the guard against those values.
 
+A kit may already say what each of its metrics is for: a **priority** metric the climb improves, a **guard** a change must keep, or an **informational** metric only recorded ([What each metric is for](../../reference/kit-manifest.md#what-each-metric-is-for)). A contract adds to it in `metrics`. Here a decode speed breaks a tie on the primary, and a change may be at most 2% below the champion's:
+
+```json title="contract.json (part)"
+"metrics": {
+  "decode_tps": {
+    "kind": "priority", "priority": 2, "direction": "max", "min_effect": 0.01,
+    "guards": [{ "stay": "above", "against": "champion", "by": 0.02 }]
+  }
+}
+```
+
+A contract may add guards and tighten a kit's, never loosen one. Every metric that is neither a priority nor a guard is informational: the judge records it with each verdict and never decides by it.
+
 ## 3. Write a goal campaign
 
 ```json title="contract.json"
