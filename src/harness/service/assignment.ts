@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { z } from "zod";
 import { BadInput, Refusal } from "../../common/errors.ts";
@@ -9,7 +8,7 @@ import { goalChecks } from "../../core/goal/index.ts";
 import { type Kit, KitSchema, kitProblems } from "../../core/kit.ts";
 import { canonicalUses, type McpUse, sameUses, usesWords } from "../../core/mcp.ts";
 import { folderCommit, hasCommit, initMirror, showFile, updateRef } from "../git.ts";
-import { importBundle, importFile, importRoom, resolveInbox } from "../imports.ts";
+import { importBundle, importFile, importRoom, inInbox } from "../imports.ts";
 import { ExperimentInput } from "../queue.ts";
 import { startingHypotheses } from "../research/index.ts";
 import type { HarnessService } from "./index.ts";
@@ -58,7 +57,7 @@ async function runImport(
     case "model": {
       // A core that never judges itself (goal 213): its runners fetch the file and check it by
       // the signed SHA-256, and the core keeps none, unless its supervisor brought one anyway.
-      if (svc.modelsOnRunners && !existsSync(resolveInbox(inboxDir, spec.path)))
+      if (svc.modelsOnRunners && !inInbox(inboxDir, spec.path))
         return { kind: "model", name: spec.name, sha256: spec.sha256, on: "runners" };
       const stored = await importFile({
         inboxDir,
