@@ -1,0 +1,48 @@
+---
+id: "216"
+title: "Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-06
+updated: 2026-11-06
+---
+
+# 216 · Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+Dependabot's minor-and-patch group of 2026-11-06 moved `@earendil-works/pi-agent-core`, `pi-ai` and `pi-tui` from 1.4.0 to 1.5.0. They stayed at 1.4.0 when the rest of the group came in on v0.1.4, because 1.5.0 breaks two things Thermite uses:
+
+- **pi-ai no longer exports TypeBox's `Type` and `TSchema`.** Tool parameters are JSON Schema, built with its new package `@earendil-works/pi-schema`, which also types the arguments; TypeBox schemas and plain JSON Schema objects still work. With 1.5.0 the typecheck fails at 25 imports, in `src/harness/agents/tools/research.ts`, `src/harness/agents/worker/tools.ts`, the supervisor's advisors (`src/supervisor/advisors/`) and their tests: every tool Thermite gives its workers, its planner and its advisors.
+- **`scripts/patch-pi-ai.mjs` stops the install** on any pi-ai but 1.4.0, as it should ([goal 140](140-long-tool-call-no-stall.goal)).
+
+pi-ai 1.5.0 also fixes goal 140's cause itself. Its providers stream a tool call's arguments through `ToolCallArgumentsStream`, which reads each piece once, and parse the finished text once with `parseToolCallArguments`; nothing calls `parseStreamingJson` any more. `parseStreamingJson`'s text is 1.4.0's, so the patch would still apply.
+
+1. **The tools' schemas in `@earendil-works/pi-schema`,** with their argument types, or in TypeBox as a dependency of Thermite's own, whichever keeps the tools' JSON Schema the same. The prompt goldens and the tools' schemas sent to each model do not change, or each change is explained.
+2. **Goal 140's patch retired,** or kept as a guard: the owner decides. Retired, it leaves `package.json`'s `postinstall`, the three Containerfiles and `tests/scripts/patch-pi-ai.test.ts`.
+3. **pi-tui 1.5.0's Pi view** (goal 169) is unchanged, with its native helpers still deleted in every image.
+4. **CREDITS** names pi-schema, and the versions on Credits and the harness image's page say 1.5.0.
+
+## Why
+
+The default worker harness and every advisor in Pi run on these packages, and Dependabot proposes them again each week until they come in.
+
+## Done when
+
+- [ ] Items 1 to 4, with tests: the full suite, and the agents, terminal and steering acceptance checks.
+- [ ] Pages: the harness image's packages, Credits, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-06 22:07 UTC: Goal written while taking Dependabot's group onto v0.1.4: `npm ci` with 1.5.0 stopped at the patch script, and the typecheck failed at 25 imports of `Type` and `TSchema`.
+
+---
+
+Run with `/goal Complete docs/plan/goals/216-pi-1-5.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

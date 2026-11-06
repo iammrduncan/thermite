@@ -1,0 +1,51 @@
+---
+id: "215"
+title: "The planner plans a round while a lane is still busy"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-06
+updated: 2026-11-06
+---
+
+# 215 · The planner plans a round while a lane is still busy
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+A hill climb's round starts as soon as every free lane has run its trials. It does not wait for a trial still running on another lane: that lane joins the next round when its trial ends ([Lanes, the planner and the queue](../../_site/src/content/docs/explanation/agents-lanes-planner.md)). But the planner is asked to plan every lane, busy or not, and its answer is checked against every lane:
+
+- `src/harness/agents/scheduler/plan.ts` gives the planner `laneCountOf(...)`: all the run's lanes.
+- `validatePlan` in `src/harness/agents/planner/check.ts` refuses a plan that does not assign "each of lane-1, lane-2 exactly once".
+- The same check refuses the busy lane's own experiment: it "can't be given out (in progress on lane-1)".
+
+So the only plan the check takes gives the busy lane another experiment, which it can't start. A model that sees the busy lane and leaves it out is refused. On the lab, 2026-11-06 at 22:01 UTC, a two-lane hill climb on v0.1.2 started round 118 while lane-1 ran its second trial of round 117. The model's first answer assigned lane-2 alone and was refused ("assign each of lane-1, lane-2 exactly once (got lane-2)"). Its second gave lane-1 the experiment lane-1 was on, and was refused too. The fixed rules then planned the round. v0.1.3's code is the same.
+
+Each such round loses the model's plan: its reasons, its holds (such as a change it keeps back because it changes bits) and its queue moves. Runs with long trials, such as a port that builds a large engine, start most rounds with a lane busy.
+
+1. **The planner is asked for the free lanes only.** Its prompt names the free lanes it plans and, for each busy lane, what it is on, so the plan can take that into account.
+2. **The check takes each free lane exactly once,** and refuses a busy lane with words that say why ("lane-1 is still on x-…: it joins the next round"). The fixed rules plan the same lanes.
+3. **A test** of a round that starts with one of two lanes busy: the model's plan for the free lane is used, and the busy lane's trial goes on.
+4. **The count:** how many rounds of the lab's runs were planned by the fixed rules for this cause, from their epochs' `causes`.
+
+## Why
+
+The planner's model is where the run's judgment about what to try next lives. Refusing it whenever a trial runs long turns most rounds of a long-trial run over to the fixed rules.
+
+## Done when
+
+- [ ] Items 1 to 4, with tests.
+- [ ] Pages: how a round is planned while a lane is busy (Lanes, the planner and the queue), and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-06 22:04 UTC: Goal written from a lab run's round 118 (its epoch's `causes`) and the code on v0.1.4.
+
+---
+
+Run with `/goal Complete docs/plan/goals/215-planner-with-a-busy-lane.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
