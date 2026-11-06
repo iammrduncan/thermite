@@ -358,7 +358,7 @@ Each run's reason keeps at most 2,000 characters. A longer one keeps its first q
 
 ## Build cache
 
-Each build has a key: the hash of the candidate's commit, the kit's commit, the kit's `build` section and the toolchain. The toolchain is a hash of the image's installed packages (`dpkg-query -W`), the `cc` and `nvcc` versions, and `THERMITE_TOOLCHAIN_ID` when it is set and not empty. A build is made once for each key and reused after: an update to new images whose packages and compilers are the same, such as a new Thermite release on the same base, keeps the run's builds, and one that changes a package builds afresh. While one judge executor makes a build, another that needs the same key waits for it. A failed build is remembered as failed, unless it was ended for a limit.
+Each build has a key: the hash of the candidate's commit, the kit's commit, the kit's `build` section and the toolchain. The toolchain is a hash of the image's installed packages (`dpkg-query -W`), the `cc` and `nvcc` versions, and `THERMITE_TOOLCHAIN_ID` when it is set and not empty. A build is made once for each key and reused after: an update to new images whose packages and compilers are the same, such as a new Thermite release on the same base, keeps the run's builds, and one that changes a package builds afresh. While one judge executor makes a build, another that needs the same key waits for it. A failed build is remembered as failed, unless it was ended for a limit, and only for the harness build that met the failure: after an update to new images, the same key is built again, as an image's fix can be what the build needed.
 
 ## How a kit reaches a rig
 

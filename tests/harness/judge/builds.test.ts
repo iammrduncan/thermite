@@ -41,7 +41,11 @@ function setup(buildScript: string, outputs: string[], timeoutS = 30) {
   const scratch = join(root, "scratch");
   mkdirSync(scratch);
   const ledger = Ledger.open(join(root, "ledger.db"));
-  const store = new BuildStore(join(root, "state"), scratch, new LocalRunner(scratch), ledger);
+  const make = (harness?: string) =>
+    new BuildStore(join(root, "state"), scratch, new LocalRunner(scratch), ledger, {
+      ...(harness ? { harness } : {}),
+    });
+  const store = make();
   const kit = KitSchema.parse({
     schema_version: 1,
     name: "t",
@@ -52,8 +56,8 @@ function setup(buildScript: string, outputs: string[], timeoutS = 30) {
     metrics: {},
     check: { command: ["true"] },
   });
-  const ensure = () =>
-    store.ensure({
+  const ensureOn = (st: BuildStore) =>
+    st.ensure({
       repo: "r",
       mirror,
       commit,
@@ -63,7 +67,7 @@ function setup(buildScript: string, outputs: string[], timeoutS = 30) {
       actor: "t",
       role: "builder",
     });
-  return { root, store, ensure };
+  return { root, store, ensure: () => ensureOn(store), ensureOn, make };
 }
 
 describe("build store", () => {
@@ -126,6 +130,18 @@ describe("build store", () => {
     const fails = setup("exit 3\n", ["out/x"]);
     const f1 = await fails.ensure();
     assert.ok(!f1.ok && !f1.transient);
+  });
+
+  test("a failure is reused by the harness that met it; another harness builds again", async () => {
+    // Each build says its own process id, so a log served from the record says the first one's.
+    const s = setup("echo pid $$; exit 3\n", ["out/x"]);
+    const first = await s.ensureOn(s.make("1.0.0@aaaa"));
+    const same = await s.ensureOn(s.make("1.0.0@aaaa"));
+    assert.ok(!first.ok && !same.ok);
+    assert.equal(same.log, first.log, "the same harness: the remembered failure");
+    const other = await s.ensureOn(s.make("1.0.0@bbbb"));
+    assert.ok(!other.ok);
+    assert.notEqual(other.log, first.log, "another harness: built again");
   });
 });
 
