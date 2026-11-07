@@ -321,9 +321,10 @@ export class RunnerHub {
     if (!p || p.checking) return;
     p.checking = true;
     try {
-      // Each card's use, but of those the judge measures on: a read never disturbs a timing.
+      // Each card's use, but the judge's runners' and a shared one's while the judge holds it:
+      // a read never disturbs a timing.
       const gpus = p.runners.flatMap((r, card) =>
-        whose(this.pools.holderOf(r.runner) ?? "") === "judge" ? [] : [card],
+        r.pool === "judge" || whose(this.pools.holderOf(r.runner) ?? "") === "judge" ? [] : [card],
       );
       const info = (await this.o.link
         .to(name)

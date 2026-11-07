@@ -170,6 +170,7 @@ describe("the core's runners as they come and go (goal 206)", () => {
         ? {
             answer: {
               ...fits.answer,
+              cards: 3,
               gpus: [{ card: 0, util_pct: 40 + 10 * (reads++ % 2), mem_used_mib: null }],
             },
           }
@@ -178,10 +179,10 @@ describe("the core's runners as they come and go (goal 206)", () => {
     const hub = new RunnerHub({ service, link: sup.link, core, checkEveryMs: 25 });
     const ex = executors();
     hub.executors = ex;
-    hub.apply([{ name: "box-2", pools: ["lanes", "judge"] }]);
+    hub.apply([{ name: "box-2", pools: ["lanes", "shared", "judge"] }]);
     const stop = hub.start();
     await wait(200);
-    // The judge measures on box-2-1: its card is read no more.
+    // The judge measures on the shared box-2-1: its card is read no more.
     const judged = ex.runners.get("box-2-1");
     assert.ok(judged);
     const release = await hub.pools.holdForJudge(judged, "executor-box-2-1");
@@ -196,8 +197,9 @@ describe("the core's runners as they come and go (goal 206)", () => {
         .flatMap((q) => (q.kind === "ask" && q.ask.op === "info" ? [q.ask.gpus] : []));
     assert.ok(
       asked(0).some((g) => JSON.stringify(g) === "[0,1]"),
-      "both cards, while the judge measured on neither",
+      "the lanes' and the shared card, while the judge measured on neither; never the judge's own",
     );
+    assert.ok(asked(0).every((g) => !g?.includes(2)));
     assert.ok(asked(before).length > 0);
     assert.ok(
       asked(before).every((g) => JSON.stringify(g) === "[0]"),
@@ -205,6 +207,7 @@ describe("the core's runners as they come and go (goal 206)", () => {
     );
     const report = hub.report();
     const [lanes, judge] = report.processes[0]?.runners ?? [];
+    assert.equal(report.processes[0]?.runners.length, 3);
     assert.ok(lanes?.use && judge?.use);
     assert.ok(judge.use.judge_ms > 0, "the judge's time on its runner");
     assert.equal(lanes.use.judge_ms, 0, "the lanes' runner is never the judge's");

@@ -105,5 +105,5 @@ export function useBlock(rig: string, v: UseView, runStarted?: string, heading?:
     rows
       ? `<div class="card flat" style="overflow-x:auto"><table class="ut"><tbody>${rows}</tbody></table></div>`
       : `<div class="card small muted">No runner reported its time in this window: a rig core of an older version reports none.</div>`
-  }<div class="small muted" style="margin-top:6px">${esc(waitedWords(v))} The GPU is read every 15 seconds, but never while the judge measures on it, so a reading never disturbs a timing.${since}</div></div>`;
+  }<div class="small muted" style="margin-top:6px">${esc(waitedWords(v))} The GPU is read every 15 seconds, but never on the judge's own runners, nor on a shared one while the judge measures there, so a reading never disturbs a timing.${since}</div></div>`;
 }
