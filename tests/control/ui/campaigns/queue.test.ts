@@ -55,6 +55,65 @@ test("a judge-only run's queue says no worker takes it, and how to carry it to a
   assert.equal(judgeOnlyQueueLine(run(false, waiting("done"))), "");
 });
 
+test("a tried experiment has Send back to up next, with why; one still queued, one dropped and a research run's have none (goal 221)", async () => {
+  const { experimentsTab } = await import("../../../../src/control/ui/campaigns/queue/index.ts");
+  const x = (id: string, state: string) => ({
+    id,
+    title: `experiment ${id}`,
+    state,
+    position: state === "queued" ? 0 : null,
+    by: "teacher",
+    direction: "",
+    why: "",
+    lane: "lane-1",
+    trial: "t-0000000000000001",
+    attempt: null,
+    result: state === "done" ? "no_attempt" : null,
+    tries: 1,
+    earlier: [],
+    at: "2026-10-21T00:00:00Z",
+    updated_at: "2026-10-21T00:00:00Z",
+  });
+  const queue = [
+    x("x-000000000001", "done"),
+    x("x-000000000002", "queued"),
+    x("x-000000000003", "dropped"),
+  ] as unknown as RunView["queue"];
+  const sent: string[] = [];
+  const tab = (mode: string) =>
+    experimentsTab({
+      u: rig,
+      r: statusRun("q-1", "running", "2026-10-20T00:00:00Z", {
+        mode,
+        has_agents: true,
+        queue,
+        at_work: {},
+      } as Partial<RunView>),
+      now: Date.parse("2026-10-22T00:00:00Z"),
+      csrf: "c",
+      back: "/ui/campaigns/quality/runs/q-1/experiments",
+      cmd: (c) => {
+        sent.push(`${c.kind} ${String(c.fields?.id ?? "")}`);
+        return `<form data-kind="${c.kind}">${c.extra ?? ""}</form>`;
+      },
+      directions: [],
+    });
+  const html = tab("hill_climb");
+  assert.match(html, /<summary class="btn sm ghost">Send back<\/summary>/);
+  assert.match(html, /<form data-kind="queue_retry"><input name="why" required maxlength="2000"/);
+  assert.deepEqual(
+    sent.filter((k) => k.startsWith("queue_retry")),
+    ["queue_retry x-000000000001"],
+    "the done one alone",
+  );
+  sent.length = 0;
+  assert.doesNotMatch(tab("research"), /Send back/);
+  assert.deepEqual(
+    sent.filter((k) => k.startsWith("queue_retry")),
+    [],
+  );
+});
+
 test("the Planner tab counts rounds, and says plainly when the planner is off", async () => {
   const { plannerTab } = await import("../../../../src/control/ui/campaigns/queue/index.ts");
   const tab = (settings: Record<string, unknown> | null, epochs: number) =>

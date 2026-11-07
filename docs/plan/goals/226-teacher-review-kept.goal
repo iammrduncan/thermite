@@ -32,6 +32,7 @@ A teacher's review is a long call on a subscription. Losing all of it for a dire
 ## Progress
 
 - 2026-11-07 05:12 UTC: Goal written from the lab round's Live lines, which the lab's infrastructure session read. Items 1 and 2 built: `cut()` in `supervisor/advisors/teachers/answers.ts` for a recommendation's direction, words, value, rationale and citations, and the list cut to 20. Test: `tests/supervisor/advisors/pass/ideas.test.ts`. The test file has not run yet.
+- 2026-11-07 05:31 UTC: item 3, from the lab's Live lines (the infrastructure session read them): of the four teachers' rounds since 00:29 UTC, two lost the review of the teacher in Claude Code this way, at 01:29 (`recommendations.0.direction`) and 04:31 (`recommendations.1.direction`), each over 200 characters; in the other two (00:29, 02:30) both teachers answered. The teacher in Codex was never refused. In every round the teacher in Claude Code made tool calls (39 to 68), its first 50 to 70 s after the call began. To the lab with 3f6425c1, the owner's roll of tonight.
 
 ---
 
