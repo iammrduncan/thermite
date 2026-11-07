@@ -228,10 +228,15 @@ describe("agent scheduler", () => {
     const contexts: { lanes: string[]; busy?: unknown }[] = [];
     const fake = await startFakeModel(({ messages, tools }) => {
       if (tools.some((t) => t.function.name === "submit_plan")) {
-        const text = messages.map((m) => String(m.content ?? "")).join("\n");
-        const lanes = JSON.parse(/"lanes":(\[[^\]]*\])/.exec(text)?.[1] ?? "[]") as string[];
-        const busy = /"busy_lanes":(\[[^\]]*\])/.exec(text)?.[1];
-        contexts.push({ lanes, ...(busy ? { busy: JSON.parse(busy) } : {}) });
+        // The context's lists, as the prompt carries them: JSON inside the messages' JSON.
+        const all = JSON.stringify(messages);
+        const list = (key: string): unknown[] | undefined => {
+          const m = new RegExp(`\\\\"${key}\\\\":(\\[[^\\]]*\\])`).exec(all);
+          return m?.[1] ? (JSON.parse(m[1].replaceAll('\\"', '"')) as unknown[]) : undefined;
+        };
+        const lanes = (list("lanes") ?? []) as string[];
+        const busy = list("busy_lanes");
+        contexts.push({ lanes, ...(busy ? { busy } : {}) });
         return {
           toolCalls: [
             {
