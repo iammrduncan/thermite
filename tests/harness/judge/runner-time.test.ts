@@ -32,10 +32,15 @@ describe("a runner's time (goal 231)", () => {
       free_ms: (5 + 12) * 60_000,
       away_ms: 3 * 60_000,
     });
-    // Its totals now count the time since its last change, but keep none of it.
-    const later = c.totals({ up: true, holder: "lane-1" }, min(70));
-    assert.equal(later.free_ms, 12 * 60_000 + 5 * 60_000);
-    assert.deepEqual(later.lanes_ms, { "lane-2": 10 * 60_000, "lane-1": 22 * 60_000 });
+    // Its totals count the time since its last change as what it does now, and keep none of it.
+    const free = { up: true, holder: undefined };
+    assert.equal(c.totals(free, min(70)).free_ms, (5 + 22) * 60_000);
+    assert.equal(c.totals(free, min(60)).free_ms, (5 + 12) * 60_000);
+    // Taken by lane-1 at 70: the free time until then is kept as free, and lane-1's begins.
+    c.tally(free, min(70));
+    const later = c.totals({ up: true, holder: "lane-1" }, min(75));
+    assert.equal(later.free_ms, (5 + 22) * 60_000);
+    assert.deepEqual(later.lanes_ms, { "lane-2": 10 * 60_000, "lane-1": 5 * 60_000 });
   });
 
   test("who waited: the judge's executors together, each lane on its own, the open waits up to now", () => {
