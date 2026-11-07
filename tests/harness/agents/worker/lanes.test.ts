@@ -160,8 +160,10 @@ describe("worker trial", () => {
     assert.equal(d.status, 200);
     // The dev-run queue applies the limit (it alone knows whether the judge shares the device).
     assert.equal(devRequests.at(-1)?.input.timeout_s, 3600);
+    // No dev_run_rss_mib in the contract: on the lane's own runner, the machine's (goal 219).
     assert.deepEqual(devRequests.at(-1)?.limits, {
       rssMib: 4096,
+      rssDefault: true,
       diskMib: 1024,
       processes: 1024,
       timeoutS: 45,
@@ -179,7 +181,12 @@ describe("worker trial", () => {
     assert.equal(seen.at(-1)?.timeoutMs, 90_000, "an agent may still set its own");
     assert.equal((await dev({})).status, 200);
     assert.equal(devRequests.at(-1)?.input.timeout_s, undefined);
-    assert.deepEqual(devRequests.at(-1)?.limits, { rssMib: 4096, diskMib: 2048, processes: 256 });
+    assert.deepEqual(devRequests.at(-1)?.limits, {
+      rssMib: 4096,
+      rssDefault: true,
+      diskMib: 2048,
+      processes: 256,
+    });
   });
 
   test("the isolation selftest refuses a rig with open trials or judge jobs", async () => {
