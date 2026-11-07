@@ -201,6 +201,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [218](goals/218-advisor-tools-in-terminal.goal) A teacher in Claude Code's own terminal has its tools from its first turn · `READY`
 - [219](goals/219-lane-runner-memory.goal) A lane on a runner of its own can build and serve a large model in `run_experiment` · `READY`
 - [220](goals/220-chatgpt-usage-refused.goal) Control shows a ChatGPT subscription's usage while its rigs use it · `READY`
+- [221](goals/221-repair-a-run-in-place.goal) Repair a run in place: send an experiment back, and change a running run's lane limits · `READY`
 
 **The owner's asks of 2026-11-03.**
 

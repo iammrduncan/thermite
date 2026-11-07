@@ -3,7 +3,7 @@ id: "219"
 title: "A lane on a runner of its own can build and serve a large model in run_experiment"
 status: READY
 version: "0.1.4"
-depends_on: []
+depends_on: ["221"]
 created: 2026-11-07
 updated: 2026-11-07
 ---
@@ -18,7 +18,7 @@ A lane's `run_experiment` runs under the contract's `lanes.limits.dev_run_rss_mi
 
 On the lab, 2026-11-06, a two-lane hill climb on a large inference engine and its model gave each lane a unified-memory machine of its own. Its contract set no `dev_run_rss_mib`. Every lane's build of the engine was killed for memory at about 4.1 GiB (`peak_rss_mib` 4099 and 4101 in two of the runs' answers); the lanes' notes say six tries with fewer jobs, a debug build and the other model families left out all died there, and that a smaller build that fit was killed 2.8 seconds into loading the model, at 4.8 GiB. So no lane could run its change before submitting it: each submission was the first full run of its code, and the first one judged crashed. The lanes' trials also hit the workspace's 50,000 files when one unpacked a compiler.
 
-1. **How much memory a dev run on a lane's own runner gets:** the owner decides between a higher ceiling for `dev_run_rss_mib` when the lane's runner is its own, the runner's memory less a margin as the default there, or leaving the limit as it is.
+1. **How much memory a dev run on a lane's own runner gets:** the owner decides between a higher ceiling for `dev_run_rss_mib` when the lane's runner is its own, the runner's memory less a margin as the default there, or leaving the limit as it is. Either way a running run takes it in place, without a new run ([goal 221](221-repair-a-run-in-place.goal)): a default applies from the run's next development run, and a value is the owner's rule on the run.
 2. **What the limit counts on a unified-memory machine,** where the GPU's memory is the machine's: whether a model's mapped files and the device's allocations count in the process's RSS, measured on one.
 3. **The brief says it:** a lane is told its dev run's memory, and a contract whose lanes cannot build its project in it is told so before the run starts, where a kit says what a build needs.
 4. **No hidden cap on a workspace's files.** The broker samples a lane's workspace by walking it, and a walk that reaches 50,000 entries is taken as a breach of the disk limit (`harness/broker/process.ts`): a trial whose workspace held 853 MiB of its 2,048 was ended "over 2048 MiB (lanes.limits.workspace_mib) or 50,000 files". No setting or page names that number. The walk's bound stops being a limit, or becomes a setting with its default on the limits page, as the owner decides ([no default caps](../decisions.md)).

@@ -80,6 +80,7 @@ Decisions that shape the whole product, newest last in each section. A decision 
 | 2026-10-16 | The owner mints the admin token, and control keeps only its hash. An operator token lets agents assign, pause, resume, redirect, reset, export and message agents. Approvals, audits and reviews stay the owner's. |
 | 2026-10-18 | Cards, call-outs and reports are written in Simplified Technical English. |
 | 2026-11-01 | Everything is kept everywhere by default. Users design their own retention policies, with full control over what each removes, where and when. Exports are made only when a run ends or when someone asks for one, never on a timer, and are removed only by hand from the Exports menu. ([125](goals/_completed/125-code-to-the-conventions.goal)) |
+| 2026-11-07 | A run in progress is repaired in place, never restarted. A fix reaches the running run when its rig moves onto the new images; an experiment that a fault of Thermite's cut short, or that it judged wrongly, goes back to the run's queue or is judged again, with why in the run's history; and the run goes on. Where control has no way to make such a repair, that is a gap to fix in Thermite ([221](goals/221-repair-a-run-in-place.goal)). |
 
 ## Releases and planning
 

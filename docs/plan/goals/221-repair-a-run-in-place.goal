@@ -1,0 +1,44 @@
+---
+id: "221"
+title: "Repair a run in place: send an experiment back, and change a running run's lane limits"
+status: READY
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 221 · Repair a run in place: send an experiment back, and change a running run's lane limits
+
+**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, 2026-11-07: a run in progress is repaired in place, never restarted ([decisions](../decisions.md#control-and-operation)). A fix reaches it when its rig moves onto new images, the experiments a fault of Thermite's cut short or judged wrongly go back or are judged again, and the run goes on. Control has some of the means: a rig drains before its images change and the owner may stop one trial (goal 079, goal 136), and the owner withdraws evidence so that what rested on it is judged again (`invalidate_evidence`, goal 174). Two are missing.
+
+On the lab, 2026-11-06, a run had two experiments that Thermite's own limits cut short: one trial was ended by the walk's 50,000-file bound with 853 MiB of its 2,048 used ([goal 219](219-lane-runner-memory.goal)), and one ended with no attempt because no lane could build the project in 4 GiB. Both are done in the queue, with one try each, and nothing sends them back. Nor can the run's lane limits change: they are the contract's, and a contract is the run's for good.
+
+1. **An experiment sent back to up next.** The owner or an operator sends a tried experiment (done, with or without an attempt, or ended in error) back to up next, at a position, with why: one more try when its tries are used, its earlier tries kept and shown, and its lane rule (goal 214) as before. An experiment in progress, queued or dropped is refused in words. The run's history records it (`experiment_returned`, by whom and why), the Experiments tab has **Send back to up next** on a tried experiment, and `issue_command` takes it over MCP and REST.
+2. **A running run's lane limits changed.** The owner sets a running run's lane limits (the memory of a development run and of a lane's run, the workspace's size and files, a development run's time) within the contract's bounds, as a rule of the run like `trial_minutes`: in force from the next development run or trial, recorded in the run's history with why, shown on the run's Info and in the lanes' briefs. Dropped, the contract's limits apply again.
+3. **The repairs say what they reach before they happen,** as `invalidate_evidence` does: which experiments go back, which trials a stop or a drain ends, and which lanes a new limit reaches.
+
+## Why
+
+A run that many people follow, or that has run for days, can't be thrown away for a fault of Thermite's: its history, its champions and its queue are the work. A run repaired in place keeps them, and says in its history what was repaired and why.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests: the command and its refusals, the queue's states, the history, the tab, the rule and its bounds, the brief.
+- [ ] Pages: Choose what a run tries next, Steer a run, Signed commands, MCP tools, Limits and pacing, the contract's lane limits, and the changelog.
+
+## Decisions
+
+- 2026-11-07, the owner: a run in progress is repaired in place; no new run is made to take a fix.
+
+## Progress
+
+- 2026-11-07 00:36 UTC: Goal written from the owner's rule and the lab run's queue.
+
+---
+
+Run with `/goal Complete docs/plan/goals/221-repair-a-run-in-place.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
