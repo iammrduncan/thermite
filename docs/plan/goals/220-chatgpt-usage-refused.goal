@@ -1,7 +1,7 @@
 ---
 id: "220"
 title: "Control shows a ChatGPT subscription's usage while its rigs use it"
-status: IN_PROGRESS
+status: DROPPED
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 220 · Control shows a ChatGPT subscription's usage while its rigs use it
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `DROPPED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -33,7 +33,7 @@ The owner chooses which agents run on which subscription from their usage and re
 
 ## Decisions
 
-- None yet.
+- 2026-11-07, the owner, from the options: "Drop it, with why (Recommended)". Dropped: a ChatGPT plan's answers on the Responses route over HTTP carried no usage-window headers for this sign-in in over three hours of the lab's calls (Progress, below), so the proxies have no windows to read and Providers keeps saying OpenAI's usage endpoint refuses the sign-in. What was built stays: the proxies pass an answer's `x-codex-*` and `x-ratelimit-*` headers on to the program, and log each name, so the windows show there if OpenAI ever sends them. Codex's websocket transport, which carries them as a `codex.rate_limits` event, was not taken up.
 
 ## Progress
 

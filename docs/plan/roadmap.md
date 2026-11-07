@@ -200,7 +200,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [217](goals/_completed/217-lane-fetch-progress.goal) A lane's runner begins fetching the model files when the run starts, and a lane is told how the whole fetch stands · `VERIFIED`
 - [218](goals/218-advisor-tools-in-terminal.goal) A teacher in Claude Code's own terminal has its tools from its first turn · `IN_PROGRESS`
 - [219](goals/219-lane-runner-memory.goal) A lane on a runner of its own can build and serve a large model in `run_experiment` · `IN_PROGRESS`
-- [220](goals/220-chatgpt-usage-refused.goal) Control shows a ChatGPT subscription's usage while its rigs use it · `IN_PROGRESS`
+- [220](goals/220-chatgpt-usage-refused.goal) Control shows a ChatGPT subscription's usage while its rigs use it · `DROPPED`
 - [221](goals/_completed/221-repair-a-run-in-place.goal) Repair a run in place: send an experiment back, and change a running run's lane limits · `VERIFIED`
 - [222](goals/222-chatgpt-prompt-cache.goal) Agents on a ChatGPT plan get its prompt cache: the session headers through the model proxy, and a session for Pi · `IN_PROGRESS`
 - [223](goals/223-judge-off-mid-job.goal) Turning the judge off says what becomes of the job under way · `DROPPED`
