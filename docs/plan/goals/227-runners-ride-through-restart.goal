@@ -32,6 +32,7 @@ Control's restart is routine, and each one should not cost a job's measurement o
 ## Progress
 
 - 2026-11-07 05:38 UTC: Goal written from the lab's central log store, which the lab's infrastructure session read: the core's "a runner process stopped answering" lines for the three runners at 18:25:45 UTC on 2026-11-06, during a restart of control, and none at the restarts of 03:05 and 04:05 UTC on 2026-11-07.
+- 2026-11-07 06:21 UTC: the restart of 06:11 UTC dropped the bus for about 43 s (06:11:09.5 to 06:11:52.7 UTC) and counted all three runners away at 06:12:10.2 UTC, 18 s after the bus was back; they answered again at 06:12:20.2 UTC, and nothing was on them. The restart of 2026-11-06 18:25 UTC was the same: the runners counted away about 6 s after the bus came back. So the checks that fail are those asked while the bus was down, which time out after it is back: item 1 must count a check by when it was asked, not when it failed. Drops so far: about 32 and 33 s rode through, 43 s did not, and a drop's length varies from restart to restart.
 
 ---
 
