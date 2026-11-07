@@ -1,7 +1,7 @@
 ---
 id: "215"
 title: "The planner plans a round while a lane is still busy"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: []
 created: 2026-11-06
@@ -10,11 +10,11 @@ updated: 2026-11-07
 
 # 215 · The planner plans a round while a lane is still busy
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
 
 ## What
 
-A hill climb's round starts as soon as every free lane has run its trials. It does not wait for a trial still running on another lane: that lane joins the next round when its trial ends ([Lanes, the planner and the queue](../../_site/src/content/docs/explanation/agents-lanes-planner.md)). But the planner is asked to plan every lane, busy or not, and its answer is checked against every lane:
+A hill climb's round starts as soon as every free lane has run its trials. It does not wait for a trial still running on another lane: that lane joins the next round when its trial ends ([Lanes, the planner and the queue](../../../_site/src/content/docs/explanation/agents-lanes-planner.md)). But the planner is asked to plan every lane, busy or not, and its answer is checked against every lane:
 
 - `src/harness/agents/scheduler/plan.ts` gives the planner `laneCountOf(...)`: all the run's lanes.
 - `validatePlan` in `src/harness/agents/planner/check.ts` refuses a plan that does not assign "each of lane-1, lane-2 exactly once".
@@ -35,8 +35,8 @@ The planner's model is where the run's judgment about what to try next lives. Re
 
 ## Done when
 
-- [ ] Items 1 to 4, with tests.
-- [ ] Pages: how a round is planned while a lane is busy (Lanes, the planner and the queue), and the changelog.
+- [x] Items 1 to 4, with tests.
+- [x] Pages: how a round is planned while a lane is busy (Lanes, the planner and the queue), and the changelog.
 
 ## Decisions
 
@@ -48,6 +48,10 @@ The planner's model is where the run's judgment about what to try next lives. Re
 - 2026-11-07 00:21 UTC: built. `PlannerInput.busy` (`harness/agents/planner/context.ts`), filled from the scheduler's running lanes with the experiment each is on (`scheduler/plan.ts`); `planLanes` and `busyLanes` give the context's `lanes` and `busy_lanes`; `validatePlan` (`planner/check.ts`) takes each free lane exactly once, refuses a busy lane in words, and leaves an experiment with tries up next for a busy lane that has not tried it; `planEpoch` gives a lane the model's plan left out the fixed rules' pick, with the fixed plan's direction when the queue is empty, and says so in Live. The planner's task text names `busy_lanes` (`agents/roles/planner.ts`, its goldens and the Agent roles page). Tests: `tests/harness/agents/planner/rules.test.ts` (the context, the free lane's plan taken, the busy lane refused, tries, every lane busy) and the goal 136 test in `tests/harness/agents/scheduler/epochs.test.ts` (round 2 planned by the model on its first try for lane-2, lane-1 in the round). Typecheck, lint, the public, size, import and loose-ends checks and the docs build and check pass; the test files have not run yet. Page: Lanes, the planner and the queue. Item 4: a second lab run, a two-lane hill climb on v0.1.3, planned 1 of its 2 rounds by the fixed rules for this cause (round 2, 2026-11-06 23:28 UTC), which gave a lane another experiment than the one the planner chose; the first run's is round 118, above. The changelog waits for v0.1.4's.
 - 2026-11-07 05:00 UTC: seen on the lab, on 7462712f: round 3 of the TensorFold run began at 03:18:07 UTC with lane-2 still on a trial, and the model's plan was taken on its first try (`planner_valid`, 1 try): lane-1 was given its experiment, and the planner's note said "With only lane-1 free". The VM's `npm run check` passed at e54b46ea (2,884 of 2,888, 0 failed; 195 of 195 alone). The changelog's v0.1.4 section has it.
 
----
+## Verified (2026-11-07)
 
-Run with `/goal Complete docs/plan/goals/215-planner-with-a-busy-lane.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- The test files the change touches, `tests/harness/agents/planner/rules.test.ts` and `tests/harness/agents/scheduler/epochs.test.ts`, in `npm run check` at e54b46ea on the lab's test machine: passed, 2,884 of 2,888 (0 failed, 4 skipped) and 195 of 195 alone, with the public, size, import and loose-ends checks ok.
+- `acceptance:agents` at 031c8eda: passed, 28 PASS lines.
+- `npm run docs:build` and `npm run docs:check` at 031c8eda: 158 pages built, `docs-check: ok (145 pages)`.
+- On the lab, 2026-11-07, a two-lane hill climb on 7462712f began round 3 at 03:18:07 UTC with lane-2 still on a trial: the model's plan was taken on its first try, for lane-1 alone.
+- Pages: Lanes, the planner and the queue, and the changelog's v0.1.4 section.

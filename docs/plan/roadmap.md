@@ -195,7 +195,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `IN_PROGRESS`
 - [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `IN_PROGRESS`
 - [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
-- [215](goals/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `IN_PROGRESS`
+- [215](goals/_completed/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `VERIFIED`
 - [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `PROPOSED`
 - [217](goals/217-lane-fetch-progress.goal) A lane's runner begins fetching the model files when the run starts, and a lane is told how the whole fetch stands · `IN_PROGRESS`
 - [218](goals/218-advisor-tools-in-terminal.goal) A teacher in Claude Code's own terminal has its tools from its first turn · `IN_PROGRESS`
