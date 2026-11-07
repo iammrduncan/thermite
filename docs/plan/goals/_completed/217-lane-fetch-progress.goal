@@ -1,7 +1,7 @@
 ---
 id: "217"
 title: "A lane's runner fetches the model files from the run's start, and a lane is told how the fetch stands"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,11 +10,11 @@ updated: 2026-11-07
 
 # 217 · A lane's runner fetches the model files from the run's start, and a lane is told how the fetch stands
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
 
 ## What
 
-A lane's `run_experiment` on a runner begins the fetch of the run's model files there and answers at once while they come ([goal 213](_completed/213-models-on-every-runner.goal)). Each answer asked the runner only for the files the harness still lacked, and counted against those alone. On the lab, 2026-11-06, a lane's runs said `0 of 33 files, 0.0 GiB`, then `0 of 23 files, 2.0 GiB`, `0 of 19 files, 4.7 GiB`, `0 of 17 files, 0.4 GiB` and so on to `0 of 10 files` over 40 minutes: the count of files done never rose, the total fell, and the GiB fell back as each file was taken in. The lane could not tell how far the fetch was, and wrote in a note that the files take "about 45 minutes or more".
+A lane's `run_experiment` on a runner begins the fetch of the run's model files there and answers at once while they come ([goal 213](213-models-on-every-runner.goal)). Each answer asked the runner only for the files the harness still lacked, and counted against those alone. On the lab, 2026-11-06, a lane's runs said `0 of 33 files, 0.0 GiB`, then `0 of 23 files, 2.0 GiB`, `0 of 19 files, 4.7 GiB`, `0 of 17 files, 0.4 GiB` and so on to `0 of 10 files` over 40 minutes: the count of files done never rose, the total fell, and the GiB fell back as each file was taken in. The lane could not tell how far the fetch was, and wrote in a note that the files take "about 45 minutes or more".
 
 1. **Counted against the whole fetch.** The core keeps the files a lane's run found missing since the first, with each one's bytes as last heard. A file the harness took in since counts as done, with its bytes, in what the lane is told and in the fetch the rig's page shows.
 2. **The fetch begins when the run starts.** A lane's runner begins fetching the run's model files at the lane's first `run_experiment`, so the lane's first 40 minutes went on waiting. Each runner of a lane's pool or the shared pool begins when the run is assigned instead, as the judge's runner does before its first build, and a lane's first run finds them there or on their way.
@@ -25,9 +25,9 @@ A lane plans its trial around the wait: whether to read code meanwhile or to try
 
 ## Done when
 
-- [ ] Item 1, with a test of a fetch whose files the harness takes in between a lane's runs.
-- [ ] Item 2, with a test: a run assigned to a rig with lanes' runners begins their fetch before any lane's first run.
-- [ ] Pages: [Model files on a rig](../../_site/src/content/docs/reference/model-files.md#on-a-rigs-runners) (it shows the whole fetch's count already; when a lane's runner begins), and the changelog.
+- [x] Item 1, with a test of a fetch whose files the harness takes in between a lane's runs.
+- [x] Item 2, with a test: a run assigned to a rig with lanes' runners begins their fetch before any lane's first run.
+- [x] Pages: [Model files on a rig](../../../_site/src/content/docs/reference/model-files.md#on-a-rigs-runners) (it shows the whole fetch's count already; when a lane's runner begins), and the changelog.
 
 ## Decisions
 
@@ -39,6 +39,8 @@ A lane plans its trial around the wait: whether to read code meanwhile or to try
 - 2026-11-07 02:21 UTC: item 2 built. `RemoteRunner.prefetch` (`harness/judge/remote-runner.ts`) begins a run's missing model files once a run; `RunnerPools.prefetch` (`harness/judge/pools.ts`) calls it on each runner that is up and serves lanes, not the judge's, which fetches its own before its first build; the runner hub (`harness/controller/runners.ts`) calls that for the running run with agents at each check round, every 15 s. Tests: `tests/harness/judge/remote-models.test.ts` (begun once a run), `tests/harness/judge/pools.test.ts` (the lanes' and the shared runners, not the judge's or one that is down). Page: Model files on a rig. The test files have not run yet; on the lab only a new run shows it, and this goal makes no new run.
 - 2026-11-07 04:12 UTC: the VM's full check at 52801c6e failed one test: the runners test's ledger stub had no `runs`, so item 2's read of the running run threw in the runner checks' timer, uncaught. The stub has `runs` now, and the timer catches a ledger that can't be read, logs it at warn and goes on checking (`harness/controller/runners.ts`). Test: `tests/harness/controller/runners.test.ts` (a ledger that throws; the runner still comes up).
 
----
+## Verified (2026-11-07)
 
-Run with `/goal Complete docs/plan/goals/217-lane-fetch-progress.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- `tests/harness/judge/remote-models.test.ts` (a file the harness takes in between two runs counts as done; the run's files begun once a run) and `tests/harness/judge/pools.test.ts` (the lanes' and the shared runners begin, not the judge's or one that is down), with `tests/harness/controller/runners.test.ts`, in `npm run check` on the lab's test machine at 3f6425c1 and at e81ece9d: passed, 0 failed.
+- On the lab the run's model files were already on its runners when the change arrived, so the prefetch found nothing to begin; the count's words were not seen there.
+- Pages: Model files on a rig, A rig over several machines, and the changelog's v0.1.4 section.
