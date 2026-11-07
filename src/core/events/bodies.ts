@@ -394,6 +394,9 @@ export interface EventBodies {
     verdict?: string | undefined;
     cause?: string | undefined;
     position: string;
+    /** Sent back by the owner (goal 221): who, and why. */
+    by?: string | undefined;
+    why?: string | undefined;
   };
   trial_started: {
     trial: string;

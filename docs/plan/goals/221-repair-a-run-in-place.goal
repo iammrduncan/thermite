@@ -1,7 +1,7 @@
 ---
 id: "221"
 title: "Repair a run in place: send an experiment back, and change a running run's lane limits"
-status: READY
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 221 · Repair a run in place: send an experiment back, and change a running run's lane limits
 
-**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -42,3 +42,4 @@ A run that many people follow, or that has run for days, can't be thrown away fo
 ---
 
 Run with `/goal Complete docs/plan/goals/221-repair-a-run-in-place.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- 2026-11-07 01:26 UTC: item 1 built. `queue_retry {run, id, why, position?}`, the owner's (`core/commands.ts`); `ExperimentQueue.retryTried` (`harness/queue.ts`) with the checks and the try it keeps in `harness/queue-tries.ts`, where the judge's settled tries (goal 214) moved too, so the queue stays under 800 lines. It reuses `experiment_retried`, with `by` and `why`; History says `The owner sent "…" back to up next for try N of M:` and why. The Experiments tab has **Send back** on a tried experiment; MCP's `issue_command` and `run_queue` name it. Test: `tests/harness/queue/tries.test.ts` (an experiment its trial's error ended, sent back with its try kept and one more try; refused while queued and while its change is with the judge; an agent's token refused). Pages: Choose what a run tries next, Signed commands, Steer a run, MCP tools, REST API, Agents, lanes and the planner, How the parts fit together. The test file has not run yet. Items 2 and 3 are left.

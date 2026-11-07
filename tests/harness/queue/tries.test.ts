@@ -195,4 +195,49 @@ describe("an experiment's tries", () => {
     const r = await controlQueue(s.events());
     assert.equal(r.queue.find((x) => x.id === id)?.tries, 5);
   });
+
+  test("the owner sends a tried experiment back to up next, with why (goal 221)", async () => {
+    const s = await setup();
+    const { q } = s;
+    // A trial that a fault cut short: it ended in error, with no attempt and its one try used.
+    const x = q.add(RUN, { title: "no drain between chunks", by: "owner" }, "control:owner:ui");
+    q.add(RUN, { title: "something else", by: "owner" }, "control:owner:ui");
+    q.assign(RUN, x.id, { lane: "lane-2", trial: "t-1", by: "planner" }, "planner");
+    q.finish("t-1", { result: "error", cause: "stopped by the lane's disk limit" }, "harness");
+    assert.equal(q.get(x.id)?.state, "done");
+    const why = "the walk's 50,000-file bound ended its trial, since removed";
+    const sent = await s.command("queue_retry", { run: RUN, id: x.id, why });
+    assert.ok(sent.accepted, JSON.stringify(sent));
+    assert.equal(sent.result.state, "queued");
+    assert.equal(sent.result.position, 0, "the top by default");
+    // Its trial kept as try 1, and a second try for it, with who and why.
+    assert.equal(q.get(x.id)?.tries, 2);
+    assert.deepEqual(
+      q.earlier(x.id).map((t) => [t.n, t.lane, t.result, t.cause]),
+      [[1, "lane-2", "error", "stopped by the lane's disk limit"]],
+    );
+    const e = body(s.events("experiment_retried").at(-1));
+    assert.deepEqual([e.try, e.tries, e.by, e.why], [1, 2, "owner", why]);
+    const r = await controlQueue(s.events());
+    const seen = r.queue.find((v) => v.id === x.id);
+    assert.equal(seen?.state, "queued");
+    assert.equal(seen?.tries, 2);
+    assert.equal(seen?.earlier.length, 1);
+    // Refused in words: one waiting, and one whose change the judge has not settled.
+    const queued = await s.command("queue_retry", { run: RUN, id: x.id, why });
+    assert.match(String(queued.result.error), /is queued: only a tried experiment goes back/);
+    const y = q.add(RUN, { title: "with a change", by: "owner" }, "control:owner:ui");
+    q.assign(RUN, y.id, { lane: "lane-1", trial: "t-2", by: "planner" }, "planner");
+    const a = attempt(s, "a-0000000000000002");
+    q.finish("t-2", { result: "submitted", attempt: a }, "harness");
+    const early = await s.command("queue_retry", { run: RUN, id: y.id, why: "again" });
+    assert.match(String(early.result.error), /is still with the judge \(submitted\)/);
+    judge(s, a, "regress", "judged");
+    const later = await s.command("queue_retry", { run: RUN, id: y.id, why: "again" });
+    assert.ok(later.accepted, JSON.stringify(later));
+    assert.equal(body(s.events("experiment_retried").at(-1)).verdict, "regress");
+    // The agent's token may not.
+    const agent = await s.command("queue_retry", { run: RUN, id: y.id, why: "x" }, "agent");
+    assert.match(String(agent.result.error), /queue_retry is the owner's to issue/);
+  });
 });

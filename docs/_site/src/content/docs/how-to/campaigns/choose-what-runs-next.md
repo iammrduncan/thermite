@@ -92,6 +92,15 @@ When a round leaves fewer ready, the planner is asked to top the queue up, the l
 
 **Tried** lists every experiment that ended, newest first, with the columns **Experiment**, **Direction**, **Added by**, **Where** (the lane and its trial), **Result** and **When**. **Result** says what became of it, such as `a-0123456789abcdef: Champion #2` for a change the judge made the champion, `no attempt: interrupted` for a trial that a pause stopped, or `dropped by you:` and your reason.
 
+### Send an experiment back
+
+When a trial didn't really get to try its experiment because of a fault of Thermite's, such as a limit that stopped every lane's build, send the experiment back for another try instead of adding a copy. The run goes on, and keeps the trial in its record.
+
+1. Under **Tried**, find the experiment, and press **Send back** in its **Result** cell.
+2. Write why in its field, such as `the lane's build was stopped by the 4 GiB limit, since raised`, and press **Send back to up next**.
+
+The experiment goes to the top of **Up next**, the same experiment, not a copy. The trial that ended is kept as its earlier try, shown with its result, and the experiment gets one more try when its tries were used. Its next try goes to a lane that has not tried it yet, while one has not ([Give an experiment several tries](#give-an-experiment-several-tries)). **History** says `The owner sent "…" back to up next for try 2 of 2:` and your reason. The rig refuses an experiment whose change the judge has not settled yet: `experiment x-0123456789ab's change a-0123456789abcdef is still with the judge (screening): send it back once it has its verdict`. A dropped experiment has no **Send back**, and neither has a research run's task, which gets one try: add a new one instead. To have the judge measure a change again, withdraw the evidence instead ([Withdraw bad evidence](withdraw-bad-evidence.md)).
+
 To see only some results, press a chip above the list: **All**, **Wins**, **Not better**, **Broken or blocked**, **Other results**, **Research finished** (only when some research task has finished) or **No attempt or dropped**. Each chip shows its count. [An experiment's result](../../reference/verdicts.md#an-experiments-result) lists every **Result** and the chip that holds it.
 
 To narrow the list further, choose a direction in **Every direction**, or an author in **Anyone added it**, such as `you`, `planner` or `lane-2's idea`. Each lists only what **Tried** holds. The chip and the two lists work together: for example, **Wins** with `memory-layout` and `planner` shows the planner's wins in that direction.
@@ -252,6 +261,7 @@ It prints the command's id and `"status":"pending"`. The kinds, with an example 
 | `queue_edit` | `{"run":"sort-speed-1","id":"x-0123456789ab","details":"Unroll by 8 on the large cases."}` |
 | `queue_drop` | `{"run":"sort-speed-1","id":"x-0123456789ab","why":"measured slower twice"}` |
 | `queue_accept` | `{"run":"sort-speed-1","id":"x-0123456789ab","position":"top"}` |
+| `queue_retry` | `{"run":"sort-speed-1","id":"x-0123456789ab","why":"the lane's build was stopped by a limit, since raised"}` |
 | `drop_directive` | `{"run":"sort-speed-1","id":7}` |
 | `redirect` | `{"run":"sort-speed-1","directives":[{"kind":"avoid","direction":":shared memory tiling:","rationale":"slower on this GPU"}],"replace":false}` |
 
@@ -268,6 +278,7 @@ It prints the command's id and `"status":"pending"`. The kinds, with an example 
 - `no experiment x-0123456789ab in run sort-speed-1`;
 - `experiment x-0123456789ab is done: only proposed or queued experiments can be dropped`;
 - `experiment x-0123456789ab is queued, not a proposed idea`, for `queue_accept`;
+- `experiment x-0123456789ab is queued: only a tried experiment goes back to up next`, for `queue_retry`;
 - `no rule 7 in force in run sort-speed-1`;
 - `run sort-speed-1 is closed: its queue and rules no longer change`, for every kind here, `redirect` too.
 

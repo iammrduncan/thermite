@@ -342,6 +342,16 @@ export const CommandPayloads = {
     id: ExperimentId,
     position: QueuePosition.optional(),
   }),
+  /**
+   * A tried experiment back to up next (goal 221), such as one that a fault of Thermite's cut
+   * short: its trial kept as an earlier try, one more try when its tries are used, with why.
+   */
+  queue_retry: z.strictObject({
+    run: RunId,
+    id: ExperimentId,
+    why: z.string().trim().min(1).max(2000),
+    position: QueuePosition.default("top"),
+  }),
   /** The owner removes a rule for the plan in force (a directive), whoever set it. */
   drop_directive: z.strictObject({ run: RunId, id: z.number().int().positive() }),
   /**
@@ -540,6 +550,7 @@ export const MCP_OPERATOR_KINDS = [
   "queue_edit",
   "queue_drop",
   "queue_accept",
+  "queue_retry",
   "drop_directive",
   // A rig part's log level, to look into a fault (the guide's question 16).
   "log_level",
@@ -578,6 +589,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "queue_edit",
   "queue_drop",
   "queue_accept",
+  "queue_retry",
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
@@ -610,6 +622,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "queue_edit",
   "queue_drop",
   "queue_accept",
+  "queue_retry",
   "drop_directive",
   "hypothesis_status",
   "propagate",

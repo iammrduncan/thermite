@@ -210,12 +210,16 @@ ${research ? "" : `<label class="sfd">${infoLabel("Tries", TRIES_INFO)}<input na
         `<div class="qidea"><div>${esc(x.title)}</div>${x.why ? `<div class="muted xs">${esc(clip(x.why, 200))}</div>` : ""}<div class="muted xs">${src(x.by)} · ${esc(ago(x.at, o.now))} ago</div><div class="qb">${o.cmd({ rig: u.id, kind: "queue_accept", fields: fields(x), label: "Queue it", cls: "sm", back: o.back })}${o.cmd({ rig: u.id, kind: "queue_drop", fields: fields(x, { why: "the owner dropped this idea" }), label: "Drop", cls: "sm ghost", back: o.back })}</div></div>`,
     )
     .join("");
+  // Send back to up next (goal 221): a tried experiment gets another try, such as one that a fault
+  // of Thermite's cut short, with why.
+  const sendBack = (x: ExperimentView) =>
+    `<details class="menu"><summary class="btn sm ghost">Send back</summary><div class="menu-pop">${infoLabel("Send back to up next", "It goes back to the top of up next for another try, with this trial kept as an earlier try. Its next try goes to a lane that has not tried it while one has not. Use it for a trial a fault cut short, not to judge a change again.")}${o.cmd({ rig: u.id, kind: "queue_retry", fields: fields(x), label: "Send back to up next", cls: "sm", back: o.back, extra: `<input name="why" required maxlength="2000" placeholder="why it goes back" aria-label="Why" style="width:100%;margin-bottom:6px">` })}</div></details>`;
   const counts = { win: 0, wait: 0, loss: 0, broken: 0, flat: 0, done: 0, none: 0 };
   const triedRows = tried
     .map((x) => {
       const res = triedResult(r, x);
       counts[res.cls]++;
-      return `<tr data-r="${res.cls}" data-d="${esc(x.direction)}" data-b="${esc(byLabel(x.by).text)}"><td><b>${esc(x.title)}</b>${namesQuestion(x) ? "" : ` ${questionChip(r, x.question)}`}${x.why ? `<div class="muted xs">${esc(clip(x.why, 160))}</div>` : ""}${x.cause && x.state === "done" ? `<div class="muted xs">How its trial ended: ${esc(clip(x.cause, 200))}</div>` : ""}${x.tries > 1 ? `<div class="qmeta">${triesParts(x).chip}</div>${triesParts(x).lines}` : ""}</td><td class="qdir">${esc(x.direction)}</td><td>${src(x.by)}</td><td class="muted small">${esc([x.lane, x.trial ? `trial ${x.trial.slice(0, 10)}` : ""].filter(Boolean).join(" · ") || "·")}</td><td><span class="qres ${res.cls}${res.quiet ? " flat" : ""}">${esc(res.text)}</span></td><td class="muted small nowrap">${esc(ago(x.updated_at, o.now))} ago</td></tr>`;
+      return `<tr data-r="${res.cls}" data-d="${esc(x.direction)}" data-b="${esc(byLabel(x.by).text)}"><td><b>${esc(x.title)}</b>${namesQuestion(x) ? "" : ` ${questionChip(r, x.question)}`}${x.why ? `<div class="muted xs">${esc(clip(x.why, 160))}</div>` : ""}${x.cause && x.state === "done" ? `<div class="muted xs">How its trial ended: ${esc(clip(x.cause, 200))}</div>` : ""}${x.tries > 1 ? `<div class="qmeta">${triesParts(x).chip}</div>${triesParts(x).lines}` : ""}</td><td class="qdir">${esc(x.direction)}</td><td>${src(x.by)}</td><td class="muted small">${esc([x.lane, x.trial ? `trial ${x.trial.slice(0, 10)}` : ""].filter(Boolean).join(" · ") || "·")}</td><td><span class="qres ${res.cls}${res.quiet ? " flat" : ""}">${esc(res.text)}</span>${x.state === "done" && !research ? sendBack(x) : ""}</td><td class="muted small nowrap">${esc(ago(x.updated_at, o.now))} ago</td></tr>`;
     })
     .join("");
   const chip = (key: string, label: string, n: number) =>

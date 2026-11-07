@@ -57,7 +57,7 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 
 ### A command about one run
 
-A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `start_teachers_round`, `add_run_hours`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
+A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `start_teachers_round`, `add_run_hours`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `queue_retry`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
 
 Control refuses, before it signs:
 
@@ -130,7 +130,7 @@ The harness checks every command in this order. A command that fails a check mar
 | It is not being applied right now | None: the harness answers `in_progress`, and the bus hands the command to the supervisor again 5 seconds later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
-The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `start_teachers_round`, which asks a run's teachers for a round now, `add_run_hours`, which adds hours to a run's stop time, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the seven kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `queue_retry` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `start_teachers_round`, which asks a run's teachers for a round now, `add_run_hours`, which adds hours to a run's stop time, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
 
 A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`; its `command` event carries the same to control.
 
@@ -158,6 +158,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | `queue_edit` | **Edit**, then **Save**, on an experiment under **Up next** on a run's **Experiments** tab | Yes | Yes | Yes | No | Yes |
 | `queue_drop` | **Drop**, then **Drop it**, on an experiment under **Up next**; **Drop** on a lane's idea under **Ideas from the lanes** | Yes | Yes | Yes | No | Yes |
 | `queue_accept` | **Queue it** on a lane's idea under **Ideas from the lanes** | Yes | Yes | Yes | No | Yes |
+| `queue_retry` | **Send back**, then **Send back to up next**, on an experiment under **Tried** | Yes | Yes | Yes | No | Yes |
 | `drop_directive` | **Remove** on a rule on a run's **Planner** tab | Yes | Yes | Yes | No | Yes |
 | `propagate` | **Send champion #&lt;n&gt;** on a run's **Planner** tab, under **Other rigs** | `POST /v1/propagate`, or `POST /v1/commands` | `propagate_champion` | `propagate_champion` | `propagate_champion` | |
 | `approve_promotion` | **Needs you**: **Make it the champion**, **Overrule the auditor** | Yes | Yes | No | No | Yes |
@@ -543,6 +544,19 @@ Queues a lane's idea: an experiment a worker proposed (with `thermite-trial idea
 | `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | the end | Where it goes |
 
 **Queue it** on the dashboard sends no position, so the idea goes to the end. The harness refuses anything but an idea: `experiment <id> is <state>, not a proposed idea`. Result as for `queue_add`. Event: `experiment_accepted`, `{id, by, position?}`.
+
+### `queue_retry`
+
+Sends a tried experiment back to up next for another try, such as one that a fault of Thermite's cut short. The run goes on, and keeps the trial that ended as the experiment's earlier try.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `run` | lowercase id | required | The run |
+| `id` | experiment id | required | The experiment, one that is done |
+| `why` | text, 1 to 2000 characters, trimmed | required | Why it goes back |
+| `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | the top | Where it goes |
+
+The experiment gets one more try when its tries were used, and its next try goes to a lane that has not tried it while one has not. The harness refuses an experiment that is not done: `experiment <id> is <state>: only a tried experiment goes back to up next`; one whose change the judge has not settled: `experiment <id>'s change <attempt> is still with the judge (<lifecycle>): send it back once it has its verdict`; and a research run's task: `a research run's task gets one try: add a new task for what it should find`. Result as for `queue_add`. Event: `experiment_retried`, `{id, try, tries, lane, trial, attempt?, result, verdict?, cause?, position, by, why}`, as for a try that ended without a win, with `by` and `why`.
 
 ### `drop_directive`
 

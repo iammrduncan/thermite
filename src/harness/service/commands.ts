@@ -307,6 +307,13 @@ export class Commands {
           svc.queue.accept(p.run, p.id, { by: "owner", position: p.position }, by),
         );
       }
+      case "queue_retry": {
+        const p = CommandPayloads.queue_retry.parse(payload);
+        openRun(svc.ledger, p.run);
+        return queueResult(
+          svc.queue.retryTried(p.run, p.id, { by: "owner", why: p.why, position: p.position }, by),
+        );
+      }
       case "drop_directive": {
         const p = CommandPayloads.drop_directive.parse(payload);
         openRun(svc.ledger, p.run);

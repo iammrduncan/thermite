@@ -140,6 +140,13 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
           : b.result === "no_attempt"
             ? "it submitted no change"
             : `its trial ended (${String(b.result ?? "").replace(/_/g, " ")})`;
+      // Sent back by the owner (goal 221), with why.
+      if (b.why)
+        return s(
+          `The owner sent "${clip(title(e.subject, b.id), 120)}" back to up next for try ${Number(b.try) + 1} of ${Number(b.tries)}: ${clip(String(b.why), 300)}. Try ${Number(b.try)}${b.lane ? ` on ${String(b.lane)}` : ""}: ${how}${b.cause ? ` (${clip(String(b.cause), 200)})` : ""}.`,
+          "",
+          { run: String(e.subject) },
+        );
       return s(
         `"${clip(title(e.subject, b.id), 120)}" went back to the top of the queue for try ${Number(b.try) + 1} of ${Number(b.tries)}: try ${Number(b.try)}${b.lane ? ` on ${String(b.lane)}` : ""} ended without a win: ${how}${b.cause ? ` (${clip(String(b.cause), 200)})` : ""}.`,
         "",

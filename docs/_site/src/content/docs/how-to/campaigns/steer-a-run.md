@@ -187,7 +187,7 @@ It prints the command's id and `"status":"pending"`. In each payload, `run` is t
 | `message_agent`, kept in force | `{"run":"sort-speed-1","to":"all","text":"Keep the public API unchanged.","keep":true}` |
 | `unkeep_message` | `{"run":"sort-speed-1","message":3}` |
 
-The changes to the experiment queue, `queue_add`, `queue_move`, `queue_edit`, `queue_drop` and `queue_accept`, are in [Choose what a run tries next](choose-what-runs-next.md#from-the-command-line-and-over-mcp).
+The changes to the experiment queue, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `queue_retry`, are in [Choose what a run tries next](choose-what-runs-next.md#from-the-command-line-and-over-mcp).
 
 A `redirect` takes up to 40 directives, each with a `kind`, a `rationale`, and, where the kind needs one, a `direction` (its direction, in plain words or as `:name:`) or a `value`:
 

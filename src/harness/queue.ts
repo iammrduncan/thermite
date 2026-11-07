@@ -3,13 +3,13 @@ import { ExperimentText, type QueuePosition } from "../core/commands.ts";
 import { DIRECTION_NAME, directionOf, RESEARCH_TASK_KINDS } from "../core/directions.ts";
 import { newExperimentId } from "../core/ids.ts";
 import { labelledQuestion } from "../core/research-check.ts";
-import { FINAL_LIFECYCLES, WON_VERDICTS } from "../core/verdicts.ts";
 import {
   type ExperimentRow,
   type ExperimentTry,
   type Ledger,
   LedgerError,
 } from "./ledger/index.ts";
+import { ownersTry, settledTries } from "./queue-tries.ts";
 
 /**
  * Each run's experiment queue (goal 064): the experiments still to try, in order, and the log
@@ -34,17 +34,6 @@ import {
  */
 
 export type Experiment = ExperimentRow;
-
-/**
- * An attempt's lifecycles that end its experiment's tries (goal 214): a win, a win that waits for
- * the owner, or one the owner decided. Any other final lifecycle uses a try.
- */
-const ENDS_TRIES: ReadonlySet<string> = new Set([
-  "promoted",
-  "awaiting_approval",
-  "audit_blocked",
-  "declined",
-]);
 
 /** An experiment's tries as an agent reads them (goal 214), when it gets more than one. */
 interface TriesBrief {
@@ -681,8 +670,15 @@ export class ExperimentQueue {
    * top of the queue, with the try kept (lane, trial, attempt, result, verdict and cause) and one
    * event, `experiment_retried`.
    */
-  private retry(x: Experiment, t: Omit<ExperimentTry, "n" | "at">, actor: string): Experiment {
+  private retry(
+    x: Experiment,
+    t: Omit<ExperimentTry, "n" | "at">,
+    actor: string,
+    /** The owner's: where it goes, its tries now, and who sent it back and why (goal 221). */
+    o: { position: QueuePosition; tries: number; by: string; why: string } | undefined = undefined,
+  ): Experiment {
     const n = this.earlier(x.id).length + 1;
+    const tries = o?.tries ?? x.tries ?? 1;
     const row: Row = {
       ...strip(x),
       state: "queued",
@@ -691,9 +687,11 @@ export class ExperimentQueue {
       attempt: null,
       result: null,
       cause: null,
+      tries,
     };
+    const position = o?.position ?? "top";
     this.ledger.experiments.write(
-      this.reorder(x.run, row, { place: "top" }),
+      this.reorder(x.run, row, { place: position }),
       {
         actor,
         kind: "experiment_retried",
@@ -701,14 +699,15 @@ export class ExperimentQueue {
         body: {
           id: x.id,
           try: n,
-          tries: x.tries ?? 1,
+          tries,
           lane: t.lane,
           trial: t.trial,
           ...(t.attempt ? { attempt: t.attempt } : {}),
           result: t.result,
           ...(t.verdict ? { verdict: t.verdict } : {}),
           ...(t.cause ? { cause: t.cause.slice(0, 500) } : {}),
-          position: "top",
+          position: String(position),
+          ...(o ? { by: o.by, why: o.why } : {}),
         },
       },
       { ...t, n },
@@ -717,36 +716,28 @@ export class ExperimentQueue {
   }
 
   /**
+   * The owner sends a tried experiment back to up next (goal 221), with why: its trial kept as an
+   * earlier try, one more try when its tries are used (queue-tries.ts says what is refused).
+   */
+  retryTried(
+    run: string,
+    id: string,
+    o: { by: string; why: string; position?: QueuePosition | undefined },
+    actor: string,
+  ): Experiment {
+    const x = this.require(run, id);
+    const why = o.why.trim().slice(0, 2000);
+    if (!why) throw new LedgerError("invalid", "say why the experiment goes back to up next");
+    const { t, tries } = ownersTry(this.ledger, x, this.earlier(id).length + 1);
+    return this.retry(x, t, actor, { position: o.position ?? "top", tries, by: o.by, why });
+  }
+
+  /**
    * The run's experiments whose attempt the judge settled without a win, with tries left (goal
-   * 214), go back to the top of the queue, the oldest last so it ends up first. An attempt still
-   * being judged, a win, a win that waits for the owner and one the owner decided stay as they
-   * are. Returns those that went back.
+   * 214), back to the top of the queue, the oldest last so it ends up first. Returns them.
    */
   retrySettled(run: string, actor: string): Experiment[] {
-    const out: Experiment[] = [];
-    for (const x of this.ledger.experiments.doneWithTriesLeft(run).reverse()) {
-      const attempt = x.attempt as string;
-      const lifecycle = String(this.ledger.attempts.get(attempt)?.lifecycle ?? "");
-      if (!FINAL_LIFECYCLES.has(lifecycle) || ENDS_TRIES.has(lifecycle)) continue;
-      const v = this.ledger.verdicts.current(attempt);
-      if (v && WON_VERDICTS.includes(v.verdict)) continue;
-      const reasons = v ? this.ledger.verdicts.get(v.id)?.reasons : undefined;
-      out.push(
-        this.retry(
-          x,
-          {
-            lane: x.lane,
-            trial: x.trial ?? "",
-            attempt,
-            result: x.result ?? "submitted",
-            verdict: v?.verdict ?? lifecycle,
-            cause: reasons?.trim().slice(0, 2000) || x.cause || null,
-          },
-          actor,
-        ),
-      );
-    }
-    return out;
+    return settledTries(this.ledger, run).map(({ x, t }) => this.retry(x, t, actor));
   }
 
   /**

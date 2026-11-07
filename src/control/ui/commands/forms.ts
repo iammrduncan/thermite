@@ -82,6 +82,8 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
       why: String(f.why ?? "").trim() || "dropped by the owner",
     },
     queue_accept: { run, id: String(f.id ?? "") },
+    // Send back to up next (goal 221), on a tried experiment, with why.
+    queue_retry: { run, id: String(f.id ?? ""), why: String(f.why ?? "").trim() },
     drop_directive: { run, id: Number(f.id) },
     invalidate_evidence: {
       run,
