@@ -188,6 +188,11 @@ export interface RoleTerminalDeps<T extends CliTally> {
   takeMs?: number | undefined;
   /** How long before one more Enter for a message still in its input (tests make it short). */
   enterAgainMs?: number | undefined;
+  /**
+   * Awaited once, when its program is first ready and before its first message is typed (goal
+   * 218), such as until the program has listed its MCP tools: it lists them only once it runs.
+   */
+  beforeFirst?: (() => Promise<void>) | undefined;
 }
 
 /** One role's program in its own terminal: one host at a time, for as long as its run lasts. */
@@ -228,6 +233,8 @@ export class RoleTerminal<T extends CliTally> {
   private lastOf: Terminal | undefined;
   /** What is typed into the program, one input at a time: the loop's turns and the owner's. */
   private typing: Promise<unknown> = Promise.resolve();
+  /** Whether its caller's wait before the first message has been awaited: once a run. */
+  private waited = false;
 
   constructor(p: CliProgram<T>, run: CliRun, o: RoleTerminalDeps<T>) {
     this.p = p;
@@ -325,13 +332,18 @@ export class RoleTerminal<T extends CliTally> {
       // On the one typing chain from the start: the owner's input typed while a new program gets
       // ready goes in after its message, never before.
       await this.typed(async () => {
-        if (started)
+        if (started) {
           await ready(
             h,
             () => this.stopping,
             () => this.startSignalled(),
             this.p.terminal.pastes === true,
           );
+          if (!this.waited && !this.stopping) {
+            this.waited = true;
+            await this.o.beforeFirst?.();
+          }
+        }
         if (!this.stopping && this.host === h) await typeIn(h, text);
       });
     } catch (err) {

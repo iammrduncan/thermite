@@ -11,18 +11,30 @@ import { OwnerAnswers, OwnerAnswersSchema } from "../owner-answers.ts";
 const DIRECTION_FIELD =
   "The rule's direction, in plain words or as :name:: one of the run's directions (brief.directions), or a new one, which the planner designs";
 
+/** A text cut to its length rather than refused: one long field never costs an advisor's review. */
+const cut = (max: number) =>
+  z
+    .string()
+    .trim()
+    .transform((s) => s.slice(0, max));
+
 /**
  * A teacher's recommendation, read leniently so that one bad recommendation never costs the
  * review: its direction (`direction`, a name or :name:) is checked when the set is made, and words
- * (`match`) are no longer a rule (goal 066), so a recommendation that gives them is dropped then.
+ * (`match`) are no longer a rule (goal 066), so a recommendation that gives them is dropped then,
+ * with why. A field past its length is cut (goal 226): a direction cut at 200 characters is
+ * longer than a direction's name may be, so that check drops it, with why, and the review stands.
  */
 const Recommendation = z.strictObject({
   kind: z.enum(["avoid", "try", "mandate", "priority", "lane_count", "planner_note"]),
-  direction: z.string().trim().max(200).optional(),
-  match: z.string().max(2000).optional(),
-  value: z.union([z.string().max(1000), z.number()]).optional(),
-  rationale: z.string().min(1).max(2000),
-  citations: z.array(z.string().min(1).max(500)).max(20).default([]),
+  direction: cut(200).optional(),
+  match: cut(2000).optional(),
+  value: z.union([cut(1000), z.number()]).optional(),
+  rationale: cut(2000).pipe(z.string().min(1)),
+  citations: z
+    .array(cut(500).pipe(z.string().min(1)))
+    .default([])
+    .transform((xs) => xs.slice(0, 20)),
 });
 
 /** An experiment an advisor proposes for the run's queue, with why. */
@@ -264,7 +276,10 @@ export const TeacherReview = z.strictObject({
   /** The main product (goal 081): checked opportunity by opportunity in teacherRound. */
   portfolio: z.array(z.unknown()).default([]).catch([]),
   /** Rules, only when new evidence calls for one. */
-  recommendations: z.array(Recommendation).max(20).default([]),
+  recommendations: z
+    .array(Recommendation)
+    .default([])
+    .transform((xs) => xs.slice(0, 20)),
   answers: OwnerAnswers,
   /** Plain experiments, the field before the portfolio: still read, and queued as they are. */
   experiments: proposals(ProposedExperiment),

@@ -321,7 +321,7 @@ export async function runInTerminal<S extends z.ZodType>(
                 kind: "status",
                 text:
                   ms === undefined
-                    ? `${rt.name}'s program had not listed its tools ${TOOLS_LISTED_MS / 1000} s after it started: its message goes in anyway, and it may answer without them`
+                    ? `${rt.name}'s program had not listed its tools ${TOOLS_LISTED_MS / 1000} s after it was ready: its message goes in anyway, and it may answer without them`
                     : `${rt.name}'s program listed its tools ${(ms / 1000).toFixed(1)} s after its tool server started`,
                 run: at.run,
               });

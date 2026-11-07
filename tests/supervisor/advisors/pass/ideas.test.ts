@@ -11,6 +11,7 @@ import {
   AdvisorsConfig,
   Opportunity,
   opportunityExperiment,
+  TeacherReview,
   teacherRound,
 } from "../../../../src/supervisor/advisors/index.ts";
 import {
@@ -235,6 +236,23 @@ describe("the teachers put ideas first (goal 081)", () => {
     assert.equal(o.gain_bound.length, 300);
     assert.equal(o.citations[0]?.length, 500);
     assert.equal(o.title, "Reuse");
+  });
+
+  test("a recommendation's field longer than its limit is cut, not refused: the teacher's review is kept (goal 226)", () => {
+    // A teacher in Claude Code wrote a recommendation's direction as a sentence past 200
+    // characters, and the whole review was refused: the round got no portfolio from it.
+    const review = TeacherReview.parse({
+      summary: "s",
+      portfolio: [opp("Reuse")],
+      recommendations: [
+        { kind: "try", direction: "d ".repeat(150), rationale: "r", citations: ["c".repeat(600)] },
+        ...Array.from({ length: 21 }, () => ({ kind: "planner_note", rationale: "n" })),
+      ],
+    });
+    assert.equal(review.portfolio.length, 1);
+    assert.equal(review.recommendations.length, 20);
+    assert.equal(review.recommendations[0]?.direction?.length, 200);
+    assert.equal(review.recommendations[0]?.citations[0]?.length, 500);
   });
 
   test("the merged by model drops no distinct idea: code adds back what it left out", async (t: TestContext) => {

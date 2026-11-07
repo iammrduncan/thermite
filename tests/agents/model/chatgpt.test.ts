@@ -3,7 +3,11 @@ import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, test } from "node:test";
 import { chatgptRequest, chatgptRouteAllowed } from "../../../src/agents/model/chatgpt.ts";
-import { FORWARDED_HEADERS, forwardToProvider } from "../../../src/agents/model/forward.ts";
+import {
+  FORWARDED_HEADERS,
+  forwardToProvider,
+  usageLogFields,
+} from "../../../src/agents/model/forward.ts";
 import {
   buildModel,
   CHATGPT_LIMIT_WAIT_MS,
@@ -214,6 +218,8 @@ describe("a ChatGPT sign-in", () => {
     }
     // The proxy passes the session headers on, and never the caller's credentials.
     let got: IncomingHttpHeaders = {};
+    // An opaque token, as the provider's turn state for sticky routing comes.
+    const turnState = `gA${"x".repeat(778)}`;
     const server = createServer((req, res) => {
       got = req.headers;
       req.resume();
@@ -222,6 +228,7 @@ describe("a ChatGPT sign-in", () => {
           .writeHead(200, {
             "content-type": "text/event-stream",
             "x-codex-primary-used-percent": "42",
+            "x-codex-turn-state": turnState,
             "set-cookie": "a=b",
           })
           .end(""),
@@ -235,6 +242,7 @@ describe("a ChatGPT sign-in", () => {
         conversation_id: "conversation-1",
         "x-client-request-id": "conversation-1",
         originator: "codex_cli_rs",
+        "x-codex-turn-state": "state-of-the-turn",
         authorization: "Bearer the-trial-token",
         cookie: "a=b",
       };
@@ -257,9 +265,22 @@ describe("a ChatGPT sign-in", () => {
       await answer.text();
       // The plan's usage headers come back to the program (goal 220); nothing else of the answer's.
       assert.equal(answer.headers.get("x-codex-primary-used-percent"), "42");
+      assert.equal(answer.headers.get("x-codex-turn-state"), turnState);
       assert.equal(answer.headers.get("set-cookie"), null);
-      for (const k of ["session_id", "conversation_id", "x-client-request-id", "originator"])
+      // The turn state the program sends back goes on, for the turn's sticky routing.
+      for (const k of [
+        "session_id",
+        "conversation_id",
+        "x-client-request-id",
+        "originator",
+        "x-codex-turn-state",
+      ])
         assert.equal(got[k], sent[k], k);
+      // The log gives a short value as it came, and a long one, such as the turn state, by its length.
+      assert.deepEqual(
+        usageLogFields({ "x-codex-primary-used-percent": "42", "x-codex-turn-state": turnState }),
+        { "x-codex-primary-used-percent": "42", "x-codex-turn-state": "780 characters" },
+      );
       assert.equal(got.authorization, "Bearer access-token-one", "the route's own key");
       assert.equal(got.cookie, undefined);
       assert.ok(!(FORWARDED_HEADERS as readonly string[]).includes("authorization"));

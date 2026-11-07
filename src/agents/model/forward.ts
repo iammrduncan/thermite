@@ -45,7 +45,9 @@ export interface ForwardCall {
  * and features, and the conversation's session (goal 222), by which a provider keeps a
  * conversation's calls where its prompt cache is: the Codex CLI's `session_id` and
  * `conversation_id`, pi-ai's `session_id`, `x-client-request-id` and `x-session-affinity`, and
- * OpenRouter's `x-session-id`. Never one that carries a credential: the proxy adds the key.
+ * OpenRouter's `x-session-id`; and `x-codex-turn-state`, the token for sticky routing that an
+ * answer gives the Codex CLI (goal 220) and the CLI sends back on the turn's later calls. Never
+ * one that carries a credential: the proxy adds the key.
  */
 export const FORWARDED_HEADERS = [
   "content-type",
@@ -59,6 +61,7 @@ export const FORWARDED_HEADERS = [
   "x-client-request-id",
   "x-session-affinity",
   "x-session-id",
+  "x-codex-turn-state",
 ] as const;
 
 /** A provider's error answer, as the proxy saw it (goal 079). */
@@ -277,12 +280,28 @@ export async function forwardToProvider(
   });
 }
 
-/** When the provider's usage headers were last logged (goal 220): once an hour at most. */
-let usageLoggedAt = 0;
+/** When each of the provider's usage headers was last logged, by name (goal 220). */
+const usageLoggedAt = new Map<string, number>();
 
-/** The provider's usage headers, by name and value, in the log: what a plan's windows read from. */
+/**
+ * The provider's usage headers in the log, what a plan's windows read from: an answer's, when it
+ * has one the log has not had in the past hour, so each shows within an hour of its first answer.
+ */
 function logUsageHeaders(h: Record<string, string>): void {
-  if (!Object.keys(h).length || Date.now() - usageLoggedAt < 3_600_000) return;
-  usageLoggedAt = Date.now();
-  log("model", "the provider's usage headers", h);
+  const now = Date.now();
+  const names = Object.keys(h);
+  if (!names.some((n) => now - (usageLoggedAt.get(n) ?? Number.NEGATIVE_INFINITY) >= 3_600_000))
+    return;
+  for (const n of names) usageLoggedAt.set(n, now);
+  log("model", "the provider's usage headers", usageLogFields(h));
+}
+
+/**
+ * Usage headers as the log gives them: a value as it came when it is short, such as a percentage,
+ * a window's minutes or a model's name; a longer one, such as Codex's turn state, by its length.
+ */
+export function usageLogFields(h: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(h).map(([k, v]) => [k, v.length <= 64 ? v : `${v.length} characters`]),
+  );
 }

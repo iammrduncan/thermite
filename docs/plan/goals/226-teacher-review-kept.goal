@@ -1,0 +1,38 @@
+---
+id: "226"
+title: "One long field of a teacher's recommendation never loses its review"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 226 · One long field of a teacher's recommendation never loses its review
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+On the lab, 2026-11-07, a teachers' round of 04:31 UTC had a portfolio from one teacher of two. The other, in Claude Code's own terminal, worked for 21 minutes with its tools and answered, but Live said `teacher-1 has no answer after 21 min: no valid answer: recommendations.1.direction: Too big: expected string to have <=200 characters`. A teacher's answer was refused whole for one field of one recommendation: its portfolio, its moves and its notes were lost with it. The schema's own comment said a recommendation is read leniently "so that one bad recommendation never costs the review", and an opportunity's parts are already cut to their length rather than refused. The recommendations' list was not.
+
+1. **A recommendation's fields are cut to their length,** and the list to its 20, never refused for a length. A direction cut so is longer than a direction's name may be, so the round's check of each rule drops it with why, as it drops a direction in words, and the review stands.
+2. **A test:** a review with a long direction, a long citation and 21 recommendations keeps its portfolio and 20 recommendations, each field at its limit.
+3. **The earlier rounds:** whether the rounds the teacher in Claude Code gave no portfolio in (goal 218) ended the same way, from their Live lines.
+
+## Why
+
+A teacher's review is a long call on a subscription. Losing all of it for a direction written as a sentence costs the round its portfolio and the plan its window.
+
+## Done when
+
+- [ ] Items 1 to 3, with the test.
+- [ ] Pages: the changelog.
+
+## Progress
+
+- 2026-11-07 05:12 UTC: Goal written from the lab round's Live lines, which the lab's infrastructure session read. Items 1 and 2 built: `cut()` in `supervisor/advisors/teachers/answers.ts` for a recommendation's direction, words, value, rationale and citations, and the list cut to 20. Test: `tests/supervisor/advisors/pass/ideas.test.ts`. The test file has not run yet.
+
+---
+
+Run with `/goal Complete docs/plan/goals/226-teacher-review-kept.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

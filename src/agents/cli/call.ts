@@ -174,14 +174,13 @@ export async function terminalCall<T extends CliTally>(
       signalsFile,
       tally,
       takeMs: link.takeMs,
+      beforeFirst: o.beforeFirst,
     });
     const unprepared = await term.prepare();
     if (unprepared) {
       tally.errors.push(unprepared);
       return tally;
     }
-    await o.beforeFirst?.();
-    if (o.signal?.aborted) return tally;
     await converse(p, term, run, { prompt, signalsFile, tally }, o);
   } finally {
     link.console(undefined);

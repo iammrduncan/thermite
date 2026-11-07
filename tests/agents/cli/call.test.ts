@@ -316,6 +316,36 @@ test("a program that turns bracketed paste on as its input comes up is typed int
   assert.ok(t.typed >= t.pastes + 700, `typed ${t.typed - t.pastes} ms after bracketed paste`);
 });
 
+test("its first message waits for beforeFirst, which begins once its program is up and ready, and once (goal 218)", async () => {
+  // An advisor's tools: its program lists them only once it runs, so the wait begins after that.
+  const k = link();
+  const { r, started, times } = runner((log) => new Program(log, k.inTurn, 3), {
+    signalAfterMs: 300,
+  });
+  const calls: { running: boolean; signalled: boolean }[] = [];
+  let waited = 0;
+  const tally = await terminalCall(
+    claudeProgram,
+    MODEL,
+    "plan",
+    { runner: r, apiUrl: "http://127.0.0.1:1", scratchDir: scratch },
+    {
+      role: "planner",
+      link: k.l,
+      answer: (t) => t.trimStart().startsWith("{"),
+      beforeFirst: async () => {
+        calls.push({ running: started() !== undefined, signalled: times().signal !== undefined });
+        await new Promise((res) => setTimeout(res, 500));
+        waited = Date.now();
+      },
+    },
+  );
+  assert.equal(tally.lastText, DRAFT);
+  assert.deepEqual(calls, [{ running: true, signalled: true }], "once, with its program up");
+  const typed = times().typed;
+  assert.ok(typed !== undefined && typed >= waited, "its message was typed after the wait");
+});
+
 test("Claude Code's status line gives the call its subscription's usage windows (goal 183)", async () => {
   const k = link();
   const resets = 1_793_662_412;

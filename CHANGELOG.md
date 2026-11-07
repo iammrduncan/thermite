@@ -19,9 +19,9 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Agents
 
-- **Agents on a ChatGPT plan keep their conversation's prompt cache.** The model proxy passes on the session headers by which the provider keeps a conversation's calls together, and never a header that carries a credential; each Pi conversation has a session of its own. A trial's end says how much of its input the cache served: `trial_finished` has `cached_in` and `cached_share`, and the trial's last line on Live gives the share. Workers in Codex had about a third of their input cached. See [Use a ChatGPT subscription](docs/_site/src/content/docs/how-to/models/chatgpt-subscription.md).
-- The model proxy passes an answer's `x-codex-*` and `x-ratelimit-*` headers on to the program, none of them a credential, and logs them once an hour.
-- **An advisor in its own terminal waits for its tools.** Its first message waits until its program has asked the supervisor's tool server for its tools, at most 30 seconds, and Live says how long the listing took, or that it never came. A teacher in Claude Code said in three rounds of four that it had none of its tools.
+- **Agents on a ChatGPT plan keep their conversation's prompt cache.** The model proxy passes on the session headers by which the provider keeps a conversation's calls together, and the turn state Codex sends back for a turn's routing, and never a header that carries a credential; each Pi conversation has a session of its own. A trial's end says how much of its input the cache served: `trial_finished` has `cached_in` and `cached_share`, and the trial's last line on Live gives the share. Workers in Codex had about a third of their input cached. See [Use a ChatGPT subscription](docs/_site/src/content/docs/how-to/models/chatgpt-subscription.md).
+- The model proxy passes an answer's `x-codex-*` and `x-ratelimit-*` headers on to the program, none of them a credential, and logs each within an hour of the first answer that has it: a short value as it came, a long one, such as Codex's turn state, by its length.
+- **An advisor in its own terminal waits for its tools.** Once its program is up and ready, its first message waits until the program has asked the supervisor's tool server for its tools, at most 30 seconds more, and Live says how long the listing took, or that it never came. A teacher in Claude Code said in three rounds of four that it had none of its tools.
 
 ### Docs
 
@@ -31,6 +31,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 - A hill climb's **Metrics** cards line up: the primary metric's card has a row of its own, and the lower priorities' cards an even row under it. Its headline gives the judge's gain, each champion against the one it replaced, as the champion card, the chart and the leaderboard do, where it gave the champion's value over the starting point's.
 - The runner checks' timer goes on when the ledger can't be read: the read is logged at warn, where its error escaped the timer.
+- A teacher's review is kept when one of its recommendations has a field past its length: the field is cut, and a direction cut so is dropped with why by the round's check of each rule. The whole review was refused, and the round had no portfolio from that teacher.
 
 ## [0.1.3] 2026-11-06: a rig over several machines, and what a first campaign on it needs
 
