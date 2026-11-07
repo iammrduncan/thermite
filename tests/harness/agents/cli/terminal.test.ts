@@ -486,9 +486,16 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
       typed.map((s) => s.how),
       ["typed"],
     );
-    // Its screen now, with the owner's input among its newest lines (the long brief before them
-    // pushes the program's first line out of view).
-    assert.match((await c.screen())?.data ?? "", /user: OWNER-INPUT-1/);
+    // Its screen, with the owner's input among its newest lines (the long brief before them
+    // pushes the program's first line out of view). The program records the input before its
+    // screen redraws, so the screen is read until it shows it, as every wait here does.
+    let screen = "";
+    for (const end = Date.now() + 20_000; Date.now() < end; ) {
+      screen = (await c.screen())?.data ?? "";
+      if (/user: OWNER-INPUT-1/.test(screen)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.match(screen, /user: OWNER-INPUT-1/);
     stop.abort();
     await running;
     await assert.rejects(c.input({ text: "too late", wait: "now" }, later), /trial has ended/);
