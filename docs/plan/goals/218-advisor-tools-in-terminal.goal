@@ -1,7 +1,7 @@
 ---
 id: "218"
 title: "A teacher in Claude Code's own terminal has its tools from its first turn"
-status: PROPOSED
+status: READY
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 218 · A teacher in Claude Code's own terminal has its tools from its first turn
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 

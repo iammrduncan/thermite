@@ -1,0 +1,44 @@
+---
+id: "220"
+title: "Control shows a ChatGPT subscription's usage while its rigs use it"
+status: READY
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 220 · Control shows a ChatGPT subscription's usage while its rigs use it
+
+**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+Control asks ChatGPT's usage endpoint how much of a ChatGPT subscription is used, with the sign-in's access token and its account (`control/providers/chatgpt.ts`, goal 151). On the lab, 2026-11-06, the endpoint answered a subscription's sign-in with HTTP 401 (`ChatGPT's usage endpoint refused this sign-in: HTTP 401`) while a rig's workers, auditor, review panel and a teacher worked on the same subscription in Codex, and their model calls went through. So Providers showed no usage windows or reset times for it.
+
+**Not checked:** whether control's access token is out of date (a rig's Codex refreshes its own copy of the sign-in, and a refresh may replace the refresh token control holds), whether the endpoint wants what the Codex CLI sends with its requests, or whether it refuses this kind of plan.
+
+1. **The cause, from control's own record:** when control's access token was issued and last refreshed, against when the rig's sign-in was refreshed, and the endpoint's answer to a token refreshed just before the ask.
+2. **The fix,** where the cause is Thermite's. Where a rig's refresh can leave control's sign-in out of date, that is a fault for the rigs too: their next start takes control's copy.
+3. **A test** with a fake ChatGPT that refuses a stale token.
+
+## Why
+
+The owner chooses which agents run on which subscription from their usage and reset times; on a subscription control can't read, the choice is blind.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests, or the cause outside Thermite said in words on Providers.
+- [ ] Pages: Providers' subscriptions, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-07 00:31 UTC: Goal written from control's answer on the lab.
+
+---
+
+Run with `/goal Complete docs/plan/goals/220-chatgpt-usage-refused.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
