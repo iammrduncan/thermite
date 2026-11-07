@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Agent } from "@earendil-works/pi-agent-core";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
 import { lastAssistant, linkSession, steerTurn } from "../../../agents/live-session.ts";
@@ -141,6 +142,9 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
       tools: toolsWith(mcp),
       thinkingLevel,
     },
+    // The conversation's own session (goal 222): pi-ai sends it as the prompt cache's key and in
+    // the session headers, so the provider keeps its calls where their cache is.
+    sessionId: randomUUID(),
     streamFn: watchedStream(models, watch, meter),
     convertToLlm: withoutPastThinking,
     // One tool call at a time: lane processes are killed by user when a tool finishes, so parallel

@@ -39,6 +39,27 @@ export interface ForwardCall {
   program?: Harness | undefined;
 }
 
+/**
+ * The caller's headers a call takes to the provider: the body's kind, the provider's API version
+ * and features, and the conversation's session (goal 222), by which a provider keeps a
+ * conversation's calls where its prompt cache is: the Codex CLI's `session_id` and
+ * `conversation_id`, pi-ai's `session_id`, `x-client-request-id` and `x-session-affinity`, and
+ * OpenRouter's `x-session-id`. Never one that carries a credential: the proxy adds the key.
+ */
+export const FORWARDED_HEADERS = [
+  "content-type",
+  "accept",
+  "anthropic-version",
+  "anthropic-beta",
+  "user-agent",
+  "originator",
+  "session_id",
+  "conversation_id",
+  "x-client-request-id",
+  "x-session-affinity",
+  "x-session-id",
+] as const;
+
 /** A provider's error answer, as the proxy saw it (goal 079). */
 export interface ProviderErrorAnswer {
   status: number;
@@ -88,7 +109,7 @@ export async function forwardToProvider(
     );
   const url = new URL(`${target.baseUrl}/${call.rest}${call.search}`);
   const headers: Record<string, string> = {};
-  for (const k of ["content-type", "accept", "anthropic-version", "anthropic-beta", "user-agent"]) {
+  for (const k of FORWARDED_HEADERS) {
     const v = call.header(k);
     if (v) headers[k] = v;
   }

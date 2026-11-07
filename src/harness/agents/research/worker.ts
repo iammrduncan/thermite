@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { type TSchema, Type } from "@earendil-works/pi-ai";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
@@ -233,6 +234,9 @@ export async function runResearchTrial(
       tools: clock.wrap(guardRepeats(toolsWith(mcpNow), () => compactor.count)),
       thinkingLevel,
     },
+    // The conversation's own session (goal 222): pi-ai sends it as the prompt cache's key and in
+    // the session headers, so the provider keeps its calls where their cache is.
+    sessionId: randomUUID(),
     streamFn: watchedStream(models, watch, meter),
     convertToLlm: withoutPastThinking,
     // One tool call at a time: each is a request to the harness, in the order the model chose.

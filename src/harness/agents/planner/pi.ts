@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { type CompactionReport, Compactor, summarizer } from "../../../agents/compaction/index.ts";
@@ -116,6 +117,9 @@ export async function callPlanner(
       thinkingLevel,
       tools: toolsWith(mcp?.tools ?? []),
     },
+    // The conversation's own session (goal 222): pi-ai sends it as the prompt cache's key and in
+    // the session headers, so the provider keeps its calls where their cache is.
+    sessionId: randomUUID(),
     streamFn: meter ? meter.streamFn(models) : models.streamSimple.bind(models),
     // Every later turn that waits goes in before its next model call: the owner's words typed into
     // its view and the owner's messages alike. Pi's default takes one a call, and a plan sent on

@@ -1,0 +1,52 @@
+---
+id: "222"
+title: "Agents on a ChatGPT plan get its prompt cache: the session headers through the model proxy, and a session for Pi"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 222 · Agents on a ChatGPT plan get its prompt cache
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+On the lab, 2026-11-07, a run's model usage showed how much of each agent's input came from the provider's prompt cache. On one ChatGPT plan, workers in Codex had 32% of their 104 million input tokens cached, a teacher in Codex 25% and a teacher in Pi 9.5%; on a Claude plan, workers and teachers in Claude Code had 94 to 98%. A plan's usage counts uncached input at full weight, so the Codex workers alone spent about 70 million tokens uncached, and the plan drew down fast.
+
+Two causes, both in Thermite's code:
+
+1. **The model proxy drops the session headers.** It passes on only `content-type`, `accept`, `anthropic-version`, `anthropic-beta` and `user-agent` (`agents/model/forward.ts`). The Codex CLI names its conversation in `session_id` and `conversation_id`, and pi-ai in `session_id`, `x-client-request-id` and `x-session-affinity`: headers by which the provider keeps a conversation's calls where its cache is. None of them reaches OpenAI. The body's `prompt_cache_key` does.
+2. **Thermite's agents in Pi have no session.** pi-ai sends `prompt_cache_key` and its session headers only for a call given a `sessionId`, and no Pi call of Thermite's gives one: the workers, the planner and the advisors in Pi.
+
+**Not checked yet:** how much each cause costs alone. A conversation's calls in Codex keep their `prompt_cache_key`, so the headers may matter less for Codex than for Pi.
+
+1. **The proxy passes the session headers on,** by name, for every provider: `session_id`, `conversation_id`, `x-client-request-id`, `x-session-affinity`, `x-session-id`, and `originator`. Never a header that carries a credential.
+2. **A session for each conversation in Pi:** a trial's, a planner call's and an advisor call's own id, as `sessionId`, so pi-ai sends its cache key and session headers.
+3. **The cache share per trial,** on the run's usage and its Live, so a fall shows at once.
+4. **Tests:** the proxy's headers passed and refused, the Pi call's session, the Codex acceptance's scripted provider seeing them.
+
+## Why
+
+On a subscription, every uncached token counts against the plan's window. Agents whose input is mostly the same conversation again should pay for it once.
+
+## Done when
+
+- [ ] Items 1 to 4.
+- [ ] On the lab, the same run's Codex workers' cached share after the fix, against 32% before.
+- [ ] Pages: the model routes, Limits and pacing (usage), and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-07 01:14 UTC: Goal written from a lab run's model usage and the proxy's and Pi's code.
+
+---
+
+Run with `/goal Complete docs/plan/goals/222-chatgpt-prompt-cache.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- 2026-11-07 01:17 UTC: items 1 and 2 built. The proxy passes on `FORWARDED_HEADERS` (`agents/model/forward.ts`): the session headers, never a credential. The Pi workers, research workers, planner and advisors each give their `Agent` a `sessionId` of their own (`harness/agents/worker/index.ts`, `harness/agents/research/worker.ts`, `harness/agents/planner/pi.ts`, `supervisor/advisors/pi/agent.ts`). Test: `tests/agents/model/chatgpt.test.ts` (a Pi call with a session sends its `prompt_cache_key` and `session_id` on the ChatGPT route; the proxy passes the session headers on and drops the caller's credentials). Page: Use a ChatGPT subscription. Typecheck and lint pass; the test file has not run yet. Items 3 and 4's Codex acceptance check are left.

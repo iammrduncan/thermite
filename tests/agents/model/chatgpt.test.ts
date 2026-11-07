@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { createServer, type IncomingHttpHeaders } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, test } from "node:test";
 import { chatgptRequest, chatgptRouteAllowed } from "../../../src/agents/model/chatgpt.ts";
+import { FORWARDED_HEADERS, forwardToProvider } from "../../../src/agents/model/forward.ts";
 import {
   buildModel,
   CHATGPT_LIMIT_WAIT_MS,
@@ -178,5 +181,79 @@ describe("a ChatGPT sign-in", () => {
     );
     assert.equal(usageLimitRetry("429 rate limited", now), undefined);
     assert.equal(usageLimitRetry(undefined, now), undefined);
+  });
+
+  test("a conversation's session reaches OpenAI, for its prompt cache (goal 222)", async () => {
+    // Pi's call with a session, as Thermite's agents in Pi now give one: its cache key and header.
+    const seen: { headers: Headers; body: Record<string, unknown> }[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const req = new Request(input, init);
+      seen.push({ headers: req.headers, body: JSON.parse(await req.text()) });
+      return helloStream();
+    }) as typeof fetch;
+    try {
+      const { models, model } = buildModel({
+        api: "chatgpt",
+        baseUrl: CHATGPT_API,
+        model: "gpt-test",
+        apiKey: "access-token-one",
+        contextWindow: 0,
+        maxTokens: 8192,
+      });
+      const stream = models.streamSimple(
+        model,
+        { systemPrompt: "You plan.", messages: [{ role: "user", content: "Plan.", timestamp: 1 }] },
+        { sessionId: "conversation-1" },
+      );
+      for await (const _ of stream);
+      assert.equal(seen[0]?.body.prompt_cache_key, "conversation-1");
+      assert.equal(seen[0]?.headers.get("session_id"), "conversation-1");
+    } finally {
+      globalThis.fetch = real;
+    }
+    // The proxy passes the session headers on, and never the caller's credentials.
+    let got: IncomingHttpHeaders = {};
+    const server = createServer((req, res) => {
+      got = req.headers;
+      req.resume();
+      req.on("end", () => res.writeHead(200, { "content-type": "text/event-stream" }).end(""));
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const sent: Record<string, string> = {
+        "content-type": "application/json",
+        session_id: "conversation-1",
+        conversation_id: "conversation-1",
+        "x-client-request-id": "conversation-1",
+        originator: "codex_cli_rs",
+        authorization: "Bearer the-trial-token",
+        cookie: "a=b",
+      };
+      const answer = await forwardToProvider(
+        {
+          method: "POST",
+          rest: "responses",
+          search: "",
+          header: (k) => sent[k],
+          body: Buffer.from(JSON.stringify({ model: "gpt-test", input: "hi" })),
+        },
+        {
+          api: "chatgpt",
+          baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+          key: "access-token-one",
+        },
+        undefined,
+        { ms: undefined },
+      );
+      await answer.text();
+      for (const k of ["session_id", "conversation_id", "x-client-request-id", "originator"])
+        assert.equal(got[k], sent[k], k);
+      assert.equal(got.authorization, "Bearer access-token-one", "the route's own key");
+      assert.equal(got.cookie, undefined);
+      assert.ok(!(FORWARDED_HEADERS as readonly string[]).includes("authorization"));
+    } finally {
+      server.close();
+    }
   });
 });

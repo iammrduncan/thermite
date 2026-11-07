@@ -60,6 +60,7 @@ Then:
 - The planner runs in Codex too, unless you give it a model of its own on **Edit rig**. Its **Runs in** says "as the workers (Codex)".
 - Research workers keep running in Pi, with the same model.
 - Codex never gets the subscription's token. It reaches OpenAI through the harness's proxy, with its trial's own token, and the proxy adds the token on the way out.
+- The proxy passes on the conversation's session, Codex's `session_id` and `conversation_id`, and never a credential, so OpenAI keeps a trial's calls where their prompt cache is. An agent in Pi has a session of its own for each conversation too, sent as the cache's key. The run's model usage shows how much of each agent's input was cached ([`model_usage`](../../reference/mcp-tools.md#model_usage)).
 
 The published harness images carry the Codex CLI. An image you build with an empty `CODEX_VERSION` does not ([build arguments](../../reference/settings.md#build-arguments)).
 
