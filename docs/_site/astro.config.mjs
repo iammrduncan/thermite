@@ -93,6 +93,7 @@ export default defineConfig({
           label: "Studies",
           items: [{ label: "Overview", link: "/studies/" }, { autogenerate: { directory: "studies" } }],
         },
+        { label: "Compare", items: [{ autogenerate: { directory: "compare" } }] },
         {
           label: "Tutorials",
           items: ["tutorials/first-goal-campaign", "tutorials/your-own-project"],
@@ -148,6 +149,11 @@ export default defineConfig({
               label: "Studies",
               paths: ["studies/**"],
               description: "campaigns Thermite has run, with their measured results",
+            },
+            {
+              label: "Compare",
+              paths: ["compare/**"],
+              description: "how Thermite differs from other autoresearch tools, and where each fits",
             },
             {
               label: "Tutorials",

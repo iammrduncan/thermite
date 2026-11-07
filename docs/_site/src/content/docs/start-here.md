@@ -8,7 +8,7 @@ sidebar:
 
 Thermite lets AI agents work on a project for as long as it takes, while a judge they cannot touch decides which of their changes really count. This page helps you find where to begin.
 
-Still deciding whether it fits? [Use cases](/use-cases/) shows what it can be pointed at, in fields from software and science to healthcare, agriculture and finance, and [the first study](studies/qwen3-8-27b-on-a-p100.mdx) shows four real campaigns from start to finish.
+Still deciding whether it fits? [Use cases](/use-cases/) shows what it can be pointed at, in fields from software and science to healthcare, agriculture and finance, and [the first study](studies/qwen3-8-27b-on-a-p100.mdx) shows four real campaigns from start to finish. [Why I built Thermite](explanation/why-i-built-thermite.md) says what it is for, and [Compare](compare/index.md) sets it beside other autoresearch tools.
 
 ## Three kinds of campaign
 
