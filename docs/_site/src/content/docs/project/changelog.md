@@ -35,6 +35,8 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 - **How long an attempt took.** An attempt's page has **How long it took**, under **Facts**: its lane's work on it, its wait for the judge, each of the judge's jobs with its runner, its wait for a confirmation, its audit, and the time from its submission to the champion, each still under way with its time so far. See [Verdicts](../reference/verdicts.md#how-long-each-stage-took).
 
+- **An advisor's Live lines over MCP.** With the run alone, `trial_session` also lists the run's advisors with lines: the teachers, the merged by model, the auditor and the review panel. With `advisor`, such as `teacher-1`, it gives that advisor's lines in the run, paged as a trial's are: when its program listed its tools, and how each call ended. See [MCP tools](../reference/mcp-tools.md#trial_session).
+
 ### Docs
 
 - [A rig over several machines](../explanation/core-and-runners.md): what runs on a rig's core and what on its runners, how they stay in touch, what a restart of control or a move onto new images does to the work under way, and how to size each machine.

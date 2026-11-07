@@ -169,23 +169,33 @@ export class LiveLines extends StorePart {
       );
   }
 
-  /** Live lines of a rig after `after` (control's own ids), oldest first; one source if given. */
+  /**
+   * Live lines of a rig after `after` (control's own ids), oldest first; one source if given, and
+   * of one run if given too (an advisor's source holds every run's lines, goal 218).
+   */
   after(
     rig: string,
     after: number,
     limit: number,
     source?: string,
+    run?: string,
   ): (LiveEntry & { id: number; signed: boolean })[] {
     const rows = (
-      source
+      source && run
         ? this.db
             .prepare(
-              "select * from rig_live where rig = ? and id > ? and source = ? order by id limit ?",
+              "select * from rig_live where rig = ? and id > ? and source = ? and run = ? order by id limit ?",
             )
-            .all(rig, after, source, limit)
-        : this.db
-            .prepare("select * from rig_live where rig = ? and id > ? order by id limit ?")
-            .all(rig, after, limit)
+            .all(rig, after, source, run, limit)
+        : source
+          ? this.db
+              .prepare(
+                "select * from rig_live where rig = ? and id > ? and source = ? order by id limit ?",
+              )
+              .all(rig, after, source, limit)
+          : this.db
+              .prepare("select * from rig_live where rig = ? and id > ? order by id limit ?")
+              .all(rig, after, limit)
     ) as Row[];
     return rows.map(entryOf);
   }
@@ -366,6 +376,32 @@ export class LiveLines extends StorePart {
       last_at: String(r.last_at),
       lines: Number(r.lines),
       ended: Number(r.ended) === 1,
+    }));
+  }
+
+  /**
+   * Each advisor with lines in one run of a rig's live log (goal 218): its source, its first and
+   * newest line's time, how many lines, and its newest line. Newest first.
+   */
+  advisors(
+    rig: string,
+    run: string,
+  ): { source: string; first_at: string; last_at: string; lines: number; last: string }[] {
+    const rows = this.db
+      .prepare(
+        `select source, min(at) as first_at, max(at) as last_at, count(*) as lines,
+           (select text from rig_live x where x.rig = l.rig and x.source = l.source and x.run = l.run
+             order by x.id desc limit 1) as last
+         from rig_live l where rig = ? and run = ? and source like 'advisor:%'
+         group by source order by max(id) desc`,
+      )
+      .all(rig, run) as Row[];
+    return rows.map((r) => ({
+      source: String(r.source),
+      first_at: String(r.first_at),
+      last_at: String(r.last_at),
+      lines: Number(r.lines),
+      last: r.last ? String(r.last) : "",
     }));
   }
 

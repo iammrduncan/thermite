@@ -209,3 +209,74 @@ test("a trial that writes many lines leaves another open trial's newest lines in
   store.liveLines.add("rig-a", "log-1", [line(900, "trial:t-loop", "search_files {}")], true, 100);
   assert.equal(kept("trial:t-quiet"), 0);
 });
+
+test("an advisor's lines in one run, and the run's advisors listed with its trials (goal 218)", () => {
+  const store = new ControlStore(":memory:");
+  const line = (seq: number, source: string, text: string, run: string): LiveEntry => ({
+    seq,
+    at: at(seq),
+    source,
+    kind: "status",
+    text,
+    run,
+  });
+  store.liveLines.add(
+    "rig-a",
+    "log-1",
+    [
+      line(1, "advisor:teacher-1", "teacher-1 begins its review of r-0", "r-0"),
+      line(
+        2,
+        "advisor:teacher-1",
+        "teacher-1's program listed its tools 31.1 s after its tool server started",
+        "r-1",
+      ),
+      line(3, "trial:t-a", "trial on lane-1: tiling, tile it", "r-1"),
+      line(4, "advisor:teacher-2", "teacher-2 answered after 6 min", "r-1"),
+      line(5, "advisor:teacher-1", "teacher-1 answered after 19 min", "r-1"),
+    ],
+    true,
+  );
+  runsOn(store, "r-0", "r-1");
+  const all = trialSession(store, base) as { advisors: Record<string, unknown>[] };
+  assert.deepEqual(all.advisors, [
+    {
+      advisor: "teacher-1",
+      first_at: at(2),
+      last_at: at(5),
+      lines: 2,
+      last: "teacher-1 answered after 19 min",
+    },
+    {
+      advisor: "teacher-2",
+      first_at: at(4),
+      last_at: at(4),
+      lines: 1,
+      last: "teacher-2 answered after 6 min",
+    },
+  ]);
+  type Page = {
+    advisor: string;
+    lines_total: number;
+    lines: { text: string }[];
+    next_after: number | null;
+  };
+  const one = trialSession(store, { ...base, advisor: "teacher-1" }) as Page;
+  assert.equal(one.advisor, "teacher-1");
+  assert.equal(one.lines_total, 2);
+  // Its lines in this run alone: the line of another run under the same advisor is left out.
+  assert.deepEqual(
+    one.lines.map((l) => l.text),
+    [
+      "teacher-1's program listed its tools 31.1 s after its tool server started",
+      "teacher-1 answered after 19 min",
+    ],
+  );
+  const paged = trialSession(store, { ...base, advisor: "advisor:teacher-1", limit: 1 }) as Page;
+  assert.equal(paged.lines.length, 1);
+  assert.notEqual(paged.next_after, null);
+  assert.throws(
+    () => trialSession(store, { ...base, advisor: "auditor" }),
+    /control has no lines of advisor auditor in run r-1/,
+  );
+});
