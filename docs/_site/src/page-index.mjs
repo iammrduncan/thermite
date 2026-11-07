@@ -13,6 +13,7 @@ const sections = [
   { dir: "use-cases/for", label: "Use cases: who Thermite is for" },
   ...fields.map((f) => ({ dir: `use-cases/${f.key}`, label: `Use cases: ${f.label}` })),
   { dir: "studies", label: "Studies: what Thermite has done" },
+  { dir: "compare", label: "Compare: Thermite and other autoresearch tools" },
   { dir: "tutorials", label: "Tutorials: learn by doing" },
   { dir: "how-to/install", label: "How-to guides: install and rigs" },
   { dir: "how-to/models", label: "How-to guides: models" },

@@ -66,4 +66,5 @@ You need Linux or macOS and Docker or Podman. A GPU is optional, and so is a pai
 
 - [Install on one machine](../tutorials/first-run.md) starts Thermite on your computer and lets you watch the judge check a rig.
 - [Kits and rigs, side by side](kits-and-rigs.md) clears up the two words new users mix up most.
-- [Where Thermite came from](where-thermite-came-from.md) tells which lessons shaped it.
+- [Why I built Thermite](why-i-built-thermite.md) tells the story, and [Where Thermite came from](where-thermite-came-from.md) pairs each lesson with the part that answers it.
+- [Compare Thermite](../compare/index.md) sets it beside other autoresearch tools.

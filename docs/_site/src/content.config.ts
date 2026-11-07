@@ -4,9 +4,9 @@ import { defineCollection } from "astro:content";
 import { z } from "astro/zod";
 import { fields, modes, personas } from "./data/use-cases.mjs";
 
-// Every page has a title, a one-line description and one type: a Diátaxis type, or `use-case` and
-// `study` for the pages that show who Thermite is for and what it has done. The build fails
-// without them. `npm run docs:check` also checks that each page sits in the section of its type.
+// Every page has a title, a one-line description and one type: a Diátaxis type, or `use-case`,
+// `study` and `comparison` for the pages that show who Thermite is for, what it has done and how
+// it differs from other tools. The build fails without them. `npm run docs:check` also checks that each page sits in the section of its type.
 // A use case (use-cases/<field>/) also says, under `useCase`, its campaign mode, the personas it
 // suits and the text of its card on the Use cases overview; its field is its folder.
 export const collections = {
@@ -23,6 +23,7 @@ export const collections = {
           "explanation",
           "use-case",
           "study",
+          "comparison",
           "hub",
           "project",
         ]),

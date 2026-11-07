@@ -8,7 +8,7 @@ sidebar:
 
 Thermite grew out of long-running hill-climbing campaigns on inference kernels: AI agents trying, change after change, to make the GPU code behind a model's answers run faster. Those campaigns taught a handful of lessons. Thermite is the system built around them, informed by published work on agent research systems and on evolutionary code search. [Credits](../project/credits.md#research-behind-the-design) names that work, with what Thermite takes from each.
 
-Each lesson below is paired with the part of Thermite that answers it. The [glossary](../reference/glossary.md) explains the Thermite words used here.
+[Why I built Thermite](why-i-built-thermite.md) tells the story behind them. Each lesson below is paired with the part of Thermite that answers it. The [glossary](../reference/glossary.md) explains the Thermite words used here.
 
 ## Loops that stopped after a fixed number of failures
 
