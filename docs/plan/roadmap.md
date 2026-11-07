@@ -204,6 +204,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [221](goals/221-repair-a-run-in-place.goal) Repair a run in place: send an experiment back, and change a running run's lane limits · `IN_PROGRESS`
 - [222](goals/222-chatgpt-prompt-cache.goal) Agents on a ChatGPT plan get its prompt cache: the session headers through the model proxy, and a session for Pi · `IN_PROGRESS`
 - [223](goals/223-judge-off-mid-job.goal) Turning the judge off says what becomes of the job under way · `DROPPED`
+- [224](goals/224-update-across-control-restart.goal) A rig's update that a control restart cuts off goes on, or says so · `PROPOSED`
 
 **The owner's asks of 2026-11-03.**
 

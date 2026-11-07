@@ -1,0 +1,38 @@
+---
+id: "224"
+title: "A rig's update that a control restart cuts off goes on, or says so"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 224 · A rig's update that a control restart cuts off goes on, or says so
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+When control moves a cluster rig onto new images, starts it or gives it a new size, it sets the rig's state to `updating` or `starting` and waits in memory for the new pods and their first report (`awaitNewPods` in `control/clusters/rigs.ts`). A failure makes the state `failed` (goal 161). A control restart makes no state at all: the wait ends with the process, and nothing at start-up takes it up again. The rig's pods still roll, but its page shows `updating` for good. **Update to these images**, a start and a restart then refuse it ("wait until its page shows it running, or failed"), and only a stop or a remove clears the state. A drain does not have this problem: the drain watch reads the state from the store, so it goes on after a restart.
+
+1. **At start-up**, control takes up each cluster rig it left `updating` or `starting`: it waits for the pods and the report again, from the step its history last recorded, and ends `running` or `failed` with a reason in the rig's history.
+2. **The same check** for rigs on machines (`deploying`, `starting`, `updating`) and joined rigs (`joining`): each goes on, or ends `failed` with "control restarted while …" when its work can't be taken up.
+3. **A test** of each: a restart part-way through, then the rig `running`, or `failed` with its reason.
+
+## Why
+
+Control's restart is routine: each new version of control needs one. A rig whose drain ends near that restart lands in the gap, with no error to read and no button that works.
+
+## Done when
+
+- [ ] Items 1 to 3.
+- [ ] Pages: Move a rig onto new images, the rig's page, and the changelog.
+
+## Progress
+
+- 2026-11-07 03:27 UTC: Goal written while planning a control restart on the lab with a cluster rig draining towards an update. The window avoids the gap: control restarts only while that rig is `draining` or `running`, never `updating`.
+
+---
+
+Run with `/goal Complete docs/plan/goals/224-update-across-control-restart.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
