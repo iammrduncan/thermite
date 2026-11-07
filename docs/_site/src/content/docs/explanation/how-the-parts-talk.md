@@ -179,6 +179,10 @@ Control writes each rig's configuration to the `CONFIG` stream, a key-value buck
 - **A Git access only while its assignment lasts.** Control puts an access in the rig's `git-access` key when an assignment of the rig names it, and takes it out when the assignment ends, and its audit log notes `git_access_handed`, with the names, each time it writes the key. An access control can't open is left out, in its log. The supervisor uses an access only to stage a project, and only for its host. Staging waits up to 2 minutes for an access its assignment names, then fails, in words: `Git access <name>: control gave this rig none in its config on the message bus. …`.
 - **Its figures count the updates** it took and the messages it refused, in all and by subject.
 
+### A rig's core and its runners
+
+A rig over several machines is a core and its runners, and the core talks to its runners on the same bus: each runner's supervisor registers its key with the rig's token, and answers the core's asks on its own subject, such as a build, a measurement, a lane's `run_experiment`, a commit's bundle or a fetch of the run's model files. The core checks each runner every 15 seconds; one that misses two checks is away, and its run under way is done again elsewhere. So a runner needs only the bus, never an address of its own, and control's own restart, which drops the bus for a moment, can make every runner away at once ([A rig over several machines](core-and-runners.md#how-the-core-and-its-runners-stay-in-touch)).
+
 ### Where the bus runs, and how rigs reach it
 
 The bus runs beside control, and every connection to it is over TLS on NATS's own port, 4222. The compose stack's own rigs reach it inside the stack, as `nats:4222`. A rig control sets up on a machine or a cluster, or one you join yourself, reaches it from outside, at control's host on the same port, or at `THERMITE_NATS_PUBLIC_URL`: a second port beside control's HTTPS, which the operator opens to the rigs. NATS's port takes no HTTP proxy, so the bus brings its own TLS.
@@ -252,7 +256,7 @@ A stop empties the pod's disk and keeps its settings: at its next start, the sup
 
 ## Inside a rig
 
-The supervisor and the harness are two containers, and they talk two ways:
+The supervisor and the harness are two containers, of a rig's core and of each of its runners alike, and they talk two ways:
 
 - **The harness's API.** The supervisor calls it: for the events and live lines it relays, for the commands it delivers, for the run's settings, and, for the advisors, about 25 routes that read the run and post their answers. The harness never calls the supervisor.
 - **Two shared folders.** The supervisor puts what a command brings (a project, a kit, another rig's champion, a model) in `/inbox`, which the harness may only read, at `/controller/inbox`: a folder of the harness image that only the harness's controller may enter, so the agents and the judge's runs never reach it. The harness writes each export to `/outbox`, and the supervisor takes it from there to git or to control, then tells the harness it is done.

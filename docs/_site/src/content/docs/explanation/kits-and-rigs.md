@@ -17,7 +17,7 @@ A campaign brings the two together. This page compares them and shows how they m
 
 | | Kit | Rig |
 | --- | --- | --- |
-| **What it is** | A git repository with `kit.json` and the project's build, run and check scripts | A core, a harness container and a supervisor container on a machine or a cluster, with its devices, and any [runners](../how-to/install/runners.md) on other machines, each one GPU or a machine's CPUs |
+| **What it is** | A git repository with `kit.json` and the project's build, run and check scripts | A core, a harness container and a supervisor container on a machine or a cluster, with its devices, and any [runners](core-and-runners.md) on other machines, each one GPU or a machine's CPUs |
 | **The question it answers** | How is a change built, run, scored and checked? | Where is it measured, and who does the work? |
 | **What it belongs to** | One project, and one kind of hardware | A machine or a cluster. One machine can host several rigs |
 | **Who makes it** | You write it, or the **New campaign** page writes a simple one from your answers | You start it with compose or a join command, or control sets it up over SSH or on Kubernetes |
