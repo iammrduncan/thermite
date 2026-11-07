@@ -1,5 +1,6 @@
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { Harness } from "../../core/agents.ts";
 import { chatgptRequest, chatgptRouteAllowed, codexUsageLimit } from "./chatgpt.ts";
@@ -152,6 +153,15 @@ export async function forwardToProvider(
         const v = res.headers[k];
         if (typeof v === "string") out.set(k, v);
       }
+      // The provider's usage and rate-limit headers go on as they came (goal 220), for a program
+      // that reads them itself, such as the Codex CLI its plan's windows: none is a credential.
+      const usage: Record<string, string> = {};
+      for (const [k, v] of Object.entries(res.headers))
+        if (typeof v === "string" && /^x-(codex|ratelimit)-/i.test(k)) {
+          out.set(k, v);
+          usage[k.toLowerCase()] = v;
+        }
+      logUsageHeaders(usage);
       // An error answer is read whole (its body is small): OpenAI's code in a ChatGPT plan's
       // refusal says when the plan's usage is full, and any provider's status, headers and words
       // say what kind of error it is (goal 079). The answer goes on as it came.
@@ -265,4 +275,14 @@ export async function forwardToProvider(
     if (body) req.write(body);
     req.end();
   });
+}
+
+/** When the provider's usage headers were last logged (goal 220): once an hour at most. */
+let usageLoggedAt = 0;
+
+/** The provider's usage headers, by name and value, in the log: what a plan's windows read from. */
+function logUsageHeaders(h: Record<string, string>): void {
+  if (!Object.keys(h).length || Date.now() - usageLoggedAt < 3_600_000) return;
+  usageLoggedAt = Date.now();
+  log("model", "the provider's usage headers", h);
 }

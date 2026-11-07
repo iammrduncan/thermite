@@ -1,7 +1,7 @@
 ---
 id: "220"
 title: "Control shows a ChatGPT subscription's usage while its rigs use it"
-status: READY
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 220 · Control shows a ChatGPT subscription's usage while its rigs use it
 
-**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -39,6 +39,7 @@ The owner chooses which agents run on which subscription from their usage and re
 
 - 2026-11-07 00:31 UTC: Goal written from control's answer on the lab.
 - 2026-11-07 02:09 UTC: the guesses about a stale token dropped: the refusal is OpenAI's, as the ChatGPT page says, and control alone renews the login. Items rewritten to read the plan's windows from the answers the proxies already see.
+- 2026-11-07 02:46 UTC: for item 1, the model proxy now passes an answer's `x-codex-*` and `x-ratelimit-*` headers on to the program, as a direct connection would give them, and logs their names and values once an hour (`the provider's usage headers`, `agents/model/forward.ts`): none of them is a credential. Test: `tests/agents/model/chatgpt.test.ts`. On the lab after a roll, that log line gives the headers item 2 reads.
 
 ---
 

@@ -217,7 +217,15 @@ describe("a ChatGPT sign-in", () => {
     const server = createServer((req, res) => {
       got = req.headers;
       req.resume();
-      req.on("end", () => res.writeHead(200, { "content-type": "text/event-stream" }).end(""));
+      req.on("end", () =>
+        res
+          .writeHead(200, {
+            "content-type": "text/event-stream",
+            "x-codex-primary-used-percent": "42",
+            "set-cookie": "a=b",
+          })
+          .end(""),
+      );
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     try {
@@ -247,6 +255,9 @@ describe("a ChatGPT sign-in", () => {
         { ms: undefined },
       );
       await answer.text();
+      // The plan's usage headers come back to the program (goal 220); nothing else of the answer's.
+      assert.equal(answer.headers.get("x-codex-primary-used-percent"), "42");
+      assert.equal(answer.headers.get("set-cookie"), null);
       for (const k of ["session_id", "conversation_id", "x-client-request-id", "originator"])
         assert.equal(got[k], sent[k], k);
       assert.equal(got.authorization, "Bearer access-token-one", "the route's own key");
