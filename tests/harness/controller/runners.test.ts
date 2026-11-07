@@ -35,8 +35,9 @@ function linked(reply: (q: QueuedRun) => { answer?: unknown; error?: string } | 
 }
 
 const service = {
-  // A lane's run here belongs to no run with model files (goal 213).
-  ledger: { trials: { get: () => undefined } },
+  // A lane's run here belongs to no run with model files (goal 213), and no run is running to
+  // fetch them for (goal 217).
+  ledger: { trials: { get: () => undefined }, runs: { list: () => [] } },
   mirrorFor: (repo: string) => `/mirrors/${repo}`,
   paths: { scratchDir: "/scratch" },
 } as unknown as HarnessService;
@@ -248,6 +249,40 @@ describe("the core's runners as they come and go (goal 206)", () => {
     answering = true;
     await wait(120);
     assert.equal(hub.state()[0]?.up, true, "it answers again: it takes runs");
+    stop();
+    hub.apply([]);
+    sup.stop();
+  });
+
+  test("a ledger that can't be read leaves the checks going: the runner still comes up", async () => {
+    let answering = false;
+    const sup = linked((q) =>
+      q.kind === "ask" && q.ask.op === "info"
+        ? answering
+          ? fits
+          : { error: "no responders available for request" }
+        : undefined,
+    );
+    const closed = {
+      ...service,
+      ledger: {
+        ...service.ledger,
+        runs: {
+          list: () => {
+            throw new Error("The database connection is not open");
+          },
+        },
+      },
+    } as unknown as HarnessService;
+    const hub = new RunnerHub({ service: closed, link: sup.link, core, checkEveryMs: 30 });
+    hub.executors = executors();
+    hub.apply([{ name: "box-2", pools: ["shared"] }]);
+    const stop = hub.start();
+    await wait();
+    assert.equal(hub.state()[0]?.up, false);
+    answering = true;
+    await wait(120);
+    assert.equal(hub.state()[0]?.up, true, "a later check, after the ledger's error, brings it up");
     stop();
     hub.apply([]);
     sup.stop();
