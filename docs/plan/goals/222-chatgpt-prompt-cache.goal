@@ -45,6 +45,7 @@ On a subscription, every uncached token counts against the plan's window. Agents
 ## Progress
 
 - 2026-11-07 01:14 UTC: Goal written from a lab run's model usage and the proxy's and Pi's code.
+- 2026-11-07 02:42 UTC: item 3 built. A trial's end sums the cached share of its calls that say (`Registry.finishTrial`, `harness/agents/registry.ts`): `trial_finished` carries `cached_in` and `cached_share`, and its last Live line says the share (`harness/agents/scheduler/trials.ts`). Test: `tests/harness/model-usage.test.ts`. Page: Use a ChatGPT subscription. The test file has not run yet. Item 4's Codex acceptance check is left.
 
 ---
 

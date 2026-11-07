@@ -334,7 +334,19 @@ export class Registry {
       error?: string | undefined;
     },
     by: string,
-  ): void {
+  ): { cachedShare?: number } {
+    // The share of its input the provider's prompt cache served (goal 222), from the calls that
+    // say: a fall shows at the trial's end.
+    const run = String(this.ledger.trials.get(id)?.run ?? "");
+    const said = this.ledger.events
+      .list("model_call", { subject: run })
+      .filter((e) => e.body.trial === id && e.body.cached_in !== null);
+    const cachedIn = said.reduce((n, e) => n + Number(e.body.cached_in), 0);
+    const saidIn = said.reduce((n, e) => n + e.body.tokens_in, 0);
+    const cached =
+      saidIn > 0
+        ? { cached_in: cachedIn, cached_share: Math.round((cachedIn / saidIn) * 1000) / 1000 }
+        : undefined;
     this.ledger.tx(() => {
       this.ledger.trials.finishTrial(id, r);
       const t = this.ledger.trials.get(id);
@@ -350,10 +362,12 @@ export class Registry {
         tokens_out: r.tokensOut,
         ...(r.compactions ? { compactions: r.compactions } : {}),
         ...(r.usageUnrecorded ? { usage_unrecorded: r.usageUnrecorded } : {}),
+        ...(cached ?? {}),
         // Why a trial failed reaches control too (the ledger keeps the longer text).
         error: r.error?.slice(0, 300) ?? null,
       });
     });
+    return cached ? { cachedShare: cached.cached_share } : {};
   }
 
   /**

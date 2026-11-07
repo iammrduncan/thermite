@@ -417,6 +417,9 @@ export interface EventBodies {
     tokens_out: number;
     compactions?: number | undefined;
     usage_unrecorded?: number | undefined;
+    /** Of the input of its calls that say, how much the provider's prompt cache served (goal 222). */
+    cached_in?: number | undefined;
+    cached_share?: number | undefined;
     error: string | null;
   };
   trial_stop_asked: { trial: string; lane: string; reason?: string | undefined };

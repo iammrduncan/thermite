@@ -113,6 +113,33 @@ describe("model usage on the harness (goal 075)", () => {
     assert.equal(s.events().length, 0);
   });
 
+  test("a trial's end says how much of its input the provider's prompt cache served (goal 222)", async () => {
+    const s = await setup();
+    s.env.service.usage.open(
+      { id: TRIAL, run: RUN },
+      { harness: "pi", provider: null, model: "m" },
+    );
+    // 1,000 in, 400 cached; 1,000 in, 800 cached; one call that does not say is left out.
+    await s.post("/v1/trial/usage", {
+      calls: [
+        call({ tokensIn: 1000, cachedIn: 400 }),
+        call({ tokensIn: 1000, cachedIn: 800 }),
+        call({ cachedIn: null }),
+      ],
+    });
+    const r = s.registry.finishTrial(
+      TRIAL,
+      { stopped: "no_submission", turns: 3, toolCalls: 0, tokensIn: 3000, tokensOut: 1 },
+      "test",
+    );
+    assert.deepEqual(r, { cachedShare: 0.6 });
+    const end = s.env.service.ledger
+      .eventsAfter(0, 100_000)
+      .events.find((e) => e.kind === "trial_finished")?.body as Record<string, unknown>;
+    assert.equal(end.cached_in, 1200);
+    assert.equal(end.cached_share, 0.6);
+  });
+
   test("the supervisor records its advisors' calls, by role and round; never a worker's or the planner's", async () => {
     const s = await setup();
     const body = {

@@ -206,7 +206,7 @@ export function startTrial(
       if (attempt) sched.registry.tagAttempt(attempt, a.direction);
       // The trial ends first (its token stops working), then its processes and dev runs.
       sched.o.service.trialWorkspaces.delete(id);
-      sched.registry.finishTrial(id, r, sched.o.owner);
+      const { cachedShare } = sched.registry.finishTrial(id, r, sched.o.owner);
       finishExperiment(sched, id, r, attempt);
       afterTrial(sched, id, run, r);
       trialLine(
@@ -215,7 +215,7 @@ export function startTrial(
         run,
         a.lane,
         "status",
-        `trial ended: ${attempt ? `submitted ${attempt}${r.submitted ? "" : ` (then ${r.stopped})`}` : r.stopped}${r.error ? ` (${r.error.slice(0, 200)})` : ""}`,
+        `trial ended: ${attempt ? `submitted ${attempt}${r.submitted ? "" : ` (then ${r.stopped})`}` : r.stopped}${r.error ? ` (${r.error.slice(0, 200)})` : ""}${cachedShare !== undefined ? `; ${Math.round(cachedShare * 100)}% of its model input came from the provider's prompt cache` : ""}`,
       );
       await sched.o.runner.killRole(lane).catch(() => 0);
       await sched.o.devRuns?.settle(lane).catch(() => undefined);
