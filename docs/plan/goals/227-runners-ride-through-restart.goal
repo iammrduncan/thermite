@@ -1,0 +1,38 @@
+---
+id: "227"
+title: "A rig's runners ride through control's restart"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 227 · A rig's runners ride through control's restart
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+A rig's core checks each runner over control's message bus every 15 seconds, and a runner that fails two checks in a row counts as away: the judge's job under way there goes back to the queue, and a lane's `run_experiment` fails ([A rig over several machines](../../_site/src/content/docs/explanation/core-and-runners.md)). A restart of control drops the bus for about half a minute. On the lab, 2026-11-06 and 2026-11-07, one restart counted all three of a rig's runners away at once, and two restarts with drops of about 32 and 33 seconds rode through. Nothing was under way on the runners at either of the later two, so no work was lost, but the outcome is chance: where the checks fell. An operator therefore turns the judge off and waits for its job's verdict before every restart of control.
+
+1. **A check that fails while the core's own link to the bus is down does not count.** The runner may be fine: the core counts from its next check after its link is back.
+2. **A run under way on a runner across the drop goes on,** and its answer is taken once the link is back, where the run outlasts the drop, instead of failing as a runner away.
+3. **A test:** a bus that drops for 45 seconds while a judge's job and a lane's run are under way on runners; both end with their answers, and no runner counts as away.
+
+## Why
+
+Control's restart is routine, and each one should not cost a job's measurement or a lane's build, nor an hour of the judge held off to avoid that.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests.
+- [ ] Pages: A rig over several machines (how the core and its runners stay in touch, and control's restart), and the changelog.
+
+## Progress
+
+- 2026-11-07 05:38 UTC: Goal written from the lab's central log store, which the lab's infrastructure session read: the core's "a runner process stopped answering" lines for the three runners at 18:25:45 UTC on 2026-11-06, during a restart of control, and none at the restarts of 03:05 and 04:05 UTC on 2026-11-07.
+
+---
+
+Run with `/goal Complete docs/plan/goals/227-runners-ride-through-restart.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

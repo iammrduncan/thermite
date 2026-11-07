@@ -207,6 +207,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [224](goals/224-update-across-control-restart.goal) A rig's update that a control restart cuts off goes on, or says so · `PROPOSED`
 - [225](goals/225-drain-waits-for-advisors.goal) A drain waits for the supervisor's advisors too · `PROPOSED`
 - [226](goals/226-teacher-review-kept.goal) One long field of a teacher's recommendation never loses its review · `IN_PROGRESS`
+- [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `PROPOSED`
 
 **The owner's asks of 2026-11-03.**
 
