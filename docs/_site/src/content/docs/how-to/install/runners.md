@@ -94,7 +94,7 @@ On **Edit rig**, under **4 · Where it runs**, each runner is a row: its name, w
 
 ## A core on a machine without a GPU
 
-With `THERMITE_LOCAL_JUDGE=0` on the core's harness, the judge measures only on the runners, and its jobs wait until one of the judge's or the shared pool answers. The rig then measures on its runners' kind of target, which a campaign's kit must measure on, and reports it to control as its target, so **Start a run** and the **New campaign** page offer the rig to a kit of that kind; its runners must all be of one kind. Without it, the judge measures on the core's machine too, and its runners must be of the core's kind.
+With `THERMITE_LOCAL_JUDGE=0` on the core's harness, the judge measures only on the runners, and its jobs wait until one of the judge's or the shared pool answers. A lane that no runner serves then runs its `run_experiment` on the core without waiting for the judge's jobs, which share nothing with it there. The rig then measures on its runners' kind of target, which a campaign's kit must measure on, and reports it to control as its target, so **Start a run** and the **New campaign** page offer the rig to a kit of that kind; its runners must all be of one kind. Without it, the judge measures on the core's machine too, and its runners must be of the core's kind.
 
 ## See them work
 

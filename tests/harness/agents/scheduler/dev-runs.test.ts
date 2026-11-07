@@ -141,6 +141,12 @@ describe("agent scheduler", () => {
     )) as Result;
     assert.equal(shared.ran, false);
     assert.match(String(shared.reason), /judge kept the device busy/);
+    // A judge that measures on the runners alone shares no device here: no wait for its jobs.
+    const away = make({});
+    away.judgeHere = false;
+    const ranHere = (await away.run({ lane: "lane-1", command: "echo ran", cwd }, "t-d")) as Result;
+    assert.equal(ranHere.ran, true);
+    assert.match(String(ranHere.stdout), /ran/);
     const dedicated = make({ dedicated: true });
     const pending = dedicated.run({ lane: "lane-1", command: "sleep 0.2; echo ran", cwd }, "t-d");
     await new Promise((r) => setTimeout(r, 100));

@@ -46,6 +46,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Fixes
 
+- A lane that no runner serves, on a core whose judge measures on its runners alone, runs its `run_experiment` on the core at once: it waited while the judge had any job open, though they share no device, and on a busy run that was until its trial ended.
 - A hill climb's **Metrics** cards line up: the primary metric's card has a row of its own, and the lower priorities' cards an even row under it. Its headline gives the judge's gain, each champion against the one it replaced, as the champion card, the chart and the leaderboard do, where it gave the champion's value over the starting point's.
 - The runner checks' timer goes on when the ledger can't be read: the read is logged at warn, where its error escaped the timer.
 - A teacher's review is kept when one of its recommendations has a field past its length: the field is cut, and a direction cut so is dropped with why by the round's check of each rule. The whole review was refused, and the round had no portfolio from that teacher.

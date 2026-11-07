@@ -136,6 +136,7 @@ async function main(): Promise<void> {
     core: { type: driver.type, separated: runner.separated, judges: judging.length > 0 },
   });
   parts.devRuns.remote = hub.pools;
+  parts.devRuns.judgeHere = judging.length > 0;
   service.runnersNow = () => (hub.state().length ? hub.report() : undefined);
   const cards = new JudgeCards();
   const executors = createJudges(ctx, {

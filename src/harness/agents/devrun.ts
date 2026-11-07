@@ -61,6 +61,12 @@ export class DevRuns {
    * there, with its change carried, not on this machine.
    */
   remote: RemoteLanes | undefined;
+  /**
+   * Whether the judge measures on this machine too. When it measures on the runners alone
+   * (`THERMITE_LOCAL_JUDGE=0`), a dev run here shares no device with it and never waits for its
+   * jobs: its queue, never empty on a busy run, held a lane's run here until its trial ended.
+   */
+  judgeHere = true;
   /** Each lane's trial with runs on those runners: their workspaces go when it settles. */
   private readonly remoteTrial = new Map<string, string>();
   /** Which development cards are in use; one card in shared mode. */
@@ -354,7 +360,7 @@ export class DevRuns {
       // with maxWaitMs given, until that wait is over).
       const deadline =
         this.maxWaitMs !== undefined ? Date.now() + this.maxWaitMs : Number.POSITIVE_INFINITY;
-      while (!this.dedicated && this.judgeBusy()) {
+      while (!this.dedicated && this.judgeHere && this.judgeBusy()) {
         if (Date.now() > deadline)
           return { ran: false, reason: "the judge kept the device busy; try again later" };
         if (!this.trialOpen(trial)) return { ran: false, reason: "the trial has ended" };
