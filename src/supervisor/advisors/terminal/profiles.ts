@@ -40,6 +40,8 @@ export interface AdvisorServed {
   tools?: PastSearchServer | undefined;
   /** None for Claude Code (its token goes to it alone) and for OpenCode's own models. */
   proxy?: AdvisorModelProxy | undefined;
+  /** The program's own web search and fetch: a teacher's (goal 232). */
+  web?: boolean | undefined;
 }
 
 /** Claude Code's MCP configuration in the call's home, which only the call's user reads. */
@@ -112,9 +114,14 @@ function codexAdvisor(served: AdvisorServed) {
           {
             path: join(run.area, ...CODEX_HOME, "config.toml"),
             content: codexTerminalConfig(
-              codexAdvisorConfig(run.model, served.proxy?.root ?? "", servers, run.keptAt, {
-                notify: codexNotify(),
-              }),
+              codexAdvisorConfig(
+                run.model,
+                served.proxy?.root ?? "",
+                servers,
+                run.keptAt,
+                { notify: codexNotify() },
+                served.web,
+              ),
               at.cwd,
             ),
             mode: 0o600,

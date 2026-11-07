@@ -19,7 +19,7 @@ import { type AdvisorRuntime, advisorRoute } from "../config.ts";
 import { limitUntil } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
 import { callId, cliHarnessModel, noAnswer, parseAnswer } from "../runtimes/index.ts";
-import { serveAdvisorTools } from "../tools/index.ts";
+import { CLAUDE_WEB_TOOLS, serveAdvisorTools } from "../tools/index.ts";
 import type { AdvisorConsoles } from "./consoles.ts";
 import { type AdvisorProgramId, advisorProgram } from "./profiles.ts";
 import { serveAdvisorTurns } from "./turns.ts";
@@ -289,7 +289,7 @@ export async function runInTerminal<S extends z.ZodType>(
     });
     const root = t.root;
     const tally = await terminalCall(
-      advisorProgram(rt.runtime, { tools: served, proxy }),
+      advisorProgram(rt.runtime, { tools: served, proxy, web: tools?.web }),
       model,
       messageText(first),
       {
@@ -303,8 +303,9 @@ export async function runInTerminal<S extends z.ZodType>(
         role: id,
         link,
         signal: rt.timeout_s !== undefined ? AbortSignal.timeout(rt.timeout_s * 1000) : undefined,
-        // None of Claude Code's own tools: only the advisor's MCP tools.
-        tools: rt.runtime === "claude-code" ? "" : undefined,
+        // None of Claude Code's own tools but, for a teacher, its web search and fetch (goal 232).
+        tools:
+          rt.runtime === "claude-code" ? (tools?.web ? CLAUDE_WEB_TOOLS.join(",") : "") : undefined,
         compaction,
         usage: (u) => usage.push(u),
         // A subscription's windows, under its provider's name (goal 183).

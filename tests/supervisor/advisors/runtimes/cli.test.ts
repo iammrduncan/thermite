@@ -160,22 +160,45 @@ const args = process.argv.slice(2);
 const val = (f) => args[args.indexOf(f) + 1];
 const token = fs.readFileSync(Number(process.env.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR), "utf8");
 fs.readFileSync(0, "utf8");
+const at = args.indexOf("--allowedTools");
+const allowed = at < 0 ? [] : args.slice(at + 1).filter((a) => !a.startsWith("--"));
 console.log(JSON.stringify({ type: "result", result: JSON.stringify({ tools: val("--tools"),
-  sources: val("--setting-sources"), token: token === "sk-ant-oat01-test" }) }));
+  sources: val("--setting-sources"), token: token === "sk-ant-oat01-test", allowed }) }));
 `,
     );
     chmodSync(bin, 0o755);
     const before = process.env.THERMITE_CLAUDE_BIN;
     process.env.THERMITE_CLAUDE_BIN = bin;
     try {
+      const schema = z.object({
+        tools: z.string(),
+        sources: z.string(),
+        token: z.boolean(),
+        allowed: z.array(z.string()),
+      });
       const r = await runAdvisor({
         runtime: { name: "a", runtime: "claude-code", model: "m", token: "sk-ant-oat01-test" },
         prompt: testPrompt("You audit.", "Audit this."),
-        schema: z.object({ tools: z.string(), sources: z.string(), token: z.boolean() }),
+        schema,
         answerSchema: Type.Object({}),
       });
       assert.equal(r.error, undefined, r.error);
-      assert.deepEqual(r.output, { tools: "", sources: "", token: true });
+      assert.deepEqual(r.output, { tools: "", sources: "", token: true, allowed: [] });
+      // A teacher (goal 232): Claude Code's own web search and fetch, its only tools of its own.
+      const teacher = await runAdvisor({
+        runtime: { name: "t", runtime: "claude-code", model: "m", token: "sk-ant-oat01-test" },
+        prompt: testPrompt("You teach.", "Review this."),
+        schema,
+        answerSchema: Type.Object({}),
+        tools: { web: true },
+      });
+      assert.equal(teacher.error, undefined, teacher.error);
+      assert.deepEqual(teacher.output, {
+        tools: "WebSearch,WebFetch",
+        sources: "",
+        token: true,
+        allowed: ["WebSearch", "WebFetch"],
+      });
     } finally {
       if (before === undefined) delete process.env.THERMITE_CLAUDE_BIN;
       else process.env.THERMITE_CLAUDE_BIN = before;

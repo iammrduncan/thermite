@@ -74,6 +74,12 @@ export interface PastSearchServer {
 }
 
 /**
+ * Claude Code's own web tools, which the teachers get (goal 232): its search and its fetch. No
+ * other advisor, and no other tool of its own.
+ */
+export const CLAUDE_WEB_TOOLS = ["WebSearch", "WebFetch"] as const;
+
+/**
  * An advisor's MCP servers for one call of Claude Code (goal 068): each server the run's kit
  * gives the advisors, as the supervisor serves it on localhost (each call goes through the
  * supervisor, which holds the sign-in), and the past-research search when there is one.
@@ -121,6 +127,8 @@ export async function serveAdvisorTools(o: {
   research?: AdvisorResearch | undefined;
   /** The final writer's checks of its paper (goal 112), on the same server. */
   paper?: AdvisorPaper | undefined;
+  /** Claude Code's own web tools allowed too (goal 232): a teacher's. */
+  web?: boolean | undefined;
   /** Told of each tool call the server answers (goal 188): the advisor's work on Live. */
   said?: ((tool: string, args: unknown) => void) | undefined;
 }): Promise<PastSearchServer> {
@@ -217,6 +225,7 @@ export async function serveAdvisorTools(o: {
       ...(paper ? PAPER_TOOL_NAMES.map((n) => `mcp__${PAST_MCP_SERVER}__${n}`) : []),
       // A server's name allows each of its tools.
       ...(mcp?.servers ?? []).map((s) => `mcp__${s}`),
+      ...(o.web ? CLAUDE_WEB_TOOLS : []),
     ],
     listed: (ms) =>
       listedAt !== undefined

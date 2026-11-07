@@ -71,6 +71,8 @@ export function codexConfig(
   mcp?: Pick<McpAccess, "apiUrl" | "servers" | "kb"> | undefined,
   keptAt?: KeptAt | undefined,
   notify?: readonly string[] | undefined,
+  /** Codex's own web search, live: the teachers' (goal 232); none for anyone else. */
+  web?: boolean | undefined,
 ): string {
   const effort = m.reasoning === "off" ? "none" : m.reasoning;
   const servers = servedNames(mcp).flatMap((s) => [
@@ -93,7 +95,7 @@ export function codexConfig(
       : []),
     ...(keptAt ? [`compact_prompt = ${tomlString(codexCompactPrompt(keptAt))}`] : []),
     ...(notify ? [`notify = [${notify.map(tomlString).join(", ")}]`] : []),
-    'web_search = "disabled"',
+    web ? 'web_search = "live"' : 'web_search = "disabled"',
     "check_for_update_on_startup = false",
     // No AGENTS.md of the project's (goal 166): the prompt is what the role's definition rendered.
     "project_doc_max_bytes = 0",

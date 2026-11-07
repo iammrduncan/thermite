@@ -156,6 +156,12 @@ export interface AdvisorTools {
   brief?: () => Promise<unknown>;
   fetchUrl?: (url: string) => Promise<unknown>;
   /**
+   * The program's own web search and fetch (goal 232): Claude Code's WebSearch and WebFetch, and
+   * Codex's web search. The teachers' alone, by the owner's decision (2026-11-07), beside their
+   * knowledge base; Pi and OpenCode have none of their own.
+   */
+  web?: boolean | undefined;
+  /**
    * Thermite's knowledge base (goal 175): kb_search and kb_read, asked of control, and kb_write
    * when the run's campaign lets the advisor's role write. Pi gets them as tools; Claude Code,
    * OpenCode and Codex over MCP on localhost; a command-line agent, not at all.

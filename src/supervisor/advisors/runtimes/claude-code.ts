@@ -19,7 +19,7 @@ import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorResult } from "../call.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
 import { type AdvisorLimit, limitUntil } from "../limit.ts";
-import { serveAdvisorTools } from "../tools/index.ts";
+import { CLAUDE_WEB_TOOLS, serveAdvisorTools } from "../tools/index.ts";
 import { callId, collectCompactions, lastJsonObject, runCli } from "./cli.ts";
 
 /**
@@ -35,7 +35,7 @@ export async function runClaudeCode<S extends z.ZodType>(
   // only those servers and only their tools allowed.
   const t = input.tools;
   const past =
-    t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper
+    t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper || t?.web
       ? await serveAdvisorTools({
           kb: t.kb,
           mcp: t.mcp,
@@ -43,6 +43,7 @@ export async function runClaudeCode<S extends z.ZodType>(
           research: t.research,
           paper: t.paper,
           said: t.said,
+          web: t.web,
         })
       : undefined;
   // Before each of Claude Code's own compactions, its PreCompact hook copies the conversation
@@ -84,8 +85,9 @@ export async function runClaudeCode<S extends z.ZodType>(
           "json",
           "--model",
           rt.model,
+          // None of its own tools but, for a teacher, its web search and fetch (goal 232).
           "--tools",
-          "",
+          t?.web ? CLAUDE_WEB_TOOLS.join(",") : "",
           "--setting-sources",
           "",
           "--strict-mcp-config",

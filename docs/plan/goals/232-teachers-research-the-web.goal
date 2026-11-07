@@ -1,0 +1,46 @@
+---
+id: "232"
+title: "Teachers research the web with their program's own search and fetch"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: ["166"]
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 232 · Teachers research the web with their program's own search and fetch
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, issue 56 (2026-11-04): "Teachers are supposed to do independent research, but in the teacher logs I'm watching on v0.1.2 I'm seeing no web calls, no research happening." And on 2026-11-07: "claude code and codex provide their own web search and fetch tooling, those should be enabled for teachers... plain and simple..."
+
+The teachers' instructions tell them to research outside the run (papers, upstream code, issues), but no tool let them. Codex ran with `web_search = "disabled"` and its standalone search off; Claude Code ran with `--tools ""`, none of its own tools; OpenCode denied `web`; and Thermite's archived fetch (`fetch_url`) reached Pi teachers alone, and only for the sites `fetch_domains` lists, none by default. On the lab, 2026-11-07, one teacher's 947 tool calls in a day read code, the knowledge base and the pages the workers had fetched: none reached the web.
+
+1. **Claude Code teachers** get its WebSearch and WebFetch: `--tools "WebSearch,WebFetch"` and both in `--allowedTools`, headless and in their own terminal. No other tool of Claude Code's own.
+2. **Codex teachers** get its web search: `web_search = "live"`, and `standalone_web_search` left on, headless and in their own terminal. Every other tool feature stays off.
+3. **The teachers alone:** the auditor, the review panel, the merged by model, the synthesizer and the final writer keep none. Pi and OpenCode teachers are as before: Pi's `fetch_url` for the listed sites.
+4. **Tests:** a teacher's Claude Code command line and a teacher's Codex configuration have the web tools; another advisor's do not.
+
+## Why
+
+The teachers bring a run its new opportunities. Without outside sources they rework what the run already holds; with them they can bring a paper's method, an upstream fix or a known issue to the queue.
+
+## Done when
+
+- [ ] Items 1 to 4.
+- [ ] Pages: the advisors file (Claude Code and Codex for a teacher), Set up the advisors, How it fits together, the changelog.
+- [ ] On the lab, a teacher's round shows web searches or fetches on Live, and a citation of a URL in its portfolio.
+
+## Decisions
+
+- 2026-11-07, the owner: "claude code and codex provide their own web search and fetch tooling, those should be enabled for teachers... plain and simple...". Thermite's own open fetch (`fetch_domains` `"*"`) still keeps the knowledge base away from that call; the programs' own web tools sit beside the knowledge base by this decision ([decisions](../decisions.md#research-and-judging)).
+
+## Progress
+
+- 2026-11-07 20:08 UTC: built. `web` on an advisor's tools (`supervisor/advisors/call.ts`), set for the teachers alone (`supervisor/advisors/pass/teachers.ts`). Claude Code: `--tools` and `--allowedTools` (`supervisor/advisors/runtimes/claude-code.ts`, `supervisor/advisors/tools/mcp.ts`, `supervisor/advisors/terminal/call.ts`). Codex: `web_search = "live"` and its standalone search not turned off (`agents/programs/codex/index.ts`, `supervisor/advisors/cli.ts`, `supervisor/advisors/terminal/profiles.ts`, `supervisor/advisors/runtimes/opencode-codex.ts`). Tests: `tests/supervisor/advisors/runtimes/cli.test.ts`, `tests/supervisor/advisors/terminal/profiles.test.ts`. The test files have not run yet: they run on the lab's VM.
+
+---
+
+Run with `/goal Complete docs/plan/goals/232-teachers-research-the-web.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

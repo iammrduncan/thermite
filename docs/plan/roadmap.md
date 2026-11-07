@@ -212,6 +212,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [229](goals/229-lanes-runner-pool.goal) A runner pool shared by the lanes, never the judge · `IN_PROGRESS`
 - [230](goals/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `IN_PROGRESS`
 - [231](goals/231-runner-utilization.goal) How busy each runner is: its share of time with the judge, each lane, idle and away · `IN_PROGRESS`
+- [232](goals/232-teachers-research-the-web.goal) Teachers research the web with their program's own search and fetch · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-03.**
 

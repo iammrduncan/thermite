@@ -134,6 +134,15 @@ test("Codex: its read-only sandbox, no tool but MCP's, its hooks on, the model t
   assert.ok(!config.includes("made-up-mcp-token") && !config.includes("proxy.made-up"));
   const resumed = p.terminal.start(run, { ...at, resume: true, session: "thread-1" });
   assert.deepEqual([resumed.args[0], resumed.args.at(-1)], ["resume", "thread-1"]);
+  // No web search but a teacher's (goal 232).
+  assert.match(config, /^web_search = "disabled"$/m);
+  assert.match(config, /^standalone_web_search = false$/m);
+  const teacher =
+    advisorProgram("codex", { ...served, web: true }).terminal.start(run, at).seeds[0]?.content ??
+    "";
+  assert.match(teacher, /^web_search = "live"$/m);
+  assert.doesNotMatch(teacher, /^standalone_web_search = false$/m);
+  assert.match(teacher, /^shell_tool = false$/m);
 });
 
 test("OpenCode: every action denied but the advisor's MCP tools, as its own agent, with Thermite's plugin", () => {

@@ -157,9 +157,11 @@ export async function runCliHarness<S extends z.ZodType>(
           }
           const dir = join(home, ".codex");
           mkdirSync(dir, { recursive: true, mode: 0o700 });
-          writeFileSync(join(dir, "config.toml"), codexAdvisorConfig(model, root, servers, at), {
-            mode: 0o600,
-          });
+          writeFileSync(
+            join(dir, "config.toml"),
+            codexAdvisorConfig(model, root, servers, at, undefined, t?.web),
+            { mode: 0o600 },
+          );
           return { CODEX_HOME: dir };
         },
         // Each compaction the program made, kept with the round's records (goal 070).

@@ -222,6 +222,8 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             // an open fetch, so private records and the open web never meet in one agent.
             ...(openFetch ? {} : { kb: await kbFor(inst.id, "teachers") }),
             brief: async () => closed(await briefOf()),
+            // Their program's own web search and fetch (goal 232): research outside the run.
+            web: true,
           },
         });
         s.teacher_runs++;

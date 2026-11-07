@@ -144,7 +144,8 @@ export const CODEX_ADVISOR_OFF = [
 /**
  * The Codex CLI's configuration for one advisor call ($CODEX_HOME/config.toml): the workers' own
  * (one provider, the proxy, over the Responses API; no web search, history, analytics or update
- * checks), with the read-only sandbox and approvals never asked, every tool feature off, no
+ * checks; a teacher's with Codex's own web search, `web`), with the read-only sandbox and
+ * approvals never asked, every tool feature off, no
  * questions, no skills, and each of the call's MCP servers, its token from THERMITE_MCP_AUTH and
  * its tools approved without asking (no one answers a question in a headless call).
  */
@@ -159,13 +160,17 @@ export function codexAdvisorConfig(
    * messages inside its turn, and its notify names Thermite's hook program too.
    */
   terminal?: { notify: readonly string[] } | undefined,
+  /** Codex's own web search, live, and its standalone search: the teachers' (goal 232). */
+  web?: boolean | undefined,
 ): string {
-  const off = terminal ? CODEX_ADVISOR_OFF.filter((f) => f !== "hooks") : CODEX_ADVISOR_OFF;
+  const off = CODEX_ADVISOR_OFF.filter(
+    (f) => !(terminal && f === "hooks") && !(web && f === "standalone_web_search"),
+  );
   return [
     // Top-level keys come before the tables the workers' configuration ends with.
     'sandbox_mode = "read-only"',
     'approval_policy = "never"',
-    codexConfig(m, proxyRoot, undefined, keptAt, terminal?.notify),
+    codexConfig(m, proxyRoot, undefined, keptAt, terminal?.notify, web),
     "[features]",
     ...off.map((f) => `${f} = false`),
     "",

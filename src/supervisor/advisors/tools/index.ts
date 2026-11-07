@@ -15,6 +15,7 @@ export {
 export {
   type AdvisorKb,
   type AdvisorServers,
+  CLAUDE_WEB_TOOLS,
   type PastSearchServer,
   serveAdvisorTools,
 } from "./mcp.ts";
