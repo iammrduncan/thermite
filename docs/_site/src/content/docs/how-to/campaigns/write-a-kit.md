@@ -65,7 +65,7 @@ The judge builds each change in a fresh copy of its commit, with no `.git` folde
 - `build.outputs` lists every result, relative to the source tree. The judge keeps exactly these, read-only, and throws the rest away.
 - Every output must be a plain file or folder: links are refused, at most 20,000 entries, 32 levels deep. Versioned shared libraries are the usual trap, because `libfoo.so` is a link: with CMake, set `-DCMAKE_PLATFORM_NO_VERSIONED_SONAME=ON`, or replace each link with a copy at the end of the build.
 - The judge moves the build, so binaries that load its own libraries need an `$ORIGIN` run path, for example CMake's `-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON`.
-- Size the limits for a cold build: `timeout_s` (600 seconds unless set), `rss_mib` (4096) and `disk_mib` (4096). The disk limit covers the source tree too, and more than 50,000 files there also counts as over it.
+- Size the limits for a cold build: `timeout_s` (600 seconds unless set), `rss_mib` (4096) and `disk_mib` (4096). The disk limit covers the source tree too. No number of files counts as over it, but a tree more than 128 folders deep, or one too large to count in 5 minutes, does.
 
 A build that fails, or lacks an output, makes the change `invalid`. A build stopped at a limit makes it `crash_candidate`.
 
@@ -111,7 +111,7 @@ These are a `kit.json`'s placeholders. The **New campaign** page has a shorter s
 - Write results only to `{out}`, as plain files: at most 10,000 entries.
 - Repeat the work until it takes much longer than starting up, as the smoke kit's `reps` does.
 - Pin what varies: pass thread counts sized to the rig's CPU share, turn off automatic tuning, and set seeds.
-- Size the limits: `timeout_s` (300 seconds), `rss_mib` (1024) and `disk_mib` (256), with the same 50,000-file rule as the build.
+- Size the limits: `timeout_s` (300 seconds), `rss_mib` (1024) and `disk_mib` (256), with the same rule for deep or very large trees as the build.
 - Size `timeout_s` for the ordinary cells. A cell that needs far longer, such as a slow diagnostic, takes its own limit: write it as `{"params": {…}, "timeout_s": 1800}` in `cells`. The [kit manifest reference](../../reference/kit-manifest.md#cells) shows both forms.
 
 A run stopped at a limit, or that exits with an error, makes the change `crash_candidate`.

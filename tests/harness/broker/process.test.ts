@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { DiskCount } from "../../../src/harness/broker/disk-count.ts";
 import {
-  diskUsage,
   killScope,
   listProcesses,
   members,
@@ -200,16 +200,32 @@ describe("supervised processes", () => {
     assert.ok(!alive(pgidOf(lane)), "the trial's end takes it");
   });
 
-  test("the disk walk is capped in depth and entries", () => {
+  test("the workspace is counted a step at a time, with no cap on its files (goal 219)", () => {
     const root = scratch();
-    let p = root;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 30; i++) writeFileSync(join(root, `f${i}`), "x");
+    // A few entries a step: no step reads more, and no number of files is a breach.
+    const c = new DiskCount(root);
+    let d = c.step(10);
+    assert.deepEqual([d.entries, d.complete, d.breach], [10, false, undefined]);
+    while (!d.complete) d = c.step(10);
+    assert.equal(d.entries, 31, "the folder and its 30 files");
+    assert.equal(d.breach, undefined);
+    // The next step starts a new count.
+    assert.equal(c.step(5).entries, 5);
+    // Deeper than 128 folders: a breach.
+    let p = scratch();
+    const deep = p;
+    for (let i = 0; i < 130; i++) {
       p = join(p, "d");
       mkdirSync(p);
     }
-    assert.equal(diskUsage(root, 1000, 16).truncated, true);
-    assert.equal(diskUsage(root, 10, 128).truncated, true);
-    assert.equal(diskUsage(root).truncated, false);
+    assert.equal(new DiskCount(deep).step(1000).breach, "deep");
+    // A count not done in its guard's time: a breach.
+    let now = 0;
+    const slow = new DiskCount(root, 60_000, () => now);
+    slow.step(1);
+    now = 61_000;
+    assert.equal(slow.step(1).breach, "slow");
   });
 
   test("the local runner refuses paths outside scratch, including through symlinks", async () => {

@@ -395,7 +395,7 @@
     "src/harness/broker/gpu.ts": ["GpuLists"],
     "src/harness/broker/lane-caches.ts": ["ASIDE"],
     "src/harness/broker/one-container.ts": ["ENROLLED_SETTINGS"],
-    "src/harness/broker/process.ts": ["KilledFor", "procArgv0", "DiskUsage"],
+    "src/harness/broker/process.ts": ["KilledFor", "procArgv0"],
     "src/harness/broker/seal.ts": ["SEAL_KIND", "SealKind"],
     "src/harness/broker/server.ts": ["BrokerServerOptions"],
     "src/harness/broker/snapshot/folder.ts": ["FolderLook"],

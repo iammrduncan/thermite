@@ -239,7 +239,7 @@ The [kit manifest](kit-manifest.md) sets these; the defaults apply when it does 
 
 A cell may set its own run time, `timeout_s` in its entry in `cells`, which replaces the run's for that cell's runs only ([Cells](kit-manifest.md#cells)). Each time limit, a cell's own too, is at most 86400 s (a day), the longest the judge runs anything; a longer one is refused: `a time limit is at most 86400 s (24 hours)`.
 
-Memory is the sum over all the processes the build or run started, sampled every 100 ms. Disk is the working directory, sampled every 500 ms; more than 50,000 files and folders, or more than 128 levels, also counts as over the disk limit. Only the last 64 KiB of output is kept. Tasks are the processes and threads the build's or run's user may have at once (`RLIMIT_NPROC`); the kit does not set them.
+Memory is the sum over all the processes the build or run started, sampled every 100 ms. Disk is the working directory, counted a step at a time: every 500 ms, at most 20,000 more of its files and folders, so the bytes counted so far are over the limit as soon as the tree is. No number of files counts as over it, but a tree more than 128 folders deep, or one whose count has not ended in 5 minutes, does. Only the last 64 KiB of output is kept. Tasks are the processes and threads the build's or run's user may have at once (`RLIMIT_NPROC`); the kit does not set them.
 
 ### Lanes and agents
 

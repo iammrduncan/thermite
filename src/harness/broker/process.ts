@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_pr
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Stream } from "node:stream";
+import { COUNT_STEP, DiskCount } from "./disk-count.ts";
 
 /**
  * Supervised child processes: wall time measured here (outside the child), memory and disk
@@ -47,7 +48,7 @@ export interface SupervisedRun {
    */
   spareRoot?: boolean | undefined;
   /** Kill when this directory grows beyond this many bytes or entries (inodes) on disk. */
-  disk?: { path: string; limitBytes: number; maxEntries?: number | undefined } | undefined;
+  disk?: { path: string; limitBytes: number } | undefined;
   /** RLIMIT_NPROC for the role (only with uid; needs prlimit). */
   nproc?: number | undefined;
   /** Written to the child's stdin, then closed. */
@@ -158,49 +159,6 @@ export function listProcesses(): Proc[] {
       gids: [],
       rssBytes: (rss as number) * 1024,
     }));
-}
-
-export interface DiskUsage {
-  bytes: number;
-  /** Files, directories and links counted (inodes). */
-  entries: number;
-  /** True when the walk stopped at its depth or entry cap: treat as over any budget. */
-  truncated: boolean;
-}
-
-/**
- * What a directory tree occupies on disk. Symlinks are not followed. The walk is capped in
- * depth and entries, so a hostile tree (very deep, or millions of empty files) cannot stall it.
- */
-export function diskUsage(path: string, maxEntries = 200_000, maxDepth = 128): DiskUsage {
-  let bytes = 0;
-  let entries = 0;
-  let truncated = false;
-  const stack: [string, number][] = [[path, 0]];
-  while (stack.length) {
-    const [p, depth] = stack.pop() as [string, number];
-    let st: ReturnType<typeof lstatSync>;
-    try {
-      st = lstatSync(p);
-    } catch {
-      continue;
-    }
-    entries++;
-    bytes += Number(st.blocks ?? 0) * 512 || Number(st.size);
-    if (entries >= maxEntries) return { bytes, entries, truncated: true };
-    if (st.isDirectory()) {
-      if (depth >= maxDepth) {
-        truncated = true;
-        continue;
-      }
-      try {
-        for (const e of readdirSync(p)) stack.push([join(p, e), depth + 1]);
-      } catch {
-        // unreadable or vanished directory: counted as its own size only
-      }
-    }
-  }
-  return { bytes, entries, truncated };
 }
 
 /** A run's processes: a user's (holding a group, if one is given), or a process group's. */
@@ -422,12 +380,14 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
       if (why === "timeout" && spec.leaveBackground) killScope({ pgid });
       else killAll();
     };
-    const sampleDisk = () => {
-      if (!spec.disk) return;
-      const d = diskUsage(spec.disk.path, spec.disk.maxEntries ?? 50_000);
+    // The workspace counted a step at a time (goal 219): no number of files ends the run.
+    const count = spec.disk ? new DiskCount(spec.disk.path) : undefined;
+    const sampleDisk = (entries?: number) => {
+      if (!spec.disk || !count) return;
+      const d = count.step(entries);
       peakDisk = Math.max(peakDisk, d.bytes);
       peakEntries = Math.max(peakEntries, d.entries);
-      if (d.bytes > spec.disk.limitBytes || d.truncated) kill("disk");
+      if (d.bytes > spec.disk.limitBytes || d.breach) kill("disk");
     };
 
     const timer =
@@ -502,9 +462,9 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
         killAll();
         swept = spec.uid !== undefined ? sweepRole(spec.uid) : [];
       }
-      sampleDisk();
-      // A breach between two samples still counts, even if the child finished first (unless
-      // the agent was spared: its commands' kills are counted instead).
+      // A last, larger step of the count: a breach between two samples still counts, even if the
+      // child finished first (unless the agent was spared: its commands' kills are counted instead).
+      sampleDisk(10 * COUNT_STEP);
       if (killedFor === null && spec.disk && peakDisk > spec.disk.limitBytes) killedFor = "disk";
       if (
         killedFor === null &&
@@ -581,6 +541,7 @@ function lingerUnder(scope: Scope, spec: Pick<SupervisedRun, "rssLimitBytes" | "
   const key = scopeKey(scope) ?? `pgid:${scope.pgid}`;
   clearInterval(lingering.get(key));
   let ticks = 0;
+  const count = spec.disk ? new DiskCount(spec.disk.path) : undefined;
   const stop = (why?: "memory" | "disk") => {
     clearInterval(t);
     lingering.delete(key);
@@ -600,9 +561,9 @@ function lingerUnder(scope: Scope, spec: Pick<SupervisedRun, "rssLimitBytes" | "
     if (!procs.length) return stop();
     const rss = procs.reduce((s, p) => s + p.rssBytes, 0);
     if (spec.rssLimitBytes !== undefined && rss > spec.rssLimitBytes) return stop("memory");
-    if (spec.disk && ticks % 5 === 0) {
-      const d = diskUsage(spec.disk.path, spec.disk.maxEntries ?? 50_000);
-      if (d.bytes > spec.disk.limitBytes || d.truncated) return stop("disk");
+    if (spec.disk && count && ticks % 5 === 0) {
+      const d = count.step();
+      if (d.bytes > spec.disk.limitBytes || d.breach) return stop("disk");
     }
   }, 1000);
   t.unref();
