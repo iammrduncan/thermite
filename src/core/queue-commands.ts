@@ -89,6 +89,8 @@ export const QUEUE_PAYLOADS = {
     run: RunId,
     limits: RunLaneLimits,
     reason: z.string().trim().min(1).max(2000),
+    /** True: what it would set and reach, with nothing changed. */
+    preview: z.boolean().optional(),
   }),
   /**
    * A tried experiment back to up next (goal 221), such as one that a fault of Thermite's cut
@@ -99,5 +101,7 @@ export const QUEUE_PAYLOADS = {
     id: ExperimentId,
     why: z.string().trim().min(1).max(2000),
     position: QueuePosition.default("top"),
+    /** True: what it would do, with nothing changed. */
+    preview: z.boolean().optional(),
   }),
 };

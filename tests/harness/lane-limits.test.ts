@@ -19,6 +19,18 @@ describe("a running run's lane limits", () => {
     const before = limitsInForce(ledger, RUN, contract);
     assert.equal(before.devRunRssMib, 4096, "the default, which the contract does not set");
     const why = "every lane's engine build was killed at 4 GiB";
+    // Its preview: what it would set, with nothing changed.
+    const preview = await s.command("lane_limits", {
+      run: RUN,
+      limits: { dev_run_rss_mib: 16_384 },
+      reason: why,
+      preview: true,
+    });
+    assert.match(
+      String(preview.result.words),
+      /would be dev_run_rss_mib 16384, from the next lane command/,
+    );
+    assert.equal(limitsInForce(ledger, RUN, contract).devRunRssMib, 4096, "nothing changed");
     const set = await s.command("lane_limits", {
       run: RUN,
       limits: { dev_run_rss_mib: 16_384, workspace_mib: 8192 },

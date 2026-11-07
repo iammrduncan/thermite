@@ -375,6 +375,7 @@ Changes a running run's lane limits in place: the memory and time of a lane's co
 | `run` | lowercase id | The run |
 | `limits` | an object of one or more of `run_timeout_s`, `run_rss_mib`, `workspace_mib`, `dev_run_timeout_s`, `dev_run_rss_mib` and `processes` | Each a whole number within the contract's own bounds ([Limits and pacing](limits-and-pacing.md#lanes-and-agents)), or `null` to go back to the contract's |
 | `reason` | text, 1 to 2000 characters, trimmed | Why |
+| `preview` | `true`, or left out | True: it changes nothing, and its result says what it would set and which lanes at work it reaches, in `words` |
 
 A limit left out stays as it is. The harness records `lane_limits_set`, `{limits, changed, reason}`: the owner's limits in force now over the contract's, what this change set, and why. Result: `{"run", "limits"}`. Control refuses before it signs a value past its bound, naming the limit and the bound, and a change with no limit in it: `give at least one of run_timeout_s, run_rss_mib, workspace_mib, dev_run_timeout_s, dev_run_rss_mib and processes`. The run page's **History** says, for example, "You changed the run's lane limits: dev_run_rss_mib 16384, from the next lane command and development run: every lane's build was killed at 4 GiB." Over MCP the owner's and the operator's `issue_command` sends it, and over REST `POST /v1/commands`.
 
@@ -568,6 +569,7 @@ Sends a tried experiment back to up next for another try, such as one that a fau
 | `id` | experiment id | required | The experiment, one that is done |
 | `why` | text, 1 to 2000 characters, trimmed | required | Why it goes back |
 | `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | the top | Where it goes |
+| `preview` | `true`, or left out | left out | True: it changes nothing, and its result says, in `words`, which try it would be and where it would go, as `"…" would go back to the top of up next for try 2 of 2, with try 1 on lane-2 (error) kept.`; it is refused as the send-back would be |
 
 The experiment gets one more try when its tries were used, and its next try goes to a lane that has not tried it while one has not. The harness refuses an experiment that is not done: `experiment <id> is <state>: only a tried experiment goes back to up next`; one whose change the judge has not settled: `experiment <id>'s change <attempt> is still with the judge (<lifecycle>): send it back once it has its verdict`; and a research run's task: `a research run's task gets one try: add a new task for what it should find`. Result as for `queue_add`. Event: `experiment_retried`, `{id, try, tries, lane, trial, attempt?, result, verdict?, cause?, position, by, why}`, as for a try that ended without a win, with `by` and `why`.
 

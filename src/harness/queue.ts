@@ -9,7 +9,7 @@ import {
   type Ledger,
   LedgerError,
 } from "./ledger/index.ts";
-import { ownersTry, settledTries } from "./queue-tries.ts";
+import { ownersTry, retryPreview, settledTries } from "./queue-tries.ts";
 
 /**
  * Each run's experiment queue (goal 064): the experiments still to try, in order, and the log
@@ -713,6 +713,16 @@ export class ExperimentQueue {
       { ...t, n },
     );
     return this.require(x.run, x.id);
+  }
+
+  /** What retryTried would do, with nothing changed (goal 221). */
+  retryPreview(run: string, id: string, position: QueuePosition = "top") {
+    return retryPreview(
+      this.ledger,
+      this.require(run, id),
+      this.earlier(id).length + 1,
+      String(position),
+    );
   }
 
   /**

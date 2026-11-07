@@ -20,7 +20,7 @@ On the lab, 2026-11-06, a run had two experiments that Thermite's own limits cut
 
 1. **An experiment sent back to up next.** The owner or an operator sends a tried experiment (done, with or without an attempt, or ended in error) back to up next, at a position, with why: one more try when its tries are used, its earlier tries kept and shown, and its lane rule (goal 214) as before. An experiment in progress, queued or dropped is refused in words. The run's history records it (`experiment_returned`, by whom and why), the Experiments tab has **Send back to up next** on a tried experiment, and `issue_command` takes it over MCP and REST.
 2. **A running run's lane limits changed.** The owner sets a running run's lane limits (the memory and time of a lane's command and of a development run, the workspace's size, a lane user's processes) within the contract's bounds, with a signed command of the owner's: in force from the next lane command and development run, recorded in the run's history with why, and in the lanes' next briefs. A limit set to null goes back to the contract's.
-3. **The repairs say what they reach before they happen,** as `invalidate_evidence` does: which experiments go back, which trials a stop or a drain ends, and which lanes a new limit reaches.
+3. **The repairs say what they reach before they happen,** as `invalidate_evidence` does: which try an experiment sent back would be and where it would go, and the limits a change would set and the lanes at work it reaches. A drain and `stop_trial` say already: the rig's report lists what a drain waits for, and a stop names its one trial.
 
 ## Why
 
@@ -39,6 +39,7 @@ A run that many people follow, or that has run for days, can't be thrown away fo
 ## Progress
 
 - 2026-11-07 00:36 UTC: Goal written from the owner's rule and the lab run's queue.
+- 2026-11-07 02:39 UTC: item 3 built. `queue_retry` and `lane_limits` take `preview: true`: nothing changes, and the result's `words` say what would (`retryPreview` in `harness/queue-tries.ts`, `limitsPreview` in `harness/lane-limits.ts`). Tests: `tests/harness/queue/tries.test.ts`, `tests/harness/lane-limits.test.ts`. Pages: Signed commands, MCP tools. The test files have not run yet. On the lab: control and sparks-rig take items 1 and 2 at the window (7462712f), item 3 at a later roll.
 
 ---
 

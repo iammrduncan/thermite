@@ -44,3 +44,22 @@ export function withOwnersLimits(
     ...(o.processes !== undefined ? { processes: o.processes } : {}),
   };
 }
+
+/**
+ * What a change of a running run's lane limits would set and reach (goal 221), with nothing
+ * changed: the limits in force after it, and the lanes at work now, whose next lane command and
+ * development run take them.
+ */
+export function limitsPreview(ledger: Ledger, run: string, limits: Record<string, number>) {
+  const atWork = ledger.trials
+    .open()
+    .filter((t) => t.run === run)
+    .map((t) => `${t.lane} (${t.id})`);
+  const set = Object.entries(limits).map(([k, v]) => `${k} ${v}`);
+  return {
+    run,
+    preview: true,
+    limits,
+    words: `${set.length ? `The owner's limits would be ${set.join(", ")}` : "The contract's limits would apply again"}, from the next lane command and development run. ${atWork.length ? `Lanes at work now: ${atWork.join(", ")}; their next commands take them.` : "No lane is at work now."} Nothing changed.`,
+  };
+}

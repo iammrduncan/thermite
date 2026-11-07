@@ -206,6 +206,14 @@ describe("an experiment's tries", () => {
     q.finish("t-1", { result: "error", cause: "stopped by the lane's disk limit" }, "harness");
     assert.equal(q.get(x.id)?.state, "done");
     const why = "the walk's 50,000-file bound ended its trial, since removed";
+    // Its preview says what it would do, and changes nothing.
+    const preview = await s.command("queue_retry", { run: RUN, id: x.id, why, preview: true });
+    assert.ok(preview.accepted, JSON.stringify(preview));
+    assert.match(
+      String(preview.result.words),
+      /would go back to the top of up next for try 2 of 2, with try 1 on lane-2 \(error\) kept/,
+    );
+    assert.equal(q.get(x.id)?.state, "done", "nothing changed");
     const sent = await s.command("queue_retry", { run: RUN, id: x.id, why });
     assert.ok(sent.accepted, JSON.stringify(sent));
     assert.equal(sent.result.state, "queued");

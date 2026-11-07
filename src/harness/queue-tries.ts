@@ -92,3 +92,19 @@ export function ownersTry(
     tries: Math.max(x.tries ?? 1, used + 1),
   };
 }
+
+/**
+ * What the owner's send-back would do (goal 221), with nothing changed: the try it would be, and
+ * where it goes; refused in words as the send-back is.
+ */
+export function retryPreview(ledger: Ledger, x: Experiment, used: number, position: string) {
+  const { t, tries } = ownersTry(ledger, x, used);
+  return {
+    experiment: x.id,
+    preview: true,
+    try: used + 1,
+    tries,
+    position,
+    words: `"${x.title.slice(0, 120)}" would go back to ${position === "top" ? "the top of up next" : position === "end" ? "the end of up next" : `place ${position} of up next`} for try ${used + 1} of ${tries}, with try ${used}${t.lane ? ` on ${t.lane}` : ""} (${t.result}${t.verdict ? `, ${t.verdict}` : ""}) kept. Its next try goes to a lane that has not tried it while one has not. Nothing changed.`,
+  };
+}

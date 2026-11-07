@@ -13,7 +13,7 @@ import { RIG_LOG_LEVEL_LASTS } from "../../core/log-levels.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
 import { endWait } from "../agents/index.ts";
 import { Conclusions } from "../conclusions.ts";
-import { mergedLimits, ownersLimits } from "../lane-limits.ts";
+import { limitsPreview, mergedLimits, ownersLimits } from "../lane-limits.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { receivePropagation } from "../propagation.ts";
 import type { Experiment } from "../queue.ts";
@@ -313,6 +313,8 @@ export class Commands {
         const p = CommandPayloads.lane_limits.parse(payload);
         openRun(svc.ledger, p.run);
         const limits = mergedLimits(ownersLimits(svc.ledger, p.run), p.limits);
+        // Its preview (goal 221): the limits it would set, and the lanes at work it reaches.
+        if (p.preview) return limitsPreview(svc.ledger, p.run, limits);
         svc.ledger.appendEvent(by, "lane_limits_set", p.run, {
           limits,
           changed: p.limits as Record<string, number | null>,
@@ -323,6 +325,7 @@ export class Commands {
       case "queue_retry": {
         const p = CommandPayloads.queue_retry.parse(payload);
         openRun(svc.ledger, p.run);
+        if (p.preview) return svc.queue.retryPreview(p.run, p.id, p.position);
         return queueResult(
           svc.queue.retryTried(p.run, p.id, { by: "owner", why: p.why, position: p.position }, by),
         );
