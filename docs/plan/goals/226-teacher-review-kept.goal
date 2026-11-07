@@ -19,6 +19,7 @@ On the lab, 2026-11-07, a teachers' round of 04:31 UTC had a portfolio from one 
 1. **A recommendation's fields are cut to their length,** and the list to its 20, never refused for a length. A direction cut so is longer than a direction's name may be, so the round's check of each rule drops it with why, as it drops a direction in words, and the review stands.
 2. **A test:** a review with a long direction, a long citation and 21 recommendations keeps its portfolio and 20 recommendations, each field at its limit.
 3. **The earlier rounds:** whether the rounds the teacher in Claude Code gave no portfolio in (goal 218) ended the same way, from their Live lines.
+4. **A turn that ends without a valid answer gets one more.** An advisor in Pi is asked to answer again within the call; one in Claude Code, Codex or OpenCode answers once (`supervisor/advisors/call.ts`), so a turn that ends on a progress message loses the round's review. The call types one more message, once: what was wrong with its answer, in words, and that its next message is the answer alone.
 
 ## Why
 
@@ -26,13 +27,14 @@ A teacher's review is a long call on a subscription. Losing all of it for a dire
 
 ## Done when
 
-- [ ] Items 1 to 3, with the test.
+- [ ] Items 1 to 4, with tests.
 - [ ] Pages: the changelog.
 
 ## Progress
 
 - 2026-11-07 05:12 UTC: Goal written from the lab round's Live lines, which the lab's infrastructure session read. Items 1 and 2 built: `cut()` in `supervisor/advisors/teachers/answers.ts` for a recommendation's direction, words, value, rationale and citations, and the list cut to 20. Test: `tests/supervisor/advisors/pass/ideas.test.ts`. The test file has not run yet.
 - 2026-11-07 05:31 UTC: item 3, from the lab's Live lines (the infrastructure session read them): of the four teachers' rounds since 00:29 UTC, two lost the review of the teacher in Claude Code this way, at 01:29 (`recommendations.0.direction`) and 04:31 (`recommendations.1.direction`), each over 200 characters; in the other two (00:29, 02:30) both teachers answered. The teacher in Codex was never refused. In every round the teacher in Claude Code made tool calls (39 to 68), its first 50 to 70 s after the call began. To the lab with 3f6425c1, the owner's roll of tonight.
+- 2026-11-07 06:18 UTC: the teachers' round of 05:31 UTC on the lab (52801c6e) got no review at all: the teacher in Claude Code was refused for two recommendations' directions over 200 characters (item 1's fault, fixed in 3f6425c1, rolled at 06:16 UTC), and the teacher in Codex, for the first time, ended its turn after 6 minutes on a progress message ("…so I'm checking the knowledge base before adding…"), with no answer in it: item 4 added. The supervisor logged "no teacher produced a review" at level error.
 
 ---
 
