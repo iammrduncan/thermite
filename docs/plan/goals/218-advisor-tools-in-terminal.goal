@@ -1,7 +1,7 @@
 ---
 id: "218"
 title: "A teacher in Claude Code's own terminal has its tools from its first turn"
-status: READY
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 218 · A teacher in Claude Code's own terminal has its tools from its first turn
 
-**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -44,3 +44,4 @@ A teacher without the code tools reviews the run from its brief alone: its ideas
 ---
 
 Run with `/goal Complete docs/plan/goals/218-advisor-tools-in-terminal.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- 2026-11-07 02:05 UTC: in the same run's fifth round (01:53 UTC) the teacher in Claude Code gave no portfolio at all: the merged by model wrote that only one teacher gave one. Why it gave none is to be read from the round's record with the cause of item 1.

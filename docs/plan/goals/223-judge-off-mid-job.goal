@@ -1,0 +1,42 @@
+---
+id: "223"
+title: "Turning the judge off says what becomes of the job under way"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 223 · Turning the judge off says what becomes of the job under way
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+**Edit rig** says of the judge: "Off: changes wait in its queue, and nothing becomes the champion." The judge measures a job a block at a time, each block a call of its loop, and with the judge off the loop calls none (`harness/controller/loops.ts`). So a job under way stops after the block it is in, and stays leased, with its attempt's lifecycle unchanged. On the lab, 2026-11-07, the judge was turned off at 01:12 UTC so that a job would finish and leave its runner free; its block ended at 01:37, no block started after it, and its attempt still said `screening` 35 minutes later, while the runner was idle. Nothing in the dashboard, the rig's page or the run's record said the job was paused.
+
+1. **The choice in words.** Turning the judge off while a job is under way either lets that job finish first, as a drain does (goal 079), or pauses it after its block. The owner decides which is the default; the other is a choice on **Edit rig** and in `set_rig_settings`.
+2. **A paused job says so:** in its attempt's state (`paused with the judge off, after block 3 of 6`), on the rig's page and in the run's Judge queue, and it goes on from its next block when the judge is on again.
+3. **A test** of each: the job finishes and writes its verdict, or it pauses, says so, and goes on.
+
+## Why
+
+An operator turns the judge off to make room on its runner, or to hold the judge while something changes. One who reads "changes wait in its queue" expects the job under way to end, and waits for a verdict that never comes.
+
+## Done when
+
+- [ ] Items 1 to 3.
+- [ ] Pages: Edit rig, the judge, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-07 02:08 UTC: Goal written from the lab, where turning the judge off left a job paused between blocks for 35 minutes with nothing saying so.
+
+---
+
+Run with `/goal Complete docs/plan/goals/223-judge-off-mid-job.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
