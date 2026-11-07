@@ -34,6 +34,23 @@ flowchart LR
 
 The diagram leaves out three returns to `queued`: after one infrastructure failure, when the champion changed before confirmation, and when another change became the champion first. After a second infrastructure failure the attempt is `errored`, as it is when its judge job is blocked after three lost leases; a blocked job's attempt goes back to `queued` when the harness starts and queues the job once more. It also leaves out a hill climb in [setup](#setup), whose changes go from `building` and `screening` to `promoted` or `judged` by the judge's baseline job alone. When its run closes, an attempt still `queued` becomes `not_judged`, and the judge never takes its job. The owner can also decline an attempt in `awaiting_audit`. A patch that does not apply to its parent never becomes an attempt: the submission is refused and counted as a `submission_refused` event.
 
+### How long each stage took
+
+On the dashboard, an attempt's page has **How long it took**, under **Facts**: one row for each stage control saw, each as a length of time, such as `1 h 51 min`.
+
+| Row | From | To |
+| --- | --- | --- |
+| **Its lane's work** | its trial's start | its submission |
+| **Waited for the judge** | its submission | the start of its first screening job |
+| **The judge screened it** | that job's start, with its number and the runner it ran on | its end |
+| **Waited for its confirmation** | the end of its screening | the start of its confirmation job |
+| **The judge confirmed it** | that job's start, with its number and runner | its end |
+| **Its audit** | when it was held for an audit | the auditor's decision |
+| **From submission to champion** | its submission | its promotion, with the champion's number |
+| **The judge's time in all** | the sum of its judge's jobs, when it had more than one | |
+
+A stage still under way gives its time `so far`, such as **Waits for the judge**. A stage whose times control does not keep has no row: a trial whose start came before control's record of the run, or a job older than the rig's newest 200.
+
 ## Verdicts
 
 A verdict is written once and never changed. A later verdict on the same attempt, such as the confirmation after a screen, is added after it. The dashboard shows the newest one.

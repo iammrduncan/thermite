@@ -8,6 +8,7 @@ import { heldOutBlock } from "./held-out.ts";
 import type { Need } from "./index.ts";
 import { outcome } from "./outcome.ts";
 import { timeline } from "./timeline.ts";
+import { tookBlock } from "./took.ts";
 import { withdrawnBlock } from "./withdraw.ts";
 
 /**
@@ -26,7 +27,8 @@ function refusedBlock(a: AttemptView): string {
 
 /**
  * One attempt, in full: what it does and where it stands in one sentence, the decision it waits
- * for, then what happened to it, the goals it moves, the files it changes and its facts.
+ * for, then what happened to it, the goals it moves, the files it changes, its facts and how long
+ * each of its stages took.
  */
 export function attemptDetail(
   u: RigView,
@@ -213,6 +215,7 @@ ${goals}
 <div class="block"><div class="head"><h2>Files it changes</h2><span class="n">${a.files_total}</span><span class="right">the diff stays on the rig: <code>attempts/${esc(a.id)}.patch</code> in its exports</span></div><div class="card flat">${files}</div></div>
 </div><div class="side">
 <div class="block"><div class="head"><h2>Facts</h2></div><div class="card"><dl class="facts">${facts}</dl></div></div>
+${tookBlock(u, r, a, now)}
 ${a.reasons ? `<div class="block"><div class="head"><h2>The judge's reasons</h2></div><div class="card small">${esc(a.reasons)}</div></div>` : ""}
 ${opts.withdraw ?? ""}
 </div></div>`;

@@ -124,6 +124,9 @@ export interface AttemptView {
   /** The planner's direction for the trial that made it. */
   direction: string | null;
   trial: string | null;
+  /** When the trial that made it started and ended, as control saw them (goal 228). */
+  trial_started_at?: string | null | undefined;
+  trial_ended_at?: string | null | undefined;
   /** Goal campaigns: what the judge's latest finished job found against the champion. */
   gained: string[] | null;
   lost: string[];
@@ -453,6 +456,8 @@ export interface RunView {
     expected_seq: number | null;
     /** The auditor's reasons, once it decided. */
     reasons: string | null;
+    /** When it was decided (goal 228); null while it waits. */
+    decided_at?: string | null | undefined;
   }[];
   /** Why each pending promotion waits, and against which champion it was measured. */
   promotion_waits: Record<

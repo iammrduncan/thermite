@@ -1,0 +1,40 @@
+---
+id: "228"
+title: "An attempt's page says how long each of its stages took"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 228 · An attempt's page says how long each of its stages took
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, 2026-11-07: "on an attempt detail page I want to see some basic stats can be under facts maybe? But like time from submission -> champion acceptance. tiem from judge picked it up to time judge finished with it, how long did lane work on it, etc..."
+
+An attempt's page says when it was submitted and lists its verdicts in **What happened to it**, each with how long ago, but no stage's length: how long its lane worked, how long it waited for the judge, how long each of the judge's jobs took and on which runner, how long its audit took, and how long it took to become the champion. On a run whose judge is its bottleneck, those are what an owner reads to see where the time goes.
+
+1. **How long it took**, a block under **Facts**: its lane's work (its trial's start to its submission), its wait for the judge, each judge's job with its number and runner, its wait for a confirmation, its audit, the time from its submission to the champion, and the judge's time in all when it had more than one job. A stage under way says its time so far; one whose times control does not keep has no row.
+2. **Control keeps the times it needs:** a trial's start on the attempt it made (`trial_started_at`, `trial_ended_at`), and an audit's decision (`decided_at`). Control rebuilds its views from the events it keeps when it starts, so older attempts get them too.
+3. **A test** from a rig's events: each row's length, and an attempt still waiting for the judge.
+
+## Why
+
+A run's progress is limited by how long changes wait and how long the judge takes. The owner should see that on the attempt, not add up times from the event list.
+
+## Done when
+
+- [ ] Items 1 to 3.
+- [ ] Pages: Verdicts (how long each stage took), and the changelog.
+
+## Progress
+
+- 2026-11-07 06:33 UTC: built. `tookBlock` (`control/ui/operator/took.ts`) on the attempt's page (`control/ui/operator/attempt.ts`), from the attempt's view, the run's audits and champions and the rig's newest 200 judge's jobs; the fold keeps a trial's start and end on its attempt (`control/views/fold/agents.ts`) and an audit's decision time (`control/views/fold/champions.ts`). Test: `tests/control/dashboard/attempt-times.test.ts`. Page: Verdicts. A preview rendered from a lab attempt's times, for the owner. The test file has not run yet.
+
+---
+
+Run with `/goal Complete docs/plan/goals/228-attempt-stage-times.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

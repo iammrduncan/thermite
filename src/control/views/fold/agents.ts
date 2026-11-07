@@ -74,8 +74,9 @@ export const AGENTS: Handlers = {
   },
   trial_finished(f, e, b) {
     const v = f.run(String(e.subject));
-    if (v.at_work[String(b.lane)]?.trial === String(b.trial ?? ""))
-      delete v.at_work[String(b.lane)];
+    const work = v.at_work[String(b.lane)];
+    const startedAt = work?.trial === String(b.trial ?? "") ? work.since : null;
+    if (startedAt !== null) delete v.at_work[String(b.lane)];
     v.trials.push(
       frozen({
         trial: String(b.trial ?? ""),
@@ -92,6 +93,9 @@ export const AGENTS: Handlers = {
     if (made) {
       made.direction = (b.direction as string | null) ?? null;
       made.trial = String(b.trial ?? "") || null;
+      // How long its lane worked on it (goal 228).
+      made.trial_started_at = startedAt;
+      made.trial_ended_at = e.at;
     }
     const a = v.agents;
     a.trials++;

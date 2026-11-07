@@ -117,6 +117,7 @@ const auditEnded: Handler = (f, e, b) => {
             ? "declined by the owner"
             : String(b.decision);
       if (typeof b.reasons === "string") a.reasons = b.reasons;
+      a.decided_at = e.at;
     }
   }
 };
@@ -252,6 +253,7 @@ export const CHAMPIONS: Handlers = {
     if (a && a.decision === null) {
       a.decision = "skipped";
       a.reasons = String(b.why ?? "this rig has no auditor");
+      a.decided_at = e.at;
     }
   },
   audit_decided: auditEnded,

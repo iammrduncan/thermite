@@ -9,6 +9,7 @@ import { TIP } from "./words.ts";
  */
 
 export { busTab, streamHref } from "./bus.ts";
+export { duration } from "./common.ts";
 export { controlTab, cpuWords, storageTab } from "./control.ts";
 export { rigsTab } from "./rigs.ts";
 export { streamMessageBody, streamPageBody } from "./stream.ts";

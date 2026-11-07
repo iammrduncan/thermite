@@ -31,6 +31,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 - The model proxy passes an answer's `x-codex-*` and `x-ratelimit-*` headers on to the program, none of them a credential, and logs each within an hour of the first answer that has it: a short value as it came, a long one, such as Codex's turn state, by its length.
 - **An advisor in its own terminal waits for its tools.** Once its program is up and ready, its first message waits until the program has asked the supervisor's tool server for its tools, at most 30 seconds more, and Live says how long the listing took, or that it never came. A teacher in Claude Code said in three rounds of four that it had none of its tools.
 
+### Dashboard
+
+- **How long an attempt took.** An attempt's page has **How long it took**, under **Facts**: its lane's work on it, its wait for the judge, each of the judge's jobs with its runner, its wait for a confirmation, its audit, and the time from its submission to the champion, each still under way with its time so far. See [Verdicts](../reference/verdicts.md#how-long-each-stage-took).
+
 ### Docs
 
 - [A rig over several machines](../explanation/core-and-runners.md): what runs on a rig's core and what on its runners, how they stay in touch, what a restart of control or a move onto new images does to the work under way, and how to size each machine.
