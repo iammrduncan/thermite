@@ -71,6 +71,17 @@ export class RunnerPools {
     this.offer(s);
   }
 
+  /**
+   * The run's model files begun on each runner that is up and serves lanes (its own pool's or the
+   * shared one), ahead of their first runs (goal 217). The judge's runner fetches its own before
+   * its first build. A fetch that could not begin is tried again at the next call.
+   */
+  prefetch(run: string, failed: (runner: string, err: unknown) => void): void {
+    for (const s of this.slots)
+      if (s.up && s.pool !== "judge")
+        void s.runner.prefetch(run).catch((err) => failed(s.runner.name, err));
+  }
+
   /** Whether a lane's runs go to runners: it has one of its own, or a shared one serves it. */
   serves(lane: string): boolean {
     return this.slots.some((s) => s.pool === lane || s.pool === "shared");

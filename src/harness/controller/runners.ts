@@ -179,6 +179,18 @@ export class RunnerHub {
   start(): () => void {
     const timer = setInterval(() => {
       for (const name of this.processes.keys()) void this.check(name);
+      // The running run's model files, begun on the lanes' runners ahead of their first runs
+      // (goal 217).
+      const run = this.o.service.ledger.runs.list().find((r) => r.status === "running" && r.agents);
+      if (run)
+        this.pools.prefetch(run.id, (runner, err) =>
+          log(
+            "harness",
+            "a runner's fetch of the run's model files could not begin",
+            { runner, run: run.id, error: errorText(err) },
+            "warn",
+          ),
+        );
     }, this.o.checkEveryMs ?? CHECK_EVERY_MS);
     timer.unref?.();
     return () => clearInterval(timer);

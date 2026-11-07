@@ -97,6 +97,8 @@ export class RemoteRunner implements RigRunner {
    * (goal 217): one the harness took in since counts as done in what the lane is told.
    */
   private laneFetch: { run: string; bytes: Map<string, number> } | undefined;
+  /** Runs whose model files this runner began fetching ahead of a lane's first run (goal 217). */
+  private readonly prefetched = new Set<string>();
 
   constructor(o: RemoteRunnerOptions) {
     this.o = o;
@@ -141,6 +143,27 @@ export class RemoteRunner implements RigRunner {
     this.modelsHeld.clear();
     this.fetching = undefined;
     this.laneFetch = undefined;
+    this.prefetched.clear();
+  }
+
+  /**
+   * The run's model files begun ahead of a lane's first run there (goal 217), once a run: a lane's
+   * first `run_experiment` then finds them there or on their way, and its count of the fetch (goal
+   * 217) starts from them. One that could not begin is tried again at the next ask.
+   */
+  async prefetch(run: string): Promise<void> {
+    if (this.modelsHeld.has(run) || this.prefetched.has(run)) return;
+    this.prefetched.add(run);
+    try {
+      const files = await this.modelsMissing(run);
+      if (!files.length) return;
+      if (this.laneFetch?.run !== run)
+        this.laneFetch = { run, bytes: new Map(files.map((f) => [f.sha256, 0])) };
+      await this.fetchTurn(run, files, "start");
+    } catch (err) {
+      this.prefetched.delete(run);
+      throw err;
+    }
   }
 
   /** Sends the runner a commit of one of the core's mirrors, as a bundle of what it lacks, once. */

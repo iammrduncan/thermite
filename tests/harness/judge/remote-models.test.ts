@@ -205,4 +205,12 @@ describe("a run's model files on a runner of another machine (goal 213)", () => 
     assert.equal(r.fetch?.done, 1);
     assert.equal(r.fetch?.bytes, 130);
   });
+
+  test("a lane's runner begins the run's model files ahead of the lane's first run, once (goal 217)", async () => {
+    const { r, polls } = runner([[st(A, "fetching", 10), st(B, "queued", 0)]]);
+    await r.prefetch("r-1");
+    await r.prefetch("r-1");
+    assert.deepEqual(polls, ["start"], "begun once a run");
+    assert.equal(r.fetch?.files, 2);
+  });
 });

@@ -215,4 +215,28 @@ describe("a rig's runners in their pools (goal 206)", () => {
       "a shared runner, which the judge uses too, keeps the default",
     );
   });
+
+  test("the run's model files begin on the runners that serve lanes, not the judge's (goal 217)", () => {
+    const begun: string[] = [];
+    const named = (name: string, fails = false) =>
+      ({
+        name,
+        prefetch: async (run: string) => {
+          begun.push(`${name} ${run}`);
+          if (fails) throw new Error("away");
+        },
+      }) as unknown as RemoteRunner;
+    const failed: string[] = [];
+    const pools = new RunnerPools();
+    pools.add(named("judge-0"), "judge", true);
+    pools.add(named("lane-0"), "lane-1" as never, true);
+    pools.add(named("shared-0", true), "shared", true);
+    pools.add(named("down-0"), "lane-2" as never, false);
+    pools.prefetch("r-1", (runner) => failed.push(runner));
+    assert.deepEqual(
+      begun,
+      ["lane-0 r-1", "shared-0 r-1"],
+      "not the judge's, nor one that is down",
+    );
+  });
 });
