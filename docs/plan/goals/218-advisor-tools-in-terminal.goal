@@ -23,6 +23,7 @@ The supervisor serves the advisors' tools over MCP on localhost for each call an
 1. **The cause, from the record:** the call's transcript on the rig, which says what tools its first turn had, for a round without tools and the round with them.
 2. **The message waits for the tools.** The supervisor serves the MCP server itself, so it knows when the program has listed its tools: the host types the message only after that, or after a limit, with the wait in the round's record. The same for the planner and every advisor in a terminal that gets MCP servers.
 3. **A test** with the Claude Code stand-in that lists its tools late, and the real Claude Code acceptance with the advisors' tools.
+4. **An advisor's Live lines over MCP.** `trial_session` reads a worker trial's lines alone, so an operating agent can't read the line item 2 writes, or any advisor's: a tool, or `trial_session` with an advisor's source (`advisor:<name>`), gives them, with the round's call.
 
 ## Why
 
@@ -30,7 +31,7 @@ A teacher without the code tools reviews the run from its brief alone: its ideas
 
 ## Done when
 
-- [ ] Items 1 to 3, with tests.
+- [ ] Items 1 to 4, with tests.
 - [ ] Pages: the advisors' terminal (Agents, lanes and the planner), and the changelog.
 
 ## Decisions
@@ -42,6 +43,7 @@ A teacher without the code tools reviews the run from its brief alone: its ideas
 - 2026-11-07 00:21 UTC: Goal written from a lab run's field notes, its prompts' records and the rig's settings.
 - 2026-11-07 02:05 UTC: in the same run's fifth round (01:53 UTC) the teacher in Claude Code gave no portfolio at all: the merged by model wrote that only one teacher gave one. Why it gave none is to be read from the round's record with the cause of item 1.
 - 2026-11-07 02:19 UTC: item 2 built, before item 1's cause is read: the supervisor's tool server notes when the program first asks for its tools (`tools/list`, `listed`, `supervisor/advisors/tools/mcp.ts`), and an advisor's call in its own terminal waits for it, at most 30 s, before its first message (`beforeFirst`, `agents/cli/call.ts`, `supervisor/advisors/terminal/call.ts`). Live says how long the listing took, or that it never came, which is item 1's evidence on the lab: a teacher whose tools were listed before its message, and that still had none, disproves the hypothesis. Tests: `tests/supervisor/advisors/pass/past.test.ts` (no list, then listed once the program asks), the profiles' fake. Page: Watch and steer an agent in its terminal. The test files have not run yet.
+- 2026-11-07 05:03 UTC: on the lab, on 52801c6e, the teachers' round of 04:31 UTC had a portfolio from the teacher in Codex alone; the teacher in Claude Code's own terminal gave none, as in the rounds above, where in the 03:30 round (on 7462712f, with item 2) it did. Item 2's line, which says whether its program listed its tools in time, is on the run's Live, and MCP can't read an advisor's Live lines: item 4 added. The lab's infrastructure session reads the supervisor's log for it.
 
 ---
 
