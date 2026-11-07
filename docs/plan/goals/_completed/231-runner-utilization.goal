@@ -1,7 +1,7 @@
 ---
 id: "231"
 title: "How busy each runner is: its share of time with the judge, each lane, idle and away"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: ["206"]
 created: 2026-11-07
@@ -10,13 +10,13 @@ updated: 2026-11-07
 
 # 231 · How busy each runner is
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
 
 ## What
 
 The owner, 2026-11-07: "I think another idea would be to have resource utilization details... How much % of time are our runners idle? etc..."
 
-A rig's page shows what each runner runs now and who waits for one ([The rig's page](../../_site/src/content/docs/reference/rig-page.md)), and an attempt's page how long it waited for the judge (goal 228). Nothing says how a runner spent the last hours: how much of its time went to the judge, to each lane, or to nothing. On the lab, 2026-11-07, two of three runners sat mostly idle for hours while the judge's queue grew, and that took reading events to see. The owner splits runners between the judge and the lanes (goal 229) and sets how far the lanes run ahead (goal 230) by exactly these figures.
+A rig's page shows what each runner runs now and who waits for one ([The rig's page](../../../_site/src/content/docs/reference/rig-page.md)), and an attempt's page how long it waited for the judge (goal 228). Nothing says how a runner spent the last hours: how much of its time went to the judge, to each lane, or to nothing. On the lab, 2026-11-07, two of three runners sat mostly idle for hours while the judge's queue grew, and that took reading events to see. The owner splits runners between the judge and the lanes (goal 229) and sets how far the lanes run ahead (goal 230) by exactly these figures.
 
 1. **The core counts each runner's time,** from its pools: held by the judge's job, held by each lane's run, free, and away, each a running total since the core started, in the rig's report. A restart of the core starts its totals again, and control keeps their history.
 2. **Who waited, and how long:** the time the judge's jobs waited for a runner, and each lane's runs, from its pools' queue of waiters.
@@ -31,14 +31,23 @@ How to split runners between the judge and the lanes, and how far ahead the lane
 
 ## Done when
 
-- [ ] Items 1 to 6.
-- [ ] Pages: The rig's page (Runners), Model use or the run's Stats (whichever holds the shares), MCP tools, REST API, and the changelog.
+- [x] Items 1 to 6.
+- [x] Pages: The rig's page (Runners), Model use or the run's Stats (whichever holds the shares), MCP tools, REST API, and the changelog.
 
 ## Progress
 
 - 2026-11-07 07:52 UTC: Goal written from the owner's ask, after a lab night where the runners' idle time showed only in the events.
 - 2026-11-07 08:38 UTC: items 1 to 6 built. The core counts each runner's time at every change of who holds it or whether it answers, and each wait as it ends, the judge's executors together (`harness/judge/runner-time.ts`, `harness/judge/pools.ts`). Each check of a runner process asks for the use of its cards that the judge does not hold, so a read never disturbs a timing; the runner process reads them with one light `nvidia-smi` query each (`harness/runner/host.ts`, the CUDA driver's `use()`), and the core keeps each card's newest read and its use between reads, a gap of three checks counting for nothing (`harness/controller/runners.ts`). The rig's report gives each runner's `use` and `gpu`, and `waited` since `waited_since`. Control keeps a sample a minute for 8 days (`control/store/runner-use.ts`, migration 36) and gives each runner's share of a window, each sample against the one before of the same life of the core (`control/views/runner-use.ts`). Shown on the rig's Runners block (**How they spent**, with the last hour, the last 24 hours or the newest run), on the run's Stats tab, over MCP (`runner_use`) and REST (`GET /v1/rigs/<rig>/runner-use`). Design choice: the cards of the judge's pool are never read, nor a shared one while the judge holds it, so the judge's use while measuring is not shown. `dropFollowers` moved from the store's schema to its machines' file, to keep the schema under the size limit. Tests: `tests/harness/judge/runner-time.test.ts`, `tests/harness/judge/pools.test.ts`, `tests/harness/controller/runners.test.ts`, `tests/harness/runner/host.test.ts`, `tests/harness/targets/cuda.test.ts`, `tests/control/views/runner-use.test.ts`, and the store's version in its tests. Pages: The rig's page, Model use (the Stats tab), A rig over several machines, MCP tools, REST API, the changelog. The test files have not run yet: they run on the lab's VM.
 
+
+## Verified (2026-11-07)
+
+- The touched test files on the lab's test machine: at a2fa5145, 41 files, 296 of 296 (`tests/harness/judge/runner-time.test.ts`, `tests/harness/judge/pools.test.ts`, `tests/harness/controller/runners.test.ts`, `tests/harness/runner/host.test.ts`, `tests/harness/targets/cuda.test.ts`, `tests/control/views/runner-use.test.ts` and the store's tests among them); at 39e04adb, its own 18 files, 131 of 131.
+- `npm run check` at d7a28b83, which holds this goal's code: passed, 2,899 of 2,903 (0 failed, 4 skipped) side by side, 200 of 200 alone, with the public, size, import and loose-ends checks ok. Three earlier full runs, four files at a time on a machine of four CPUs, each failed one test that waits on time; the last such test was fixed in d7a28b83.
+- `npm run docs:build` and `npm run docs:check` passed at 7b694bcf and c35ba243.
+- On the lab: control runs 39e04adb since 21:17 UTC (its store migrated to schema 36), the rig with runners since 22:00 UTC. `runner_use` for its last hour (22:16 to 23:16 UTC): its two runners of the judge's pool were the judge's 100% of the time, as the run's events show (one runner's job from 22:12:38 to 22:57:17.86 and its next job leased 50 ms later, still running; the other's job running throughout). Its runner of the lanes' pool: lane-1 48.3%, lane-2 40.4%, idle 11.2%, away 0; the lanes waited for it 8 times each, 20 and 13 minutes in all. Its GPU was read for 59 minutes, with a mean use of 0%: the lanes ran builds there and served no model in that hour; its memory has no figure, as a GPU that shares the machine's memory. The Runners block itself was not looked at: it shows the same view.
+- Pages: The rig's page (Runners), Model use (the Stats tab), A rig over several machines, MCP tools, REST API, and the changelog's v0.1.4 section.
+
 ---
 
-Run with `/goal Complete docs/plan/goals/231-runner-utilization.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/231-runner-utilization.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

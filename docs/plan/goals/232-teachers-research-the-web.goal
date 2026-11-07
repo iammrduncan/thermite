@@ -40,6 +40,8 @@ The teachers bring a run its new opportunities. Without outside sources they rew
 ## Progress
 
 - 2026-11-07 20:08 UTC: built. `web` on an advisor's tools (`supervisor/advisors/call.ts`), set for the teachers alone (`supervisor/advisors/pass/teachers.ts`). Claude Code: `--tools` and `--allowedTools` (`supervisor/advisors/runtimes/claude-code.ts`, `supervisor/advisors/tools/mcp.ts`, `supervisor/advisors/terminal/call.ts`). Codex: `web_search = "live"` and its standalone search not turned off (`agents/programs/codex/index.ts`, `supervisor/advisors/cli.ts`, `supervisor/advisors/terminal/profiles.ts`, `supervisor/advisors/runtimes/opencode-codex.ts`). Tests: `tests/supervisor/advisors/runtimes/cli.test.ts`, `tests/supervisor/advisors/terminal/profiles.test.ts`. The test files have not run yet: they run on the lab's VM.
+- 2026-11-07 22:44 UTC: on the lab since the roll of 39e04adb (sparks-rig at 22:00 UTC), the teachers' round that restarted at 21:59 UTC: the teacher in Claude Code called `WebSearch` at 22:11:22 UTC ("DGX Spark GB10 cudaMalloc first touch page fault slow large allocation unified memory") among its 112 tool calls since 21:30 UTC; the teacher in Codex made no web search in its 8-minute round. Codex's search is not yet seen to be offered: the next rounds show it, or the request's tools at the model proxy.
+- 2026-11-07 23:18 UTC: that round's portfolio, at 22:22 UTC, cites a page of NVIDIA's developer forums on slow mmap on the DGX Spark in one of its experiments: the Claude Code teacher's search reached the queue. The Codex teacher's search is still to be seen.
 
 ---
 
