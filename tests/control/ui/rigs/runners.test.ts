@@ -133,6 +133,29 @@ describe("a rig's runners in control (goal 206)", () => {
     );
   });
 
+  test("the lanes' runner: the lanes take turns there, and a lane waiting for it says so (goal 229)", () => {
+    const html = runnersBlock(
+      view({
+        processes: [
+          {
+            name: "box-4",
+            pools: ["lanes"],
+            up: true,
+            answered_at: "2026-11-04T19:59:50Z",
+            away_since: null,
+            runners: [{ name: "box-4-0", pool: "lanes", holder: "lane-1" }],
+          },
+        ],
+        waiting: ["lane-2"],
+      }),
+      Date.parse("2026-11-04T20:00:00Z"),
+    );
+    assert.match(html, /<span class="chip ok">the lanes(&#39;|')<\/span>/);
+    assert.match(html, /Lane 1(&#39;|')s run_experiment\. It never counts\./);
+    assert.match(html, /it takes the next free one of box-4-0, after lane 1(&#39;|')s run\./);
+    assert.match(html, /and on the lanes(&#39;|') one the lanes alone\./);
+  });
+
   test("a runner's store and each wait's start are read from the report", () => {
     const r = readRunners({
       processes: [

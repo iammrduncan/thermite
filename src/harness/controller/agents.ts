@@ -68,6 +68,7 @@ export function agentParts(
     dedicated: devCard?.layout !== undefined,
     cards: devCards.length || undefined,
     unavailable: devCard?.error,
+    live: service.live,
   });
 
   // Each run's research folder: what it has learned, as files its workers search (and, in a

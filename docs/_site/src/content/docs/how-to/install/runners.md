@@ -24,16 +24,17 @@ Each runner is in one pool. A runner takes one run at a time, so a measurement n
 | --- | --- |
 | `judge` | The judge alone: its builds and measurements |
 | `shared` | The judge and every lane, in turn, first come, first served |
+| `lanes` | Every lane, in turn, first come, first served: its `run_experiment`. The judge never measures there |
 | `lane-1` to `lane-16` | That lane alone: its `run_experiment`. The judge never measures there |
 
-A lane runs on its own runner first, then on a shared one; a lane that no runner serves runs on the core's machine. What a lane runs never counts: only the judge's measurement does. On a runner, each `run_experiment` starts on a fresh copy of the lane's starting point with its change applied, its files the agent made and never staged too: what an earlier run built there is not kept, and the answer says so: `It ran on a fresh copy of your starting point with your change applied: what an earlier run built there is not kept, so build and run in the same command`. Reading the change leaves the lane's own git index as the agent left it, so a submission carries only its editable paths.
+A lane runs on its own runner first, then on one of the lanes' pool, then on a shared one, which the judge needs too; a lane that no runner serves runs on the core's machine. A runner of the lanes' pool suits lanes that each spend most of a trial thinking and editing, and run their command now and then: two or three lanes then share one GPU, while the judge keeps its own. On a lane's own runner or one of the lanes', a development run whose memory no one set gets the runner's memory, less a margin; on a shared one it keeps the core's 4,096 MiB ([Limits and pacing](../../reference/limits-and-pacing.md#lanes-and-agents)). A lane's run that has to wait says so on Live, with who holds each runner it may use, such as `run_experiment waits for a runner: box-4-0: lane-2's run`, and its answer gives how long it waited, `waited_s`. What a lane runs never counts: only the judge's measurement does. On a runner, each `run_experiment` starts on a fresh copy of the lane's starting point with its change applied, its files the agent made and never staged too: what an earlier run built there is not kept, and the answer says so: `It ran on a fresh copy of your starting point with your change applied: what an earlier run built there is not kept, so build and run in the same command`. Reading the change leaves the lane's own git index as the agent left it, so a submission carries only its editable paths.
 
 ## When you add the rig
 
 **Rigs › Add a rig** is a wizard. Under **What kind of rig?**, choose **Several machines** and press **Next**; then, a step at a time:
 
 1. **The core** (**Where does the core run?**): where the core goes, any machine or free slot control knows, with the core's CPUs, memory and disk, filled in from the slot's quota, and on a cluster its **Node**. It needs no GPU.
-2. **Runners** (**Which GPUs are its runners?**): none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. A runner on a GPU of a DRA class whose node control read from the cluster goes on that node. **Workers at a time** sets how many lanes work at once, 2 by default.
+2. **Runners** (**Which GPUs are its runners?**): none at first. **+ Add a runner** adds a row: choose its **Machine** (a machine over SSH, a node of a cluster, or a slot whose GPUs come through DRA), then its **GPU**, one of the machine's free ones, then **Its pool**: **The judge's**, **Shared: the judge and the lanes**, **Lanes: any lane, never the judge**, or a lane's. The first row is the judge's, the next ones shared, until you change them; a GPU another row took is not offered again, and **Remove** takes a row away. A runner on a GPU of a DRA class whose node control read from the cluster goes on that node. **Workers at a time** sets how many lanes work at once, 2 by default.
 3. **Name and create** (**Name it and create it**): the rig's name, and the images: the core's, and the runners' CUDA image for their GPUs.
 
 On the last step, **What this rig will be** says where the core runs, where the judge measures and where each lane tries its changes, and notes what would go wrong:
@@ -75,7 +76,7 @@ The runner's supervisor registers its key with control, then answers the core's 
 ## 2. Add the one you started to the rig
 
 1. On the rig's page, press **Edit rig**.
-2. Under **4 · Where it runs**, open **A runner process you started yourself**, write the runner process's name in **Its name**, and in **Its runners' pools** one pool for each runner it serves, in order, separated by commas, such as `judge, shared`.
+2. Under **4 · Where it runs**, open **A runner process you started yourself**, write the runner process's name in **Its name**, and in **Its runners' pools** one pool for each runner it serves, in order, separated by commas, such as `judge, shared` or `lanes`.
 3. Press **Save changes**.
 
 The rig's core takes the change at once, while its run goes on. The runner takes runs once it answers the core's check, within about 15 seconds. A script or an agent does the same with `runners` in [`POST /v1/rigs/<rig>/settings`](../../reference/rest-api.md#a-rigs-settings), or MCP's [`set_rig_settings`](../../reference/mcp-tools.md#set_rig_settings) with the owner's token: the whole list of the rig's runner processes, each `{name, pools}`.

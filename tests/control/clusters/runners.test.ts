@@ -468,7 +468,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       ],
       [
         { runner: "spark-02", gpus: 1, pool: "gpu" },
-        /^A runner's pool is judge, shared or lane-1 to lane-16\.$/,
+        /^A runner's pool is judge, shared, lanes or lane-1 to lane-16\.$/,
       ],
       [
         { runner: "spark-02", gpus: 1, pool: "judge", node: "no-node" },

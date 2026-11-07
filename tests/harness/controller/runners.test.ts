@@ -154,6 +154,9 @@ describe("the core's runners as they come and go (goal 206)", () => {
     assert.deepEqual(ex.now, []);
     hub.apply([{ name: "box-2", pools: ["shared", "judge"] }]);
     assert.deepEqual(ex.now, ["box-2-0 shared", "box-2-1"]);
+    // The lanes' pool (goal 229): no executor of the judge's, so the judge never measures there.
+    hub.apply([{ name: "box-2", pools: ["lanes", "judge"] }]);
+    assert.deepEqual(ex.now, ["box-2-1"]);
     sup.stop();
   });
 
@@ -290,9 +293,9 @@ describe("the core's runners as they come and go (goal 206)", () => {
 
   test("THERMITE_RUNNERS gives the setting's value at the start, or the harness says what is wrong", () => {
     assert.deepEqual(runnersOf({}), []);
-    assert.deepEqual(runnersOf({ THERMITE_RUNNERS: "box-2=judge+shared, box-3=lane-2" }), [
+    assert.deepEqual(runnersOf({ THERMITE_RUNNERS: "box-2=judge+shared, box-3=lane-2+lanes" }), [
       { name: "box-2", pools: ["judge", "shared"] },
-      { name: "box-3", pools: ["lane-2"] },
+      { name: "box-3", pools: ["lane-2", "lanes"] },
     ]);
     assert.throws(() => runnersOf({ THERMITE_RUNNERS: "box-2=gpu" }), /"box-2=gpu" is not/);
     assert.throws(() => runnersOf({ THERMITE_RUNNERS: "box-2=lane-17" }), /is not <name>=<pool>/);

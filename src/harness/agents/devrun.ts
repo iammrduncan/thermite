@@ -2,6 +2,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { shellQuote } from "../../common/exec.ts";
 import { SHARED_DEV_RUN_S } from "../../core/contract.ts";
+import type { LiveLog } from "../../core/live.ts";
 import { type Role, RoleSchema, type Runner } from "../broker/index.ts";
 import type { LaneRun } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
@@ -37,7 +38,7 @@ export const DevRunRequest = z.object({
  */
 interface RemoteLanes {
   serves(lane: string): boolean;
-  laneRun(r: LaneRun, signal?: AbortSignal): Promise<object>;
+  laneRun(r: LaneRun, signal?: AbortSignal, onWait?: (held: string) => void): Promise<object>;
   trialEnded(trial: string): Promise<void>;
 }
 
@@ -78,6 +79,7 @@ export class DevRuns {
   private readonly unavailable: string | undefined;
   /** How long a dev run waits for a device before it gives up; none unless given (goal 079). */
   private readonly maxWaitMs: number | undefined;
+  private readonly live: Pick<LiveLog, "append"> | undefined;
 
   constructor(opts: {
     runner: Runner;
@@ -91,8 +93,11 @@ export class DevRuns {
     /** Why dev runs cannot run on this rig at all. */
     unavailable?: string | undefined;
     maxWaitMs?: number;
+    /** Live, where a lane's run that waits for a runner says who holds it (goal 229). */
+    live?: Pick<LiveLog, "append"> | undefined;
   }) {
     this.runner = opts.runner;
+    this.live = opts.live;
     this.ledger = opts.ledger;
     this.scratchDir = opts.scratchDir;
     this.gpu = opts.gpu;
@@ -194,6 +199,14 @@ export class DevRuns {
           limits,
         },
         wait.signal,
+        (held) =>
+          this.live?.append({
+            source: `trial:${trial}`,
+            kind: "status",
+            text: `run_experiment waits for a runner: ${held}`,
+            lane: req.lane,
+            run: t.run,
+          }),
       );
       const o = r as {
         wall_ms?: unknown;

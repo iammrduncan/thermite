@@ -1,7 +1,7 @@
 ---
 id: "229"
 title: "A runner pool shared by the lanes, never the judge"
-status: READY
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: ["206", "219"]
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 229 · A runner pool shared by the lanes, never the judge
 
-**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -41,6 +41,7 @@ On the lab the judge was the bottleneck: lanes waited hours for verdicts while t
 ## Progress
 
 - 2026-11-07 07:52 UTC: Goal written from the owner's ask, after a lab night where two of three runners sat idle while the judge's queue grew.
+- 2026-11-07 08:17 UTC: items 1 to 6 built. The pool `lanes` in the `runners` setting and `THERMITE_RUNNERS` (`core/rig-settings.ts`, `harness/controller/judges.ts`), with no executor of the judge's (`harness/controller/runners.ts` makes one only for the judge's and shared). A lane's run takes its own runner, then a `lanes` one, then a shared one, and gets the machine's memory on the first two (`harness/judge/pools.ts`); one that waits is told who holds its runners, which Live says (`run_experiment waits for a runner: …`), and its answer gives `waited_s` (`harness/agents/devrun.ts`). Add a rig, Edit rig and the Runners block offer and name it (`control/dashboard/rigs/add-places.ts`, `control/ui/rigs/`), and every refusal and description lists it. Tests: `tests/harness/judge/pools.test.ts` (the order, two lanes taking turns, the wait's words and `waited_s`, the memory, the model files), `tests/harness/controller/runners.test.ts` (no judge's executor; the setting's parse), `tests/control/ui/rigs/runners.test.ts` (the block), and the refusal words in `tests/control/rigs/settings.test.ts` and `tests/control/clusters/runners.test.ts`. Pages: Give a rig runners on other machines, A rig over several machines, Limits and pacing, The rig's page, the settings reference, REST API, MCP tools, the changelog. The glossary's Runner says "in its pool" and needs no change. The test files have not run yet: they run on the lab's VM.
 
 ---
 

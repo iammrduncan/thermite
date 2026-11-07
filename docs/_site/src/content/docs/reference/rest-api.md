@@ -376,7 +376,7 @@ Its objects are named for `<rig>-<runner>` (cut, with a hash, past 40 characters
 | `<rig>'s harness is older: it does not report its settings and cannot take runners. They work after its next roll.` | Its harness reports no settings |
 | `A runner's name is 2 to 40 characters of a-z, 0-9 and -, starting and ending with a letter or digit.` | A name out of form |
 | `<rig> has a runner named <runner> already.` | The rig has one by that name |
-| `A runner's pool is judge, shared or lane-1 to lane-16.` | Another pool |
+| `A runner's pool is judge, shared, lanes or lane-1 to lane-16.` | Another pool |
 | `A runner on a cluster takes one GPU, or none.` | `gpus` other than 0 or 1 |
 | `<cluster> has no node <node> that control can see.`, `<node> offers no GPU through the device plugin.` | A node it can't use |
 | `The slot <slot> holds the rig <other>.` | Another rig's slot |

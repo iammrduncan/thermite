@@ -7,8 +7,8 @@ import { RunnerAway } from "../../../src/harness/judge/runner-link.ts";
 /**
  * Goal 206, step 3a: the runners of a rig's other machines in their pools. A runner takes one run
  * at a time, first come, first served, between the judge and the lanes it serves; a lane takes its
- * own runner before a shared one; a lane's wait ends with its trial; a trial's workspaces go when
- * it ends. Runners come and go (step 3c): one added takes runs once it is up, one away takes none
+ * own runner before the lanes' one (goal 229) and a shared one last; a lane's wait ends with its
+ * trial; a trial's workspaces go when it ends. Runners come and go (step 3c): one added takes runs once it is up, one away takes none
  * until it is up again, and one taken away ends the waits for it.
  */
 
@@ -111,6 +111,50 @@ describe("a rig's runners in their pools (goal 206)", () => {
     await r;
   });
 
+  test("a lane takes its own runner, then the lanes' one, then a shared one; lanes take turns on the lanes' (goal 229)", async () => {
+    const shared = fake("box-2-0");
+    const lanes = fake("box-4-0");
+    const own = fake("box-3-0");
+    const pools = poolsOf(
+      [shared.runner, "shared"],
+      [lanes.runner, "lanes"],
+      [own.runner, "lane-2"],
+    );
+    assert.equal(pools.serves("lane-5"), true, "the lanes' runner serves every lane");
+    assert.equal(poolsOf([lanes.runner, "lanes"]).serves("lane-1"), true);
+    const a = pools.laneRun(run("lane-2"));
+    const b = pools.laneRun(run("lane-2", "make b"));
+    const c = pools.laneRun(run("lane-1", "make c"));
+    await tick();
+    assert.deepEqual(own.said, ["run lane-2 make"]);
+    assert.deepEqual(lanes.said, ["run lane-2 make b"], "its own runner busy: the lanes' one");
+    assert.deepEqual(shared.said, ["run lane-1 make c"], "the lanes' busy too: a shared one");
+    own.finish();
+    lanes.finish();
+    shared.finish();
+    await Promise.all([a, b, c]);
+    // Two lanes with the lanes' runner alone take turns, first come, first served.
+    const one = fake("box-4-0");
+    const turns = poolsOf([one.runner, "lanes"]);
+    const told: string[] = [];
+    const first = turns.laneRun(run("lane-1", "make 1"), undefined, (held) => told.push(held));
+    const second = turns.laneRun(run("lane-2", "make 2"), undefined, (held) => told.push(held));
+    await tick();
+    assert.deepEqual(one.said, ["run lane-1 make 1"]);
+    assert.deepEqual(turns.waiting(), ["lane-2"]);
+    // The one that waits is told who holds its runner, once; the one that ran at once is not.
+    assert.deepEqual(told, ["box-4-0: lane-1's run"]);
+    one.finish();
+    assert.deepEqual(await first, { ran: true, exit: 0, runner: "box-4-0" });
+    await tick();
+    assert.deepEqual(one.said, ["run lane-1 make 1", "run lane-2 make 2"]);
+    one.finish();
+    // Its answer says how long it waited, in seconds.
+    const answer = (await second) as { runner?: string; waited_s?: unknown };
+    assert.equal(answer.runner, "box-4-0");
+    assert.equal(typeof answer.waited_s, "number");
+  });
+
   test("a lane's wait ends with its trial, and the trial's workspaces go when it ends", async () => {
     const s = fake("box-2-0");
     const pools = poolsOf([s.runner, "shared"]);
@@ -195,7 +239,7 @@ describe("a rig's runners in their pools (goal 206)", () => {
     assert.equal(pools.serves("lane-2"), false);
   });
 
-  test("a run whose memory no one set gets the machine's on the lane's own runner alone (goal 219)", async () => {
+  test("a run whose memory no one set gets the machine's on the lane's own runner or the lanes' (goals 219, 229)", async () => {
     const seen: LaneRun["limits"][] = [];
     const capture = (name: string) =>
       ({
@@ -209,10 +253,11 @@ describe("a rig's runners in their pools (goal 206)", () => {
     const limits = { rssMib: 4096, diskMib: 1024, rssDefault: true };
     await poolsOf([capture("box-3-0"), "lane-2"]).laneRun({ ...run("lane-2"), limits });
     await poolsOf([capture("box-2-0"), "shared"]).laneRun({ ...run("lane-1"), limits });
+    await poolsOf([capture("box-4-0"), "lanes"]).laneRun({ ...run("lane-1"), limits });
     assert.deepEqual(
       seen.map((l) => l.rssDefault),
-      [true, false],
-      "a shared runner, which the judge uses too, keeps the default",
+      [true, false, true],
+      "a shared runner, which the judge uses too, keeps the default; the lanes' one, which no judge's job shares, does not",
     );
   });
 
@@ -231,12 +276,13 @@ describe("a rig's runners in their pools (goal 206)", () => {
     pools.add(named("judge-0"), "judge", true);
     pools.add(named("lane-0"), "lane-1" as never, true);
     pools.add(named("shared-0", true), "shared", true);
+    pools.add(named("lanes-0"), "lanes", true);
     pools.add(named("down-0"), "lane-2" as never, false);
     pools.prefetch("r-1", (runner) => failed.push(runner));
     assert.deepEqual(
       begun,
-      ["lane-0 r-1", "shared-0 r-1"],
-      "not the judge's, nor one that is down",
+      ["lane-0 r-1", "shared-0 r-1", "lanes-0 r-1"],
+      "the lanes' too (goal 229); not the judge's, nor one that is down",
     );
   });
 });

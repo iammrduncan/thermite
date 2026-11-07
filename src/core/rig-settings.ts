@@ -60,14 +60,15 @@ export interface RigSettings {
 }
 
 /**
- * A runner's pool (goal 206): the judge's, one lane's (`lane-2`), or shared by the judge and every
- * lane, first come, first served.
+ * A runner's pool (goal 206): the judge's, one lane's (`lane-2`), shared by the judge and every
+ * lane, or the lanes' (goal 229), shared by every lane and never the judge; first come, first
+ * served.
  */
-export type RunnerPool = "judge" | "shared" | `lane-${number}`;
+export type RunnerPool = "judge" | "shared" | "lanes" | `lane-${number}`;
 
-/** A pool's name: judge, shared or lane-1 to lane-MAX_LANES. */
+/** A pool's name: judge, shared, lanes or lane-1 to lane-MAX_LANES. */
 const POOL = new RegExp(
-  `^(?:judge|shared|lane-(?:${Array.from({ length: MAX_LANES }, (_, i) => i + 1).join("|")}))$`,
+  `^(?:judge|shared|lanes|lane-(?:${Array.from({ length: MAX_LANES }, (_, i) => i + 1).join("|")}))$`,
 );
 
 /** The most runners one runner process serves, and runner processes one rig has. */
@@ -78,7 +79,7 @@ export const RUNNER_PROCESSES = 16;
 export const RunnerSetting = z.strictObject({
   name: z.string().regex(RIG_ID),
   pools: z
-    .array(z.string().regex(POOL, `a pool is judge, shared or lane-1 to lane-${MAX_LANES}`))
+    .array(z.string().regex(POOL, `a pool is judge, shared, lanes or lane-1 to lane-${MAX_LANES}`))
     .min(1)
     .max(RUNNERS_PER_PROCESS),
 });

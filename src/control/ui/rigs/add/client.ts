@@ -40,6 +40,7 @@ export const ADD_RIG_JS = `
   const poolSays = (p) =>
     p === "judge" ? "Only the judge measures here." :
     p === "shared" ? "The judge and every lane, in turn." :
+    p === "lanes" ? "Every lane, in turn: its run_experiment. The judge never measures here." :
     p.startsWith("lane-") ? "Only " + laneWords(p).toLowerCase() + ": its run_experiment. The judge never measures here." :
     "Not used: free for other rigs.";
   let lastPlace = "";
@@ -194,7 +195,7 @@ export const ADD_RIG_JS = `
       }
       for (const o of sel.options)
         if (o.value.startsWith("lane-")) o.hidden = Number(o.value.slice(5)) > Math.max(4, lanes) && !o.selected;
-      row.classList.remove("judge", "shared", "lane");
+      row.classList.remove("judge", "shared", "lanes", "lane");
       const says = row.querySelector("[data-pool-says]");
       if (!gpu.value) { if (says) says.textContent = machine.value ? "This machine has no free GPU left." : ""; continue; }
       const o = gpu.selectedOptions[0];
@@ -211,6 +212,7 @@ export const ADD_RIG_JS = `
     if (count) count.textContent = used.length + " chosen";
     const judgeOn = used.filter((u) => u.pool === "judge" || u.pool === "shared");
     const shared = used.filter((u) => u.pool === "shared").map((u) => u.label);
+    const lanesPool = used.filter((u) => u.pool === "lanes").map((u) => u.label);
     const kinds = [...new Set(used.map((u) => u.product).filter(Boolean))];
     const lines = [];
     lines.push("<b>The core</b> runs on " + esc(core || "the place you choose") + ": the run's records, the planner, " + lanes + " lane" + (lanes > 1 ? "s'" : "'s") + " agent programs and the judge's decisions.");
@@ -219,14 +221,17 @@ export const ADD_RIG_JS = `
       used.length ? "no runner yet" : (core || "the core") + "'s CPUs, as no GPU is chosen") + ".");
     for (let i = 1; i <= lanes; i++) {
       const own = used.filter((u) => u.pool === "lane-" + i).map((u) => u.label);
+      const after = [lanesPool.length ? "the lanes' " + list(lanesPool) : "", shared.length ? "the shared " + list(shared) : ""].filter(Boolean);
       lines.push("<b>Lane " + i + "</b> tries its changes on " + esc(
-        own.length ? "its own " + list(own) + (shared.length ? ", then the shared " + list(shared) : "") :
-        shared.length ? "the shared " + list(shared) : (core || "the core") + ", the core's own machine") + ".");
+        own.length ? "its own " + list(own) + (after.length ? ", then " + list(after) : "") :
+        after.length ? list(after) : (core || "the core") + ", the core's own machine") + ".");
     }
     if (used.length)
       lines.push(shared.length
         ? "On a shared runner, the judge and the lanes take turns, first come, first served."
-        : "No runner is shared: the judge and the lanes never wait for each other.");
+        : lanesPool.length
+          ? "On the lanes' runners the lanes take turns; the judge never waits for a lane."
+          : "No runner is shared: the judge and the lanes never wait for each other.");
     lines.push('<span class="muted">Runners can be added and taken away later on Edit rig, while a run goes on.</span>');
     sum.innerHTML = lines.map((l) => "<li>" + l + "</li>").join("");
     const notes = [];

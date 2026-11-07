@@ -201,7 +201,9 @@ describe("Edit rig's settings over REST and MCP", () => {
     );
     assert.deepEqual(
       rigSettingsChange("rig-a", now, split, { runners: [{ name: "box-2", pools: ["gpu"] }] }),
-      { error: "Not saved: runners.0.pools.0: a pool is judge, shared or lane-1 to lane-16" },
+      {
+        error: "Not saved: runners.0.pools.0: a pool is judge, shared, lanes or lane-1 to lane-16",
+      },
     );
     assert.deepEqual(
       rigSettingsChange("rig-a", now, split, { runners: [...runners, ...runners] }),

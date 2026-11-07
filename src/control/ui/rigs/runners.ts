@@ -15,6 +15,7 @@ type Process = RunnersView["processes"][number];
 function poolWords(pool: string): string {
   if (pool === "judge") return "the judge's";
   if (pool === "shared") return "shared";
+  if (pool === "lanes") return "the lanes'";
   return `${pool}'s`;
 }
 
@@ -93,10 +94,22 @@ function nowCell(u: RigView, p: Process, pool: string, holder: string | null): s
   if (holder || p.up) return nowHtml(u, holder);
   const others = (u.runners?.processes ?? [])
     .filter((x) => x.up && x.name !== p.name)
-    .flatMap((x) => x.runners.filter((y) => y.pool === pool || y.pool === "shared"))
+    .flatMap((x) =>
+      x.runners.filter(
+        (y) =>
+          y.pool === pool ||
+          y.pool === "shared" ||
+          // A lane's runs go to the lanes' runners too (goal 229), never the judge's jobs.
+          (pool !== "judge" && y.pool === "lanes"),
+      ),
+    )
     .map((y) => y.name);
   const whose =
-    pool === "judge" ? "the judge's jobs" : pool === "shared" ? "its runs" : `${pool}'s runs`;
+    pool === "judge"
+      ? "the judge's jobs"
+      : pool === "shared" || pool === "lanes"
+        ? "its runs"
+        : `${pool}'s runs`;
   return `<span class="muted">${esc(
     others.length
       ? `Nothing: ${whose} go to ${listWords(others)} meanwhile, and come back once ${p.name} answers.`
@@ -106,7 +119,7 @@ function nowCell(u: RigView, p: Process, pool: string, holder: string | null): s
 
 /** A pool as a chip, coloured as Add a rig colours it. */
 const poolChip = (pool: string) =>
-  `<span class="chip${pool === "judge" ? " warn" : pool === "shared" ? " info" : ""}">${esc(poolWords(pool))}</span>`;
+  `<span class="chip${pool === "judge" ? " warn" : pool === "shared" ? " info" : pool === "lanes" ? " ok" : ""}">${esc(poolWords(pool))}</span>`;
 
 /** Who waits for a runner: a card for the judge's jobs and one for each lane, with since when. */
 function waitingCards(u: RigView, now: number): string {
@@ -147,9 +160,11 @@ function waitingCards(u: RigView, now: number): string {
   for (const w of lanes) {
     const lane = w.who;
     const own = runnersOf((pool) => pool === lane);
+    // The lanes' runners (goal 229) come before a shared one, which the judge uses too.
+    const lanesOwn = runnersOf((pool) => pool === "lanes");
     const shared = runnersOf((pool) => pool === "shared");
     const away = own.filter((x) => !x.up).map((x) => x.name);
-    const next = [...own, ...shared].filter((x) => x.up);
+    const next = [...own, ...lanesOwn, ...shared].filter((x) => x.up);
     const busy = [...new Set(next.flatMap((x) => (x.holder ? [holderWords(x.holder)] : [])))];
     const says = `${away.length ? `Its own ${listWords(away)} ${away.length === 1 ? "is" : "are"} away; ` : ""}${
       next.length
@@ -157,7 +172,7 @@ function waitingCards(u: RigView, now: number): string {
         : "no runner of its pool answers now."
     }`;
     cards.push(
-      `<div class="card rq"><span>${own.length ? poolChip(lane) : ""}${own.length && shared.length ? " and " : ""}${shared.length ? poolChip("shared") : ""}</span><span>${esc(`${lane.replace("lane-", "Lane ")}'s run_experiment${w.since ? `, waiting ${ago(w.since, now)}` : ""}.`)}</span><span class="small muted">${esc(says)}</span></div>`,
+      `<div class="card rq"><span>${[own.length ? poolChip(lane) : "", lanesOwn.length ? poolChip("lanes") : "", shared.length ? poolChip("shared") : ""].filter(Boolean).join(" and ")}</span><span>${esc(`${lane.replace("lane-", "Lane ")}'s run_experiment${w.since ? `, waiting ${ago(w.since, now)}` : ""}.`)}</span><span class="small muted">${esc(says)}</span></div>`,
     );
   }
   return `<div class="sub-block"><h3>Waiting for a runner</h3><div class="rq-cards">${cards.join("")}</div></div>`;
@@ -200,7 +215,7 @@ export function runnersBlock(
         `<span${l.ok ? "" : ' class="bad"'}><span class="muted mono">${esc(l.at.slice(11, 16))}</span> ${esc(l.text)}</span>`,
     )
     .join("");
-  return `<div class="block" data-part="runners"><div class="head"><h2>Runners</h2><span class="n">${count}</span><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}/edit#where">Add or take away runners on Edit rig</a> · the run goes on</span></div><div class="card flat" style="overflow-x:auto"><table class="ut"><thead><tr><th scope="col">Runner</th><th scope="col">Pool</th><th scope="col">State</th><th scope="col">Now</th><th scope="col">Its store</th></tr></thead><tbody>${rows}</tbody></table></div>${waitingCards(u, now)}${lines ? `<div class="sub-block"><h3>History <span class="muted small">the runners' lines</span></h3><div class="card rh">${lines}</div></div>` : ""}<div class="small muted" style="margin-top:6px">Each runner takes one run at a time; on a shared one the judge and the lanes take turns, first come, first served.</div></div>`;
+  return `<div class="block" data-part="runners"><div class="head"><h2>Runners</h2><span class="n">${count}</span><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}/edit#where">Add or take away runners on Edit rig</a> · the run goes on</span></div><div class="card flat" style="overflow-x:auto"><table class="ut"><thead><tr><th scope="col">Runner</th><th scope="col">Pool</th><th scope="col">State</th><th scope="col">Now</th><th scope="col">Its store</th></tr></thead><tbody>${rows}</tbody></table></div>${waitingCards(u, now)}${lines ? `<div class="sub-block"><h3>History <span class="muted small">the runners' lines</span></h3><div class="card rh">${lines}</div></div>` : ""}<div class="small muted" style="margin-top:6px">Each runner takes one run at a time; on a shared one the judge and the lanes take turns, first come, first served, and on the lanes' one the lanes alone.</div></div>`;
 }
 
 /** The rig's core, as the approved mockup has it: where it runs, its facts, and what it keeps. */
@@ -214,12 +229,13 @@ export function coreBlock(c: {
   return `<div class="block" data-part="core"><div class="head"><h2>The core</h2></div><div class="card rc"><div><b>${esc(c.name)}</b> <span class="chip">${esc(c.where)}</span> ${c.chips}</div>${c.facts.length ? `<div class="rc-facts">${c.facts.map((f) => `<span>${esc(f)}</span>`).join("")}</div>` : ""}<div class="small">${esc(c.keeps)}</div></div></div>`;
 }
 
-/** A pool's choice in a select: the judge's, shared, or one of the rig's lanes'. */
+/** A pool's choice in a select: the judge's, shared, the lanes', or one of the rig's lanes'. */
 function poolOptions(now: string, lanes: number): string {
   const n = Math.max(lanes, now.startsWith("lane-") ? Number(now.slice(5)) : 0);
   const opts = [
     ["judge", "The judge's"],
     ["shared", "Shared: the judge and the lanes"],
+    ["lanes", "Lanes: any lane, never the judge"],
     ...Array.from({ length: n }, (_, i) => [`lane-${i + 1}`, `Lane ${i + 1}'s`]),
   ];
   return opts
@@ -293,12 +309,12 @@ export function runnersFields(u: RigView, settings: RigSettings, at: RunnerPlace
     : `<div class="muted small" style="margin-top:10px">No free GPU that control knows: add a machine or a cluster under <a href="/ui/settings/machines">Settings › Machines</a>.</div>`;
   return `<div class="sec-sub" id="runners"><div class="sec-head"><h3>Runners <span class="muted small" data-runner-count>${settings.runners.length}</span></h3><span class="small muted">Changes take effect at once, while the run goes on: nothing pauses.</span></div><div class="card flat" data-runner-list data-judge-on-runners="${at.judgeOnRunners ? "1" : ""}">${rows || `<div class="empty" data-runner-none>None yet: the rig runs on its core alone.</div>`}</div>${add}<div data-runner-notes></div>
 <details class="adv"><summary>A runner process you started yourself</summary><div class="g3"><label class="fd">${infoLabel("Its name", "The name of a runner process started with THERMITE_ROLE=runner and THERMITE_RUNNER, with the rig's token: it registers its key with control, and the rig's core asks it once it answers. 2 to 40 lowercase letters, digits and dashes.")}<input name="runner_add_name" maxlength="40" placeholder="box-2" data-add-runner></label>
-<label class="fd">${infoLabel("Its runners' pools", "One pool for each runner it serves, in its order, separated by commas: judge, shared or lane-1 to lane-16. Each GPU is one runner.")}<input name="runner_add_pools" placeholder="judge, shared"></label></div></details></div>`;
+<label class="fd">${infoLabel("Its runners' pools", "One pool for each runner it serves, in its order, separated by commas: judge, shared, lanes or lane-1 to lane-16. Each GPU is one runner.")}<input name="runner_add_pools" placeholder="judge, shared"></label></div></details></div>`;
 }
 
 /** What a pool means, beside each pool's field. */
 const POOL_TIP =
-  "The judge's: only the judge measures there. Shared: the judge and every lane, in turn, first come, first served. A lane's: only that lane runs its run_experiment there, and the judge never measures on it.";
+  "The judge's: only the judge measures there. Shared: the judge and every lane, in turn, first come, first served. Lanes: every lane runs its run_experiment there, in turn, and the judge never measures on it. A lane's: only that lane runs its run_experiment there, and the judge never measures on it.";
 
 /**
  * The rig's runner processes as Edit rig's form asks for them: each kept with its runners' pools

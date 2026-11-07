@@ -34,7 +34,7 @@ export const EDIT_RIG_JS = `
   // a free GPU in the list, with its pool, for Save changes to set up. The notes say what would
   // go wrong. Without the script, Remove is a box to tick and Add a runner's choice is added.
   const escR = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  const poolPhrase = (p) => p === "judge" ? "the judge's pool" : p === "shared" ? "the shared pool" : p.replace("lane-", "lane ") + "'s pool";
+  const poolPhrase = (p) => p === "judge" ? "the judge's pool" : p === "shared" ? "the shared pool" : p === "lanes" ? "the lanes' pool" : p.replace("lane-", "lane ") + "'s pool";
   const runnerList = $("[data-runner-list]");
   const addAt = $("[data-add-at]"), addPool = $("[data-add-pool]"), addBtn = $("[data-add-btn]");
   let nextNew = 0;

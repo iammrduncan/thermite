@@ -68,7 +68,7 @@ interface ClusterRunnerRequest {
   storageGi?: number | undefined;
   cpus?: number | undefined;
   memoryGi?: number | undefined;
-  /** Its runner's pool: the judge's, shared, or a lane's. */
+  /** Its runner's pool: the judge's, shared, the lanes', or a lane's. */
   pool: string;
 }
 
@@ -116,7 +116,7 @@ export const ClusterRunnerBody = z.strictObject({
   pool: z
     .string()
     .describe(
-      "Its runner's pool: judge, shared (the judge's and every lane's, in turn) or lane-1 to lane-16",
+      "Its runner's pool: judge, shared (the judge's and every lane's, in turn), lanes (every lane's, never the judge's) or lane-1 to lane-16",
     ),
 });
 export type ClusterRunnerBody = z.infer<typeof ClusterRunnerBody>;
@@ -201,7 +201,8 @@ export async function addClusterRunner(
   )
     return fail(`${rig} has a runner named ${runner} already.`);
   const setting = RunnerSetting.safeParse({ name: runner, pools: [i.pool] });
-  if (!setting.success) return fail("A runner's pool is judge, shared or lane-1 to lane-16.");
+  if (!setting.success)
+    return fail("A runner's pool is judge, shared, lanes or lane-1 to lane-16.");
   const k = store.clusters.get(i.cluster);
   if (!k) return fail("Choose a cluster.");
   const facts = k.facts as ClusterFacts | null;
@@ -648,7 +649,7 @@ export async function addMachineRunner(
   )
     return fail(`${rig} has a runner named ${runner} already.`);
   if (!RunnerSetting.safeParse({ name: runner, pools: [i.pool] }).success)
-    return fail("A runner's pool is judge, shared or lane-1 to lane-16.");
+    return fail("A runner's pool is judge, shared, lanes or lane-1 to lane-16.");
   const m = store.machines.get(i.machine);
   if (!m) return fail("Choose a machine.");
   const facts = m.facts as MachineFacts | null;

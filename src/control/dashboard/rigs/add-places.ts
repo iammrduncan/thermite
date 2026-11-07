@@ -420,7 +420,7 @@ export function productAt(store: ControlStore, at: Place): string {
 
 /** What a runner's pool means, beside its field. */
 const POOL_TIP =
-  "The judge's: only the judge measures here. Shared: the judge and every lane, in turn, first come, first served. A lane's: only that lane tries its changes here, with run_experiment, and the judge never measures on it.";
+  "The judge's: only the judge measures here. Shared: the judge and every lane, in turn, first come, first served. Lanes: every lane tries its changes here, in turn, and the judge never measures on it. A lane's: only that lane tries its changes here, with run_experiment, and the judge never measures on it.";
 
 /**
  * The core's place chosen first: the one Settings › Machines' Add a rig here asked for, else the
@@ -482,6 +482,7 @@ export function runnerPicker(groups: ReturnType<typeof runnerGroups>): string {
   const pools = [
     opt("judge", "The judge's"),
     opt("shared", "Shared: the judge and the lanes"),
+    opt("lanes", "Lanes: any lane, never the judge"),
     ...Array.from({ length: 16 }, (_, i) => opt(`lane-${i + 1}`, `Lane ${i + 1}'s`)),
   ].join("");
   const row = (n: string) =>

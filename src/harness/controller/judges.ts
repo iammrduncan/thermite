@@ -24,8 +24,9 @@ import type { RunnerExecutors } from "./runners.ts";
 /**
  * The rig's runner processes when it starts (goal 206): THERMITE_RUNNERS, `<name>=<pool>[+<pool>…]`
  * separated by commas: one pool for each runner the process serves, in its order: `judge`, `shared`
- * (the judge's and every lane's, first come, first served) or one lane's (`lane-2`). It is the
- * `runners` setting's value until the owner sets one; the setting changes it while the rig works.
+ * (the judge's and every lane's, first come, first served), `lanes` (every lane's, never the
+ * judge's) or one lane's (`lane-2`). It is the `runners` setting's value until the owner sets one;
+ * the setting changes it while the rig works.
  * Not set: none, and the core runs on its own runner alone.
  */
 export function runnersOf(env: NodeJS.ProcessEnv): RunnerSetting[] {
@@ -36,7 +37,7 @@ export function runnersOf(env: NodeJS.ProcessEnv): RunnerSetting[] {
     const r = RunnerSetting.safeParse({ name, pools: pools.split("+") });
     if (!r.success)
       throw new Error(
-        `THERMITE_RUNNERS: "${part}" is not <name>=<pool>[+<pool>…], each judge, shared or lane-<n>, at most ${RUNNERS_PER_PROCESS}`,
+        `THERMITE_RUNNERS: "${part}" is not <name>=<pool>[+<pool>…], each judge, shared, lanes or lane-<n>, at most ${RUNNERS_PER_PROCESS}`,
       );
     return r.data as RunnerSetting;
   });

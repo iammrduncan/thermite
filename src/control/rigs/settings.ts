@@ -396,7 +396,7 @@ export const rigSettingsFields = {
         pools: z
           .array(z.string())
           .describe(
-            "The pool of each runner it serves, in its order: judge, shared (the judge's and every lane's, first come, first served) or one lane's, such as lane-2",
+            "The pool of each runner it serves, in its order: judge, shared (the judge's and every lane's, first come, first served), lanes (every lane's, never the judge's) or one lane's, such as lane-2",
           ),
       }),
     )

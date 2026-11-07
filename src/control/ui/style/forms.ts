@@ -16,7 +16,7 @@ export const FORMS = `/* Edit rig: one row per part, with its switch. */
 .ar-run { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(0, 1fr) auto; gap: 0 14px; align-items: end; padding: 12px 14px 0; border-bottom: 1px solid var(--border); }
 .ar-run:last-child { border-bottom: 0; } .ar-run .fd, .ar-run > button { margin-bottom: 10px; } .ar-says { grid-column: 1 / -1; margin: -4px 0 12px; }
 .ar-run.judge select.ar-pool { border-color: var(--warning-foreground); color: var(--warning-foreground); font-weight: 600; }
-.ar-run.lane select.ar-pool, .ar-run.shared select.ar-pool { border-color: var(--primary); color: var(--info-foreground); font-weight: 600; }
+.ar-run.lane select.ar-pool, .ar-run.lanes select.ar-pool, .ar-run.shared select.ar-pool { border-color: var(--primary); color: var(--info-foreground); font-weight: 600; }
 @media (max-width: 760px) { .ar-run { grid-template-columns: minmax(0, 1fr); } }
 .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; } .sec-head h2 { font-size: 15px; margin: 0 0 4px; }
 .ar-sum { padding: 14px 16px; margin-bottom: 14px; } .ar-sum h2 { font-size: 15px; margin: 0 0 8px; }
