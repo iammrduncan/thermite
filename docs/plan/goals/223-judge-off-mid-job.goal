@@ -1,7 +1,7 @@
 ---
 id: "223"
 title: "Turning the judge off says what becomes of the job under way"
-status: PROPOSED
+status: DROPPED
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 223 · Turning the judge off says what becomes of the job under way
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `DROPPED` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -31,11 +31,12 @@ An operator turns the judge off to make room on its runner, or to hold the judge
 
 ## Decisions
 
-- None yet.
+- 2026-11-07: dropped. Its premise was wrong: the job under way had finished, at 01:37 UTC with a verdict, and the job after it, its confirmation, waited while the judge was off, as Edit rig says. A judge turned off lets the job it is on finish and takes no new one.
 
 ## Progress
 
 - 2026-11-07 02:08 UTC: Goal written from the lab, where turning the judge off left a job paused between blocks for 35 minutes with nothing saying so.
+- 2026-11-07 02:11 UTC: dropped: the job had a verdict at 01:37 UTC, which a read of too few of the run's newest events missed.
 
 ---
 
