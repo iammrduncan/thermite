@@ -55,6 +55,7 @@ const typeOfSection = {
   explanation: "explanation",
   "use-cases": "use-case",
   studies: "study",
+  compare: "comparison",
   project: "project",
 };
 
