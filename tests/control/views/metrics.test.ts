@@ -152,6 +152,12 @@ test("the Overview's metrics block: the primary's chart, a card for each lower p
   assert.match(html, /Priority 1 · primary<\/span><b>decode_tps<\/b>/);
   assert.match(html, /<label for="ms-gain">Gain<\/label>.*<label for="ms-unit">tok\/s<\/label>/s);
   assert.match(html, /Priority 2<\/span><b>prefill_tps<\/b>/);
+  // The lower priorities in a row of their own, each sparkline as wide as its card.
+  assert.match(
+    html,
+    /<div class="ms-top"><div class="card ms-primary">.*<\/div><div class="ms-lowers"><div class="card ms-lower">/s,
+  );
+  assert.match(html, /class="chart ms-spark fluid"/);
   assert.match(
     html,
     /<b>peak_gib<\/b><div class="muted small">at most 5% above the baseline<\/div>/,

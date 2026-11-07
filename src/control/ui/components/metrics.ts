@@ -1,5 +1,6 @@
 import { guardWordsAsks } from "../../../core/metric-roles.ts";
 import {
+  currentChampion,
   figure,
   type GuardRow,
   type RunMetrics,
@@ -7,6 +8,7 @@ import {
   roomLeft,
   runMetrics,
 } from "../../views/index.ts";
+import { signed } from "../words/index.ts";
 import { esc, gainChart } from "./index.ts";
 
 /**
@@ -36,6 +38,8 @@ function spark(
     highs?: (number | null)[];
     latest?: number | null;
     label: string;
+    /** As wide as its card, its height to scale; else `w` pixels wide. */
+    fluid?: boolean;
   },
 ): string {
   const known = values.filter((v): v is number => v !== null);
@@ -86,7 +90,7 @@ function spark(
     o.start != null
       ? `<line class="start" x1="2" x2="${o.w - 2}" y1="${f(Y(o.start))}" y2="${f(Y(o.start))}"/>`
       : "";
-  return `<svg class="chart ms-spark" viewBox="0 0 ${o.w} ${o.h}" style="width:${o.w}px" role="img" aria-label="${esc(o.label)}">${band}${start}<path class="limit" d="${steps(o.lows)} ${steps(o.highs)}"/><path class="ms-line" d="${line}"/>${dots}${latest}</svg>`;
+  return `<svg class="chart ms-spark${o.fluid ? " fluid" : ""}" viewBox="0 0 ${o.w} ${o.h}"${o.fluid ? "" : ` style="width:${o.w}px"`} role="img" aria-label="${esc(o.label)}">${band}${start}<path class="limit" d="${steps(o.lows)} ${steps(o.highs)}"/><path class="ms-line" d="${line}"/>${dots}${latest}</svg>`;
 }
 
 const last = (xs: { value: number | null }[]) =>
@@ -96,6 +100,10 @@ function primaryCard(r: RunView, m: RunMetrics): string {
   const p = m.priorities[0];
   if (!p) return "";
   const now = last(p.points);
+  // The gain as the judge measured it, each champion against the one it replaced, as the champion
+  // card and the chart give it: the values compared beside it come from different measurements.
+  const step = currentChampion(r);
+  const gain = step?.attempt ? signed(step.cumulative - 1) : pct(now ?? 0, p.start ?? 1);
   const valueChart =
     p.start !== null ? gainChart(r, 760, 200, { start: p.start, unit: p.unit ?? "" }) : "";
   const toggle = valueChart
@@ -103,7 +111,7 @@ function primaryCard(r: RunView, m: RunMetrics): string {
     : "";
   return `<div class="card ms-primary"><div class="ms-head"><span class="chip info">Priority 1 · primary</span><b>${esc(p.metric)}</b><span class="muted small">${p.direction === "max" ? "higher" : "lower"} is better${p.min_effect !== null ? ` · counts from ${(p.min_effect * 100).toFixed(1).replace(/\.0$/, "")}%` : ""}</span></div>${
     now !== null && p.start !== null
-      ? `<div class="ms-big"><span class="fig-big">${esc(figure(now))}${esc(unitOf(p.unit))}</span><span class="ok">${esc(pct(now, p.start))} over the start, ${esc(figure(p.start))}</span></div>`
+      ? `<div class="ms-big"><span class="fig-big">${esc(figure(now))}${esc(unitOf(p.unit))}</span><span class="ok" title="The judge's gain: each champion measured against the one it replaced, in the same blocks. The starting point's value was measured at the run's start.">${esc(gain)} over the start, ${esc(figure(p.start))}</span></div>`
       : ""
   }${toggle}<div class="ms-chart ms-chart-gain">${gainChart(r)}</div>${valueChart ? `<div class="ms-chart ms-chart-unit">${valueChart}</div>` : ""}${
     p.latest
@@ -129,6 +137,7 @@ function lowerCards(m: RunMetrics): string {
           start: p.start,
           latest: p.latest?.value ?? null,
           label: `${p.metric} of each champion`,
+          fluid: true,
         },
       )}</div>`;
     })
@@ -174,5 +183,5 @@ function infoTiles(m: RunMetrics): string {
 export function metricsBlock(r: RunView): string {
   const m = runMetrics(r);
   if (!m?.priorities.length) return "";
-  return `<div class="block" data-part="metrics"><div class="head"><h2>Metrics</h2><span class="right muted small">measured on this rig, against the starting point</span></div><div class="ms-top">${primaryCard(r, m)}${lowerCards(m)}</div>${guardRows(m)}${infoTiles(m)}</div>`;
+  return `<div class="block" data-part="metrics"><div class="head"><h2>Metrics</h2><span class="right muted small">measured on this rig, against the starting point</span></div><div class="ms-top">${primaryCard(r, m)}</div>${m.priorities.length > 1 ? `<div class="ms-lowers">${lowerCards(m)}</div>` : ""}${guardRows(m)}${infoTiles(m)}</div>`;
 }

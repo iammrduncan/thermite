@@ -20,9 +20,9 @@ export const RUNS = `/* a run at a glance: its lanes, planner and judge, one lin
 .goalbar .seg.ok { background: var(--success); } .goalbar .seg.bad { background: var(--error); } .goalbar .seg.warn { background: var(--warning); }
 
 /* a hill climb's metrics on its Overview (goal 209): priorities, guard rows, informational tiles */
-.ms-top { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
-.ms-top > .ms-primary:only-child { grid-column: span 2; }
-@media (max-width: 1100px) { .ms-top { grid-template-columns: minmax(0, 1fr); } .ms-top > .ms-primary:only-child { grid-column: auto; } }
+.ms-top { margin-bottom: 14px; }
+.ms-lowers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.ms-top > .card, .ms-lowers > .card { margin-top: 0; }
 .ms-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .ms-big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .fig-big { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -45,6 +45,7 @@ export const RUNS = `/* a run at a glance: its lanes, planner and judge, one lin
 .ms-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .ms-tile-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
 svg.chart.ms-spark { height: auto; display: inline-block; }
+svg.chart.ms-spark.fluid { width: 100%; display: block; margin-top: 6px; }
 svg.chart .ms-line { fill: none; stroke: var(--info); stroke-width: 1.5; }
 svg.chart .ms-pt { fill: var(--info); }
 svg.chart .ms-latest { fill: var(--card); stroke: var(--info); stroke-width: 1.5; stroke-dasharray: 2 2; }

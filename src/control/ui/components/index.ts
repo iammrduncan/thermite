@@ -397,8 +397,16 @@ export function gainChart(
   const t0 = Math.min(...ts);
   const t1 = Math.max(now, ...ts, t0 + 1);
   const ys = steps.map((s) => s.cumulative - 1);
-  const y0 = Math.min(0, ...ys);
-  const y1 = Math.max(...ys, y0 + 0.001) * 1.12;
+  // The axis on round values: a step of 1, 2, 2.5 or 5 times a power of ten, from at or below the
+  // lowest to above the highest, so each line stands where its label says.
+  const low = Math.min(0, ...ys);
+  const span = Math.max(...ys, low + 0.001) * 1.05 - low;
+  const mag = 10 ** Math.floor(Math.log10(span / 5));
+  const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((s) => s >= span / 5) ?? 10 * mag;
+  const y0 = Math.floor(low / step) * step;
+  const y1 = Math.ceil((low + span) / step) * step;
+  const ticks = Array.from({ length: Math.round((y1 - y0) / step) + 1 }, (_, i) => y0 + i * step);
+  const places = Number.isInteger(Math.round(step * 1e6) / 1e4) ? 0 : 1;
   const X = (t: number) => padL + ((t - t0) / (t1 - t0)) * (w - padL - padR);
   const Y = (y: number) => padT + ((y1 - y) / (y1 - y0)) * (h - padT - padB);
   let d = "";
@@ -410,11 +418,10 @@ export function gainChart(
   const lastY = Y(ys.at(-1) as number);
   d += ` H${X(t1).toFixed(1)}`;
   const area = `${d} V${Y(y0).toFixed(1)} H${X(t0).toFixed(1)} Z`;
-  const grid = [0, 0.25, 0.5, 0.75, 1]
-    .map((f) => y0 + f * (y1 - y0))
+  const grid = ticks
     .map(
       (y) =>
-        `<line class="grid" x1="${padL}" x2="${w - padR}" y1="${Y(y).toFixed(1)}" y2="${Y(y).toFixed(1)}"/><text x="${padL - 8}" y="${(Y(y) + 4).toFixed(1)}" text-anchor="end">${inUnit ? esc(figure(inUnit.start * (1 + y))) : pct(y, 0)}</text>`,
+        `<line class="grid" x1="${padL}" x2="${w - padR}" y1="${Y(y).toFixed(1)}" y2="${Y(y).toFixed(1)}"/><text x="${padL - 8}" y="${(Y(y) + 4).toFixed(1)}" text-anchor="end">${inUnit ? esc(figure(inUnit.start * (1 + y))) : pct(y, places)}</text>`,
     )
     .join("");
   const fmt = (t: number) => {
