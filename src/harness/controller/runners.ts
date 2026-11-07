@@ -3,12 +3,17 @@ import { log } from "../../common/log.ts";
 import type { RunnerSetting } from "../../core/rig-settings.ts";
 import {
   type FetchProgress,
+  GpuClock,
+  type GpuRead,
+  type GpuTime,
   type Pool,
   RemoteRunner,
   type RunLink,
   RunnerAway,
   type RunnerLink,
   RunnerPools,
+  type RunnerTime,
+  whose,
 } from "../judge/index.ts";
 import type { HarnessService } from "../service/index.ts";
 
@@ -45,6 +50,24 @@ interface RunnerStore {
   kits: number;
 }
 
+/** Each card's use from a check's answer (goal 231), by card; one it can't read is left out. */
+function gpusOf(v: unknown): Map<number, GpuRead> {
+  const out = new Map<number, GpuRead>();
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null);
+  for (const g of Array.isArray(v) ? v : []) {
+    const o = (g ?? {}) as Record<string, unknown>;
+    const card = n(o.card);
+    const util = n(o.util_pct);
+    if (card === null || util === null) continue;
+    out.set(card, {
+      util_pct: Math.min(100, util),
+      mem_used_mib: n(o.mem_used_mib),
+      mem_total_mib: n(o.mem_total_mib),
+    });
+  }
+  return out;
+}
+
 /** A store from a check's answer, its numbers alone. */
 function storeOf(v: unknown): RunnerStore | undefined {
   if (!v || typeof v !== "object") return undefined;
@@ -73,6 +96,8 @@ interface Process {
   type?: string | undefined;
   /** What it keeps, as it last answered: its volume and its builds and kits. */
   store?: RunnerStore | undefined;
+  /** Each of its runners' GPU use as its checks read it, by card (goal 231). */
+  gpus: GpuClock[];
   /** When it last answered its check, and since when it is away. */
   answeredAt?: number | undefined;
   awaySince?: number | undefined;
@@ -135,7 +160,8 @@ export class RunnerHub {
   /**
    * The rig's runners for its report to control: each process, whether it takes runs, when it
    * last answered or since when it is away, who holds each of its runners and its fetch of a
-   * run's model files under way (goal 213); and who waits.
+   * run's model files under way (goal 213); and who waits. With how each runner spent its time
+   * and its GPU's use, and who waited and how long (goal 231): running totals since it joined.
    */
   report(): {
     processes: {
@@ -146,12 +172,22 @@ export class RunnerHub {
       answered_at: string | null;
       away_since: string | null;
       store?: RunnerStore;
-      runners: { name: string; pool: string; holder: string | null; fetch?: FetchProgress }[];
+      runners: {
+        name: string;
+        pool: string;
+        holder: string | null;
+        fetch?: FetchProgress;
+        use?: RunnerTime;
+        gpu?: GpuTime;
+      }[];
     }[];
     waiting: string[];
     waits: { who: string; since: string }[];
+    waited: Record<string, { count: number; ms: number }>;
+    waited_since: string;
   } {
     const at = (ms: number | undefined) => (ms === undefined ? null : new Date(ms).toISOString());
+    const use = this.pools.use();
     return {
       processes: [...this.processes.values()].map((p) => ({
         name: p.setting.name,
@@ -161,17 +197,25 @@ export class RunnerHub {
         answered_at: at(p.answeredAt),
         away_since: at(p.awaySince),
         ...(p.store ? { store: p.store } : {}),
-        runners: p.runners.map((r) => ({
-          name: r.runner.name,
-          pool: r.pool,
-          holder: this.pools.holderOf(r.runner) ?? null,
-          ...(r.runner.fetch ? { fetch: r.runner.fetch } : {}),
-        })),
+        runners: p.runners.map((r, card) => {
+          const gpu = p.gpus[card]?.totals();
+          const time = use.runners[r.runner.name];
+          return {
+            name: r.runner.name,
+            pool: r.pool,
+            holder: this.pools.holderOf(r.runner) ?? null,
+            ...(r.runner.fetch ? { fetch: r.runner.fetch } : {}),
+            ...(time ? { use: time } : {}),
+            ...(gpu ? { gpu } : {}),
+          };
+        }),
       })),
       waiting: this.pools.waiting(),
       waits: this.pools
         .waits()
         .map((w) => ({ who: w.who, since: new Date(w.since).toISOString() })),
+      waited: use.waited,
+      waited_since: new Date(this.pools.since).toISOString(),
     };
   }
 
@@ -209,7 +253,16 @@ export class RunnerHub {
 
   private join(setting: RunnerSetting): void {
     const { service, link, core } = this.o;
-    const p: Process = { setting, runners: [], up: false, failed: 0, checking: false };
+    // A gap of three checks without a read counts for nothing: the judge measured there.
+    const gap = 3 * (this.o.checkEveryMs ?? CHECK_EVERY_MS);
+    const p: Process = {
+      setting,
+      runners: [],
+      up: false,
+      failed: 0,
+      checking: false,
+      gpus: setting.pools.map(() => new GpuClock(gap)),
+    };
     const to = link.to(setting.name);
     const away = () => (p.away ? Promise.reject(new RunnerAway(p.away)) : undefined);
     const guarded: RunLink = {
@@ -268,18 +321,27 @@ export class RunnerHub {
     if (!p || p.checking) return;
     p.checking = true;
     try {
+      // Each card's use, but of those the judge measures on: a read never disturbs a timing.
+      const gpus = p.runners.flatMap((r, card) =>
+        whose(this.pools.holderOf(r.runner) ?? "") === "judge" ? [] : [card],
+      );
       const info = (await this.o.link
         .to(name)
-        .ask({ op: "info" }, this.o.checkWaitMs ?? CHECK_WAIT_MS)) as {
+        .ask(
+          { op: "info", ...(gpus.length ? { gpus } : {}) },
+          this.o.checkWaitMs ?? CHECK_WAIT_MS,
+        )) as {
         type?: unknown;
         separated?: unknown;
         cards?: unknown;
         store?: unknown;
+        gpus?: unknown;
       };
       if (this.processes.get(name) !== p) return;
       p.failed = 0;
       p.answeredAt = Date.now();
       p.store = storeOf(info.store);
+      for (const [card, use] of gpusOf(info.gpus)) p.gpus[card]?.saw(use, p.answeredAt);
       const unfit = this.unfit(p, info);
       if (unfit) {
         if (p.unfit !== unfit)

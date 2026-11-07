@@ -94,7 +94,9 @@ export type {
   KbTextState,
   KbTotals,
 } from "./kb/index.ts";
+export type { RunnerUseSample } from "./runner-use.ts";
 
+import { RunnerUse } from "./runner-use.ts";
 import { RigRunners } from "./runners.ts";
 import { RigWorkers } from "./workers.ts";
 
@@ -156,6 +158,8 @@ export class ControlStore {
   readonly rigRunners: RigRunners;
   /** Add a rig's Workers at a time, until the new rig takes it (goal 206). */
   readonly rigWorkers: RigWorkers;
+  /** How a rig's runners spent their time (goal 231). */
+  readonly runnerUse: RunnerUse;
   readonly rigUpdates: RigUpdates;
   readonly mcpServers: McpServerRows;
   /** Changes the operator proposes to a campaign's settings, for the owner to approve. */
@@ -212,6 +216,7 @@ export class ControlStore {
     this.busKeys = new BusKeys(this, this.db);
     this.rigRunners = new RigRunners(this, this.db);
     this.rigWorkers = new RigWorkers(this, this.db);
+    this.runnerUse = new RunnerUse(this, this.db);
     this.rigUpdates = new RigUpdates(this, this.db);
     this.mcpServers = new McpServerRows(this, this.db);
     this.proposals = new CampaignProposals(this, this.db);

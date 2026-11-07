@@ -3,7 +3,15 @@ import { busReach } from "../bus/index.ts";
 import { copiedFromRecords, untriedOf } from "../campaigns/index.ts";
 import { weeklyLimit } from "../rigs/index.ts";
 import { cursorOf } from "../store/index.ts";
-import { findRun, podStopped, rigEventsPage, rigView } from "../views/index.ts";
+import {
+  findRun,
+  podStopped,
+  rigEventsPage,
+  rigView,
+  runnerUseRead,
+  USE_WINDOWS,
+  useWindowOf,
+} from "../views/index.ts";
 import { agentRoutes } from "./agents.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 import { runRoutes } from "./runs.ts";
@@ -88,6 +96,19 @@ export function recordRoutes(app: Hono, api: ApiContext): void {
     });
     // Its subscription's weekly limit, while one holds its runs (goal 169), as Needs you shows it.
     return c.json({ ...v, bus, weekly_limit: weeklyLimit(store, v) ?? null });
+  });
+
+  // How the rig's runners spent their time (goal 231): the twin of MCP's runner_use.
+  app.get("/v1/rigs/:rig/runner-use", admin, (c) => {
+    const v = rigView(store, c.req.param("rig"), viewOpts);
+    if (!v) return c.json({ error: "not found" }, 404);
+    const w = c.req.query("window");
+    if (w !== undefined && !(USE_WINDOWS as readonly string[]).includes(w))
+      return c.json({ error: "window is hour, day or run" }, 400);
+    const read = runnerUseRead(store, v, useWindowOf(w), Date.now());
+    return read
+      ? c.json(read)
+      : c.json({ error: `${v.id} has no run: ask for the hour or the day` }, 404);
   });
 
   // One run by its name, wherever it ran: the run itself, of a size an agent can read, one of

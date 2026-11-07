@@ -31,6 +31,8 @@ import { readThrottle, type TargetDriver } from "../targets/index.ts";
 
 /** Where the core's bundles go in a runner's mirror: each sent ref under it. */
 const SENT = "refs/thermite/imports/core";
+/** How long a card's use may take to read, for its core's check (goal 231). */
+const USE_WAIT_MS = 5000;
 
 interface RunHostOptions {
   runner: Runner;
@@ -121,6 +123,23 @@ export class RunHost {
     };
   }
 
+  /**
+   * The use now of the cards asked (goal 231), each `{card, util_pct, mem_used_mib,
+   * mem_total_mib}`; a card that can't say within USE_WAIT_MS is left out.
+   */
+  private async gpus(cards: number[]): Promise<object[]> {
+    const read = async (card: number) => {
+      const c = this.cards[card];
+      if (!c?.driver.use) return [];
+      const timer = new Promise<undefined>((r) =>
+        setTimeout(() => r(undefined), USE_WAIT_MS).unref?.(),
+      );
+      const u = await Promise.race([c.driver.use().catch(() => undefined), timer]);
+      return u ? [{ card, ...u }] : [];
+    };
+    return (await Promise.all(cards.map(read))).flat();
+  }
+
   /** Answers one ask of the core. */
   async ask(a: RunAsk): Promise<object> {
     switch (a.op) {
@@ -130,6 +149,7 @@ export class RunHost {
           separated: this.o.runner.separated,
           cards: this.cards.length,
           store: this.store(),
+          ...(a.gpus?.length ? { gpus: await this.gpus(a.gpus) } : {}),
         };
       case "git_has": {
         const m = this.mirror(a.repo);

@@ -62,6 +62,33 @@ describe("cuda-gpu driver", () => {
     assert.equal(seen.length, 3, "the failed query was retried");
   });
 
+  test("its use now, in one light query of its card: a GPU that shares the machine's memory has none (goal 231)", async () => {
+    const asked: string[][] = [];
+    const answer = (line: string) =>
+      new CudaDriver({
+        targetClass: "gb10",
+        smi: async (args) => {
+          asked.push(args);
+          return `${line}\n`;
+        },
+      });
+    assert.deepEqual(await answer("GPU-0000, 97, 9000, 16384").use(), {
+      util_pct: 97,
+      mem_used_mib: 9000,
+      mem_total_mib: 16384,
+    });
+    assert.deepEqual(asked[0]?.slice(0, 2), [
+      "--query-gpu=uuid,utilization.gpu,memory.used,memory.total",
+      "--format=csv,noheader,nounits",
+    ]);
+    assert.deepEqual(await answer("GPU-0000, 12, [N/A], [N/A]").use(), {
+      util_pct: 12,
+      mem_used_mib: null,
+      mem_total_mib: null,
+    });
+    assert.equal(await answer("GPU-0000, [N/A], [N/A], [N/A]").use(), undefined);
+  });
+
   test("parses nvidia-smi rows and clock event reasons", () => {
     const [r] = parseGpuRows(`${IDLE}\n`);
     assert.equal(r?.name, "Tesla P100-PCIE-16GB");

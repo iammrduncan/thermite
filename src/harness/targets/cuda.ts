@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { promisify } from "node:util";
 import type { Role, Runner } from "../broker/index.ts";
-import type { Readiness, TargetDriver, TargetIdentity } from "./driver.ts";
+import type { Readiness, TargetDriver, TargetIdentity, TargetUse } from "./driver.ts";
 
 /**
  * CUDA GPU target, read through nvidia-smi. It never changes clocks, power or cooling:
@@ -148,6 +148,26 @@ export class CudaDriver implements TargetDriver {
     if (this.uuid && r.uuid !== this.uuid)
       throw new Error(`nvidia-smi reported ${r.uuid}, not ${this.uuid}`);
     return r;
+  }
+
+  /** Its use now, in one light query of this card alone (goal 231). */
+  async use(): Promise<TargetUse | undefined> {
+    const out = await this.smi([
+      "--query-gpu=uuid,utilization.gpu,memory.used,memory.total",
+      "--format=csv,noheader,nounits",
+      ...this.only(),
+    ]);
+    const f = out
+      .split("\n")
+      .map(parseCsvRow)
+      .find((x) => x.length >= 4);
+    if (!f || (this.uuid && f[0] !== this.uuid)) return undefined;
+    const n = (x: string | undefined) =>
+      Number.isFinite(Number(x)) && x !== "" ? Number(x) : null;
+    const util = n(f[1]);
+    return util === null
+      ? undefined
+      : { util_pct: util, mem_used_mib: n(f[2]), mem_total_mib: n(f[3]) };
   }
 
   private async reasons(): Promise<string[]> {

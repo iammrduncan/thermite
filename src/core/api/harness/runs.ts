@@ -81,8 +81,14 @@ const BaselineFile = z.object({ path: z.string().min(1).max(1024), base64: z.str
 
 /** One ask of a runner process, by its `op`. */
 export const RunAsk = z.discriminatedUnion("op", [
-  /** Its kind of target, its runners and whether its roles are separated. */
-  z.object({ op: z.literal("info") }),
+  /**
+   * Its kind of target, its runners and whether its roles are separated; with `gpus`, those
+   * cards' use now (goal 231), which the core asks only of cards the judge is not measuring on.
+   */
+  z.object({
+    op: z.literal("info"),
+    gpus: z.array(z.number().int().min(0).max(15)).max(16).optional(),
+  }),
   /** Whether it has a commit, and the commits it was sent (to send only what it lacks). */
   z.object({ op: z.literal("git_has"), repo: MirrorName, commit: Commit }),
   /** A commit built with the kit as the runner's builder, or found built. */

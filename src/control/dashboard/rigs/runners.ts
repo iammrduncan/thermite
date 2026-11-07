@@ -6,7 +6,7 @@ import type { ControlStore } from "../../store/index.ts";
 import { ago, esc } from "../../ui/components/index.ts";
 import { coreBlock, type RunnerPlaces, runnersBlock } from "../../ui/rigs/runners.ts";
 import { rigHref } from "../../ui/urls.ts";
-import type { RigView } from "../../views/index.ts";
+import { newestRunStart, type RigView, rigRunnerUse, type UseWindow } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
 import { type Place, placeOf, productAt, runnerGroups } from "./add-places.ts";
 
@@ -223,7 +223,12 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
  * The rig's page's **The core** and **Runners** blocks (goal 206), as the approved mockup has
  * them, for a rig with runners: nothing for one without.
  */
-export function coreAndRunners(store: ControlStore, u: RigView, now: number): string {
+export function coreAndRunners(
+  store: ControlStore,
+  u: RigView,
+  now: number,
+  window: UseWindow = "hour",
+): string {
   if (!u.runners && !u.settings?.runners.length) return "";
   const m = store.machines.rig(u.id);
   const k = store.clusters.rig(u.id);
@@ -275,5 +280,14 @@ export function coreAndRunners(store: ControlStore, u: RigView, now: number): st
     chips,
     facts,
     keeps,
-  })}${runnersBlock(u, now, { placed: placedRunners(store, u.id), lines })}`;
+  })}${runnersBlock(u, now, { placed: placedRunners(store, u.id), lines, use: useOf(store, u, now, window) })}`;
+}
+
+/** How the rig's runners spent the window chosen (goal 231); the last hour when its run has none. */
+function useOf(store: ControlStore, u: RigView, now: number, window: UseWindow) {
+  const runStarted = newestRunStart(u);
+  const view =
+    rigRunnerUse(store, u.id, window, now, runStarted) ??
+    rigRunnerUse(store, u.id, "hour", now, runStarted);
+  return view ? { view, runStarted } : undefined;
 }

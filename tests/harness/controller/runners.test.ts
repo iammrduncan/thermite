@@ -112,10 +112,13 @@ describe("the core's runners as they come and go (goal 206)", () => {
     const report = hub.report();
     assert.equal(report.processes[0]?.up, true);
     assert.ok(report.processes[0]?.answered_at);
-    assert.deepEqual(report.processes[0]?.runners, [
-      { name: "box-2-0", pool: "judge", holder: null },
-      { name: "box-2-1", pool: "lane-2", holder: "lane-2" },
-    ]);
+    assert.deepEqual(
+      report.processes[0]?.runners.map(({ name, pool, holder }) => ({ name, pool, holder })),
+      [
+        { name: "box-2-0", pool: "judge", holder: null },
+        { name: "box-2-1", pool: "lane-2", holder: "lane-2" },
+      ],
+    );
     assert.deepEqual(report.waiting, []);
     assert.deepEqual(report.waits, []);
     // What it keeps, as its check's answer said, for the rig's page.
@@ -157,6 +160,62 @@ describe("the core's runners as they come and go (goal 206)", () => {
     // The lanes' pool (goal 229): no executor of the judge's, so the judge never measures there.
     hub.apply([{ name: "box-2", pools: ["lanes", "judge"] }]);
     assert.deepEqual(ex.now, ["box-2-1"]);
+    sup.stop();
+  });
+
+  test("each check reads the GPUs the judge does not measure on; the report gives each runner's time and its GPU's (goal 231)", async () => {
+    let reads = 0;
+    const sup = linked((q) =>
+      q.kind === "ask" && q.ask.op === "info"
+        ? {
+            answer: {
+              ...fits.answer,
+              gpus: [{ card: 0, util_pct: 40 + 10 * (reads++ % 2), mem_used_mib: null }],
+            },
+          }
+        : undefined,
+    );
+    const hub = new RunnerHub({ service, link: sup.link, core, checkEveryMs: 25 });
+    const ex = executors();
+    hub.executors = ex;
+    hub.apply([{ name: "box-2", pools: ["lanes", "judge"] }]);
+    const stop = hub.start();
+    await wait(200);
+    // The judge measures on box-2-1: its card is read no more.
+    const judged = ex.runners.get("box-2-1");
+    assert.ok(judged);
+    const release = await hub.pools.holdForJudge(judged, "executor-box-2-1");
+    // A check asked before the hold may still be on its way.
+    await wait(100);
+    const before = sup.asked.length;
+    await wait(200);
+    stop();
+    const asked = (from: number) =>
+      sup.asked
+        .slice(from)
+        .flatMap((q) => (q.kind === "ask" && q.ask.op === "info" ? [q.ask.gpus] : []));
+    assert.ok(
+      asked(0).some((g) => JSON.stringify(g) === "[0,1]"),
+      "both cards, while the judge measured on neither",
+    );
+    assert.ok(asked(before).length > 0);
+    assert.ok(
+      asked(before).every((g) => JSON.stringify(g) === "[0]"),
+      "the judge's card is never read while it measures",
+    );
+    const report = hub.report();
+    const [lanes, judge] = report.processes[0]?.runners ?? [];
+    assert.ok(lanes?.use && judge?.use);
+    assert.ok(judge.use.judge_ms > 0, "the judge's time on its runner");
+    assert.equal(lanes.use.judge_ms, 0, "the lanes' runner is never the judge's");
+    assert.ok(lanes.use.free_ms > 0);
+    assert.ok([40, 50].includes(lanes.gpu?.util_pct ?? -1), "its newest read");
+    assert.equal(lanes.gpu?.mem_used_mib, null, "a GPU that shares the machine's memory");
+    assert.equal(typeof lanes.gpu?.read_ms, "number");
+    assert.equal(judge.gpu, undefined, "a card the answer never gave");
+    assert.deepEqual(report.waited, {});
+    assert.ok(Date.parse(report.waited_since) <= Date.now());
+    release?.();
     sup.stop();
   });
 

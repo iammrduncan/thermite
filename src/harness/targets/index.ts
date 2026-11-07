@@ -7,4 +7,4 @@
 export { readThrottle, type ThrottleSample, throttledFraction } from "./cgroup.ts";
 export { CpuDriver } from "./cpu.ts";
 export { CudaDriver, smiAs, smiAsRun } from "./cuda.ts";
-export type { Readiness, TargetDriver, TargetIdentity } from "./driver.ts";
+export type { Readiness, TargetDriver, TargetIdentity, TargetUse } from "./driver.ts";

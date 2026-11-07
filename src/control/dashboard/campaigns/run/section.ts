@@ -42,6 +42,7 @@ import {
   waitWords,
 } from "../../../ui/operator/index.ts";
 import { promptsTab } from "../../../ui/prompts.ts";
+import { useBlock } from "../../../ui/rigs/runner-use.ts";
 import { runFetchWords } from "../../../ui/rigs/runners.ts";
 import {
   attemptHref,
@@ -59,6 +60,7 @@ import {
   type RigView,
   type RunOnRig,
   type RunView,
+  rigRunnerUse,
   runCampaign,
 } from "../../../views/index.ts";
 import type { Ctx, Dashboard } from "../../context.ts";
@@ -516,9 +518,11 @@ export function runHelpers(dash: Dashboard) {
                       : view === "hypotheses" && researchRun
                         ? hypothesesTab({ u, r: i, now, cmd: (f) => cmdForm(c, f), back })
                         : view === "stats"
-                          ? usage
-                            ? runStatsTab(usage)
-                            : `<div class="card"><div class="empty">No model use: this run has no agents.</div></div>`
+                          ? `${
+                              usage
+                                ? runStatsTab(usage)
+                                : `<div class="card"><div class="empty">No model use: this run has no agents.</div></div>`
+                            }${runnersSince(store, u, i, now)}`
                           : `<p class="run-said" data-part="run-said">${said}</p>
 <div data-part="run-needs">${waiting ? `<div class="block" id="needs"><div class="head"><h2>Needs you</h2><span class="n">${waiting}</span></div><div class="dqs">${decisions.map((n) => n.html).join("")}</div></div>` : ""}</div>
 ${metrics}<div class="cols run-cols"><div>
@@ -534,4 +538,14 @@ ${body}
 </section>`;
   };
   return { reviewSources, runSection };
+}
+
+/**
+ * The run's Stats: how the rig's runners spent the run's time (goal 231), as the rig's Runners
+ * block shows it; nothing on a rig with no runners' times.
+ */
+function runnersSince(store: Dashboard["store"], u: RigView, r: RunView, now: number): string {
+  const v = r.created_at ? rigRunnerUse(store, u.id, "run", now, r.created_at) : undefined;
+  if (!v?.runners.length) return "";
+  return `<div class="block" id="runners"><div class="head"><h2>The rig's runners</h2><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}#runners">${esc(u.id)}'s Runners</a></span></div>${useBlock(u.id, v, r.created_at ?? undefined, "this run")}</div>`;
 }

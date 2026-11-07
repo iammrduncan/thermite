@@ -4,7 +4,8 @@
  * (baseline.ts), held-out results named safely (held-out.ts), failure reasons (reasons.ts), job
  * leases (lease.ts), one timed run (measure.ts), changes carried to a new champion (ports.ts),
  * a stored build removed by a retention policy (builds.ts), and the runner the judge builds and
- * measures on (runner.ts; the core's own: core-runner.ts, goal 206).
+ * measures on (runner.ts; the core's own: core-runner.ts, goal 206), and how its runners of other
+ * machines spent their time (runner-time.ts, goal 231).
  * The Judge itself stays in judge.ts; this file is only the folder's interface.
  */
 
@@ -38,3 +39,10 @@ export {
 } from "./remote-runner.ts";
 export type { Measured, MeasureSpec, RigRunner, Sealed } from "./runner.ts";
 export { RunnerAway, RunnerLink } from "./runner-link.ts";
+export {
+  GpuClock,
+  type GpuRead,
+  type GpuTime,
+  type RunnerTime,
+  whose,
+} from "./runner-time.ts";

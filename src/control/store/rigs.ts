@@ -199,6 +199,7 @@ export class ReportedRigs extends StorePart {
       before ? JSON.parse(String(before.summary)) : undefined,
       report.summary,
     );
+    this.store.runnerUse.note(report.rig, report.summary, now);
   }
 
   /**

@@ -264,6 +264,29 @@ describe("a rig's runners in their pools (goal 206)", () => {
     );
   });
 
+  test("each runner's time goes to whoever held it, and each wait to whose it was (goal 231)", async () => {
+    const s = fake("box-2-0");
+    const pools = poolsOf([s.runner, "shared"]);
+    const releaseJudge = await pools.holdForJudge(s.runner, "executor-box-2-0");
+    const lane = pools.laneRun(run("lane-1"));
+    await tick();
+    releaseJudge?.();
+    await tick();
+    s.finish();
+    await lane;
+    await tick();
+    const use = pools.use();
+    const t = use.runners["box-2-0"];
+    assert.ok(t);
+    assert.ok(t.judge_ms > 0, "the judge's job held it first");
+    assert.ok((t.lanes_ms["lane-1"] ?? 0) > 0, "then lane-1's run");
+    assert.ok(t.free_ms > 0, "and it is free now");
+    assert.equal(t.away_ms, 0);
+    assert.equal(use.waited.judge, undefined, "the judge never waited");
+    assert.equal(use.waited["lane-1"]?.count, 1, "lane-1 waited once, behind the judge's job");
+    assert.ok((use.waited["lane-1"]?.ms ?? 0) > 0);
+  });
+
   test("the run's model files begin on the runners that serve lanes, not the judge's (goal 217)", () => {
     const begun: string[] = [];
     const named = (name: string, fails = false) =>

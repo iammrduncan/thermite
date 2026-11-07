@@ -40,6 +40,17 @@ const machineOf = (r: Row): Machine => ({
   created_at: String(r.created_at),
 });
 
+/**
+ * What goal 205's two migrations made, dropped (goal 206): the followers' keys on the bus and a
+ * machine rig's followers. A store that never had them has nothing to drop.
+ */
+export function dropFollowers(db: DatabaseSync): void {
+  db.exec("drop table if exists machine_bus_key");
+  const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "followers"))
+    db.exec("alter table machine_rig drop column followers");
+}
+
 /** Migration 34: whether a rig control set up on a machine judges on its runners alone (goal 206). */
 export function machineRigJudgeOnRunners(db: DatabaseSync): void {
   // Once: a store whose migrations run again from an earlier version has it already.

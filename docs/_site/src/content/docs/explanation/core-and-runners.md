@@ -37,7 +37,7 @@ On its runner, a lane's run has the runner's memory, not the core's:
 
 The judge decides on the core and measures on the runners of its pool, or the shared one, never on a lane's or the lanes'. Each measurement is one job, on one runner, from start to finish: the core sends the runner the kit's commit and the change, and the runner's own copy of the model files, which it fetches before its first build of the run. A runner takes one run at a time, so a measurement never shares its GPU with a lane's run or another measurement. Runners must all be of one kind of GPU, so that the run's verdicts compare.
 
-A change that screens as a win is measured again, on fresh runs, before it becomes the champion. That second job queues behind the first and may wait while the judge works on other changes. The run's page shows each job, its runner and what waits ([The rig's page](../reference/rig-page.md#blocks)).
+A change that screens as a win is measured again, on fresh runs, before it becomes the champion. That second job queues behind the first and may wait while the judge works on other changes. The run's page shows each job, its runner and what waits, and the rig's page how each runner spent the last hour, the last day or the run: with the judge, with each lane, idle or away, and how busy its GPU was ([The rig's page](../reference/rig-page.md#blocks)). Those figures are how to split runners between the judge and the lanes, and how far ahead the lanes may run.
 
 ## How the core and its runners stay in touch
 

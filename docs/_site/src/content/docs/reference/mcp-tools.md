@@ -58,7 +58,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `retention_policies`, `retention_preview`, `retention_removals` | Yes | Yes | No | No |
 | `create_retention_policy`, `update_retention_policy`, `set_retention_policy_on`, `delete_retention_policy`, `run_retention_policy` | Yes | No | No | No |
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
-| `trial_session`, `control_log`, `control_log_level`, `providers`, `bus_state`, `system_state`, `rig_models`, `rig_settings`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
+| `trial_session`, `control_log`, `control_log_level`, `providers`, `bus_state`, `system_state`, `rig_models`, `rig_settings`, `runner_use`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
 | `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
 | `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `start_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
 | `set_rig_settings` | Yes | Yes, but not the promotion rule or the GPU split | No | No |
@@ -1027,6 +1027,19 @@ Returns `{rig, settings, gpu_split}`, from the rig's last signed report, as its 
 | `gpu_split` | `{set, judge}` or `null` | **GPUs for the judge**, under **4 · Where it runs** | The rig's set of GPUs, and how many are the judge's now. `null`: the rig has no GPU set to split |
 
 `settings` is `null` for a rig whose harness is older and reports no settings. [`rig_settings`](signed-commands.md#rig_settings) in Signed commands says what each setting does. Errors: `no rig <rig>`. Its REST twin is [`GET /v1/rigs/<rig>/settings`](rest-api.md#a-rigs-settings).
+
+### runner_use
+
+**How a rig's runners spent their time.** Owner, operator and reader.
+
+> How a rig's runners on other machines spent a window of time, as its page's Runners block shows it: the last hour (the default), the last 24 hours (day) or since its newest run began (run). Returns {rig, window, from, to, first, runners, waited}. Each runner has its pool; its time with the judge (judge_ms), with each lane (lanes_ms), free (free_ms) and away (away_ms); reported_ms, their sum; shares, each in percent of it; and gpu: its GPU's mean use over the window where its core read it (mean_pct, over read_ms), its use and memory at its last read (now_pct, at, mem_used_mib, mem_total_mib; a GPU that shares the machine's memory has none), or null where none was read. The core reads a GPU every 15 seconds, but never while the judge measures on it. waited gives, for the judge's jobs (judge) and each lane's runs, how many waited for a runner and how long in all. first is control's first sample in the window: its time before has none. Control keeps a sample a minute for 8 days; a rig core of an older version reports none.
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `rig` | string | | The rig |
+| `window` | `hour`, `day` or `run` | `hour` | The last hour, the last 24 hours, or since the rig's newest run began |
+
+The rig's page shows the same in its **Runners** block ([The rig's page](rig-page.md#blocks)). Errors: `no rig <rig>`; `<rig> has no run: ask for the hour or the day`. Its REST twin is [`GET /v1/rigs/<rig>/runner-use`](rest-api.md#a-rigs-settings).
 
 ### set_rig_settings
 

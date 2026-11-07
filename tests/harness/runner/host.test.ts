@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { RunAsk } from "../../../src/core/api/harness/runs.ts";
@@ -163,5 +164,38 @@ describe("a runner process (goal 206)", () => {
     // A small machine: less 4 GiB at the least; never less than the default the core sent.
     assert.equal(machineRssMib(4096, 16 * 2 ** 30, 0), 12_288);
     assert.equal(machineRssMib(8192, 8 * 2 ** 30, 0), 8192);
+  });
+
+  test("its check's answer gives the use of the cards asked, and nothing for one that can't say (goal 231)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "thermite-host-use-"));
+    const paths = {
+      stateDir: join(root, "state"),
+      scratchDir: join(root, "scratch"),
+      inboxDir: join(root, "inbox"),
+    };
+    for (const d of Object.values(paths)) mkdirSync(d, { recursive: true });
+    const cpu = () => new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY });
+    const read = Object.assign(cpu(), {
+      use: async () => ({ util_pct: 37, mem_used_mib: 900, mem_total_mib: 16_384 }),
+    });
+    const host = new RunHost({
+      runner: new LocalRunner(paths.scratchDir),
+      drivers: [read, cpu()],
+      paths,
+      ledger: Ledger.open(join(paths.stateDir, "ledger", "ledger.db")),
+    });
+    const asked = (await host.ask(RunAsk.parse({ op: "info", gpus: [0, 1, 5] }))) as {
+      cards: number;
+      gpus?: unknown;
+    };
+    assert.equal(asked.cards, 2);
+    assert.deepEqual(asked.gpus, [
+      { card: 0, util_pct: 37, mem_used_mib: 900, mem_total_mib: 16_384 },
+    ]);
+    // Asked for none, as an older core asks: no reads.
+    assert.equal(
+      ((await host.ask(RunAsk.parse({ op: "info" }))) as { gpus?: unknown }).gpus,
+      undefined,
+    );
   });
 });

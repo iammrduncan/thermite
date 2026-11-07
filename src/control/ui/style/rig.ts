@@ -43,4 +43,12 @@ export const RIG = `/* a rig's page */
 .camp-said { margin-top: 3px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 ol.steps { margin: 0; padding-left: 18px; font-size: 13px; } ol.steps li { margin: 3px 0; }
-.explain { color: var(--muted-foreground); font-size: 12px; margin: 4px 0 0; }`;
+.explain { color: var(--muted-foreground); font-size: 12px; margin: 4px 0 0; }
+.usebar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); margin: 2px 0 4px; max-width: 100%; }
+.usebar > i { display: block; height: 100%; }
+.usebar > i.judge { background: var(--warning); }
+.usebar > i.lane { background: var(--info); }
+.usebar > i.lane + i.lane { background: color-mix(in srgb, var(--info) 55%, var(--background)); }
+.usebar > i.idle { background: color-mix(in srgb, var(--muted-foreground) 35%, transparent); }
+.usebar > i.away { background: var(--error); }
+#runners-use h3 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }`;

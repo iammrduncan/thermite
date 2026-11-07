@@ -75,6 +75,16 @@ export {
   type TaskYieldView,
 } from "./research.ts";
 export { podStopped } from "./rig.ts";
+export {
+  newestRunStart,
+  type RunnerShare,
+  rigRunnerUse,
+  runnerUseRead,
+  USE_WINDOWS,
+  type UseView,
+  type UseWindow,
+  useWindowOf,
+} from "./runner-use.ts";
 export type { EventBus, RawEvent, StreamEvent } from "./stream.ts";
 export { streamEvent } from "./stream.ts";
 export type {

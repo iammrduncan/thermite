@@ -62,6 +62,7 @@ Under the line:
 
 - **Calls**: the run's calls, how many calls the workers made in a trial (`28 a trial`), and the median time to the first token (`first token 1.8 s`). The bars beside it count the calls in each round, from `round 1` to the latest; a run with fewer than two rounds has no bars.
 - **By agent and model**: one row for each agent's calls to each model, and one for each agent the rig gives a model to that has made no call in the run yet.
+- **The rig's runners**, on a rig with runners on other machines: how they spent the run's time, as the rig's **Runners** block shows it for its newest run ([The rig's page](rig-page.md#blocks)).
 
 A run that has made no model call yet says `No model call recorded yet. Code counts each call of the agents when it ends.`, with each agent the rig gives a model to under it, each showing **No calls yet**. A run with no agents and no model use says `No model use: this run has no agents.`
 

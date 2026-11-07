@@ -1,6 +1,7 @@
 import type { RunnerPool } from "../../core/rig-settings.ts";
 import type { LaneRun, RemoteRunner } from "./remote-runner.ts";
 import { RunnerAway } from "./runner-link.ts";
+import { RunnerClock, type RunnerTime, WaitTotals } from "./runner-time.ts";
 
 /**
  * The runners of a rig's other machines, in their pools (goal 206): each is the judge's, one
@@ -26,6 +27,8 @@ interface Slot {
   holder: string | undefined;
   /** It answered its last check: runs go to it. */
   up: boolean;
+  /** How it spent its time since it joined (goal 231). */
+  clock: RunnerClock;
 }
 
 /** Who has a runner, for a lane that waits for it: `box-4-0: lane-2's run`. */
@@ -53,10 +56,13 @@ export class RunnerPools {
   private readonly waiters: Waiter[] = [];
   /** Each trial's runners it ran on, by trial: their workspaces go when it ends. */
   private readonly used = new Map<string, { lane: string; runners: Set<RemoteRunner> }>();
+  /** Who waited for a runner, and how long (goal 231), since the pools began. */
+  private readonly waited = new WaitTotals();
+  readonly since = Date.now();
 
   /** A runner joins its pool: it takes runs once it is up. */
   add(runner: RemoteRunner, pool: Pool, up = false): void {
-    const s: Slot = { runner, pool, holder: undefined, up };
+    const s: Slot = { runner, pool, holder: undefined, up, clock: new RunnerClock() };
     this.slots.push(s);
     this.offer(s);
   }
@@ -80,6 +86,7 @@ export class RunnerPools {
   setUp(runner: RemoteRunner, up: boolean): void {
     const s = this.slots.find((x) => x.runner === runner);
     if (!s || s.up === up) return;
+    s.clock.tally(s);
     s.up = up;
     this.offer(s);
   }
@@ -118,7 +125,7 @@ export class RunnerPools {
     const opens = this.slots.filter(open);
     const free = rank ? [...opens].sort((a, b) => rank(a) - rank(b))[0] : opens[0];
     if (free) {
-      free.holder = who;
+      this.holdBy(free, who);
       return Promise.resolve(free);
     }
     if (signal?.aborted) return Promise.resolve("ended");
@@ -129,12 +136,14 @@ export class RunnerPools {
         may,
         take: (s) => {
           signal?.removeEventListener("abort", ended);
+          this.waited.end(who, w.since);
           resolve(s);
         },
       };
       const ended = () => {
         const i = this.waiters.indexOf(w);
         if (i >= 0) this.waiters.splice(i, 1);
+        this.waited.end(who, w.since);
         resolve("ended");
       };
       signal?.addEventListener("abort", ended, { once: true });
@@ -149,14 +158,34 @@ export class RunnerPools {
     const i = this.waiters.findIndex((w) => w.may(s));
     if (i < 0) return;
     const [w] = this.waiters.splice(i, 1) as [Waiter];
-    s.holder = w.who;
+    this.holdBy(s, w.who);
     w.take(s);
   }
 
   /** Lets a runner go: the first waiter that may use it takes it. */
   private release(s: Slot): void {
-    s.holder = undefined;
+    this.holdBy(s, undefined);
     this.offer(s);
+  }
+
+  /** A runner's holder changes, its time until then counted as its old holder's. */
+  private holdBy(s: Slot, who: string | undefined): void {
+    s.clock.tally(s);
+    s.holder = who;
+  }
+
+  /**
+   * How each runner spent its time since it joined, by its name, and who waited for one, the
+   * judge's executors together as `judge` (goal 231).
+   */
+  use(now = Date.now()): {
+    runners: Record<string, RunnerTime>;
+    waited: Record<string, { count: number; ms: number }>;
+  } {
+    return {
+      runners: Object.fromEntries(this.slots.map((s) => [s.runner.name, s.clock.totals(s, now)])),
+      waited: this.waited.totals(this.waits(), now),
+    };
   }
 
   /**

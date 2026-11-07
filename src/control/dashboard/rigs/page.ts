@@ -55,7 +55,7 @@ import {
 import { stateBanners, stateRows, stateSummary, versionFact } from "../../ui/rigs/states.ts";
 import { runHref } from "../../ui/urls.ts";
 import { span } from "../../ui/words/index.ts";
-import { type RigView, runCampaign } from "../../views/index.ts";
+import { type RigView, runCampaign, useWindowOf } from "../../views/index.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { agentsModelBlock } from "./model-line.ts";
 import { coreAndRunners } from "./runners.ts";
@@ -480,7 +480,7 @@ ${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b c
 ${rp ? podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>
-${coreAndRunners(store, u, now)}
+${coreAndRunners(store, u, now, useWindowOf(c.req.query("use")))}
 ${agentsModelBlock(store, u, now)}
 <div class="block" data-part="checks"${takingModel(u.model, store.agentModels.byRig()[u.id]) ? ` data-follow="${esc(modelFollowUrl(u.id))}" data-follow-state="taking"` : ""}><div class="head"><h2>Checks</h2><span class="right">run by the rig itself; each result also goes to its history</span></div><div class="card flat cks">${checkRows}</div></div>
 <div class="block" data-part="runs"><div class="head"><h2>Runs on this rig</h2><span class="n">${u.runs.length}</span>${u.state !== "reporting" || refusedNow ? `<span class="right">as of its last report${neverReported(u) ? "" : `, ${esc(ago(u.last_seen, now))} ago`}</span>` : ""}</div>${runRows ? `<div class="card flat">${runRows}</div>` : `<div class="card"><div class="empty">No campaign assigned.</div></div>`}</div>

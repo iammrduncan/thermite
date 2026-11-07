@@ -274,6 +274,7 @@ The rest of **Edit rig**: the rig's parts, workers at a time, its limits, how it
 | Route | Token | What it does | Request | Answer |
 | --- | --- | --- | --- | --- |
 | `GET /v1/rigs/<rig>/settings` | Owner | The settings the rig reports, and its GPU split, as its **Edit rig** page shows them | None | `{rig, settings, gpu_split}`, as MCP's [`rig_settings`](mcp-tools.md#rig_settings) returns it. `settings` is `null` for a rig whose harness is older and reports none; `gpu_split` is `{set, judge}`, or `null` for a rig with no GPU set to split. 404 `{"error":"no rig <rig>"}` |
+| `GET /v1/rigs/<rig>/runner-use` | Owner | How the rig's runners spent a window of time, as its page's **Runners** block shows it: `?window=hour` (the default), `day` or `run` | None | As MCP's [`runner_use`](mcp-tools.md#runner_use); 400 `window is hour, day or run`; 404 `<rig> has no run: ask for the hour or the day` |
 | `POST /v1/rigs/<rig>/settings` | Owner | Changes the rig's settings as **Save changes** on **Edit rig** does, through the same checks: only the fields that differ from what the rig reports go to the rig, as one [`rig_settings`](signed-commands.md#rig_settings) command issued by `owner:api` | Any of `{judge, workers, planner, teachers, auditor, review, exports, lanes, trial_minutes, max_turns, quiet_minutes, program_mode, promotion, judge_gpus, runners}`, below | `{rig, id, sent, restarts, said}`, below. 400, 404 or 409 `{"error":"<why>"}`, below |
 
 | Field | Type | Meaning |

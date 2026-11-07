@@ -25,13 +25,14 @@ import {
   knowledgeSearch,
   knowledgeSlotNames,
 } from "./kb/index.ts";
-import { machineRigJudgeOnRunners } from "./machines.ts";
+import { dropFollowers, machineRigJudgeOnRunners } from "./machines.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { reachableAddressTable } from "./reachable.ts";
 import { copiesPolicyOn, eventFloorTable, retentionTables } from "./retention.ts";
+import { runnerUseTable } from "./runner-use.ts";
 import { rigRunnerTable } from "./runners.ts";
 import { runRegistryTable } from "./runs.ts";
 import { tunnelLeafColumns } from "./tunnels.ts";
@@ -603,17 +604,6 @@ function schemaFive(db: DatabaseSync): void {
 function retired(): void {}
 
 /**
- * What goal 205's two migrations made, dropped (goal 206): the followers' keys on the bus and a
- * machine rig's followers. A store that never had them has nothing to drop.
- */
-function dropFollowers(db: DatabaseSync): void {
-  db.exec("drop table if exists machine_bus_key");
-  const cols = db.prepare("pragma table_info(machine_rig)").all() as { name: string }[];
-  if (cols.some((c) => c.name === "followers"))
-    db.exec("alter table machine_rig drop column followers");
-}
-
-/**
  * Control's migrations, in order: the store's schema version is how many have run. A change to
  * the schema is a new function at the end, never an edit of one that has run.
  */
@@ -681,6 +671,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   machineRigJudgeOnRunners,
   // Add a rig's Workers at a time, which control gives the new rig once it reports (goal 206).
   rigWorkersTable,
+  // How a rig's runners spent their time, a sample a minute from its reports (goal 231).
+  runnerUseTable,
 ];
 
 /**

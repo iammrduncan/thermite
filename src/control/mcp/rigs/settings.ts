@@ -8,6 +8,7 @@ import {
   rigSettingsRead,
   setRigSettings,
 } from "../../rigs/index.ts";
+import { runnerUseRead, USE_WINDOWS, type UseWindow } from "../../views/index.ts";
 import type { ToolContext } from "../context.ts";
 
 /**
@@ -32,6 +33,24 @@ export function registerRigSettings(tools: ToolContext): void {
     audited("rig_settings", (a: { rig: string }) => {
       const read = rigSettingsRead(store, a.rig);
       if (!read) throw new Error(`no rig ${a.rig}`);
+      return read;
+    }),
+  );
+  // How a rig's runners spent their time (goal 231), as its page's Runners block shows it.
+  server.registerTool(
+    "runner_use",
+    {
+      title: "How a rig's runners spent their time",
+      description:
+        "How a rig's runners on other machines spent a window of time, as its page's Runners block shows it: the last hour (the default), the last 24 hours (day) or since its newest run began (run). Returns {rig, window, from, to, first, runners, waited}. Each runner has its pool; its time with the judge (judge_ms), with each lane (lanes_ms), free (free_ms) and away (away_ms); reported_ms, their sum; shares, each in percent of it; and gpu: its GPU's mean use over the window where its core read it (mean_pct, over read_ms), its use and memory at its last read (now_pct, at, mem_used_mib, mem_total_mib; a GPU that shares the machine's memory has none), or null where none was read. The core reads a GPU every 15 seconds, but never while the judge measures on it. waited gives, for the judge's jobs (judge) and each lane's runs, how many waited for a runner and how long in all. first is control's first sample in the window: its time before has none. Control keeps a sample a minute for 8 days; a rig core of an older version reports none.",
+      inputSchema: {
+        rig: z.string().min(1),
+        window: z.enum(USE_WINDOWS).optional().describe("hour (the default), day or run"),
+      },
+    },
+    audited("runner_use", (a: { rig: string; window?: UseWindow }) => {
+      const read = runnerUseRead(store, tools.view(a.rig), a.window ?? "hour", Date.now());
+      if (!read) throw new Error(`${a.rig} has no run: ask for the hour or the day`);
       return read;
     }),
   );

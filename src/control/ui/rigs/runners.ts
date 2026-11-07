@@ -1,7 +1,8 @@
 import type { RigSettings } from "../../../core/rig-settings.ts";
-import type { RigView, RunnerFetch, RunnersView } from "../../views/index.ts";
+import type { RigView, RunnerFetch, RunnersView, UseView } from "../../views/index.ts";
 import { ago, esc, infoLabel } from "../components/index.ts";
 import { jobHtml } from "../operator/index.ts";
+import { useBlock } from "./runner-use.ts";
 
 /**
  * A rig's runners of other machines on its page (goal 206), as its core reports them: each
@@ -76,6 +77,8 @@ interface RunnerPage {
   placed: RunnerPlaces["placed"];
   /** The runners' lines of the rig's history, oldest first. */
   lines: { at: string; ok: boolean; text: string }[];
+  /** How they spent the window chosen (goal 231), and when the rig's newest run began. */
+  use?: { view: UseView; runStarted?: string | undefined } | undefined;
 }
 
 /** A runner process's store, in words. */
@@ -215,7 +218,7 @@ export function runnersBlock(
         `<span${l.ok ? "" : ' class="bad"'}><span class="muted mono">${esc(l.at.slice(11, 16))}</span> ${esc(l.text)}</span>`,
     )
     .join("");
-  return `<div class="block" data-part="runners"><div class="head"><h2>Runners</h2><span class="n">${count}</span><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}/edit#where">Add or take away runners on Edit rig</a> · the run goes on</span></div><div class="card flat" style="overflow-x:auto"><table class="ut"><thead><tr><th scope="col">Runner</th><th scope="col">Pool</th><th scope="col">State</th><th scope="col">Now</th><th scope="col">Its store</th></tr></thead><tbody>${rows}</tbody></table></div>${waitingCards(u, now)}${lines ? `<div class="sub-block"><h3>History <span class="muted small">the runners' lines</span></h3><div class="card rh">${lines}</div></div>` : ""}<div class="small muted" style="margin-top:6px">Each runner takes one run at a time; on a shared one the judge and the lanes take turns, first come, first served, and on the lanes' one the lanes alone.</div></div>`;
+  return `<div class="block" data-part="runners"><div class="head"><h2>Runners</h2><span class="n">${count}</span><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}/edit#where">Add or take away runners on Edit rig</a> · the run goes on</span></div><div class="card flat" style="overflow-x:auto"><table class="ut"><thead><tr><th scope="col">Runner</th><th scope="col">Pool</th><th scope="col">State</th><th scope="col">Now</th><th scope="col">Its store</th></tr></thead><tbody>${rows}</tbody></table></div>${more.use ? useBlock(u.id, more.use.view, more.use.runStarted) : ""}${waitingCards(u, now)}${lines ? `<div class="sub-block"><h3>History <span class="muted small">the runners' lines</span></h3><div class="card rh">${lines}</div></div>` : ""}<div class="small muted" style="margin-top:6px">Each runner takes one run at a time; on a shared one the judge and the lanes take turns, first come, first served, and on the lanes' one the lanes alone.</div></div>`;
 }
 
 /** The rig's core, as the approved mockup has it: where it runs, its facts, and what it keeps. */
