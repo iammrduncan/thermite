@@ -208,7 +208,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [225](goals/225-drain-waits-for-advisors.goal) A drain waits for the supervisor's advisors too · `PROPOSED`
 - [226](goals/226-teacher-review-kept.goal) One long field of a teacher's recommendation never loses its review · `IN_PROGRESS`
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `PROPOSED`
-- [228](goals/228-attempt-stage-times.goal) An attempt's page says how long each of its stages took · `IN_PROGRESS`
+- [228](goals/_completed/228-attempt-stage-times.goal) An attempt's page says how long each of its stages took · `VERIFIED`
 
 **The owner's asks of 2026-11-03.**
 

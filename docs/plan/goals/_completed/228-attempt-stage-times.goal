@@ -1,7 +1,7 @@
 ---
 id: "228"
 title: "An attempt's page says how long each of its stages took"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: []
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 228 · An attempt's page says how long each of its stages took
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
 
 ## What
 
@@ -28,13 +28,17 @@ A run's progress is limited by how long changes wait and how long the judge take
 
 ## Done when
 
-- [ ] Items 1 to 3.
-- [ ] Pages: Verdicts (how long each stage took), and the changelog.
+- [x] Items 1 to 3.
+- [x] Pages: Verdicts (how long each stage took), and the changelog.
 
 ## Progress
 
 - 2026-11-07 06:33 UTC: built. `tookBlock` (`control/ui/operator/took.ts`) on the attempt's page (`control/ui/operator/attempt.ts`), from the attempt's view, the run's audits and champions and the rig's newest 200 judge's jobs; the fold keeps a trial's start and end on its attempt (`control/views/fold/agents.ts`) and an audit's decision time (`control/views/fold/champions.ts`). Test: `tests/control/dashboard/attempt-times.test.ts`. Page: Verdicts. A preview rendered from a lab attempt's times, for the owner. The test file has not run yet.
 
----
+## Verified (2026-11-07)
 
-Run with `/goal Complete docs/plan/goals/228-attempt-stage-times.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- `tests/control/dashboard/attempt-times.test.ts`, with the other touched files (`tests/control/dashboard/judge-findings.test.ts`, `tests/control/views`), on the lab's test machine at e81ece9d: 95 of 95.
+- `npm run check` at e81ece9d: passed, 2,888 of 2,892 (0 failed, 4 skipped) and 195 of 195 alone, with the public, size, import and loose-ends checks ok.
+- `npm run docs:build` and `npm run docs:check` at e81ece9d: passed.
+- On the lab, control runs e81ece9d since 07:22 UTC, 2026-11-07. A preview of the page, rendered from a lab attempt's times before the roll, showed its rows: its lane's work 41 min, its wait for the judge 3 h 44 min, its screening 1 h 51 min on its runner, its wait for a confirmation 13 min, and its confirmation so far.
+- Pages: Verdicts (how long each stage took), and the changelog's v0.1.4 section.
