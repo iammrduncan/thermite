@@ -2,6 +2,36 @@
 
 Each release of Thermite, newest first. Version numbers count up by the middle number, 0.2.0, 0.3.0 and so on, with fixes and quick follow-ups as 0.1.1, 0.1.2. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]: v0.1.4
+
+### Steering
+
+- **Send an experiment back.** A tried experiment whose trial a fault cut short, or whose change was misjudged, goes back to the top of **Up next**, the same experiment, not a copy: **Send back** in its **Result** cell under **Tried** on the **Experiments** tab, with why, or the signed command `queue_retry {run, id, why, position?}`. Its trial is kept as an earlier try, it gets one more try when its tries are used, and **History** says who sent it back and why. Refused in words for an experiment that is not done, or whose change the judge has not settled. See [Choose what a run tries next](docs/_site/src/content/docs/how-to/campaigns/choose-what-runs-next.md#send-an-experiment-back).
+- **A running run's lane limits, changed in place.** The owner's signed command `lane_limits {run, limits, reason}` sets a running run's lane-command and development-run memory and time, its workspace and a lane user's processes, each within the contract's own bounds, or `null` to go back to the contract's. Every lane command and development run takes them from then on, and **History** says who changed what and why. No agent may change the limits it works under. See [Limits and pacing](docs/_site/src/content/docs/reference/limits-and-pacing.md#lanes-and-agents).
+- `queue_retry` and `lane_limits` take `preview: true`: nothing changes, and the answer says which try the experiment would be and where it would go, or the limits a change would set and the lanes at work it reaches.
+- **The planner plans while a lane is busy.** A round starts once every free lane has run its trials, while a lane may still be on a trial. The planner is now asked for the free lanes alone, and told which lane is busy and on what (`busy_lanes`); its check refuses a busy lane in words. Such rounds went to the fixed rules, because a plan that left the busy lane out was refused. See [Agents, lanes and the planner](docs/_site/src/content/docs/explanation/agents-lanes-planner.md).
+
+### Rigs
+
+- **A lane's development runs on a runner of its own get that machine's memory.** When neither the contract nor `lane_limits` sets `dev_run_rss_mib`, a development run on the lane's own runner gets the memory the runner may use, the machine's or its container's limit when lower, less the larger of 4 GiB and a tenth: about 97 GiB in a container limited to 108 GiB. A shared runner, which the judge uses too, and the core keep 4,096 MiB. The highest value a contract or `lane_limits` may set rises from 16,384 to 262,144 MiB. Each run on a runner answers with its `memory_limit_mib`, and the workers' brief says what a development run gets. A large engine's build was stopped at 4 GiB in every lane's run.
+- **No number of files ends a trial.** A workspace is counted a step at a time, at most 20,000 entries a sample, and only its bytes count against `workspace_mib`; a tree deeper than 128 folders, or one whose count has not ended in 5 minutes, is still a breach. A walk that stopped at 50,000 entries took that as a breach, and ended a trial whose workspace held 853 MiB of its 2,048.
+- **A lane's runner fetches the run's model files when the run is under way,** not at the lane's first `run_experiment` there, and a lane is told how the whole fetch stands, such as `12 of 33 files, 40.3 of 95.2 GiB`, where its count started again at each run. See [Model files on a rig](docs/_site/src/content/docs/reference/model-files.md#on-a-rigs-runners).
+
+### Agents
+
+- **Agents on a ChatGPT plan keep their conversation's prompt cache.** The model proxy passes on the session headers by which the provider keeps a conversation's calls together, and never a header that carries a credential; each Pi conversation has a session of its own. A trial's end says how much of its input the cache served: `trial_finished` has `cached_in` and `cached_share`, and the trial's last line on Live gives the share. Workers in Codex had about a third of their input cached. See [Use a ChatGPT subscription](docs/_site/src/content/docs/how-to/models/chatgpt-subscription.md).
+- The model proxy passes an answer's `x-codex-*` and `x-ratelimit-*` headers on to the program, none of them a credential, and logs them once an hour.
+- **An advisor in its own terminal waits for its tools.** Its first message waits until its program has asked the supervisor's tool server for its tools, at most 30 seconds, and Live says how long the listing took, or that it never came. A teacher in Claude Code said in three rounds of four that it had none of its tools.
+
+### Docs
+
+- [A rig over several machines](docs/_site/src/content/docs/explanation/core-and-runners.md): what runs on a rig's core and what on its runners, how they stay in touch, what a restart of control or a move onto new images does to the work under way, and how to size each machine.
+
+### Fixes
+
+- A hill climb's **Metrics** cards line up: the primary metric's card has a row of its own, and the lower priorities' cards an even row under it. Its headline gives the judge's gain, each champion against the one it replaced, as the champion card, the chart and the leaderboard do, where it gave the champion's value over the starting point's.
+- The runner checks' timer goes on when the ledger can't be read: the read is logged at warn, where its error escaped the timer.
+
 ## [0.1.3] 2026-11-06: a rig over several machines, and what a first campaign on it needs
 
 v0.1.3 makes a rig a core and its runners on other machines, and holds the fixes its first campaign on three DGX Sparks needed. A v0.1.2 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.3), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. Control adds its new tables as it starts; no setting or secret changes.
