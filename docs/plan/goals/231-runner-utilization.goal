@@ -1,0 +1,43 @@
+---
+id: "231"
+title: "How busy each runner is: its share of time with the judge, each lane, idle and away"
+status: READY
+version: "0.1.4"
+depends_on: ["206"]
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 231 · How busy each runner is
+
+**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, 2026-11-07: "I think another idea would be to have resource utilization details... How much % of time are our runners idle? etc..."
+
+A rig's page shows what each runner runs now and who waits for one ([The rig's page](../../_site/src/content/docs/reference/rig-page.md)), and an attempt's page how long it waited for the judge (goal 228). Nothing says how a runner spent the last hours: how much of its time went to the judge, to each lane, or to nothing. On the lab, 2026-11-07, two of three runners sat mostly idle for hours while the judge's queue grew, and that took reading events to see. The owner splits runners between the judge and the lanes (goal 229) and sets how far the lanes run ahead (goal 230) by exactly these figures.
+
+1. **The core counts each runner's time,** from its pools: held by the judge's job, held by each lane's run, free, and away, each a running total since the core started, in the rig's report. A restart of the core starts its totals again, and control keeps their history.
+2. **Who waited, and how long:** the time the judge's jobs waited for a runner, and each lane's runs, from its pools' queue of waiters.
+3. **Control keeps the series** from the rig's reports and gives each runner's share for the last hour, the last 24 hours and the run: judge, each lane, idle, away, as percentages and hours.
+4. **Shown** on the rig's **Runners** block (a bar for each runner, judge, lanes, idle, away, with a choice of window), on the run's **Stats**, over MCP (`rig_reports`, or a tool of its own) and REST.
+5. **The GPU's own utilization,** where the runner can read it (`nvidia-smi`'s utilization and memory), sampled beside the time shares, so a runner held but idle on the GPU (a lane's agent thinking with its run waiting on a build) shows apart from one measuring.
+6. **Tests:** the totals from a sequence of holds, frees and a runner away; the shares over each window across a core restart; the bars' words.
+
+## Why
+
+How to split runners between the judge and the lanes, and how far ahead the lanes may run, are decisions for the owner. They should rest on how busy each runner was, not on reading events by hand.
+
+## Done when
+
+- [ ] Items 1 to 6.
+- [ ] Pages: The rig's page (Runners), Model use or the run's Stats (whichever holds the shares), MCP tools, REST API, and the changelog.
+
+## Progress
+
+- 2026-11-07 07:52 UTC: Goal written from the owner's ask, after a lab night where the runners' idle time showed only in the events.
+
+---
+
+Run with `/goal Complete docs/plan/goals/231-runner-utilization.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

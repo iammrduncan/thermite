@@ -1,0 +1,47 @@
+---
+id: "229"
+title: "A runner pool shared by the lanes, never the judge"
+status: READY
+version: "0.1.4"
+depends_on: ["206", "219"]
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 229 · A runner pool shared by the lanes, never the judge
+
+**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, 2026-11-07: "I hae a new selection for runner... shared between lanes (no judge access)... I think that would allow me to run on our case 2 or 3 lanes against one DGX runner cause they aren't all using it all at the same time... Keep 2 dedicated to judges..."
+
+A runner is in one pool ([A rig over several machines](../../_site/src/content/docs/explanation/core-and-runners.md)): the judge's, one lane's (`lane-2`), or `shared`, which the judge and every lane use first come, first served. A rig with three GPUs therefore has two choices for its lanes: a runner each, with the judge on what is left, or one shared runner that the judge takes too, often for an hour's job. A lane runs `run_experiment` in short bursts (a build of a few minutes, a test, a serve), so two or three lanes fit on one runner, and the judge, the run's bottleneck, can keep two runners of its own.
+
+1. **A pool `lanes`.** Every lane's `run_experiment` may run on it, first come, first served, one run at a time, after the lane's own runner when it has one. The judge never runs there: no executor of the judge's is made for it. A lane with no runner of its own and a `lanes` runner up never falls back to the core.
+2. **A development run there gets the machine's memory,** as on a lane's own runner (goal 219): the memory the runner may use less the larger of 4 GiB and a tenth, when neither the contract nor `lane_limits` sets `dev_run_rss_mib`. No judge's job shares the runner, and it takes one run at a time.
+3. **Everywhere a pool is chosen:** the `runners` rig setting and `THERMITE_RUNNERS` accept `lanes`, with words that say what it is; **Edit rig** and **Add a rig** offer it, as "Lanes: any lane, never the judge"; `set_rig_settings` and `POST /v1/rigs/<rig>/settings` take it. A runner process may serve several pools, `lanes` among them.
+4. **What waits shows:** the rig's **Runners** block says which lane holds a `lanes` runner and who waits for it, as it does for a shared one; a lane's run that waits for one says so in its answer and on Live.
+5. **The model files** are begun on a `lanes` runner when the run is under way, as on a lane's own (goal 217).
+6. **Tests:** the pools (a lane takes a `lanes` runner after its own, two lanes take turns, the judge never does, the dev run's memory there), the setting's parse and its refusals, and the Edit rig form.
+
+## Why
+
+On the lab the judge was the bottleneck: lanes waited hours for verdicts while their own runners sat idle. Two runners for the judge and one for two or three lanes uses the same machines for more measurements.
+
+## Done when
+
+- [ ] Items 1 to 6.
+- [ ] Pages: Give a rig runners on other machines (the pools), A rig over several machines, Limits and pacing (a development run's memory), the settings reference, the glossary, and the changelog.
+
+## Decisions
+
+- 2026-11-07, the owner, from the options: a development run on a `lanes` runner gets "The machine's, as its own (Recommended)": the machine's memory less a margin, as on a lane's own runner.
+
+## Progress
+
+- 2026-11-07 07:52 UTC: Goal written from the owner's ask, after a lab night where two of three runners sat idle while the judge's queue grew.
+
+---
+
+Run with `/goal Complete docs/plan/goals/229-lanes-runner-pool.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

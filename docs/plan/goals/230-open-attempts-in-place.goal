@@ -1,0 +1,47 @@
+---
+id: "230"
+title: "A running run's limit of unjudged changes, set in place, and no default"
+status: READY
+version: "0.1.4"
+depends_on: ["221"]
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 230 · A running run's limit of unjudged changes, set in place, and no default
+
+**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, 2026-11-07: "Increase the judge queue limit before stopping lanes to like 15 or 20 maybe?"
+
+A run's lanes start no new trial while it has `budget.max_open_attempts` changes the judge has not settled: 4 unless the contract says otherwise ([Limits and pacing](../../_site/src/content/docs/reference/limits-and-pacing.md)). The value is the contract's for the run's life. On the lab, 2026-11-07, a run with two lanes and a judge whose jobs take 35 to 110 minutes held both lanes for hours at 5 unjudged changes, with nothing on the run's page saying why: the tracker showed no lanes at work.
+
+1. **A rule over the contract's,** set while the run goes on, as `trial_minutes` and `keep_working` are: `redirect` with a directive `open_attempts` and a value, 1 or more. The owner's and an operator's alone: the teachers and the planner may not propose it, as no agent may change the pace it works under. The run's history says who set it and why; dropping the rule goes back to the contract's.
+2. **No default.** A contract that sets no `max_open_attempts` has no limit. The owner's standing rule: no cap Thermite sets by default, only those configured. A run already running when this lands keeps the limit it started with, 4, until a rule changes it, so no run's pace changes on an upgrade.
+3. **Lanes that wait say why:** while the limit holds them, the run's page, Live and `get_run` say so, with the count and the limit, such as `lanes wait: 5 changes unjudged, at most 4 (the contract's); open_attempts raises it`.
+4. **Tests:** the rule raises and lowers the limit for the next trial; a teacher's or the planner's `open_attempts` is refused in words; a contract without a value has no limit; a run started before keeps 4; the wait's words.
+
+## Why
+
+The judge is often a run's bottleneck. A run whose lanes stop at 4 unjudged changes leaves their runners and their plans idle while the judge works through hours of jobs. The owner sets how far ahead they may run, on a running run, and the run says when it waits.
+
+A deeper queue has a cost the run's page should make plain: a change judged hours after it was written is judged against a newer champion, and one written on an older champion needs a port when it wins.
+
+## Done when
+
+- [ ] Items 1 to 4.
+- [ ] Pages: Limits and pacing, the contract (`budget.max_open_attempts`), Steer a run (the rule), Signed commands, MCP tools, and the changelog.
+
+## Decisions
+
+- 2026-11-07, the owner, from the options: "16 here; no default (Recommended)": the lab's run gets the rule `open_attempts` 16 once this is on its rig, and a contract that sets no limit has none.
+
+## Progress
+
+- 2026-11-07 07:52 UTC: Goal written from the owner's ask and the lab run's night: lanes held at 5 unjudged changes from 03:42 to 07:15 UTC.
+
+---
+
+Run with `/goal Complete docs/plan/goals/230-open-attempts-in-place.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
