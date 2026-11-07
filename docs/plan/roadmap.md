@@ -197,6 +197,9 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
 - [215](goals/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `IN_PROGRESS`
 - [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `PROPOSED`
+- [217](goals/217-lane-fetch-progress.goal) A lane is told how the whole fetch of the model files stands, not only the files still missing · `IN_PROGRESS`
+- [218](goals/218-advisor-tools-in-terminal.goal) A teacher in Claude Code's own terminal has its tools from its first turn · `PROPOSED`
+- [219](goals/219-lane-runner-memory.goal) A lane on a runner of its own can build and serve a large model in `run_experiment` · `PROPOSED`
 
 **The owner's asks of 2026-11-03.**
 

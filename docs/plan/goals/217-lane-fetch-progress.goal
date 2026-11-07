@@ -1,0 +1,40 @@
+---
+id: "217"
+title: "A lane is told how the whole fetch of the model files stands"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 217 · A lane is told how the whole fetch of the model files stands
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+A lane's `run_experiment` on a runner begins the fetch of the run's model files there and answers at once while they come ([goal 213](_completed/213-models-on-every-runner.goal)). Each answer asked the runner only for the files the harness still lacked, and counted against those alone. On the lab, 2026-11-06, a lane's runs said `0 of 33 files, 0.0 GiB`, then `0 of 23 files, 2.0 GiB`, `0 of 19 files, 4.7 GiB`, `0 of 17 files, 0.4 GiB` and so on to `0 of 10 files` over 40 minutes: the count of files done never rose, the total fell, and the GiB fell back as each file was taken in. The lane could not tell how far the fetch was, and wrote in a note that the files take "about 45 minutes or more".
+
+1. **Counted against the whole fetch.** The core keeps the files a lane's run found missing since the first, with each one's bytes as last heard. A file the harness took in since counts as done, with its bytes, in what the lane is told and in the fetch the rig's page shows.
+
+## Why
+
+A lane plans its trial around the wait: whether to read code meanwhile or to try again in a minute. So does the owner, from the rig's page.
+
+## Done when
+
+- [ ] Item 1, with a test of a fetch whose files the harness takes in between a lane's runs.
+- [ ] Pages: [Model files on a rig](../../_site/src/content/docs/reference/model-files.md#on-a-rigs-runners) already shows the whole fetch's count; the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-07 00:21 UTC: built. `RemoteRunner.laneRun` (`harness/judge/remote-runner.ts`) keeps the files of a lane's fetch with their bytes, and `fetchTurn` adds those taken in to its words and to the rig's progress. Test: `tests/harness/judge/remote-models.test.ts` (the harness takes a file in between two runs: `1 of 2 files` where it said `0 of 1`). Typecheck and lint pass; the test file has not run yet. The changelog waits for v0.1.4's.
+
+---
+
+Run with `/goal Complete docs/plan/goals/217-lane-fetch-progress.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

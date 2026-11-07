@@ -27,10 +27,13 @@ const MODELS = [
  * A runner whose fetch answers each turn from `turns`, the last repeated; what it was asked; and
  * how the core held the fetch to stand for the rig's report when each turn was asked.
  */
-function runner(turns: ModelFetchState[][], o: { stallMs?: number } = {}) {
+function runner(turns: ModelFetchState[][], o: { stallMs?: number; missing?: string[][] } = {}) {
   const polls: ModelPoll[] = [];
   const asks: string[] = [];
   const held: (FetchProgress | undefined)[] = [];
+  // What the harness lacks at each ask: both files unless the test says, the last repeated.
+  let asked = 0;
+  let lacks = [A, B];
   const ledger = {
     commands: { modelsOf: () => MODELS },
     trials: { get: () => ({ run: "r-1" }) },
@@ -40,7 +43,10 @@ function runner(turns: ModelFetchState[][], o: { stallMs?: number } = {}) {
     link: {
       ask: async (a: RunAsk) => {
         asks.push(a.op);
-        if (a.op === "models_have") return { missing: [A, B] };
+        if (a.op === "models_have") {
+          lacks = o.missing?.[Math.min(asked++, o.missing.length - 1)] ?? [A, B];
+          return { missing: lacks };
+        }
         if (a.op === "git_has") return { has: true, heads: [] };
         if (a.op === "build") return { ok: true, cached: true, manifest: { key: "k" } };
         if (a.op === "lane_run") return { ran: true, exit: 0 };
@@ -48,9 +54,10 @@ function runner(turns: ModelFetchState[][], o: { stallMs?: number } = {}) {
       },
       sendGit: async () => undefined,
       fetchModels: async (files: ModelFetch[], poll: ModelPoll) => {
+        // Only the files the harness lacks are asked for.
         assert.deepEqual(
           files.map((f) => f.sha256),
-          [A, B],
+          lacks,
         );
         polls.push(poll);
         held.push(r.fetch && { ...r.fetch });
@@ -173,5 +180,29 @@ describe("a run's model files on a runner of another machine (goal 213)", () => 
     assert.equal(r.fetch, undefined);
     // Each lane run begins (or goes on with) the fetch; none waits for it.
     assert.deepEqual(polls, ["start", "start"]);
+  });
+
+  test("a lane is told how the whole fetch stands, with the files taken in since counted (goal 217)", async () => {
+    // The harness takes A in after the first run: the next run asks for B alone.
+    const { r } = runner(
+      [[st(A, "fetching", 60), st(B, "queued", 0)], [st(B, "fetching", 30)], [st(B, "done", 100)]],
+      { missing: [[A, B], [B], [B], []] },
+    );
+    const run = {
+      lane: "lane-2",
+      trial: "t-1",
+      repo: "proj",
+      parent: "c".repeat(40),
+      patch: Buffer.from(""),
+      command: "make && ./serve",
+      limits: { rssMib: 1024, diskMib: 1024 },
+    };
+    const said = async () => ((await r.laneRun(run)) as { reason?: string }).reason ?? "";
+    assert.match(await said(), /\(0 of 2 files, 0\.0 of 0\.0 GiB\)/);
+    // Where it said "0 of 1 files": the fetch counted from what was still missing.
+    assert.match(await said(), /\(1 of 2 files, 0\.0 of 0\.0 GiB\)/);
+    assert.equal(r.fetch?.files, 2);
+    assert.equal(r.fetch?.done, 1);
+    assert.equal(r.fetch?.bytes, 130);
   });
 });

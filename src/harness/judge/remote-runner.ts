@@ -92,6 +92,11 @@ export class RemoteRunner implements RigRunner {
   private readonly modelsHeld = new Set<string>();
   /** Its fetch under way, as last heard; none once the files are there or the fetch failed. */
   private fetching: FetchProgress | undefined;
+  /**
+   * The files a lane's run found missing since the first, each with its bytes as last heard
+   * (goal 217): one the harness took in since counts as done in what the lane is told.
+   */
+  private laneFetch: { run: string; bytes: Map<string, number> } | undefined;
 
   constructor(o: RemoteRunnerOptions) {
     this.o = o;
@@ -135,6 +140,7 @@ export class RemoteRunner implements RigRunner {
     this.baselines.clear();
     this.modelsHeld.clear();
     this.fetching = undefined;
+    this.laneFetch = undefined;
   }
 
   /** Sends the runner a commit of one of the core's mirrors, as a bundle of what it lacks, once. */
@@ -241,7 +247,9 @@ export class RemoteRunner implements RigRunner {
     run: string,
     files: ModelFetch[],
     poll: ModelPoll,
-  ): Promise<{ done: boolean; words: string; got: number }> {
+    /** Files of the same fetch the harness took in before this turn, and their bytes. */
+    before: { files: number; bytes: number } = { files: 0, bytes: 0 },
+  ): Promise<{ done: boolean; words: string; got: number; states: ModelFetchState[] }> {
     let states: ModelFetchState[];
     try {
       states = ModelFetchState.array().parse(await this.o.link.fetchModels(files, poll));
@@ -263,21 +271,21 @@ export class RemoteRunner implements RigRunner {
       : null;
     const done = states.filter((x) => x.state === "done").length;
     const tried = states.find((x) => x.state !== "done" && x.error);
-    const words = `${done} of ${files.length} files, ${gib(got)}${total !== null ? ` of ${gib(total)}` : ""} GiB${tried ? `; the last try of ${nameOf(tried.sha256)} failed: ${tried.error}` : ""}`;
+    const words = `${done + before.files} of ${files.length + before.files} files, ${gib(got + before.bytes)}${total !== null ? ` of ${gib(total + before.bytes)}` : ""} GiB${tried ? `; the last try of ${nameOf(tried.sha256)} failed: ${tried.error}` : ""}`;
     const all = states.length >= files.length && done === states.length;
     const at = new Date().toISOString();
     this.fetching = all
       ? undefined
       : {
           run,
-          files: files.length,
-          done,
-          bytes: got,
-          total,
+          files: files.length + before.files,
+          done: done + before.files,
+          bytes: got + before.bytes,
+          total: total !== null ? total + before.bytes : null,
           since: this.fetching?.run === run ? this.fetching.since : at,
           at,
         };
-    return { done: all, words, got };
+    return { done: all, words, got, states };
   }
 
   /**
@@ -388,13 +396,24 @@ export class RemoteRunner implements RigRunner {
     const run = this.o.ledger.trials.get(r.trial)?.run;
     const files = run ? await this.modelsMissing(run) : [];
     if (run && files.length) {
-      const turn = await this.fetchTurn(run, files, "start");
+      // Each run asks only for the files still missing; the lane is told how the whole fetch
+      // stands, with those the harness took in since its first run counted as done (goal 217).
+      if (this.laneFetch?.run !== run) this.laneFetch = { run, bytes: new Map() };
+      const seen = this.laneFetch.bytes;
+      for (const f of files) if (!seen.has(f.sha256)) seen.set(f.sha256, 0);
+      const landed = [...seen].filter(([sha]) => !files.some((f) => f.sha256 === sha));
+      const turn = await this.fetchTurn(run, files, "start", {
+        files: landed.length,
+        bytes: landed.reduce((n, [, b]) => n + b, 0),
+      });
+      for (const x of turn.states) seen.set(x.sha256, x.total ?? x.bytes);
       if (!turn.done)
         return {
           ran: false,
           reason: `the run's model files are on their way to this machine (${turn.words}); run again in a few minutes`,
         };
       this.modelsHeld.add(run);
+      this.laneFetch = undefined;
     }
     await this.sendCommit(r.repo, r.parent);
     return (await this.o.link.ask({

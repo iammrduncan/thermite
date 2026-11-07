@@ -1,0 +1,46 @@
+---
+id: "218"
+title: "A teacher in Claude Code's own terminal has its tools from its first turn"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 218 · A teacher in Claude Code's own terminal has its tools from its first turn
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+On the lab, 2026-11-06, a rig ran its agents in their own terminals. Its first teacher ran in Claude Code, its second in Pi and then in Codex. In three of the run's four teachers' rounds (20:32, 21:33 and 22:33 UTC), the teacher in Claude Code wrote in its field notes that it had none of the advisors' tools (`list_files`, `read_file`, `read_diff`, `kb_search`, the research tools), while the other teacher in the same round read the champion's code and cited its files and lines. In the fourth round (23:48 UTC) its notes cite files and lines too, and say nothing of missing tools. Its prompt had the same sections in all four rounds.
+
+The supervisor serves the advisors' tools over MCP on localhost for each call and gives Claude Code the server with `--mcp-config` ([the terminal profile](../../../src/supervisor/advisors/terminal/profiles.ts)). The terminal host types the message once Claude Code's input box is up and its SessionStart hook has fired; nothing waits for the MCP server.
+
+**Hypothesis (not checked):** in its own terminal, Claude Code connects the servers of `--mcp-config` in the background, and a turn that begins before the server is connected has none of its tools.
+
+1. **The cause, from the record:** the call's transcript on the rig, which says what tools its first turn had, for a round without tools and the round with them.
+2. **The message waits for the tools.** The supervisor serves the MCP server itself, so it knows when the program has listed its tools: the host types the message only after that, or after a limit, with the wait in the round's record. The same for the planner and every advisor in a terminal that gets MCP servers.
+3. **A test** with the Claude Code stand-in that lists its tools late, and the real Claude Code acceptance with the advisors' tools.
+
+## Why
+
+A teacher without the code tools reviews the run from its brief alone: its ideas cannot be checked against the champion, and it says so instead of advising.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests.
+- [ ] Pages: the advisors' terminal (Agents, lanes and the planner), and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-07 00:21 UTC: Goal written from a lab run's field notes, its prompts' records and the rig's settings.
+
+---
+
+Run with `/goal Complete docs/plan/goals/218-advisor-tools-in-terminal.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
