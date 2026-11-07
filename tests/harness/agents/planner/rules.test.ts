@@ -333,4 +333,71 @@ describe("planner", () => {
     // Without a goal report, nothing is skipped.
     assert.equal(fallbackPlan({ ...input, goalReport: undefined }).assignments.length, 2);
   });
+
+  test("a round planned while a lane is on a trial plans the free lanes only (goal 215)", () => {
+    const queue = {
+      up_next: [
+        {
+          id: "x-1",
+          title: "port the patch",
+          by: "owner",
+          tries: {
+            of: 3,
+            try: 2,
+            lanes: ["lane-2"],
+            earlier: [{ n: 1, lane: "lane-2", result: "no_attempt" }],
+          },
+        },
+        { id: "x-2", title: "other", by: "owner" },
+      ],
+      proposed: [],
+      in_progress: [{ id: "x-0", title: "a long build", by: "owner", lane: "lane-1" }],
+      tried: [],
+    };
+    const input: PlannerInput = { ...base, queue, busy: [{ lane: "lane-1", experiment: "x-0" }] };
+    const context = JSON.parse(plannerContext(input)) as Record<string, unknown>;
+    assert.deepEqual(context.lanes, ["lane-2"]);
+    assert.deepEqual(context.busy_lanes, [{ lane: "lane-1", experiment: "x-0" }]);
+    // The free lane alone: the plan the lab's model gave, refused before (goal 215).
+    const good = validatePlan(
+      { assignments: [{ lane: "lane-2", experiment: "x-2", parent: "champion" }] },
+      input,
+    );
+    assert.deepEqual(good.errors, []);
+    assert.deepEqual(
+      good.plan?.handout.map((h) => h.lane),
+      ["lane-2"],
+    );
+    // The busy lane named too, on what it is on: refused with why, and only that.
+    const busy = validatePlan(
+      {
+        assignments: [
+          { lane: "lane-1", experiment: "x-0", parent: "champion" },
+          { lane: "lane-2", experiment: "x-2", parent: "champion" },
+        ],
+      },
+      input,
+    );
+    assert.deepEqual(busy.errors, [
+      "lane-1 is still on a trial (experiment x-0): leave it out. The fixed rules give it the next experiment up next after your hand-out, which it starts when its trial ends",
+    ]);
+    // An experiment lane-2 tried waits for lane-1, which has not, though lane-1 is busy.
+    const tried = validatePlan(
+      { assignments: [{ lane: "lane-2", experiment: "x-1", parent: "champion" }] },
+      input,
+    );
+    assert.deepEqual(tried.errors, [
+      "lane-2: experiment x-1 was tried on lane-2 already (try 2 of 3 is next): leave it up next for lane-1, which has not tried it and is still on a trial",
+    ]);
+    // With every lane busy, the plan gives every lane one, as before.
+    const all = {
+      ...input,
+      busy: [
+        { lane: "lane-1", experiment: "x-0" },
+        { lane: "lane-2", experiment: null },
+      ],
+    };
+    assert.deepEqual(JSON.parse(plannerContext(all)).lanes, ["lane-1", "lane-2"]);
+    assert.equal(JSON.parse(plannerContext(all)).busy_lanes, undefined);
+  });
 });

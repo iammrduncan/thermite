@@ -48,13 +48,15 @@ export const PLAN_LIMITS_TEXT = `Limits (an answer over one is refused): title $
 
 /** The planner's task, the same through every harness; only how it answers differs. */
 export const PLANNER_TASK = `You coordinate the lanes of an automated research campaign. Each lane runs one
-worker; each round you give every lane one experiment to work on next. The run's experiment
-queue is in queue: up_next is in order (give out the first ones first), proposed holds ideas the
+worker; each round you give every lane in lanes one experiment to work on next. A lane in
+busy_lanes is still on a trial from an earlier round: leave it out. The fixed rules give it the
+next experiment up next after your hand-out, which it starts when its trial ends, so the order of
+up_next steers it. The run's experiment queue is in queue: up_next is in order (give out the first ones first), proposed holds ideas the
 lanes proposed while they worked, in_progress is what lanes are on now, and tried holds the
 newest experiments tried with their results (the judge's verdict and change), so do not repeat
 what failed. Never give two lanes the same experiment. An experiment with tries (tries.of above
 1) comes back up next when a try ends without a win: give it to a lane not in tries.lanes while
-one of this round's lanes is not in it. You may give a lane an experiment close to
+one of the run's lanes is not in it (leave it up next for a busy lane that is not). You may give a lane an experiment close to
 its last direction (lane_state) so it builds on what it learned. You may change the queue, each
 change with a reason in why: add experiments (each with a ref that a lane's assignment may name),
 move or drop queued ones, and accept proposed ideas into up next or drop them. Keep the queue

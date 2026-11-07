@@ -221,18 +221,24 @@ describe("agent scheduler", () => {
     await fake.close();
   });
 
-  test("a round ends without waiting for a lane's long trial; the judge's wait holds the round and the lane's next trial in any round (goal 136)", async () => {
+  test("a round ends without waiting for a lane's long trial; the judge's wait holds the round and the lane's next trial in any round (goal 136); the planner plans the free lane and the busy one joins (goal 215)", async () => {
     const env = makeJudgeEnv({ lanes: { count: 2, trials_per_epoch: 1 } });
     await env.start();
+    // The planner's context, as the fake model reads it: the lanes it plans and those busy.
+    const contexts: { lanes: string[]; busy?: unknown }[] = [];
     const fake = await startFakeModel(({ messages, tools }) => {
       if (tools.some((t) => t.function.name === "submit_plan")) {
+        const text = messages.map((m) => String(m.content ?? "")).join("\n");
+        const lanes = JSON.parse(/"lanes":(\[[^\]]*\])/.exec(text)?.[1] ?? "[]") as string[];
+        const busy = /"busy_lanes":(\[[^\]]*\])/.exec(text)?.[1];
+        contexts.push({ lanes, ...(busy ? { busy: JSON.parse(busy) } : {}) });
         return {
           toolCalls: [
             {
               name: "submit_plan",
               args: {
                 new_directions: [{ id: "loops", description: "simplify the inner loop" }],
-                assignments: ["lane-1", "lane-2"].map((lane) => ({
+                assignments: lanes.map((lane) => ({
                   lane,
                   direction: "loops",
                   focus: "remove waste",
@@ -305,6 +311,17 @@ describe("agent scheduler", () => {
     assert.ok(await scheduler.tick(), "round 2: lane-2 starts");
     assert.deepEqual(trials("lane-2")[1], { epoch: 2, ended: false });
     assert.deepEqual(trials("lane-1"), [{ epoch: 1, ended: false }]);
+    // Round 2 was planned with lane-1 on its trial: the model planned lane-2 alone, and its plan
+    // was used on its first try; lane-1 is in the round by the fixed rules (goal 215).
+    assert.deepEqual(contexts.at(-1)?.lanes, ["lane-2"]);
+    assert.equal((contexts.at(-1)?.busy as { lane: string }[] | undefined)?.[0]?.lane, "lane-1");
+    assert.equal(round()?.source, "planner");
+    const started = env.ledger.events.newest("epoch_started", { subject: "js-1" })?.body;
+    assert.equal(started?.planner_tries, 1, JSON.stringify(started));
+    assert.deepEqual(
+      round()?.assignments.map((a) => a.lane),
+      ["lane-2", "lane-1"],
+    );
     await until(() => trials("lane-2")[1]?.ended === true);
     // Lane-1's trial of round 1 ends with a change: its next trial, in round 2, waits for the judge.
     holding = false;

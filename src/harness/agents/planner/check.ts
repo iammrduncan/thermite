@@ -5,7 +5,15 @@ import { QueuePosition } from "../../../core/commands.ts";
 import { asToken, DirectionRef, directionName, notADirection } from "../../../core/directions.ts";
 import { DIRECTIVE_KINDS } from "../../../core/directives.ts";
 import { directionOf, inDirection } from "../../queue.ts";
-import { directiveSets, lanesOf, type PlannerInput, toConvert, toDesign } from "./context.ts";
+import {
+  busyLanes,
+  directiveSets,
+  lanesOf,
+  type PlannerInput,
+  planLanes,
+  toConvert,
+  toDesign,
+} from "./context.ts";
 
 /**
  * The model's answer and its check: the shape a plan takes, and the rules code holds every plan
@@ -165,8 +173,20 @@ export function validatePlan(
     return { errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
   const p = parsed.data;
   const errors: string[] = [];
-  const lanes = lanesOf(input.laneCount);
-  const assigned = p.assignments.map((a) => a.lane).sort();
+  // The lanes this round plans: those still on a trial are left out (goal 215).
+  const lanes = planLanes(input);
+  const busy = new Map(busyLanes(input).map((b) => [b.lane, b.experiment]));
+  for (const a of p.assignments)
+    if (busy.has(a.lane)) {
+      const on = busy.get(a.lane);
+      errors.push(
+        `${a.lane} is still on a trial${on ? ` (experiment ${on})` : ""}: leave it out. The fixed rules give it the next experiment up next after your hand-out, which it starts when its trial ends`,
+      );
+    }
+  const assigned = p.assignments
+    .map((a) => a.lane)
+    .filter((l) => !busy.has(l))
+    .sort();
   if (canonicalJson(assigned) !== canonicalJson([...lanes].sort())) {
     errors.push(
       `assign each of ${lanes.join(", ")} exactly once (got ${assigned.join(", ") || "none"})`,
@@ -203,6 +223,7 @@ export function validatePlan(
   });
   const handout: QueuePlan["handout"] = [];
   for (const a of p.assignments) {
+    if (busy.has(a.lane)) continue;
     let experiment = a.experiment;
     const text = a.title ?? a.focus;
     if (!experiment && text) {
@@ -246,15 +267,17 @@ export function validatePlan(
       errors.push(
         `${a.ref.startsWith("@") ? a.ref.slice(1) : `add ${a.ref}`}: the direction "${a.direction}" ${NOT_A_DIRECTION}`,
       );
-  // Tries (goal 214): an experiment a lane tried goes to a lane that has not, while one has not.
+  // Tries (goal 214): an experiment a lane tried goes to a lane that has not, while one has not,
+  // a lane still on a trial too (goal 215): the fixed rules give it to that lane.
   for (const h of handout) {
     const t = queued.get(h.experiment)?.tries;
     if (!t?.lanes.includes(h.lane)) continue;
-    const fresh = lanes.filter((l) => !t.lanes.includes(l));
-    if (fresh.length)
-      errors.push(
-        `${h.lane}: experiment ${h.experiment} was tried on ${h.lane} already (try ${t.try} of ${t.of} is next): give it to ${fresh.join(" or ")}, which has not tried it`,
-      );
+    const fresh = lanesOf(input.laneCount).filter((l) => !t.lanes.includes(l));
+    if (!fresh.length) continue;
+    const free = fresh.filter((l) => lanes.includes(l));
+    errors.push(
+      `${h.lane}: experiment ${h.experiment} was tried on ${h.lane} already (try ${t.try} of ${t.of} is next): ${free.length ? `give it to ${free.join(" or ")}, which has not tried it` : `leave it up next for ${fresh.join(" or ")}, which has not tried it and is still on a trial`}`,
+    );
   }
   const twice = handout.filter(
     (h, i) => handout.findIndex((o) => o.experiment === h.experiment) !== i,

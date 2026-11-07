@@ -39,6 +39,11 @@ export interface PlannerInput {
   /** What each lane worked on last: its direction and its experiment's title. */
   laneState?: Record<string, { direction: string | null; experiment: string | null }> | undefined;
   /**
+   * The lanes still on a trial as the round is planned (goal 215), each with the experiment it is
+   * on: the plan leaves them out, and each takes the fixed rules' pick when its trial ends.
+   */
+  busy?: { lane: string; experiment: string | null }[] | undefined;
+  /**
    * The campaign's brief, from its author and approved with the contract (goal 078): its
    * additional information, ideas to try and hypotheses, whole.
    */
@@ -94,6 +99,23 @@ export function lanesOf(n: number): string[] {
   return Array.from({ length: n }, (_, i) => `lane-${i + 1}`);
 }
 
+/**
+ * The lanes a round's plan gives experiments to (goal 215): every lane not still on a trial, or
+ * every lane when none is free.
+ */
+export function planLanes(input: Pick<PlannerInput, "laneCount" | "busy">): string[] {
+  const busy = new Set(input.busy?.map((b) => b.lane));
+  const all = lanesOf(input.laneCount);
+  const free = all.filter((l) => !busy.has(l));
+  return free.length ? free : all;
+}
+
+/** The lanes still on a trial that a round's plan leaves out, with what each is on. */
+export function busyLanes(input: Pick<PlannerInput, "laneCount" | "busy">) {
+  const planned = new Set(planLanes(input));
+  return (input.busy ?? []).filter((b) => !planned.has(b.lane));
+}
+
 export function directiveSets(input: PlannerInput) {
   const of = (k: string) =>
     new Set(
@@ -128,7 +150,9 @@ export const RULES_BY =
 export function plannerContext(input: PlannerInput): string {
   return canonicalJson({
     epoch: input.epoch,
-    lanes: lanesOf(input.laneCount),
+    lanes: planLanes(input),
+    // Lanes still on a trial (goal 215): left out of the plan, with what each is on.
+    ...(busyLanes(input).length ? { busy_lanes: busyLanes(input) } : {}),
     objective: input.objective,
     editable_paths: input.editablePaths,
     champion: input.champion,

@@ -38,6 +38,7 @@ export async function planEpoch(
   const { laneCount } = input;
   const owner = input.ownerMessages ?? [];
   const lanes = lanesOf(laneCount);
+  const busy = new Set(input.busy?.map((b) => b.lane));
   const live = sched.o.service.live;
   live.append({
     source: "planner",
@@ -148,9 +149,13 @@ export async function planEpoch(
           `the queue had fewer than its target of ${target} experiments ready: a lane's distinct idea goes up next`,
         )
       : [];
+  // A lane the model's plan leaves out, one still on a trial (goal 215), takes the fixed rules'
+  // pick, and the fixed plan's direction when the queue has nothing for it, so it joins the round.
+  const fixedPlan = p.source === "planner" ? fallbackPlan(input).assignments : [];
   for (const lane of lanes) {
     if (handout.some((h) => h.lane === lane)) continue;
-    const fixed = p.assignments.find((a) => a.lane === lane);
+    const fixed =
+      p.assignments.find((a) => a.lane === lane) ?? fixedPlan.find((a) => a.lane === lane);
     let x = sched.coordinator.pick(run, lane, {
       directives,
       window: laneCount,
@@ -196,7 +201,7 @@ export async function planEpoch(
       `round ${n}: ${p.source === "planner" ? `planned by the model${p.tries > 1 ? ` (try ${p.tries})` : ""}` : `taken from the queue by the fixed rules${p.notes ? ` (${p.notes})` : p.rawViolations.length ? " (the model gave no usable plan)" : p.tries === 0 ? " (no model)" : ""}`}`,
       ...assignments.map(
         (a) =>
-          `${a.lane}: ${a.direction}, ${a.focus}${a.parent === "lane_best" ? " (from the lane's best)" : ""}`,
+          `${a.lane}: ${a.direction}, ${a.focus}${a.parent === "lane_best" ? " (from the lane's best)" : ""}${busy.has(a.lane) ? " (still on a trial: it starts this when that ends)" : ""}`,
       ),
       ...(p.newDirections.length
         ? [
@@ -298,6 +303,7 @@ export function plannerInput(
   const owner = sched.o.service.messages.waitingForPlanner(run);
   const lanes = lanesOf(laneCount);
   const champion = sched.ledger.champions.current(run);
+  const on = sched.o.service.queue.assigned(run);
   return {
     run,
     epoch: n,
@@ -309,6 +315,10 @@ export function plannerInput(
     evidence: sched.registry.evidence(run, 30),
     queue: sched.o.service.queue.brief(run),
     laneState: sched.coordinator.laneState(run, lanes),
+    // A round starts while a lane's trial of an earlier one goes on (goals 136 and 215).
+    busy: lanes
+      .filter((l) => sched.running.has(l))
+      .map((lane) => ({ lane, experiment: on.find((x) => x.lane === lane)?.id ?? null })),
     directives: directivesOf(sched, run),
     directions: sched.o.service.queue.directions(run),
     laneBests: Object.fromEntries(lanes.map((l) => [l, sched.registry.laneBest(run, l)])),

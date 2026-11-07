@@ -195,7 +195,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `IN_PROGRESS`
 - [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `IN_PROGRESS`
 - [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
-- [215](goals/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `PROPOSED`
+- [215](goals/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `IN_PROGRESS`
 - [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `PROPOSED`
 
 **The owner's asks of 2026-11-03.**

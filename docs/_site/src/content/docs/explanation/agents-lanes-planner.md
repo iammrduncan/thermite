@@ -26,7 +26,7 @@ Thermite's work nests in five levels:
 
 An **experiment** is one thing to try: a short title, some details, its **direction** (a named approach, such as `loop-tiling`) and why it is worth trying. Each run keeps its experiments in one queue, described [below](#the-experiment-queue).
 
-Work is organised in **rounds**. At the start of each round, the planner gives every lane an experiment for its next trial. Then each lane runs a few trials, one after another (three by default), and each later trial takes the next experiment from the queue. A round ends, and the next is planned, as soon as every free lane has run its trials. It never waits for a trial still running on another lane: that lane joins the next round when its trial ends, so no lane sits idle while another lane's trial takes long. Unless the run keeps working (below), a change still waiting for the judge holds the round, so the next plan has its verdict. An experiment a round gave a lane that never started in it stays up next, for a later hand-out. The dashboard says "round", and so does each plan in Live ("round 4: planned by the model"). The contract's settings, the harness's records and the workers' briefs call a round an **epoch**; the planner's live line says "planning round 4".
+Work is organised in **rounds**. At the start of each round, the planner gives every lane an experiment for its next trial. Then each lane runs a few trials, one after another (three by default), and each later trial takes the next experiment from the queue. A round ends, and the next is planned, as soon as every free lane has run its trials. It never waits for a trial still running on another lane: that lane joins the next round when its trial ends, so no lane sits idle while another lane's trial takes long. The planner plans that round for the free lanes alone: it is told which lanes are still on a trial and what each is on, and it leaves them out. The fixed rules give each of those lanes the next experiment up next after the planner's hand-out, which the lane starts when its trial ends, so the planner steers it by the order of up next. Unless the run keeps working (below), a change still waiting for the judge holds the round, so the next plan has its verdict. An experiment a round gave a lane that never started in it stays up next, for a later hand-out. The dashboard says "round", and so does each plan in Live ("round 4: planned by the model"). The contract's settings, the harness's records and the workers' briefs call a round an **epoch**; the planner's live line says "planning round 4".
 
 ```mermaid
 flowchart LR
@@ -107,6 +107,7 @@ The **planner** coordinates the lanes. It is one model call at the start of each
 - the objective, the champion, the directions tried and their verdicts, recent attempts from every lane (a change the static checks refused with its first five violations, and a held-out failure by its kind in words), and each lane's best result;
 - the queue: up next in order, the lanes' ideas, what each lane is on now, and the newest experiments tried, with the judge's verdict and change for each attempt;
 - each lane's last direction and experiment;
+- the lanes it plans, and the lanes still on a trial of an earlier round, each with the experiment it is on, which it leaves out;
 - the queue's target (`queue_target`): how many experiments up next should hold after this round's hand-out, what it holds now, and at least how many to add ([below](#keeping-the-queue-at-its-target));
 - the rules in force, each naming a direction, and any old rule in the owner's own words, marked legacy;
 - the run's directions, and the ones that rules name but the run doesn't have yet, which it must design;
@@ -125,7 +126,7 @@ A message counts as read by the planner only when the model's plan is used, but 
 
 The planner answers with:
 
-- **an experiment for each lane:** one from up next, a lane's idea, one it adds in the same answer, or a new one described in place; a starting point, either the champion or the lane's own best result; and why;
+- **an experiment for each lane it plans:** one from up next, a lane's idea, one it adds in the same answer, or a new one described in place; a starting point, either the champion or the lane's own best result; and why;
 - **changes to the queue,** each with why: experiments to add, queued ones to move or drop, and ideas to queue or drop. It is told to keep the queue at its target with distinct ideas, to queue the lanes' distinct ideas, and to drop an idea that repeats one queued or tried, saying which;
 - **rules that an owner's message asks for,** such as "stop :loop tiling:" or "never touch the timer code". Each names a direction and records the message it came from. A `:name:` in the message names the direction exactly; for plain words, the planner picks the run's direction that fits, or designs a new one;
 - **the conversion of each old rule in words:** the direction its words mean, one of the run's or a new one it designs;
@@ -137,11 +138,11 @@ The planner answers with:
 Code checks the answer before anything changes. It refuses an answer that:
 
 - isn't in the form the planner is asked for;
-- doesn't give every lane exactly one experiment;
+- doesn't give every lane it plans exactly one experiment, or gives one to a lane still on a trial;
 - gives out an experiment that is not up next, not a lane's idea and not added in the same answer, such as one in progress or one already tried;
 - gives out an experiment that the same answer drops;
 - gives the same experiment to two lanes;
-- gives a lane an experiment that lane tried already while another lane of the round has not tried it ([An experiment tried more than once](#an-experiment-tried-more-than-once));
+- gives a lane an experiment that lane tried already while another lane of the run has not tried it, a lane still on a trial too ([An experiment tried more than once](#an-experiment-tried-more-than-once));
 - has a lane build on its best result when it has none yet;
 - gives out an experiment in a direction that an **Avoid** rule names, or gives no lane one in a direction that an **Always** rule names;
 - moves an experiment that isn't queued, drops one that isn't queued or an idea, or queues something that isn't an idea;

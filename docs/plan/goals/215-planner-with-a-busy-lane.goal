@@ -1,16 +1,16 @@
 ---
 id: "215"
 title: "The planner plans a round while a lane is still busy"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: []
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # 215 · The planner plans a round while a lane is still busy
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -25,7 +25,7 @@ So the only plan the check takes gives the busy lane another experiment, which i
 Each such round loses the model's plan: its reasons, its holds (such as a change it keeps back because it changes bits) and its queue moves. Runs with long trials, such as a port that builds a large engine, start most rounds with a lane busy.
 
 1. **The planner is asked for the free lanes only.** Its prompt names the free lanes it plans and, for each busy lane, what it is on, so the plan can take that into account.
-2. **The check takes each free lane exactly once,** and refuses a busy lane with words that say why ("lane-1 is still on x-…: it joins the next round"). The fixed rules plan the same lanes.
+2. **The check takes each free lane exactly once,** and refuses a busy lane with words that say why. Each busy lane still gets the fixed rules' pick from up next after the planner's hand-out, as before, so it joins the round when its trial ends.
 3. **A test** of a round that starts with one of two lanes busy: the model's plan for the free lane is used, and the busy lane's trial goes on.
 4. **The count:** how many rounds of the lab's runs were planned by the fixed rules for this cause, from their epochs' `causes`.
 
@@ -40,11 +40,12 @@ The planner's model is where the run's judgment about what to try next lives. Re
 
 ## Decisions
 
-- None yet.
+- 2026-11-07: a busy lane is left out of the planner's plan, not planned by it: the fixed rules give it the next experiment up next after the planner's hand-out, so the planner steers it by the order of up next. When every lane is busy, the planner plans every lane, as before.
 
 ## Progress
 
 - 2026-11-06 22:04 UTC: Goal written from a lab run's round 118 (its epoch's `causes`) and the code on v0.1.4.
+- 2026-11-07 00:21 UTC: built. `PlannerInput.busy` (`harness/agents/planner/context.ts`), filled from the scheduler's running lanes with the experiment each is on (`scheduler/plan.ts`); `planLanes` and `busyLanes` give the context's `lanes` and `busy_lanes`; `validatePlan` (`planner/check.ts`) takes each free lane exactly once, refuses a busy lane in words, and leaves an experiment with tries up next for a busy lane that has not tried it; `planEpoch` gives a lane the model's plan left out the fixed rules' pick, with the fixed plan's direction when the queue is empty, and says so in Live. The planner's task text names `busy_lanes` (`agents/roles/planner.ts`, its goldens and the Agent roles page). Tests: `tests/harness/agents/planner/rules.test.ts` (the context, the free lane's plan taken, the busy lane refused, tries, every lane busy) and the goal 136 test in `tests/harness/agents/scheduler/epochs.test.ts` (round 2 planned by the model on its first try for lane-2, lane-1 in the round). Typecheck, lint, the public, size, import and loose-ends checks and the docs build and check pass; the test files have not run yet. Page: Lanes, the planner and the queue. Item 4: a second lab run, a two-lane hill climb on v0.1.3, planned 1 of its 2 rounds by the fixed rules for this cause (round 2, 2026-11-06 23:28 UTC), which gave a lane another experiment than the one the planner chose; the first run's is round 118, above. The changelog waits for v0.1.4's.
 
 ---
 
