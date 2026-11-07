@@ -1,0 +1,38 @@
+---
+id: "225"
+title: "A drain waits for the supervisor's advisors too"
+status: PROPOSED
+version: "0.1.4"
+depends_on: []
+created: 2026-11-07
+updated: 2026-11-07
+---
+
+# 225 · A drain waits for the supervisor's advisors too
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+A drain (goal 079) waits for what the rig's harness reports still runs: its open trials and the judge's jobs (`summary.work`, `control/views/work.ts`). The supervisor's advisors are not in that report: an audit, a teachers' round, the review panel. When the drain ends, the rig's pods restart, the supervisor's among them, and an advisor's call under way ends with it. A teachers' round can take half an hour or more. An audit holds a confirmed win from becoming the champion until it ends.
+
+1. **The supervisor reports its advisors' work under way** with the harness's: each call's advisor, run and start.
+2. **A drain waits for it,** as it waits for a trial: no new audit, teachers' round or review starts while the rig drains, and the call under way ends first. The drain card and the deadline's choices (goal 173) name it.
+3. **A test:** a rig drains while an audit runs; the pods restart only after the audit's verdict.
+
+## Why
+
+An operator who drains a rig expects the move to cut nothing. A cut audit leaves a win waiting, and a cut teachers' round spends a subscription's window for nothing.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests.
+- [ ] Pages: Move a rig onto new images, the drain card, and the changelog.
+
+## Progress
+
+- 2026-11-07 03:53 UTC: Goal written while planning a rig's move on the lab during a teachers' round: the move waits for the round by hand.
+
+---
+
+Run with `/goal Complete docs/plan/goals/225-drain-waits-for-advisors.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
