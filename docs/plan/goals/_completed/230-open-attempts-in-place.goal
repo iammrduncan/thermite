@@ -1,7 +1,7 @@
 ---
 id: "230"
 title: "A running run's limit of unjudged changes, set in place, and no default"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: ["221"]
 created: 2026-11-07
@@ -10,13 +10,13 @@ updated: 2026-11-07
 
 # 230 · A running run's limit of unjudged changes, set in place, and no default
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
 
 ## What
 
 The owner, 2026-11-07: "Increase the judge queue limit before stopping lanes to like 15 or 20 maybe?"
 
-A run's lanes start no new trial while it has `budget.max_open_attempts` changes the judge has not settled: 4 unless the contract says otherwise ([Limits and pacing](../../_site/src/content/docs/reference/limits-and-pacing.md)). The value is the contract's for the run's life. On the lab, 2026-11-07, a run with two lanes and a judge whose jobs take 35 to 110 minutes held both lanes for hours at 5 unjudged changes, with nothing on the run's page saying why: the tracker showed no lanes at work.
+A run's lanes start no new trial while it has `budget.max_open_attempts` changes the judge has not settled: 4 unless the contract says otherwise ([Limits and pacing](../../../_site/src/content/docs/reference/limits-and-pacing.md)). The value is the contract's for the run's life. On the lab, 2026-11-07, a run with two lanes and a judge whose jobs take 35 to 110 minutes held both lanes for hours at 5 unjudged changes, with nothing on the run's page saying why: the tracker showed no lanes at work.
 
 1. **A rule over the contract's,** set while the run goes on, as `trial_minutes` and `keep_working` are: `redirect` with a directive `open_attempts` and a value, 1 or more. The owner's and an operator's alone: the teachers and the planner may not propose it, as no agent may change the pace it works under. The run's history says who set it and why; dropping the rule goes back to the contract's.
 2. **No default.** A contract that sets no `max_open_attempts` has no limit. The owner's standing rule: no cap Thermite sets by default, only those configured. A run already running when this lands keeps the limit it started with, 4, until a rule changes it, so no run's pace changes on an upgrade.
@@ -31,8 +31,8 @@ A deeper queue has a cost the run's page should make plain: a change judged hour
 
 ## Done when
 
-- [ ] Items 1 to 4.
-- [ ] Pages: Limits and pacing, the contract (`budget.max_open_attempts`), Steer a run (the rule), Signed commands, MCP tools, and the changelog.
+- [x] Items 1 to 4.
+- [x] Pages: Limits and pacing, the contract (`budget.max_open_attempts`), Steer a run (the rule), Signed commands, MCP tools, and the changelog.
 
 ## Decisions
 
@@ -43,6 +43,15 @@ A deeper queue has a cost the run's page should make plain: a change judged hour
 - 2026-11-07 07:52 UTC: Goal written from the owner's ask and the lab run's night: lanes held at 5 unjudged changes from 03:42 to 07:15 UTC.
 - 2026-11-07 08:03 UTC: items 1 to 4 built. The directive `open_attempts` (`core/directives.ts`, 1 to 1000); the ledger leaves one out of any set but the owner's or an operator's, with `directives_left_out` (`harness/ledger/directives.ts`); `openAttemptsLimit` gives the rule's, else the contract's, else none (`harness/agents/coordinator.ts`); `lanesHeld` holds the lanes and records `lanes_held` and `lanes_held_ended`, with a Live line, once for each count and limit (`harness/agents/scheduler/gates.ts`). `budget.max_open_attempts` has no default (`core/contract.ts`); a version stored before, holding 4, is the same version for a contract given again without it (`sameAsStored`), and its runs keep the stored contract (`harness/service/assignment.ts`). Control folds `lanes_held` into the run's view, says it in the run's status line and History, shows the rule's chip, and sends the rule from a running run's **⋯ › Set how many may wait**. Tests: `tests/harness/agents/scheduler/open-attempts.test.ts`, `tests/control/dashboard/lanes-held.test.ts`, the six prompt goldens whose briefs carried the old default. Pages: Limits and pacing, the contract, Steer a run, Signed commands, the changelog. The test files have not run yet.
 
+
+## Verified (2026-11-07)
+
+- The touched test files at d01cb135 (385e8647's code with the contract hash tests built as signed), on the lab's test machine: 333 of 333, `tests/harness/agents/scheduler/open-attempts.test.ts`, `tests/control/dashboard/lanes-held.test.ts` and `tests/core/contract.test.ts` among them; the planner's rules test, which lists the rule kinds, passed after e12acf9b.
+- `npm run check` at d7a28b83, which holds this goal's code unchanged: passed, 2,899 of 2,903 (0 failed, 4 skipped) side by side, 200 of 200 alone, with the public, size, import and loose-ends checks ok.
+- `npm run docs:build` and `npm run docs:check` passed at 385e8647.
+- On the lab: a running run whose stored contract holds the old 4 got the owner's `open_attempts` rule of 16 at 09:19 UTC, set by the operator's token for the owner; its lanes then went on starting trials with 6 changes waiting for the judge, where the 4 would have held them. A run on another rig, started before, kept its stored 4; neither run reached its limit after the roll, so the words of a hold (`lanes wait: …`) rest on the tests.
+- Pages: Limits and pacing, the contract, Steer a run, Signed commands, MCP tools, and the changelog's v0.1.4 section.
+
 ---
 
-Run with `/goal Complete docs/plan/goals/230-open-attempts-in-place.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/230-open-attempts-in-place.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

@@ -209,8 +209,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [226](goals/226-teacher-review-kept.goal) One long field of a teacher's recommendation never loses its review · `IN_PROGRESS`
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `PROPOSED`
 - [228](goals/_completed/228-attempt-stage-times.goal) An attempt's page says how long each of its stages took · `VERIFIED`
-- [229](goals/229-lanes-runner-pool.goal) A runner pool shared by the lanes, never the judge · `IN_PROGRESS`
-- [230](goals/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `IN_PROGRESS`
+- [229](goals/_completed/229-lanes-runner-pool.goal) A runner pool shared by the lanes, never the judge · `VERIFIED`
+- [230](goals/_completed/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `VERIFIED`
 - [231](goals/231-runner-utilization.goal) How busy each runner is: its share of time with the judge, each lane, idle and away · `IN_PROGRESS`
 - [232](goals/232-teachers-research-the-web.goal) Teachers research the web with their program's own search and fetch · `IN_PROGRESS`
 
