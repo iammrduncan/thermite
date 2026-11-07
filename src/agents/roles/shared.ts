@@ -213,7 +213,7 @@ export function ownerAdditionSection(a: OwnerAddition | undefined): Section[] {
  * them. `memory`: what the program itself uses, in words, when it is known.
  */
 export function limitsNote(limits: LaneLimitValues, program: string, memory?: string): string {
-  return `Memory: ${limits.runRssMib} MiB for everything your lane runs at once, ${program} itself included${memory ? ` (it uses ${memory})` : ""}. A command that takes it over the limit is killed (your shell tool reports "Killed by SIGKILL"): run it again with less parallelism (for example make -j2) or a smaller input, or as a development run, which has its own limit. Disk: ${limits.workspaceMib} MiB for this trial's directory, ${program}'s own files included; going over ends the trial.`;
+  return `Memory: ${limits.runRssMib} MiB for everything your lane runs at once, ${program} itself included${memory ? ` (it uses ${memory})` : ""}. A command that takes it over the limit is killed (your shell tool reports "Killed by SIGKILL"): run it again with less parallelism (for example make -j2) or a smaller input, or as a development run, which has its own limit: ${limits.devRunRssSet ? `${limits.devRunRssMib} MiB` : `${limits.devRunRssMib} MiB, or on a runner of your lane's own, that machine's memory less a margin (each run's answer gives its memory_limit_mib)`}. Disk: ${limits.workspaceMib} MiB for this trial's directory, ${program}'s own files included; going over ends the trial.`;
 }
 
 /** The program an advisor runs in, and what it adds around the advisor's own text. */

@@ -332,6 +332,8 @@ export class RunHost {
         killed: r.killedFor,
         wall_ms: Math.round(r.wallMs),
         peak_rss_mib: Math.round(r.peakRssBytes / 2 ** 20),
+        // The run's memory limit here (goal 219): on the lane's own runner, the machine's.
+        memory_limit_mib: Math.round(rss / 2 ** 20),
         stdout: r.stdout.slice(-6_000),
         stderr: r.stderr.slice(-3_000),
         note: "diagnostic only: this number never counts",
