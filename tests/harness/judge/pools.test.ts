@@ -94,7 +94,10 @@ describe("a rig's runners in their pools (goal 206)", () => {
     await tick();
     assert.equal(judgeHeld, false);
     s.finish();
-    assert.deepEqual(await lane, { ran: true, exit: 0, runner: "box-2-0" });
+    // It waited for the judge's job: its answer says how long, in seconds (goal 229).
+    const { waited_s, ...answer } = (await lane) as { waited_s?: unknown };
+    assert.equal(typeof waited_s, "number");
+    assert.deepEqual(answer, { ran: true, exit: 0, runner: "box-2-0" });
     (await judge)?.();
     assert.equal(judgeHeld, true);
   });
