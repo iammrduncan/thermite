@@ -36,6 +36,18 @@ export const AGENTS: Handlers = {
   agents_wait_ended(f, e) {
     f.run(String(e.subject)).agents_wait = null;
   },
+  lanes_held(f, e, b) {
+    const v = f.run(String(e.subject));
+    v.lanes_held = {
+      open: Number(b.open ?? 0),
+      limit: Number(b.limit ?? 0),
+      from: String(b.from ?? ""),
+      since: v.lanes_held?.since ?? e.at,
+    };
+  },
+  lanes_held_ended(f, e) {
+    f.run(String(e.subject)).lanes_held = null;
+  },
   epoch_started(f, e, b) {
     const v = f.run(String(e.subject));
     v.epoch = {

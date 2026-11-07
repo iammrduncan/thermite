@@ -471,6 +471,13 @@ export interface EventBodies {
     changed: Record<string, number | null>;
     reason: string;
   };
+  /**
+   * The run's lanes start no new trial (goal 230): `open` changes wait for the judge, at most
+   * `limit`, from the run's open_attempts rule or the contract's max_open_attempts.
+   */
+  lanes_held: { open: number; limit: number; from: "rule" | "contract" };
+  /** The run's lanes may start trials again: fewer changes wait than the limit, or none is set. */
+  lanes_held_ended: { open: number };
   agents_stopped: { kind: string; words: string; by: string; said: string };
   agents_resumed: { why: string };
   agents_wait_for_limit: {

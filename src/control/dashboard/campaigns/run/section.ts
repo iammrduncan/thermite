@@ -34,6 +34,7 @@ import {
   championHeldOutBlock,
   confirmingWords,
   goalState,
+  heldWords,
   jobHtml,
   leftByClose,
   runBrief,
@@ -331,6 +332,8 @@ export function runHelpers(dash: Dashboard) {
       i.status === "running" ? confirmingWords(i) : "",
       // A wait for the provider's limit: Resume now in the header ends it.
       esc(waitWords(i, now)),
+      // Enough changes wait for the judge (goal 230): an open_attempts rule raises the limit.
+      esc(heldWords(i)),
       // A hill climb's baseline (goal 115): the judge measures the starting point first.
       i.status === "running" ? esc(baselineWords(i)) : "",
       // A runner's fetch of the run's model files (goal 213), which its first build waits for.

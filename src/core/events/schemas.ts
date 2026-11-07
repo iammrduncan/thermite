@@ -383,6 +383,8 @@ const BODIES = {
   agents_resumed: z.object({ why: str }),
   agents_wait_for_limit: z.object({ until: str, reason: str, trial: str, weekly: bool }),
   agents_wait_ended: z.object({ until: str }),
+  lanes_held: z.object({ open: num, limit: num, from: str }),
+  lanes_held_ended: z.object({ open: num }),
   journal_note: z.object({
     id: num,
     by: str,

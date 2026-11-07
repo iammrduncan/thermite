@@ -4,6 +4,7 @@ import { getCookie, setCookie } from "hono/cookie";
 import { buildInfo } from "../../common/build-info.ts";
 import { sameSecret } from "../../common/secrets.ts";
 import { ADD_HOURS_MAX, HOURS_SPENT } from "../../core/contract.ts";
+import { OPEN_ATTEMPTS_MAX } from "../../core/directives.ts";
 import { McpServers } from "../mcp-servers/index.ts";
 import type { PageOptions } from "../pages.ts";
 import { ChatGPTLogins } from "../providers/index.ts";
@@ -38,6 +39,11 @@ const CLOSE_WHY_TIP =
   "Why you close the run, up to 500 characters. The run keeps it: it shows wherever the run's state does, in its History and in the rig's export.";
 // biome-ignore lint/suspicious/noExplicitAny: any route's context
 export type Ctx = Context<any, any, any>;
+/** How many changes may wait for the judge, on a run's ⋯ (goal 230). */
+const OPEN_TIP =
+  "The lanes start no new trial while this many of the run's changes wait for the judge's verdict. A higher number keeps the lanes working while the judge catches up; their changes are judged later, against a newer champion.";
+const OPEN_WORDS =
+  "A rule over the contract's max_open_attempts, from the next trial: the run's history says who set it and why. Drop the rule to go back to the contract's.";
 
 /** What control gives its dashboard (control/pages.ts). */
 export type DashboardOptions = PageOptions;
@@ -183,8 +189,13 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
     const round = working
       ? `${cmdForm(c, { rig, kind: "start_teachers_round", fields: { run: r.id }, label: "Start a teachers' round", cls, back, disabled: !!noRound, why: noRound })}<div class="muted small">${esc(noRound || TEACHERS_ROUND_WORDS)}</div>`
       : "";
+    // How many changes may wait for the judge before the lanes start no new trial (goal 230):
+    // the owner's pace, as a rule over the contract's.
+    const pace = working
+      ? `${cmdForm(c, { rig, kind: "redirect", fields: { run: r.id }, label: "Set how many may wait", cls, back, extra: `<label class="fd" style="margin-bottom:6px">${infoLabel("Changes that may wait for the judge", OPEN_TIP)}<input name="open_attempts" type="number" min="1" max="${OPEN_ATTEMPTS_MAX}" step="1" value="${r.lanes_held?.limit ?? ""}" placeholder="16" required></label>` })}<div class="muted small">${esc(OPEN_WORDS)}</div>`
+      : "";
     const closing = close && r.status !== "closed" ? closeForm(c, rig, r.id, back) : "";
-    const items = [restart, round, closing].filter(Boolean);
+    const items = [restart, round, pace, closing].filter(Boolean);
     const hours = hoursMenu(c, rig, r, back, cls);
     if (!items.length) return hours;
     return `${hours}<details class="menu"><summary class="btn${cls ? ` ${cls}` : ""}" title="More">⋯</summary><div class="menu-pop">${items.join(`<div class="divider" style="margin:2px 0"></div>`)}</div></details>`;

@@ -15,7 +15,7 @@ import {
   type SchedulerOptions,
   schedulerContext,
 } from "./context.ts";
-import { budgetSpent, laneWaitMs, openAttempts, waitingForMcp } from "./gates.ts";
+import { budgetSpent, lanesHeld, laneWaitMs, waitingForMcp } from "./gates.ts";
 import { awaitingGoalReport, waitingForConfirmation } from "./goal.ts";
 import { maybeForkRound, updateLaneBests } from "./lanes.ts";
 import { planEpoch } from "./plan.ts";
@@ -46,7 +46,8 @@ export type { AgentsStopped };
  * most one submission, and the next trial only after that submission is judged. An epoch ends
  * when its lanes' trials are judged; it has no time cap (goal 079). When its lanes keep working
  * (goal 135), the next trial and the next epoch start while the judge works through their changes
- * (at most max_open_attempts unjudged). Agents never judge: the scheduler only reads verdicts.
+ * (at most the open_attempts rule's or the contract's max_open_attempts unjudged, goal 230). Agents
+ * never judge: the scheduler only reads verdicts.
  *
  * The model provider decides when agents can work (goal 079): no trial or plan starts while the
  * workers' model check fails or after a trial found no credits, a refused key or an unserved
@@ -260,7 +261,7 @@ export class Scheduler implements AgentSignals {
         continue;
       if (sched.running.size >= sched.o.maxConcurrent) continue;
       if (sched.o.workersOn && !sched.o.workersOn()) continue;
-      if (openAttempts(sched, id) >= contract.budget.max_open_attempts) continue;
+      if (lanesHeld(sched, id, contract)) continue;
       if (laneWaitMs(sched, id, a.lane, false) > 0) continue;
       // Each trial asks again: no trial starts once the rig drains or stops.
       if (halted(sched)) return started;

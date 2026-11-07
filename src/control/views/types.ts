@@ -383,6 +383,12 @@ export interface RunView {
     trial: string | null;
     weekly: boolean;
   } | null;
+  /**
+   * The run's lanes start no new trial (goal 230): `open` changes wait for the judge, at most
+   * `limit`, from the run's open_attempts rule or the contract's max_open_attempts, since `since`.
+   * Null when they may start trials.
+   */
+  lanes_held: { open: number; limit: number; from: string; since: string } | null;
   /** Research mode: the newest digest's figures and report. */
   research: Record<string, unknown> | null;
   /**

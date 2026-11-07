@@ -3,7 +3,12 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { BadInput, Refusal } from "../../common/errors.ts";
 import type { CommandPayloads, ImportSpec } from "../../core/commands.ts";
-import { contractSha, parseContract, parseStoredContract } from "../../core/contract.ts";
+import {
+  contractSha,
+  parseContract,
+  parseStoredContract,
+  sameAsStored,
+} from "../../core/contract.ts";
 import { goalChecks } from "../../core/goal/index.ts";
 import { type Kit, KitSchema, kitProblems } from "../../core/kit.ts";
 import { canonicalUses, type McpUse, sameUses, usesWords } from "../../core/mcp.ts";
@@ -144,7 +149,7 @@ export async function assignCampaign(
       "a run without agents has no briefs: leave out the background from past research",
     );
   const existing = svc.ledger.contracts.get(contract.campaign, contract.version);
-  if (existing && contractSha(existing) !== parsed.sha) {
+  if (existing && !sameAsStored(existing, contract)) {
     throw new Refusal(
       `contract ${contract.campaign} v${contract.version} exists with other content`,
     );
@@ -215,12 +220,13 @@ export async function assignCampaign(
     await updateRef(mirror, `refs/thermite/runs/${p.run}/champion`, start);
   }
   svc.ledger.tx(() => {
-    svc.ledger.contracts.store(contract, parsed.sha, by);
+    // A version stored before keeps its contract as stored (goal 230); a new one is stored now.
+    if (!existing) svc.ledger.contracts.store(contract, parsed.sha, by);
     pauseOthers(svc.ledger, p.run, by);
     svc.ledger.runs.create({
       id: p.run,
-      contract,
-      contractSha: parsed.sha,
+      contract: existing ?? contract,
+      contractSha: existing ? contractSha(existing) : parsed.sha,
       seedRepo: seed.repo,
       seedCommit: start,
       ...(folder ? { seedFolder: { folder, commit: seed.commit } } : {}),

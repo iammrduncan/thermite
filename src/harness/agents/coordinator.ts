@@ -138,6 +138,24 @@ export function keepsWorking(ledger: Ledger, run: string, contract: Contract): b
 }
 
 /**
+ * How many changes may wait for the judge before the run's lanes start no new trial (goal 230):
+ * the newest open_attempts rule in force, else the contract's budget.max_open_attempts, else none
+ * (undefined: no limit), with where it comes from.
+ */
+export function openAttemptsLimit(
+  ledger: Ledger,
+  run: string,
+  contract: Contract,
+): { limit: number; from: "rule" | "contract" } | undefined {
+  const rule = rulesInForce(ledger, run)
+    .filter((d) => d.body.kind === "open_attempts" && typeof d.body.value === "number")
+    .at(-1);
+  if (rule) return { limit: Number(rule.body.value), from: "rule" };
+  const own = contract.budget.max_open_attempts;
+  return own === undefined ? undefined : { limit: own, from: "contract" };
+}
+
+/**
  * The run's lane limits: the contract's, with the owner's changes over them (goal 221) and the
  * trial length a trial_minutes rule sets.
  */

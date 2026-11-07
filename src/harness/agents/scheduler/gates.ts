@@ -1,5 +1,6 @@
 import { NOT_HANDED } from "../../../agents/mcp/index.ts";
 import type { Contract } from "../../../core/contract.ts";
+import { openAttemptsLimit } from "../coordinator.ts";
 import type { SchedulerContext } from "./context.ts";
 
 /**
@@ -112,6 +113,43 @@ export function budgetSpent(
   return undefined;
 }
 
-export function openAttempts(sched: SchedulerContext, run: string): number {
+function openAttempts(sched: SchedulerContext, run: string): number {
   return sched.ledger.attempts.countIn(run, OPEN_LIFECYCLES);
+}
+
+/**
+ * Whether the run's lanes start no new trial because enough of its changes wait for the judge
+ * (goal 230): the open_attempts rule in force, else the contract's budget.max_open_attempts, else
+ * no limit. Once for each count and limit, History (`lanes_held`) and Live say so, and when the
+ * lanes may start again, History says that (`lanes_held_ended`).
+ */
+export function lanesHeld(sched: SchedulerContext, run: string, contract: Contract): boolean {
+  const limit = openAttemptsLimit(sched.ledger, run, contract);
+  const open = openAttempts(sched, run);
+  const noted = sched.heldNoted.get(run);
+  if (limit && open >= limit.limit) {
+    const key = `${open}/${limit.limit}/${limit.from}`;
+    if (noted !== key) {
+      sched.heldNoted.set(run, key);
+      sched.ledger.appendEvent(sched.o.owner, "lanes_held", run, {
+        open,
+        limit: limit.limit,
+        from: limit.from,
+      });
+      const from =
+        limit.from === "rule" ? "the run's open_attempts rule" : "the contract's max_open_attempts";
+      sched.o.service.live.append({
+        source: "planner",
+        kind: "status",
+        text: `lanes wait: ${open} changes the judge has not settled, at most ${limit.limit} (${from}); an open_attempts rule raises it`,
+        run,
+      });
+    }
+    return true;
+  }
+  if (noted !== undefined) {
+    sched.heldNoted.delete(run);
+    sched.ledger.appendEvent(sched.o.owner, "lanes_held_ended", run, { open });
+  }
+  return false;
 }

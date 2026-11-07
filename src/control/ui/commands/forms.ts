@@ -15,7 +15,8 @@ function triesField(f: Record<string, unknown>): { tries?: number } {
 /**
  * The payload of each command a dashboard form sends to /ui/commands, from the form's fields.
  * A kind with none here is not available from the dashboard. Rules come from Tell the planner
- * (goal 066): the dashboard sends no redirect of its own.
+ * (goal 066): the dashboard sends no redirect of its own, but for how many changes may wait for
+ * the judge, which is the owner's alone (goal 230).
  */
 export function formPayload(kind: CommandKind, f: Record<string, unknown>): unknown {
   const run = String(f.run ?? "");
@@ -23,6 +24,20 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
   const job = /^job:(\d+)$/.exec(String(f.subject ?? ""))?.[1];
   const payloads: Partial<Record<CommandKind, unknown>> = {
     pause_run: { run, reason: String(f.reason || "paused from the dashboard") },
+    redirect:
+      f.open_attempts === undefined
+        ? undefined
+        : {
+            run,
+            directives: [
+              {
+                kind: "open_attempts",
+                value: Number(f.open_attempts),
+                rationale: "set on the run's page",
+              },
+            ],
+            replace: false,
+          },
     resume_run: { run },
     // Resume now, on a run's page while its agents wait for the provider's limit.
     end_wait: { run },

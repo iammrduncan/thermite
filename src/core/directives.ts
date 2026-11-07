@@ -9,11 +9,16 @@ import { DirectionRef } from "./directions.ts";
  * direction; LANE_COUNT sets the lanes (up to the contract's count); TRIAL_MINUTES sets how long
  * one trial lasts, in minutes (value, 1 to 1,440), over the contract's; KEEP_WORKING turns the
  * run's lanes keeping working while the judge works on or off (value, on or off), over the
- * contract's; PLANNER_NOTE is free text for the
+ * contract's; OPEN_ATTEMPTS sets how many changes the judge has not settled before the lanes start
+ * no new trial (value, a whole number from 1), over the contract's (goal 230), the owner's and an
+ * operator's alone; PLANNER_NOTE is free text for the
  * planner only. The planner sees rationales and notes; workers never do. A rule in words that
  * names no direction (`match`) is no longer made: one already in a ledger stays in force as
  * legacy (isLegacyRule) until the planner's next round converts it to a named direction.
  */
+/** The most changes an open_attempts rule lets wait for the judge (goal 230). */
+export const OPEN_ATTEMPTS_MAX = 1000;
+
 /** The kinds of directive. None of them is ever a direction's name (a lane "on try"). */
 export const DIRECTIVE_KINDS = [
   "avoid",
@@ -23,6 +28,7 @@ export const DIRECTIVE_KINDS = [
   "lane_count",
   "trial_minutes",
   "keep_working",
+  "open_attempts",
   "planner_note",
 ] as const;
 
@@ -67,7 +73,16 @@ export const StructuredDirective = z
   .refine((d) => d.kind !== "keep_working" || d.value === "on" || d.value === "off", {
     message: "a keep_working rule gives value: on or off",
     path: ["value"],
-  });
+  })
+  .refine(
+    (d) =>
+      d.kind !== "open_attempts" ||
+      (Number.isInteger(d.value) && Number(d.value) >= 1 && Number(d.value) <= OPEN_ATTEMPTS_MAX),
+    {
+      message: `an open_attempts rule gives value: how many changes may wait for the judge, a whole number from 1 to ${OPEN_ATTEMPTS_MAX}`,
+      path: ["value"],
+    },
+  );
 export type StructuredDirective = z.infer<typeof StructuredDirective>;
 
 /**

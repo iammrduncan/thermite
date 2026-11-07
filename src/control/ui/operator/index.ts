@@ -22,6 +22,7 @@ export {
   baselineWords,
   confirmingWords,
   goalState,
+  heldWords,
   jobHtml,
   leftByClose,
   runFigure,

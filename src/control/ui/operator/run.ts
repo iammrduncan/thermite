@@ -61,6 +61,17 @@ export function waitWords(r: RunView, now: number): string {
 }
 
 /**
+ * Why a running run's lanes start no new trial (goal 230): enough of its changes wait for the
+ * judge, in words; "" when they may start.
+ */
+export function heldWords(r: RunView): string {
+  const h = r.lanes_held;
+  if (r.status !== "running" || !h) return "";
+  const from = h.from === "rule" ? "its open_attempts rule" : "its contract's max_open_attempts";
+  return `Its lanes wait: ${h.open} changes the judge has not settled, at most ${h.limit} (${from}). An open_attempts rule raises it.`;
+}
+
+/**
  * Why a goal run starts no new trial while the judge confirms a champion that met every required
  * goal (goal 086), in words; "" when it does not wait for that.
  */

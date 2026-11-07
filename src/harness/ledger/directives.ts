@@ -36,15 +36,27 @@ export class LedgerDirectives extends LedgerPart {
       // A rule the owner removed never comes back with an advisor's, the planner's or an agent's
       // next set; only the owner (or an operator for the owner) can set it again.
       if (author !== "control:owner" && !author.startsWith("control:owner:")) {
+        // How far the lanes run ahead of the judge is the owner's (goal 230): no agent sets the
+        // pace it works under.
+        const paced = keep.filter(
+          (b) => (b as { kind?: unknown } | null)?.kind === "open_attempts",
+        );
+        if (paced.length) {
+          keep = keep.filter((b) => !paced.includes(b));
+          this.ledger.appendEvent(author, "directives_left_out", run, {
+            rules: paced,
+            why: "an open_attempts rule is the owner's or an operator's to set",
+          });
+        }
         const gone = new Set(
           this.rows<Row>(
             "select body from directive where run = ? and status = 'dropped'",
             run,
           ).map((r) => ruleKey(JSON.parse(String(r.body)))),
         );
-        const left = bodies.filter((b) => gone.has(ruleKey(b)));
+        const left = keep.filter((b) => gone.has(ruleKey(b)));
         if (left.length) {
-          keep = bodies.filter((b) => !gone.has(ruleKey(b)));
+          keep = keep.filter((b) => !gone.has(ruleKey(b)));
           this.ledger.appendEvent(author, "directives_left_out", run, {
             rules: left,
             why: "the owner removed these rules",

@@ -210,7 +210,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `PROPOSED`
 - [228](goals/_completed/228-attempt-stage-times.goal) An attempt's page says how long each of its stages took · `VERIFIED`
 - [229](goals/229-lanes-runner-pool.goal) A runner pool shared by the lanes, never the judge · `READY`
-- [230](goals/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `READY`
+- [230](goals/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `IN_PROGRESS`
 - [231](goals/231-runner-utilization.goal) How busy each runner is: its share of time with the judge, each lane, idle and away · `READY`
 
 **The owner's asks of 2026-11-03.**

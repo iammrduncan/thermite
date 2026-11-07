@@ -177,9 +177,14 @@ const Common = {
       wall_hours: z.number().positive().optional(),
       device_hours: z.number().positive().optional(),
       llm_usd: z.number().nonnegative().optional(),
-      max_open_attempts: z.number().int().positive().default(4),
+      /**
+       * Back-pressure (goal 230): no new trial starts while this many changes wait for the judge.
+       * Unset: no limit; a run's open_attempts rule sets one over it. A contract stored before
+       * holds the old default, 4, which its runs keep.
+       */
+      max_open_attempts: z.number().int().positive().optional(),
     })
-    .default({ max_open_attempts: 4 }),
+    .default({}),
   min_duration: DurationSchema.optional(),
   max_duration: DurationSchema.optional(),
   /**
@@ -627,4 +632,18 @@ export function laneLimits(contract: Pick<Contract, "lanes">): LaneLimitValues {
 /** The content hash of a validated contract: sha256 of its canonical JSON. */
 export function contractSha(contract: Contract): string {
   return canonicalSha(contract);
+}
+
+/**
+ * Whether a contract stored for a version and one given for it again are the same contract as
+ * written (goal 230): their hashes match, or the stored one holds budget.max_open_attempts 4, the
+ * default a contract was given before the limit had none, where the given one sets none. A run
+ * of that version then keeps the stored contract, and its 4.
+ */
+export function sameAsStored(stored: Contract, given: Contract): boolean {
+  if (contractSha(stored) === contractSha(given)) return true;
+  if (stored.budget.max_open_attempts !== 4 || given.budget.max_open_attempts !== undefined)
+    return false;
+  const { max_open_attempts: _, ...budget } = stored.budget;
+  return contractSha({ ...stored, budget }) === contractSha(given);
 }

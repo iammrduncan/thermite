@@ -1,7 +1,7 @@
 ---
 id: "230"
 title: "A running run's limit of unjudged changes, set in place, and no default"
-status: READY
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: ["221"]
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 230 · A running run's limit of unjudged changes, set in place, and no default
 
-**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -41,6 +41,7 @@ A deeper queue has a cost the run's page should make plain: a change judged hour
 ## Progress
 
 - 2026-11-07 07:52 UTC: Goal written from the owner's ask and the lab run's night: lanes held at 5 unjudged changes from 03:42 to 07:15 UTC.
+- 2026-11-07 08:03 UTC: items 1 to 4 built. The directive `open_attempts` (`core/directives.ts`, 1 to 1000); the ledger leaves one out of any set but the owner's or an operator's, with `directives_left_out` (`harness/ledger/directives.ts`); `openAttemptsLimit` gives the rule's, else the contract's, else none (`harness/agents/coordinator.ts`); `lanesHeld` holds the lanes and records `lanes_held` and `lanes_held_ended`, with a Live line, once for each count and limit (`harness/agents/scheduler/gates.ts`). `budget.max_open_attempts` has no default (`core/contract.ts`); a version stored before, holding 4, is the same version for a contract given again without it (`sameAsStored`), and its runs keep the stored contract (`harness/service/assignment.ts`). Control folds `lanes_held` into the run's view, says it in the run's status line and History, shows the rule's chip, and sends the rule from a running run's **⋯ › Set how many may wait**. Tests: `tests/harness/agents/scheduler/open-attempts.test.ts`, `tests/control/dashboard/lanes-held.test.ts`, the six prompt goldens whose briefs carried the old default. Pages: Limits and pacing, the contract, Steer a run, Signed commands, the changelog. The test files have not run yet.
 
 ---
 

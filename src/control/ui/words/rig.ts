@@ -72,6 +72,18 @@ export function rigSentence(w: SentenceContext, e: StoredEvent): Sentence | null
       return s(`The agents go on: ${String(b.why ?? "a model check passed")}.`, "ok", {
         run: String(e.subject),
       });
+    case "lanes_held":
+      return s(
+        `The lanes start no new trial: ${Number(b.open ?? 0)} changes wait for the judge, at most ${Number(b.limit ?? 0)} (${b.from === "rule" ? "the run's open_attempts rule" : "the contract's max_open_attempts"}).`,
+        "warn",
+        { run: String(e.subject) },
+      );
+    case "lanes_held_ended":
+      return s(
+        `The lanes start trials again: ${Number(b.open ?? 0)} changes wait for the judge.`,
+        "ok",
+        { run: String(e.subject) },
+      );
     case "agents_wait_for_limit":
       return s(
         `The agents wait for the provider's limit until ${String(b.until ?? "?")

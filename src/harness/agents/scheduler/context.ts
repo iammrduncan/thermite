@@ -173,6 +173,8 @@ export interface SchedulerContext {
   limitNoted: Map<string, string>;
   /** Runs waiting for their MCP servers on this harness, since when (ms). */
   mcpWaits: Map<string, number>;
+  /** Runs whose lanes wait for the judge's verdicts (goal 230), as History last said it. */
+  heldNoted: Map<string, string>;
   /** Runs whose wait for their MCP servers is over on this harness. */
   mcpReady: Set<string>;
   /** Each run's champion whose confirmation Live was told about, so it is said once. */
@@ -223,6 +225,7 @@ export function schedulerContext(opts: SchedulerOptions): SchedulerContext {
     failingSince: new Map(),
     limitNoted: new Map(),
     mcpWaits: new Map(),
+    heldNoted: new Map(),
     mcpReady: new Set(),
     confirmNoted: new Map(),
     baselineNoted: new Map(),
