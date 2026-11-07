@@ -360,11 +360,18 @@ export class RunHost {
 export class RunRefusal extends Error {}
 
 /**
- * A lane's run's memory on its own runner when no one set it (goal 219): the machine's memory less
- * the larger of 4 GiB and a tenth of it, for the runner process and the system; never less than
- * the default the core sent. On a 128 GB machine, about 110 GiB.
+ * A lane's run's memory on its own runner when no one set it (goal 219): the memory the runner's
+ * process may use, the machine's or its container's limit when that is lower, less the larger of
+ * 4 GiB and a tenth of it, for the runner's own processes; never less than the default the core
+ * sent. So the run's own limit ends it, in words, before the container's kills a process. In a
+ * 108 GiB container, about 97 GiB.
  */
-export function machineRssMib(given: number, total = totalmem()): number {
-  const mib = Math.floor(total / 2 ** 20);
+export function machineRssMib(
+  given: number,
+  total = totalmem(),
+  container = process.constrainedMemory(),
+): number {
+  const bytes = container > 0 && container < total ? container : total;
+  const mib = Math.floor(bytes / 2 ** 20);
   return Math.max(given, mib - Math.max(4096, Math.ceil(mib / 10)));
 }

@@ -154,11 +154,14 @@ describe("a runner process (goal 206)", () => {
   });
 
   test("on a lane's own runner, a run whose memory no one set gets the machine's less a margin (goal 219)", () => {
-    // A 128 GB machine: its memory less a tenth, about 107 GiB.
-    assert.equal(machineRssMib(4096, 128e9), 109_863);
-    // A small one: less 4 GiB at the least.
-    assert.equal(machineRssMib(4096, 16 * 2 ** 30), 12_288);
-    // Never less than the default the core sent.
-    assert.equal(machineRssMib(8192, 8 * 2 ** 30), 8192);
+    // A 128 GB machine with no container limit: its memory less a tenth, about 107 GiB.
+    assert.equal(machineRssMib(4096, 128e9, 0), 109_863);
+    // In a container limited to 108 GiB on that machine: the container's, less a tenth.
+    assert.equal(machineRssMib(4096, 128e9, 108 * 2 ** 30), 99_532);
+    // A container limit above the machine's memory: the machine's.
+    assert.equal(machineRssMib(4096, 16 * 2 ** 30, 2 ** 62), 12_288);
+    // A small machine: less 4 GiB at the least; never less than the default the core sent.
+    assert.equal(machineRssMib(4096, 16 * 2 ** 30, 0), 12_288);
+    assert.equal(machineRssMib(8192, 8 * 2 ** 30, 0), 8192);
   });
 });
