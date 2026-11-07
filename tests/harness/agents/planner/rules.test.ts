@@ -260,7 +260,7 @@ describe("planner", () => {
     );
     assert.match(
       String(bad.errors[0]),
-      /avoid, try, mandate, priority, lane_count, trial_minutes, keep_working, planner_note/,
+      /avoid, try, mandate, priority, lane_count, trial_minutes, keep_working, open_attempts, planner_note/,
     );
     const ok = validatePlan(
       {
