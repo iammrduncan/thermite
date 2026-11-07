@@ -16,11 +16,11 @@ updated: 2026-11-07
 
 Control asks ChatGPT's usage endpoint how much of a ChatGPT subscription is used, with the sign-in's access token and its account (`control/providers/chatgpt.ts`, goal 151). On the lab, 2026-11-06, the endpoint answered a subscription's sign-in with HTTP 401 (`ChatGPT's usage endpoint refused this sign-in: HTTP 401`) while a rig's workers, auditor, review panel and a teacher worked on the same subscription in Codex, and their model calls went through. So Providers showed no usage windows or reset times for it.
 
-**Not checked:** whether control's access token is out of date (a rig's Codex refreshes its own copy of the sign-in, and a refresh may replace the refresh token control holds), whether the endpoint wants what the Codex CLI sends with its requests, or whether it refuses this kind of plan.
+**What is known:** the page Use a ChatGPT subscription already says that OpenAI refuses that endpoint for Thermite's sign-in, and only control renews the login, so a rig's refresh does not leave control's token out of date. The refusal is OpenAI's. But every answer of ChatGPT's Responses route carries the plan's usage windows in its headers, which the Codex CLI reads for its own status, and every call of Thermite's agents on the plan passes through a model proxy: the harness's for the workers and the planner, the supervisor's for the advisors. The proxies pass on only `retry-after` and `retry-after-ms` of an answer's headers, and read none of the rest.
 
-1. **The cause, from control's own record:** when control's access token was issued and last refreshed, against when the rig's sign-in was refreshed, and the endpoint's answer to a token refreshed just before the ask.
-2. **The fix,** where the cause is Thermite's. Where a rig's refresh can leave control's sign-in out of date, that is a fault for the rigs too: their next start takes control's copy.
-3. **A test** with a fake ChatGPT that refuses a stale token.
+1. **The headers, from a real answer:** which of an answer's headers give the plan's windows (used share, the window's length, when it resets), read by the proxy on the lab and recorded by name and form, with no value of a credential.
+2. **The windows from the proxies:** the newest windows each proxy saw go with the rig's report to control, as a Claude subscription's do from Claude Code's status line (goal 183), and Providers shows them, with when they were seen, where the usage endpoint refuses. The proxy passes them on to the Codex CLI too.
+3. **A test** with a scripted provider that answers with those headers: the windows reach control and show on Providers.
 
 ## Why
 
@@ -28,7 +28,7 @@ The owner chooses which agents run on which subscription from their usage and re
 
 ## Done when
 
-- [ ] Items 1 to 3, with tests, or the cause outside Thermite said in words on Providers.
+- [ ] Items 1 to 3.
 - [ ] Pages: Providers' subscriptions, and the changelog.
 
 ## Decisions
@@ -38,6 +38,7 @@ The owner chooses which agents run on which subscription from their usage and re
 ## Progress
 
 - 2026-11-07 00:31 UTC: Goal written from control's answer on the lab.
+- 2026-11-07 02:09 UTC: the guesses about a stale token dropped: the refusal is OpenAI's, as the ChatGPT page says, and control alone renews the login. Items rewritten to read the plan's windows from the answers the proxies already see.
 
 ---
 
