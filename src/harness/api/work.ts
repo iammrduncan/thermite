@@ -6,6 +6,7 @@ import { ATTEMPT, ATTEMPTS } from "../../core/api/harness/proposer.ts";
 import { laneLimits } from "../../core/contract.ts";
 import { laneCacheEnv } from "../agents/index.ts";
 import { type Role, RunRequest } from "../broker/index.ts";
+import { withOwnersLimits } from "../lane-limits.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { type ApiContext, allows, limitOf, trialToken, Unauthorized } from "./context.ts";
 
@@ -55,9 +56,13 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
     if (req.gpu) throw new Unauthorized("device runs go through run_experiment");
     if (!inside(req.cwd) || (req.disk && !inside(req.disk.path)))
       throw new Unauthorized("outside the trial's workspace");
-    // The contract's lane limits bound every lane command: memory and disk always (defaults
-    // when it sets none), time only when it sets one.
-    const limits = laneLimits(service.contractFor(trial.run));
+    // The contract's lane limits bound every lane command, with the owner's changes over them
+    // (goal 221): memory and disk always (defaults when it sets none), time only when one is set.
+    const limits = withOwnersLimits(
+      laneLimits(service.contractFor(trial.run)),
+      service.ledger,
+      trial.run,
+    );
     const rssCap = limits.runRssMib * 1024 ** 2;
     const diskCap = limits.workspaceMib * 1024 ** 2;
     let argv: string[];
@@ -90,7 +95,11 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
     const body = z
       .object({ command: z.string(), timeout_s: z.number().optional(), cwd: z.string() })
       .parse(await c.req.json());
-    const limits = laneLimits(service.contractFor(trial.run));
+    const limits = withOwnersLimits(
+      laneLimits(service.contractFor(trial.run)),
+      service.ledger,
+      trial.run,
+    );
     return c.json(
       (await extras.devRuns.run(
         {

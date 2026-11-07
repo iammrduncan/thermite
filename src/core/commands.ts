@@ -14,6 +14,7 @@ import {
   IdSchema,
   MAX_LANES,
   MAX_LANES_REASON,
+  RunLaneLimits,
   Sha256Schema,
 } from "./contract.ts";
 import { directionName } from "./directions.ts";
@@ -23,6 +24,7 @@ import { InvalidateEvidence } from "./invalidation.ts";
 import { LOG_LEVELS, LOG_PARTS } from "./log-levels.ts";
 import { McpUses } from "./mcp.ts";
 import { currentCommand } from "./names.ts";
+import { QUEUE_PAYLOADS } from "./queue-commands.ts";
 import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
 import { PROGRAM_MODES, RunnerSettings } from "./rig-settings.ts";
 import { TerminalInput } from "./terminal-input.ts";
@@ -115,40 +117,8 @@ export const ImportSpec = z.discriminatedUnion("kind", [
 ]);
 export type ImportSpec = z.infer<typeof ImportSpec>;
 
+export { EXPERIMENT_DETAILS, ExperimentText, QueuePosition } from "./queue-commands.ts";
 export { ExperimentId };
-
-/** Where an experiment goes among the queued ones: first, last, or at an index (0 first). */
-export const QueuePosition = z.union([
-  z.literal("top"),
-  z.literal("end"),
-  z.number().int().min(0).max(100_000),
-]);
-export type QueuePosition = z.infer<typeof QueuePosition>;
-
-/** An experiment's text: what to try, its details, its direction and why it is worth trying. */
-/** The most characters of an experiment's details. */
-export const EXPERIMENT_DETAILS = 4000;
-
-export const ExperimentText = {
-  title: z.string().trim().min(1).max(200),
-  details: z.string().max(EXPERIMENT_DETAILS),
-  /**
-   * The direction: a direction's name, or words, whose direction is the name
-   * they make (directionOf). Written `:name:`, it is kept without the colons.
-   */
-  direction: z
-    .string()
-    .trim()
-    .min(1)
-    .max(80)
-    .transform((s) => {
-      const inner = /^:(.+):$/.exec(s)?.[1]?.trim();
-      return inner && directionName(inner) ? inner : s;
-    }),
-  why: z.string().max(2000),
-  /** How many trials it gets before it counts as tried (goal 214): each on another lane if one can. */
-  tries: z.number().int().min(1).max(10),
-};
 
 /**
  * One experiment for a run's queue copied from another run (goal 064): what to try, who added it
@@ -304,54 +274,8 @@ export const CommandPayloads = {
     }),
   /** The owner ends a message kept in force (owner only): new briefs no longer carry it. */
   unkeep_message: z.object({ run: RunId, message: z.number().int().positive() }),
-  /**
-   * The run's experiment queue (goal 064), the owner's changes (owner only; an operator may issue
-   * them for the owner). Add an experiment (by default at the end of up next), move a queued one,
-   * edit or drop one still waiting, or queue a lane's proposed idea.
-   */
-  queue_add: z.strictObject({
-    run: RunId,
-    title: ExperimentText.title,
-    details: ExperimentText.details.optional(),
-    direction: ExperimentText.direction.optional(),
-    why: ExperimentText.why.optional(),
-    tries: ExperimentText.tries.optional(),
-    position: QueuePosition.default("end"),
-  }),
-  queue_move: z.strictObject({ run: RunId, id: ExperimentId, position: QueuePosition }),
-  queue_edit: z
-    .strictObject({
-      run: RunId,
-      id: ExperimentId,
-      title: ExperimentText.title.optional(),
-      details: ExperimentText.details.optional(),
-      direction: ExperimentText.direction.optional(),
-      why: ExperimentText.why.optional(),
-      tries: ExperimentText.tries.optional(),
-    })
-    .refine((p) => Object.keys(p).some((k) => k !== "run" && k !== "id"), {
-      message: "change at least one of title, details, direction, why and tries",
-    }),
-  queue_drop: z.strictObject({
-    run: RunId,
-    id: ExperimentId,
-    why: z.string().trim().min(1).max(2000),
-  }),
-  queue_accept: z.strictObject({
-    run: RunId,
-    id: ExperimentId,
-    position: QueuePosition.optional(),
-  }),
-  /**
-   * A tried experiment back to up next (goal 221), such as one that a fault of Thermite's cut
-   * short: its trial kept as an earlier try, one more try when its tries are used, with why.
-   */
-  queue_retry: z.strictObject({
-    run: RunId,
-    id: ExperimentId,
-    why: z.string().trim().min(1).max(2000),
-    position: QueuePosition.default("top"),
-  }),
+  // The run's experiment queue (goal 064), and a running run's lane limits (goal 221).
+  ...QUEUE_PAYLOADS,
   /** The owner removes a rule for the plan in force (a directive), whoever set it. */
   drop_directive: z.strictObject({ run: RunId, id: z.number().int().positive() }),
   /**
@@ -551,6 +475,7 @@ export const MCP_OPERATOR_KINDS = [
   "queue_drop",
   "queue_accept",
   "queue_retry",
+  "lane_limits",
   "drop_directive",
   // A rig part's log level, to look into a fault (the guide's question 16).
   "log_level",
@@ -590,6 +515,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "queue_drop",
   "queue_accept",
   "queue_retry",
+  "lane_limits",
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
@@ -623,6 +549,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "queue_drop",
   "queue_accept",
   "queue_retry",
+  "lane_limits",
   "drop_directive",
   "hypothesis_status",
   "propagate",

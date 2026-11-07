@@ -186,6 +186,7 @@ It prints the command's id and `"status":"pending"`. In each payload, `run` is t
 | `message_agent` | `{"run":"sort-speed-1","to":"lane-2","text":"Look at the cache misses first."}` |
 | `message_agent`, kept in force | `{"run":"sort-speed-1","to":"all","text":"Keep the public API unchanged.","keep":true}` |
 | `unkeep_message` | `{"run":"sort-speed-1","message":3}` |
+| `lane_limits`, a running run's lane limits changed in place | `{"run":"sort-speed-1","limits":{"dev_run_rss_mib":16384},"reason":"the build needs more than 4 GiB"}` |
 
 The changes to the experiment queue, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `queue_retry`, are in [Choose what a run tries next](choose-what-runs-next.md#from-the-command-line-and-over-mcp).
 

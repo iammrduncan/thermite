@@ -92,6 +92,17 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "",
         { run: String(e.subject) },
       );
+    // A running run's lane limits changed in place (goal 221).
+    case "lane_limits_set": {
+      const changed = Object.entries((b.changed ?? {}) as Record<string, unknown>)
+        .map(([k, v]) => (v === null ? `${k} back to the contract's` : `${k} ${String(v)}`))
+        .join(", ");
+      return s(
+        `${who(e.actor)} changed the run's lane limits: ${changed}, from the next lane command and development run: ${clip(String(b.reason ?? ""), 300)}.`,
+        "",
+        { run: String(e.subject) },
+      );
+    }
     // A teachers' round asked for now (goal 194): the supervisor starts it within a minute.
     case "teachers_round_requested":
       return s(

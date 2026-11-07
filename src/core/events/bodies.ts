@@ -459,6 +459,15 @@ export interface EventBodies {
   teachers_round_requested: Record<string, never>;
   /** Hours the owner added to a run's stop time (goal 198): its hours now, and whether it resumed. */
   run_hours_added: { hours: number; total: number; resumed: boolean };
+  /**
+   * The owner changed a running run's lane limits (goal 221): those in force over the contract's
+   * now, what this change set (null: back to the contract's), and why.
+   */
+  lane_limits_set: {
+    limits: Record<string, number>;
+    changed: Record<string, number | null>;
+    reason: string;
+  };
   agents_stopped: { kind: string; words: string; by: string; said: string };
   agents_resumed: { why: string };
   agents_wait_for_limit: {

@@ -13,6 +13,7 @@ import { RIG_LOG_LEVEL_LASTS } from "../../core/log-levels.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
 import { endWait } from "../agents/index.ts";
 import { Conclusions } from "../conclusions.ts";
+import { mergedLimits, ownersLimits } from "../lane-limits.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { receivePropagation } from "../propagation.ts";
 import type { Experiment } from "../queue.ts";
@@ -306,6 +307,18 @@ export class Commands {
         return queueResult(
           svc.queue.accept(p.run, p.id, { by: "owner", position: p.position }, by),
         );
+      }
+      // A running run's lane limits changed in place (goal 221), from the next command or dev run.
+      case "lane_limits": {
+        const p = CommandPayloads.lane_limits.parse(payload);
+        openRun(svc.ledger, p.run);
+        const limits = mergedLimits(ownersLimits(svc.ledger, p.run), p.limits);
+        svc.ledger.appendEvent(by, "lane_limits_set", p.run, {
+          limits,
+          changed: p.limits as Record<string, number | null>,
+          reason: p.reason,
+        });
+        return { run: p.run, limits };
       }
       case "queue_retry": {
         const p = CommandPayloads.queue_retry.parse(payload);

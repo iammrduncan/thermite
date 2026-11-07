@@ -243,6 +243,8 @@ Memory is the sum over all the processes the build or run started, sampled every
 
 ### Lanes and agents
 
+The owner may change a running run's command, development run, workspace and process limits in place, within the same bounds, with the signed command [`lane_limits`](signed-commands.md#lane_limits): the run goes on, and each lane command and development run from then on takes them.
+
 | Limit | Default | Set in the contract's `lanes.limits` |
 | --- | --- | --- |
 | One command a lane runs (a build, a test) | None: it runs until it ends or the trial ends. On a trial with a length, a Pi worker's command (`run`, `run_experiment`) stops 3 minutes before the trial's end, so that the worker can still submit, and nearer the end than that it gets 1 minute at most. Its result then says `stopped by the trial's clock` | `run_timeout_s` (10 to 7,200) |

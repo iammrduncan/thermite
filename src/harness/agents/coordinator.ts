@@ -2,6 +2,7 @@ import { type Contract, type LaneLimitValues, laneLimits, MAX_LANES } from "../.
 import type { StoredRule } from "../../core/directives.ts";
 import { ideaWords, ruleRefusal } from "../../core/queue-target.ts";
 import { JUDGED_LIFECYCLES } from "../../core/verdicts.ts";
+import { withOwnersLimits } from "../lane-limits.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import {
   directionOf,
@@ -136,12 +137,15 @@ export function keepsWorking(ledger: Ledger, run: string, contract: Contract): b
   return rule ? rule.body.value === "on" : contract.lanes.keep_working === true;
 }
 
-/** The run's lane limits: the contract's, with the trial length a trial_minutes rule sets. */
+/**
+ * The run's lane limits: the contract's, with the owner's changes over them (goal 221) and the
+ * trial length a trial_minutes rule sets.
+ */
 export function limitsInForce(ledger: Ledger, run: string, contract: Contract): LaneLimitValues {
   const rule = rulesInForce(ledger, run)
     .filter((d) => d.body.kind === "trial_minutes" && typeof d.body.value === "number")
     .at(-1);
-  const limits = laneLimits(contract);
+  const limits = withOwnersLimits(laneLimits(contract), ledger, run);
   return rule ? { ...limits, trialMinutes: Number(rule.body.value) } : limits;
 }
 

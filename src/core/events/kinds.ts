@@ -131,6 +131,7 @@ export const EVENT_KINDS = [
   "submission_refused",
   "teachers_round_requested",
   "run_hours_added",
+  "lane_limits_set",
   "terminal_input",
   "trial_finished",
   "trial_repeating",

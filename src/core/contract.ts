@@ -97,6 +97,25 @@ const LaneLimits = z.strictObject({
 });
 
 /**
+ * The lane limits the owner may change on a running run (goal 221), each within the contract's own
+ * bounds; null goes back to the contract's.
+ */
+export const RunLaneLimits = z
+  .strictObject({
+    run_timeout_s: LaneLimits.shape.run_timeout_s.unwrap().nullable().optional(),
+    run_rss_mib: LaneLimits.shape.run_rss_mib.unwrap().nullable().optional(),
+    workspace_mib: LaneLimits.shape.workspace_mib.unwrap().nullable().optional(),
+    dev_run_timeout_s: LaneLimits.shape.dev_run_timeout_s.unwrap().nullable().optional(),
+    dev_run_rss_mib: LaneLimits.shape.dev_run_rss_mib.unwrap().nullable().optional(),
+    processes: LaneLimits.shape.processes.unwrap().nullable().optional(),
+  })
+  .refine((l) => Object.keys(l).length > 0, {
+    message:
+      "give at least one of run_timeout_s, run_rss_mib, workspace_mib, dev_run_timeout_s, dev_run_rss_mib and processes",
+  });
+export type RunLaneLimits = z.infer<typeof RunLaneLimits>;
+
+/**
  * A folder inside a repository, such as examples/matmul-cpu/project: its path from the top,
  * separated by /. No part is empty or starts with a dot, so ".", "..", ".git" and absolute paths
  * are refused. A project in one folder of its repository uses that folder as its root.
