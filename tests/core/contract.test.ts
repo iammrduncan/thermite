@@ -163,11 +163,21 @@ describe("contracts", () => {
     }
   });
 
+  /**
+   * A contract as control signed it and a rig stored it before goal 230: parsed, with the
+   * `budget.max_open_attempts` 4 its parse wrote in then. A contract has no such default now, so a
+   * contract written without one hashes otherwise; the one signed keeps its 4, and its hash.
+   */
+  const asSigned = (c: unknown) => {
+    const o = c as Record<string, unknown>;
+    return { ...o, budget: { max_open_attempts: 4, ...(o.budget as object | undefined) } };
+  };
+
   test("a contract written before v0.1.1 keeps its key `notes` as signed, so its hash holds; a new one is refused it, with its new name", () => {
     const examples = join(import.meta.dirname, "..", "..", "examples", "contracts");
     const now = readJson(join(examples, "smoke-cpu.json")) as Record<string, unknown>;
     const { additional_information: information, ...rest } = now;
-    const before = { ...rest, notes: information };
+    const before = asSigned({ ...rest, notes: information });
     // The smoke contract as it was signed before v0.1.1: the same hash as then.
     const stored = parseStoredContract(before);
     assert.ok(stored.ok, stored.ok ? "" : stored.errors.join("; "));
@@ -195,7 +205,8 @@ describe("contracts", () => {
     // The hashes of the example contracts and the fixtures before goal 078: unchanged. The smoke
     // contract's and the hill-climb fixture's changed once since, when goal 163 removed their
     // `check` hard constraint, which is refused now; the smoke contract's again in v0.1.1, when
-    // its additional information took its new key (the test below keeps its hash before).
+    // its additional information took its new key (the test below keeps its hash before). Each is
+    // as it was signed, with the limit of unjudged changes its parse wrote in then (goal 230).
     const examples = join(import.meta.dirname, "..", "..", "examples", "contracts");
     const before: [unknown, string][] = [
       [
@@ -219,9 +230,12 @@ describe("contracts", () => {
       [researchFixture, "198706ecb4cc39015c6ef2515efd800182f6b60fdf8b6bbc1c2de78a14dab945"],
     ];
     for (const [c, sha] of before) {
-      const r = parseContract(c);
+      const r = parseContract(asSigned(c));
       assert.ok(r.ok, r.ok ? "" : r.errors.join("; "));
       assert.equal(r.ok && r.sha, sha);
+      // As written, with no limit: another contract now, with no default written in.
+      const now = parseContract(c);
+      assert.ok(now.ok && now.sha !== sha && now.contract.budget.max_open_attempts === undefined);
       assert.ok(
         r.ok &&
           !("ideas" in r.contract) &&
