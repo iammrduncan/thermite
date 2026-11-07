@@ -51,7 +51,7 @@ I wrote up seven ways forward and compared them. These are the three that matter
 | Option | Why I didn't take it |
 | --- | --- |
 | Patch or fork pi-autoresearch | The agent would still own its benchmark. Take away the benchmark and the verdict, and little of the extension is left, in a fork that has to keep up with Pi |
-| Adopt another multi-agent harness | [CORAL](https://github.com/Human-Agent-Society/CORAL) was the best one I read, and Thermite takes ideas from it. But I would have written the same judge inside someone else's frame |
+| Adopt another multi-agent harness | [CORAL](../compare/coral.md) was the best one I read, and Thermite takes ideas from it. But I would have written the same judge inside someone else's frame |
 | Give the agents stricter rules | My own campaigns had already answered that: written reminders did not stop it, and only a checker would |
 
 Across every system I read, the results I could trust came from something that measured and judged outside the agent's reach, not from smarter search. So Thermite starts there: agents propose, and code they can't touch measures, judges and promotes. [Why agents never judge](why-agents-never-judge.md) explains how.

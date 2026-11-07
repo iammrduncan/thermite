@@ -3,7 +3,7 @@ title: "Thermite vs pi-autoresearch"
 description: "Both run the same agent loop. pi-autoresearch runs it in your terminal and leaves the verdict to the agent and you; Thermite runs it in containers and leaves the verdict to a judge."
 type: comparison
 sidebar:
-  order: 2
+  order: 3
   label: "pi-autoresearch"
 ---
 
