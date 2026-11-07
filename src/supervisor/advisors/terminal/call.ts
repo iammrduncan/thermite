@@ -24,6 +24,9 @@ import type { AdvisorConsoles } from "./consoles.ts";
 import { type AdvisorProgramId, advisorProgram } from "./profiles.ts";
 import { serveAdvisorTurns } from "./turns.ts";
 
+/** How long an advisor's first message waits for its program to list its tools (goal 218). */
+const TOOLS_LISTED_MS = 30_000;
+
 /**
  * An advisor's call in its program's own terminal (goal 169; the owner's decision of 2026-10-31:
  * every role, every program, the same way), on the one path every role takes there
@@ -308,6 +311,22 @@ export async function runInTerminal<S extends z.ZodType>(
         windows:
           rt.provider && t.windows ? (w) => t.windows?.(rt.provider as string, w) : undefined,
         answer: (text) => parseAnswer(text, input.schema).ok,
+        // Its first message waits until its program has listed its tools (goal 218): a turn that
+        // began before then had none of them. Live says how long it took, or that it never did.
+        beforeFirst: served
+          ? async () => {
+              const ms = await (served as NonNullable<typeof served>).listed(TOOLS_LISTED_MS);
+              t.live({
+                source: advisorLiveSource(rt.name),
+                kind: "status",
+                text:
+                  ms === undefined
+                    ? `${rt.name}'s program had not listed its tools ${TOOLS_LISTED_MS / 1000} s after it started: its message goes in anyway, and it may answer without them`
+                    : `${rt.name}'s program listed its tools ${(ms / 1000).toFixed(1)} s after its tool server started`,
+                run: at.run,
+              });
+            }
+          : undefined,
       },
     );
     const answer = parseAnswer(tally.lastText, input.schema);

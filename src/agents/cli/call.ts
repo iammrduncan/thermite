@@ -112,6 +112,11 @@ export interface TerminalCallOptions {
    * the tally's last text; none taken, or no `answer`: its last text, as the log said it.
    */
   answer?: ((text: string) => boolean) | undefined;
+  /**
+   * Awaited once its program is ready and before its first message is typed (goal 218), such as
+   * until the program has listed its MCP tools.
+   */
+  beforeFirst?: (() => Promise<void>) | undefined;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -175,6 +180,8 @@ export async function terminalCall<T extends CliTally>(
       tally.errors.push(unprepared);
       return tally;
     }
+    await o.beforeFirst?.();
+    if (o.signal?.aborted) return tally;
     await converse(p, term, run, { prompt, signalsFile, tally }, o);
   } finally {
     link.console(undefined);

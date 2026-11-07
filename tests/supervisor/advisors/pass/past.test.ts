@@ -258,13 +258,17 @@ describe("the advisors' tools for Thermite's knowledge base", () => {
       // Without the token, nothing.
       const bare = await fetch(server.url, { method: "POST", body: "{}" });
       assert.equal(bare.status, 401);
+      // Not listed yet (goal 218): a wait for the list ends empty, at its time.
+      assert.equal(await server.listed(20), undefined);
       const client = new Client({ name: "test", version: "1" });
       await client.connect(
         new StreamableHTTPClientTransport(new URL(server.url), {
           requestInit: { headers: entry.headers },
         }),
       );
+      const listing = server.listed(5000);
       const { tools } = await client.listTools();
+      assert.equal(typeof (await listing), "number", "listed once the program asked for the tools");
       assert.deepEqual(
         tools.map((x) => [x.name, x.annotations?.readOnlyHint]),
         [

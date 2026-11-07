@@ -23,6 +23,7 @@ const served: AdvisorServed = {
     token: "made-up-mcp-token",
     args: [],
     mcpConfig: JSON.stringify({ mcpServers: { thermite: { type: "http" } } }),
+    listed: async () => 0,
     close: async () => undefined,
   },
   proxy: {

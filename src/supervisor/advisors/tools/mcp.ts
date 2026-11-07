@@ -65,6 +65,11 @@ export interface PastSearchServer {
   servers: { name: string; url: string }[];
   /** The bearer token the servers take, made for this call alone. */
   token: string;
+  /**
+   * Once the program has asked for the servers' tools (goal 218): the milliseconds since the
+   * servers started, or undefined after `ms` with no ask.
+   */
+  listed(ms: number): Promise<number | undefined>;
   close(): Promise<void>;
 }
 
@@ -150,9 +155,23 @@ export async function serveAdvisorTools(o: {
     return server;
   };
   const app = new Hono();
+  // When the program first asks for the tools (goal 218): a turn before it has none of them.
+  const started = Date.now();
+  let listedAt: number | undefined;
+  const waiting = new Set<() => void>();
   const serving = (make: () => McpServer | Server) => async (c: Context) => {
     if (!sameSecret(c.req.header("authorization") ?? "", `Bearer ${token}`))
       return c.json({ error: "unauthorized" }, 401);
+    if (listedAt === undefined) {
+      const ask = (await c.req.raw
+        .clone()
+        .json()
+        .catch(() => undefined)) as { method?: unknown } | undefined;
+      if (ask?.method === "tools/list") {
+        listedAt = Date.now() - started;
+        for (const w of waiting) w();
+      }
+    }
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -199,6 +218,18 @@ export async function serveAdvisorTools(o: {
       // A server's name allows each of its tools.
       ...(mcp?.servers ?? []).map((s) => `mcp__${s}`),
     ],
+    listed: (ms) =>
+      listedAt !== undefined
+        ? Promise.resolve(listedAt)
+        : new Promise((r) => {
+            const done = () => {
+              clearTimeout(t);
+              waiting.delete(done);
+              r(listedAt);
+            };
+            const t = setTimeout(done, ms);
+            waiting.add(done);
+          }),
     close: () =>
       new Promise<void>((r) => {
         (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
