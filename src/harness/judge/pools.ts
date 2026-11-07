@@ -182,7 +182,10 @@ export class RunnerPools {
     u.runners.add(s.runner);
     this.used.set(r.trial, u);
     try {
-      return { ...(await s.runner.laneRun(r)), runner: s.runner.name };
+      // The machine's memory for a run whose memory no one set, on the lane's own runner alone
+      // (goal 219): a shared one keeps the default.
+      const run = mine(s) ? r : { ...r, limits: { ...r.limits, rssDefault: false } };
+      return { ...(await s.runner.laneRun(run)), runner: s.runner.name };
     } catch (err) {
       if (!(err instanceof RunnerAway)) throw err;
       return { ran: false, reason: `${err.message} while your command ran: run it again` };

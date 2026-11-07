@@ -368,7 +368,7 @@ Refused in words: `<run> is closed: start a new run of its campaign instead`, wh
 
 ### `lane_limits`
 
-Changes a running run's lane limits in place: the memory and time of a lane's command and of a development run, the trial's workspace and the processes a lane's user may have. The run goes on; each lane command and development run from then on takes the new limits, and a lane's next brief gives its new command memory and workspace. Use it when a limit stops the run's work, such as a build that needs more than a development run's 4,096 MiB.
+Changes a running run's lane limits in place: the memory and time of a lane's command and of a development run, the trial's workspace and the processes a lane's user may have. The run goes on; each lane command and development run from then on takes the new limits, and a lane's next brief gives its new command memory and workspace. Use it when a limit stops the run's work, such as a build that needs more than a development run's 4,096 MiB. A `dev_run_rss_mib` it sets applies on every machine, a lane's own runner too, where a run whose memory no one set gets the machine's less a margin ([Limits and pacing](limits-and-pacing.md#lanes-and-agents)).
 
 | Field | Type | Meaning |
 | --- | --- | --- |

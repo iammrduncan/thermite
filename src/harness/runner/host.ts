@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { totalmem } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { freeSpace, gib } from "../../common/disk.ts";
 import type { RunAsk } from "../../core/api/harness/runs.ts";
@@ -287,7 +288,8 @@ export class RunHost {
       this.workspaces.set(a.trial, ws);
     }
     const env = laneCacheEnv(this.o.paths.scratchDir, a.lane);
-    const rss = a.limits.rss_mib * 1024 * 1024;
+    const rss =
+      (a.limits.rss_machine ? machineRssMib(a.limits.rss_mib) : a.limits.rss_mib) * 2 ** 20;
     const disk = { path: ws.dir, limitBytes: a.limits.disk_mib * 1024 * 1024 };
     const nproc = a.limits.processes !== undefined ? { nproc: a.limits.processes } : {};
     const setUp = await this.o.runner.run({
@@ -356,3 +358,13 @@ export class RunHost {
 
 /** An ask the runner refuses: a runner it lacks, or a folder it did not name. */
 export class RunRefusal extends Error {}
+
+/**
+ * A lane's run's memory on its own runner when no one set it (goal 219): the machine's memory less
+ * the larger of 4 GiB and a tenth of it, for the runner process and the system; never less than
+ * the default the core sent. On a 128 GB machine, about 110 GiB.
+ */
+export function machineRssMib(given: number, total = totalmem()): number {
+  const mib = Math.floor(total / 2 ** 20);
+  return Math.max(given, mib - Math.max(4096, Math.ceil(mib / 10)));
+}

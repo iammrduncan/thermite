@@ -38,7 +38,9 @@ export function withOwnersLimits(
     ...(o.run_rss_mib !== undefined ? { runRssMib: o.run_rss_mib } : {}),
     ...(o.workspace_mib !== undefined ? { workspaceMib: o.workspace_mib } : {}),
     ...(o.dev_run_timeout_s !== undefined ? { devRunTimeoutS: o.dev_run_timeout_s } : {}),
-    ...(o.dev_run_rss_mib !== undefined ? { devRunRssMib: o.dev_run_rss_mib } : {}),
+    ...(o.dev_run_rss_mib !== undefined
+      ? { devRunRssMib: o.dev_run_rss_mib, devRunRssSet: true }
+      : {}),
     ...(o.processes !== undefined ? { processes: o.processes } : {}),
   };
 }

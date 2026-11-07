@@ -6,7 +6,7 @@ import { RunAsk } from "../../../src/core/api/harness/runs.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { RemoteRunner } from "../../../src/harness/judge/remote-runner.ts";
 import { Ledger } from "../../../src/harness/ledger/index.ts";
-import { RunHost } from "../../../src/harness/runner/host.ts";
+import { machineRssMib, RunHost } from "../../../src/harness/runner/host.ts";
 import { CpuDriver } from "../../../src/harness/targets/cpu.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../../helpers/judge-env.ts";
 
@@ -151,5 +151,14 @@ describe("a runner process (goal 206)", () => {
     assert.equal(workspaces().length, 1, "one workspace for the trial");
     await runner.laneEnd("lane-1", "t-0123456789abcdef");
     assert.equal(workspaces().length, 0, "it went when the trial ended");
+  });
+
+  test("on a lane's own runner, a run whose memory no one set gets the machine's less a margin (goal 219)", () => {
+    // A 128 GB machine: its memory less a tenth, about 107 GiB.
+    assert.equal(machineRssMib(4096, 128e9), 109_863);
+    // A small one: less 4 GiB at the least.
+    assert.equal(machineRssMib(4096, 16 * 2 ** 30), 12_288);
+    // Never less than the default the core sent.
+    assert.equal(machineRssMib(8192, 8 * 2 ** 30), 8192);
   });
 });

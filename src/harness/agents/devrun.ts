@@ -149,7 +149,7 @@ export class DevRuns {
     req: z.infer<typeof DevRunRequest>,
     cwd: string,
     trial: string,
-    limits: { rssMib: number; diskMib: number; processes?: number },
+    limits: { rssMib: number; diskMib: number; processes?: number; rssDefault?: boolean },
     timeoutS: number | undefined,
   ): Promise<unknown> {
     const t = this.ledger.trials.get(trial);
@@ -230,7 +230,13 @@ export class DevRuns {
   run(
     input: unknown,
     trial: string,
-    limits: { rssMib: number; diskMib: number; timeoutS?: number; processes?: number } = {
+    limits: {
+      rssMib: number;
+      diskMib: number;
+      timeoutS?: number;
+      processes?: number;
+      rssDefault?: boolean;
+    } = {
       rssMib: 4096,
       diskMib: 2048,
     },
@@ -325,7 +331,7 @@ export class DevRuns {
     req: z.infer<typeof DevRunRequest>,
     cwd: string,
     trial: string,
-    limits: { rssMib: number; diskMib: number; processes?: number },
+    limits: { rssMib: number; diskMib: number; processes?: number; rssDefault?: boolean },
     timeoutS: number | undefined,
     onStart: () => void,
   ): Promise<unknown> {

@@ -1,7 +1,7 @@
 ---
 id: "219"
 title: "A lane on a runner of its own can build and serve a large model in run_experiment"
-status: READY
+status: IN_PROGRESS
 version: "0.1.4"
 depends_on: ["221"]
 created: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 219 · A lane on a runner of its own can build and serve a large model in run_experiment
 
-**Status:** `READY` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
 
 ## What
 
@@ -34,7 +34,8 @@ A lane that cannot run its change works blind, and the judge's time goes on chan
 
 ## Decisions
 
-- None yet.
+- 2026-11-07, the owner, from the options: a dev run's memory on a lane's own runner of another machine defaults to the machine's memory less a margin, and the ceiling rises to match, so every new run whose contract sets no value gets it, and a running run takes it in place; the workspace walk's 50,000-entry bound stops being a limit, and the byte limit alone ends a trial.
+- 2026-11-07: the margin is the larger of 4 GiB and a tenth of the machine's memory (about 107 GiB of a 128 GB machine), and the machine's memory goes only to a run on the lane's own runner: a shared runner, which the judge uses too, keeps the default. The contract's and `lane_limits`' ceiling for `dev_run_rss_mib` rises from 16,384 to 262,144 MiB.
 
 ## Progress
 
@@ -43,3 +44,4 @@ A lane that cannot run its change works blind, and the judge's time goes on chan
 ---
 
 Run with `/goal Complete docs/plan/goals/219-lane-runner-memory.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- 2026-11-07 02:03 UTC: item 1 built. `laneLimits` says whether anyone set `dev_run_rss_mib` (`devRunRssSet`, `core/contract.ts`), so does `lane_limits`; a dev run on a runner whose memory no one set carries `rssDefault` (`harness/api/work.ts`, `harness/agents/devrun.ts`), the pools keep it for the lane's own runner alone (`harness/judge/pools.ts`), the core sends `rss_machine` (`harness/judge/remote-runner.ts`, `core/api/harness/runs.ts`), and the runner sizes the run with `machineRssMib` (`harness/runner/host.ts`). Tests: `tests/harness/judge/pools.test.ts` (own runner keeps it, shared drops it), `tests/harness/runner/host.test.ts` (the margin on 128 GB, 16 GiB and 8 GiB machines). Pages: Limits and pacing, the contract, Signed commands. The test files have not run yet. Items 2 to 4 are left: item 4 next, with a guard that keeps a tree of millions of files from stalling the walk.

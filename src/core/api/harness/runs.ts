@@ -152,6 +152,8 @@ export const RunAsk = z.discriminatedUnion("op", [
       .optional(),
     limits: z.object({
       rss_mib: z.number().int().positive(),
+      /** The run's memory is the default on the lane's own runner: its memory less a margin. */
+      rss_machine: z.boolean().optional(),
       disk_mib: z.number().int().positive(),
       processes: z.number().int().positive().optional(),
     }),

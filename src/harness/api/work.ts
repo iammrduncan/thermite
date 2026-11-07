@@ -112,6 +112,8 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
         trial.id,
         {
           rssMib: limits.devRunRssMib,
+          // Set by no one: a lane's own runner gives the run its memory less a margin (goal 219).
+          ...(limits.devRunRssSet ? {} : { rssDefault: true }),
           diskMib: limits.workspaceMib,
           processes: limits.processes,
           ...(limits.devRunTimeoutS !== undefined ? { timeoutS: limits.devRunTimeoutS } : {}),

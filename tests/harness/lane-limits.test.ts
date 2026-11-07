@@ -47,8 +47,8 @@ describe("a running run's lane limits", () => {
     const s = await setup();
     await assert.rejects(
       () =>
-        s.command("lane_limits", { run: RUN, limits: { dev_run_rss_mib: 99_999 }, reason: "x" }),
-      /16384|too_big|less than or equal/i,
+        s.command("lane_limits", { run: RUN, limits: { dev_run_rss_mib: 999_999 }, reason: "x" }),
+      /262144|too_big|less than or equal/i,
     );
     await assert.rejects(
       () => s.command("lane_limits", { run: RUN, limits: {}, reason: "x" }),

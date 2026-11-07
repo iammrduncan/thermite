@@ -65,7 +65,11 @@ const LaneLimits = z.strictObject({
    * card; on a card the judge shares, the rig's own (the judge needs the card back).
    */
   dev_run_timeout_s: z.number().int().min(10).max(3600).optional(),
-  dev_run_rss_mib: z.number().int().min(256).max(16_384).optional(),
+  /**
+   * One development run's memory. Unset: 4,096 MiB, but on a lane's own runner of another machine
+   * the runner's memory less a margin (goal 219); a value up to a large machine's.
+   */
+  dev_run_rss_mib: z.number().int().min(256).max(262_144).optional(),
   /**
    * A worker's whole trial. Unset: the rig's own (Edit rig, THERMITE_TRIAL_MINUTES), which is none
    * unless someone set one (goal 079).
@@ -577,6 +581,11 @@ export interface LaneLimitValues {
   /** Unset: see dev_run_timeout_s. */
   devRunTimeoutS?: number | undefined;
   devRunRssMib: number;
+  /**
+   * Whether the contract or the owner set the dev run's memory (goal 219). Unset, a lane's own
+   * runner of another machine gives its runs its memory less a margin instead of devRunRssMib.
+   */
+  devRunRssSet?: boolean | undefined;
   trialMinutes?: number | undefined;
   /** RLIMIT_NPROC for each of the lane's users (lane, development and agent). */
   processes: number;
@@ -605,6 +614,7 @@ export function laneLimits(contract: Pick<Contract, "lanes">): LaneLimitValues {
     workspaceMib: l.workspace_mib ?? 2048,
     devRunTimeoutS: l.dev_run_timeout_s,
     devRunRssMib: l.dev_run_rss_mib ?? 4096,
+    devRunRssSet: l.dev_run_rss_mib !== undefined,
     trialMinutes: l.trial_minutes,
     processes: l.processes ?? LANE_PROCESSES,
     failuresInARow: l.failures_in_a_row,

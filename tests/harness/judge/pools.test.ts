@@ -194,4 +194,25 @@ describe("a rig's runners in their pools (goal 206)", () => {
     });
     assert.equal(pools.serves("lane-2"), false);
   });
+
+  test("a run whose memory no one set gets the machine's on the lane's own runner alone (goal 219)", async () => {
+    const seen: LaneRun["limits"][] = [];
+    const capture = (name: string) =>
+      ({
+        name,
+        laneRun: async (r: LaneRun) => {
+          seen.push(r.limits);
+          return { ran: true, exit: 0 };
+        },
+        laneEnd: async () => undefined,
+      }) as unknown as RemoteRunner;
+    const limits = { rssMib: 4096, diskMib: 1024, rssDefault: true };
+    await poolsOf([capture("box-3-0"), "lane-2"]).laneRun({ ...run("lane-2"), limits });
+    await poolsOf([capture("box-2-0"), "shared"]).laneRun({ ...run("lane-1"), limits });
+    assert.deepEqual(
+      seen.map((l) => l.rssDefault),
+      [true, false],
+      "a shared runner, which the judge uses too, keeps the default",
+    );
+  });
 });

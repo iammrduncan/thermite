@@ -428,6 +428,7 @@ export class RemoteRunner implements RigRunner {
       ...(r.timeoutS !== undefined ? { timeout_s: r.timeoutS } : {}),
       limits: {
         rss_mib: r.limits.rssMib,
+        ...(r.limits.rssDefault ? { rss_machine: true } : {}),
         disk_mib: r.limits.diskMib,
         ...(r.limits.processes !== undefined ? { processes: r.limits.processes } : {}),
       },
@@ -454,5 +455,14 @@ export interface LaneRun {
   patch: Buffer;
   command: string;
   timeoutS?: number | undefined;
-  limits: { rssMib: number; diskMib: number; processes?: number | undefined };
+  limits: {
+    rssMib: number;
+    diskMib: number;
+    processes?: number | undefined;
+    /**
+     * The memory is the default, set by no one (goal 219): on the lane's own runner, the runner
+     * gives the run its memory less a margin instead.
+     */
+    rssDefault?: boolean | undefined;
+  };
 }
