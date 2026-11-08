@@ -12,7 +12,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 
 ## Current stage
 
-- v0.1.3 is out (2026-11-06). Work goes on toward v0.1.4, on its branch `v0.1.4`.
+- v0.1.3 is out (2026-11-06). New work goes on toward v0.2.0, on its branch `v0.2.0`. v0.1.4 is v0.1.3's fix release, on its branch `v0.1.4`, which starts from `main`; each fix there merges into `v0.2.0` too.
 - The plans are public, in [docs/plan/](docs/plan/README.md): the [roadmap](docs/plan/roadmap.md), the [release plan](docs/plan/release-v0.1.0.md), the [settled decisions](docs/plan/decisions.md) and one goal for each roadmap item.
 
 ## Settled decisions (summary)
@@ -49,7 +49,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 ## Git
 
 - Work on a branch and commit in reviewable steps with clear messages.
-- Each version is built on a branch named for it, such as `v0.1.1`: work merges there, and `main` moves only when a version ships ([decisions](docs/plan/decisions.md#releases-and-planning)).
+- Each version is built on a branch named for it: work merges there, and `main` moves only when a version ships ([decisions](docs/plan/decisions.md#releases-and-planning)). New work goes on the next minor version's branch, such as `v0.2.0`. A fix to the released version goes on the next patch's branch, such as `v0.1.4`, which starts from `main`, and it merges into the minor version's branch too.
 - Do not rewrite history that has been pushed.
 - `.agents/`, `.claude/` and `skills-lock.json` belong to the maintainers' tooling. Leave them alone unless asked.
 
