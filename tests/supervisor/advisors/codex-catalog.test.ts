@@ -11,8 +11,8 @@ import { advisorProgram } from "../../../src/supervisor/advisors/terminal/index.
 
 /**
  * A Codex teacher's model catalog (goal 232): its model's own entry from Codex's bundled catalog,
- * over the full Responses API, so Codex sends the provider's hosted web search and not its
- * standalone one, which a ChatGPT sign-in's route refuses.
+ * over the full Responses API with no tools of Codex's own, so Codex sends the provider's hosted
+ * web search and not its standalone one, which a ChatGPT sign-in's route refuses.
  */
 
 const dir = mkdtempSync(join(tmpdir(), "thermite-codex-catalog-test-"));
@@ -22,6 +22,10 @@ const LITE = {
   slug: "gpt-6.1-sol",
   use_responses_lite: true,
   tool_mode: "code_mode_only",
+  apply_patch_tool_type: "freeform",
+  multi_agent_version: "v2",
+  multi_agent_reasoning_effort: "xhigh",
+  experimental_supported_tools: ["send_user_message_async", "clock"],
   web_search_tool_type: "text_and_image",
   context_window: 272000,
 };
@@ -63,7 +67,7 @@ const model = (slug: string): ModelConfig => ({
   maxTokens: 0,
 });
 
-test("a model on Responses Lite gets its own entry over the full Responses API; others get none", () => {
+test("a model on Responses Lite gets its own entry over the full Responses API, with no tools of Codex's own; others get none", () => {
   withCodex(fakeCodex("codex", [LITE, { slug: "gpt-5.5", use_responses_lite: false }]), () => {
     const catalog = codexTeacherCatalog("gpt-6.1-sol");
     assert.deepEqual(JSON.parse(catalog ?? "{}"), {
@@ -71,6 +75,7 @@ test("a model on Responses Lite gets its own entry over the full Responses API; 
         {
           slug: "gpt-6.1-sol",
           use_responses_lite: false,
+          experimental_supported_tools: [],
           web_search_tool_type: "text_and_image",
           context_window: 272000,
         },

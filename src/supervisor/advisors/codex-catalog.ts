@@ -16,6 +16,19 @@ import { codexBin, codexExe } from "../../agents/programs/index.ts";
 
 type CatalogEntry = { slug?: unknown; use_responses_lite?: unknown; [k: string]: unknown };
 
+/**
+ * The entry's fields that put Codex's own tools on the model's list once Code Mode Only no longer
+ * hides them inside `exec`: `apply_patch` and the sub-agents' `collaboration` tools. With them
+ * gone and `experimental_supported_tools` empty, the provider's web search is the teacher's only
+ * tool of Codex's own.
+ */
+const TOOL_FIELDS = new Set([
+  "tool_mode",
+  "apply_patch_tool_type",
+  "multi_agent_version",
+  "multi_agent_reasoning_effort",
+]);
+
 /** The bundled catalog's models, read once for each binary; [] when it can't be read. */
 const read = new Map<string, CatalogEntry[]>();
 
@@ -46,13 +59,14 @@ function bundledModels(): CatalogEntry[] {
 
 /**
  * The catalog a Codex teacher's configuration names (`model_catalog_json`), as JSON: its model's
- * own entry with `use_responses_lite` false and no `tool_mode`. Undefined for a model Codex does
- * not drive over Responses Lite, or one its bundled catalog does not hold: its hosted search
- * needs no change.
+ * own entry with `use_responses_lite` false, no experimental tools and none of TOOL_FIELDS.
+ * Undefined for a model Codex does not drive over Responses Lite, or one its bundled catalog does
+ * not hold: its hosted search needs no change.
  */
 export function codexTeacherCatalog(model: string): string | undefined {
   const entry = bundledModels().find((m) => m.slug === model);
   if (entry?.use_responses_lite !== true) return undefined;
-  const { tool_mode: _toolMode, ...rest } = entry;
-  return `${JSON.stringify({ models: [{ ...rest, use_responses_lite: false }] })}\n`;
+  const own = Object.fromEntries(Object.entries(entry).filter(([k]) => !TOOL_FIELDS.has(k)));
+  const teacher = { ...own, use_responses_lite: false, experimental_supported_tools: [] };
+  return `${JSON.stringify({ models: [teacher] })}\n`;
 }
