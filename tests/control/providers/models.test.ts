@@ -39,7 +39,12 @@ describe("a provider's model list", () => {
         data: [
           {
             id: "priced",
-            pricing: { prompt: "0.000003", completion: "0.000015", input_cache_read: "0.0000003" },
+            pricing: {
+              prompt: "0.000003",
+              completion: "0.000015",
+              input_cache_read: "0.0000003",
+              input_cache_write: "0.00000375",
+            },
           },
           { id: "no-cache-price", pricing: { prompt: "0.0000000700", completion: "0.0000005" } },
           // A router's price, -1: no price.
@@ -53,13 +58,20 @@ describe("a provider's model list", () => {
       (models as { id: string; price?: unknown }[]).map((m) => [m.id, m.price]),
       [
         ["half", undefined],
-        ["no-cache-price", { input: 0.07, cached_input: null, output: 0.5 }],
+        ["no-cache-price", { input: 0.07, cached_input: null, cache_write: null, output: 0.5 }],
         ["plain", undefined],
-        ["priced", { input: 3, cached_input: 0.3, output: 15 }],
+        ["priced", { input: 3, cached_input: 0.3, cache_write: 3.75, output: 15 }],
         ["router", undefined],
       ],
     );
     assert.equal(listedPrice({ pricing: { prompt: "free", completion: "0" } }), undefined);
+    // A write price that is not a number is none, and the rest of the price stands.
+    assert.deepEqual(
+      listedPrice({
+        pricing: { prompt: "0.000001", completion: "0.000002", input_cache_write: "-1" },
+      }),
+      { input: 1, cached_input: null, cache_write: null, output: 2 },
+    );
   });
 
   test("a model's maximum output, as each provider's list names it: the route's reply limit (goal 079)", async () => {

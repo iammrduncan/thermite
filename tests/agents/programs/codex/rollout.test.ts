@@ -69,10 +69,37 @@ describe("the Codex CLI's rollout as session events", () => {
     assert.equal(of(events, "usage").length, 6);
     assert.equal(tally.tokensIn, 6035);
     assert.equal(tally.tokensOut, 120);
+    // The provider names the writes it made: its 0 is reported, not taken for not reported.
+    assert.ok(tally.calls.every((c) => c.cache_write_in === 0));
     assert.equal(tally.turns, 10, "each message and each tool call is one");
     assert.equal(tally.toolCalls, 4);
     assert.equal(tally.session, "01a18637-54e9-7663-af0e-f5a1a428bc98");
     assert.equal(tally.lastText, "Step 1 of SPIKE-3.");
+  });
+
+  test("each response's cache write is read as it gives it (goal 195)", () => {
+    const usage = (id: string, input: number, cached: number, wrote: number) =>
+      JSON.stringify({
+        timestamp: "2026-10-29T05:52:16.107Z",
+        type: "token_usage_record",
+        payload: {
+          response_id: id,
+          usage: {
+            input_tokens: input,
+            cached_input_tokens: cached,
+            cache_write_input_tokens: wrote,
+            output_tokens: 2,
+          },
+        },
+      });
+    const { tally } = read([usage("resp_1", 100, 40, 10), usage("resp_2", 300, 100, 30)]);
+    assert.deepEqual(
+      tally.calls.map((c) => [c.tokens_in, c.cached_in, c.cache_write_in]),
+      [
+        [100, 40, 10],
+        [300, 100, 30],
+      ],
+    );
   });
 
   test("a message queued for the next turn; a killed thread resumed in the same rollout", () => {

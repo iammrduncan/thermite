@@ -599,7 +599,7 @@ describe("model use on the screens (goal 075)", () => {
     assert.equal(r.to, "/ui/settings/prices?ok=saved#model-prices");
     assert.deepEqual(
       s.store.usage.prices().map((x) => [x.provider, x.model, x.price]),
-      [["lab", "small-model", { input: 0.6, cached_input: 0.1, output: 2.5 }]],
+      [["lab", "small-model", { input: 0.6, cached_input: 0.1, cache_write: null, output: 2.5 }]],
     );
     assert.equal(
       s.store.modelProviders.get("lab")?.models.find((m) => m.id === "wide-model")?.price?.input,
@@ -661,6 +661,21 @@ describe("model use on the screens (goal 075)", () => {
         ["owner:ui", "model_price_cleared"],
       ],
     );
+    // A cache write's price, set elsewhere, stays when the page saves the rest of the price.
+    s.store.usage.setPrice(
+      "lab",
+      "small-model",
+      { input: 0.6, cached_input: 0.1, cache_write: 0.5, output: 2.5 },
+      "owner:api",
+    );
+    r = await s.post("/ui/settings/prices", { ...form, in0: "0.70" });
+    assert.equal(r.to, "/ui/settings/prices?ok=saved#model-prices");
+    assert.deepEqual(s.store.usage.prices()[0]?.price, {
+      input: 0.7,
+      cached_input: 0.1,
+      cache_write: 0.5,
+      output: 2.5,
+    });
   });
 
   test("Model prices: the page's script refuses what the server refuses, in the same words", async () => {
@@ -705,6 +720,7 @@ describe("model use on the screens (goal 075)", () => {
     assert.deepEqual(s.store.usage.prices()[0]?.price, {
       input: 0.000001,
       cached_input: null,
+      cache_write: null,
       output: 0,
     });
   });

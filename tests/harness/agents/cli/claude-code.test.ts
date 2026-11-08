@@ -159,6 +159,7 @@ describe("Claude Code", () => {
     assert.equal(u?.calls, 2, "two messages: two model calls");
     assert.equal(u?.tokens_in, 2006);
     assert.equal(u?.cached_in, 1000);
+    assert.equal(u?.cache_write_in, 1000, "the input written to the cache, apart (goal 195)");
     assert.equal(u?.uncached_in, 1006);
     assert.equal(u?.tokens_out, 35);
     assert.equal(u?.reasoning, null, "Claude Code names no reasoning tokens");
@@ -182,6 +183,7 @@ describe("Claude Code", () => {
       bare,
     );
     assert.equal(bare.calls[0]?.cached_in, null);
+    assert.equal(bare.calls[0]?.cache_write_in, null);
     assert.equal(bare.calls[0]?.calls, null, "no messages seen: the calls are not reported");
   });
 
@@ -196,6 +198,8 @@ describe("Claude Code", () => {
     assert.equal(u?.tokens_in, 2006);
     // One message named no cache read: the run's cached input is not reported.
     assert.equal(u?.cached_in, null);
+    // One named no cache write either: the run's written input is not reported.
+    assert.equal(u?.cache_write_in, null);
     assert.equal(u?.tokens_out, 35);
     assert.equal(u?.call_ms, null);
     closeClaudeRun(t);
@@ -265,8 +269,8 @@ describe("Claude Code", () => {
     assert.equal(r.turns, 2);
     // The run's usage, from its result, reaches the harness once.
     assert.deepEqual(
-      calls.map((u) => [u.calls, u.tokens_in, u.cached_in, u.tokens_out]),
-      [[2, 2006, 1000, 35]],
+      calls.map((u) => [u.calls, u.tokens_in, u.cached_in, u.cache_write_in, u.tokens_out]),
+      [[2, 2006, 1000, 1000, 35]],
     );
     assert.ok(f.runs.every((x) => x.role === "lane-1"));
     const run = f.runs.find((x) => x.argv.includes("-p")) as RunRequest;

@@ -62,6 +62,7 @@ const TokenUsage = z.looseObject({
   usage: z.looseObject({
     input_tokens: z.number(),
     cached_input_tokens: z.number().nullish(),
+    cache_write_input_tokens: z.number().nullish(),
     output_tokens: z.number(),
     reasoning_output_tokens: z.number().nullish(),
   }),
@@ -256,6 +257,7 @@ function readRecord(raw: unknown, s: RolloutState, out: SessionEvent[]): boolean
           calls: 1,
           tokensIn: u.input_tokens,
           cachedIn: u.cached_input_tokens ?? null,
+          cacheWriteIn: u.cache_write_input_tokens ?? null,
           tokensOut: u.output_tokens,
           reasoning: u.reasoning_output_tokens ?? null,
           firstTokenMs: null,

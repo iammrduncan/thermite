@@ -209,6 +209,7 @@ function readAssistant(
         tokensIn:
           n(u.input_tokens) + n(u.cache_creation_input_tokens) + n(u.cache_read_input_tokens),
         cachedIn: u.cache_read_input_tokens ?? null,
+        cacheWriteIn: u.cache_creation_input_tokens ?? null,
         tokensOut: n(u.output_tokens),
         reasoning: null,
         firstTokenMs: null,

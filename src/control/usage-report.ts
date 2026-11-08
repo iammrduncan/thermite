@@ -135,6 +135,7 @@ export const PriceRequest = z.strictObject({
   model: z.string().trim().min(1).max(200),
   input: z.number().min(0).max(1_000_000).optional(),
   cached_input: z.number().min(0).max(1_000_000).nullable().optional(),
+  cache_write: z.number().min(0).max(1_000_000).nullable().optional(),
   output: z.number().min(0).max(1_000_000).optional(),
   clear: z.literal(true).optional(),
 });
@@ -184,7 +185,7 @@ export function setModelPrice(
       status: 400,
       error:
         issue?.code === "unrecognized_keys"
-          ? `It takes provider, model, input, cached_input, output and clear, not ${issue.keys.join(", ")}.`
+          ? `It takes provider, model, input, cached_input, cache_write, output and clear, not ${issue.keys.join(", ")}.`
           : `${String(issue?.path[0] ?? "the request")}: ${
               issue?.path[0] === "provider" || issue?.path[0] === "model"
                 ? "a name, given"
@@ -215,7 +216,12 @@ export function setModelPrice(
       error: `${p.name}'s model list gives ${q.model} its price, and model usage uses that one.`,
     };
   if (q.clear) {
-    if (q.input !== undefined || q.output !== undefined || q.cached_input !== undefined)
+    if (
+      q.input !== undefined ||
+      q.output !== undefined ||
+      q.cached_input !== undefined ||
+      q.cache_write !== undefined
+    )
       return { ok: false, status: 400, error: "Give clear: true alone, or a price." };
     store.usage.setPrice(p.name, q.model, null, by);
     return {
@@ -237,8 +243,14 @@ export function setModelPrice(
   const price: ModelPrice = {
     input: q.input,
     cached_input: q.cached_input ?? null,
+    cache_write: q.cache_write ?? null,
     output: q.output,
   };
+  const cached = price.cached_input === null ? "" : `, ${dollars(price.cached_input)} cached`;
+  const write =
+    price.cache_write === null || price.cache_write === undefined
+      ? ""
+      : `, ${dollars(price.cache_write)} a cache write`;
   store.usage.setPrice(p.name, q.model, price, by);
   return {
     ok: true,
@@ -246,9 +258,7 @@ export function setModelPrice(
       provider: p.name,
       model: q.model,
       price,
-      said: `${q.model} of ${p.name} costs ${dollars(price.input)} per million tokens in${
-        price.cached_input === null ? "" : `, ${dollars(price.cached_input)} cached`
-      } and ${dollars(price.output)} out. Model usage prices all its calls at it.`,
+      said: `${q.model} of ${p.name} costs ${dollars(price.input)} per million tokens in${cached}${write} and ${dollars(price.output)} out. Model usage prices all its calls at it.`,
     },
   };
 }

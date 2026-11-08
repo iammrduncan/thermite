@@ -606,7 +606,14 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         continue;
       const r = setModelPrice(
         store,
-        { provider: p.name, model: id, input, cached_input: cached, output },
+        {
+          provider: p.name,
+          model: id,
+          input,
+          cached_input: cached,
+          cache_write: was?.cache_write ?? null,
+          output,
+        },
         "owner:ui",
       );
       if (r.ok) changed++;

@@ -136,7 +136,7 @@ Under the six numbers:
 | --- | --- |
 | **Model** | The model's id at its provider |
 | **Provider** | The provider that serves it |
-| **In** | Dollars for a million tokens in that the provider did not read from its cache |
+| **In** | Dollars for a million tokens in that the provider did not read from its cache. Its cache writes cost the same unless a write price is set |
 | **Cached in** | Dollars for a million tokens in that the provider read from its cache. Empty: the **In** price |
 | **Out** | Dollars for a million tokens out, with reasoning |
 | **Price from** | Where the price comes from: `provider's list`, `yours`, `free` or `no price` |
@@ -151,6 +151,8 @@ On a narrow screen the provider shows under the model.
 | `no price` | Neither: the model's calls show `no price` |
 
 A model with no listed price has three fields. **Save prices**, under the table, saves every row at once, and waits until a price changes. To set a price, fill in **In** and **Out**; to remove yours, empty all three. The line beside **Save prices** then says `Saved. Every cost follows.`: a price you set or change costs every call of the model, the earlier ones too. With no change it says `Nothing changed.` Each change is in the audit log as `model_price_set` or `model_price_cleared`, by `owner:ui`.
+
+A provider that charges for writing to its cache has a fourth price, the cache write's, in US dollars for a million tokens written. The page has no field for it: set it with [`POST /v1/model-prices`](rest-api.md#model-usage) or [`set_model_price`](mcp-tools.md#set_model_price) (`cache_write`), and the page keeps it when it saves the rest of the price.
 
 The line beside **Save prices** says why a row can't be saved, with the model and its provider: as you type it starts with `Not yet.`, and after you press **Save prices** with `Not saved.`, such as `Not saved. small-model of lab: set In and Out, or leave all three empty.` Rows without a problem are saved even then, and the line ends with how many, such as `The other 2 changes are saved.`
 
