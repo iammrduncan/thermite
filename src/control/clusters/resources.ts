@@ -306,7 +306,7 @@ export const clusterResourcesFields = {
     .nullable()
     .optional()
     .describe(
-      `The rig's CPUs, at least ${leastRigSize("terminal").cpus}: the supervisor gets half a CPU, the harness the rest. null, with memory_gib null: the namespace's defaults`,
+      `The rig's CPUs, at least ${leastRigSize("terminal").cpus}: the supervisor gets a quarter of them (at least half a CPU, at most 2) while the rig's agent programs run in their own terminals, else half a CPU, and the harness the rest. null, with memory_gib null: the namespace's defaults`,
     ),
   memory_gib: z
     .number()

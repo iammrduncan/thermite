@@ -1,0 +1,40 @@
+---
+id: "235"
+title: "The supervisor has the CPUs to start its advisors in their own terminals"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: ["169"]
+created: 2026-11-08
+updated: 2026-11-08
+---
+
+# 235 · The supervisor has the CPUs to start its advisors in their own terminals
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+On the lab, 2026-11-08, a teachers' round on a rig control set up on a cluster gave no answer at all. Its two teachers, one in Claude Code and one in Codex, started in their own terminals at the same second. Within a minute Claude Code's terminal host did not answer within its 15 seconds, and Codex had not listed its tools after 30 seconds and then exited with code 1. The supervisor's container had half a CPU, its share for a rig whose agent programs run in their own terminals. Kubernetes throttled it for 65% of its periods in that minute and 98% in the next. Its memory stayed under 320 MiB of its 4 GiB. The round an hour before had been throttled as hard at its start and had only just answered.
+
+1. **A quarter of the rig's CPUs:** while a rig's agent programs run in their own terminals, its supervisor gets a quarter of the rig's CPUs, at least half a CPU and at most 2, and the harness the rest. A rig's least size stays 1.5 CPUs. Headless, and on a runner's pods, it keeps half a CPU.
+2. **Tests:** the deployments of a rig of 16 CPUs give its supervisor 2 and its harness 14; of 6 CPUs, 1.5 and 4.5; of 1.5 CPUs, half a CPU; headless, half a CPU.
+
+## Why
+
+The owner wants the teachers to research every round. A round in which no teacher can start brings the run nothing, and a supervisor that only just starts them fails again on a busier minute.
+
+## Done when
+
+- [ ] Items 1 and 2.
+- [ ] Pages: Add a rig on a cluster (the supervisor's share), Limits and pacing, the REST API, MCP tools, the screens' help for CPUs, the changelog.
+- [ ] On the lab, after the rigs' next update, the teachers' rounds start in their own terminals and answer, and the supervisor's container is throttled for less than half of its periods as they start.
+
+## Decisions
+
+## Progress
+
+- 2026-11-08 14:45 UTC: built (`src/control/clusters/manifests.ts`), with the screens' and tools' words (`src/control/dashboard/rigs/`, `src/control/mcp/clusters.ts`, `src/control/clusters/resources.ts`). Tests: `tests/control/clusters/clusters.test.ts`, `tests/control/dashboard/clusters.test.ts`, `tests/control/dashboard/cluster-resources.test.ts`; they run on the lab's VM. A rig takes its new share when control next writes its deployments: an image update, a new size or a new mode.
+
+---
+
+Run with `/goal Complete docs/plan/goals/235-supervisor-cpus-for-terminals.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

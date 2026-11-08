@@ -421,7 +421,7 @@ describe("a cluster rig's GPUs, CPUs and memory, changed from control (goal 118)
       "a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals: its supervisor takes 4 GiB for the advisors' terminals, and its harness at least 4 GiB";
     // Added, sized by its slot's quota: a new rig's agent programs run in their own terminals, so
     // its supervisor has 4 GiB of the 52 for the advisors' terminals.
-    assert.deepEqual(shares(), [both("500m", "4096Mi"), both("15500m", "49152Mi")]);
+    assert.deepEqual(shares(), [both("2000m", "4096Mi"), both("14000m", "49152Mi")]);
     assert.equal(s.store.clusters.rig("cpu-m")?.spec.programMode, "terminal");
     await running("terminal");
 
@@ -465,7 +465,7 @@ describe("a cluster rig's GPUs, CPUs and memory, changed from control (goal 118)
       String(toTerminal.body.said),
       /Its supervisor gets 4 GiB, as its agent programs run in their own terminals: cpu-m's pods restart with 16 CPUs and 52 GiB of memory\.$/,
     );
-    assert.deepEqual(shares(), [both("500m", "4096Mi"), both("15500m", "49152Mi")]);
+    assert.deepEqual(shares(), [both("2000m", "4096Mi"), both("14000m", "49152Mi")]);
 
     // In their own terminals, 6 GiB is too little: refused in words, and nothing is applied.
     await running("terminal");

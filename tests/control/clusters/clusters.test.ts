@@ -275,10 +275,11 @@ describe("rigs on Kubernetes", () => {
       limits: { cpu, memory },
     });
     const sized = { ...plan, gpus: 0, resources: { cpus: 16, memoryGi: 52 } };
-    // In their own terminals: the advisors' terminals run in the supervisor, so it has 4 GiB.
+    // In their own terminals: the advisors' terminals run in the supervisor, so it has 4 GiB, and
+    // a quarter of the rig's CPUs, at most 2 (goal 235).
     const terminal = clusterRigObjects(sized, secrets) as Obj[];
-    assert.deepEqual(res(terminal, "supervisor"), both("500m", "4096Mi"));
-    assert.deepEqual(res(terminal, "harness"), both("15500m", "49152Mi"));
+    assert.deepEqual(res(terminal, "supervisor"), both("2000m", "4096Mi"));
+    assert.deepEqual(res(terminal, "harness"), both("14000m", "49152Mi"));
     // Headless: 2 GiB, as before the terminals; the harness takes the rest.
     const headless = clusterRigObjects({ ...sized, programMode: "headless" }, secrets) as Obj[];
     assert.deepEqual(res(headless, "supervisor"), both("500m", "2048Mi"));
@@ -286,13 +287,22 @@ describe("rigs on Kubernetes", () => {
     // The deployments an image update or a new size applies carry the same shares.
     assert.deepEqual(
       res(clusterRigDeployments(sized) as Obj[], "supervisor"),
-      both("500m", "4096Mi"),
+      both("2000m", "4096Mi"),
     );
     // A GPU rig's harness keeps its GPUs beside its share.
     assert.deepEqual(res(clusterRigObjects({ ...sized, gpus: 2 }, secrets) as Obj[], "harness"), {
-      requests: { cpu: "15500m", memory: "49152Mi" },
-      limits: { cpu: "15500m", memory: "49152Mi", "nvidia.com/gpu": 2 },
+      requests: { cpu: "14000m", memory: "49152Mi" },
+      limits: { cpu: "14000m", memory: "49152Mi", "nvidia.com/gpu": 2 },
     });
+    // A rig of 6 CPUs: a quarter of them; of 1.5, the least, half a CPU.
+    assert.deepEqual(
+      rigResources({ cpus: 6, memoryGi: 24 }, "terminal").supervisor,
+      both("1500m", "4096Mi"),
+    );
+    assert.deepEqual(
+      rigResources({ cpus: 1.5, memoryGi: 8 }, "terminal").supervisor,
+      both("500m", "4096Mi"),
+    );
     // The least size: the supervisor's share and the harness's 4 GiB.
     assert.deepEqual(
       rigResources({ cpus: 1.5, memoryGi: 8 }, "terminal").harness,

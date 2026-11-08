@@ -71,12 +71,23 @@ const amount = (cpus: number, mi: number): Resources => {
  * The supervisor's share of a rig, by how the rig's agent programs run. It relays, fetches and
  * exports, and computes little; but its advisors in their programs' own terminals take about
  * 550 MiB each in Claude Code's, and two teachers and three reviewers can run at once, so there it
- * has 4 GiB (the owner's choice, 2026-10-31).
+ * has 4 GiB (the owner's choice, 2026-10-31). `cpus` is its least: see supervisorCpus.
  */
 export const SUPERVISOR_SHARE: Record<ProgramMode, { cpus: number; memoryGi: number }> = {
   terminal: { cpus: 0.5, memoryGi: 4 },
   headless: { cpus: 0.5, memoryGi: 2 },
 };
+
+/**
+ * The supervisor's CPUs (goal 235): in its advisors' own terminals, a quarter of the rig's, at
+ * least its share's and at most 2, since those programs start at once. On half a CPU, two
+ * teachers starting were throttled for 98% of their time and missed their terminals' waits.
+ * Headless, its share's.
+ */
+const supervisorCpus = (rigCpus: number, mode: ProgramMode): number =>
+  mode === "terminal"
+    ? Math.min(2, Math.max(SUPERVISOR_SHARE.terminal.cpus, rigCpus / 4))
+    : SUPERVISOR_SHARE[mode].cpus;
 /** The least the harness keeps beside the supervisor's share: it takes the rest of the rig. */
 export const HARNESS_LEAST = { cpus: 1, memoryGi: 4 };
 
@@ -108,9 +119,10 @@ export function rigResources(
         ? `a rig needs at least ${least.cpus} CPUs and ${least.memoryGi} GiB of memory while its agent programs run in their own terminals: its supervisor takes ${share.memoryGi} GiB for the advisors' terminals, and its harness at least ${HARNESS_LEAST.memoryGi} GiB`
         : `a rig needs at least ${least.cpus} CPUs and ${least.memoryGi} GiB of memory`,
     );
+  const cpus = supervisorCpus(r.cpus, mode);
   return {
-    harness: amount(r.cpus - share.cpus, (r.memoryGi - share.memoryGi) * 1024),
-    supervisor: amount(share.cpus, share.memoryGi * 1024),
+    harness: amount(r.cpus - cpus, (r.memoryGi - share.memoryGi) * 1024),
+    supervisor: amount(cpus, share.memoryGi * 1024),
     prepare: amount(0.25, 256),
   };
 }

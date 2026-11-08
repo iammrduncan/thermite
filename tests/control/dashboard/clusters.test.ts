@@ -657,9 +657,9 @@ describe("clusters in Providers and Add a rig", () => {
       limits: { cpu, memory },
     });
     // A new rig runs its agent programs in their own terminals, the default, so its supervisor
-    // has 4 GiB for the advisors' terminals, and the harness the rest.
-    assert.deepEqual(res("harness"), both("5500m", "20480Mi"));
-    assert.deepEqual(res("supervisor"), both("500m", "4096Mi"));
+    // has 4 GiB and a quarter of the CPUs for the advisors' terminals, and the harness the rest.
+    assert.deepEqual(res("harness"), both("4500m", "20480Mi"));
+    assert.deepEqual(res("supervisor"), both("1500m", "4096Mi"));
     assert.equal(store.clusters.rig("cpu-2")?.spec.programMode, "terminal");
     for (const d of pods)
       assert.deepEqual(d.spec?.template?.spec?.initContainers[0]?.resources, both("250m", "256Mi"));
