@@ -144,10 +144,10 @@ export const CODEX_ADVISOR_OFF = [
 /**
  * The Codex CLI's configuration for one advisor call ($CODEX_HOME/config.toml): the workers' own
  * (one provider, the proxy, over the Responses API; no web search, history, analytics or update
- * checks; a teacher's with Codex's own web search, `web`), with the read-only sandbox and
- * approvals never asked, every tool feature off, no
- * questions, no skills, and each of the call's MCP servers, its token from THERMITE_MCP_AUTH and
- * its tools approved without asking (no one answers a question in a headless call).
+ * checks; a teacher's with Codex's own web search, `web`, on the model's own list), with the
+ * read-only sandbox and approvals never asked, every tool feature off, no questions, no skills,
+ * and each of the call's MCP servers, its token from THERMITE_MCP_AUTH and its tools approved
+ * without asking (no one answers a question in a headless call).
  */
 export function codexAdvisorConfig(
   m: ModelConfig,
@@ -174,6 +174,9 @@ export function codexAdvisorConfig(
     "[features]",
     ...off.map((f) => `${f} = false`),
     "",
+    // A teacher's web search on the model's own list (goal 232): a model Codex drives in Code
+    // Mode Only would otherwise reach it only from Code Mode's `exec`, whose host is off.
+    ...(web ? ["[features.code_mode]", 'direct_only_tool_namespaces = ["web"]', ""] : []),
     "[tools.experimental_request_user_input]",
     "enabled = false",
     "",

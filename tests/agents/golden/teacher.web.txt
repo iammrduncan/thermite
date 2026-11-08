@@ -1,0 +1,4 @@
+You have your program's own web search and fetch. Search the web in every round, before
+you answer: look for outside sources that bear on what limits the run now, such as papers, the
+upstream projects and their fixes, issue trackers, vendor documentation and forums. Bring what you
+find into the portfolio: cite each source you used by its URL in the opportunities it informs.

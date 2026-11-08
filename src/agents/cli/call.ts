@@ -25,7 +25,8 @@ import { type WindowLink, waitOutWindow } from "./usage-window.ts";
  * the role's user: its prompt is typed in, the owner's messages go in inside its turn through its
  * hooks or Thermite's plugin, the owner's console types into it, Live shows its screen, and a full
  * usage window is waited out as a trial's is. It ends when its first turn does (one an owner's
- * message sent on at its end goes on), with the tally of its session log; its answer is its last
+ * message sent on at its end goes on, and so does one its caller asks for after it: `more`), with
+ * the tally of its session log; its answer is its last
  * text, or the newest text that ends one of its turns and that its caller takes as an answer
  * (`answer`): the owner may type into it, and its turn that answers the owner in other words is
  * not its answer.
@@ -113,6 +114,12 @@ export interface TerminalCallOptions {
    */
   answer?: ((text: string) => boolean) | undefined;
   /**
+   * Asked after each turn that ends with no failure and no usage window shown: a later turn its
+   * caller wants, rendered, at `n`, its place in the call; undefined ends the call. A teacher that
+   * has not searched the web in the call is sent back to (goal 232).
+   */
+  more?: ((tally: CliTally, n: number) => Prompt | undefined) | undefined;
+  /**
    * Awaited once its program is ready and before its first message is typed (goal 218), such as
    * until the program has listed its MCP tools.
    */
@@ -193,7 +200,8 @@ export async function terminalCall<T extends CliTally>(
 
 /**
  * The call's turns in its terminal: its prompt, then, after a full usage window, what it goes on
- * from, until a turn ends with no limit shown, the program ends, or the call is stopped.
+ * from, and any later turn its caller asks for (`more`), until a turn ends with no limit shown
+ * and none asked, the program ends, or the call is stopped.
  */
 async function converse<T extends CliTally>(
   p: CliProgram<T>,
@@ -310,6 +318,15 @@ async function converse<T extends CliTally>(
           tally.notes.join("\n"),
         ),
       );
+    // A later turn its caller asks for, while its program still runs (goal 232).
+    const more =
+      outcome.exitCode === 0 && !tally.errors.length ? o.more?.(tally, said + 1) : undefined;
+    if (more) {
+      said++;
+      link.sent?.(more);
+      message = messageText(more);
+      continue;
+    }
     break;
   }
   await term.stop();

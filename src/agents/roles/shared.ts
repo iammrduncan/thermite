@@ -229,6 +229,11 @@ export interface AdvisorFrame {
   kbWrites?: readonly string[] | undefined;
   /** In a program, which has no answer tool: the answer's JSON Schema, which it is told. */
   answerSchema?: unknown;
+  /**
+   * It has its program's own web search and fetch (a teacher in Claude Code or Codex, goal 232):
+   * its instructions say to search the web every round.
+   */
+  web?: boolean | undefined;
 }
 
 /**
@@ -278,6 +283,13 @@ export const ADVISOR_OWNER_TURN =
 export const ADVISOR_OWNER_TURN_PI =
   "A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.";
 
+/**
+ * Told a teacher with its program's own web search, in its own terminal, when a turn ends and its
+ * call has no web search or fetch yet (goal 232; the owner's decision of 2026-11-08: every round).
+ */
+export const ADVISOR_SEARCH_TURN =
+  "You have not searched the web in this round yet. Search the web now, with your web search and fetch, for outside sources that bear on what limits the run, and bring in what you find, each source by its URL. Then end with your whole answer again, as one JSON object.";
+
 /** A later turn in an advisor's call in its program's own terminal (goal 169). */
 export type AdvisorTurn =
   /**
@@ -286,7 +298,9 @@ export type AdvisorTurn =
    */
   | { kind: "owner"; id?: number | undefined; text: string }
   /** It waited for its usage window to reset; `words`: the limit's. */
-  | { kind: "failed"; words: string };
+  | { kind: "failed"; words: string }
+  /** A teacher's turn ended with no web search in its call (goal 232). */
+  | { kind: "search" };
 
 /**
  * A later turn in an advisor's call in its program's own terminal (goal 169), for its role (the
@@ -297,15 +311,17 @@ export function renderAdvisorTurn(
   i: AdvisorTurn & { program: string; turn: number },
 ): Prompt {
   const message =
-    i.kind === "owner" && i.id !== undefined
-      ? [
-          section(
-            "owner",
-            "owner",
-            `${i.program === "pi" ? ADVISOR_OWNER_TURN_PI : ADVISOR_OWNER_TURN}\n\n${JSON.stringify({ id: i.id, text: i.text })}`,
-          ),
-        ]
-      : trialTurnSections(i);
+    i.kind === "search"
+      ? [section("search", "role", ADVISOR_SEARCH_TURN)]
+      : i.kind === "owner" && i.id !== undefined
+        ? [
+            section(
+              "owner",
+              "owner",
+              `${i.program === "pi" ? ADVISOR_OWNER_TURN_PI : ADVISOR_OWNER_TURN}\n\n${JSON.stringify({ id: i.id, text: i.text })}`,
+            ),
+          ]
+        : trialTurnSections(i);
   return prompt(role, i.program, { turn: i.turn, message });
 }
 

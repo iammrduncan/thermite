@@ -117,6 +117,8 @@ export async function runCliHarness<S extends z.ZodType>(
           answered = a;
         },
         rt.runtime,
+        // A Codex teacher's own web search (goal 232).
+        rt.runtime === "codex" && t?.web === true,
       );
     const servers = tools?.servers ?? [];
     const opencode = rt.runtime === "opencode";
@@ -199,6 +201,8 @@ export async function runCliHarness<S extends z.ZodType>(
           mcpServers: servers.map((s) => s.name).filter((s) => s !== KB_SERVER),
           kbWrites: t?.kb?.writes,
           answerSchema: input.answerSchema,
+          // Codex's own web search, a teacher's (goal 232); OpenCode has none.
+          web: rt.runtime === "codex" && t?.web === true,
         }),
       ),
       input.schema,

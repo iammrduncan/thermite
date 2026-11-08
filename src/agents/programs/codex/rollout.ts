@@ -52,11 +52,18 @@ const Message = z.looseObject({
 const ToolCall = z.looseObject({
   call_id: z.string(),
   name: z.string().optional(),
+  namespace: z.string().optional(),
   arguments: z.string().optional(),
   input: z.unknown().optional(),
   action: z.unknown().optional(),
 });
 const ToolOutput = z.looseObject({ call_id: z.string(), output: z.unknown() });
+/** A web search the provider ran itself (Responses' hosted `web_search`): no output of its own. */
+const WebSearchCall = z.looseObject({
+  id: z.string().optional(),
+  status: z.string().optional(),
+  action: z.looseObject({ type: z.string().optional() }).optional(),
+});
 const TokenUsage = z.looseObject({
   response_id: z.string(),
   usage: z.looseObject({
@@ -187,11 +194,28 @@ function readResponse(type: string, raw: unknown, s: RolloutState, out: SessionE
       parse(ToolCall, (r) => {
         s.answered = true;
         remember(s.pending, r.call_id);
+        const name = r.name ?? (type === "local_shell_call" ? "shell" : "tool");
         out.push({
           type: "tool.call",
           id: r.call_id,
-          name: r.name ?? (type === "local_shell_call" ? "shell" : "tool"),
+          // A tool of a namespace by both names: Codex's own web search is `web.run` (goal 232).
+          name: r.namespace ? `${r.namespace}.${name}` : name,
           input: r.arguments !== undefined ? argsOf(r.arguments) : (r.input ?? r.action),
+        });
+      });
+      break;
+    // The provider's own web search (goal 232), a call and its end in one item.
+    case "web_search_call":
+      parse(WebSearchCall, (r) => {
+        s.answered = true;
+        const id = r.id ?? `web_search_${s.results.size}`;
+        remember(s.results, id);
+        out.push({ type: "tool.call", id, name: "web_search", input: r.action ?? {} });
+        out.push({
+          type: "tool.result",
+          id,
+          ok: r.status === undefined || r.status === "completed",
+          output: r.status ?? "",
         });
       });
       break;

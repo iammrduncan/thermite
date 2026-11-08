@@ -143,6 +143,12 @@ test("Codex: its read-only sandbox, no tool but MCP's, its hooks on, the model t
   assert.match(teacher, /^web_search = "live"$/m);
   assert.doesNotMatch(teacher, /^standalone_web_search = false$/m);
   assert.match(teacher, /^shell_tool = false$/m);
+  // A model on Responses Lite gets Codex's own search, through the proxy, on the model's own list
+  // while Code Mode's host stays off.
+  assert.match(teacher, /^supports_standalone_web_search = true$/m);
+  assert.match(teacher, /^\[features\.code_mode\]\ndirect_only_tool_namespaces = \["web"\]$/m);
+  assert.match(teacher, /^code_mode_host = false$/m);
+  assert.doesNotMatch(config, /supports_standalone_web_search|direct_only_tool_namespaces/);
 });
 
 test("OpenCode: every action denied but the advisor's MCP tools, as its own agent, with Thermite's plugin", () => {

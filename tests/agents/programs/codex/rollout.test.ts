@@ -105,6 +105,30 @@ describe("the Codex CLI's rollout as session events", () => {
     ]);
   });
 
+  test("a web search, Codex's own and the provider's hosted one, as tool calls with their names (goal 232)", () => {
+    const at = '"timestamp":"2026-11-08T08:30:00.000Z","type":"response_item"';
+    const { events, tally, unknown } = read([
+      `{${at},"payload":{"type":"function_call","name":"run","namespace":"web","arguments":"{\\"search_query\\":[{\\"q\\":\\"gb10 mmap slow\\"}]}","call_id":"call_w"}}`,
+      `{${at},"payload":{"type":"function_call_output","call_id":"call_w","output":"1. Very slow mmap on DGX Spark"}}`,
+      `{${at},"payload":{"type":"web_search_call","id":"ws_1","status":"completed","action":{"type":"search","query":"gb10 mmap slow"}}}`,
+    ]);
+    assert.deepEqual([...unknown], []);
+    assert.deepEqual(
+      of(events, "tool.call").map((e) => [e.name, e.input]),
+      [
+        ["web.run", { search_query: [{ q: "gb10 mmap slow" }] }],
+        ["web_search", { type: "search", query: "gb10 mmap slow" }],
+      ],
+    );
+    assert.deepEqual(
+      tally.tools.map((t) => [t.tool, t.ok]),
+      [
+        ["web.run", true],
+        ["web_search", true],
+      ],
+    );
+  });
+
   test("a usage record seen twice counts once, and a kind it does not know is counted", () => {
     const usage =
       '{"timestamp":"2026-10-29T05:52:16.107Z","type":"token_usage_record","payload":{"response_id":"resp_1","usage":{"input_tokens":10,"output_tokens":2}}}';

@@ -15,7 +15,8 @@ import {
   terminalCall,
 } from "../../../src/agents/cli/index.ts";
 import type { ModelConfig } from "../../../src/agents/model/index.ts";
-import { renderPlannerTurn } from "../../../src/agents/roles/index.ts";
+import { messageText } from "../../../src/agents/prompt.ts";
+import { renderAdvisorTurn, renderPlannerTurn } from "../../../src/agents/roles/index.ts";
 import type { RoleRunner, RoleRunOutcome, RoleRunRequest } from "../../../src/agents/runner.ts";
 import { TERMINAL_HOST, TERMINAL_SOCKET } from "../../../src/agents/terminal/index.ts";
 import { serveTerminal } from "../../../src/agents/terminal/server.ts";
@@ -281,6 +282,36 @@ test("no message comes: the call answers with its first turn's text", async () =
   );
   assert.equal(tally.lastText, DRAFT);
   assert.deepEqual(k.given, []);
+});
+
+test("a later turn its caller asks for at a turn's end goes in, until it asks for none; the answer stays the newest that holds one (goal 232)", async () => {
+  const k = link();
+  const sent: string[] = [];
+  k.l.sent = (p) => sent.push(messageText(p));
+  const { r } = runner((log) => new Program(log, k.inTurn, 3));
+  const asked: number[] = [];
+  const tally = await terminalCall(
+    claudeProgram,
+    MODEL,
+    "review",
+    { runner: r, apiUrl: "http://127.0.0.1:1", scratchDir: scratch },
+    {
+      role: "teacher",
+      link: k.l,
+      answer: (t) => t.trimStart().startsWith("{"),
+      more: (_t, n) => {
+        asked.push(n);
+        return asked.length === 1
+          ? renderAdvisorTurn("teacher", { kind: "search", program: "claude-code", turn: n })
+          : undefined;
+      },
+    },
+  );
+  assert.deepEqual(asked, [1, 2], "asked after each turn, with its place in the call");
+  assert.equal(sent.length, 1);
+  assert.match(sent[0] ?? "", /You have not searched the web in this round yet/);
+  // Its later turn answered "done", which holds no answer: the first turn's stands.
+  assert.equal(tally.lastText, DRAFT);
 });
 
 test("Claude Code is typed into only once it has started: its SessionStart signal, then a still screen (goal 183)", async () => {

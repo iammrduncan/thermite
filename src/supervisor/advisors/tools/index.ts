@@ -17,6 +17,7 @@ export {
   type AdvisorServers,
   CLAUDE_WEB_TOOLS,
   type PastSearchServer,
+  searchedWeb,
   serveAdvisorTools,
 } from "./mcp.ts";
 export { type AdvisorPaper, PAPER_TOOL_NAMES, PAPER_TOOLS, runPaperTool } from "./paper.ts";

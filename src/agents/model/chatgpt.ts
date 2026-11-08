@@ -3,7 +3,8 @@ import { CHATGPT_LIMIT_CODE, CHATGPT_LIMIT_WAIT_MS } from "./index.ts";
 /**
  * What OpenAI accepts from a ChatGPT sign-in (its "ChatGPT plan usage" preview), applied by the
  * harness's model proxy so every agent's requests fit, whatever program sends them: only the
- * Responses API (POST /responses) and the account's model list (GET /models); each request with
+ * Responses API (POST /responses) and the account's model list (GET /models), and for a teacher
+ * the Codex CLI's own web search (POST /alpha/search, goal 232); each Responses request with
  * `store: false`, `stream: true` and its whole history in `input`; no system messages (the
  * developer role instead); none of the fields the route refuses. And how a full plan is told to
  * the Codex CLI (codexUsageLimit).
@@ -29,10 +30,23 @@ const REFUSED = [
   "previous_response_id",
 ];
 
-/** Whether the route takes this call at all. */
-export function chatgptRouteAllowed(method: string, path: string): boolean {
-  const p = path.replace(/^\/+|\/+$/g, "");
-  return (method === "POST" && p === "responses") || (method === "GET" && p === "models");
+/** The Codex CLI's standalone web search, relative to the provider's base address (goal 232). */
+export const CHATGPT_SEARCH_PATH = "alpha/search";
+
+/** A path without its slashes at either end. */
+export const chatgptPath = (path: string): string => path.replace(/^\/+|\/+$/g, "");
+
+/**
+ * Whether the route takes this call at all; `webSearch`: the caller may search the web through
+ * the Codex CLI's own search (a teacher's call, goal 232).
+ */
+export function chatgptRouteAllowed(method: string, path: string, webSearch = false): boolean {
+  const p = chatgptPath(path);
+  return (
+    (method === "POST" && p === "responses") ||
+    (method === "GET" && p === "models") ||
+    (webSearch && method === "POST" && p === CHATGPT_SEARCH_PATH)
+  );
 }
 
 /** A Responses request made to fit the route; an error when it is not a JSON object. */

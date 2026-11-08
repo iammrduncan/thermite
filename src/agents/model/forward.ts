@@ -3,7 +3,13 @@ import { request as httpsRequest } from "node:https";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { Harness } from "../../core/agents.ts";
-import { chatgptRequest, chatgptRouteAllowed, codexUsageLimit } from "./chatgpt.ts";
+import {
+  CHATGPT_SEARCH_PATH,
+  chatgptPath,
+  chatgptRequest,
+  chatgptRouteAllowed,
+  codexUsageLimit,
+} from "./chatgpt.ts";
 import { CHATGPT_LIMIT_CODE, type ModelConfig } from "./index.ts";
 import { DataSeen, ModelStreamSilent, modelStallMs, stallWords } from "./stall.ts";
 import { type AnswerTokens, TokensSeen } from "./tokens.ts";
@@ -38,6 +44,11 @@ export interface ForwardCall {
    * full ChatGPT plan's refusal as its own usage-limit error (codexUsageLimit).
    */
   program?: Harness | undefined;
+  /**
+   * The caller may search the web through the Codex CLI's own search (a teacher's call, goal 232):
+   * a ChatGPT sign-in then reaches its search endpoint too.
+   */
+  webSearch?: boolean | undefined;
 }
 
 /**
@@ -106,9 +117,11 @@ export async function forwardToProvider(
 ): Promise<Response> {
   // A ChatGPT sign-in reaches only OpenAI's Responses API and the account's model list.
   const chatgpt = target.api === "chatgpt";
-  if (chatgpt && !chatgptRouteAllowed(call.method, call.rest))
+  if (chatgpt && !chatgptRouteAllowed(call.method, call.rest, call.webSearch))
     return Response.json(
-      { error: "a ChatGPT sign-in reaches only POST /responses and GET /models" },
+      {
+        error: `a ChatGPT sign-in reaches only POST /responses and GET /models${call.webSearch ? `, and POST /${CHATGPT_SEARCH_PATH}` : ""}`,
+      },
       { status: 403 },
     );
   const url = new URL(`${target.baseUrl}/${call.rest}${call.search}`);
@@ -120,7 +133,8 @@ export async function forwardToProvider(
   if (target.api === "anthropic") headers["x-api-key"] = target.key;
   else headers.authorization = `Bearer ${target.key}`;
   let body = call.body;
-  if (body && chatgpt) {
+  // A search request is not a Responses request: it goes as it came.
+  if (body && chatgpt && chatgptPath(call.rest) !== CHATGPT_SEARCH_PATH) {
     try {
       body = chatgptRequest(body);
     } catch (err) {

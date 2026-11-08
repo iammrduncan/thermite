@@ -726,6 +726,21 @@ Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not planner_note rules.
 ```
 
+### Teacher: in Claude Code or Codex, with the program's own web search and fetch, after its instructions
+
+```text
+You have your program's own web search and fetch. Search the web in every round, before
+you answer: look for outside sources that bear on what limits the run now, such as papers, the
+upstream projects and their fixes, issue trackers, vendor documentation and forums. Bring what you
+find into the portfolio: cite each source you used by its URL in the opportunities it informs.
+```
+
+### Teacher: in its program's own terminal, after a turn that ended with no web search or fetch in its call
+
+```text
+You have not searched the web in this round yet. Search the web now, with your web search and fetch, for outside sources that bear on what limits the run, and bring in what you find, each source by its URL. Then end with your whole answer again, as one JSON object.
+```
+
 ### Teacher: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
 
 ```text
@@ -814,6 +829,21 @@ note is about when it is about one thing (an experiment, an attempt, a source, a
 finding, a round, a trial or a message, by its id); a note that names nothing is about the run.
 Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not planner_note rules.
+```
+
+### Research teacher: in Claude Code or Codex, with the program's own web search and fetch, after its instructions
+
+```text
+You have your program's own web search and fetch. Search the web in every round,
+before you answer: look for sources the run has not read yet for its open questions, such as the
+vendor's specification, papers, standards, and the project's code and issue tracker. Point tasks at
+what you find: give each source by its URL in the citations of the tasks it informs.
+```
+
+### Research teacher: in its program's own terminal, after a turn that ended with no web search or fetch in its call
+
+```text
+You have not searched the web in this round yet. Search the web now, with your web search and fetch, for outside sources that bear on what limits the run, and bring in what you find, each source by its URL. Then end with your whole answer again, as one JSON object.
 ```
 
 ### Research teacher: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id

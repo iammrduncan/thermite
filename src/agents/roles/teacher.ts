@@ -115,6 +115,21 @@ ${RESEARCH_GUIDE}
 
 ${ADVISOR_NOTES}`;
 
+/**
+ * A teacher with its program's own web search and fetch (goal 232; the owner's decision of
+ * 2026-11-08): it searches the web every round and brings outside sources in.
+ */
+export const TEACHER_WEB = `You have your program's own web search and fetch. Search the web in every round, before
+you answer: look for outside sources that bear on what limits the run now, such as papers, the
+upstream projects and their fixes, issue trackers, vendor documentation and forums. Bring what you
+find into the portfolio: cite each source you used by its URL in the opportunities it informs.`;
+
+/** The same for a research run's teacher: sources the run has not read yet, for its tasks. */
+export const RESEARCH_TEACHER_WEB = `You have your program's own web search and fetch. Search the web in every round,
+before you answer: look for sources the run has not read yet for its open questions, such as the
+vendor's specification, papers, standards, and the project's code and issue tracker. Point tasks at
+what you find: give each source by its URL in the citations of the tasks it informs.`;
+
 /** What a teachers' round gives a teacher: its run, why the round runs, and the run's brief. */
 export interface TeacherInput {
   research: boolean;
@@ -131,11 +146,19 @@ export interface TeacherInput {
 export const briefHead = (i: Pick<TeacherInput, "run" | "why">) =>
   `Brief of run ${i.run}${i.why ? ` (${i.why})` : ""}:`;
 
-/** A teacher's prompt for one round (goal 166): its text, then the run's brief, cut to fit. */
+/**
+ * A teacher's prompt for one round (goal 166): its text, with its program's own web search the
+ * rule to search every round (goal 232), then the run's brief, cut to fit.
+ */
 export function renderTeacher(i: TeacherInput, f: AdvisorFrame): Prompt {
   return advisorPromptOf(
     i.research ? "research-teacher" : "teacher",
-    [section("system", "role", i.research ? RESEARCH_TEACHER_SYSTEM : TEACHER_SYSTEM)],
+    [
+      section("system", "role", i.research ? RESEARCH_TEACHER_SYSTEM : TEACHER_SYSTEM),
+      ...(f.web
+        ? [section("web", "role", i.research ? RESEARCH_TEACHER_WEB : TEACHER_WEB, "\n\n")]
+        : []),
+    ],
     [section("brief", "package", advisorPackage(briefHead(i), i.brief, 120_000, i.fit))],
     f,
     i.addition,

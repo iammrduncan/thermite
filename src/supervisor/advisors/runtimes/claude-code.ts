@@ -122,6 +122,7 @@ export async function runClaudeCode<S extends z.ZodType>(
           mcpServers: t?.mcp?.servers ?? [],
           kbWrites: t?.kb?.writes,
           answerSchema: input.answerSchema,
+          web: t?.web === true,
         }),
       ),
       input.schema,

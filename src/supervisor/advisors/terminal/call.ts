@@ -19,13 +19,16 @@ import { type AdvisorRuntime, advisorRoute } from "../config.ts";
 import { limitUntil } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
 import { callId, cliHarnessModel, noAnswer, parseAnswer } from "../runtimes/index.ts";
-import { CLAUDE_WEB_TOOLS, serveAdvisorTools } from "../tools/index.ts";
+import { CLAUDE_WEB_TOOLS, searchedWeb, serveAdvisorTools } from "../tools/index.ts";
 import type { AdvisorConsoles } from "./consoles.ts";
 import { type AdvisorProgramId, advisorProgram } from "./profiles.ts";
 import { serveAdvisorTurns } from "./turns.ts";
 
 /** How long an advisor's first message waits for its program to list its tools (goal 218). */
 const TOOLS_LISTED_MS = 30_000;
+
+/** How many times a teacher is sent back to search the web in one call (goal 232). */
+const SEARCH_TURNS_MAX = 2;
 
 /**
  * An advisor's call in its program's own terminal (goal 169; the owner's decision of 2026-10-31:
@@ -209,15 +212,22 @@ export async function runInTerminal<S extends z.ZodType>(
           answered = { ...a, at: Date.now() };
         },
         rt.runtime,
+        // A Codex teacher's own web search (goal 232).
+        rt.runtime === "codex" && tools?.web === true,
       );
     turns = await serveAdvisorTurns();
+    // A teacher's own web search and fetch, in Claude Code and Codex (goal 232).
+    const web = tools?.web === true && (rt.runtime === "claude-code" || rt.runtime === "codex");
     const first = input.prompt({
       program: rt.runtime,
       // The kit's servers: Thermite's own has its own part of the prompt (goal 175).
       mcpServers: tools?.mcp?.servers ?? [],
       kbWrites: tools?.kb?.writes,
       answerSchema: input.answerSchema,
+      web,
     });
+    // Its turns that sent it back to search the web (goal 232): at most SEARCH_TURNS_MAX.
+    let searchTurns = 0;
     // Before each of the program's own compactions, the conversation is kept with the round's
     // records (goal 070), as for a headless call.
     const keeper = input.keeper;
@@ -312,6 +322,19 @@ export async function runInTerminal<S extends z.ZodType>(
         windows:
           rt.provider && t.windows ? (w) => t.windows?.(rt.provider as string, w) : undefined,
         answer: (text) => parseAnswer(text, input.schema).ok,
+        // A teacher searches the web every round (the owner's decision of 2026-11-08): a turn that
+        // ends with no web search or fetch in its call sends it back to search, twice at most.
+        more: (tally, n) => {
+          if (!web || searchedWeb(tally.tools) || searchTurns >= SEARCH_TURNS_MAX) return undefined;
+          searchTurns++;
+          t.live({
+            source: advisorLiveSource(rt.name),
+            kind: "status",
+            text: `${rt.name} has not searched the web in this round: it is sent back to search`,
+            run: at.run,
+          });
+          return renderAdvisorTurn(first.role, { kind: "search", program: rt.runtime, turn: n });
+        },
         // Its first message waits until its program has listed its tools (goal 218): a turn that
         // began before then had none of them. Live says how long it took, or that it never did.
         beforeFirst: served

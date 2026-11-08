@@ -37,12 +37,14 @@ export const ADVISOR_PROXY_PATH = "/v1/model-proxy";
  * Starts the proxy on a free local port. Close it when the call ends. `onError` hears each error
  * answer of the provider's: an advisor in its own terminal waits for a full usage window by it
  * (goal 169). `program`: the advisor's program, the Codex CLI hearing a full ChatGPT plan as its
- * own usage limit.
+ * own usage limit. `webSearch`: a teacher's call (goal 232), whose Codex CLI may reach the
+ * provider's search endpoint for its own web search.
  */
 export async function serveAdvisorModel(
   target: ForwardTarget,
   onError?: ((a: ProviderErrorAnswer) => void) | undefined,
   program?: Harness | undefined,
+  webSearch?: boolean | undefined,
 ): Promise<AdvisorModelProxy> {
   const token = `proxy.${randomBytes(24).toString("hex")}`;
   const app = new Hono();
@@ -63,6 +65,7 @@ export async function serveAdvisorModel(
             ? undefined
             : Buffer.from(await c.req.arrayBuffer()),
         program,
+        webSearch,
       },
       target,
       onError,

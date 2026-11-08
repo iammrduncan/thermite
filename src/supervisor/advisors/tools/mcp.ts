@@ -80,6 +80,19 @@ export interface PastSearchServer {
 export const CLAUDE_WEB_TOOLS = ["WebSearch", "WebFetch"] as const;
 
 /**
+ * The names a program's own web tools have in its session log (goal 232): Claude Code's, the
+ * Codex CLI's own search (`web.run`), and the provider's hosted search (`web_search`).
+ */
+const WEB_TOOL_NAMES: readonly string[] = [...CLAUDE_WEB_TOOLS, "web.run", "web_search"];
+
+/**
+ * Whether a call's tool calls hold a search or fetch with its program's own web tools, whatever
+ * it returned (goal 232): a teacher sent back to search when it has none.
+ */
+export const searchedWeb = (tools: readonly { tool: string }[]): boolean =>
+  tools.some((t) => WEB_TOOL_NAMES.includes(t.tool));
+
+/**
  * An advisor's MCP servers for one call of Claude Code (goal 068): each server the run's kit
  * gives the advisors, as the supervisor serves it on localhost (each call goes through the
  * supervisor, which holds the sign-in), and the past-research search when there is one.

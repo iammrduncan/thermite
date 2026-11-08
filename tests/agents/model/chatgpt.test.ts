@@ -87,6 +87,10 @@ describe("a ChatGPT sign-in", () => {
     assert.ok(!chatgptRouteAllowed("GET", "responses"));
     assert.ok(!chatgptRouteAllowed("POST", "chat/completions"));
     assert.ok(!chatgptRouteAllowed("POST", "responses/resp_1/cancel"));
+    // The Codex CLI's own web search, a teacher's alone (goal 232).
+    assert.ok(!chatgptRouteAllowed("POST", "alpha/search"));
+    assert.ok(chatgptRouteAllowed("POST", "/alpha/search", true));
+    assert.ok(!chatgptRouteAllowed("GET", "alpha/search", true));
     const fit = JSON.parse(
       chatgptRequest(
         Buffer.from(JSON.stringify({ model: "m", input: "hi", top_p: 1, user: "u", metadata: {} })),
@@ -284,6 +288,57 @@ describe("a ChatGPT sign-in", () => {
       assert.equal(got.authorization, "Bearer access-token-one", "the route's own key");
       assert.equal(got.cookie, undefined);
       assert.ok(!(FORWARDED_HEADERS as readonly string[]).includes("authorization"));
+    } finally {
+      server.close();
+    }
+  });
+
+  test("a teacher's Codex CLI reaches the search endpoint, its request as it came; no one else does (goal 232)", async () => {
+    let seen: { url: string; body: string; auth: string } | undefined;
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => {
+        body += c;
+      });
+      req.on("end", () => {
+        seen = { url: req.url ?? "", body, auth: req.headers.authorization ?? "" };
+        res.writeHead(200, { "content-type": "application/json" }).end('{"output":[]}');
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const target = {
+        api: "chatgpt" as const,
+        baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`,
+        key: "access-token-one",
+      };
+      // A search request, which carries a field a Responses request may not (max_output_tokens).
+      const request = JSON.stringify({ id: "s1", model: "gpt-test", max_output_tokens: 9 });
+      const call = (webSearch: boolean) =>
+        forwardToProvider(
+          {
+            method: "POST",
+            rest: "alpha/search",
+            search: "",
+            header: (k) => (k === "content-type" ? "application/json" : undefined),
+            body: Buffer.from(request),
+            webSearch,
+          },
+          target,
+          undefined,
+          { ms: undefined },
+        );
+      const refused = await call(false);
+      assert.equal(refused.status, 403);
+      assert.equal(seen, undefined, "never sent");
+      const answer = await call(true);
+      assert.equal(answer.status, 200);
+      await answer.text();
+      assert.deepEqual(seen, {
+        url: "/v1/alpha/search",
+        body: request,
+        auth: "Bearer access-token-one",
+      });
     } finally {
       server.close();
     }

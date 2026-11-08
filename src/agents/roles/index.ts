@@ -45,6 +45,7 @@ import {
 import {
   ADVISOR_OWNER_TURN,
   ADVISOR_OWNER_TURN_PI,
+  ADVISOR_SEARCH_TURN,
   FAILED_GO_ON,
   KB_GUIDE,
   OWNER_TURN_HEAD,
@@ -52,7 +53,13 @@ import {
   TRIAL_TURN_TEXTS,
 } from "./shared.ts";
 import { renderSynthesizer, SYNTHESIZER_SYSTEM } from "./synthesizer.ts";
-import { RESEARCH_TEACHER_SYSTEM, renderTeacher, TEACHER_SYSTEM } from "./teacher.ts";
+import {
+  RESEARCH_TEACHER_SYSTEM,
+  RESEARCH_TEACHER_WEB,
+  renderTeacher,
+  TEACHER_SYSTEM,
+  TEACHER_WEB,
+} from "./teacher.ts";
 import {
   renderWorker,
   renderWorkerTurn,
@@ -246,6 +253,24 @@ const ADVISOR_TERMINAL_TEXTS: readonly RoleText[] = [
   },
 ];
 
+/**
+ * A teacher's texts with its program's own web search and fetch (goal 232): the rule to search
+ * every round, after its instructions, and, in its own terminal, the turn that sends it back to
+ * search when a turn ends with none in its call.
+ */
+const teacherWebTexts = (rule: string): readonly RoleText[] => [
+  {
+    id: "web",
+    what: "in Claude Code or Codex, with the program's own web search and fetch, after its instructions",
+    text: rule,
+  },
+  {
+    id: "search-terminal",
+    what: "in its program's own terminal, after a turn that ended with no web search or fetch in its call",
+    text: ADVISOR_SEARCH_TURN,
+  },
+];
+
 /** The later turns of an advisor the owner's messages reach: Pi's, and those in its terminal. */
 const ADVISOR_TURNS = [...PI_TURNS, renderAdvisorTurn] as const;
 
@@ -398,6 +423,7 @@ export const ROLES: readonly RoleDefinition[] = [
     turns: ADVISOR_TURNS,
     texts: [
       { id: "system", what: "its instructions", text: TEACHER_SYSTEM },
+      ...teacherWebTexts(TEACHER_WEB),
       ...ADVISOR_TERMINAL_TEXTS,
       KB_TEXT,
     ],
@@ -414,6 +440,7 @@ export const ROLES: readonly RoleDefinition[] = [
     turns: ADVISOR_TURNS,
     texts: [
       { id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM },
+      ...teacherWebTexts(RESEARCH_TEACHER_WEB),
       ...ADVISOR_TERMINAL_TEXTS,
       KB_TEXT,
     ],

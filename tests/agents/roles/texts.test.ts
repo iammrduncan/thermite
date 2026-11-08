@@ -49,6 +49,7 @@ import {
   ADVISOR_NOTES,
   ADVISOR_OWNER_TURN,
   ADVISOR_OWNER_TURN_PI,
+  ADVISOR_SEARCH_TURN,
   AT_WORK_GUIDE,
   BRIEF_GUIDE,
   CONTEXT_FULL_TURN,
@@ -63,7 +64,12 @@ import {
   timeLeftWords,
 } from "../../../src/agents/roles/shared.ts";
 import { SYNTHESIZER_SYSTEM } from "../../../src/agents/roles/synthesizer.ts";
-import { RESEARCH_TEACHER_SYSTEM, TEACHER_SYSTEM } from "../../../src/agents/roles/teacher.ts";
+import {
+  RESEARCH_TEACHER_SYSTEM,
+  RESEARCH_TEACHER_WEB,
+  TEACHER_SYSTEM,
+  TEACHER_WEB,
+} from "../../../src/agents/roles/teacher.ts";
 import {
   TRIAL_CUT_WHERE,
   WORKER_CLAUDE_CODE_SYSTEM,
@@ -109,6 +115,10 @@ const TEXTS: Record<string, string> = {
   "advisors.research-guide": RESEARCH_GUIDE,
   "advisors.owner-terminal": ADVISOR_OWNER_TURN,
   "advisors.owner-pi": ADVISOR_OWNER_TURN_PI,
+  // A teacher's own web search, every round (goal 232).
+  "advisors.search-terminal": ADVISOR_SEARCH_TURN,
+  "teacher.web": TEACHER_WEB,
+  "research-teacher.web": RESEARCH_TEACHER_WEB,
   // The knowledge base's part of every role's prompt (goal 175), and kb_write's line.
   "shared.kb-guide": KB_GUIDE,
   "shared.kb-write": kbWriteLine(["note", "finding"]),

@@ -52,8 +52,9 @@ export function codexExe(): string | undefined {
 /**
  * The Codex CLI's configuration for a run ($CODEX_HOME/config.toml): one provider, the harness's
  * key-adding proxy (`proxyRoot`) over the Responses API, with the run's credential from
- * THERMITE_PROXY_AUTH; the route's reasoning effort ("off" sends "none"); no hosted web search,
- * analytics, feedback, update checks or history file. The MCP servers the run's kit gives this
+ * THERMITE_PROXY_AUTH; the route's reasoning effort ("off" sends "none"); no web search (a
+ * teacher's has Codex's own, `web`: the hosted search, or for a model on Responses Lite the
+ * standalone one through the proxy), analytics, feedback, update checks or history file. The MCP servers the run's kit gives this
  * agent (goal 068) are each a streamable HTTP server at the harness's gateway, with the gateway's
  * credential from THERMITE_MCP_AUTH (never in the file), and none is required to start.
  *
@@ -105,6 +106,10 @@ export function codexConfig(
     `base_url = ${tomlString(proxyRoot)}`,
     'env_key = "THERMITE_PROXY_AUTH"',
     'wire_api = "responses"',
+    // A model Codex drives over Responses Lite (its gpt-6 models) takes no hosted tools: its web
+    // search is Codex's own (`web.run`), which calls the provider's search endpoint, and only
+    // for a provider that says it has one.
+    ...(web ? ["supports_standalone_web_search = true"] : []),
     "",
     "[history]",
     'persistence = "none"',
