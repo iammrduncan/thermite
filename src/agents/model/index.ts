@@ -28,6 +28,7 @@ export {
   type ForwardStall,
   type ForwardTarget,
   forwardToProvider,
+  isSearchCall,
   type ProviderErrorAnswer,
 } from "./forward.ts";
 export { PiMeter, USAGE_BATCH, UsageSender } from "./meter.ts";

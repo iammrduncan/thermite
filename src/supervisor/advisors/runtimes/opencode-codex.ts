@@ -24,6 +24,7 @@ import {
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
 import type { AdvisorFrame } from "../../../agents/roles/index.ts";
 import { KB_SERVER } from "../../../agents/tools/index.ts";
+import { log } from "../../../common/log.ts";
 import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorKeeper, AdvisorResult, AdvisorTools } from "../call.ts";
 import {
@@ -117,8 +118,17 @@ export async function runCliHarness<S extends z.ZodType>(
           answered = a;
         },
         rt.runtime,
-        // A Codex teacher's own web search (goal 232).
-        rt.runtime === "codex" && t?.web === true,
+        // A Codex teacher's own web search (goal 232): a search the provider refused is logged.
+        rt.runtime === "codex" && t?.web === true
+          ? (a) => {
+              if (a.error !== undefined)
+                log("supervisor", "a teacher's web search failed", {
+                  advisor: rt.name,
+                  status: a.status,
+                  error: a.error,
+                });
+            }
+          : undefined,
       );
     const servers = tools?.servers ?? [];
     const opencode = rt.runtime === "opencode";

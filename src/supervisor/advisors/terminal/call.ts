@@ -187,6 +187,8 @@ export async function runInTerminal<S extends z.ZodType>(
   const compactions: AdvisorCompaction[] = [];
   /** The provider's newest error answer, which the call's proxy saw (Codex's usage window). */
   let answered: (ProviderErrorAnswer & { at: number }) | undefined;
+  /** The web searches a Codex teacher's proxy carried in this call, answered or not (goal 232). */
+  let searches = 0;
   const inbox = new CallInbox({
     read: () => t.waiting(at.run, at.role),
     given: at.given,
@@ -212,8 +214,22 @@ export async function runInTerminal<S extends z.ZodType>(
           answered = { ...a, at: Date.now() };
         },
         rt.runtime,
-        // A Codex teacher's own web search (goal 232).
-        rt.runtime === "codex" && tools?.web === true,
+        // A Codex teacher's own web search (goal 232): each answer on Live as its result, which
+        // Codex's log never holds, and a search that counts for its round.
+        rt.runtime === "codex" && tools?.web === true
+          ? (a) => {
+              searches++;
+              t.live({
+                source: advisorLiveSource(rt.name),
+                kind: "result",
+                text:
+                  a.error === undefined
+                    ? `web.run: the provider answered ${a.status}`
+                    : `web.run failed: the provider answered ${a.status}: ${a.error}`,
+                run: at.run,
+              });
+            }
+          : undefined,
       );
     turns = await serveAdvisorTurns();
     // A teacher's own web search and fetch, in Claude Code and Codex (goal 232).
@@ -325,7 +341,8 @@ export async function runInTerminal<S extends z.ZodType>(
         // A teacher searches the web every round (the owner's decision of 2026-11-08): a turn that
         // ends with no web search or fetch in its call sends it back to search, twice at most.
         more: (tally, n) => {
-          if (!web || searchedWeb(tally.tools) || searchTurns >= SEARCH_TURNS_MAX) return undefined;
+          if (!web || searches > 0 || searchedWeb(tally.tools) || searchTurns >= SEARCH_TURNS_MAX)
+            return undefined;
           searchTurns++;
           t.live({
             source: advisorLiveSource(rt.name),

@@ -6,6 +6,7 @@ import { bodyLimit } from "hono/body-limit";
 import {
   type ForwardTarget,
   forwardToProvider,
+  isSearchCall,
   logStall,
   modelStallMs,
   type ProviderErrorAnswer,
@@ -30,6 +31,15 @@ export interface AdvisorModelProxy {
   close(): Promise<void>;
 }
 
+/**
+ * The provider's answer to one of a teacher's web searches through the proxy (goal 232): its
+ * status, and an error's words, cut. The Codex CLI keeps no result of its own search in its log.
+ */
+interface SearchAnswer {
+  status: number;
+  error?: string | undefined;
+}
+
 /** The path the proxy answers under, as the harness's proxy does. */
 export const ADVISOR_PROXY_PATH = "/v1/model-proxy";
 
@@ -37,14 +47,14 @@ export const ADVISOR_PROXY_PATH = "/v1/model-proxy";
  * Starts the proxy on a free local port. Close it when the call ends. `onError` hears each error
  * answer of the provider's: an advisor in its own terminal waits for a full usage window by it
  * (goal 169). `program`: the advisor's program, the Codex CLI hearing a full ChatGPT plan as its
- * own usage limit. `webSearch`: a teacher's call (goal 232), whose Codex CLI may reach the
- * provider's search endpoint for its own web search.
+ * own usage limit. `onSearch`: a teacher's call (goal 232), whose Codex CLI may reach the
+ * provider's search endpoint for its own web search; it hears each search's answer.
  */
 export async function serveAdvisorModel(
   target: ForwardTarget,
   onError?: ((a: ProviderErrorAnswer) => void) | undefined,
   program?: Harness | undefined,
-  webSearch?: boolean | undefined,
+  onSearch?: ((a: SearchAnswer) => void) | undefined,
 ): Promise<AdvisorModelProxy> {
   const token = `proxy.${randomBytes(24).toString("hex")}`;
   const app = new Hono();
@@ -54,10 +64,11 @@ export async function serveAdvisorModel(
       ? bearer.slice(7)
       : (c.req.header("x-api-key") ?? "");
     if (!sameSecret(given, token)) return c.json({ error: "unauthorized" }, 401);
-    return forwardToProvider(
+    const rest = c.req.path.slice(`${ADVISOR_PROXY_PATH}/`.length);
+    const answer = await forwardToProvider(
       {
         method: c.req.method,
-        rest: c.req.path.slice(`${ADVISOR_PROXY_PATH}/`.length),
+        rest,
         search: new URL(c.req.url).search,
         header: (k) => c.req.header(k),
         body:
@@ -65,7 +76,7 @@ export async function serveAdvisorModel(
             ? undefined
             : Buffer.from(await c.req.arrayBuffer()),
         program,
-        webSearch,
+        webSearch: onSearch !== undefined,
       },
       target,
       onError,
@@ -73,6 +84,13 @@ export async function serveAdvisorModel(
       // connection or a 504, as from any gateway, and the supervisor's log says so.
       { ms: modelStallMs(), onStall: (ms) => logStall(ms, { advisor_proxy: true }) },
     );
+    if (onSearch && isSearchCall(c.req.method, rest))
+      onSearch(
+        answer.ok
+          ? { status: answer.status }
+          : { status: answer.status, error: (await answer.clone().text()).slice(0, 300) },
+      );
+    return answer;
   });
   app.all("*", (c) => c.json({ error: "not found" }, 404));
   const server = await new Promise<ReturnType<typeof serve>>((resolve) => {

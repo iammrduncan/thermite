@@ -528,6 +528,54 @@ describe("the advisor's model proxy", () => {
     assert.equal(p.seen.at(-1)?.headers.authorization, "Bearer access");
   });
 
+  test("a teacher's Codex search: only its call reaches the search endpoint, and each answer is heard (goal 232)", async (t) => {
+    let status = 200;
+    const server = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(status, { "content-type": "application/json" });
+        res.end(status === 200 ? '{"output":[]}' : '{"error":"not found here"}');
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    t.after(() => server.close());
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
+    const heard: { status: number; error?: string | undefined }[] = [];
+    const teacher = await serveAdvisorModel(
+      { api: "chatgpt", baseUrl: url, key: "access" },
+      undefined,
+      "codex",
+      (a) => heard.push(a),
+    );
+    const other = await serveAdvisorModel({ api: "chatgpt", baseUrl: url, key: "access" });
+    t.after(() => teacher.close());
+    t.after(() => other.close());
+    const search = (proxy: typeof teacher) =>
+      fetch(`${proxy.root}/alpha/search`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${proxy.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ id: "s", model: "m" }),
+      });
+    assert.equal((await search(other)).status, 403, "no other advisor's call searches");
+    assert.equal((await search(teacher)).status, 200);
+    status = 404;
+    assert.equal((await search(teacher)).status, 404);
+    assert.deepEqual(heard, [
+      { status: 200 },
+      { status: 404, error: '{"error":"not found here"}' },
+    ]);
+    // A model call is no search.
+    status = 200;
+    await (
+      await fetch(`${teacher.root}/responses`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${teacher.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ model: "m", input: "hi" }),
+      })
+    ).text();
+    assert.equal(heard.length, 2);
+  });
+
   test("a full ChatGPT plan reaches an advisor in Codex as Codex's own usage limit, and the supervisor hears OpenAI's answer", async (t) => {
     const server = createServer((req, res) => {
       req.resume();

@@ -75,6 +75,10 @@ export const FORWARDED_HEADERS = [
   "x-codex-turn-state",
 ] as const;
 
+/** Whether a call is the Codex CLI's own web search, which a teacher's call may make (goal 232). */
+export const isSearchCall = (method: string, rest: string): boolean =>
+  method === "POST" && chatgptPath(rest) === CHATGPT_SEARCH_PATH;
+
 /** A provider's error answer, as the proxy saw it (goal 079). */
 export interface ProviderErrorAnswer {
   status: number;
