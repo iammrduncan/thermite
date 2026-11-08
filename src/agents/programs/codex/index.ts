@@ -53,10 +53,11 @@ export function codexExe(): string | undefined {
  * The Codex CLI's configuration for a run ($CODEX_HOME/config.toml): one provider, the harness's
  * key-adding proxy (`proxyRoot`) over the Responses API, with the run's credential from
  * THERMITE_PROXY_AUTH; the route's reasoning effort ("off" sends "none"); no web search (a
- * teacher's has Codex's own, `web`: the hosted search, or for a model on Responses Lite the
- * standalone one through the proxy), analytics, feedback, update checks or history file. The MCP servers the run's kit gives this
- * agent (goal 068) are each a streamable HTTP server at the harness's gateway, with the gateway's
- * credential from THERMITE_MCP_AUTH (never in the file), and none is required to start.
+ * teacher's has Codex's own, `web`: the hosted search, and with `standalone` Codex's standalone
+ * one through the proxy), analytics, feedback, update checks or history file. The MCP servers
+ * the run's kit gives this agent (goal 068) are each a streamable HTTP server at the harness's
+ * gateway, with the gateway's credential from THERMITE_MCP_AUTH (never in the file), and none is
+ * required to start.
  *
  * `keptAt` (goal 070): where Thermite keeps the conversation before each compaction. Codex 0.162
  * takes a compaction prompt of its own (`compact_prompt`, which replaces its built-in one): Thermite
@@ -74,6 +75,8 @@ export function codexConfig(
   notify?: readonly string[] | undefined,
   /** Codex's own web search, live: the teachers' (goal 232); none for anyone else. */
   web?: boolean | undefined,
+  /** Codex's standalone search too, through the proxy, for a model with no hosted search. */
+  standalone: boolean | undefined = web,
 ): string {
   const effort = m.reasoning === "off" ? "none" : m.reasoning;
   const servers = servedNames(mcp).flatMap((s) => [
@@ -109,7 +112,7 @@ export function codexConfig(
     // A model Codex drives over Responses Lite (its gpt-6 models) takes no hosted tools: its web
     // search is Codex's own (`web.run`), which calls the provider's search endpoint, and only
     // for a provider that says it has one.
-    ...(web ? ["supports_standalone_web_search = true"] : []),
+    ...(standalone ? ["supports_standalone_web_search = true"] : []),
     "",
     "[history]",
     'persistence = "none"',

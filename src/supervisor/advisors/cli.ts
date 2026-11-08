@@ -162,21 +162,30 @@ export function codexAdvisorConfig(
   terminal?: { notify: readonly string[] } | undefined,
   /** Codex's own web search, live, and its standalone search: the teachers' (goal 232). */
   web?: boolean | undefined,
+  /**
+   * A teacher's model catalog, by its absolute path (codex-catalog.ts): its model over the full
+   * Responses API, so Codex sends the provider's hosted web search and not its standalone one.
+   */
+  catalog?: string | undefined,
 ): string {
+  // Codex's standalone search only for a model with no hosted one: on Responses Lite with no
+  // catalog of its own. A ChatGPT sign-in's route answers it 401 Unauthorized.
+  const standalone = web === true && catalog === undefined;
   const off = CODEX_ADVISOR_OFF.filter(
-    (f) => !(terminal && f === "hooks") && !(web && f === "standalone_web_search"),
+    (f) => !(terminal && f === "hooks") && !(standalone && f === "standalone_web_search"),
   );
   return [
     // Top-level keys come before the tables the workers' configuration ends with.
     'sandbox_mode = "read-only"',
     'approval_policy = "never"',
-    codexConfig(m, proxyRoot, undefined, keptAt, terminal?.notify, web),
+    ...(catalog ? [`model_catalog_json = ${tomlString(catalog)}`] : []),
+    codexConfig(m, proxyRoot, undefined, keptAt, terminal?.notify, web, standalone),
     "[features]",
     ...off.map((f) => `${f} = false`),
     "",
     // A teacher's web search on the model's own list (goal 232): a model Codex drives in Code
     // Mode Only would otherwise reach it only from Code Mode's `exec`, whose host is off.
-    ...(web ? ["[features.code_mode]", 'direct_only_tool_namespaces = ["web"]', ""] : []),
+    ...(standalone ? ["[features.code_mode]", 'direct_only_tool_namespaces = ["web"]', ""] : []),
     "[tools.experimental_request_user_input]",
     "enabled = false",
     "",

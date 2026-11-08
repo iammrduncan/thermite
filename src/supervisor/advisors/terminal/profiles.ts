@@ -20,6 +20,7 @@ import {
   runEnv,
 } from "../../../agents/programs/index.ts";
 import { codexAdvisorConfig, codexAdvisorTerminalArgs, opencodeAdvisorConfig } from "../cli.ts";
+import { codexTeacherCatalog } from "../codex-catalog.ts";
 import type { AdvisorModelProxy } from "../proxy.ts";
 import type { PastSearchServer } from "../tools/index.ts";
 
@@ -48,6 +49,9 @@ export interface AdvisorServed {
 const CLAUDE_MCP = ["claude-home", "mcp.json"];
 /** Where Codex's home is in the call's folder, as the trial's entry has it: CODEX_HOME. */
 const CODEX_HOME = ["codex-home", ".codex"];
+
+/** A teacher's model catalog in its Codex home (goal 232). */
+const catalogPath = (area: string) => join(area, ...CODEX_HOME, "models.json");
 
 /**
  * Claude Code for an advisor: the trial's terminal with no tools of its own (`--tools ""`, the
@@ -105,30 +109,36 @@ function codexAdvisor(served: AdvisorServed) {
       }),
     terminal: {
       ...p.terminal,
-      start: (run, at) => ({
-        args: codexAdvisorTerminalArgs(run.model, {
-          cwd: at.cwd,
-          resume: at.resume ? at.session : undefined,
-        }),
-        seeds: [
-          {
-            path: join(run.area, ...CODEX_HOME, "config.toml"),
-            content: codexTerminalConfig(
-              codexAdvisorConfig(
-                run.model,
-                served.proxy?.root ?? "",
-                servers,
-                run.keptAt,
-                { notify: codexNotify() },
-                served.web,
+      start: (run, at) => {
+        const catalog = served.web ? codexTeacherCatalog(run.model.model) : undefined;
+        return {
+          args: codexAdvisorTerminalArgs(run.model, {
+            cwd: at.cwd,
+            resume: at.resume ? at.session : undefined,
+          }),
+          seeds: [
+            {
+              path: join(run.area, ...CODEX_HOME, "config.toml"),
+              content: codexTerminalConfig(
+                codexAdvisorConfig(
+                  run.model,
+                  served.proxy?.root ?? "",
+                  servers,
+                  run.keptAt,
+                  { notify: codexNotify() },
+                  served.web,
+                  catalog ? catalogPath(run.area) : undefined,
+                ),
+                at.cwd,
               ),
-              at.cwd,
-            ),
-            mode: 0o600,
-          },
-        ],
-        log: codexTerminalLog(join(run.area, ...CODEX_HOME)),
-      }),
+              mode: 0o600,
+            },
+            // A teacher's model over the full Responses API, for the hosted web search (goal 232).
+            ...(catalog ? [{ path: catalogPath(run.area), content: catalog, mode: 0o600 }] : []),
+          ],
+          log: codexTerminalLog(join(run.area, ...CODEX_HOME)),
+        };
+      },
     },
   } satisfies typeof p;
 }

@@ -35,6 +35,7 @@ import {
   readCodexAnswer,
   readOpencodeAnswer,
 } from "../cli.ts";
+import { codexTeacherCatalog } from "../codex-catalog.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
 import { limitInAnswer } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
@@ -169,9 +170,20 @@ export async function runCliHarness<S extends z.ZodType>(
           }
           const dir = join(home, ".codex");
           mkdirSync(dir, { recursive: true, mode: 0o700 });
+          // A teacher's model over the full Responses API, for the hosted web search (goal 232).
+          const catalog = t?.web ? codexTeacherCatalog(model.model) : undefined;
+          if (catalog) writeFileSync(join(dir, "models.json"), catalog, { mode: 0o600 });
           writeFileSync(
             join(dir, "config.toml"),
-            codexAdvisorConfig(model, root, servers, at, undefined, t?.web),
+            codexAdvisorConfig(
+              model,
+              root,
+              servers,
+              at,
+              undefined,
+              t?.web,
+              catalog ? join(dir, "models.json") : undefined,
+            ),
             { mode: 0o600 },
           );
           return { CODEX_HOME: dir };
