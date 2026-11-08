@@ -80,7 +80,7 @@ describe("a running run's acceptance", () => {
     );
     await assert.rejects(
       () => s.command("acceptance", { run: RUN, acceptance: { futility: 0.3 }, reason: "x" }),
-      /greater than or equal|too_small/i,
+      /acceptance\.futility: Too small: expected number to be >=0\.5/,
     );
     const agent = await s.command(
       "acceptance",
