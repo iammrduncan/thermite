@@ -7,9 +7,11 @@ import { recordGoals, verifyGoals } from "../goals.ts";
 import { olderChampion, parentScreened } from "../ports.ts";
 
 /**
- * The evaluate job. A hill climb's attempt is gated and screened against the champion in blocks,
- * decided at the contract's looks; a parent screen measures it against the older champion it was
- * written on (goal 135). A goal campaign's attempt is checked on every goal (evaluateGoal).
+ * The evaluate job. A hill climb's attempt is screened against the champion in blocks, decided at
+ * the contract's looks; each run's check is judged as it ends, so a candidate that fails stops the
+ * screen at its first run, with no gating runs before the blocks (goal 233). A parent screen
+ * measures it against the older champion it was written on (goal 135). A goal campaign's attempt
+ * is checked on every goal (evaluateGoal).
  */
 
 export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish> {
@@ -34,12 +36,6 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
     const champ = await judge.armFor("champion", run, onParent ? parent : champion.commit_sha, k);
     const cand = await judge.armFor("candidate", run, String(attempt.commit_sha), k);
     const ctx = judge.context(k, job);
-
-    step("gating");
-    for (const cell of contract.cells) {
-      judge.judgeRun(cand, await judge.measure(ctx, cand, cell));
-      judge.judgeRun(champ, await judge.measure(ctx, champ, cell));
-    }
 
     step("screening");
     let decision: Decision<string> | undefined;
@@ -79,7 +75,7 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
               attempt: attemptId,
               kind: "confirm",
               priority: 50,
-              spec: { baseline_seq: champion.seq, screen_job: job.id, ...judge.avoidMe() },
+              spec: { baseline_seq: champion.seq, screen_job: job.id },
               actor: judge.o.owner,
             },
           }
@@ -155,7 +151,7 @@ async function evaluateGoal(judge: JudgeContext, job: JobRow): Promise<Finish> {
               attempt: attemptId,
               kind: "confirm",
               priority: 50,
-              spec: { baseline_seq: champion.seq, screen_job: job.id, gained, ...judge.avoidMe() },
+              spec: { baseline_seq: champion.seq, screen_job: job.id, gained },
               actor: judge.o.owner,
             },
           }

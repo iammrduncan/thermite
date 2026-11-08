@@ -470,7 +470,7 @@ describe("ledger", () => {
     assert.equal(ledger.jobs.lease("exec", 60_000)?.id, old);
   });
 
-  test("with several judge cards, a pinned job waits for its card and a confirmation avoids its screen's", () => {
+  test("with several judge cards, a pinned job waits for its card; a confirmation goes to the first card free, its screen's own included (goal 233)", () => {
     const { ledger } = setup();
     const calA = ledger.jobs.enqueue({
       kind: "calibrate",
@@ -478,6 +478,7 @@ describe("ledger", () => {
       spec: { run: "race-1", card: "GPU-a" },
       actor: "t",
     });
+    // A confirmation queued before this change still names the card to avoid: no card avoids it.
     const confirm = ledger.jobs.enqueue({
       kind: "confirm",
       priority: 20,
@@ -490,19 +491,22 @@ describe("ledger", () => {
       spec: { run: "race-1" },
       actor: "t",
     });
-    // Card B: not A's calibration, but the confirmation (it must not run on A).
+    // Card B: never A's calibration; the confirmation is first of the rest.
     assert.equal(ledger.jobs.lease("executor-1", 60_000, undefined, "GPU-b")?.id, confirm);
-    // Card A: its own calibration, then the unpinned job; never the confirmation.
+    // Card A: its own calibration, then the unpinned job.
     assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a")?.id, calA);
     assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a")?.id, plain);
     assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a"), undefined);
-    // A rig with one judge card passes no card and takes everything.
-    const again = ledger.jobs.enqueue({
+    // The card that screened takes its confirmation next, ahead of the screens queued before it.
+    const screen = ledger.jobs.enqueue({ kind: "evaluate", spec: { run: "race-1" }, actor: "t" });
+    const next = ledger.jobs.enqueue({
       kind: "confirm",
-      spec: { run: "race-1", avoid_card: "GPU-a" },
+      priority: 50,
+      spec: { run: "race-1" },
       actor: "t",
     });
-    assert.equal(ledger.jobs.lease("executor-0", 60_000)?.id, again);
+    assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a")?.id, next);
+    assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a")?.id, screen);
   });
 
   test("leases are fenced: an expired holder cannot write, and repeated expiry blocks the job", () => {

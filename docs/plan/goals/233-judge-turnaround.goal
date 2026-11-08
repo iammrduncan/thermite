@@ -1,0 +1,45 @@
+---
+id: "233"
+title: "The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: ["206", "228"]
+created: 2026-11-08
+updated: 2026-11-08
+---
+
+# 233 · The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+The owner, 2026-11-08: "each judge to champion takes almost 2 hours of judge time and 4-6 hours total waiting on submission to judge and requeue from screen to confirmation... Look to see if we can get screen down to 20 minutes, then no wait for confirmation and confirmation in 10-20 minutes. Judge queue is whats holding up the ability to do more experiments and test more changes."
+
+On a lab run that times a large model's server (goal 228's **How long it took**), one champion took: its lane's work 50 min, waiting for the judge 42 min, its screen 46 min, waiting for its confirmation 21 min, its confirmation 56 min and its audit 1 min, so 3 h 56 min from its submission to the champion and 1 h 42 min of the judge's time. Thirteen of the run's changes waited for the judge, and its lanes were held at the run's limit of open changes.
+
+1. **No wait for a confirmation.** A confirmation goes to the first judge card free, its screen's own included. Confirmations come before screens in the judge's queue, so the card that screened a win takes its confirmation next, with both builds already made. Before, a confirmation had to run on another card than its screen's: an agent's choice of 2026-10-18, not the owner's. It waited for the other card to finish a screen, and on the lab a card that had just screened a win took an older screen instead. Each comparison times both arms on one card in one job, so cards are never compared with each other.
+2. **No gating runs.** A screen ran each cell once for both arms before its blocks, to see the change pass the kit's check. Each block's runs are judged as they end, so a change that fails its check stops the screen at its first run all the same. On the lab that was 2 of a screen's 8 runs.
+3. **What one run costs** (to be measured on the lab, then decided): the load, the timed requests, the checks that give the same answer in every block, and what the judge does between runs.
+
+## Why
+
+The judge is the run's bottleneck: every lane's change waits for it, and a change the judge confirms an hour later than it could have holds every change built on it.
+
+## Done when
+
+- [ ] Items 1 to 3.
+- [ ] Pages: Verdicts (the attempt's states), Sharing a device (the judge's pool), the changelog.
+- [ ] On the lab, a day's screens take 20 minutes or less, and a screened win's confirmation starts at once and takes 10 to 20 minutes.
+
+## Decisions
+
+- 2026-11-08, the owner: "Look to see if we can get screen down to 20 minutes, then no wait for confirmation and confirmation in 10-20 minutes."
+
+## Progress
+
+- 2026-11-08 09:02 UTC: why a confirmation waited: the lab's events at 08:52:05 UTC show a card end a screen as `win_screened` and queue its confirmation (job 159), then lease an older screen (job 138), since the confirmation might not run on its screen's card; it waited for the other card's screen, up to its 46 minutes. Built items 1 and 2: the lease rule `avoid_card` is gone (a confirmation queued before still names its card to avoid, and no card avoids it now), and a screen starts with its blocks. Tests: `tests/harness/ledger.test.ts`, `tests/harness/judge/judge.test.ts`; they run on the lab's VM. Item 3 waits for the lab's timings of a screen and a confirmation, run by run.
+
+---
+
+Run with `/goal Complete docs/plan/goals/233-judge-turnaround.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

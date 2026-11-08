@@ -433,9 +433,4 @@ export class JudgeContext {
   get cards(): number {
     return this.o.card?.count ?? 1;
   }
-
-  /** A confirmation's spec: on a rig with several judge cards, not on this (the screen's) card. */
-  avoidMe(): { avoid_card?: string } {
-    return this.cards > 1 && this.o.card ? { avoid_card: this.o.card.uuid } : {};
-  }
 }

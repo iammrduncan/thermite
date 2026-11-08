@@ -213,6 +213,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [230](goals/_completed/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `VERIFIED`
 - [231](goals/_completed/231-runner-utilization.goal) How busy each runner is: its share of time with the judge, each lane, idle and away · `VERIFIED`
 - [232](goals/232-teachers-research-the-web.goal) Teachers research the web with their program's own search and fetch · `IN_PROGRESS`
+- [233](goals/233-judge-turnaround.goal) The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20 · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-03.**
 

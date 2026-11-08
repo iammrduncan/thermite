@@ -16,7 +16,7 @@ flowchart LR
   S --> R[rejected_v0]
   S --> D[duplicate]
   Q --> B[building]
-  B --> M[gating and screening,<br/>or verifying]
+  B --> M[screening,<br/>or verifying]
   M --> J[judged]
   M --> C[confirming]
   C --> J
@@ -195,10 +195,9 @@ On the **Knowledge** page, the attempt's item has a warning mark in the table an
 | `rejected_v0` | Refused by the static checks before any build: a file outside the editable paths, a forbidden pattern in an added line, a binary file, a link or a submodule, or no change at all. Kept, never built, no verdict. Its violations, such as `binary change: assets/table.bin`, are in its record: see [Why a change was refused](#why-a-change-was-refused) | "rejected v0" |
 | `duplicate` | The same change as an earlier attempt of the run. Not judged again | "the same change as an earlier attempt" |
 | `building` | The judge is building the change and the champion | "being built" |
-| `gating` | Hill climb: each case runs once for both; the change must pass the kit's check | "gating" |
-| `screening` | Hill climb: timed against the champion in blocks; in setup, timed alone by the baseline job | "being measured" |
+| `screening` | Hill climb: timed against the champion in blocks; in setup, timed alone by the baseline job. Each run's check is judged as it ends, so a change that fails it stops the screen at its first run | "being measured" |
 | `verifying` | Goal campaign: the goals are being checked | "being checked" |
-| `confirming` | A screened win, waiting for its confirmation or, in a hill climb, in it. A goal campaign's confirmation shows `verifying` | "being confirmed on fresh runs" |
+| `confirming` | A screened win, waiting for its confirmation or, in a hill climb, in it. A confirmation comes before every screen in the judge's queue, and the first judge card free takes it, the card that screened it included, so the card that screened it usually confirms it next, with both builds already made. A goal campaign's confirmation shows `verifying` | "being confirmed on fresh runs" |
 | `judged` | The judge is done, and the verdict does not make it the champion | "judged" |
 | `awaiting_audit` | A promotable result held for the auditor | "held for an audit" |
 | `awaiting_approval` | A promotable result waiting for the owner | "waiting for your approval" |

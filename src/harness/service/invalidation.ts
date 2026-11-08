@@ -26,6 +26,7 @@ import { requireRun } from "./runs.ts";
 const WAITING = new Set([
   "queued",
   "building",
+  // Before goal 233, a screen ran its gating runs first: a ledger from then may hold one.
   "gating",
   "screening",
   "verifying",

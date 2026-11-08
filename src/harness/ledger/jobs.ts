@@ -53,8 +53,8 @@ export class LedgerJobs extends LedgerPart {
    * Leases the next queued job (lowest priority number first). The fence increments on every
    * lease, so a holder whose lease expired can no longer write results. On a rig with several
    * judge cards each executor passes its card: it then skips a job pinned to another card (a
-   * calibration) and a job that must avoid its card (a confirmation, which belongs on another
-   * card than its screen's). The runs in `baseline` wait for the baseline of their starting
+   * calibration). A confirmation goes to the first card free, its screen's own included, which
+   * takes it at once (goal 233). The runs in `baseline` wait for the baseline of their starting
    * point (goal 115): of their jobs, only a `baseline` job is leased.
    */
   lease(
@@ -66,11 +66,7 @@ export class LedgerJobs extends LedgerPart {
   ): JobRow | undefined {
     return this.tx(() => {
       const filter = kinds?.length ? `and j.kind in (${kinds.map(() => "?").join(",")})` : "";
-      const cards =
-        card === undefined
-          ? ""
-          : `and coalesce(json_extract(j.spec, '$.card'), ?) = ?
-             and coalesce(json_extract(j.spec, '$.avoid_card'), '') <> ?`;
+      const cards = card === undefined ? "" : `and coalesce(json_extract(j.spec, '$.card'), ?) = ?`;
       const waits = baseline.length
         ? `and (i.id is null or j.kind = 'baseline' or i.id not in (${baseline.map(() => "?").join(",")}))`
         : "";
@@ -83,7 +79,7 @@ export class LedgerJobs extends LedgerPart {
            and (i.status is null or i.status = 'running')
          order by j.priority, j.id limit 1`,
         ...(kinds ?? []),
-        ...(card === undefined ? [] : [card, card, card]),
+        ...(card === undefined ? [] : [card, card]),
         ...baseline,
       );
       if (!r) return undefined;

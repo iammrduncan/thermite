@@ -60,7 +60,7 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     assert.ok(Number(receipts?.n) >= 10, `receipts ${receipts?.n}`);
   });
 
-  test("two judge cards: each calibrates itself, and a win screened on one is confirmed on the other", async () => {
+  test("two judge cards: each calibrates itself, and a win screened on one is confirmed next on the first card free, its own (goal 233)", async () => {
     const env = await setup();
     const card = (index: number) =>
       new Judge({
@@ -87,19 +87,18 @@ describe("judge pipeline (local runner, Node test kit)", () => {
       .map((r) => r.card);
     assert.deepEqual([...cals].sort(), ["GPU-a", "GPU-b"]);
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
-    // Card A screens it; the confirmation is then not A's to take.
+    // Card A screens it, and takes its confirmation at once: no wait for another card.
     assert.equal(await a.tick(), true);
     const confirm = env.ledger.db
       .prepare("select id, spec from job where kind = 'confirm' and attempt = ?")
       .get(id) as { id: number; spec: string };
-    assert.equal(JSON.parse(confirm.spec).avoid_card, "GPU-a");
-    assert.equal(await a.tick(), false);
-    assert.equal(await b.tick(), true);
+    assert.equal(JSON.parse(confirm.spec).avoid_card, undefined);
+    assert.equal(await a.tick(), true);
     const leased = env.ledger.db
       .prepare("select actor from event where kind = 'job_leased' and subject = ?")
       .all(String(confirm.id))
       .map((r) => r.actor);
-    assert.deepEqual(leased, ["executor-1"]);
+    assert.deepEqual(leased, ["executor-0"]);
     assert.equal(
       (
         env.ledger.db.prepare("select state from job where id = ?").get(confirm.id) as {
