@@ -1,7 +1,7 @@
 ---
 id: "235"
 title: "The supervisor has the CPUs to start its advisors in their own terminals"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: ["169"]
 created: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 235 · The supervisor has the CPUs to start its advisors in their own terminals
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
 
 ## What
 
@@ -25,9 +25,9 @@ The owner wants the teachers to research every round. A round in which no teache
 
 ## Done when
 
-- [ ] Items 1 and 2.
-- [ ] Pages: Add a rig on a cluster (the supervisor's share), Limits and pacing, the REST API, MCP tools, the screens' help for CPUs, the changelog.
-- [ ] On the lab, after the rigs' next update, the teachers' rounds start in their own terminals and answer, and the supervisor's container is throttled for less than half of its periods as they start.
+- [x] Items 1 and 2.
+- [x] Pages: Add a rig on a cluster (the supervisor's share), Limits and pacing, the REST API, MCP tools, the screens' help for CPUs, the changelog.
+- [x] On the lab, after the rigs' next update, the teachers' rounds start in their own terminals and answer, and the supervisor's container is throttled for less than half of its periods as they start.
 
 ## Decisions
 
@@ -37,7 +37,8 @@ The owner wants the teachers to research every round. A round in which no teache
 - 2026-11-08 16:36 UTC: on the lab, with 2acab9a3. The P100 run's rig (16 CPUs) moved at 15:57 UTC, its supervisor on 2 CPUs: throttled in 15 of its first 2,150 periods (0.7%) through its first round's start, and for at most 7% of a minute (16:08 UTC) as both teachers started together in the next. The rig with runners (6 CPUs) moved at 16:07 UTC, its supervisor on 1.5 CPUs: throttled for at most 44% of a minute (16:08 UTC), a minute that also held the supervisor's own start and both teachers', and in 20% of its periods since its start. On half a CPU at 14:07 UTC it was 65%, then 98%. The tests of 2acab9a3 passed on the lab's VM, 23 of 23. In each of these rounds the Codex teacher ran for 10 s only (refused: goal 232), so the check with both teachers running past their start waits for the rigs' move onto 493c5435.
 - 2026-11-08 17:18 UTC: with both teachers running past their start (the P100 run's rig on 493c5435, round of 16:58 UTC, the Codex teacher for 4 min): the supervisor on 2 CPUs was throttled for at most 4% of a minute, and in 16 of its first 5,462 periods (0.3%). The rig with runners' check with both teachers running waits for its move onto 493c5435.
 - 2026-11-08 18:38 UTC: the rig with runners on 493c5435, its supervisor on 1.5 CPUs. Its round started on its own 22 s after the supervisor did (18:27:38 UTC), and both teachers ran, the Codex one for 9 min 49 s. Throttled: 51% and 52% of the first minute, which also held the supervisor's own start (49% of its first 178 periods, before the round had run 10 s); then at most 26% (18:29:30 UTC), and 1% to 6% from 18:30 UTC to the round's end; 8.3% of its periods since its start. So a round alone stays well under half on 1.5 CPUs, and only the minute after a restart, which holds the supervisor's own start as well, comes to just over half. Two CPUs for that rig, a third of its six, would clear that minute too: the owner's choice.
+- 2026-11-08 20:36 UTC: **verified.** On 6d1f42ea, with the round started two minutes after the supervisor (20:26:35 UTC) on the rig with runners and its supervisor on 1.5 CPUs: throttled for at most 24% of a minute as both teachers started (20:27 UTC), 16% the next minute, then 9% or less; the supervisor's own start, apart, 4%. On the P100 run's rig, on 2 CPUs, at most 5% (20:17 UTC). Both teachers started and answered on each rig. The tests ran on the lab's VM, 23 of 23. Pages: Add a rig on a cluster (the supervisor's share), Limits and pacing, the REST API, MCP tools, the screens' help for CPUs on Add a rig and Edit rig, and the changelog's v0.1.4 section.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/235-supervisor-cpus-for-terminals.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/_completed/235-supervisor-cpus-for-terminals.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).
