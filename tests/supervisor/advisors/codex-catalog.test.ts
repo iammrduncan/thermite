@@ -12,7 +12,7 @@ import { advisorProgram } from "../../../src/supervisor/advisors/terminal/index.
 /**
  * A Codex teacher's model catalog (goal 232): its model's own entry from Codex's bundled catalog,
  * over the full Responses API with no tools of Codex's own, so Codex sends the provider's hosted
- * web search and not its standalone one; never on a ChatGPT sign-in's route, which refuses both.
+ * web search and not its standalone one, which a ChatGPT sign-in's route refuses, nor tool_search.
  */
 
 const dir = mkdtempSync(join(tmpdir(), "thermite-codex-catalog-test-"));
@@ -26,6 +26,7 @@ const LITE = {
   multi_agent_version: "v2",
   multi_agent_reasoning_effort: "xhigh",
   experimental_supported_tools: ["send_user_message_async", "clock"],
+  supports_search_tool: true,
   web_search_tool_type: "text_and_image",
   context_window: 272000,
 };
@@ -77,6 +78,7 @@ test("a model on Responses Lite gets its own entry over the full Responses API, 
           slug: "gpt-6.1-sol",
           use_responses_lite: false,
           experimental_supported_tools: [],
+          supports_search_tool: false,
           web_search_tool_type: "text_and_image",
           context_window: 272000,
         },
@@ -88,8 +90,11 @@ test("a model on Responses Lite gets its own entry over the full Responses API, 
       "its hosted search needs no change",
     );
     assert.equal(codexTeacherCatalog(model("a-model-codex-does-not-know")), undefined);
-    // A ChatGPT sign-in's route refuses every hosted tool: the model stays on Responses Lite.
-    assert.equal(codexTeacherCatalog(model("gpt-6.1-sol", "chatgpt")), undefined);
+    // A ChatGPT sign-in's route takes the hosted search, not Codex's tool_search.
+    assert.equal(
+      codexTeacherCatalog(model("gpt-6.1-sol", "chatgpt")),
+      codexTeacherCatalog(model("gpt-6.1-sol")),
+    );
   });
 });
 
@@ -108,6 +113,8 @@ test("the teacher's configuration names the catalog among its top-level keys, wi
   assert.ok(at >= 0 && at < first, config.slice(0, 300));
   assert.match(config, /^web_search = "live"$/m);
   assert.match(config, /^standalone_web_search = false$/m);
+  // Nor Codex's worktree tools, for which its terminal adds a tool_search the route refuses.
+  assert.match(config, /^worktrees = false$/m);
   assert.doesNotMatch(config, /supports_standalone_web_search|direct_only_tool_namespaces/);
   // With no catalog, a teacher keeps Codex's standalone search, as Codex has no other for it.
   const without = codexAdvisorConfig(m, root, [], undefined, undefined, true);
@@ -150,11 +157,11 @@ test("a teacher in its own terminal has the catalog in its Codex home, and its c
     const auditor = advisorProgram("codex", { proxy }).terminal.start(run, at).seeds;
     assert.equal(auditor.length, 1);
     assert.doesNotMatch(auditor[0]?.content ?? "", /model_catalog_json/);
-    // A teacher on a ChatGPT sign-in: no catalog, and Codex's standalone search as before.
+    // A teacher on a ChatGPT sign-in: the same catalog, and no standalone search.
     const plan = { ...run, model: model("gpt-6.1-sol", "chatgpt") };
     const signedIn = advisorProgram("codex", { proxy, web: true }).terminal.start(plan, at).seeds;
-    assert.equal(signedIn.length, 1);
-    assert.doesNotMatch(signedIn[0]?.content ?? "", /model_catalog_json/);
-    assert.match(signedIn[0]?.content ?? "", /^supports_standalone_web_search = true$/m);
+    assert.equal(signedIn.length, 2);
+    assert.match(signedIn[0]?.content ?? "", /^model_catalog_json = /m);
+    assert.doesNotMatch(signedIn[0]?.content ?? "", /supports_standalone_web_search/);
   });
 });

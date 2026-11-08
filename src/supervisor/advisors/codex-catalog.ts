@@ -14,10 +14,9 @@ import { codexBin, codexExe } from "../../agents/programs/index.ts";
  * catalog (`codex debug models --bundled`, read once, with no network), so every other field is as
  * Codex would use it.
  *
- * Never on a ChatGPT sign-in's route: it takes only function and custom tools, and refuses a request
- * with a hosted tool (`subscription_sharing_unsupported_capability`), so the teacher would give no
- * answer at all. It answers the standalone search 401 Unauthorized, which leaves the teacher's
- * call as it was.
+ * A ChatGPT sign-in's route takes the hosted search and function and custom tools alone: it refuses
+ * a request that also has Codex's `tool_search` (`subscription_sharing_unsupported_capability`),
+ * and answers the standalone search 401 Unauthorized.
  */
 
 type CatalogEntry = { slug?: unknown; use_responses_lite?: unknown; [k: string]: unknown };
@@ -25,8 +24,8 @@ type CatalogEntry = { slug?: unknown; use_responses_lite?: unknown; [k: string]:
 /**
  * The entry's fields that put Codex's own tools on the model's list once Code Mode Only no longer
  * hides them inside `exec`: `apply_patch` and the sub-agents' `collaboration` tools. With them
- * gone and `experimental_supported_tools` empty, the provider's web search is the teacher's only
- * tool of Codex's own.
+ * gone, `experimental_supported_tools` empty and `supports_search_tool` false (no `tool_search`),
+ * the provider's web search is the teacher's only tool of Codex's own.
  */
 const TOOL_FIELDS = new Set([
   "tool_mode",
@@ -65,15 +64,19 @@ function bundledModels(): CatalogEntry[] {
 
 /**
  * The catalog a Codex teacher's configuration names (`model_catalog_json`), as JSON: its model's
- * own entry with `use_responses_lite` false, no experimental tools and none of TOOL_FIELDS.
- * Undefined on a ChatGPT sign-in's route, and for a model Codex does not drive over Responses Lite
- * or one its bundled catalog does not hold: its hosted search needs no change.
+ * own entry with `use_responses_lite` false, no experimental tools, no search tool and none of
+ * TOOL_FIELDS. Undefined for a model Codex does not drive over Responses Lite, or one its bundled
+ * catalog does not hold: its hosted search needs no change.
  */
-export function codexTeacherCatalog(m: Pick<ModelConfig, "api" | "model">): string | undefined {
-  if (m.api === "chatgpt") return undefined;
+export function codexTeacherCatalog(m: Pick<ModelConfig, "model">): string | undefined {
   const entry = bundledModels().find((e) => e.slug === m.model);
   if (entry?.use_responses_lite !== true) return undefined;
   const own = Object.fromEntries(Object.entries(entry).filter(([k]) => !TOOL_FIELDS.has(k)));
-  const teacher = { ...own, use_responses_lite: false, experimental_supported_tools: [] };
+  const teacher = {
+    ...own,
+    use_responses_lite: false,
+    experimental_supported_tools: [],
+    supports_search_tool: false,
+  };
   return `${JSON.stringify({ models: [teacher] })}\n`;
 }

@@ -138,6 +138,8 @@ export const CODEX_ADVISOR_OFF = [
   "workspace_dependencies",
   "code_mode_host",
   "sleep_tool",
+  // Its worktree tools, which in its own terminal reach the model's list (or `tool_search`).
+  "worktrees",
   "standalone_web_search",
 ] as const;
 
