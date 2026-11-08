@@ -1,0 +1,46 @@
+---
+id: "238"
+title: "Every judge card keeps a noise floor, and no judge job starves behind a full queue"
+status: PROPOSED
+version: "0.1.4"
+depends_on: ["018", "206"]
+created: 2026-11-08
+updated: 2026-11-08
+---
+
+# 238 · Every judge card keeps a noise floor, and no judge job starves behind a full queue
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+A verdict's interval takes the larger of the blocks' own spread and the rig's calibrated A/A spread, its **noise floor**, so that a few blocks that agree by chance do not decide on a rig whose calibration showed more noise ([Verdicts](../../_site/src/content/docs/reference/verdicts.md)). With several judge cards, each card's verdicts take the floor of a calibration made on that card alone. A card calibrates in a `calibrate` job pinned to it, at priority 200, and the judge leases the job with the lowest number first: a baseline 10, a confirmation 50, a screen 100, a parent screen 150.
+
+On a lab rig that judges on two runners, 2026-11-08: since 2026-11-07 06:21 UTC, each card's `calibrate` jobs stayed queued and were never leased, because its queue of screens was never empty. The run's only calibration (block sigma 0.274%, 2026-11-06 22:29 UTC) was made before the rig judged on runners and names no card. So every verdict on that rig since then was decided with no noise floor: a screen at 3 blocks reported ±0.30% where its floor would give ±0.85%. A card that had not calibrated scheduled another `calibrate` job a day after the last one was queued, whether or not it ran, so each card had two waiting. The run's 21 parent screens (priority 150, goal 135) waited the same way, the oldest since 2026-11-07 08:11 UTC, and none of them ran. Every win the run confirmed in that time gained 2.97% or more, beyond its interval with the floor too, so none of its champions rested on the missing floor.
+
+1. **A card with no calibration of its own takes the run's newest calibration as its floor,** from any card, until it has its own, instead of none. The verdict's reasons say whose floor it took.
+2. **A card's first calibration of a run runs before its screens;** later ones keep their place behind them. A card schedules no new `calibrate` job while one waits.
+3. **Work the judge never reaches shows:** the run's page and `get_run` say which jobs have waited longest behind the others, with their kind and since when, such as `21 parent screens have waited since 2026-11-07 08:11 UTC: the judge's queue of screens was never empty`.
+4. **Tests:** a card with no calibration takes the run's; a card's first calibration is leased before a waiting screen; no second `calibrate` job while one waits.
+
+## Why
+
+The noise floor is what keeps a rig whose blocks agree by chance from screening a false win. A rig with runners lost it without a word, and the judge's queue hid every job behind the screens.
+
+## Done when
+
+- [ ] Items 1 to 4.
+- [ ] Pages: Verdicts (the noise floor with several cards), A rig over several machines, the changelog.
+- [ ] On the lab, each judge card's verdicts state their floor, and each card has calibrated.
+
+## Decisions
+
+- Open, for the owner: whether each card's first calibration may take its judge's time before the queue's screens (item 2), about an hour of each card at a run's start; and whether the parent screens that wait (goal 135) should run at all while screens wait.
+
+## Progress
+
+- 2026-11-08 23:58 UTC: goal written from the lab. A screen's interval on the rig with runners (job 160, ±0.30% at 3 blocks) was narrower than its floor would allow. Its ledger, read on a copy: 14 `calibrate` jobs, the 10 done all before the runners and with no card; 4 queued with a card, never leased (two for each card, 2026-11-07 06:21 and 07:23 UTC, 2026-11-08 06:22 and 08:04 UTC); 10 `calibration` events, none naming a card. Queued then: 21 parent screens, 14 screens, 4 calibrations.
+
+---
+
+Run with `/goal Complete docs/plan/goals/238-judge-cards-keep-noise-floor.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
