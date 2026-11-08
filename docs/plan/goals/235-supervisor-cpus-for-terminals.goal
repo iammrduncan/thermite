@@ -34,6 +34,8 @@ The owner wants the teachers to research every round. A round in which no teache
 ## Progress
 
 - 2026-11-08 14:45 UTC: built (`src/control/clusters/manifests.ts`), with the screens' and tools' words (`src/control/dashboard/rigs/`, `src/control/mcp/clusters.ts`, `src/control/clusters/resources.ts`). Tests: `tests/control/clusters/clusters.test.ts`, `tests/control/dashboard/clusters.test.ts`, `tests/control/dashboard/cluster-resources.test.ts`; they run on the lab's VM. A rig takes its new share when control next writes its deployments: an image update, a new size or a new mode.
+- 2026-11-08 16:36 UTC: on the lab, with 2acab9a3. The P100 run's rig (16 CPUs) moved at 15:57 UTC, its supervisor on 2 CPUs: throttled in 15 of its first 2,150 periods (0.7%) through its first round's start, and for at most 7% of a minute (16:08 UTC) as both teachers started together in the next. The rig with runners (6 CPUs) moved at 16:07 UTC, its supervisor on 1.5 CPUs: throttled for at most 44% of a minute (16:08 UTC), a minute that also held the supervisor's own start and both teachers', and in 20% of its periods since its start. On half a CPU at 14:07 UTC it was 65%, then 98%. The tests of 2acab9a3 passed on the lab's VM, 23 of 23. In each of these rounds the Codex teacher ran for 10 s only (refused: goal 232), so the check with both teachers running past their start waits for the rigs' move onto 493c5435.
+- 2026-11-08 17:18 UTC: with both teachers running past their start (the P100 run's rig on 493c5435, round of 16:58 UTC, the Codex teacher for 4 min): the supervisor on 2 CPUs was throttled for at most 4% of a minute, and in 16 of its first 5,462 periods (0.3%). The rig with runners' check with both teachers running waits for its move onto 493c5435.
 
 ---
 
