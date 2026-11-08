@@ -11,6 +11,7 @@ import { HOURS_SPENT } from "../../core/contract.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
 import { RIG_LOG_LEVEL_LASTS } from "../../core/log-levels.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
+import { acceptancePreview, mergedAcceptance, ownersAcceptance } from "../acceptance.ts";
 import { endWait } from "../agents/index.ts";
 import { Conclusions } from "../conclusions.ts";
 import { limitsPreview, mergedLimits, ownersLimits } from "../lane-limits.ts";
@@ -321,6 +322,24 @@ export class Commands {
           reason: p.reason,
         });
         return { run: p.run, limits };
+      }
+      // A running run's acceptance changed in place (goal 233), from the judge's next job.
+      case "acceptance": {
+        const p = CommandPayloads.acceptance.parse(payload);
+        openRun(svc.ledger, p.run);
+        if (svc.contractFor(p.run).mode !== "hill_climb")
+          throw new LedgerError(
+            "invalid",
+            `${p.run} is not a hill climb: only a hill climb's judge decides by acceptance`,
+          );
+        const acceptance = mergedAcceptance(ownersAcceptance(svc.ledger, p.run), p.acceptance);
+        if (p.preview) return acceptancePreview(svc.ledger, p.run, acceptance);
+        svc.ledger.appendEvent(by, "acceptance_set", p.run, {
+          acceptance,
+          changed: p.acceptance,
+          reason: p.reason,
+        });
+        return { run: p.run, acceptance };
       }
       case "queue_retry": {
         const p = CommandPayloads.queue_retry.parse(payload);

@@ -476,6 +476,7 @@ export const MCP_OPERATOR_KINDS = [
   "queue_accept",
   "queue_retry",
   "lane_limits",
+  "acceptance",
   "drop_directive",
   // A rig part's log level, to look into a fault (the guide's question 16).
   "log_level",
@@ -516,6 +517,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "queue_accept",
   "queue_retry",
   "lane_limits",
+  "acceptance",
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
@@ -550,6 +552,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "queue_accept",
   "queue_retry",
   "lane_limits",
+  "acceptance",
   "drop_directive",
   "hypothesis_status",
   "propagate",

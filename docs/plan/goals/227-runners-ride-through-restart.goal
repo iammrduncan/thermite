@@ -30,6 +30,10 @@ Control's restart is routine, and each one should not cost a job's measurement o
 - [ ] Items 1 to 4, with tests.
 - [ ] Pages: A rig over several machines (how the core and its runners stay in touch, and control's restart), and the changelog.
 
+## Decisions
+
+- 2026-11-08 22:06 UTC, the owner, on building item 4 next: "yes".
+
 ## Progress
 
 - 2026-11-07 05:38 UTC: Goal written from the lab's central log store, which the lab's infrastructure session read: the core's "a runner process stopped answering" lines for the three runners at 18:25:45 UTC on 2026-11-06, during a restart of control, and none at the restarts of 03:05 and 04:05 UTC on 2026-11-07.

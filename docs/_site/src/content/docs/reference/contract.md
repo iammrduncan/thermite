@@ -239,7 +239,7 @@ A hard constraint is one of:
 | `{"kind": "max", "metric": "<m>", "value": <number>}` | The mean must be at most `value`, or the verdict is `infeasible` |
 | `{"kind": "check", "check": "<name>"}` | Refused when the contract is checked, with `hard_constraints.<i>` and the reason: the kit's own checks run on every candidate anyway. Bound a metric with `min` or `max` instead. A contract stored before v0.1.1 that has one keeps it, and nothing checks it |
 
-`acceptance`:
+`acceptance`. On a running run, the owner may change `min_effects`, `confirm_blocks` and `futility` in place with the signed command [`acceptance`](signed-commands.md#acceptance); the contract and its hash stay as they were:
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -248,6 +248,8 @@ A hard constraint is one of:
 | `acceptance.equivalence_band` | number > 0 | 0.005 | A difference whose whole interval is within ± this fraction is `neutral` ("equivalent") |
 | `acceptance.looks` | list of integers ≥ 1, at least one | `[3, 6, 9]` | Block counts at which screening may decide. The largest is the most blocks screening runs |
 | `acceptance.confirm_blocks` | integer ≥ 1 | 5 | Fresh blocks for confirmation |
+| `acceptance.futility` | number, at least 0.5 and below 1 | none | The [early stop](verdicts.md#the-early-stop)'s confidence: at each look, a primary whose one-sided upper bound at this confidence is under its minimum effect stops the screen, and the lower priorities decide. Unset: no early stop |
+| `acceptance.min_effects` | object of metric names, each a fraction above 0 and below 1 | none | A metric's minimum effect over the contract's `objective.primary.min_effect` and its [metric role](kit-manifest.md#what-each-metric-is-for)'s, such as `{"prefill_tps": 0.007}` |
 | `acceptance.runs_per_cell` | integer, 1–9 | 1 | Runs of each arm on each cell in one block. The block uses their median. The [baseline](#the-baseline)'s blocks use it too. For a kit described on the **New campaign** page, its **Runs per case** sets it, 3 unless changed |
 | `acceptance.audit.ratio_to_median` | number > 0 | 3 | A confirmed gain more than this many times the median of the run's earlier confirmed gains waits for an audit. It applies once there are three earlier gains |
 | `acceptance.audit.absolute` | number > 0 | 0.15 | A confirmed gain above this fraction goes to an audit first ([Audits](../how-to/campaigns/decide-what-waits.md#audits)) |

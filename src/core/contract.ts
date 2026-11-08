@@ -120,6 +120,32 @@ export const RunLaneLimits = z
 export type RunLaneLimits = z.infer<typeof RunLaneLimits>;
 
 /**
+ * The acceptance the owner may change on a running run (goal 233), over the contract's: each
+ * metric's minimum effect, a confirmation's blocks and the early stop; null goes back to the
+ * contract's.
+ */
+export const RunAcceptance = z
+  .strictObject({
+    min_effects: z
+      .record(MetricSchema, z.number().positive().lt(1).nullable())
+      .refine((m) => Object.keys(m).length > 0, { message: "name at least one metric" })
+      .optional(),
+    confirm_blocks: z.number().int().min(2).max(20).nullable().optional(),
+    futility: z.number().min(0.5).lt(1).nullable().optional(),
+  })
+  .refine((a) => Object.keys(a).length > 0, {
+    message: "give at least one of min_effects, confirm_blocks and futility",
+  });
+export type RunAcceptance = z.infer<typeof RunAcceptance>;
+
+/** The owner's acceptance in force on a running run (goal 233); empty: the contract's own. */
+export interface OwnersAcceptance {
+  min_effects?: Record<string, number>;
+  confirm_blocks?: number;
+  futility?: number;
+}
+
+/**
  * A folder inside a repository, such as examples/matmul-cpu/project: its path from the top,
  * separated by /. No part is empty or starts with a dot, so ".", "..", ".git" and absolute paths
  * are refused. A project in one folder of its repository uses that folder as its root.
@@ -259,6 +285,18 @@ const Acceptance = z
      * a single disturbed run (a noisy shared host) unable to swing a block.
      */
     runs_per_cell: z.number().int().min(1).max(9).default(1),
+    /**
+     * An early stop for a change that cannot reach its minimum effect (goal 233): at each look, a
+     * primary whose one-sided upper bound at this confidence is under its min_effect stops the
+     * screen, and the lower priorities decide. Unset: no such stop. Optional and without a default,
+     * so contracts written before it keep their hash.
+     */
+    futility: z.number().min(0.5).lt(1).optional(),
+    /**
+     * Each metric's minimum effect over the contract's objective and the kit's roles (goal 233),
+     * as a fraction. Optional and without a default, so contracts written before keep their hash.
+     */
+    min_effects: z.record(MetricSchema, z.number().positive().lt(1)).optional(),
     audit: z
       .strictObject({
         ratio_to_median: z.number().positive().default(3),

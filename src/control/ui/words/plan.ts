@@ -103,6 +103,34 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         { run: String(e.subject) },
       );
     }
+    // A running run's acceptance changed in place (goal 233).
+    case "acceptance_set": {
+      const c = (b.changed ?? {}) as Record<string, unknown>;
+      const pct = (v: unknown) => `${+(Number(v) * 100).toFixed(3)}%`;
+      const back = "back to the contract's";
+      const changed = [
+        ...Object.entries((c.min_effects ?? {}) as Record<string, unknown>).map(
+          ([m, v]) => `${m}'s minimum effect ${v === null ? back : pct(v)}`,
+        ),
+        ...(c.confirm_blocks !== undefined
+          ? [
+              `a confirmation's blocks ${c.confirm_blocks === null ? back : String(c.confirm_blocks)}`,
+            ]
+          : []),
+        ...(c.futility !== undefined
+          ? [
+              c.futility === null
+                ? `the early stop ${back}`
+                : `the early stop at a confidence of ${String(c.futility)}`,
+            ]
+          : []),
+      ].join(", ");
+      return s(
+        `${who(e.actor)} changed the run's acceptance: ${changed}, from the judge's next screen or confirmation: ${clip(String(b.reason ?? ""), 300)}.`,
+        "",
+        { run: String(e.subject) },
+      );
+    }
     // A teachers' round asked for now (goal 194): the supervisor starts it within a minute.
     case "teachers_round_requested":
       return s(

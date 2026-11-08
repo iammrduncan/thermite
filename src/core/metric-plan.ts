@@ -51,7 +51,7 @@ export interface MetricPlan {
 type Plannable = Pick<
   HillClimbContract,
   "objective" | "guards" | "hard_constraints" | "monitor_only" | "metrics"
->;
+> & { acceptance?: Pick<HillClimbContract["acceptance"], "min_effects"> | undefined };
 /** A kit's metrics, as kit.json names them, each with its role. */
 /** A kit's metrics as the plan reads them: their roles, and whether each may be zero (goal 211). */
 type KitMetrics = Record<string, MetricRole & { may_be_zero?: true | undefined }>;
@@ -89,9 +89,12 @@ export function metricPlan(c: Plannable, kitMetrics: KitMetrics = {}): MetricPla
     for (const [m, r] of kit.filter(([, r]) => r.kind === "priority").sort(byPriority))
       asked.push({ metric: m, direction: r.direction ?? "max", min_effect: r.min_effect });
   const seen = new Set<string>();
-  const priorities = asked
-    .filter((p) => !seen.has(p.metric) && seen.add(p.metric))
-    .map((p, i) => ({ ...p, priority: i + 1 }));
+  const priorities = withMinEffects(
+    asked
+      .filter((p) => !seen.has(p.metric) && seen.add(p.metric))
+      .map((p, i) => ({ ...p, priority: i + 1 })),
+    c.acceptance?.min_effects,
+  );
 
   const guards: PlannedGuard[] = [
     ...kit.flatMap(([m, r]) =>
@@ -189,4 +192,23 @@ export function planProblems(c: Plannable, kitMetrics: KitMetrics): string[] {
       );
   }
   return out;
+}
+
+/**
+ * Priorities with the acceptance's own minimum effects over theirs (goal 233): a contract's
+ * `acceptance.min_effects`, or the owner's change of a running run's.
+ */
+export function withMinEffects(
+  priorities: PlannedPriority[],
+  own: Readonly<Record<string, number>> | undefined,
+): PlannedPriority[] {
+  if (!own) return priorities;
+  return priorities.map((p) =>
+    own[p.metric] !== undefined ? { ...p, min_effect: own[p.metric] } : p,
+  );
+}
+
+/** The primary's minimum effect: the acceptance's own for it, else the contract's (goal 233). */
+export function primaryMinEffect(c: Pick<Plannable, "objective" | "acceptance">): number {
+  return c.acceptance?.min_effects?.[c.objective.primary.metric] ?? c.objective.primary.min_effect;
 }

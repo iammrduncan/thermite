@@ -1,0 +1,46 @@
+---
+id: "236"
+title: "The judge's builds on a builder, off the judge cards' clock"
+status: PROPOSED
+version: "0.1.4"
+depends_on: ["206", "233"]
+created: 2026-11-08
+updated: 2026-11-08
+---
+
+# 236 · The judge's builds on a builder, off the judge cards' clock
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+Goal [233](233-judge-turnaround.goal)'s option D. On a lab run, each screen starts with a build of the change on the judge's card: 4.3 to 4.7 minutes of the card's time in which nothing is measured, about a seventh of a screen decided at its first look. The owner, 2026-11-08: "For D, can that be done on a non-gpu machine? I probably got cores/ram available on [a GPU server] that we can use for builder machines. Runners should probably take prebuilt images etc... maybe or have that be a toggle/setup option."
+
+A build needs no GPU: it compiles the change, and the judge's card loads what it made. What it needs is the run's toolchain for the judge cards' architecture, and to stay out of the agents' reach, as the judge's own builds are.
+
+1. **A builder:** a runner with no GPU, in a pool of its own, that builds each change the judge will measure, from the attempt's commit, with the kit's build, in the harness's image for the judge cards' architecture (or a cross-build that gives the same files), as soon as the change is queued.
+2. **The judge's runners take the build,** checked by its hash, instead of building it. A build that is not ready when the judge's card is free is made on the card, as today.
+3. **A choice in the rig's setup:** the judge builds on its own cards (today's way), or on the rig's builders.
+4. **Tests:** a change built on a builder is measured on a judge's runner with no build there; a builder that is away or late leaves the card to build it.
+
+## Why
+
+A screen of 20 minutes needs its build off the card's clock, and a queue of changes waiting for the judge leaves the builders all the time they need to build them ahead.
+
+## Done when
+
+- [ ] Items 1 to 4.
+- [ ] Pages: A rig over several machines, Add a runner, the rig's settings, Verdicts (the attempt's stages), the changelog.
+- [ ] On the lab, a screen starts measuring within a minute of its lease, with its build made on a builder.
+
+## Decisions
+
+- 2026-11-08 22:06 UTC, the owner: builders on a machine with spare cores and memory and no GPU; runners take builds made ahead; a toggle or a setup option.
+
+## Progress
+
+- 2026-11-08 22:06 UTC: goal written. One question for its design: the judge cards of one lab rig are arm64 and the spare machine is x86-64, so its builds for that rig must cross-build or run on an arm64 builder; the other lab rig is x86-64 throughout.
+
+---
+
+Run with `/goal Complete docs/plan/goals/236-judge-builds-on-a-builder.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

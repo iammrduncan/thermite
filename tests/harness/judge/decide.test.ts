@@ -491,3 +491,100 @@ describe("metric roles (goal 209)", () => {
     assert.equal(decideScreen(before, quiet(3, { gflops: 1, prefill: 1.05 })).verdict, "neutral");
   });
 });
+
+describe("the early stop and the run's own minimum effects (goal 233)", () => {
+  const policy = hillClimb({ guards: [] });
+  const cells = policy.cells;
+  const stopping = (a: Record<string, unknown> = {}) =>
+    hillClimb({ guards: [], acceptance: { futility: 0.8, ...a } });
+  const quiet = (n: number, effects: Record<string, number>, seed = 3) =>
+    blocks(n, cells, effects, 0.0005, seed);
+  // A rig's A/A block spread as on a lab run whose 3 blocks give ±0.85%: wider than the band.
+  const floor = 0.00274;
+  const roles: Roles = {
+    prefill: { kind: "priority", priority: 2, direction: "max", min_effect: 0.01 },
+  };
+
+  test("a neutral change stops at the first look, where without the stop it goes on", () => {
+    const flat = quiet(3, { gflops: 1 });
+    assert.equal(decideScreen(policy, flat, floor).verdict, undefined, "no decision at 3 blocks");
+    const d = decideScreen(stopping(), flat, floor);
+    assert.equal(d.verdict, "neutral", d.reasons);
+    assert.match(d.reasons, /^cannot reach min_effect \(its upper bound at 0\.8 is /);
+    // A gain that may still reach it goes on.
+    assert.equal(decideScreen(stopping(), quiet(3, { gflops: 1.009 }), floor).verdict, undefined);
+  });
+
+  test("a gain of 0.8% wins at a minimum effect of 0.7%, and is neutral at the contract's 1%", () => {
+    const gain = quiet(3, { gflops: 1.008 });
+    assert.equal(decideScreen(policy, gain).verdict, "neutral");
+    const lower = hillClimb({ guards: [], acceptance: { min_effects: { gflops: 0.007 } } });
+    const d = decideScreen(lower, gain);
+    assert.equal(d.verdict, "win_screened", d.reasons);
+    assert.equal(
+      decideScreen(stopping({ min_effects: { gflops: 0.007 } }), gain).verdict,
+      "win_screened",
+    );
+  });
+
+  test("a lower priority's gain beyond its own minimum effect wins a change whose primary gains less than its own", () => {
+    // 0.6% on the primary: over the band, under its minimum effect.
+    const some = quiet(3, { gflops: 1.006, prefill: 1.03 });
+    assert.equal(
+      decideScreen(policy, some, 0, roles).verdict,
+      "neutral",
+      "no tie: no lower priority",
+    );
+    const d = decideScreen(stopping(), some, 0, roles);
+    assert.equal(d.verdict, "win_screened", d.reasons);
+    assert.match(
+      d.reasons,
+      /^cannot reach min_effect .*; prefill .*, better beyond its min_effect/,
+    );
+    // Under its own minimum effect, the lower priority is passed over: neutral.
+    const small = decideScreen(stopping(), quiet(3, { gflops: 1.006, prefill: 1.005 }), 0, roles);
+    assert.equal(small.verdict, "neutral", small.reasons);
+    // Surely worse on it: no win.
+    const worse = decideScreen(stopping(), quiet(3, { gflops: 1.006, prefill: 0.95 }), 0, roles);
+    assert.equal(worse.verdict, "neutral", worse.reasons);
+  });
+
+  test("a lower priority still unsure goes on to the next look, and is neutral at the last", () => {
+    const merged = (n: number) => {
+      const p = quiet(n, { gflops: 1.003 });
+      const q = blocks(n, cells, { prefill: 1.04 }, 0.03, 11);
+      return p.map((b, i) => ({
+        candidate: { ...b.candidate, ...q[i]?.candidate },
+        reference: { ...b.reference, ...q[i]?.reference },
+      }));
+    };
+    const d = decideScreen(stopping(), merged(3), 0, roles);
+    assert.equal(d.verdict, undefined, d.reasons);
+    assert.match(d.reasons, /; prefill .*, continue;/);
+    const last = decideScreen(stopping({ looks: [3] }), merged(3), 0, roles);
+    assert.equal(last.verdict, "neutral", last.reasons);
+  });
+
+  test("a primary that may be worse than the band is neutral at once, whatever a lower priority gains", () => {
+    const d = decideScreen(stopping(), quiet(3, { gflops: 0.9955, prefill: 1.05 }), floor, roles);
+    assert.equal(d.verdict, "neutral", d.reasons);
+    assert.match(d.reasons, /may be worse than the band/);
+  });
+
+  test("a confirmation that rests on a lower priority needs the primary not worse than the band on fresh data", () => {
+    const fresh = quiet(3, { gflops: 1, prefill: 1.05 }, 9);
+    // Equal within the band on both sides is out of reach at 3 blocks of this noise.
+    assert.equal(
+      decideConfirm(policy, fresh, {}, floor, undefined, roles).verdict,
+      "not_confirmed",
+    );
+    const d = decideConfirm(stopping(), fresh, {}, floor, undefined, roles);
+    assert.equal(d.verdict, "win_confirmed", d.reasons);
+    assert.match(d.reasons, /not worse than the band on gflops; prefill/);
+    const lost = quiet(3, { gflops: 0.998, prefill: 1.05 }, 9);
+    assert.equal(
+      decideConfirm(stopping(), lost, {}, floor, undefined, roles).verdict,
+      "not_confirmed",
+    );
+  });
+});

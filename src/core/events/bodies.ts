@@ -1,5 +1,5 @@
 import type { AdvisorRole, Harness, MessageHow } from "../agents.ts";
-import type { Mode } from "../contract.ts";
+import type { Mode, OwnersAcceptance, RunAcceptance } from "../contract.ts";
 import type { GoalCellValues, GoalCheck } from "../goal/index.ts";
 import type { HeldOutCell } from "../held-out.ts";
 import type { KbItemBody, KbItemFile } from "../kb/index.ts";
@@ -471,6 +471,11 @@ export interface EventBodies {
     changed: Record<string, number | null>;
     reason: string;
   };
+  /**
+   * The owner changed a running run's acceptance (goal 233): what is in force over the contract's
+   * now, what this change set (null: back to the contract's), and why.
+   */
+  acceptance_set: { acceptance: OwnersAcceptance; changed: RunAcceptance; reason: string };
   /**
    * The run's lanes start no new trial (goal 230): `open` changes wait for the judge, at most
    * `limit`, from the run's open_attempts rule or the contract's max_open_attempts.

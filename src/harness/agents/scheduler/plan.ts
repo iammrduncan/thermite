@@ -3,6 +3,7 @@ import type { Contract } from "../../../core/contract.ts";
 import { asToken } from "../../../core/directions.ts";
 import { queueTarget } from "../../../core/queue-target.ts";
 import { additionOf } from "../../../core/role-additions.ts";
+import { ownersAcceptance } from "../../acceptance.ts";
 import { notesData } from "../../journal.ts";
 import { baselineOf } from "../../judge/index.ts";
 import { messageText } from "../../messages.ts";
@@ -308,7 +309,11 @@ export function plannerInput(
     run,
     epoch: n,
     laneCount,
-    objective: objectiveOf(contract, baselineOf(sched.ledger, run)?.plan),
+    objective: objectiveOf(
+      contract,
+      baselineOf(sched.ledger, run)?.plan,
+      ownersAcceptance(sched.ledger, run).min_effects,
+    ),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
     champion: { seq: champion.seq, gain: championGain(sched.ledger, run) },
     registry: sched.registry.directions(run),

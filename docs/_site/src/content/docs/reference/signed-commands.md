@@ -57,7 +57,7 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 
 ### A command about one run
 
-A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `start_teachers_round`, `add_run_hours`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `queue_retry`, `lane_limits`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
+A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `start_teachers_round`, `add_run_hours`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `queue_retry`, `lane_limits`, `acceptance`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
 
 Control refuses, before it signs:
 
@@ -130,7 +130,7 @@ The harness checks every command in this order. A command that fails a check mar
 | It is not being applied right now | None: the harness answers `in_progress`, and the bus hands the command to the supervisor again 5 seconds later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
-The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the seven kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `queue_retry` and `drop_directive`, `lane_limits`, which changes a running run's lane limits, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `start_teachers_round`, which asks a run's teachers for a round now, `add_run_hours`, which adds hours to a run's stop time, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the seven kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `queue_retry` and `drop_directive`, `lane_limits`, which changes a running run's lane limits, `acceptance`, which changes a running hill climb's acceptance, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `start_teachers_round`, which asks a run's teachers for a round now, `add_run_hours`, which adds hours to a run's stop time, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
 
 A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`; its `command` event carries the same to control.
 
@@ -160,6 +160,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | `queue_accept` | **Queue it** on a lane's idea under **Ideas from the lanes** | Yes | Yes | Yes | No | Yes |
 | `queue_retry` | **Send back**, then **Send back to up next**, on an experiment under **Tried** | Yes | Yes | Yes | No | Yes |
 | `lane_limits` | none: over MCP, REST or the command line | Yes | Yes | Yes | No | Yes |
+| `acceptance` | none: over MCP, REST or the command line | Yes | Yes | Yes | No | Yes |
 | `drop_directive` | **Remove** on a rule on a run's **Planner** tab | Yes | Yes | Yes | No | Yes |
 | `propagate` | **Send champion #&lt;n&gt;** on a run's **Planner** tab, under **Other rigs** | `POST /v1/propagate`, or `POST /v1/commands` | `propagate_champion` | `propagate_champion` | `propagate_champion` | |
 | `approve_promotion` | **Needs you**: **Make it the champion**, **Overrule the auditor** | Yes | Yes | No | No | Yes |
@@ -380,6 +381,22 @@ Changes a running run's lane limits in place: the memory and time of a lane's co
 | `preview` | `true`, or left out | True: it changes nothing, and its result says what it would set and which lanes at work it reaches, in `words` |
 
 A limit left out stays as it is. The harness records `lane_limits_set`, `{limits, changed, reason}`: the owner's limits in force now over the contract's, what this change set, and why. Result: `{"run", "limits"}`. Control refuses before it signs a value past its bound, naming the limit and the bound, and a change with no limit in it: `give at least one of run_timeout_s, run_rss_mib, workspace_mib, dev_run_timeout_s, dev_run_rss_mib and processes`. The run page's **History** says, for example, "You changed the run's lane limits: dev_run_rss_mib 16384, from the next lane command and development run: every lane's build was killed at 4 GiB." Over MCP the owner's and the operator's `issue_command` sends it, and over REST `POST /v1/commands`.
+
+### `acceptance`
+
+Changes a running hill climb's acceptance in place: each metric's minimum effect, the blocks of a confirmation, and the early stop. The run goes on; the judge's next screen or confirmation takes the new values, a job under way keeps those it started with, and the agents' next briefs give the new minimum effects. The contract and its hash stay as they were. Use it when the run's own measurements show its acceptance costs the judge's time or misses gains, such as a neutral change that runs every look because 3 blocks are too noisy to call it equal.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run, a hill climb |
+| `acceptance` | an object of one or more of `min_effects`, `confirm_blocks` and `futility` | Each over the contract's [`acceptance`](contract.md), or `null` to go back to the contract's |
+| `acceptance.min_effects` | an object of metric names, each a fraction above 0 and below 1, or `null` | A metric's minimum effect: the primary's over `objective.primary.min_effect`, a lower priority's over its [metric role](kit-manifest.md#what-each-metric-is-for)'s. A metric left out keeps its own |
+| `acceptance.confirm_blocks` | whole number, 2 to 20, or `null` | Fresh blocks for a confirmation |
+| `acceptance.futility` | number, at least 0.5 and below 1, or `null` | The [early stop](verdicts.md#the-early-stop)'s confidence |
+| `reason` | text, 1 to 2000 characters, trimmed | Why |
+| `preview` | `true`, or left out | True: it changes nothing, and its result says what it would set and which of the run's judge's jobs wait or run, in `words` |
+
+A value left out stays as it is. The harness records `acceptance_set`, `{acceptance, changed, reason}`: the owner's acceptance in force now over the contract's, what this change set, and why. Result: `{"run", "acceptance"}`. Refused in words: a change with nothing in it, `give at least one of min_effects, confirm_blocks and futility`; a value past its bound, naming it; and a run that is not a hill climb, `<run> is not a hill climb: only a hill climb's judge decides by acceptance`. The run page's **History** says, for example, "You changed the run's acceptance: prefill_tps's minimum effect 0.7%, a confirmation's blocks 3, the early stop at a confidence of 0.8, from the judge's next screen or confirmation: gains of 0.9% were missed." Over MCP the owner's and the operator's `issue_command` sends it, and over REST `POST /v1/commands`.
 
 ### `start_teachers_round`
 

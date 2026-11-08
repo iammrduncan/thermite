@@ -4,7 +4,12 @@ import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
 import type { Contract } from "../../../core/contract.ts";
 import type { StoredRule } from "../../../core/directives.ts";
-import { type MetricPlan, metricPlan } from "../../../core/metric-plan.ts";
+import {
+  type MetricPlan,
+  metricPlan,
+  primaryMinEffect,
+  withMinEffects,
+} from "../../../core/metric-plan.ts";
 import { guardWords } from "../../../core/metric-roles.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Runner } from "../../broker/index.ts";
@@ -269,12 +274,21 @@ export function halted(sched: SchedulerContext): boolean {
  * contract's alone) what breaks a tie on it, the guards a change must keep, however much it
  * gains, and the metrics only recorded.
  */
-export function objectiveOf(c: Contract, plan?: MetricPlan | undefined): string {
+export function objectiveOf(
+  c: Contract,
+  plan?: MetricPlan | undefined,
+  /** The owner's minimum effects of the running run (goal 233), over the contract's. */
+  own?: Readonly<Record<string, number>> | undefined,
+): string {
   if (c.mode === "hill_climb") {
-    const p = c.objective.primary;
+    const minEffects = { ...c.acceptance.min_effects, ...own };
+    const p = {
+      ...c.objective.primary,
+      min_effect: primaryMinEffect({ ...c, acceptance: { min_effects: minEffects } }),
+    };
     const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
     const m = plan ?? metricPlan(c);
-    const ties = m.priorities
+    const ties = withMinEffects(m.priorities, minEffects)
       .slice(1)
       .filter((x) => x.min_effect !== undefined)
       .map(

@@ -1,5 +1,10 @@
 import type { GoalContract, HillClimbContract } from "../../core/contract.ts";
-import { metricPlan, type PlannedGuard, type PlannedPriority } from "../../core/metric-plan.ts";
+import {
+  metricPlan,
+  type PlannedGuard,
+  type PlannedPriority,
+  primaryMinEffect,
+} from "../../core/metric-plan.ts";
 import { type GuardRule, guardWords, type MetricRole } from "../../core/metric-roles.ts";
 import {
   type Interval,
@@ -325,6 +330,29 @@ function tieBreak(
   return undefined;
 }
 
+/**
+ * The lower priorities of a change stopped early on its primary (goal 233, the owner, 2026-11-08:
+ * a change whose primary gains less than its minimum effect still wins by a lower priority's gain
+ * beyond its own). Each in turn: one surely worse ends it with no win; one whose estimate is under
+ * its own min_effect cannot win now and is passed over; the first at or beyond it decides, a win
+ * when sure of its gain, else undecided.
+ */
+function lowerPriority(
+  priorities: readonly PlannedPriority[],
+  blocks: readonly Block[],
+  cells: readonly string[],
+  alpha: number,
+): { by: PlannedPriority; interval: Interval; outcome: "win" | "worse" | "undecided" } | undefined {
+  for (const p of priorities.slice(1)) {
+    if (p.min_effect === undefined) continue;
+    const interval = meanInterval(blockEffects(blocks, p.metric, p.direction, cells), alpha);
+    if (interval.high < 0) return { by: p, interval, outcome: "worse" };
+    if (interval.estimate < toLog(p.min_effect)) continue;
+    return { by: p, interval, outcome: interval.low > 0 ? "win" : "undecided" };
+  }
+  return undefined;
+}
+
 /** Per-block effect for one metric: the mean log ratio over cells (a geometric mean ratio). */
 export function blockEffects(
   blocks: readonly Block[],
@@ -443,12 +471,10 @@ export function decideScreen(
   const { acceptance } = policy;
   const final = blocks.length >= Math.max(...acceptance.looks);
   const alpha = acceptance.alpha_screen / acceptance.looks.length;
-  const { metric, direction, min_effect } = policy.objective.primary;
-  const primary = meanInterval(
-    blockEffects(blocks, metric, direction, policy.cells),
-    alpha,
-    noiseFloor,
-  );
+  const { metric, direction } = policy.objective.primary;
+  const min_effect = primaryMinEffect(policy);
+  const effects = blockEffects(blocks, metric, direction, policy.cells);
+  const primary = meanInterval(effects, alpha, noiseFloor);
   const extra = roleGuards(policy, roles);
   const guards = [
     ...guardResults(policy, blocks, alpha),
@@ -491,6 +517,28 @@ export function decideScreen(
     return result(undefined, `guards unresolved: ${unsure.join(", ")}`);
   };
   const band = toLog(acceptance.equivalence_band);
+  if (acceptance.futility !== undefined) {
+    // The early stop (goal 233, E): a win on the primary as ever; a primary that cannot reach its
+    // min_effect, its one-sided upper bound at the stop's confidence under it, leaves the lower
+    // priorities to decide, unless it may be worse than the band.
+    if (primary.low > 0 && primary.estimate >= toLog(min_effect))
+      return win("better beyond min_effect");
+    if (primary.high < 0) return result("regress", "worse");
+    const stop = meanInterval(effects, 2 * (1 - acceptance.futility), noiseFloor);
+    if (stop.high >= toLog(min_effect))
+      return result(
+        final ? "inconclusive" : undefined,
+        final ? "no decision by the last look" : "continue",
+      );
+    const below = `cannot reach min_effect (its upper bound at ${acceptance.futility} is ${pct(stop.high)})`;
+    if (stop.low <= -band) return result("neutral", `${below}, and may be worse than the band`);
+    const lower = lowerPriority(metricPlan(policy, roles).priorities, blocks, policy.cells, alpha);
+    if (!lower) return result("neutral", below);
+    const on = `${below}; ${lower.by.metric} ${describe(lower.interval)}`;
+    if (lower.outcome === "win") return win(`${on}, better beyond its min_effect`);
+    if (lower.outcome === "worse" || final) return result("neutral", on);
+    return result(undefined, `${on}, continue`);
+  }
   if (primary.low > -band && primary.high < band) {
     const tie = tieBreak(metricPlan(policy, roles).priorities, blocks, policy.cells, alpha, band);
     if (!tie) return result("neutral", "equivalent");
@@ -529,11 +577,8 @@ export function decideConfirm(
 ): Decision<ConfirmVerdict> {
   const alpha = policy.acceptance.alpha_confirm;
   const { metric, direction } = policy.objective.primary;
-  const primary = meanInterval(
-    blockEffects(blocks, metric, direction, policy.cells),
-    alpha,
-    noiseFloor,
-  );
+  const effects = blockEffects(blocks, metric, direction, policy.cells);
+  const primary = meanInterval(effects, alpha, noiseFloor);
   const extra = roleGuards(policy, roles);
   const guards = [
     ...guardResults(policy, blocks, alpha),
@@ -595,12 +640,20 @@ export function decideConfirm(
         .join("; ")}`,
     );
   }
-  // A tie on the primary is confirmed on fresh data too, down the priorities (goal 209).
+  // A tie on the primary is confirmed on fresh data too, down the priorities (goal 209). With the
+  // early stop (goal 233), a win by a lower priority needs the primary not worse than the band:
+  // its one-sided lower bound at alpha_confirm above minus the band.
   const band = toLog(policy.acceptance.equivalence_band);
-  const tied = primary.low > -band && primary.high < band;
+  const stopping = policy.acceptance.futility !== undefined;
+  const tied = stopping
+    ? meanInterval(effects, 2 * alpha, noiseFloor).low > -band
+    : primary.low > -band && primary.high < band;
+  const priorities = metricPlan(policy, roles).priorities;
   const tie =
     primary.low <= 0 && tied
-      ? tieBreak(metricPlan(policy, roles).priorities, blocks, policy.cells, alpha, band)
+      ? stopping
+        ? lowerPriority(priorities, blocks, policy.cells, alpha)
+        : tieBreak(priorities, blocks, policy.cells, alpha, band)
       : undefined;
   if (primary.low <= 0 && tie?.outcome !== "win")
     return result("not_confirmed", "gain not confirmed on fresh data");
@@ -609,7 +662,7 @@ export function decideConfirm(
   if (tie)
     return result(
       "win_confirmed",
-      `confirmed on fresh data: equivalent on ${metric}; ${tie.by.metric} ${describe(tie.interval)}`,
+      `confirmed on fresh data: ${stopping ? "not worse than the band" : "equivalent"} on ${metric}; ${tie.by.metric} ${describe(tie.interval)}`,
     );
   return result("win_confirmed", "confirmed on fresh data");
 }

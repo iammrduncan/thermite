@@ -5,6 +5,7 @@ import type { Contract, GoalContract, HillClimbContract } from "../../core/contr
 import type { EventToRecord } from "../../core/events/bodies.ts";
 import { contractMetrics, type Kit } from "../../core/kit.ts";
 import { toFraction } from "../../core/stats.ts";
+import { ownersAcceptance, withOwnersAcceptance } from "../acceptance.ts";
 import type { Runner } from "../broker/index.ts";
 import type { JobRow, Ledger } from "../ledger/index.ts";
 import type { HarnessService } from "../service/index.ts";
@@ -365,12 +366,13 @@ export class JudgeContext {
     };
   }
 
+  /** A hill climb's contract, with the owner's acceptance of the running run over its own (goal 233). */
   hillClimb(run: string): HillClimbContract {
     const c = this.o.service.contractFor(run);
     if (c.mode !== "hill_climb") {
       throw new InfraError(`the judge handles hill_climb attempts; ${run} is ${c.mode}`);
     }
-    return c;
+    return withOwnersAcceptance(c, ownersAcceptance(this.ledger, run));
   }
 
   stopped(job: JobRow, err: Stop): Finish {

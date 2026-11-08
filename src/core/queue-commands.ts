@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { RunLaneLimits } from "./contract.ts";
+import { RunAcceptance, RunLaneLimits } from "./contract.ts";
 import { directionName } from "./directions.ts";
 import { ExperimentId, RunId } from "./ids.ts";
 
 /**
  * The owner's commands for a run's experiment queue (goal 064), with the words an experiment is
- * given in and where it goes, and a running run's lane limits (goal 221). commands.ts holds them
- * among every kind's payload.
+ * given in and where it goes, a running run's lane limits (goal 221) and its acceptance (goal
+ * 233). commands.ts holds them among every kind's payload.
  */
 
 /** Where an experiment goes among the queued ones: first, last, or at an index (0 first). */
@@ -88,6 +88,18 @@ export const QUEUE_PAYLOADS = {
   lane_limits: z.strictObject({
     run: RunId,
     limits: RunLaneLimits,
+    reason: z.string().trim().min(1).max(2000),
+    /** True: what it would set and reach, with nothing changed. */
+    preview: z.boolean().optional(),
+  }),
+  /**
+   * A running run's acceptance changed in place (goal 233): each metric's minimum effect, a
+   * confirmation's blocks and the early stop, over the contract's, from the judge's next screen or
+   * confirmation; null goes back to the contract's.
+   */
+  acceptance: z.strictObject({
+    run: RunId,
+    acceptance: RunAcceptance,
     reason: z.string().trim().min(1).max(2000),
     /** True: what it would set and reach, with nothing changed. */
     preview: z.boolean().optional(),

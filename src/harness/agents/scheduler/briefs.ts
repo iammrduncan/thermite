@@ -5,6 +5,7 @@ import { writeAtomic } from "../../../common/fs.ts";
 import { log } from "../../../common/log.ts";
 import { BRIEF_FILE, briefFile, briefSection } from "../../../core/brief.ts";
 import type { Contract } from "../../../core/contract.ts";
+import { ownersAcceptance } from "../../acceptance.ts";
 import { NOTES_ARE_DATA, notesText } from "../../journal.ts";
 import { baselineOf, baselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
 import { briefingText } from "../../knowledge.ts";
@@ -166,7 +167,11 @@ export function brief(
     lane: a.lane,
     title: contract.title,
     mode: contract.mode,
-    objective: objectiveOf(contract, baselineOf(sched.ledger, run)?.plan),
+    objective: objectiveOf(
+      contract,
+      baselineOf(sched.ledger, run)?.plan,
+      ownersAcceptance(sched.ledger, run).min_effects,
+    ),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : undefined,
     forbiddenPatterns: "forbidden_patterns" in contract ? contract.forbidden_patterns : [],
     start,

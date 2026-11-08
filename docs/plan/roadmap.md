@@ -216,6 +216,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [233](goals/233-judge-turnaround.goal) The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20 · `IN_PROGRESS`
 - [234](goals/234-trial-keeps-its-route.goal) A trial under way keeps its model's route when the rig's workers move to another model · `IN_PROGRESS`
 - [235](goals/_completed/235-supervisor-cpus-for-terminals.goal) The supervisor has the CPUs to start its advisors in their own terminals · `VERIFIED`
+- [236](goals/236-judge-builds-on-a-builder.goal) The judge's builds on a builder, off the judge cards' clock · `PROPOSED`
+- [237](goals/237-supervisor-roll-keeps-judge.goal) A roll of the supervisor alone keeps the judge measuring · `PROPOSED`
 
 **The owner's asks of 2026-11-03.**
 

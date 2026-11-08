@@ -1,0 +1,43 @@
+---
+id: "237"
+title: "A roll of the supervisor alone keeps the judge measuring"
+status: PROPOSED
+version: "0.1.4"
+depends_on: ["227"]
+created: 2026-11-08
+updated: 2026-11-08
+---
+
+# 237 · A roll of the supervisor alone keeps the judge measuring
+
+**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+On the lab, 2026-11-08, four of the day's changes touched only the supervisor's advisors, and every roll onto them moved the whole rig: the harness restarted with the supervisor, so the judge was turned off first and its jobs drained, and one rig's judge was off for about five hours over the day. The owner, 2026-11-08: "supervisor update without stopping judge, if possible yes."
+
+1. **Update to these images moves only what changed:** when the harness's image is the same, the supervisor restarts alone, on its new image, and the harness, its judge's jobs and its lanes go on; the advisors' calls under way end as a restart ends them today and start again.
+2. **The same for a runner's supervisor,** which a judge's job on that runner outlasts.
+3. **Tests:** a roll that changes only the supervisor's image, with a judge's job under way, ends with the job's verdict and the new supervisor reporting.
+
+## Why
+
+A change to the teachers or the auditor should not cost the judge an hour, nor the run its queue's turn.
+
+## Done when
+
+- [ ] Items 1 to 3.
+- [ ] Pages: Update a rig, A rig on a cluster, the changelog.
+- [ ] On the lab, a roll of the supervisor alone with a judge's job under way.
+
+## Decisions
+
+- 2026-11-08 22:06 UTC, the owner: "if possible yes."
+
+## Progress
+
+- 2026-11-08 22:06 UTC: goal written.
+
+---
+
+Run with `/goal Complete docs/plan/goals/237-supervisor-roll-keeps-judge.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
