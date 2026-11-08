@@ -12,7 +12,7 @@ import { advisorProgram } from "../../../src/supervisor/advisors/terminal/index.
 /**
  * A Codex teacher's model catalog (goal 232): its model's own entry from Codex's bundled catalog,
  * over the full Responses API with no tools of Codex's own, so Codex sends the provider's hosted
- * web search and not its standalone one, which a ChatGPT sign-in's route refuses.
+ * web search and not its standalone one; never on a ChatGPT sign-in's route, which refuses both.
  */
 
 const dir = mkdtempSync(join(tmpdir(), "thermite-codex-catalog-test-"));
@@ -57,8 +57,9 @@ function withCodex(bin: string, f: () => void): void {
   }
 }
 
-const model = (slug: string): ModelConfig => ({
-  api: "chatgpt",
+/** A route with an API key (an OpenAI-compatible provider), or with `chatgpt` a ChatGPT sign-in's. */
+const model = (slug: string, api?: "chatgpt"): ModelConfig => ({
+  ...(api ? { api } : {}),
   harness: "codex",
   baseUrl: "https://api.openai.com/v1",
   model: slug,
@@ -69,7 +70,7 @@ const model = (slug: string): ModelConfig => ({
 
 test("a model on Responses Lite gets its own entry over the full Responses API, with no tools of Codex's own; others get none", () => {
   withCodex(fakeCodex("codex", [LITE, { slug: "gpt-5.5", use_responses_lite: false }]), () => {
-    const catalog = codexTeacherCatalog("gpt-6.1-sol");
+    const catalog = codexTeacherCatalog(model("gpt-6.1-sol"));
     assert.deepEqual(JSON.parse(catalog ?? "{}"), {
       models: [
         {
@@ -81,14 +82,20 @@ test("a model on Responses Lite gets its own entry over the full Responses API, 
         },
       ],
     });
-    assert.equal(codexTeacherCatalog("gpt-5.5"), undefined, "its hosted search needs no change");
-    assert.equal(codexTeacherCatalog("a-model-codex-does-not-know"), undefined);
+    assert.equal(
+      codexTeacherCatalog(model("gpt-5.5")),
+      undefined,
+      "its hosted search needs no change",
+    );
+    assert.equal(codexTeacherCatalog(model("a-model-codex-does-not-know")), undefined);
+    // A ChatGPT sign-in's route refuses every hosted tool: the model stays on Responses Lite.
+    assert.equal(codexTeacherCatalog(model("gpt-6.1-sol", "chatgpt")), undefined);
   });
 });
 
 test("a Codex that can't print its catalog leaves the teacher as Codex drives it", () => {
   withCodex(join(dir, "no-such-codex"), () => {
-    assert.equal(codexTeacherCatalog("gpt-6.1-sol"), undefined);
+    assert.equal(codexTeacherCatalog(model("gpt-6.1-sol")), undefined);
   });
 });
 
@@ -143,5 +150,11 @@ test("a teacher in its own terminal has the catalog in its Codex home, and its c
     const auditor = advisorProgram("codex", { proxy }).terminal.start(run, at).seeds;
     assert.equal(auditor.length, 1);
     assert.doesNotMatch(auditor[0]?.content ?? "", /model_catalog_json/);
+    // A teacher on a ChatGPT sign-in: no catalog, and Codex's standalone search as before.
+    const plan = { ...run, model: model("gpt-6.1-sol", "chatgpt") };
+    const signedIn = advisorProgram("codex", { proxy, web: true }).terminal.start(plan, at).seeds;
+    assert.equal(signedIn.length, 1);
+    assert.doesNotMatch(signedIn[0]?.content ?? "", /model_catalog_json/);
+    assert.match(signedIn[0]?.content ?? "", /^supports_standalone_web_search = true$/m);
   });
 });

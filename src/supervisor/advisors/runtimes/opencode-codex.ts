@@ -171,7 +171,7 @@ export async function runCliHarness<S extends z.ZodType>(
           const dir = join(home, ".codex");
           mkdirSync(dir, { recursive: true, mode: 0o700 });
           // A teacher's model over the full Responses API, for the hosted web search (goal 232).
-          const catalog = t?.web ? codexTeacherCatalog(model.model) : undefined;
+          const catalog = t?.web ? codexTeacherCatalog(model) : undefined;
           if (catalog) writeFileSync(join(dir, "models.json"), catalog, { mode: 0o600 });
           writeFileSync(
             join(dir, "config.toml"),

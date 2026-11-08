@@ -2,16 +2,22 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ModelConfig } from "../../agents/model/index.ts";
 import { codexBin, codexExe } from "../../agents/programs/index.ts";
 
 /**
  * A Codex teacher's model catalog (goal 232). Codex 0.162.1 drives its gpt-6 models over Responses
- * Lite, in Code Mode Only: it sends them no hosted tools, and its own search (`web.run`) calls an
- * endpoint that a ChatGPT sign-in's route answers 401 Unauthorized. Given its own catalog entry for
- * the model with Responses Lite and Code Mode Only off, Codex drives it over the full Responses API
- * and sends the provider's hosted web search, which that route takes, with the model's tools on
- * its own list. The entry is Codex's own, from its bundled catalog (`codex debug models
- * --bundled`, read once, with no network), so every other field is as Codex would use it.
+ * Lite, in Code Mode Only: it sends them no hosted tools, and its own search (`web.run`) calls the
+ * provider's search endpoint. Given its own catalog entry for the model with Responses Lite and
+ * Code Mode Only off, Codex drives it over the full Responses API and sends the provider's hosted
+ * web search, with the model's tools on its own list. The entry is Codex's own, from its bundled
+ * catalog (`codex debug models --bundled`, read once, with no network), so every other field is as
+ * Codex would use it.
+ *
+ * Never on a ChatGPT sign-in's route: it takes only function and custom tools, and refuses a request
+ * with a hosted tool (`subscription_sharing_unsupported_capability`), so the teacher would give no
+ * answer at all. It answers the standalone search 401 Unauthorized, which leaves the teacher's
+ * call as it was.
  */
 
 type CatalogEntry = { slug?: unknown; use_responses_lite?: unknown; [k: string]: unknown };
@@ -60,11 +66,12 @@ function bundledModels(): CatalogEntry[] {
 /**
  * The catalog a Codex teacher's configuration names (`model_catalog_json`), as JSON: its model's
  * own entry with `use_responses_lite` false, no experimental tools and none of TOOL_FIELDS.
- * Undefined for a model Codex does not drive over Responses Lite, or one its bundled catalog does
- * not hold: its hosted search needs no change.
+ * Undefined on a ChatGPT sign-in's route, and for a model Codex does not drive over Responses Lite
+ * or one its bundled catalog does not hold: its hosted search needs no change.
  */
-export function codexTeacherCatalog(model: string): string | undefined {
-  const entry = bundledModels().find((m) => m.slug === model);
+export function codexTeacherCatalog(m: Pick<ModelConfig, "api" | "model">): string | undefined {
+  if (m.api === "chatgpt") return undefined;
+  const entry = bundledModels().find((e) => e.slug === m.model);
   if (entry?.use_responses_lite !== true) return undefined;
   const own = Object.fromEntries(Object.entries(entry).filter(([k]) => !TOOL_FIELDS.has(k)));
   const teacher = { ...own, use_responses_lite: false, experimental_supported_tools: [] };

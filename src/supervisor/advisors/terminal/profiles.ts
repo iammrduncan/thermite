@@ -110,7 +110,7 @@ function codexAdvisor(served: AdvisorServed) {
     terminal: {
       ...p.terminal,
       start: (run, at) => {
-        const catalog = served.web ? codexTeacherCatalog(run.model.model) : undefined;
+        const catalog = served.web ? codexTeacherCatalog(run.model) : undefined;
         return {
           args: codexAdvisorTerminalArgs(run.model, {
             cwd: at.cwd,
