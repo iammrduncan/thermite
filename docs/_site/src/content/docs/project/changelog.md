@@ -10,6 +10,14 @@ sidebar:
 
 Each release of Thermite, newest first. Version numbers count up by the middle number, 0.2.0, 0.3.0 and so on, with fixes and quick follow-ups as 0.1.1, 0.1.2. Versions 0.x make no upgrade promise: read [Known limits](../reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]: v0.1.4
+
+v0.1.4 is a fix release of v0.1.3.
+
+### Fixes
+
+- **New campaign starts a hill climb or a goal campaign again.** The page sends where each run's work goes with every hill climb's and goal's answers, and control refused them with `the form: Unrecognized key: "results"`, whatever the choice, so only a research campaign started from the page. Control now takes the choice and checks it as before: a branch of the project's repository, or a separate repository, needs a Git access that can push ([issue 68](https://github.com/iammrduncan/thermite/issues/68)).
+
 ## [0.1.3] 2026-11-06: a rig over several machines, and what a first campaign on it needs
 
 v0.1.3 makes a rig a core and its runners on other machines, and holds the fixes its first campaign on three DGX Sparks needed. A v0.1.2 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.3), as [Stop, start and update](../how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. Control adds its new tables as it starts; no setting or secret changes.

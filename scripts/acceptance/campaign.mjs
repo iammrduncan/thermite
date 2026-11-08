@@ -146,6 +146,9 @@ try {
     },
     score: { kind: "time", min_effect: 0.1 },
     lanes: 1,
+    // Where each run's work goes, left at Only on control: the page sends it for every hill
+    // climb and goal.
+    results: { to: "control" },
   };
   const res = await fetch(`${control}/ui/campaigns/new`, {
     method: "POST",

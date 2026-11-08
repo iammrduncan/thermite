@@ -238,6 +238,13 @@ export const CampaignDraft = z.strictObject(
      * kit keeps its own list.
      */
     mcp_servers: McpUses.optional(),
+    /**
+     * Where each run's work goes (goal 185), as the page sends it for every hill climb and goal:
+     * `{to: "control"}`, `{to: "project", access}` or `{to: "repository", git, access}`. It is
+     * not part of the contract: startCampaign checks it in words (resultsOf) and keeps it in the
+     * campaign's sources.
+     */
+    results: z.unknown().optional(),
   },
   { error: oldContractKeyError },
 );

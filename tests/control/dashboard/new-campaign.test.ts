@@ -149,6 +149,45 @@ describe("the new-campaign page", () => {
     );
   });
 
+  test("Where each run's work goes: the draft carries it as the page sends it, and the campaign keeps it", async () => {
+    const s = await stack();
+    // The page's script adds `results` to every hill climb's and goal's draft, "Only on control"
+    // included; the draft was refused with `Unrecognized key: "results"` (issue 68).
+    const send = (campaign: string, results: unknown, start_value: string) =>
+      s.post("/ui/campaigns/new", {
+        csrf: s.csrf,
+        draft: JSON.stringify(draft({ campaign, results })),
+        rig: "rig-a",
+        promotion: "",
+        start_value,
+      });
+    const sources = (campaign: string) => s.store.campaigns.versions(campaign)[0]?.sources;
+
+    const onControl = await send("on-control", { to: "control" }, "start");
+    assert.equal(onControl.status, 303);
+    assert.equal(onControl.headers.get("location"), "/ui/campaigns/on-control/runs/on-control-1");
+    assert.equal(sources("on-control")?.results, undefined);
+
+    assert.equal(
+      (await send("to-project", { to: "project", access: "deploy-rw" }, "save")).status,
+      303,
+    );
+    assert.deepEqual(sources("to-project")?.results, { to: "project", access: "deploy-rw" });
+
+    const elsewhere = { to: "repository", git: "git@git.example.com:team/results.git" };
+    assert.equal(
+      (await send("to-repository", { ...elsewhere, access: "deploy-rw" }, "save")).status,
+      303,
+    );
+    assert.deepEqual(sources("to-repository")?.results, { ...elsewhere, access: "deploy-rw" });
+
+    // A destination with no Git access to push with is refused in words, and nothing is saved.
+    const refused = await (await send("no-access", { to: "project", access: "" }, "save")).text();
+    assert.match(refused, /choose a Git access that can push there, or Only on control/);
+    assert.doesNotMatch(refused, /Unrecognized key/);
+    assert.equal(s.store.campaigns.versions("no-access").length, 0);
+  });
+
   test("every hidden-test field says what the judge checks on a hidden case", async () => {
     const s = await stack();
     const page = await (await s.get("/ui/campaigns/new")).text();
