@@ -1,0 +1,40 @@
+---
+id: "234"
+title: "A trial under way keeps its model's route when the rig's workers move to another model"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: ["073"]
+created: 2026-11-08
+updated: 2026-11-08
+---
+
+# 234 · A trial under way keeps its model's route when the rig's workers move to another model
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+
+## What
+
+On the lab, 2026-11-08, the owner moved a rig's workers from a ChatGPT plan in Codex to a Claude subscription in Claude Code while a lane's trial ran in Codex. From then on, every model call of that trial got `404 {"error":"no provider to reach"}` from the harness's model proxy. It waited and tried again for 30 minutes, then ended with an error, and its experiment's work was lost. The pages already said "A trial under way keeps its model". It did not: the proxy gave every trial the rig's current workers' route, and a Claude subscription has no route through the proxy.
+
+1. **The route a trial starts with stays its own:** the harness keeps each trial's route from its start, and the model proxy reaches that route for the trial's token until the trial ends, whatever model the workers move to. A trial that starts after the move takes the new route. A credential minted for a check or a plan, and a call in its own terminal, reach their routes as before.
+2. **Tests:** after the workers move to a Claude subscription, a trial that started on a route through the proxy still reaches its provider with its key; one that starts after the move gets the new route; an ended trial's route goes.
+
+## Why
+
+The owner moves models when a subscription runs low. A move must never cost the work of the trials under way.
+
+## Done when
+
+- [ ] Items 1 and 2.
+- [ ] Pages: Give each agent its own model (the workers' row), the changelog.
+- [ ] On the lab, a trial in Codex or OpenCode goes on to its end after the workers' model changes.
+
+## Decisions
+
+## Progress
+
+- 2026-11-08 10:56 UTC: built. The service keeps each trial's route as its program starts (`src/harness/controller/agents.ts`, `src/harness/service/proxy.ts`) and the proxy reaches it for the trial's token (`src/harness/api/proxy.ts`); the routes of ended trials go as the next one is kept. Test: `tests/harness/api/proxy.test.ts`; it runs on the lab's VM.
+
+---
+
+Run with `/goal Complete docs/plan/goals/234-trial-keeps-its-route.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

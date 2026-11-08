@@ -540,6 +540,15 @@ export class HarnessService {
     return this.credentials.proxyTokenModel(token);
   }
 
+  keepTrialRoute(trial: string, model: ModelConfig): void {
+    const open = (t: string) => this.ledger.trials.get(t)?.ended_at === null;
+    this.credentials.keepTrialRoute(trial, model, open);
+  }
+
+  trialRoute(trial: string): ModelConfig | undefined {
+    return this.credentials.trialRoute(trial);
+  }
+
   mintMcpToken(caller: McpCaller, ms = 15 * 60_000): string {
     return this.credentials.mintMcpToken(caller, ms);
   }

@@ -71,7 +71,7 @@ When each agent takes its new model:
 
 | Agent | Takes the new model |
 | --- | --- |
-| **Workers** | At each new trial, within a minute of the save. A trial already running ends on the model it started with. The rig checks the new model at once |
+| **Workers** | At each new trial, within a minute of the save. A trial already running ends on the model it started with: one in OpenCode or Codex keeps reaching its provider through the harness's model proxy until it ends. The rig checks the new model at once |
 | **Planner** | At its next round's plan |
 | **Teachers**, **Auditor**, **Review panel**, **Synthesizer**, **Final writer** | At their next round. A call already under way, such as a review, ends on the model it started with |
 

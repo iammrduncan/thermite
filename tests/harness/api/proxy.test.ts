@@ -415,4 +415,77 @@ describe("the model proxy", () => {
       server.close();
     }
   });
+
+  test("a trial keeps the route it started with when the rig's workers move to another model (goal 234)", async () => {
+    const p = await provider();
+    try {
+      const env = makeHarnessEnv();
+      const out = await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
+      assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
+      const registry = new Registry(env.service.ledger);
+      const start = (id: string) =>
+        registry.startTrial({
+          id,
+          run: "smoke-1",
+          lane: "lane-1",
+          epoch: 1,
+          direction: "f",
+          parent: env.seedCommit,
+          token: `${id}-token`,
+        });
+      const file = join(mkdtempSync(join(tmpdir(), "thermite-proxy-")), "model-route.json");
+      const codexRoute = {
+        api: "openai" as const,
+        harness: "codex" as const,
+        baseUrl: `${p.url}/v1`,
+        model: "m",
+        apiKey: "the-old-route-key",
+        contextWindow: 0,
+        maxTokens: 0,
+      };
+      env.service.models = new ModelSource(file, codexRoute);
+      start("t-old");
+      env.service.keepTrialRoute("t-old", codexRoute);
+      // The owner moves the workers to a Claude subscription, which Claude Code reaches itself.
+      env.service.models = new ModelSource(file, {
+        api: "claude",
+        harness: "claude-code",
+        baseUrl: "https://api.anthropic.com",
+        model: "claude-test",
+        apiKey: "a-sign-in",
+        contextWindow: 0,
+        maxTokens: 0,
+      });
+      start("t-new");
+      const api = createHarnessApi(env.service, { supervisor: "sup-token-abcdef" });
+      const ask = (trial: string) =>
+        api.request("/v1/model-proxy/responses", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer trial.${trial}-token`,
+          },
+          body: JSON.stringify({ model: "m", stream: true }),
+        });
+      const old = await ask("t-old");
+      assert.equal(old.status, 200, "the trial under way still reaches its provider");
+      await old.text();
+      assert.equal(p.seen[0]?.headers.authorization, "Bearer the-old-route-key");
+      const fresh = await ask("t-new");
+      assert.equal(fresh.status, 404, "a trial that started after the move takes the new route");
+      assert.deepEqual(await fresh.json(), { error: "no provider to reach" });
+      // Once the trial ends, its route goes with the next one kept.
+      env.service.ledger.trials.finishTrial("t-old", {
+        stopped: "submitted",
+        turns: 1,
+        toolCalls: 0,
+        tokensIn: 0,
+        tokensOut: 0,
+      });
+      env.service.keepTrialRoute("t-new", codexRoute);
+      assert.equal(env.service.trialRoute("t-old"), undefined);
+    } finally {
+      p.server.close();
+    }
+  });
 });

@@ -53,6 +53,23 @@ export class ProxyCredentials {
     return v && v.until >= Date.now() ? v.model : undefined;
   }
 
+  /**
+   * The route each open trial started with (goal 234): its program reaches that provider through
+   * the proxy until the trial ends, also after the rig's workers move to another model.
+   */
+  private trialRoutes = new Map<string, ModelConfig>();
+
+  /** Keeps a trial's route; those of trials no longer `open` go. */
+  keepTrialRoute(trial: string, model: ModelConfig, open: (trial: string) => boolean): void {
+    for (const t of this.trialRoutes.keys()) if (!open(t)) this.trialRoutes.delete(t);
+    this.trialRoutes.set(trial, model);
+  }
+
+  /** The route a trial started with, while the harness keeps it. */
+  trialRoute(trial: string): ModelConfig | undefined {
+    return this.trialRoutes.get(trial);
+  }
+
   /** Credentials the MCP gateway takes besides trials' tokens: the planner's, one per plan. */
   private mcpTokens = new Map<string, { caller: McpCaller; until: number }>();
 

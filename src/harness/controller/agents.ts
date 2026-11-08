@@ -168,6 +168,8 @@ export function agentLinks(
     signal: AbortSignal,
   ): TrialLink => {
     const trial = { id: spec.trialId, run: spec.run, lane: spec.lane };
+    // Its route stays its own until it ends, whatever model the rig's workers move to (goal 234).
+    if (m) service.keepTrialRoute(spec.trialId, m);
     return {
       runner,
       model: m,

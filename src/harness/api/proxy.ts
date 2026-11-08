@@ -10,7 +10,8 @@ export function proxyRoutes(app: Hono, { service, registry }: ApiContext): void 
   // provider's key (or a ChatGPT sign-in's access token) never reaches the lane. It takes a
   // trial's token, a call's in its own terminal, or one the harness minted for a check or a plan
   // (as a bearer token, or as Anthropic's x-api-key), adds the real key and streams the answer. A minted token may name
-  // its own route: the planner's, when control gave the planner a model of its own (goal 073).
+  // its own route: the planner's, when control gave the planner a model of its own (goal 073). A
+  // trial keeps the route it started with until it ends (goal 234).
   // The tokens a trial's answers report are kept with the trial: its run's budget counts them,
   // not what the trial's program says.
   const openTrial = (token: string) => {
@@ -32,9 +33,11 @@ export function proxyRoutes(app: Hono, { service, registry }: ApiContext): void 
     const call = given.startsWith("call.") ? service.callOf(given) : undefined;
     const ok = trial ? trialId !== undefined : call !== undefined || service.proxyTokenValid(given);
     if (!ok) return c.json({ error: "unauthorized" }, 401);
+    // A trial reaches the route it started with (goal 234); the rest, their own or the workers'.
     const m =
-      (trial ? undefined : (call?.model ?? service.proxyTokenModel(given))) ??
-      service.models?.current();
+      (trialId !== undefined
+        ? service.trialRoute(trialId)
+        : (call?.model ?? service.proxyTokenModel(given))) ?? service.models?.current();
     // OpenCode's own models need no proxy; a Claude subscription is used only by Claude Code.
     if (!m || !throughProxy(m.api)) return c.json({ error: "no provider to reach" }, 404);
     return forwardToProvider(
