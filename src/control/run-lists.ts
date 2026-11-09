@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { agentRun, type RunOnRig, type RunView } from "./views/index.ts";
+import { agentRun, type JudgeJob, type RunOnRig, type RunView } from "./views/index.ts";
 
 /**
  * A run's detail of a size an agent can read (goal 128), for MCP's get_run and REST's
@@ -194,4 +194,22 @@ export function attemptRead(
     champion_seq: champion?.seq ?? null,
     attempt: a,
   };
+}
+
+/** A run's judge jobs that wait in the queue, by kind, the longest waiting first (goal 238). */
+export function judgeWaits(
+  u: { judge: { queued: readonly Pick<JudgeJob, "kind" | "run" | "queued_at">[] } },
+  run: string,
+): { kind: string; count: number; since: string }[] {
+  const by = new Map<string, { kind: string; count: number; since: string }>();
+  for (const j of u.judge.queued) {
+    if (j.run !== run) continue;
+    const w = by.get(j.kind);
+    if (!w) by.set(j.kind, { kind: j.kind, count: 1, since: j.queued_at });
+    else {
+      w.count++;
+      if (j.queued_at < w.since) w.since = j.queued_at;
+    }
+  }
+  return [...by.values()].sort((a, b) => a.since.localeCompare(b.since));
 }

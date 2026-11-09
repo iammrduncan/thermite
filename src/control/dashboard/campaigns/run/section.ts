@@ -37,6 +37,7 @@ import {
   heldWords,
   jobHtml,
   leftByClose,
+  passedOverWords,
   runBrief,
   timeline,
   waitWords,
@@ -336,6 +337,8 @@ export function runHelpers(dash: Dashboard) {
       esc(waitWords(i, now)),
       // Enough changes wait for the judge (goal 230): an open_attempts rule raises the limit.
       esc(heldWords(i)),
+      // Jobs the judge passes over for the screens it takes first (goal 238).
+      i.status === "running" ? esc(passedOverWords(u, i.id, now)) : "",
       // A hill climb's baseline (goal 115): the judge measures the starting point first.
       i.status === "running" ? esc(baselineWords(i)) : "",
       // A runner's fetch of the run's model files (goal 213), which its first build waits for.

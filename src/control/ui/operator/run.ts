@@ -1,3 +1,4 @@
+import { judgeWaits } from "../../run-lists.ts";
 import {
   type AttemptView,
   currentChampion,
@@ -69,6 +70,41 @@ export function heldWords(r: RunView): string {
   if (r.status !== "running" || !h) return "";
   const from = h.from === "rule" ? "its open_attempts rule" : "its contract's max_open_attempts";
   return `Its lanes wait: ${h.open} changes the judge has not settled, at most ${h.limit} (${from}). An open_attempts rule raises it.`;
+}
+
+/** A judge job's kind in words, one and several (goal 238). */
+const JOB_NOUNS: Record<string, [string, string]> = {
+  baseline: ["baseline", "baselines"],
+  evaluate: ["screen", "screens"],
+  parent_screen: ["parent screen", "parent screens"],
+  confirm: ["confirmation", "confirmations"],
+  validate: ["goal check", "goal checks"],
+  calibrate: ["calibration", "calibrations"],
+};
+
+/** How long a job waits before the run's page names it: the judge has passed it over (goal 238). */
+const PASSED_OVER_MS = 60 * 60 * 1000;
+
+/**
+ * The jobs the judge passes over for the confirmations and screens it takes first, in words
+ * (goal 238): those of other kinds that have waited an hour or more; "" when none.
+ */
+export function passedOverWords(
+  u: Parameters<typeof judgeWaits>[0],
+  run: string,
+  now: number,
+): string {
+  const old = judgeWaits(u, run).filter(
+    (w) =>
+      w.kind !== "evaluate" && w.kind !== "confirm" && now - Date.parse(w.since) >= PASSED_OVER_MS,
+  );
+  if (!old.length) return "";
+  const parts = old.map((w) => {
+    const [one, many] = JOB_NOUNS[w.kind] ?? [w.kind, w.kind];
+    const verb = w.count === 1 ? "has" : "have";
+    return `${w.count} ${w.count === 1 ? one : many} ${verb} waited since ${waitEnd(w.since)}`;
+  });
+  return `${cap(parts.join(", and "))}: the judge takes the confirmations and screens first.`;
 }
 
 /**

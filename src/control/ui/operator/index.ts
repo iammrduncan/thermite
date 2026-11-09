@@ -25,6 +25,7 @@ export {
   heldWords,
   jobHtml,
   leftByClose,
+  passedOverWords,
   runFigure,
   runProgress,
   runRow,
