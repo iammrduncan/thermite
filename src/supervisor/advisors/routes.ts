@@ -39,12 +39,45 @@ const pointOf = (route: AdvisorRoute) =>
     : undefined;
 
 /**
+ * The newest access token control sent for a route's ChatGPT sign-in, in any role's route, else
+ * the route's own: control renews a sign-in's token for every route that uses it at once.
+ */
+function keyNowOf(route: AdvisorRoute, now: () => AdvisorRoutesValue | undefined): () => string {
+  return () => {
+    const r = now();
+    const routes = r
+      ? [
+          ...(r.teacher_models ?? []),
+          r.merged_by,
+          r.auditor,
+          r.review_panel,
+          r.synthesizer,
+          r.final_writer,
+        ]
+      : [];
+    return (
+      routes.find((x) => x?.type === "chatgpt" && x.name === route.name)?.api_key ?? route.api_key
+    );
+  };
+}
+
+/**
  * One role's runtime from its route, or undefined when advisors can't run it. The route's window
  * and compaction point go with it (goal 070): Pi compacts the call's conversation with them, and
  * Claude Code, OpenCode and Codex get them in their own settings. So does its provider's name,
- * which the role's model usage is recorded with (goal 075).
+ * which the role's model usage is recorded with (goal 075). `now`: control's newest routes, from
+ * which a ChatGPT sign-in's call reads the newest token at each request.
  */
-export function runtimeOf(route: AdvisorRoute, name: string): AdvisorRuntime | undefined {
+export function runtimeOf(
+  route: AdvisorRoute,
+  name: string,
+  now?: () => AdvisorRoutesValue | undefined,
+): AdvisorRuntime | undefined {
+  const rt = runtimeOfRoute(route, name);
+  return rt && now && route.type === "chatgpt" ? { ...rt, keyNow: keyNowOf(route, now) } : rt;
+}
+
+function runtimeOfRoute(route: AdvisorRoute, name: string): AdvisorRuntime | undefined {
   const compactAt = pointOf(route);
   if (route.type === "claude")
     return {
@@ -126,27 +159,31 @@ export function runtimeOf(route: AdvisorRoute, name: string): AdvisorRuntime | u
 /**
  * Control's advisors' routes, from the rig's config on the message bus, as runtimes by role: each teacher's model (teacher-1 and teacher-2), the merged by model, the
  * auditor, the review panel three times (reviewer-1 to reviewer-3), the synthesizer and the final
- * writer.
+ * writer. `now`: control's newest routes, which a ChatGPT sign-in's calls read its token from.
  */
-export function advisorsOf(r: AdvisorRoutesValue): ControlAdvisors {
+export function advisorsOf(
+  r: AdvisorRoutesValue,
+  now?: () => AdvisorRoutesValue | undefined,
+): ControlAdvisors {
+  const one = (route: AdvisorRoute, name: string) => runtimeOf(route, name, now);
   const many = (route: AdvisorRoute | null | undefined, base: string, n: number) => {
     if (!route) return undefined;
-    const list = Array.from({ length: n }, (_, i) => runtimeOf(route, `${base}-${i + 1}`)).filter(
+    const list = Array.from({ length: n }, (_, i) => one(route, `${base}-${i + 1}`)).filter(
       (x): x is AdvisorRuntime => x !== undefined,
     );
     return list.length ? list : undefined;
   };
   const teachers = (r.teacher_models ?? [])
     .slice(0, TEACHERS_MAX)
-    .map((route, i) => runtimeOf(route, `teacher-${i + 1}`))
+    .map((route, i) => one(route, `teacher-${i + 1}`))
     .filter((x): x is AdvisorRuntime => x !== undefined);
   return {
     teachers: teachers.length ? teachers : undefined,
-    merged_by: r.merged_by ? runtimeOf(r.merged_by, "merged-by") : undefined,
-    auditor: r.auditor ? runtimeOf(r.auditor, "auditor") : undefined,
+    merged_by: r.merged_by ? one(r.merged_by, "merged-by") : undefined,
+    auditor: r.auditor ? one(r.auditor, "auditor") : undefined,
     review_panel: many(r.review_panel, "reviewer", 3),
-    synthesizer: r.synthesizer ? runtimeOf(r.synthesizer, "synthesizer") : undefined,
-    final_writer: r.final_writer ? runtimeOf(r.final_writer, "final-writer") : undefined,
+    synthesizer: r.synthesizer ? one(r.synthesizer, "synthesizer") : undefined,
+    final_writer: r.final_writer ? one(r.final_writer, "final-writer") : undefined,
   };
 }
 

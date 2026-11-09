@@ -309,7 +309,9 @@ async function main(): Promise<void> {
   const refreshAdvisors = async () => {
     // Nothing from the bus yet: the roles taken last stay.
     const given = known.get("advisor-routes");
-    if (given) controlAdvisors = advisorsOf(given);
+    // A ChatGPT sign-in's call reads the newest token at each request: one renewed during a
+    // round reaches the calls already under way.
+    if (given) controlAdvisors = advisorsOf(given, () => known.get("advisor-routes"));
     advisors = mergeAdvisors(fileAdvisors, controlAdvisors);
     return advisors;
   };

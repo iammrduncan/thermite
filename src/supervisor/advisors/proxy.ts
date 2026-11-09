@@ -49,9 +49,11 @@ export const ADVISOR_PROXY_PATH = "/v1/model-proxy";
  * (goal 169). `program`: the advisor's program, the Codex CLI hearing a full ChatGPT plan as its
  * own usage limit. `onSearch`: a teacher's call (goal 232), whose Codex CLI may reach the
  * provider's search endpoint for its own web search; it hears each search's answer.
+ * `target.keyNow`: the key at each request, for a ChatGPT sign-in whose token control renews
+ * while the call runs; else `target.key` for the whole call.
  */
 export async function serveAdvisorModel(
-  target: ForwardTarget,
+  target: ForwardTarget & { keyNow?: (() => string) | undefined },
   onError?: ((a: ProviderErrorAnswer) => void) | undefined,
   program?: Harness | undefined,
   onSearch?: ((a: SearchAnswer) => void) | undefined,
@@ -78,7 +80,7 @@ export async function serveAdvisorModel(
         program,
         webSearch: onSearch !== undefined,
       },
-      target,
+      { api: target.api, baseUrl: target.baseUrl, key: target.keyNow?.() ?? target.key },
       onError,
       // A stream that goes silent is broken off (goal 079): the advisor's program sees a broken
       // connection or a 504, as from any gateway, and the supervisor's log says so.

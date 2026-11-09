@@ -114,7 +114,7 @@ export async function runCliHarness<S extends z.ZodType>(
       });
     if (!native)
       proxy = await serveAdvisorModel(
-        { api: model.api, baseUrl: model.baseUrl, key },
+        { api: model.api, baseUrl: model.baseUrl, key, keyNow: rt.keyNow },
         (a) => {
           answered = a;
         },

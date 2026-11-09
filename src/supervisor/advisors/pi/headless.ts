@@ -53,7 +53,11 @@ export async function runPi<S extends z.ZodType>(
   const { tools, mcpAt } = advisorPiTools(t);
   const apiKey = piKey(rt);
   if (!apiKey) return { ...result, error: `advisor ${rt.name} has no key` };
-  const cfg = piModel(rt, { baseUrl: rt.base_url.replace(/\/$/, ""), apiKey });
+  // Straight to the provider: a ChatGPT sign-in's renewed token reaches the call's later requests.
+  const cfg = {
+    ...piModel(rt, { baseUrl: rt.base_url.replace(/\/$/, ""), apiKey }),
+    keyNow: rt.keyNow,
+  };
   // Each model call's usage, the compaction summaries' included (goal 075).
   const usage: AdvisorUsage = { ...(advisorRoute(rt) as UsageRoute), calls: [] };
   result.usage = usage;

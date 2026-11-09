@@ -209,7 +209,7 @@ export async function runInTerminal<S extends z.ZodType>(
       });
     if (key !== undefined)
       proxy = await serveAdvisorModel(
-        { api: model.api, baseUrl: model.baseUrl, key },
+        { api: model.api, baseUrl: model.baseUrl, key, keyNow: rt.keyNow },
         (a) => {
           answered = { ...a, at: Date.now() };
         },

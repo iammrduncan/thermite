@@ -131,7 +131,12 @@ const Runtime = z.discriminatedUnion("runtime", [
     provider: ProviderName,
   }),
 ]);
-export type AdvisorRuntime = z.infer<typeof Runtime>;
+/**
+ * A runtime as the supervisor runs it. A role control gives a ChatGPT sign-in also reads the
+ * newest access token control sent (`keyNow`), at each of a call's requests: control renews the
+ * token only in its last minutes when OpenAI holds the renewal back, and a call can outlast it.
+ */
+export type AdvisorRuntime = z.infer<typeof Runtime> & { keyNow?: (() => string) | undefined };
 
 /**
  * Where an advisor's calls go, for its model usage (goal 075); none for a command-line agent,

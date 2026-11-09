@@ -272,6 +272,7 @@ export async function runInPiView<S extends z.ZodType>(
       api: rt.api === "anthropic" || rt.api === "chatgpt" ? rt.api : undefined,
       baseUrl: rt.base_url.replace(/\/$/, ""),
       key,
+      keyNow: rt.keyNow,
     });
     server = await serveCall({ auth, route });
     // One of the runs' root's children, which the advisors' runner hands to its user per run.

@@ -7,9 +7,11 @@ import { join } from "node:path";
 import { describe, type TestContext, test } from "node:test";
 import { Type } from "@earendil-works/pi-ai";
 import { z } from "zod";
+import type { AdvisorRoutesValue } from "../../../src/core/link/config.ts";
 import { CODEX_ADVISOR_OFF } from "../../../src/supervisor/advisors/cli.ts";
 import { type AdvisorRuntime, runAdvisor } from "../../../src/supervisor/advisors/index.ts";
 import { serveAdvisorModel } from "../../../src/supervisor/advisors/proxy.ts";
+import { advisorsOf } from "../../../src/supervisor/advisors/routes.ts";
 import { testPrompt } from "../../helpers/advisor-prompt.ts";
 
 /**
@@ -526,6 +528,51 @@ describe("the advisor's model proxy", () => {
     });
     assert.equal(ok.status, 200);
     assert.equal(p.seen.at(-1)?.headers.authorization, "Bearer access");
+  });
+
+  test("a ChatGPT sign-in's call takes the token control renewed while it runs, at its next request", async (t) => {
+    const p = await provider(t);
+    const route = (api_key: string) => ({
+      name: "codex-1",
+      type: "chatgpt",
+      harness: "codex",
+      base_url: p.url,
+      model: "m",
+      context_window: 0,
+      reasoning: null,
+      api_key,
+    });
+    // Control's routes as the rig's config on the bus has them now.
+    let routes: AdvisorRoutesValue = { teacher_models: [route("access-one")] };
+    const [teacher] = advisorsOf(routes, () => routes).teachers ?? [];
+    assert.ok(teacher?.runtime === "codex" && teacher.keyNow);
+    const proxy = await serveAdvisorModel(
+      { api: "chatgpt", baseUrl: p.url, key: teacher.api_key ?? "", keyNow: teacher.keyNow },
+      undefined,
+      "codex",
+    );
+    t.after(() => proxy.close());
+    const ask = async () =>
+      (
+        await fetch(`${proxy.root}/responses`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${proxy.token}`, "content-type": "application/json" },
+          body: JSON.stringify({ model: "m", input: "hi" }),
+        })
+      ).status;
+    assert.equal(await ask(), 200);
+    assert.equal(p.seen.at(-1)?.headers.authorization, "Bearer access-one");
+    // Renewed during the call: the auditor's route carries the sign-in's new token too.
+    routes = { teacher_models: [], auditor: route("access-two") };
+    assert.equal(await ask(), 200);
+    assert.equal(p.seen.at(-1)?.headers.authorization, "Bearer access-two");
+    // No route has the sign-in now: the call keeps the token it had.
+    routes = {};
+    await ask();
+    assert.equal(p.seen.at(-1)?.headers.authorization, "Bearer access-one");
+    // An API key's route reads none.
+    const keyed = advisorsOf({ auditor: { ...route("k"), type: "openai" } }, () => routes).auditor;
+    assert.equal(keyed?.keyNow, undefined);
   });
 
   test("a teacher's Codex search: only its call reaches the search endpoint, and each answer is heard (goal 232)", async (t) => {

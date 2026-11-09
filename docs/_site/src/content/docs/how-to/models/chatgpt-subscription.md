@@ -66,7 +66,7 @@ The published harness images carry the Codex CLI. An image you build with an emp
 
 ## How the login is kept
 
-Control exchanges the code for the login, seals it, and renews it from then on. Only control renews it. A rig whose agents use the subscription gets a token that lasts one hour, and control gives it a fresh one while it uses it. The row on **Providers** says "control renews the login" while all is well.
+Control exchanges the code for the login, seals it, and renews it from then on. Only control renews it. A rig whose agents use the subscription gets a token that lasts one hour, and control gives it a fresh one while it uses it: in the token's last half hour, or later when OpenAI does not allow a renewal before then. A worker's or an advisor's call under way takes the fresh token at its next request. The row on **Providers** says "control renews the login" while all is well.
 
 If the login ends, for example because you disconnected Thermite in ChatGPT, the row shows "its ChatGPT sign-in ended" and the reason, ending "sign in again". To sign in again:
 
