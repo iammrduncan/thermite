@@ -193,9 +193,9 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **A faster judge, and a running run changed in place.** Released 2026-11-09. The new work after v0.1.3, with v0.1.4's fixes: its changes are in the [changelog](../../CHANGELOG.md). A goal still `IN_PROGRESS` below is built and released, and waits for its check on the lab or for its issue to be closed. The goals not started moved at its release (the owner, 2026-11-09: "cut v0.2.0 with what changes we have now"): the fixes to [v0.2.x](#v02x), each a version of its own, and the rest to [v0.3.0](#v030).
 
-- [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `IN_PROGRESS`
-- [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `IN_PROGRESS`
-- [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
+- [189](goals/_completed/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `VERIFIED`
+- [190](goals/_completed/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `VERIFIED`
+- [191](goals/_completed/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `VERIFIED`
 - [215](goals/_completed/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `VERIFIED`
 - [217](goals/_completed/217-lane-fetch-progress.goal) A lane's runner begins fetching the model files when the run starts, and a lane is told how the whole fetch stands · `VERIFIED`
 - [218](goals/218-advisor-tools-in-terminal.goal) A teacher in Claude Code's own terminal has its tools from its first turn · `IN_PROGRESS`
@@ -215,7 +215,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [235](goals/_completed/235-supervisor-cpus-for-terminals.goal) The supervisor has the CPUs to start its advisors in their own terminals · `VERIFIED`
 - [238](goals/238-judge-cards-keep-noise-floor.goal) Every judge card keeps a noise floor, and no judge job starves behind a full queue · `IN_PROGRESS`
 - [240](goals/_completed/240-hung-run-holds-judge.goal) A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows · `VERIFIED`
-- [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `IN_PROGRESS`
+- [193](goals/_completed/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `VERIFIED`
 - [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `IN_PROGRESS`
 - [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `IN_PROGRESS`
 

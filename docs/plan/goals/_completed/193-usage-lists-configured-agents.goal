@@ -1,16 +1,16 @@
 ---
 id: "193"
 title: "The usage table lists every agent with a model, with no calls yet when it has none"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.2.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 193 · The usage table lists every agent with a model, with no calls yet when it has none
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 
@@ -29,7 +29,7 @@ An agent that is set up but never works should stand out at a glance.
 - [x] Items 1 to 3, with tests: tests/control/usage-agents.test.ts. Passing on the lab's test machine is still to come.
 - [x] A mockup the owner agrees to, before the table changes: "Build it as drawn", 2026-11-04.
 - [x] Pages: the run page's reference, the MCP tools, and the changelog. Also the REST API's usage report.
-- [ ] Issue 52 closed with its commit.
+- [x] Issue 52 closed with its commit.
 
 ## Decisions
 
@@ -43,7 +43,8 @@ An agent that is set up but never works should stand out at a glance.
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
 - 2026-11-04: Researched and verified on v0.1.3 (73d0d166): the Stats table (ui/usage.ts runStatsTab) drew only `by_agent_model`, made of records (core/usage.ts usageReport), so an agent with a model and no call had no row. Control keeps what is needed: each agent's model (rigs/model/request.ts agentModelsOf), the advisors file the supervisor reports (advisorsFileOf), the rig's settings, and each rig's Live lines (store/live.ts).
 - 2026-11-04: Mockup made and approved. Built: core/usage.ts withConfigured; control/usage-agents.ts configuredAgents, with store/live.ts noAnswers for Live's why; usage-report.ts usageData adds the lines for one run over all its time; the Stats table's **No calls yet** rows; the `model_usage` description. Typecheck, lint, the size, import and loose-ends checks pass; the tests run on the lab's test machine.
+- 2026-11-09: Issue 52 closed with its commit, at the owner's word ("Close issues that are fixed in v0.2.0"): v0.2.0 released it. Verified.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/193-usage-lists-configured-agents.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/_completed/193-usage-lists-configured-agents.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).
