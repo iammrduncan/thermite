@@ -404,6 +404,10 @@ const internalSettings = new Map([
   ],
   ["THERMITE_LANE_CACHE", "the controller gives each lane's commands its build cache"],
   ["THERMITE_BASELINE_DIR", "the judge gives a hill climb's kit check its baseline folder"],
+  ["THERMITE_ONCE", "the judge tells a kit's run whether it measures the once metrics"],
+  ["THERMITE_ARM", "the judge tells a kit's run which arm it is"],
+  ["THERMITE_BLOCK", "the judge tells a kit's run its block in the job"],
+  ["THERMITE_JOB", "the judge tells a kit's run its job's kind"],
   ["THERMITE_PROBE_TOKEN", "control gives a RunPod test pod its report path"],
   ["THERMITE_PROBE_JS", "control gives a RunPod test pod its probe script"],
 ]);

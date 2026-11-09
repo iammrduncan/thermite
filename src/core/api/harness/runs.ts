@@ -38,6 +38,8 @@ const Spec = z.object({
   baseline: z.union([z.object({ written: Folder }), z.object({ run: RunId, job: Job })]).optional(),
   /** The metrics the run decides by; none: all of the kit's. */
   uses: z.array(z.string().max(200)).max(200).optional(),
+  /** Which block of which job the run is for (goal 233); none: a run outside a job's blocks. */
+  at: z.object({ block: z.number().int().min(1).max(1000), job: z.string().max(40) }).optional(),
 });
 
 const Arm = z.object({

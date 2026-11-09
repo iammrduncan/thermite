@@ -117,7 +117,12 @@ async function runBlock(
     for (let k = 0; k < x.runsPerCell; k++) {
       const pair = !b ? [a] : order() < 0.5 ? [a, b] : [b, a];
       for (const arm of pair) {
-        const m = await judge.target.measure(ctx, arm, cell);
+        // Each run is told its block and its job (goal 233), so a kit measures its once metrics once.
+        const m = await judge.target.measure(
+          { ...ctx, at: { block: n, job: job.kind } },
+          arm,
+          cell,
+        );
         const r = m.run;
         const runThrottle = m.throttled ?? 0;
         worstRunThrottle = Math.max(worstRunThrottle, runThrottle);

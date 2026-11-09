@@ -135,7 +135,21 @@ type Policy = Pick<
 >;
 
 /** A kit's metrics with their roles (goal 209), as the judge has the run's kit. */
-export type Roles = Readonly<Record<string, MetricRole>>;
+export type Roles = Readonly<Record<string, MetricRole & { once?: true | undefined }>>;
+
+/**
+ * A metric's values on one cell in each block, the candidate's: a metric the kit measures once a
+ * job (goal 233) in the blocks that report it alone, any other in every block.
+ */
+function candidateValues(
+  blocks: readonly Block[],
+  metric: string,
+  cell: string,
+  roles: Roles | undefined,
+): (number | undefined)[] {
+  const xs = blocks.map((b) => b.candidate[metric]?.[cell]);
+  return roles?.[metric]?.once ? xs.filter((x) => x !== undefined) : xs;
+}
 
 /**
  * The guards of the metric roles (goal 209): the kit's and the contract's `metrics`. The
@@ -217,13 +231,14 @@ function valueGuardFailures(
   guards: readonly PlannedGuard[],
   blocks: readonly Block[],
   cells: readonly string[],
+  roles: Roles | undefined,
 ): string[] {
   const out: string[] = [];
   for (const g of guards.filter((x) => x.rule.against === "value")) {
     const v = g.rule.value ?? 0;
     for (const cell of cells) {
-      const xs = blocks.map((b) => b.candidate[g.metric]?.[cell]);
-      if (xs.some((x) => x === undefined || !Number.isFinite(x))) {
+      const xs = candidateValues(blocks, g.metric, cell, roles);
+      if (!xs.length || xs.some((x) => x === undefined || !Number.isFinite(x))) {
         out.push(`${g.metric}/${cell}: missing or non-finite`);
         continue;
       }
@@ -374,15 +389,19 @@ export function blockEffects(
 }
 
 /** Hard constraints on absolute values: the candidate's mean per cell must satisfy each. */
-export function hardConstraintFailures(policy: Policy, blocks: readonly Block[]): string[] {
+export function hardConstraintFailures(
+  policy: Policy,
+  blocks: readonly Block[],
+  roles?: Roles | undefined,
+): string[] {
   const failures: string[] = [];
   for (const h of policy.hard_constraints) {
     // A `check` constraint is refused at validation (goal 163); one in a contract stored before
     // was never checked, and is not now.
     if (h.kind === "check") continue;
     for (const cell of policy.cells) {
-      const values = blocks.map((b) => b.candidate[h.metric]?.[cell]);
-      if (values.some((v) => v === undefined || !Number.isFinite(v))) {
+      const values = candidateValues(blocks, h.metric, cell, roles);
+      if (!values.length || values.some((v) => v === undefined || !Number.isFinite(v))) {
         failures.push(`${h.metric}/${cell}: missing or non-finite`);
         continue;
       }
@@ -486,6 +505,7 @@ export function decideScreen(
     extra.filter((g) => g.rule.ask),
     blocks,
     policy.cells,
+    roles,
   );
   const result = (verdict: ScreenVerdict | undefined, reasons: string) => ({
     verdict,
@@ -498,11 +518,12 @@ export function decideScreen(
   });
 
   const failures = [
-    ...hardConstraintFailures(policy, blocks),
+    ...hardConstraintFailures(policy, blocks, roles),
     ...valueGuardFailures(
       extra.filter((g) => !g.rule.ask),
       blocks,
       policy.cells,
+      roles,
     ),
   ];
   if (failures.length) return result("infeasible", `hard constraints: ${failures.join("; ")}`);
@@ -595,6 +616,7 @@ export function decideConfirm(
     extra.filter((g) => g.rule.ask),
     blocks,
     policy.cells,
+    roles,
   );
   const result = (verdict: ConfirmVerdict, reasons: string) => ({
     verdict,
@@ -608,11 +630,12 @@ export function decideConfirm(
   });
 
   const failures = [
-    ...hardConstraintFailures(policy, blocks),
+    ...hardConstraintFailures(policy, blocks, roles),
     ...valueGuardFailures(
       extra.filter((g) => !g.rule.ask),
       blocks,
       policy.cells,
+      roles,
     ),
   ];
   if (failures.length) return result("infeasible", `hard constraints: ${failures.join("; ")}`);

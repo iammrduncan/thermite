@@ -32,7 +32,15 @@ export interface MeasureSpec {
    */
   baseline?: { written: string } | { kept: string; run: string; job: number } | undefined;
   uses?: ReadonlySet<string> | undefined;
+  /** Which block of which job a run is for (goal 233): its run is told, and a once metric's need. */
+  at?: RunAt | undefined;
   note?: MeasureContext["note"];
+}
+
+/** A run's place: the block of the job, from 1, and the job's kind (goal 233). */
+interface RunAt {
+  block: number;
+  job: string;
 }
 
 /** What a build is made from, with the kit's repository, which names it anywhere. */

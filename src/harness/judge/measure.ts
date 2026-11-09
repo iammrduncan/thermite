@@ -94,6 +94,31 @@ export interface MeasureContext {
    * the kit is needed.
    */
   uses?: ReadonlySet<string> | undefined;
+  /** Which block of which job the run is for (goal 233); none: a run outside a job's blocks. */
+  at?: { block: number; job: string } | undefined;
+}
+
+/**
+ * Whether a run measures the kit's once metrics (goal 233): the change's first block of a job
+ * (the starting point's in a baseline), and every run outside a job's blocks.
+ */
+export function measuresOnce(at: MeasureContext["at"], arm: Arm["name"]): boolean {
+  return !at || (at.block === 1 && (arm === "candidate" || arm === "baseline"));
+}
+
+/** Whether the kit measures a metric once a job (goal 233). */
+function onceMetric(kit: Pick<Kit, "metrics">, name: string): boolean {
+  const m = kit.metrics[name];
+  return m !== undefined && "once" in m && m.once === true;
+}
+
+/** What a run is told of its place (goal 233): its block, its arm, its job and the once metrics. */
+function placeEnv(ctx: MeasureContext, arm: Arm["name"]): Record<string, string> {
+  return {
+    THERMITE_ONCE: measuresOnce(ctx.at, arm) ? "1" : "0",
+    THERMITE_ARM: arm,
+    ...(ctx.at ? { THERMITE_BLOCK: String(ctx.at.block), THERMITE_JOB: ctx.at.job } : {}),
+  };
 }
 
 /**
@@ -200,7 +225,7 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
     // The cell's own limit when it sets one, else the kit's; the driver's run has the same.
     const limits = (at: string) => ({
       cwd: at,
-      env: {},
+      env: placeEnv(ctx, arm.name),
       timeoutMs: cellTimeoutS(ctx.kit, cell) * 1000,
       rssLimitBytes: ctx.kit.run.rss_mib * 1024 * 1024,
       disk: { path: at, limitBytes: ctx.kit.run.disk_mib * 1024 * 1024 },
@@ -257,7 +282,7 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
     renameSync(out, join(checkDir, "out"));
     const checkerRole = ctx.checkerRole ?? "checker";
     await ctx.runner.handOver(checkDir, checkerRole);
-    const check = await runCheck(ctx, checkerRole, checkDir, {
+    const check = await runCheck(ctx, checkerRole, checkDir, arm.name, {
       build: arm.dir,
       params: join(checkDir, "params.txt"),
       params_json: join(checkDir, "params.json"),
@@ -276,7 +301,10 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
     }
     const seconds = outcome.wallMs / 1000;
     const metrics: Record<string, number> = {};
-    const needed = (name: string) => !ctx.uses || ctx.uses.has(name);
+    // A once metric (goal 233) is needed only in the run that measures it.
+    const once = measuresOnce(ctx.at, arm.name);
+    const needed = (name: string) =>
+      (!ctx.uses || ctx.uses.has(name)) && (once || !onceMetric(ctx.kit, name));
     for (const [name, m] of Object.entries(ctx.kit.metrics)) {
       if ("from" in m && m.from === "check") {
         // The judge's check worked it out from the outputs; it must be a number above zero, or
@@ -337,13 +365,17 @@ async function runCheck(
   ctx: MeasureContext,
   role: Role,
   cwd: string,
+  arm: Arm["name"],
   vars: Record<string, string>,
 ): Promise<CheckResult> {
   const r = await ctx.runner.run({
     role,
     argv: expandArgv(ctx.kit.check.command, vars),
     cwd,
-    env: ctx.baselineDir ? { THERMITE_BASELINE_DIR: ctx.baselineDir } : {},
+    env: {
+      ...placeEnv(ctx, arm),
+      ...(ctx.baselineDir ? { THERMITE_BASELINE_DIR: ctx.baselineDir } : {}),
+    },
     timeoutMs: ctx.kit.check.timeout_s * 1000,
   });
   const last = r.stdout.trim().split("\n").pop() ?? "";

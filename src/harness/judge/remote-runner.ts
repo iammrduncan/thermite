@@ -358,6 +358,7 @@ export class RemoteRunner implements RigRunner {
           ? { baseline: "written" in b ? { written: b.written } : { run: b.run, job: b.job } }
           : {}),
         ...(spec.uses ? { uses: [...spec.uses] } : {}),
+        ...(spec.at ? { at: spec.at } : {}),
       },
       arm: { name: arm.name, dir: arm.dir, manifest: { ...arm.manifest } },
       cell,

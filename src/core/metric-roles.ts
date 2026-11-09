@@ -111,6 +111,25 @@ export function roleProblems(name: string, r: MetricRole): string[] {
  * guard against the baseline or the champion. The judge compares those by their ratio, which a
  * zero has none of; an informational metric and a guard against a value compare values.
  */
+/**
+ * A metric measured once a job (goal 233) has a value in the change's first block alone: it can't
+ * be a priority metric, nor have a guard against the champion or the baseline, which compare it
+ * block by block.
+ */
+export function onceProblems(name: string, r: MetricRole): string[] {
+  const out: string[] = [];
+  if (r.kind === "priority" || r.priority !== undefined)
+    out.push(
+      `metric ${name} is measured once a job, so it can't be a priority metric: the judge compares those block by block`,
+    );
+  for (const g of r.guards ?? [])
+    if (g.against !== "value")
+      out.push(
+        `metric ${name} is measured once a job, so its guard can't be against the ${g.against}, which the judge compares block by block: hold it against a value`,
+      );
+  return out;
+}
+
 export function zeroProblems(name: string, r: MetricRole): string[] {
   const out: string[] = [];
   if (r.kind === "priority" || r.priority !== undefined)

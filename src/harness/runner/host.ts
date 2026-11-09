@@ -193,6 +193,7 @@ export class RunHost {
               kitCommit: a.spec.kit_commit,
               ...(baseline ? { baseline } : {}),
               ...(a.spec.uses ? { uses: new Set(a.spec.uses) } : {}),
+              ...(a.spec.at ? { at: a.spec.at } : {}),
             },
             // The build's folder is one this runner named in its build's answer.
             { ...a.arm, manifest: a.arm.manifest as never },

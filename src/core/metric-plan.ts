@@ -54,7 +54,10 @@ type Plannable = Pick<
 > & { acceptance?: Pick<HillClimbContract["acceptance"], "min_effects"> | undefined };
 /** A kit's metrics, as kit.json names them, each with its role. */
 /** A kit's metrics as the plan reads them: their roles, and whether each may be zero (goal 211). */
-type KitMetrics = Record<string, MetricRole & { may_be_zero?: true | undefined }>;
+type KitMetrics = Record<
+  string,
+  MetricRole & { may_be_zero?: true | undefined; once?: true | undefined }
+>;
 
 const byPriority = (a: [string, MetricRole], b: [string, MetricRole]) =>
   (a[1].priority ?? 0) - (b[1].priority ?? 0);
@@ -181,6 +184,18 @@ export function planProblems(c: Plannable, kitMetrics: KitMetrics): string[] {
     if (g.rule.against !== "value" && zero(g.metric))
       out.push(
         `the guard on ${g.metric}, ${guardWords(g.rule)}, compares it by its ratio, and it may be zero: hold it against a value`,
+      );
+  // A metric measured once a job (goal 233) has a value in one block: never compared by blocks.
+  const once = (m: string) => kitMetrics[m]?.once === true;
+  for (const p of plan.priorities)
+    if (once(p.metric))
+      out.push(
+        `${p.metric} is measured once a job, so it can't be a priority metric: the judge compares those block by block`,
+      );
+  for (const g of plan.guards)
+    if (g.rule.against !== "value" && once(g.metric))
+      out.push(
+        `the guard on ${g.metric}, ${guardWords(g.rule)}, compares it block by block, and it is measured once a job: hold it against a value`,
       );
   for (const g of plan.guards.filter((x) => x.from === "contract")) {
     const loose = (kitMetrics[g.metric]?.guards ?? []).find(

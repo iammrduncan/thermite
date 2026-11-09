@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type Contract, ID_PATTERN } from "./contract.ts";
 import { McpUses } from "./mcp.ts";
 import { metricPlan, planProblems } from "./metric-plan.ts";
-import { MetricRole, roleProblems, zeroProblems } from "./metric-roles.ts";
+import { MetricRole, onceProblems, roleProblems, zeroProblems } from "./metric-roles.ts";
 import { normalizePath } from "./paths.ts";
 
 /**
@@ -137,6 +137,12 @@ const KitFields = z.strictObject({
         from: z.literal("check"),
         field: z.string().min(1),
         may_be_zero: z.literal(true).optional(),
+        /**
+         * Measured once a judge's job (goal 233): its check runs in the change's first block
+         * alone (the starting point's in a baseline), and the judge needs it there and nowhere
+         * else. For a check that gives the same answer every time. Its run says THERMITE_ONCE=1.
+         */
+        once: z.literal(true).optional(),
         ...MetricRole,
       }),
     ]),
@@ -184,6 +190,9 @@ export const KitSchema = KitFields.superRefine((kit, ctx) => {
       ctx.addIssue({ code: "custom", path: ["metrics", name], message });
     if ("may_be_zero" in m && m.may_be_zero)
       for (const message of zeroProblems(name, m))
+        ctx.addIssue({ code: "custom", path: ["metrics", name], message });
+    if ("once" in m && m.once)
+      for (const message of onceProblems(name, m))
         ctx.addIssue({ code: "custom", path: ["metrics", name], message });
     if (m.kind !== "priority" || m.priority === undefined) continue;
     const other = places.get(m.priority);

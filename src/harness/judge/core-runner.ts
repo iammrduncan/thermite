@@ -67,6 +67,7 @@ export class CoreRunner implements RigRunner {
       modelsDir: join(this.o.paths.stateDir, "models"),
       ...(baselineDir ? { baselineDir } : {}),
       ...(spec.uses ? { uses: spec.uses } : {}),
+      ...(spec.at ? { at: spec.at } : {}),
       runRole: runRole(this.o.index),
       checkerRole: checkerRole(this.o.index),
       driverRole: driverRole(this.o.index),
