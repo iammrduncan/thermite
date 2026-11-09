@@ -2,7 +2,7 @@
 id: "122"
 title: "Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-10-24
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 122 · Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

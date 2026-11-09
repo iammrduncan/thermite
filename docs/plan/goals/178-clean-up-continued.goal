@@ -2,7 +2,7 @@
 id: "178"
 title: "Code clean-up, continued: what v0.1.1 left for later"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["125"]
 created: 2026-11-01
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 178 · Code clean-up, continued: what v0.1.1 left for later
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014) · **Depends on:** [125](_completed/125-code-to-the-conventions.goal)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Depends on:** [125](_completed/125-code-to-the-conventions.goal)
 
 ## What
 

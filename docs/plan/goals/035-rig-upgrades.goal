@@ -2,7 +2,7 @@
 id: "035"
 title: "Upgrades from control"
 status: IN_PROGRESS
-version: "0.3.0"
+version: "0.4.0"
 depends_on: ["012"]
 created: 2026-10-19
 updated: 2026-10-24
@@ -10,7 +10,7 @@ updated: 2026-10-24
 
 # 035 · Upgrades from control
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [012](_completed/012-version-checks.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.4.0](../roadmap.md#v040) · **Depends on:** [012](_completed/012-version-checks.goal)
 
 ## What
 

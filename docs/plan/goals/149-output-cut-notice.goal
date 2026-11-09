@@ -2,7 +2,7 @@
 id: "149"
 title: "A command's result says its output was cut only when it was"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-10-26
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 149 · A command's result says its output was cut only when it was
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

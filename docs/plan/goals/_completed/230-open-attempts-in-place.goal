@@ -2,7 +2,7 @@
 id: "230"
 title: "A running run's limit of unjudged changes, set in place, and no default"
 status: VERIFIED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["221"]
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 230 · A running run's limit of unjudged changes, set in place, and no default
 
-**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 

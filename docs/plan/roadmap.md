@@ -4,7 +4,7 @@ Every goal, by version, in priority order. Each line links to its goal. [How The
 
 - **v0.1.0 is decided.** Its plan is [release-v0.1.0.md](release-v0.1.0.md).
 - **Later versions are proposed.** Their order and their contents can change.
-- **Versions count up by the middle number:** 0.2.0, 0.3.0 and so on. Fixes and quick follow-ups ship as 0.1.1, 0.1.2.
+- **A version with new work counts up the middle number,** such as 0.2.0. **A version of fixes alone counts up the last number,** such as 0.1.4, and its fixes go into the next middle version too ([decisions](decisions.md#releases-and-planning), 2026-11-08). Before v0.1.4, versions with new work also counted up the last number, from 0.1.1 to 0.1.3.
 - **Each version ships when its goals are verified,** not on a date. Each one also takes the fixes from tester reports on the version before it.
 
 ## Built so far
@@ -163,7 +163,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.1.3
 
-**A rig over several machines, and what a first campaign on it needs.** Released 2026-11-06. A rig is a core and its runners on other machines; every agent program works on them; a kit says what each of its metrics is for; and the fixes a first real campaign on runners needed, on the lab's three DGX Sparks. The rest of v0.1.3's first plan moved to [v0.1.4](#v014).
+**A rig over several machines, and what a first campaign on it needs.** Released 2026-11-06. A rig is a core and its runners on other machines; every agent program works on them; a kit says what each of its metrics is for; and the fixes a first real campaign on runners needed, on the lab's three DGX Sparks. The rest of v0.1.3's first plan moved to [v0.2.0](#v020).
 
 - [206](goals/_completed/206-core-and-runners.goal) A rig is a core and its runners: lanes and the judge run their experiments on runners anywhere, shared or dedicated · `VERIFIED`
 - [208](goals/_completed/208-every-program-on-runners.goal) Every agent program on a rig of runners: a smoke hill climb for Claude Code, Codex, Pi and OpenCode · `VERIFIED`
@@ -185,6 +185,14 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [194](goals/_completed/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `VERIFIED`
 
 ## v0.1.4
+
+**New campaign for every mode again, and the dashboard checked in a browser.** Released 2026-11-09. v0.1.4 is the fix release of v0.1.3: its fixes are in the [changelog](../../CHANGELOG.md). It also holds one safeguard:
+
+- [239](goals/_completed/239-browser-checks.goal) Browser checks of the dashboard: New campaign and every kind of page in headless Chrome with Playwright, their layouts at two widths · `VERIFIED`
+
+## v0.2.0
+
+**The new work after v0.1.3 (the owner, 2026-11-08).** Built on its branch `v0.2.0`; v0.1.4 was v0.1.3's fixes alone, and they are in v0.2.0 too. In the works.
 
 **Moved from v0.1.3 (the owner, 2026-11-06).** v0.1.3's first plan, apart from what multi-machine rigs need: follow-ups from use, the open issues of its milestone, the first release's follow-ups, GPUs on demand and work within a budget. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified.
 
@@ -280,7 +288,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [089](goals/089-dashboard-performance.goal) Faster dashboard pages · `PROPOSED`
 - [148](goals/148-keep-working-on-screens.goal) Keeping working, on New campaign and on a run's page · `PROPOSED`
 
-## v0.2.0
+## v0.3.0
 
 **Run Thermite without the dashboard.** Every dashboard action has an API and MCP twin, all logs are in one place you can search, and sign-in uses your identity provider. Proposed.
 
@@ -302,7 +310,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [031](goals/031-design-docs.goal) The design reasons, in public docs · `PROPOSED`
 - [061](goals/061-gaps-found-by-the-docs.goal) Gaps found by the docs work · `PROPOSED`
 
-## v0.3.0
+## v0.4.0
 
 **Rigs you can trust.** Setting up and removing rigs on machines and clusters is safe to repeat, and lanes are kept off the local network. Proposed.
 
@@ -315,7 +323,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [039](goals/039-cluster-ranges-and-key-rotation.goal) Cluster ranges and key rotation · `PROPOSED`
 - [104](goals/104-change-a-cloud-rigs-gpu.goal) Change a cloud rig's GPU and settings, keeping its state · `PROPOSED`
 
-## v0.4.0
+## v0.5.0
 
 **Kits and evidence.** Kits are easier to write and to test before agents start, and each result shows clearer evidence. Proposed.
 
@@ -327,7 +335,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [045](goals/045-richer-receipts.goal) Richer receipts · `PROPOSED`
 - [113](goals/113-research-lab-campaign.goal) A research lab: one campaign that researches, builds, improves and researches again · `PROPOSED`
 
-## v0.5.0
+## v0.6.0
 
 **Unattended for days.** Campaigns in all three modes run for days with no person watching. Research mode already searches the web, through an MCP server the campaign names (046, done ahead of this version). Proposed.
 

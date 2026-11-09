@@ -2,7 +2,7 @@
 id: "229"
 title: "A runner pool shared by the lanes, never the judge"
 status: VERIFIED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["206", "219"]
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 229 · A runner pool shared by the lanes, never the judge
 
-**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 

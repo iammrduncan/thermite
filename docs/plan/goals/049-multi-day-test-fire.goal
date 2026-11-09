@@ -2,7 +2,7 @@
 id: "049"
 title: "The multi-day test fire"
 status: PROPOSED
-version: "0.5.0"
+version: "0.6.0"
 depends_on: []
 created: 2026-10-19
 updated: 2026-10-19
@@ -10,7 +10,7 @@ updated: 2026-10-19
 
 # 049 · The multi-day test fire
 
-**Status:** `PROPOSED` · **Version:** [v0.5.0](../roadmap.md#v050)
+**Status:** `PROPOSED` · **Version:** [v0.6.0](../roadmap.md#v060)
 
 ## What
 

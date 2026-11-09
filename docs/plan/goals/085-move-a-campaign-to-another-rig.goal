@@ -2,7 +2,7 @@
 id: "085"
 title: "Move a campaign's work to another rig"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["024", "069"]
 created: 2026-10-22
 updated: 2026-10-22
@@ -10,7 +10,7 @@ updated: 2026-10-22
 
 # 085 · Move a campaign's work to another rig
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 

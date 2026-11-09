@@ -2,7 +2,7 @@
 id: "148"
 title: "Keeping working, on New campaign and on a run's page"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["135"]
 created: 2026-10-25
 updated: 2026-10-25
@@ -10,7 +10,7 @@ updated: 2026-10-25
 
 # 148 · Keeping working, on New campaign and on a run's page
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014) · **Depends on:** [135](_completed/135-lanes-and-judge-throughput.goal)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Depends on:** [135](_completed/135-lanes-and-judge-throughput.goal)
 
 ## What
 

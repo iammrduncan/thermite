@@ -208,6 +208,9 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
       held_out: plan.agents.hidden,
     },
     score: { name: metric, direction, min_effect: plan.agents.minEffectPercent / 100 },
+    // Where each run's work goes, left at Only on control: the page sends it for every hill
+    // climb and goal.
+    results: { to: "control" },
   };
   console.log(`  draft: ${JSON.stringify(draft)}`);
   const started = await send(

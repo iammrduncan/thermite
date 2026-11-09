@@ -2,7 +2,7 @@
 id: "216"
 title: "Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-06
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 216 · Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

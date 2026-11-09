@@ -2,7 +2,7 @@
 id: "231"
 title: "How busy each runner is: its share of time with the judge, each lane, idle and away"
 status: VERIFIED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["206"]
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 231 · How busy each runner is
 
-**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 

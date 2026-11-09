@@ -2,7 +2,7 @@
 id: "199"
 title: "The judge copies a job's files once, and checks the disk before it times"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-03
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 199 · The judge copies a job's files once, and checks the disk before it times
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

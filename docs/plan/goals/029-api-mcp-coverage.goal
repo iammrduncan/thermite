@@ -2,7 +2,7 @@
 id: "029"
 title: "Full API and MCP coverage"
 status: IN_PROGRESS
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-10-19
 updated: 2026-10-22
@@ -10,7 +10,7 @@ updated: 2026-10-22
 
 # 029 · Full API and MCP coverage
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 

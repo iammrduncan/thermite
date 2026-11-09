@@ -2,7 +2,7 @@
 id: "221"
 title: "Repair a run in place: send an experiment back, and change a running run's lane limits"
 status: VERIFIED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 221 · Repair a run in place: send an experiment back, and change a running run's lane limits
 
-**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 

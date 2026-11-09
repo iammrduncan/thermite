@@ -2,7 +2,7 @@
 id: "210"
 title: "The first change a run's judge measures reads high"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-05
 updated: 2026-11-05
@@ -10,7 +10,7 @@ updated: 2026-11-05
 
 # 210 · The first change a run's judge measures reads high
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014) · For the owner to weigh: a question about the judge, found while checking goal 209.
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · For the owner to weigh: a question about the judge, found while checking goal 209.
 
 ## What was seen (2026-11-05)
 

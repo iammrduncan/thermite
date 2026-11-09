@@ -67,6 +67,17 @@ It prints the token to sign in with. One of its runs has a made-up experiment qu
 
 The documentation's screenshots come from the demo, whose data is made up. With the demo running, `node scripts/docs/screenshots.mjs` takes them again: the Overview, the Campaigns list, a run's page, the run's **Experiments** and **Journal** tabs, Live for a run at work, the **Knowledge** page and a rig's page, at 1440×900 in the light theme, as WebP files in `docs/_site/src/assets/screenshots/`. It needs a local Chrome or Chromium (`--chrome PATH`); `--out DIR` writes the files elsewhere, to look at them first.
 
+## The browser acceptance test
+
+The dashboard in a real browser, with no stack: `npm run acceptance:browser` (`scripts/acceptance/browser.mjs`) starts control from the source on the demo's data, with one more CPU rig that reports its hardware and a project lookup that answers for any repository under `https://git.example.com/` (`tests/stand-ins/dashboard/main.ts`), and drives it with Playwright in the installed Google Chrome. `THERMITE_BROWSER_CHROME` names another Chrome or Chromium; nothing is downloaded. Chrome resolves no address but this machine's, so no page, link or redirect reaches another site.
+
+It has two parts:
+
+1. **New campaign, end to end.** It fills the page in as a person does: it clicks the cards, types into the fields, presses Next and then one of the three buttons, so the page's own script builds the draft. A hill climb starts, a goal campaign's kit is tried, each choice of **Where each run's work goes** is saved or refused in words with the answers kept, and a research campaign is saved. It reads what control stored from control's store.
+2. **Every kind of page.** From the Overview it follows the dashboard's links: up to four pages of each route, where each of a run's tabs, each area of Settings and each page opened with a query is a kind of its own. It opens each page at each width and fails on a console error or an uncaught exception, a request that fails, a link that leads nowhere, anything loaded from another site, a page wider than the window, controls drawn on top of each other, text cut off and an image that doesn't load. It notes the links that leave control, such as **Sign in with ChatGPT**, and the routes no link reached.
+
+It writes `report.json`, its screenshots and `index.html`, every page's screenshots side by side, to `.dev/acceptance/browser/`. Each screenshot is the whole page: the window is made as tall as the page, since the dashboard scrolls inside its content. While you build a screen, open the index and look at the screen at each width. `--widths 1440,1150,820` checks other widths (the default is 1440 and 820), `--only flows` or `--only pages` runs one part, `--max-pages N` stops the sweep sooner and `--headed` shows the browser. It takes about 4 minutes, and CI runs it on every run, keeping the report and the screenshots when it fails.
+
 ## Journals and the knowledge base
 
 Goal 065's parts are covered by unit tests, which `npm test` runs like any other: field notes (`tests/harness/journal.test.ts`, `tests/harness/agents/scheduler/notes.test.ts`), research in every mode (`tests/harness/research/research-everywhere.test.ts`), the export (`tests/system/export-notes.test.ts`), the advisors' notes (`tests/supervisor/advisors/pass/notes.test.ts`), control's knowledge base and its pages (`tests/control/kb.test.ts`, `tests/control/dashboard/knowledge.test.ts`).

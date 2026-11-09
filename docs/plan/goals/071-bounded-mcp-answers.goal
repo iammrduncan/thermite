@@ -2,7 +2,7 @@
 id: "071"
 title: "MCP answers that fit an agent's context"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["029"]
 created: 2026-10-21
 updated: 2026-10-21
@@ -10,7 +10,7 @@ updated: 2026-10-21
 
 # 071 · MCP answers that fit an agent's context
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 

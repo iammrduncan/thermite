@@ -2,7 +2,7 @@
 id: "091"
 title: "Needs you shows a rig that is stuck"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-10-22
 updated: 2026-10-24
@@ -10,7 +10,7 @@ updated: 2026-10-24
 
 # 091 · Needs you shows a rig that is stuck
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

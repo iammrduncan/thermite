@@ -2,7 +2,7 @@
 id: "223"
 title: "Turning the judge off says what becomes of the job under way"
 status: DROPPED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 223 · Turning the judge off says what becomes of the job under way
 
-**Status:** `DROPPED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `DROPPED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

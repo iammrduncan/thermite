@@ -2,7 +2,7 @@
 id: "113"
 title: "A research lab: one campaign that researches, builds, improves and researches again"
 status: PROPOSED
-version: "0.4.0"
+version: "0.5.0"
 depends_on: ["102", "107", "112"]
 created: 2026-10-23
 updated: 2026-10-23
@@ -10,7 +10,7 @@ updated: 2026-10-23
 
 # 113 · A research lab: one campaign that researches, builds, improves and researches again
 
-**Status:** `PROPOSED` · **Version:** [v0.4.0](../roadmap.md#v040)
+**Status:** `PROPOSED` · **Version:** [v0.5.0](../roadmap.md#v050)
 
 ## What
 

@@ -221,7 +221,7 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 
 ### What builds and checks Thermite
 
-[TypeScript](https://github.com/microsoft/TypeScript) (Microsoft, Apache-2.0), [Biome](https://github.com/biomejs/biome) (MIT OR Apache-2.0), [Node.js's type definitions](https://github.com/DefinitelyTyped/DefinitelyTyped) (MIT), and [gitleaks](https://github.com/gitleaks/gitleaks) (MIT) for the secret scan. CI uses GitHub's own actions (MIT) and Docker's (Apache-2.0).
+[TypeScript](https://github.com/microsoft/TypeScript) (Microsoft, Apache-2.0), [Biome](https://github.com/biomejs/biome) (MIT OR Apache-2.0), [Node.js's type definitions](https://github.com/DefinitelyTyped/DefinitelyTyped) (MIT), [Playwright](https://github.com/microsoft/playwright) (Microsoft, Apache-2.0), whose `playwright-core` drives the installed Google Chrome for the browser acceptance check, and [gitleaks](https://github.com/gitleaks/gitleaks) (MIT) for the secret scan. CI uses GitHub's own actions (MIT) and Docker's (Apache-2.0).
 
 ### What builds the documentation site
 

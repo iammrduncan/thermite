@@ -2,7 +2,7 @@
 id: "235"
 title: "The supervisor has the CPUs to start its advisors in their own terminals"
 status: VERIFIED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["169"]
 created: 2026-11-08
 updated: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 235 · The supervisor has the CPUs to start its advisors in their own terminals
 
-**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 

@@ -11,14 +11,14 @@ Thermite is at version 0.x. This page lists what to know before you run it: the 
 | Limit | Removed by |
 | --- | --- |
 | [Agents run code that a model wrote, on your machine](#agents-run-code-that-a-model-wrote-on-your-machine) | No goal: it is how Thermite works |
-| [Under compose, that code can reach your local network](#under-compose-that-code-can-reach-your-local-network) | [Goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), v0.3.0 |
+| [Under compose, that code can reach your local network](#under-compose-that-code-can-reach-your-local-network) | [Goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), v0.4.0 |
 | [There are no default caps](#there-are-no-default-caps) | No goal: it is a decision |
 | [Timing on RunPod is noisier](#timing-on-runpod-is-noisier) | No goal: it comes with shared machines |
 | [Research mode searches the web only through an MCP server](#research-mode-searches-the-web-only-through-an-mcp-server) | No goal: give the campaign a search server |
 | [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records them |
-| [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.5.0 |
-| [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.1.3 |
-| [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.1.3 |
+| [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.6.0 |
+| [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.2.0 |
+| [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.2.0 |
 | [0.x versions make no upgrade promise](#0x-versions-make-no-upgrade-promise) | No goal yet: it holds until 1.0 |
 
 ## Agents run code that a model wrote, on your machine
@@ -38,7 +38,7 @@ Compose joins each rig's harness to a normal network of its own, `rig-egress` or
 - A worker's research fetches are different: the harness fetches each page itself, and refuses private and local addresses.
 - On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS, addresses outside the private, shared and link-local ranges, and the addresses the owner lists in **Settings › Addresses rigs may reach**, each on its listed TCP ports. Control refuses a slot unless its rules do the same, and opens no more of the list than its entries, and the rig's isolation check fails when a lane reaches the cluster's API server ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
 
-**Removed by:** [goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), Keep lanes off the local network (v0.3.0), under compose. Until then, run a compose rig where nothing on your local network relies on being out of reach.
+**Removed by:** [goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), Keep lanes off the local network (v0.4.0), under compose. Until then, run a compose rig where nothing on your local network relies on being out of reach.
 
 ## There are no default caps
 
@@ -79,19 +79,19 @@ Research workers have no web search of their own. They search the web with the t
 
 Thermite is built to run unattended for as long as a campaign takes, and to recover from crashes and restarts. Its own tests run campaigns for minutes to a few hours: the longest, `scripts/acceptance/research-longrun.mjs`, runs a research campaign for about two hours by default and kills the harness's controller halfway. The test that proves runs of several days has not run yet: several campaigns in all three modes, for days, with crashes, restarts, a full disk and a lost model along the way.
 
-**Removed by:** [goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), The multi-day test fire (v0.5.0). If a long run goes wrong for you, [report it](../project/getting-help.md).
+**Removed by:** [goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), The multi-day test fire (v0.6.0). If a long run goes wrong for you, [report it](../project/getting-help.md).
 
 ## The CUDA 13 harness is untested
 
 The release publishes two CUDA harnesses ([The CUDA harness](harness-image.md#the-cuda-harness)). The CUDA 12 one (`-cuda`) runs Thermite's GPU rigs, on P100 GPUs among others. The CUDA 13 one (`-cuda13`), for Turing to Blackwell and the DGX Spark, is built, and the release's checks hold it to its architectures, but it has not yet run on a GPU. Control sets GPU rigs up from the CUDA 12 image unless `THERMITE_RIG_HARNESS_CUDA_IMAGE` names another, or, for a rig or a runner whose CUDA is 13, from the CUDA 13 image (`THERMITE_RIG_HARNESS_CUDA13_IMAGE`). Control sets it to 13 for an arm64 node or a Blackwell GPU where it can tell: for a rig or a runner on a cluster, and for a runner on a machine. A rig's own GPUs on a machine and the one-machine install have no such choice yet.
 
-**Removed by:** [goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), Rig images for each GPU generation (v0.1.3). If you run it on a Blackwell GPU or a DGX Spark, [tell us how it went](../project/getting-help.md).
+**Removed by:** [goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), Rig images for each GPU generation (v0.2.0). If you run it on a Blackwell GPU or a DGX Spark, [tell us how it went](../project/getting-help.md).
 
 ## A win the champion moved past still asks to be made the champion
 
 A confirmed win can wait for you: under **Needs you** when you ask to decide each promotion, or after an audit. Meanwhile another win can become the champion. The waiting win's card still asks **Make it the champion**, but approving it does not make it the champion at once: the judge screens it again against the new champion, and it becomes the champion only if it still wins there. The change it held may also come back as a port onto the new champion.
 
-**Removed by:** [goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), A waiting win the champion moved past (v0.1.3).
+**Removed by:** [goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), A waiting win the champion moved past (v0.2.0).
 
 ## 0.x versions make no upgrade promise
 

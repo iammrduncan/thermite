@@ -2,7 +2,7 @@
 id: "084"
 title: "Research tasks inside goal and hill-climb runs, with web search"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["081", "062", "046"]
 created: 2026-10-22
 updated: 2026-10-22
@@ -10,7 +10,7 @@ updated: 2026-10-22
 
 # 084 · Research tasks inside goal and hill-climb runs, with web search
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 

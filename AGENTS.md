@@ -12,7 +12,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 
 ## Current stage
 
-- v0.1.3 is out (2026-11-06). Work goes on toward v0.1.4, on its branch `v0.1.4`.
+- v0.1.4 is out (2026-11-09), v0.1.3's fix release. New work goes on toward v0.2.0, on its branch `v0.2.0`. A fix to v0.1.4 goes on the branch of the next fix release, `v0.1.5`, made from `main` when the first fix needs it; each fix there merges into `v0.2.0` too.
 - The plans are public, in [docs/plan/](docs/plan/README.md): the [roadmap](docs/plan/roadmap.md), the [release plan](docs/plan/release-v0.1.0.md), the [settled decisions](docs/plan/decisions.md) and one goal for each roadmap item.
 
 ## Settled decisions (summary)
@@ -49,7 +49,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 ## Git
 
 - Work on a branch and commit in reviewable steps with clear messages.
-- Each version is built on a branch named for it, such as `v0.1.1`: work merges there, and `main` moves only when a version ships ([decisions](docs/plan/decisions.md#releases-and-planning)).
+- Each version is built on a branch named for it: work merges there, and `main` moves only when a version ships ([decisions](docs/plan/decisions.md#releases-and-planning)). New work goes on the next minor version's branch, such as `v0.2.0`. A fix to the released version goes on the next patch's branch, such as `v0.1.5`, which starts from `main`, and it merges into the minor version's branch too.
 - Do not rewrite history that has been pushed.
 - `.agents/`, `.claude/` and `skills-lock.json` belong to the maintainers' tooling. Leave them alone unless asked.
 
@@ -72,7 +72,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 
 ## Checks
 
-Run from the repository root, and report which ran and which didn't. Before each commit: typecheck, lint, the public check, the size, import and loose-ends checks, and the test files the change touches (`node scripts/test.mjs <files>`), plus `npm run docs:build` and `npm run docs:check` when the commit touches `docs/_site/` or anything a page describes. A roll to a lab follows these local checks and does not wait for CI. No CI or release run starts until a maintainer approves it (the environment `ci`); CI runs the heavy jobs (compose, rig image, RunPod, quick start) only for a change that touches what they test, and they gate version tags and releases; on a version tag it also runs every other acceptance check a runner can run (all but the cluster, rig deploy and paid RunPod checks). Before each version tag or release: the full `npm run check`, the images pinned by digest checked against their registries (`node --experimental-strip-types scripts/release/pins.ts --registry`; it asks each registry, so it needs the network), the compose checks the changes need, and CI's full run on the tag, which runs every job.
+Run from the repository root, and report which ran and which didn't. Before each commit: typecheck, lint, the public check, the size, import and loose-ends checks, and the test files the change touches (`node scripts/test.mjs <files>`), plus `npm run docs:build` and `npm run docs:check` when the commit touches `docs/_site/` or anything a page describes, and `npm run acceptance:browser` when it touches the dashboard: look at its screenshots of the screens you changed, as you build them, not only at its verdicts. A roll to a lab follows these local checks and does not wait for CI. No CI or release run starts until a maintainer approves it (the environment `ci`); CI runs the heavy jobs (compose, rig image, RunPod, quick start) only for a change that touches what they test, and they gate version tags and releases; on a version tag it also runs every other acceptance check a runner can run (all but the cluster, rig deploy and paid RunPod checks). Before each version tag or release: the full `npm run check`, the images pinned by digest checked against their registries (`node --experimental-strip-types scripts/release/pins.ts --registry`; it asks each registry, so it needs the network), the compose checks the changes need, and CI's full run on the tag, which runs every job.
 
 - Install: `npm ci` (Node.js 22.19 or later; the agent libraries require it. The documentation site needs 22.22 or later.)
 - All the fast checks: `npm run check`. It runs, in order:
@@ -100,6 +100,8 @@ Run from the repository root, and report which ran and which didn't. Before each
   - `COMPOSE="podman compose" npm run acceptance:leaf`
 - Quick-start acceptance, after changes to the quick start's pages (Install on one machine, Run your first campaign, the command line and Check the machine), the containers, compose, the release bundle or `examples/`. It builds the images, writes a release bundle for them, and follows the pages' own steps to the sample campaign's first verdict, with the agents acceptance's scripted model. CI runs it with Docker. Allow about 7 minutes with the image layers cached, about 20 without. After a change to those pages only, `node scripts/test.mjs tests/docs/quick-start.test.ts` first:
   - `COMPOSE="podman compose" npm run acceptance:quick-start`
+- Browser acceptance, after changes to the dashboard: a page, its script or its styles, New campaign, or the dashboard demo's data. It needs no containers and no network: control runs from the source on the demo's data (`tests/stand-ins/dashboard/main.ts`), and Playwright drives the installed Google Chrome (or `THERMITE_BROWSER_CHROME`), which reaches nothing but control. It fills in New campaign as a person does, presses its buttons and reads what control stored; then it opens every kind of page the dashboard links to, at 1440 and 820 pixels wide, and fails on a console error, a request that fails, a link that leads nowhere, anything loaded from another site, a page wider than the window, controls on top of each other, text cut off or an image that doesn't load. It keeps a screenshot of each whole page, side by side in `.dev/acceptance/browser/index.html`. `--widths 1440,1150,820` checks other widths, and `--only flows` or `--only pages` one part. About 4 minutes; CI runs it on every run:
+  - `npm run acceptance:browser`
 - New-campaign acceptance, after changes to the new-campaign page, Start a run, the campaign builder, kits kept on control, Git access or the supervisor's staging. A tiny project is served by `git daemon`; the campaign is created through the dashboard form, its first run must start with both imports verified, and another run is started from the campaign's page:
   - `COMPOSE="podman compose" npm run acceptance:campaign`
 - Machines acceptance, after changes to machines over SSH, their checks or install recipes. A local container with an SSH server stands in for the machine (never a real host); control reaches it from its own image, the host key must match, and Podman is installed only after the maintainers' yes (it downloads packages):

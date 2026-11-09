@@ -2,7 +2,7 @@
 id: "041"
 title: "Kits and rigs, explained"
 status: DROPPED
-version: "0.4.0"
+version: "0.5.0"
 depends_on: []
 created: 2026-10-19
 updated: 2026-10-19
@@ -10,7 +10,7 @@ updated: 2026-10-19
 
 # 041 · Kits and rigs, explained
 
-**Status:** `DROPPED`, merged into [060](_completed/060-docs-site.goal) · **Version:** [v0.4.0](../roadmap.md#v040)
+**Status:** `DROPPED`, merged into [060](_completed/060-docs-site.goal) · **Version:** [v0.5.0](../roadmap.md#v050)
 
 ## What
 

@@ -2,7 +2,7 @@
 id: "222"
 title: "Agents on a ChatGPT plan get its prompt cache: the session headers through the model proxy, and a session for Pi"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 222 · Agents on a ChatGPT plan get its prompt cache
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

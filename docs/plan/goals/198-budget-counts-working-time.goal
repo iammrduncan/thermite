@@ -2,7 +2,7 @@
 id: "198"
 title: "A run's time budget counts the time it worked, and a run that spent it can go on"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["123"]
 created: 2026-11-03
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 198 · A run's time budget counts the time it worked, and a run that spent it can go on
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

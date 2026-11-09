@@ -2,7 +2,7 @@
 id: "237"
 title: "A roll of the supervisor alone keeps the judge measuring"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["227"]
 created: 2026-11-08
 updated: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 237 · A roll of the supervisor alone keeps the judge measuring
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

@@ -2,7 +2,7 @@
 id: "090"
 title: "An Info tab for campaigns and runs: everything they were started with"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["078"]
 created: 2026-10-22
 updated: 2026-10-24
@@ -10,7 +10,7 @@ updated: 2026-10-24
 
 # 090 · An Info tab for campaigns and runs: everything they were started with
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014) · **Depends on:** [078](_completed/078-campaign-brief.goal)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Depends on:** [078](_completed/078-campaign-brief.goal)
 
 ## What
 

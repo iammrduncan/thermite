@@ -2,7 +2,7 @@
 id: "193"
 title: "The usage table lists every agent with a model, with no calls yet when it has none"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-03
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 193 · The usage table lists every agent with a model, with no calls yet when it has none
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

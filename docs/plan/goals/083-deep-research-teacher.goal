@@ -2,7 +2,7 @@
 id: "083"
 title: "A deep-research teacher that runs on a trigger"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["081", "062"]
 created: 2026-10-22
 updated: 2026-10-22
@@ -10,7 +10,7 @@ updated: 2026-10-22
 
 # 083 · A deep-research teacher that runs on a trigger
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 

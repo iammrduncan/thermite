@@ -4,13 +4,14 @@
 # break the site, so it always comes alone (see docs/writing-docs.md). @types/node gets no major
 # update: its major is the Node.js version Thermite supports (package.json's engines), and a newer
 # one's types would let code use what that Node.js does not have. The pull requests go to the branch
-# of the version being built, which target-branch names (docs/plan/decisions.md, Releases and
-# planning): main moves only when a version ships.
+# of the next minor version, which target-branch names, not to a patch's branch, which holds fixes
+# alone (docs/plan/decisions.md, Releases and planning): main moves only when a version ships.
+# Dependabot reads this file from main, so a change here takes effect when its version ships.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
-    target-branch: v0.1.4
+    target-branch: v0.2.0
     schedule:
       interval: weekly
     groups:
@@ -22,7 +23,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /docs/_site
-    target-branch: v0.1.4
+    target-branch: v0.2.0
     schedule:
       interval: weekly
     groups:
@@ -32,7 +33,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    target-branch: v0.1.4
+    target-branch: v0.2.0
     schedule:
       interval: weekly
     groups:

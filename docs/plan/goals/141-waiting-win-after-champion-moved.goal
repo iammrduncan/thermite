@@ -2,7 +2,7 @@
 id: "141"
 title: "A waiting win the champion moved past: closed when a champion has it, an approval when none does"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-10-25
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 141 · A waiting win the champion moved past: closed when a champion has it, an approval when none does
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

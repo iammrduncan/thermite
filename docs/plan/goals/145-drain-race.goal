@@ -2,7 +2,7 @@
 id: "145"
 title: "A drain doesn't wait two hours for a trial that started seconds before it"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["136"]
 created: 2026-10-25
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 145 · A drain doesn't wait two hours for a trial that started seconds before it
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

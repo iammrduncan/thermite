@@ -2,7 +2,7 @@
 id: "215"
 title: "The planner plans a round while a lane is still busy"
 status: VERIFIED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-06
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 215 · The planner plans a round while a lane is still busy
 
-**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 

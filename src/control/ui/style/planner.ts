@@ -28,8 +28,13 @@ export const PLANNER = `/* The experiment queue and the Planner tab (goal 064) *
 .qadd { display: grid; grid-template-columns: minmax(0, 1fr) 180px 140px auto; gap: 8px; align-items: end; padding: 12px; border: 1px dashed var(--input); border-radius: 10px; margin-bottom: 10px; }
 .qadd.tries { grid-template-columns: minmax(0, 1fr) 180px 140px 90px auto; }
 .qadd .qwhy-f { grid-column: 1 / -2; }
+/* The add form lays out by its own width, its column's, not the window's: the sidebar and the
+   queue's side column narrow it at many window widths, where fixed columns left its title field a
+   few pixels and the next field drawn over it. */
+.qup { container-type: inline-size; }
+@container (max-width: 720px) { .qadd, .qadd.tries { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .qadd .qtitle-f, .qadd .qwhy-f { grid-column: 1 / -1; } }
+@container (max-width: 420px) { .qadd, .qadd.tries { grid-template-columns: minmax(0, 1fr); } }
 .qtry { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--accent); color: var(--foreground); }
-@media (max-width: 760px) { .qadd { grid-template-columns: minmax(0, 1fr); } .qadd .qwhy-f { grid-column: auto; } }
 .qlane { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .qlt { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted-foreground); }
 .qlt b { color: var(--foreground); }

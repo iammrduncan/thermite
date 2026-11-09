@@ -1,8 +1,8 @@
 # Changelog
 
-Each release of Thermite, newest first. Version numbers count up by the middle number, 0.2.0, 0.3.0 and so on, with fixes and quick follow-ups as 0.1.1, 0.1.2. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
+Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
-## [Unreleased]: v0.1.4
+## [Unreleased]: v0.2.0
 
 ### Steering
 
@@ -53,6 +53,21 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 - A hill climb's **Metrics** cards line up: the primary metric's card has a row of its own, and the lower priorities' cards an even row under it. Its headline gives the judge's gain, each champion against the one it replaced, as the champion card, the chart and the leaderboard do, where it gave the champion's value over the starting point's.
 - The runner checks' timer goes on when the ledger can't be read: the read is logged at warn, where its error escaped the timer.
 - A teacher's review is kept when one of its recommendations has a field past its length: the field is cut, and a direction cut so is dropped with why by the round's check of each rule. The whole review was refused, and the round had no portfolio from that teacher.
+
+## [0.1.4] 2026-11-09: New campaign for every mode again, and the dashboard checked in a browser
+
+v0.1.4 is a fix release of v0.1.3. A v0.1.3 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.4), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. The fixes are all in control's dashboard and its check of a new campaign. It changes no store, setting or secret.
+
+### Fixes
+
+- **New campaign starts a hill climb or a goal campaign again.** The page sends where each run's work goes with every hill climb's and goal's answers, and control refused them with `the form: Unrecognized key: "results"`, whatever the choice, so only a research campaign started from the page. Control now takes the choice and checks it as before: a branch of the project's repository, or a separate repository, needs a Git access that can push ([issue 68](https://github.com/iammrduncan/thermite/issues/68)).
+- **Settings › Retention saves a new policy again.** The form's script stopped on the words "Each lane's champion builds", whose apostrophe cut short the page's copy of what each kind keeps, so **Save** stayed off after a name was typed, and the boxes for what to keep and the fields for when did not follow the kind.
+- **Add an experiment keeps its fields apart at any width.** Beside the sidebar and the queue's side column, the form on a run's **Experiments** tab left its first field a few pixels at some window widths, such as 820 and 1150 pixels, and drew **Direction** over it. It now lays out by its own width: in two columns when it is narrow, and in one on a phone.
+
+### For contributors
+
+- **The dashboard in a real browser.** `npm run acceptance:browser` drives the dashboard with Playwright in the installed Google Chrome, with no containers and no network: it fills in New campaign as a person does and reads what control stored, then opens every kind of page at 1440 and 820 pixels wide and fails on console errors, failing requests, broken links, anything loaded from another site, a page wider than the window, controls on top of each other and text cut off. It keeps a screenshot of each whole page. CI runs it on every run. See [the contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md#the-browser-acceptance-test).
+- The dashboard demo records a propagated champion as an attempt of its own, as the harness does, so its page opens from the run's attempts.
 
 ## [0.1.3] 2026-11-06: a rig over several machines, and what a first campaign on it needs
 

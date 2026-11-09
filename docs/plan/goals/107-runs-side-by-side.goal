@@ -2,7 +2,7 @@
 id: "107"
 title: "Several runs at once on one rig, within its resources"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-10-23
 updated: 2026-10-23
@@ -10,7 +10,7 @@ updated: 2026-10-23
 
 # 107 · Several runs at once on one rig, within its resources
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 

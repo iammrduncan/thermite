@@ -2,7 +2,7 @@
 id: "123"
 title: "Budgets made simple: one amount in dollars, easy to set, that holds on every rig"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-10-24
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 123 · Budgets made simple: one amount in dollars, easy to set, that holds on every rig
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

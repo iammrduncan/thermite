@@ -2,7 +2,7 @@
 id: "092"
 title: "Explore the knowledge base, and dump it to outside stores"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["065"]
 created: 2026-10-22
 updated: 2026-10-22
@@ -10,7 +10,7 @@ updated: 2026-10-22
 
 # 092 · Explore the knowledge base, and dump it to outside stores
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Depends on:** [065](_completed/065-journals-and-corpus.goal)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [065](_completed/065-journals-and-corpus.goal)
 
 ## What
 

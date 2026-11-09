@@ -2,7 +2,7 @@
 id: "191"
 title: "Check waits while the rig takes its new model"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["150"]
 created: 2026-11-03
 updated: 2026-11-06
@@ -10,7 +10,7 @@ updated: 2026-11-06
 
 # 191 · Check waits while the rig takes its new model
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

@@ -2,7 +2,7 @@
 id: "227"
 title: "A rig's runners ride through control's restart"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: []
 created: 2026-11-07
 updated: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 227 · A rig's runners ride through control's restart
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

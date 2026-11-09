@@ -2,7 +2,7 @@
 id: "219"
 title: "A lane on a runner of its own can build and serve a large model in run_experiment"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["221"]
 created: 2026-11-07
 updated: 2026-11-07
@@ -10,7 +10,7 @@ updated: 2026-11-07
 
 # 219 · A lane on a runner of its own can build and serve a large model in run_experiment
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

@@ -2,7 +2,7 @@
 id: "120"
 title: "From research to the next campaign: next experiments in Start a run and New campaign, and kit prep"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["119", "102"]
 created: 2026-10-24
 updated: 2026-10-24
@@ -10,7 +10,7 @@ updated: 2026-10-24
 
 # 120 · From research to the next campaign: next experiments in Start a run and New campaign, and kit prep
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Depends on:** [119](_completed/119-next-experiments-by-run-kind.goal), [102](102-kits-define-campaigns.goal)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [119](_completed/119-next-experiments-by-run-kind.goal), [102](102-kits-define-campaigns.goal)
 
 ## What
 

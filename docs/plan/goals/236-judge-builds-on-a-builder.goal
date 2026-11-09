@@ -2,7 +2,7 @@
 id: "236"
 title: "The judge's builds on a builder, off the judge cards' clock"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["206", "233"]
 created: 2026-11-08
 updated: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 236 · The judge's builds on a builder, off the judge cards' clock
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

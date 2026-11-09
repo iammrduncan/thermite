@@ -2,7 +2,7 @@
 id: "232"
 title: "Teachers research the web with their program's own search and fetch"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["166"]
 created: 2026-11-07
 updated: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 232 · Teachers research the web with their program's own search and fetch
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

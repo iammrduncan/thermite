@@ -2,7 +2,7 @@
 id: "233"
 title: "The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20"
 status: IN_PROGRESS
-version: "0.1.4"
+version: "0.2.0"
 depends_on: ["206", "228"]
 created: 2026-11-08
 updated: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 233 · The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

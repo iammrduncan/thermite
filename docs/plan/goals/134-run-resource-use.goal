@@ -2,7 +2,7 @@
 id: "134"
 title: "A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back"
 status: PROPOSED
-version: "0.1.4"
+version: "0.2.0"
 part: "GPUs on demand, and work within a budget"
 depends_on: []
 created: 2026-10-25
@@ -11,7 +11,7 @@ updated: 2026-11-06
 
 # 134 · A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back
 
-**Status:** `PROPOSED` · **Version:** [v0.1.4](../roadmap.md#v014) · **Part:** GPUs on demand, and work within a budget
+**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Part:** GPUs on demand, and work within a budget
 
 ## What
 
