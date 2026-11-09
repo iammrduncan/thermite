@@ -63,6 +63,13 @@ paths = ['''^tests/core/link/leaf\.test\.ts$''']
 regexes = ['''^bm90IGEga2V5$''']
 
 [[allowlists]]
+description = "A conversation's made-up session id, sent as Pi's prompt cache key, in the ChatGPT model's test"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^tests/agents/model/chatgpt\.test\.ts$''']
+regexes = ['''^conversation-1$''']
+
+[[allowlists]]
 description = "A kit's file name next to the signing key's name in the backup test"
 condition = "AND"
 targetRules = ["generic-api-key"]
