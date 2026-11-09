@@ -31,8 +31,8 @@ async function kitAt(mirror: string, repo: string, commit: string): Promise<Kit>
 
 /**
  * The `kit_commit` command: the kit's bundle imported, the commit checked to come after the one
- * the run measures with, its kit.json to fit the contract as at an assignment, and its MCP servers
- * to be the run's; then a `kit_set` event, or with `preview` what it would do.
+ * the run measures with, its kit.json to keep the run's target and fit the contract as at an
+ * assignment, and its MCP servers to be the run's; then a `kit_set` event, or with `preview` what it would do.
  */
 export async function moveRunKit(
   svc: HarnessService,
@@ -56,12 +56,16 @@ export async function moveRunKit(
       `kit commit ${spec.commit} does not come after ${from}, the one ${p.run} measures with: a run moves only onto a later commit of its kit`,
     );
   const kit = await kitAt(mirror, ref.repo, spec.commit);
+  const was = await kitAt(mirror, ref.repo, from);
+  if (kit.target !== was.target)
+    throw new Refusal(
+      `the kit at ${spec.commit} measures on ${kit.target}, and ${p.run}'s on ${was.target}: a run's kit keeps its target`,
+    );
   const problems = kitProblems(contract, kit, svc.targetType);
   if (problems.length)
     throw new Refusal(
       `the kit at ${spec.commit} does not fit the contract: ${problems.join("; ")}`,
     );
-  const was = await kitAt(mirror, ref.repo, from);
   if (!sameUses(kit.mcp_servers ?? [], was.mcp_servers ?? []))
     throw new Refusal(
       `the kit at ${spec.commit} names the MCP servers ${usesWords(kit.mcp_servers ?? [])}, and the run's ${usesWords(was.mcp_servers ?? [])}: a run's servers are its assignment's`,

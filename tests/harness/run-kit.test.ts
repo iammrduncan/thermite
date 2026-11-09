@@ -97,7 +97,18 @@ test("the owner moves a running run onto a later commit of its kit, and the judg
   });
   assert.match(
     String((await send("k3", unfit)).result.error),
-    /the kit at .* does not fit the contract/,
+    /the kit at .* measures on cuda-gpu, and js-1's on cpu: a run's kit keeps its target/,
+  );
+  const lacking = commit("k4", (k) => {
+    // The contract measures the cell small, which this commit drops.
+    k.target = "cpu";
+    const { small: _, ...rest } = k.cells as Record<string, unknown>;
+    k.cells = rest;
+    k.verifiers = { correctness: { cells: ["held"] } };
+  });
+  assert.match(
+    String((await send("k4", lacking)).result.error),
+    /the kit at .* does not fit the contract: .*which the kit does not have/,
   );
   assert.equal(ownersKit(env.ledger, "js-1"), next, "a refusal moves nothing");
 });
