@@ -2,15 +2,15 @@
 id: "186"
 title: "The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-11-02
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 186 · The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -35,6 +35,7 @@ The judge should take a released artifact as an arm: an image by its digest, or 
 ## Decisions
 
 - 2026-11-02, owner: "Plan it now, build after v0.1.1".
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Progress
 

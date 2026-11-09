@@ -2,15 +2,15 @@
 id: "225"
 title: "A drain waits for the supervisor's advisors too"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-09
 ---
 
 # 225 · A drain waits for the supervisor's advisors too
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -28,6 +28,10 @@ An operator who drains a rig expects the move to cut nothing. A cut audit leaves
 
 - [ ] Items 1 to 3, with tests.
 - [ ] Pages: Move a rig onto new images, the drain card, and the changelog.
+
+## Decisions
+
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Progress
 

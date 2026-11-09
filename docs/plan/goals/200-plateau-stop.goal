@@ -2,15 +2,15 @@
 id: "200"
 title: "A plateau stop: a run ends after a time without a new champion, when the owner sets it"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 200 · A plateau stop: a run ends after a time without a new champion, when the owner sets it
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -32,6 +32,7 @@ A stuck run holds a GPU that the next target could use.
 ## Decisions
 
 - None yet.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Progress
 

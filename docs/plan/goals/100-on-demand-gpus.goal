@@ -2,15 +2,15 @@
 id: "100"
 title: "GPUs on demand for the judge and the workers"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["022", "023", "206"]
 created: 2026-10-23
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 100 · GPUs on demand for the judge and the workers
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -41,6 +41,7 @@ Thermite's settled decisions already reach measurement targets through target dr
 - 2026-11-04, owner: a rig becomes a core and its runners (goal [206](_completed/206-core-and-runners.goal)); a GPU on demand is a runner that exists only while it works ("We need this anyways if we want to make effecient use of runpod... This solidifies that design to work not just for runpod but also for any resource"). This goal builds on 206.
 - 2026-10-24, owner: the first goal of v0.1.1 ("on-demand GPUs is the first goal of v0.1.1 cause I have exact need for it").
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up, and GPUs on demand leads v0.1.2.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

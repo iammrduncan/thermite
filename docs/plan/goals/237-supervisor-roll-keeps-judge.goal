@@ -2,15 +2,15 @@
 id: "237"
 title: "A roll of the supervisor alone keeps the judge measuring"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["227"]
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-09
 ---
 
 # 237 · A roll of the supervisor alone keeps the judge measuring
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -33,6 +33,7 @@ A change to the teachers or the auditor should not cost the judge an hour, nor t
 ## Decisions
 
 - 2026-11-08 22:06 UTC, the owner: "if possible yes."
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Progress
 

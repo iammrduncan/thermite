@@ -2,15 +2,15 @@
 id: "122"
 title: "Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-10-24
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 122 · Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -65,6 +65,7 @@ The owner, 2026-10-24: "This should be a setting you can turn off with a descrip
 - 2026-10-24, owner: a setting that can be turned off, with a description of why one may or may not want it.
 - 2026-10-24: placed in v0.1.1 with goal [123](123-budgets-made-simple.goal), for the same owners. The owner did not name a version.
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.2, with GPUs on demand.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

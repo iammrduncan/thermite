@@ -2,15 +2,15 @@
 id: "177"
 title: "The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-10-30
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 177 · The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -42,6 +42,7 @@ The owner, 2026-10-30, asked where this belongs: a goal of its own after v0.1.1 
 ## Decisions
 
 - 2026-10-30, owner: a goal of its own after v0.1.1.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

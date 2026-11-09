@@ -2,15 +2,15 @@
 id: "109"
 title: "The Exports page shows what matters, not every slice"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["103"]
 created: 2026-10-23
-updated: 2026-10-24
+updated: 2026-11-09
 ---
 
 # 109 · The Exports page shows what matters, not every slice
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -37,6 +37,7 @@ The owner, 2026-10-23, on the new Exports page: "wow there are a lot more export
 
 - 2026-10-23, owner: in v0.1.1; the page stays as built for v0.1.0.
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.4, the UI clean-up and UX improvements.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

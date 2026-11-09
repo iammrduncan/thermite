@@ -2,15 +2,15 @@
 id: "149"
 title: "A command's result says its output was cut only when it was"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-10-26
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 149 · A command's result says its output was cut only when it was
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -35,6 +35,7 @@ A false note costs an agent turns, and a silent cut misleads it. Both are in eve
 - [ ] Pages: Limits and pacing gives what each tool keeps of an output, and the changelog.
 
 ## Decisions
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Open questions
 

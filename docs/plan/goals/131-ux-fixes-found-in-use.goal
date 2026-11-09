@@ -2,15 +2,15 @@
 id: "131"
 title: "UX fixes found in use: the screens' small faults that the owner reports"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-11-09
 ---
 
 # 131 · UX fixes found in use: the screens' small faults that the owner reports
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -56,6 +56,7 @@ The owner reports these from use, 2026-10-24: "ux fixes to add".
 ## Decisions
 
 - 2026-10-24, owner: the UX fixes found in use go in v0.1.4, the UI clean-up and UX improvements.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Open questions
 

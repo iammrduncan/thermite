@@ -2,15 +2,15 @@
 id: "126"
 title: "UI clean-up: every screen checked against the rules for screens, and the gaps fixed"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-11-09
 ---
 
 # 126 · UI clean-up: every screen checked against the rules for screens, and the gaps fixed
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -44,6 +44,7 @@ The owner, 2026-10-24: "v0.1.4 becomes UI Cleanup and UX improvements."
 ## Decisions
 
 - 2026-10-24, owner: v0.1.4 is the UI clean-up and UX improvements.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

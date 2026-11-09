@@ -2,15 +2,15 @@
 id: "101"
 title: "A secondary judge: an outside service's checks on a schedule, and its submissions"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["100"]
 created: 2026-10-23
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 101 · A secondary judge: an outside service's checks on a schedule, and its submissions
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -38,6 +38,7 @@ The owner, 2026-10-23, entering a public kernel challenge that allows a few outs
 - 2026-10-23, owner: checks on a set interval, only when Thermite's own checks recorded a gain; a submission at most once a day, only when Thermite's checks show a gain (the words above). The owner's words are the standing approval for that daily submission in the owner's campaign.
 - 2026-10-23, owner: built after v0.1.0's release steps, with goal [100](100-on-demand-gpus.goal), for live tests within days.
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.2, with GPUs on demand.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

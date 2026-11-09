@@ -2,7 +2,9 @@
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
-## [Unreleased]: v0.2.0
+## [0.2.0] 2026-11-09: A faster judge, and a running run changed in place
+
+v0.2.0 holds the new work after v0.1.3, and v0.1.4's fixes. A v0.1.1, v0.1.2, v0.1.3 or v0.1.4 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.2.0), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. Control adds one table as it starts, for how busy each runner is; a rig's ledger, the settings and the secrets do not change. The judge decides sooner: a screen stops early when the change cannot win, runs no gating runs and measures some metrics once a job, and a screened win's confirmation starts at once. The owner changes a running run in place: its lane limits, how many changes may wait for the judge, its acceptance and its kit's commit. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on.
 
 ### Steering
 

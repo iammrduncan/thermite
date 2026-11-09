@@ -2,15 +2,15 @@
 id: "148"
 title: "Keeping working, on New campaign and on a run's page"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: ["135"]
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-11-09
 ---
 
 # 148 · Keeping working, on New campaign and on a run's page
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Depends on:** [135](_completed/135-lanes-and-judge-throughput.goal)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [135](_completed/135-lanes-and-judge-throughput.goal)
 
 ## What
 
@@ -33,6 +33,7 @@ Moved out of goal 135 when the owner froze v0.1.0's scope, 2026-10-25: "we keep 
 ## Decisions
 
 - 2026-10-25, owner: after v0.1.0.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

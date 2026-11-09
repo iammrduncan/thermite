@@ -2,15 +2,15 @@
 id: "197"
 title: "The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 197 · The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -34,6 +34,7 @@ An unbounded queue buries its best ideas, and the judge's queue hides what the w
 ## Decisions
 
 - None yet.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Progress
 

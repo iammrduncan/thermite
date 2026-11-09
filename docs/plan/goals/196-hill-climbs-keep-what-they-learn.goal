@@ -2,15 +2,15 @@
 id: "196"
 title: "Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 196 · Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -37,6 +37,7 @@ Each costs search the run already paid for.
 ## Decisions
 
 - None yet.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Progress
 

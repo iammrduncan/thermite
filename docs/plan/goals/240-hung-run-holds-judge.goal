@@ -14,7 +14,7 @@ updated: 2026-11-09
 
 ## What
 
-On the lab, 2026-11-09, a change that added a second barrier phase to a GPU kernel was submitted at 10:25 UTC. Its job's lease ran out three times, the last at 12:00:28 UTC, and the job was blocked; its attempt became `errored` with no reason. The rig's two judge cards gave no verdict from 10:24 to 12:00 UTC. One card took the job at 11:32:30 UTC and its next job at 12:32:35 UTC: 60 minutes, the kit's time limit for a run (3,600 s). The events before 11:19 UTC were no longer kept, so the first two leases' times are inferred from the same hour: about three hours of the cards' time for one change, and no verdict.
+On the lab, 2026-11-09, a change that added a second barrier phase to a GPU kernel was submitted at 10:25 UTC. Its job's lease ran out three times, the last at 12:00:28 UTC, and the job was blocked; its attempt became `errored` with no reason. The rig's two judge cards gave no verdict from 10:24 to 12:00 UTC. The cards' GPU metrics show each of its three runs: a few minutes of setup, then the GPU at 96% busy at idle power (8 to 9 W, where a real kernel draws 18 to 50 W) until the kit's time limit for a run (3,600 s) stopped it: 10:34 to 11:32 UTC on one card, 11:02 to 12:00 UTC on the other, and 11:34 to 12:33 UTC on the first again. A kernel that never returned, the same on both cards: about three hours of the cards' time for one change, and no verdict. The kill at the limit freed each card within about 30 seconds.
 
 The judge renewed a job's 15-minute lease at the start of each block and while it builds (goal 163), never while a run goes on. A run that hangs outlasts the lease, its job goes back to the queue and hangs on the next card, and the first card waits out the kit's limit before its outcome is refused.
 
@@ -43,4 +43,5 @@ A change an agent writes can hang. The judge must give it a verdict, at the cost
 
 ## Progress
 
-- 2026-11-09: goal written and items 1 to 4 built.
+- 2026-11-09: goal written and items 1 to 4 built (f4384975; the test's fix-forward 182b8616). On the lab's VM, the six test files the change touches: 67 of 68 at f4384975, the one failure the test's own comparison of a database row with no prototype, fixed in 182b8616.
+- 2026-11-09: the campaign's kit now gives each case 900 s (its quality case 1,200 s), its load 600 s, and its driver ends a request the server sends no byte of for 300 s, in words; the run moved onto that kit commit from its next job. A normal run takes 3 to 5 minutes.

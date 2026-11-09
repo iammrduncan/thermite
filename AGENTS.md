@@ -12,7 +12,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 
 ## Current stage
 
-- v0.1.4 is out (2026-11-09), v0.1.3's fix release. New work goes on toward v0.2.0, on its branch `v0.2.0`. A fix to v0.1.4 goes on the branch of the next fix release, `v0.1.5`, made from `main` when the first fix needs it; each fix there merges into `v0.2.0` too.
+- v0.2.0 is out (2026-11-09). New features go on toward v0.3.0, on its branch `v0.3.0`. Each fix to v0.2.0 is a patch version of its own, v0.2.1, v0.2.2 and so on: a pull request to `main` from a branch of its own, released when it merges, and then merged into `v0.3.0`.
 - The plans are public, in [docs/plan/](docs/plan/README.md): the [roadmap](docs/plan/roadmap.md), the [release plan](docs/plan/release-v0.1.0.md), the [settled decisions](docs/plan/decisions.md) and one goal for each roadmap item.
 
 ## Settled decisions (summary)

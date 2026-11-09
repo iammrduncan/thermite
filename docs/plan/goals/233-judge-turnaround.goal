@@ -5,7 +5,7 @@ status: IN_PROGRESS
 version: "0.2.0"
 depends_on: ["206", "228"]
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-09
 ---
 
 # 233 · The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20
@@ -44,6 +44,7 @@ The judge is the run's bottleneck: every lane's change waits for it, and a chang
 
 - 2026-11-08, the owner: "Look to see if we can get screen down to 20 minutes, then no wait for confirmation and confirmation in 10-20 minutes."
 - 2026-11-08 22:06 UTC, the owner, on item 3's options: "Options A, C, E for sure... For E if gain on priority 1 is <1% but gain on secondary priorities is >1% we can still accept it!... Also our gain should probably be like 0.7% or higher... lots of 0.9% opportunities missed that we probably should include." So A, C and E; the primary's minimum effect 0.7% (1% before), the lower priorities' 1%, and a lower priority still wins a change whose primary gains less than its minimum effect. On D: "can that be done on a non-gpu machine? ... Runners should probably take prebuilt images etc... maybe or have that be a toggle/setup option": goal [236](236-judge-builds-on-a-builder.goal). B is not chosen.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"). Its screens take about 25 minutes, and a screened win's confirmation starts at once and takes about 20; the 20-minute screen goes on in goal [236](236-judge-builds-on-a-builder.goal) (v0.3.0), whose builds off the judge cards are what is left of it.
 
 ## Progress
 

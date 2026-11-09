@@ -2,15 +2,15 @@
 id: "227"
 title: "A rig's runners ride through control's restart"
 status: IN_PROGRESS
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-11-07
-updated: 2026-11-08
+updated: 2026-11-09
 ---
 
 # 227 · A rig's runners ride through control's restart
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -33,6 +33,7 @@ Control's restart is routine, and each one should not cost a job's measurement o
 ## Decisions
 
 - 2026-11-08 22:06 UTC, the owner, on building item 4 next: "yes".
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x. Item 4 shipped in v0.2.0; items 1 to 3 are the fix.
 
 ## Progress
 

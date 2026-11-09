@@ -2,15 +2,15 @@
 id: "210"
 title: "The first change a run's judge measures reads high"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-09
 ---
 
 # 210 · The first change a run's judge measures reads high
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · For the owner to weigh: a question about the judge, found while checking goal 209.
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · For the owner to weigh: a question about the judge, found while checking goal 209.
 
 ## What was seen (2026-11-05)
 
@@ -25,3 +25,7 @@ Is the first change a run's judge measures biased upward, against the champion i
 ## Done when
 
 The owner has decided whether to look into it; if so, the cause is found on a quiet machine and, where it is the judge's, fixed with a test.
+
+## Decisions
+
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.

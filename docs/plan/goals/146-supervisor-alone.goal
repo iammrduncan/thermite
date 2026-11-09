@@ -2,15 +2,15 @@
 id: "146"
 title: "Restart or update a rig's supervisor alone, while its harness goes on"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 depends_on: []
 created: 2026-10-25
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 146 · Restart or update a rig's supervisor alone, while its harness goes on
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -42,6 +42,7 @@ The supervisor can fail while the harness is well. Restarting both stops trials 
 ## Decisions
 
 - 2026-10-25, owner: this goal comes after the first release.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Open questions
 

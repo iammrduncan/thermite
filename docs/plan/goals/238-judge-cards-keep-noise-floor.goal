@@ -1,7 +1,7 @@
 ---
 id: "238"
 title: "Every judge card keeps a noise floor, and no judge job starves behind a full queue"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.2.0"
 depends_on: ["018", "206"]
 created: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-08
 
 # 238 · Every judge card keeps a noise floor, and no judge job starves behind a full queue
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
 
 ## What
 

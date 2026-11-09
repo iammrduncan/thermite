@@ -2,15 +2,15 @@
 id: "130"
 title: "An MCP client sees control's new tools after control is updated"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-10-24
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 130 · An MCP client sees control's new tools after control is updated
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -31,6 +31,7 @@ Thermite runs itself through control. A new tool that the operator's assistant c
 ## Decisions
 
 - 2026-10-24, owner: write the gaps found while operating the lab as goals, slotted where they fit.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Progress
 

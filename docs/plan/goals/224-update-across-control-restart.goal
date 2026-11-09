@@ -2,15 +2,15 @@
 id: "224"
 title: "A rig's update that a control restart cuts off goes on, or says so"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-09
 ---
 
 # 224 · A rig's update that a control restart cuts off goes on, or says so
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -28,6 +28,10 @@ Control's restart is routine: each new version of control needs one. A rig whose
 
 - [ ] Items 1 to 3.
 - [ ] Pages: Move a rig onto new images, the rig's page, and the changelog.
+
+## Decisions
+
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Progress
 

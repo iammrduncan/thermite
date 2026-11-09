@@ -2,16 +2,16 @@
 id: "134"
 title: "A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back"
 status: PROPOSED
-version: "0.2.0"
+version: "0.3.0"
 part: "GPUs on demand, and work within a budget"
 depends_on: []
 created: 2026-10-25
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 134 · A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020) · **Part:** GPUs on demand, and work within a budget
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Part:** GPUs on demand, and work within a budget
 
 ## What
 
@@ -39,6 +39,10 @@ The same day, a hill climb on a GPU rig with a GPU for each of its two lanes and
 - What the screen looks like: a mockup first, as for every screen decision.
 - How often the harness samples, and how long it keeps the samples.
 - Whether a rig's page shows the same view across all its runs.
+
+## Decisions
+
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 
 ## Progress
 

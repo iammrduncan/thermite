@@ -2,15 +2,15 @@
 id: "199"
 title: "The judge copies a job's files once, and checks the disk before it times"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 199 · The judge copies a job's files once, and checks the disk before it times
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -32,6 +32,7 @@ Noise from the judge's own copying looks like the candidate's, and it cost real 
 ## Decisions
 
 - None yet.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Progress
 

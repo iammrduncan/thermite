@@ -177,7 +177,6 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 **For the tag.** CI's run on the tag, and the images the runners take.
 
 - [192](goals/192-ci-tag-run-green.goal) CI's run on a version tag passes every check a runner can run (issue 54) · `IN_PROGRESS`
-- [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
 
 **Done on the way.**
 
@@ -192,19 +191,12 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.2.0
 
-**The new work after v0.1.3 (the owner, 2026-11-08).** Built on its branch `v0.2.0`; v0.1.4 was v0.1.3's fixes alone, and they are in v0.2.0 too. In the works.
-
-**Moved from v0.1.3 (the owner, 2026-11-06).** v0.1.3's first plan, apart from what multi-machine rigs need: follow-ups from use, the open issues of its milestone, the first release's follow-ups, GPUs on demand and work within a budget. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified.
-
-- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`, moved from v0.1.3 at its release: a question for the owner
-
-**First, what users hit.** Bugs with a clear fix.
+**A faster judge, and a running run changed in place.** Released 2026-11-09. The new work after v0.1.3, with v0.1.4's fixes: its changes are in the [changelog](../../CHANGELOG.md). A goal still `IN_PROGRESS` below is built and released, and waits for its check on the lab or for its issue to be closed. The goals not started moved at its release (the owner, 2026-11-09: "cut v0.2.0 with what changes we have now"): the fixes to [v0.2.x](#v02x), each a version of its own, and the rest to [v0.3.0](#v030).
 
 - [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `IN_PROGRESS`
 - [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `IN_PROGRESS`
 - [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `IN_PROGRESS`
 - [215](goals/_completed/215-planner-with-a-busy-lane.goal) The planner plans a round while a lane is still busy, instead of being refused for it · `VERIFIED`
-- [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `PROPOSED`
 - [217](goals/_completed/217-lane-fetch-progress.goal) A lane's runner begins fetching the model files when the run starts, and a lane is told how the whole fetch stands · `VERIFIED`
 - [218](goals/218-advisor-tools-in-terminal.goal) A teacher in Claude Code's own terminal has its tools from its first turn · `IN_PROGRESS`
 - [219](goals/219-lane-runner-memory.goal) A lane on a runner of its own can build and serve a large model in `run_experiment` · `IN_PROGRESS`
@@ -212,10 +204,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [221](goals/_completed/221-repair-a-run-in-place.goal) Repair a run in place: send an experiment back, and change a running run's lane limits · `VERIFIED`
 - [222](goals/222-chatgpt-prompt-cache.goal) Agents on a ChatGPT plan get its prompt cache: the session headers through the model proxy, and a session for Pi · `IN_PROGRESS`
 - [223](goals/223-judge-off-mid-job.goal) Turning the judge off says what becomes of the job under way · `DROPPED`
-- [224](goals/224-update-across-control-restart.goal) A rig's update that a control restart cuts off goes on, or says so · `PROPOSED`
-- [225](goals/225-drain-waits-for-advisors.goal) A drain waits for the supervisor's advisors too · `PROPOSED`
 - [226](goals/226-teacher-review-kept.goal) One long field of a teacher's recommendation never loses its review · `IN_PROGRESS`
-- [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `IN_PROGRESS`
 - [228](goals/_completed/228-attempt-stage-times.goal) An attempt's page says how long each of its stages took · `VERIFIED`
 - [229](goals/_completed/229-lanes-runner-pool.goal) A runner pool shared by the lanes, never the judge · `VERIFIED`
 - [230](goals/_completed/230-open-attempts-in-place.goal) A running run's limit of unjudged changes, set in place, and no default · `VERIFIED`
@@ -224,70 +213,28 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [233](goals/233-judge-turnaround.goal) The judge's turnaround: a screen in 20 minutes, its confirmation at once and in 10 to 20 · `IN_PROGRESS`
 - [234](goals/234-trial-keeps-its-route.goal) A trial under way keeps its model's route when the rig's workers move to another model · `IN_PROGRESS`
 - [235](goals/_completed/235-supervisor-cpus-for-terminals.goal) The supervisor has the CPUs to start its advisors in their own terminals · `VERIFIED`
-- [236](goals/236-judge-builds-on-a-builder.goal) The judge's builds on a builder, off the judge cards' clock · `PROPOSED`
-- [237](goals/237-supervisor-roll-keeps-judge.goal) A roll of the supervisor alone keeps the judge measuring · `PROPOSED`
-- [238](goals/238-judge-cards-keep-noise-floor.goal) Every judge card keeps a noise floor, and no judge job starves behind a full queue · `PROPOSED`
+- [238](goals/238-judge-cards-keep-noise-floor.goal) Every judge card keeps a noise floor, and no judge job starves behind a full queue · `IN_PROGRESS`
 - [240](goals/240-hung-run-holds-judge.goal) A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows · `IN_PROGRESS`
-
-**The owner's asks of 2026-11-03.**
-
 - [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `IN_PROGRESS`
-
-**The owner's asks of 2026-11-04.**
-
 - [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `IN_PROGRESS`
-- [204](goals/204-quiet-ride-through.goal) A supervisor rides through control's restart quietly · `PROPOSED`
-- [207](goals/207-runpod-runners.goal) A RunPod GPU as a rig's runner, launched while it works · `PROPOSED`
-
-**Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
-
 - [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `IN_PROGRESS`
+
+## v0.2.x
+
+**Fixes to v0.2.0, each a version of its own (the owner, 2026-11-09).** Each is one pull request to `main`, released as the next patch number when it merges, v0.2.1, then v0.2.2, and merged into v0.3.0 too. In the order to take them:
+
+- [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `IN_PROGRESS`: item 4 shipped in v0.2.0, items 1 to 3 are the fix
 - [201](goals/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop, and stop holding up the rest (issue 50) · `PROPOSED`
-- [199](goals/199-judge-files-once-disk-ready.goal) The judge copies a job's files once, and checks the disk before it times (issue 50) · `PROPOSED`
-- [200](goals/200-plateau-stop.goal) A plateau stop: a run ends after a time without a new champion, when the owner sets it (issue 50) · `PROPOSED`
+- [224](goals/224-update-across-control-restart.goal) A rig's update that a control restart cuts off goes on, or says so · `PROPOSED`
+- [225](goals/225-drain-waits-for-advisors.goal) A drain waits for the supervisor's advisors too · `PROPOSED`
+- [204](goals/204-quiet-ride-through.goal) A supervisor rides through control's restart quietly · `PROPOSED`
 - [141](goals/141-waiting-win-after-champion-moved.goal) A waiting win the champion moved past: closed when a champion has it, an approval when none does (issue 23) · `PROPOSED`
-- [202](goals/202-field-report-3080.goal) The 3080 field report: each of its items in a goal (issue 50) · `PROPOSED`
-
-**Costs, and what a hill climb keeps.**
-
-- [195](goals/195-model-prices-cache-and-tiers.goal) Model prices: a price for cache writes, and prices by request size (issue 41) · `PROPOSED`
-- [123](goals/123-budgets-made-simple.goal) Budgets made simple: one amount in dollars, easy to set, that holds on every rig · `PROPOSED`
-- [196](goals/196-hill-climbs-keep-what-they-learn.goal) Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on (issues 29, 36, 37, 38) · `PROPOSED`
-- [197](goals/197-experiment-queue-cap-and-split.goal) The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's (issues 30, 20) · `PROPOSED`
-- [114](goals/114-hill-climb-contract-gaps.goal) Hill-climb contracts: a check once per candidate, cheaper held-out cells, and goal mode's fields · `PROPOSED`
-- [122](goals/122-repeat-measurements-setting.goal) Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not · `PROPOSED`
-
-**Planned before the issues.** The rest of the first release's follow-ups, then GPUs on demand and a secondary judge.
-
-- [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) Give control a kit bundle from the dashboard · `PROPOSED`
-- [108](goals/108-gated-models-on-cloud-rigs.goal) Gated models on cloud rigs · `PROPOSED`
-- [129](goals/129-copy-takes-rubrics.goal) A research campaign's copy can take its own rubrics · `PROPOSED`
-- [130](goals/130-mcp-tools-after-update.goal) An MCP client sees control's new tools after control is updated · `PROPOSED`
 - [145](goals/145-drain-race.goal) A drain doesn't wait two hours for a trial that started seconds before it · `PROPOSED`
-- [146](goals/146-supervisor-alone.goal) Restart or update a rig's supervisor alone, while its harness goes on · `PROPOSED`
 - [149](goals/149-output-cut-notice.goal) A command's result says its output was cut only when it was · `PROPOSED`
-- [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
-- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
-- [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
-- [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
-- [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
-- [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
-- [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
-
-**UI clean-up and UX improvements.** The screens agree with each other, and each one says what you need to know. Proposed.
-
-- [126](goals/126-ui-clean-up.goal) UI clean-up: every screen checked against the rules for screens, and the gaps fixed · `PROPOSED`
+- [130](goals/130-mcp-tools-after-update.goal) An MCP client sees control's new tools after control is updated · `PROPOSED`
+- [199](goals/199-judge-files-once-disk-ready.goal) The judge copies a job's files once, and checks the disk before it times (issue 50) · `PROPOSED`
+- [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `PROPOSED`
 - [131](goals/131-ux-fixes-found-in-use.goal) UX fixes found in use: the screens' small faults that the owner reports · `PROPOSED`
-- [088](goals/088-new-campaign-button-progress.goal) New campaign's buttons show they were pressed · `PROPOSED`
-- [090](goals/090-info-tab.goal) An Info tab for campaigns and runs: everything they were started with · `PROPOSED`
-- [091](goals/091-needs-you-stuck-rigs.goal) Needs you shows a rig that is stuck · `PROPOSED`
-- [093](goals/093-live-shows-reasoning.goal) Live shows what the model thinks and says, not only its tool calls · `PROPOSED`
-- [094](goals/094-copy-id.goal) Copy an ID from any page · `PROPOSED`
-- [109](goals/109-exports-page-shows-what-matters.goal) The Exports page shows what matters, not every slice · `PROPOSED`
-- [110](goals/110-judge-only-runs-show-progress.goal) A judge-only run shows its progress · `PROPOSED`
-- [072](goals/072-why-nothing-at-work.goal) Say why a running run has nothing at work · `PROPOSED`
-- [089](goals/089-dashboard-performance.goal) Faster dashboard pages · `PROPOSED`
-- [148](goals/148-keep-working-on-screens.goal) Keeping working, on New campaign and on a run's page · `PROPOSED`
 
 ## v0.3.0
 
@@ -310,6 +257,58 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [030](goals/030-oauth-sign-in.goal) Sign in with OAuth or OIDC · `PROPOSED`
 - [031](goals/031-design-docs.goal) The design reasons, in public docs · `PROPOSED`
 - [061](goals/061-gaps-found-by-the-docs.goal) Gaps found by the docs work · `PROPOSED`
+
+**Moved from v0.2.0 at its release (the owner, 2026-11-09).** The features planned for v0.2.0 that were not started.
+
+**The judge, rigs and images.**
+
+- [236](goals/236-judge-builds-on-a-builder.goal) The judge's builds on a builder, off the judge cards' clock · `PROPOSED`
+- [237](goals/237-supervisor-roll-keeps-judge.goal) A roll of the supervisor alone keeps the judge measuring · `PROPOSED`
+- [207](goals/207-runpod-runners.goal) A RunPod GPU as a rig's runner, launched while it works · `PROPOSED`
+- [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
+
+**Runs that don't waste the machine.** The field report's ranked requests, and a question on the judge.
+
+- [200](goals/200-plateau-stop.goal) A plateau stop: a run ends after a time without a new champion, when the owner sets it (issue 50) · `PROPOSED`
+- [202](goals/202-field-report-3080.goal) The 3080 field report: each of its items in a goal (issue 50) · `PROPOSED`
+- [210](goals/210-first-candidate-bias.goal) The first change a run's judge measures reads high: a question for the owner, seen on a noisy machine · `PROPOSED`: a question for the owner
+
+**Costs, and what a hill climb keeps.**
+
+- [195](goals/195-model-prices-cache-and-tiers.goal) Model prices: a price for cache writes, and prices by request size (issue 41) · `PROPOSED`
+- [123](goals/123-budgets-made-simple.goal) Budgets made simple: one amount in dollars, easy to set, that holds on every rig · `PROPOSED`
+- [196](goals/196-hill-climbs-keep-what-they-learn.goal) Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on (issues 29, 36, 37, 38) · `PROPOSED`
+- [197](goals/197-experiment-queue-cap-and-split.goal) The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's (issues 30, 20) · `PROPOSED`
+- [114](goals/114-hill-climb-contract-gaps.goal) Hill-climb contracts: a check once per candidate, cheaper held-out cells, and goal mode's fields · `PROPOSED`
+- [122](goals/122-repeat-measurements-setting.goal) Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not · `PROPOSED`
+
+**Planned before the issues.** The rest of the first release's follow-ups, then GPUs on demand and a secondary judge.
+
+- [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) Give control a kit bundle from the dashboard · `PROPOSED`
+- [108](goals/108-gated-models-on-cloud-rigs.goal) Gated models on cloud rigs · `PROPOSED`
+- [129](goals/129-copy-takes-rubrics.goal) A research campaign's copy can take its own rubrics · `PROPOSED`
+- [146](goals/146-supervisor-alone.goal) Restart or update a rig's supervisor alone, while its harness goes on · `PROPOSED`
+- [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
+- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
+- [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
+- [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
+- [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
+- [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
+- [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
+
+**UI clean-up and UX improvements.** The screens agree with each other, and each one says what you need to know.
+
+- [126](goals/126-ui-clean-up.goal) UI clean-up: every screen checked against the rules for screens, and the gaps fixed · `PROPOSED`
+- [088](goals/088-new-campaign-button-progress.goal) New campaign's buttons show they were pressed · `PROPOSED`
+- [090](goals/090-info-tab.goal) An Info tab for campaigns and runs: everything they were started with · `PROPOSED`
+- [091](goals/091-needs-you-stuck-rigs.goal) Needs you shows a rig that is stuck · `PROPOSED`
+- [093](goals/093-live-shows-reasoning.goal) Live shows what the model thinks and says, not only its tool calls · `PROPOSED`
+- [094](goals/094-copy-id.goal) Copy an ID from any page · `PROPOSED`
+- [109](goals/109-exports-page-shows-what-matters.goal) The Exports page shows what matters, not every slice · `PROPOSED`
+- [110](goals/110-judge-only-runs-show-progress.goal) A judge-only run shows its progress · `PROPOSED`
+- [072](goals/072-why-nothing-at-work.goal) Say why a running run has nothing at work · `PROPOSED`
+- [089](goals/089-dashboard-performance.goal) Faster dashboard pages · `PROPOSED`
+- [148](goals/148-keep-working-on-screens.goal) Keeping working, on New campaign and on a run's page · `PROPOSED`
 
 ## v0.4.0
 

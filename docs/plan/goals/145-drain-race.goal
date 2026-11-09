@@ -2,15 +2,15 @@
 id: "145"
 title: "A drain doesn't wait two hours for a trial that started seconds before it"
 status: PROPOSED
-version: "0.2.0"
+version: "0.2.x"
 depends_on: ["136"]
 created: 2026-10-25
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # 145 · A drain doesn't wait two hours for a trial that started seconds before it
 
-**Status:** `PROPOSED` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -41,6 +41,7 @@ A drain exists so that an update loses no work. A trial seconds old has no work 
 ## Decisions
 
 - 2026-10-25, owner: this goal comes after the first release.
+- 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
 
 ## Open questions
 
