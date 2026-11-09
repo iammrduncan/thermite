@@ -76,6 +76,16 @@ export const RunResults = z.object({
 });
 export type RunResults = z.infer<typeof RunResults>;
 
+/** A kit's commit as a bundle in the inbox, which the supervisor fetches from `source` first. */
+const KitBundle = z.object({
+  kind: z.literal("kit_bundle"),
+  path: InboxPath,
+  repo: IdSchema,
+  commit: CommitSchema,
+  sha256: Sha256Schema.optional(),
+  source: GitSource.optional(),
+});
+
 export const ImportSpec = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("repo_bundle"),
@@ -93,14 +103,7 @@ export const ImportSpec = z.discriminatedUnion("kind", [
     sha256: Sha256Schema,
     source: FileSource.optional(),
   }),
-  z.object({
-    kind: z.literal("kit_bundle"),
-    path: InboxPath,
-    repo: IdSchema,
-    commit: CommitSchema,
-    sha256: Sha256Schema.optional(),
-    source: GitSource.optional(),
-  }),
+  KitBundle,
   /**
    * Another rig's champion as a binary patch against a base commit both rigs have (the
    * campaign seed). The harness applies it to the base and accepts it only if the file's sha256
@@ -434,6 +437,18 @@ export const CommandPayloads = {
     part: z.enum(LOG_PARTS),
     level: z.enum(LOG_LEVELS).nullable(),
   }),
+  /**
+   * A running run moved onto a later commit of its kit (goal 233), from the judge's next job: its
+   * one import is the kit's bundle, which the supervisor fetches as an assignment's, and the
+   * harness checks the commit against the contract as at an assignment.
+   */
+  kit_commit: z.strictObject({
+    run: RunId,
+    imports: z.array(KitBundle).length(1),
+    reason: z.string().trim().min(1).max(2000),
+    /** True: what it would do, with nothing changed. */
+    preview: z.boolean().optional(),
+  }),
 } as const;
 
 export type CommandKind = keyof typeof CommandPayloads;
@@ -477,6 +492,7 @@ export const MCP_OPERATOR_KINDS = [
   "queue_retry",
   "lane_limits",
   "acceptance",
+  "kit_commit",
   "drop_directive",
   // A rig part's log level, to look into a fault (the guide's question 16).
   "log_level",
@@ -518,6 +534,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "queue_retry",
   "lane_limits",
   "acceptance",
+  "kit_commit",
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
@@ -553,6 +570,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "queue_retry",
   "lane_limits",
   "acceptance",
+  "kit_commit",
   "drop_directive",
   "hypothesis_status",
   "propagate",

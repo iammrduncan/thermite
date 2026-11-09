@@ -100,7 +100,7 @@ const git = (repo: string, args: string[], env: Record<string, string> = {}) =>
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
 /** The kinds of command whose content the supervisor stages: it fetches something for them. */
-const STAGED_KINDS: readonly string[] = ["assign_campaign", "propagate"];
+const STAGED_KINDS: readonly string[] = ["assign_campaign", "propagate", "kit_commit"];
 /** Commands whose signature the harness has checked, by id: each is asked about once. */
 const checked = new Set<string>();
 /** At most this many are kept; past it, the set starts again. */
@@ -139,7 +139,9 @@ export async function stageSigned(
  * is not available yet (for example the source rig's export is not pushed), try again later.
  */
 export async function stageCommand(cfg: StagingConfig, cmd: SignedCommand): Promise<StageResult> {
-  if (cmd.envelope.kind === "assign_campaign") return stageSources(cfg, cmd);
+  // An assignment's sources, and a running run's later kit commit (goal 233).
+  if (cmd.envelope.kind === "assign_campaign" || cmd.envelope.kind === "kit_commit")
+    return stageSources(cfg, cmd);
   if (cmd.envelope.kind !== "propagate") return "ready";
   // Past its expiry the harness refuses it anyway: relay it so the refusal is acknowledged.
   if (Date.parse(cmd.envelope.expires_at) < Date.now()) return "ready";

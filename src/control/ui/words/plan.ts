@@ -131,6 +131,13 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         { run: String(e.subject) },
       );
     }
+    // A running run moved onto a later commit of its kit (goal 233).
+    case "kit_set":
+      return s(
+        `${who(e.actor)} moved the run onto kit ${String(b.repo ?? "")} at ${String(b.commit ?? "").slice(0, 12)} (from ${String(b.from ?? "").slice(0, 12)}), from the judge's next job: ${clip(String(b.reason ?? ""), 300)}.`,
+        "",
+        { run: String(e.subject) },
+      );
     // A teachers' round asked for now (goal 194): the supervisor starts it within a minute.
     case "teachers_round_requested":
       return s(

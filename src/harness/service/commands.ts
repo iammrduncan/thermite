@@ -29,6 +29,7 @@ import { askStop, drainCommand } from "./drain.ts";
 import type { HarnessService } from "./index.ts";
 import { invalidateEvidence } from "./invalidation.ts";
 import { conflictCheck, unknownIn } from "./rules.ts";
+import { moveRunKit } from "./run-kit.ts";
 import { decidingRun, openRun, pauseOthers, requireRun } from "./runs.ts";
 import { requestWipe } from "./wipe.ts";
 
@@ -340,6 +341,12 @@ export class Commands {
           reason: p.reason,
         });
         return { run: p.run, acceptance };
+      }
+      // A running run moved onto a later commit of its kit (goal 233), from the judge's next job.
+      case "kit_commit": {
+        const p = CommandPayloads.kit_commit.parse(payload);
+        openRun(svc.ledger, p.run);
+        return await moveRunKit(svc, p, by);
       }
       case "queue_retry": {
         const p = CommandPayloads.queue_retry.parse(payload);

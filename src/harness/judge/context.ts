@@ -8,7 +8,7 @@ import { toFraction } from "../../core/stats.ts";
 import { ownersAcceptance, withOwnersAcceptance } from "../acceptance.ts";
 import type { Runner } from "../broker/index.ts";
 import type { JobRow, Ledger } from "../ledger/index.ts";
-import type { HarnessService } from "../service/index.ts";
+import { type HarnessService, ownersKit } from "../service/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
 import { BASELINE_BLOCKS, type Baseline, baselineDir, baselineOf } from "./baseline.ts";
 import { CoreRunner } from "./core-runner.ts";
@@ -199,14 +199,16 @@ export class JudgeContext {
     recordInfraFailure(this.ledger, job, reason, { owner: this.o.owner, spec: this.spec(job) });
   }
 
-  async kitFor(contract: Contract): Promise<KitAt> {
+  /** The run's kit: the contract's, at the commit the owner moved the run onto (goal 233) or its own. */
+  async kitFor(contract: Contract, run: string): Promise<KitAt> {
     const ref = contract.project.kit;
     if (!ref) throw new InfraError(`contract ${contract.campaign} names no kit`);
     const repo = `kit-${ref.repo}`;
+    const commit = ownersKit(this.ledger, run) ?? ref.commit;
     const dir = await exportKit(
       this.o.service.paths.stateDir,
       this.o.service.mirrorFor(repo),
-      ref.commit,
+      commit,
     );
     const kit = loadKit(dir);
     if (kit.target !== this.target.driver.type) {
@@ -214,7 +216,7 @@ export class JudgeContext {
         `kit ${kit.name} measures ${kit.target}, this rig has ${this.target.driver.type}`,
       );
     }
-    return { kit, dir, repo, commit: ref.commit };
+    return { kit, dir, repo, commit };
   }
 
   private async build(run: string, commit: string, k: KitAt) {

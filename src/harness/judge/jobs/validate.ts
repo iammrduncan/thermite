@@ -55,7 +55,7 @@ export async function validate(judge: JudgeContext, job: JobRow): Promise<Finish
   const run = String(judge.spec(job).run);
   const contract = judge.goalContract(run);
   const champion = judge.ledger.champions.current(run);
-  const k = await judge.kitFor(contract);
+  const k = await judge.kitFor(contract, run);
   const arm = await judge.armFor("champion", run, champion.commit_sha, k);
   const ctx = judge.context(k, job);
   const results = await verifyGoals(judge, job, contract, ctx, arm, {

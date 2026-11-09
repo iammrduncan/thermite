@@ -63,7 +63,7 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
   const dir = prepareBaselineDir(judge.o.service.paths.stateDir, run, job.id);
   const written = await judge.baselineWork(job);
   try {
-    const k = await judge.kitFor(contract);
+    const k = await judge.kitFor(contract, run);
     step("building");
     const arm = await judge.armFor("baseline", run, commit, k);
     const ctx = judge.context(k, job, written);

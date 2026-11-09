@@ -48,7 +48,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
   }
 
   try {
-    const k = await judge.kitFor(contract);
+    const k = await judge.kitFor(contract, run);
     judge.ledger.jobs.heartbeat(job.id, job.fence, judge.o.leaseMs);
     const champ = await judge.armFor("champion", run, champion.commit_sha, k);
     const cand = await judge.armFor("candidate", run, String(attempt.commit_sha), k);
@@ -273,7 +273,7 @@ async function confirmGoal(judge: JudgeContext, job: JobRow): Promise<Finish> {
     };
   }
   try {
-    const k = await judge.kitFor(contract);
+    const k = await judge.kitFor(contract, run);
     judge.ledger.attempts.setLifecycle(attemptId, "verifying", judge.o.owner);
     const cand = await judge.armFor("candidate", run, String(attempt.commit_sha), k);
     const ctx = judge.context(k, job);

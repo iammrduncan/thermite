@@ -58,6 +58,16 @@ export async function hasCommit(mirror: string, sha: string): Promise<boolean> {
   }
 }
 
+/** Whether `older` is `newer` or one of its ancestors in the mirror (goal 233). */
+export async function isAncestor(mirror: string, older: string, newer: string): Promise<boolean> {
+  try {
+    await git(mirror, ["merge-base", "--is-ancestor", older, newer]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveCommit(mirror: string, rev: string): Promise<string> {
   return (await git(mirror, ["rev-parse", "--verify", `${rev}^{commit}`])).trim();
 }

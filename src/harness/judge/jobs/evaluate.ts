@@ -31,7 +31,7 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
   };
 
   try {
-    const k = await judge.kitFor(contract);
+    const k = await judge.kitFor(contract, run);
     step("building");
     const champ = await judge.armFor("champion", run, onParent ? parent : champion.commit_sha, k);
     const cand = await judge.armFor("candidate", run, String(attempt.commit_sha), k);
@@ -109,7 +109,7 @@ async function evaluateGoal(judge: JudgeContext, job: JobRow): Promise<Finish> {
   const contract = judge.goalContract(run);
   const champion = judge.ledger.champions.current(run);
   try {
-    const k = await judge.kitFor(contract);
+    const k = await judge.kitFor(contract, run);
     judge.ledger.attempts.setLifecycle(attemptId, "building", judge.o.owner);
     const cand = await judge.armFor("candidate", run, String(attempt.commit_sha), k);
     judge.ledger.attempts.setLifecycle(attemptId, "verifying", judge.o.owner);

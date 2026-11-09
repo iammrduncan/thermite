@@ -133,6 +133,7 @@ export const EVENT_KINDS = [
   "run_hours_added",
   "lane_limits_set",
   "acceptance_set",
+  "kit_set",
   "lanes_held",
   "lanes_held_ended",
   "terminal_input",

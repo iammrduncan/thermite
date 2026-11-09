@@ -188,6 +188,7 @@ It prints the command's id and `"status":"pending"`. In each payload, `run` is t
 | `unkeep_message` | `{"run":"sort-speed-1","message":3}` |
 | `lane_limits`, a running run's lane limits changed in place | `{"run":"sort-speed-1","limits":{"dev_run_rss_mib":16384},"reason":"the build needs more than 4 GiB"}` |
 | `acceptance`, a running hill climb's acceptance changed in place | `{"run":"sort-speed-1","acceptance":{"min_effects":{"flops_per_s":0.007},"confirm_blocks":3,"futility":0.8},"reason":"gains of 0.9% were missed"}` |
+| `kit_commit`, a running run moved onto a later commit of its kit | `{"run":"sort-speed-1","imports":[{"kind":"kit_bundle","repo":"sort-kit","commit":"<40 hex>","path":"kits/sort-kit-2.bundle","source":{"control":"kits/sort-kit"}}],"reason":"the probe runs once a job"}` |
 
 The changes to the experiment queue, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `queue_retry`, are in [Choose what a run tries next](choose-what-runs-next.md#from-the-command-line-and-over-mcp).
 

@@ -15,7 +15,7 @@ export async function calibrate(judge: JudgeContext, job: JobRow): Promise<Finis
   const run = String(judge.spec(job).run);
   const contract = judge.hillClimb(run);
   const champion = judge.ledger.champions.current(run);
-  const k = await judge.kitFor(contract);
+  const k = await judge.kitFor(contract, run);
   const champ = await judge.armFor("champion", run, champion.commit_sha, k);
   const ctx = judge.context(k, job);
   const twin: Arm = { ...champ, name: "twin" };

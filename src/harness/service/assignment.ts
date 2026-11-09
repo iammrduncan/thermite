@@ -24,7 +24,7 @@ import { pauseOthers } from "./runs.ts";
  * contract, and its run made, with its champion ref, its MCP servers and the queue it starts with.
  */
 
-async function runImport(
+export async function runImport(
   svc: HarnessService,
   spec: ImportSpec,
   repoHint: string,

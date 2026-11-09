@@ -476,6 +476,8 @@ export interface EventBodies {
    * now, what this change set (null: back to the contract's), and why.
    */
   acceptance_set: { acceptance: OwnersAcceptance; changed: RunAcceptance; reason: string };
+  /** The owner moved a running run onto a later commit of its kit (goal 233), from which, and why. */
+  kit_set: { repo: string; commit: string; from: string; reason: string };
   /**
    * The run's lanes start no new trial (goal 230): `open` changes wait for the judge, at most
    * `limit`, from the run's open_attempts rule or the contract's max_open_attempts.
