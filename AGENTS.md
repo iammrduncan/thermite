@@ -49,7 +49,8 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 ## Git
 
 - Work on a branch and commit in reviewable steps with clear messages.
-- Each version is built on a branch named for it: work merges there, and `main` moves only when a version ships ([decisions](docs/plan/decisions.md#releases-and-planning)). New work goes on the next minor version's branch, such as `v0.2.0`. A fix to the released version goes on the next patch's branch, such as `v0.1.5`, which starts from `main`, and it merges into the minor version's branch too.
+- `main` holds released versions only, each with its tag ([decisions](docs/plan/decisions.md#releases-and-planning)). New features go on the next minor version's branch, such as `v0.3.0`, and ship together when its goals are verified.
+- Each fix to the released version is a patch version of its own: one branch from `main` (`fix/<what-it-fixes>`) and one pull request to `main`, with its version and its changelog section (v0.2.1, then v0.2.2). When it merges, `main` is tagged and released, and `main` merges into the minor version's branch. Keep a fix's pull request to that one fix.
 - Do not rewrite history that has been pushed.
 - `.agents/`, `.claude/` and `skills-lock.json` belong to the maintainers' tooling. Leave them alone unless asked.
 

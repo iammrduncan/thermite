@@ -4,7 +4,7 @@ Every goal, by version, in priority order. Each line links to its goal. [How The
 
 - **v0.1.0 is decided.** Its plan is [release-v0.1.0.md](release-v0.1.0.md).
 - **Later versions are proposed.** Their order and their contents can change.
-- **A version with new work counts up the middle number,** such as 0.2.0. **A version of fixes alone counts up the last number,** such as 0.1.4, and its fixes go into the next middle version too ([decisions](decisions.md#releases-and-planning), 2026-11-08). Before v0.1.4, versions with new work also counted up the last number, from 0.1.1 to 0.1.3.
+- **A version with new work counts up the middle number,** such as 0.3.0, and holds the new features. **Each fix is a version of its own** that counts up the last number, such as 0.2.1: it is released when its pull request merges to `main`, and it goes into the next middle version too ([decisions](decisions.md#releases-and-planning), 2026-11-08 and 2026-11-09). Before v0.1.4, versions with new work also counted up the last number, from 0.1.1 to 0.1.3.
 - **Each version ships when its goals are verified,** not on a date. Each one also takes the fixes from tester reports on the version before it.
 
 ## Built so far
