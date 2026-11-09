@@ -152,7 +152,7 @@ function policyForm(
       const kindsWith = RETENTION_KIND_KEYS.filter((k) => kindOf(k).keeps[key]);
       // The selected kind's words for what it keeps, else the first kind's that has it; the
       // page's script changes them with the kind (data-keep-words).
-      return `<label data-keep="${key}"${own ? "" : " hidden"}><input type="checkbox" name="keep_${key}" value="1"${spec.keep[key] ? " checked" : ""}> <span data-keep-words='${esc(JSON.stringify(Object.fromEntries(kindsWith.map((k) => [k, kindOf(k).keeps[key]]))))}'>${esc(own ?? words)}</span></label>`;
+      return `<label data-keep="${key}"${own ? "" : " hidden"}><input type="checkbox" name="keep_${key}" value="1"${spec.keep[key] ? " checked" : ""}> <span data-keep-words="${esc(JSON.stringify(Object.fromEntries(kindsWith.map((k) => [k, kindOf(k).keeps[key]]))))}">${esc(own ?? words)}</span></label>`;
     })
     .join("");
   const hasKeeps = Object.keys(kindOf(spec.kind).keeps).length > 0;

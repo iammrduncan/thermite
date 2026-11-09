@@ -9,6 +9,8 @@ v0.1.4 is a fix release of v0.1.3.
 ### Fixes
 
 - **New campaign starts a hill climb or a goal campaign again.** The page sends where each run's work goes with every hill climb's and goal's answers, and control refused them with `the form: Unrecognized key: "results"`, whatever the choice, so only a research campaign started from the page. Control now takes the choice and checks it as before: a branch of the project's repository, or a separate repository, needs a Git access that can push ([issue 68](https://github.com/iammrduncan/thermite/issues/68)).
+- **Settings › Retention saves a new policy again.** The form's script stopped on the words "Each lane's champion builds", whose apostrophe cut short the page's copy of what each kind keeps, so **Save** stayed off after a name was typed, and the boxes for what to keep and the fields for when did not follow the kind.
+- **Add an experiment keeps its fields apart at any width.** Beside the sidebar and the queue's side column, the form on a run's **Experiments** tab left its first field a few pixels at some window widths, such as 820 and 1150 pixels, and drew **Direction** over it. It now lays out by its own width: in two columns when it is narrow, and in one on a phone.
 
 ## [0.1.3] 2026-11-06: a rig over several machines, and what a first campaign on it needs
 

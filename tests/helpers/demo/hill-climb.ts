@@ -384,6 +384,14 @@ export function hillClimbRigs(): { g1: Rig; g2: Rig } {
   });
   const g2 = new Rig("gpu-2");
   hillClimb(g2, "decode-b", 26, [0.048, 0.031, 0.027, 0.036], { pending: true });
+  // The harness submits a propagated champion as an attempt of its own (harness/propagation.ts),
+  // so its page opens from the run's attempts.
+  g2.ev(5.01, "attempt_recorded", "a-prop-1", {
+    run: "decode-b",
+    lifecycle: "queued",
+    hypothesis:
+      "Propagated: gpu-1's champion (run decode-a, seq 5), judged here against this rig's champion",
+  });
   g2.ev(5, "propagation_received", "decode-b", {
     attempt: "a-prop-1",
     source_rig: "gpu-1",

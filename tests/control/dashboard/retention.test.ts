@@ -143,6 +143,26 @@ describe("Settings › Retention policies", () => {
     assert.match(edit, /<option value="weekly"|value="weekly" checked/);
   });
 
+  test("each kind's words for what it keeps reach the page's script whole, apostrophes too", async () => {
+    // The words sat in a single-quoted attribute, so "Each lane's champion builds" ended it at the
+    // apostrophe: the script's JSON.parse threw on every change, before Save could wait for a
+    // name, and Save stayed off. Read as a browser reads an attribute, in either quote.
+    const { control } = controlOnly({ tokens: { admin: OWNER } });
+    const s = await signIn(control, OWNER);
+    const form = await s.page("/ui/settings?retention=new");
+    const attrs = [...form.matchAll(/data-keep-words=(?:"([^"]*)"|'([^']*)')/g)].map((m) =>
+      (m[1] ?? m[2] ?? "")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&"),
+    );
+    assert.ok(attrs.length > 0, "the form names what each kind keeps");
+    const words = attrs.flatMap((a) => Object.values(JSON.parse(a) as Record<string, string>));
+    assert.ok(words.includes("Each lane's champion builds"), words.join(" | "));
+  });
+
   test("a refused design comes back to the form with what was typed, and says why", async () => {
     const { control, store } = controlOnly({ tokens: { admin: OWNER } });
     const s = await signIn(control, OWNER);
