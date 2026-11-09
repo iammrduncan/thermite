@@ -177,7 +177,8 @@ describe("judge pipeline (local runner, Node test kit)", () => {
       .prepare(
         "select kind, state, priority from job where kind in ('calibrate', 'evaluate') order by id",
       )
-      .all() as { kind: string; state: string; priority: number }[];
+      .all()
+      .map((r) => ({ ...r })) as { kind: string; state: string; priority: number }[];
     assert.deepEqual(jobs, [
       { kind: "evaluate", state: "queued", priority: 100 },
       { kind: "calibrate", state: "done", priority: 60 },
