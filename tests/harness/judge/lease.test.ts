@@ -89,11 +89,12 @@ function oneJob(kind = "evaluate") {
   return { ledger, job, lose, tick };
 }
 
-/** The attempt's newest verdict and its reasons. */
+/** The attempt's newest verdict and its reasons, as a plain object (node:sqlite's rows have no prototype). */
 function verdictOf(ledger: Ledger, attempt: string) {
-  return ledger.db
+  const row = ledger.db
     .prepare("select verdict, reasons from verdict where attempt = ? order by id desc limit 1")
     .get(attempt) as { verdict: string; reasons: string } | undefined;
+  return row && { verdict: row.verdict, reasons: row.reasons };
 }
 
 test("a measurement run longer than the lease keeps it while it goes on, and no more once it ends (goal 240)", async () => {
