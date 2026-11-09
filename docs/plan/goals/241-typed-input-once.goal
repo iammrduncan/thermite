@@ -1,0 +1,42 @@
+---
+id: "241"
+title: "Input the owner types into an advisor's terminal reaches it once"
+status: PROPOSED
+version: "0.2.x"
+depends_on: []
+created: 2026-11-09
+updated: 2026-11-09
+---
+
+# 241 · Input the owner types into an advisor's terminal reaches it once
+
+**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
+
+## What
+
+CI's run on v0.2.0's tag, 2026-11-09: the Claude Code acceptance check failed twice in a row on one check, "the owner's message to the auditor went in inside its turn, through its Stop hook, and the input typed into its terminal reached it". The stand-in auditor received the typed input twice (`typed=OWNER-TYPED-AUDITOR,OWNER-TYPED-AUDITOR`), where the check expects it once. The same code passed the check 1.5 hours earlier.
+
+The check types into the auditor's terminal with `terminal_input` until one is accepted, as the terminal refuses input between its program's turns. So either a try the harness answers as not typed still reaches the program, which would make an owner who tries again type twice, or the check's own retry sends a second input while the first is still on its way.
+
+1. **Find which:** the harness's record of each `terminal_input` for the auditor's call, and what the stand-in saw, in a run of the check that fails.
+2. **If the harness:** an input it answers as not typed never reaches the program, and one it types it answers as typed.
+3. **If the check:** it types once more only after a refusal in words, never after a wait that ran out.
+4. **Tests:** the case that failed, with a test of the harness's answer or of the check's retry.
+
+## Why
+
+An owner's typed input must reach the program once, as the answer said.
+
+## Done when
+
+- [ ] Items 1 to 4.
+- [ ] The Claude Code acceptance check passes three times running, and on CI.
+- [ ] Pages: Watch and steer an agent in its terminal, if the harness's answer changes; the changelog.
+
+## Decisions
+
+- 2026-11-09, the owner: v0.2.0 is published with this check failing ("Publish now"); this goal finds the cause and fixes it as a v0.2.x version of its own.
+
+## Progress
+
+- 2026-11-09: goal written.
