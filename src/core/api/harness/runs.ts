@@ -234,7 +234,12 @@ export const RUN_ANSWER = {
   method: "POST",
   path: "/v1/run-asks/:id",
   what: "runner's answer",
-  body: z.object({ answer: z.unknown().optional(), error: z.string().max(4000).optional() }),
+  body: z.object({
+    answer: z.unknown().optional(),
+    error: z.string().max(4000).optional(),
+    /** The runner no longer holds the ask (goal 227): its run fails as a runner away. */
+    away: z.literal(true).optional(),
+  }),
   answer: z.looseObject({ ok: z.boolean() }),
   maxBytes: RUN_MAX_BYTES + 1024 * 1024,
 } as const satisfies Route;

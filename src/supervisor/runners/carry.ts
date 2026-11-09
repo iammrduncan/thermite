@@ -36,7 +36,20 @@ interface Carrier {
   stopping: () => boolean;
   /** Each round, for the health route's loop. */
   tick?: (() => void) | undefined;
+  /** Tests only: how often a long ask's state is asked; a minute by default (goal 227). */
+  stateMs?: number | undefined;
 }
+
+/** How often the supervisor asks a runner where a long ask stands (goal 227). */
+const STATE_EVERY_MS = 60_000;
+/** How long one such question waits for its answer. */
+const STATE_TIMEOUT_MS = 15_000;
+
+/** A runner that does not know an ask (goal 227): its answer was lost, or it started again. */
+class AskGone extends Error {}
+
+const minute = (ms: number) =>
+  new Promise<"minute">((r) => setTimeout(() => r("minute"), ms).unref?.());
 
 /** Sends one request to a runner's supervisor and reads its reply. */
 async function send(c: Carrier, runner: string, r: RunnerRequest, timeoutMs: number) {
@@ -67,22 +80,72 @@ async function answerOf(c: Carrier, runner: string, first: RunnerReply): Promise
   return reply.answer;
 }
 
+/**
+ * A long ask's reply, or where it stands (goal 227). Its request can be lost while the bus is
+ * away, its reply with it, so every minute the supervisor asks the runner by the ask's id: a reply
+ * the runner kept ends the wait as the reply would have, one still running waits on, and one the
+ * runner does not know ends it as gone. A runner too old to say waits on as before.
+ */
+async function settled(
+  c: Carrier,
+  runner: string,
+  id: string,
+  pending: Promise<RunnerReply>,
+  everyMs = STATE_EVERY_MS,
+): Promise<RunnerReply> {
+  let request: Promise<{ r: RunnerReply } | null> | undefined = pending.then(
+    (r) => ({ r }),
+    () => null,
+  );
+  for (;;) {
+    const got = request ? await Promise.race([request, minute(everyMs)]) : await minute(everyMs);
+    if (got && got !== "minute") return got.r;
+    // The request failed (a bus that dropped): from now on the runner says where the ask stands.
+    if (got === null) {
+      request = undefined;
+      continue;
+    }
+    let s: RunnerReply;
+    try {
+      s = await send(c, runner, { kind: "state", id }, STATE_TIMEOUT_MS);
+    } catch {
+      continue;
+    }
+    if (s.state === "running") continue;
+    if (s.state === "unknown")
+      throw new AskGone(
+        `runner ${runner} no longer holds the ask: its answer was lost, or the runner started again`,
+      );
+    if (s.error?.startsWith("not an ask this runner reads")) continue;
+    return s;
+  }
+}
+
 /** An ask to the runner, in parts when it is too long for one message; its answer. */
 async function sendAsk(c: Carrier, a: Extract<QueuedRun, { kind: "ask" }>): Promise<unknown> {
-  const whole: RunnerRequest = { kind: "ask", ask: a.ask };
+  const whole: RunnerRequest = { kind: "ask", ask: a.ask, id: a.id };
   const text = JSON.stringify(a.ask);
   if (text.length + 32 <= RUNNER_PART_CHARS)
-    return answerOf(c, a.runner, await send(c, a.runner, whole, RUNNER_ASK_TIMEOUT_MS));
+    return answerOf(
+      c,
+      a.runner,
+      await settled(c, a.runner, a.id, send(c, a.runner, whole, RUNNER_ASK_TIMEOUT_MS), c.stateMs),
+    );
   const parts = Math.ceil(text.length / RUNNER_PART_CHARS);
   let last: RunnerReply = {};
   for (let part = 0; part < parts; part++) {
     const data = text.slice(part * RUNNER_PART_CHARS, (part + 1) * RUNNER_PART_CHARS);
-    last = await send(
-      c,
-      a.runner,
-      { kind: "ask_part", id: a.id, part, parts, data },
-      part === parts - 1 ? RUNNER_ASK_TIMEOUT_MS : RUNNER_PART_TIMEOUT_MS,
-    );
+    const request = { kind: "ask_part" as const, id: a.id, part, parts, data };
+    last =
+      part === parts - 1
+        ? await settled(
+            c,
+            a.runner,
+            a.id,
+            send(c, a.runner, request, RUNNER_ASK_TIMEOUT_MS),
+            c.stateMs,
+          )
+        : await send(c, a.runner, request, RUNNER_PART_TIMEOUT_MS);
     if (last.error !== undefined) throw new Error(last.error);
   }
   return answerOf(c, a.runner, last);
@@ -109,7 +172,7 @@ async function sendBundle(c: Carrier, a: Extract<QueuedRun, { kind: "git" }>): P
 
 /** One ask carried, and its answer, or why there is none, given to the harness. */
 async function carryOne(c: Carrier, a: QueuedRun): Promise<void> {
-  let body: { answer?: unknown; error?: string };
+  let body: { answer?: unknown; error?: string; away?: true };
   try {
     body = {
       answer:
@@ -129,7 +192,11 @@ async function carryOne(c: Carrier, a: QueuedRun): Promise<void> {
             : await sendBundle(c, a),
     };
   } catch (err) {
-    body = { error: errorText(err).slice(0, 4000) };
+    // An ask its runner no longer holds fails as a runner away (goal 227): its job goes back.
+    body = {
+      error: errorText(err).slice(0, 4000),
+      ...(err instanceof AskGone ? { away: true as const } : {}),
+    };
   }
   await c.harness.call(RUN_ANSWER, { params: { id: a.id }, body }).catch((err: unknown) =>
     log("supervisor", "a runner's answer did not reach the harness", {

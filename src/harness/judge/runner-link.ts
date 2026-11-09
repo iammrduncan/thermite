@@ -146,12 +146,20 @@ export class RunnerLink {
     return out.map((o) => o.item);
   }
 
-  /** A runner's answer to an ask taken, or why none came. False: no such ask is open. */
-  answer(id: string, a: { answer?: unknown; error?: string | undefined }): boolean {
+  /**
+   * A runner's answer to an ask taken, or why none came; `away`: the runner no longer holds it
+   * (goal 227), so its run fails as a runner away. False: no such ask is open.
+   */
+  answer(
+    id: string,
+    a: { answer?: unknown; error?: string | undefined; away?: true | undefined },
+  ): boolean {
     const o = this.taken.get(id);
     if (!o) return false;
     this.taken.delete(id);
-    if (a.error !== undefined) o.reject(new Error(`runner ${o.item.runner}: ${a.error}`));
+    if (a.away)
+      o.reject(new RunnerAway(`runner ${o.item.runner}: ${a.error ?? "its run is gone"}`));
+    else if (a.error !== undefined) o.reject(new Error(`runner ${o.item.runner}: ${a.error}`));
     else o.resolve(a.answer);
     return true;
   }

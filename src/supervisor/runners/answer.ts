@@ -46,7 +46,12 @@ export async function answerCoreAsks(o: Answerer): Promise<void> {
   const bundles = new Map<string, { file: string; next: number; at: number }>();
   const held = new Map<string, { parts: string[]; at: number }>();
   const asks = new Map<string, { parts: string[]; at: number }>();
+  // Each ask by the core's id (goal 227): those under way, and the reply each gave, kept for an
+  // hour, so an answer lost on the bus can still be had.
+  const running = new Set<string>();
+  const answered = new Map<string, { text: string; at: number }>();
   const forget = (now = Date.now()) => {
+    for (const [id, a] of answered) if (now - a.at > HELD_MS) answered.delete(id);
     for (const [id, b] of bundles)
       if (now - b.at > HELD_MS) {
         rmSync(b.file, { force: true });
@@ -94,16 +99,30 @@ export async function answerCoreAsks(o: Answerer): Promise<void> {
     } catch (err) {
       return JSON.stringify({ error: `not an ask this runner reads: ${errorText(err)}` });
     }
-    const askHarness = async (ask: unknown) =>
-      reply(
-        await harnessSays(() =>
-          o.harness.call(RUN, {
-            body: RunAsk.parse(ask),
-            timeoutMs: RUNNER_ASK_TIMEOUT_MS,
-          }),
-        ),
-      );
-    if (req.kind === "ask") return askHarness(req.ask);
+    const askHarness = async (ask: unknown, id?: string) => {
+      if (id) running.add(id);
+      try {
+        const text = reply(
+          await harnessSays(() =>
+            o.harness.call(RUN, {
+              body: RunAsk.parse(ask),
+              timeoutMs: RUNNER_ASK_TIMEOUT_MS,
+            }),
+          ),
+        );
+        if (id) answered.set(id, { text, at: Date.now() });
+        return text;
+      } finally {
+        if (id) running.delete(id);
+      }
+    };
+    if (req.kind === "ask") return askHarness(req.ask, req.id);
+    // Where an ask stands (goal 227): its kept reply, running, or unknown.
+    if (req.kind === "state") {
+      const kept = answered.get(req.id);
+      if (kept) return kept.text;
+      return JSON.stringify({ state: running.has(req.id) ? "running" : "unknown" });
+    }
     // A long ask's part, in order: the last gives the joined ask to the harness.
     if (req.kind === "ask_part") {
       const a = asks.get(req.id) ?? { parts: [], at: Date.now() };
@@ -123,7 +142,7 @@ export async function answerCoreAsks(o: Answerer): Promise<void> {
       } catch (err) {
         return JSON.stringify({ error: `not an ask this runner reads: ${errorText(err)}` });
       }
-      return askHarness(ask);
+      return askHarness(ask, req.id);
     }
     if (req.kind === "models") {
       const inbox = o.inboxDir;

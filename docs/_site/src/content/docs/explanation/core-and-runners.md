@@ -49,6 +49,8 @@ The core and its runners talk through control's message bus, as every rig report
 
 No verdict is lost and nothing counts against a change, but the work under way is done again.
 
+A run can also end while the bus is away, on a runner that never counted as away: its answer is then sent while no one can hear it. So while a build or a run waits, the core's supervisor asks the runner every minute where it stands, by the ask's own id. The runner keeps each answer for an hour: an answer it kept ends the wait as the lost one would have, one still running waits on, and an ask the runner does not know, because its answer was lost before it was kept or the runner started again, fails as a runner away does, so the judge's job goes back to the queue. A job never waits hours for an answer that will not come.
+
 **Control's own restart drops the bus for a moment,** often for about half a minute. A runner counts as away only when two of the core's checks in a row fail, 15 seconds apart, so a drop of about 30 seconds may ride through or may not, depending on where the checks fall, and a longer one is likelier to count every runner as away. To restart control without losing work, choose a moment when no runner has a run under way:
 
 1. On the rig's **Edit rig**, turn the **Judge** off. The job it is on finishes and records its verdict; no new job starts.

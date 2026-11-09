@@ -38,8 +38,8 @@ const Data = z.string().max(RUNNER_PART_CHARS);
 
 /** What the core's supervisor sends a runner's. */
 export const RunnerRequest = z.discriminatedUnion("kind", [
-  /** An ask of the runner process. */
-  z.object({ kind: z.literal("ask"), ask: RunAsk }),
+  /** An ask of the runner process; `id`, the core's, by which its answer is kept (goal 227). */
+  z.object({ kind: z.literal("ask"), ask: RunAsk, id: Id.optional() }),
   /**
    * One part of an ask too long for one message (a kept baseline's files), in order: the parts
    * joined are the ask's JSON, and the last part's answer is the runner's.
@@ -57,6 +57,11 @@ export const RunnerRequest = z.discriminatedUnion("kind", [
   }),
   /** The next part of an answer that came in parts. */
   z.object({ kind: z.literal("more"), id: Id, part: Part.min(1) }),
+  /**
+   * Where an ask stands, by its id (goal 227): still running, its answer kept (the reply it gave),
+   * or unknown, which the core takes as a run its runner no longer holds.
+   */
+  z.object({ kind: z.literal("state"), id: Id }),
   /** Model files to fetch from their sources and give the runner process; `poll`: in turns. */
   z.object({
     kind: z.literal("models"),
@@ -77,5 +82,7 @@ export const RunnerReply = z.object({
   took: z.boolean().optional(),
   more: z.object({ id: z.string(), parts: Part.min(2) }).optional(),
   data: z.string().optional(),
+  /** An ask's state (goal 227): one its runner still runs, or one it does not know. */
+  state: z.enum(["running", "unknown"]).optional(),
 });
 export type RunnerReply = z.infer<typeof RunnerReply>;
