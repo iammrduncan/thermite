@@ -394,9 +394,20 @@ try {
 
   // The private path. A stand-in Git host on control's network accepts only keys in its
   // authorized_keys; control makes the deploy key in Providers and keeps its private half.
-  execFileSync(engine, ["build", "-q", "-t", "thermite-test-machine", "tests/stand-ins/machine"], {
-    stdio: ["ignore", "ignore", "inherit"],
-  });
+  // Docker reads only a Dockerfile unless -f names the file; Podman also finds a Containerfile.
+  execFileSync(
+    engine,
+    [
+      "build",
+      "-q",
+      "-f",
+      "tests/stand-ins/machine/Containerfile",
+      "-t",
+      "thermite-test-machine",
+      "tests/stand-ins/machine",
+    ],
+    { stdio: ["ignore", "ignore", "inherit"] },
+  );
   execFileSync(
     engine,
     ["run", "-d", "--name", gitBox, "--network", "thermite_control", "thermite-test-machine"],
