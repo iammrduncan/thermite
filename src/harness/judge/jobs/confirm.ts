@@ -92,7 +92,7 @@ export async function confirm(judge: JudgeContext, job: JobRow): Promise<Finish>
         verdict,
         ...judge.verdictFields(d),
         dependsOnJobs: [job.id, Number(judge.spec(job).screen_job ?? job.id)],
-        reasons: `${reasons}; vs champion seq ${champion.seq}`,
+        reasons: `${reasons}${judge.floorNote(run)}; vs champion seq ${champion.seq}`,
         judgedBy: judge.o.owner,
       },
       ...(ho ? { events: [heldOutEvent(job.id, run, attemptId, ho)] } : {}),

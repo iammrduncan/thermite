@@ -118,6 +118,84 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     assert.equal(env.ledger.champions.current("js-1").attempt, id);
   });
 
+  test("a card with no calibration of its own takes the run's newest one, and its verdict says so (goal 238)", async () => {
+    const env = await setup();
+    const card = (index: number, calibrationBlocks: number) =>
+      new Judge({
+        service: env.service,
+        runner: new LocalRunner(env.paths.scratchDir),
+        driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
+        owner: `executor-${index}`,
+        readyRetries: 0,
+        calibrationBlocks,
+        card: { index, uuid: `GPU-${"ab"[index]}`, count: 2 },
+      });
+    // Card A measures the baseline and calibrates; card B never calibrates.
+    const [a, b] = [card(0, 2), card(1, 0)];
+    assert.equal(await a.tick(), true);
+    assert.equal(await a.tick(), true);
+    const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
+    assert.equal(await b.tick(), true);
+    const reasons = String(
+      (
+        env.ledger.db
+          .prepare("select reasons from verdict where attempt = ? order by id limit 1")
+          .get(id) as { reasons: string }
+      ).reasons,
+    );
+    assert.match(
+      reasons,
+      /; noise floor [\d.]+% from the run's calibration on another card, until this card has its own; vs champion seq 1$/,
+    );
+  });
+
+  test("a card's first calibration comes before a waiting screen, and a card keeps one waiting (goal 238)", async () => {
+    const env = await setup();
+    const card = (index: number) =>
+      new Judge({
+        service: env.service,
+        runner: new LocalRunner(env.paths.scratchDir),
+        driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
+        owner: `executor-${index}`,
+        readyRetries: 0,
+        calibrationBlocks: 2,
+        card: { index, uuid: `GPU-${"ab"[index]}`, count: 2 },
+      });
+    const [a, b] = [card(0), card(1)];
+    assert.equal(await a.tick(), true, "the baseline");
+    await env.submit(FAST_KERNEL, "drop the wasted inner loop");
+    // Two of card B's calibrations wait behind the screen, as a queue that never empties left them.
+    for (let i = 0; i < 2; i++)
+      env.ledger.jobs.enqueue({
+        kind: "calibrate",
+        priority: 200,
+        spec: { run: "js-1", card: "GPU-b" },
+        actor: "test",
+      });
+    assert.equal(await b.tick(), true);
+    const jobs = env.ledger.db
+      .prepare(
+        "select kind, state, priority from job where kind in ('calibrate', 'evaluate') order by id",
+      )
+      .all() as { kind: string; state: string; priority: number }[];
+    assert.deepEqual(jobs, [
+      { kind: "evaluate", state: "queued", priority: 100 },
+      { kind: "calibrate", state: "done", priority: 60 },
+      { kind: "calibrate", state: "cancelled", priority: 200 },
+    ]);
+    const cals = env.ledger.db
+      .prepare("select json_extract(body, '$.card') as card from event where kind = 'calibration'")
+      .all()
+      .map((r) => r.card);
+    assert.deepEqual(cals, ["GPU-b"]);
+    const cancelled = env.ledger.db
+      .prepare(
+        "select json_extract(body, '$.reason') as reason from event where kind = 'job_cancelled'",
+      )
+      .get() as { reason: string };
+    assert.equal(cancelled.reason, "another calibration of this card waits already");
+  });
+
   test("a score from the judge's clock as plain time: a faster kernel wins on lower seconds", async () => {
     const env = await setup({
       kitMetrics: { seconds: { unit: "s", from: "time" } },

@@ -40,6 +40,12 @@ export type { JudgeOptions, PromotionPolicy } from "./context.ts";
 
 /** The judge's jobs, as it leases them. */
 const JOB_KINDS = ["baseline", "evaluate", "parent_screen", "confirm", "calibrate", "validate"];
+/**
+ * A card's calibration's place in the queue: behind every other job, but its first of a run after
+ * the confirmations and before the screens (goal 238), as the lowest number is leased first.
+ */
+const CALIBRATION_PRIORITY = 200;
+const FIRST_CALIBRATION_PRIORITY = 60;
 
 export class Judge {
   /** The judge's options, ledger, build store and held job, and the steps every job takes. */
@@ -314,24 +320,39 @@ export class Judge {
 
   /**
    * A hill climb's calibration (the A/A) comes after its baseline (goal 115): a run that waits
-   * for its baseline gets none queued yet.
+   * for its baseline gets none queued yet. A card's first calibration of a run comes before its
+   * screens, and a card keeps one waiting at most (goal 238): behind a queue of screens that
+   * never empties, a card's calibration at its later priority would never run.
    */
   private maybeScheduleCalibration(waiting: readonly string[] = []): void {
     if (this.judge.o.calibrationBlocks < 2) return;
     // Each judge card calibrates for itself; its executor schedules the job pinned to it.
     const mine = this.judge.cards > 1 ? this.judge.o.card?.uuid : undefined;
+    const jobs = this.judge.ledger.jobs;
     for (const inst of this.judge.ledger.runs.list()) {
       if (inst.status !== "running" || inst.mode !== "hill_climb") continue;
       if (waiting.includes(inst.id)) continue;
-      const last = this.judge.ledger.jobs
-        .ofRun(inst.id, "calibrate")
-        .filter((j) => !mine || j.spec.card === mine)
-        .at(-1);
+      const own = jobs.ofRun(inst.id, "calibrate").filter((j) => !mine || j.spec.card === mine);
+      const calibrated = own.some((j) => j.state === "done");
+      const open = own.filter((j) => j.state === "queued" || j.state === "leased");
+      if (open.length) {
+        // One waits: the others go, and a first calibration moves before the screens.
+        const [keep, ...extra] = open;
+        for (const j of extra)
+          jobs.cancel(j.id, this.judge.o.owner, {
+            run: inst.id,
+            reason: "another calibration of this card waits already",
+          });
+        if (!calibrated && keep?.state === "queued")
+          jobs.reprioritize(keep.id, FIRST_CALIBRATION_PRIORITY);
+        continue;
+      }
+      const last = own.at(-1);
       if (last && Date.now() - Date.parse(last.created_at) < this.judge.o.calibrationEveryMs)
         continue;
-      this.judge.ledger.jobs.enqueue({
+      jobs.enqueue({
         kind: "calibrate",
-        priority: 200,
+        priority: calibrated ? CALIBRATION_PRIORITY : FIRST_CALIBRATION_PRIORITY,
         spec: { run: inst.id, ...(mine ? { card: mine } : {}) },
         actor: this.judge.o.owner,
       });

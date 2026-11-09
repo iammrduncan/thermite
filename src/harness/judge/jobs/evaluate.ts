@@ -66,7 +66,7 @@ export async function evaluate(judge: JudgeContext, job: JobRow): Promise<Finish
         verdict,
         ...judge.verdictFields(d),
         dependsOnJobs: [job.id],
-        reasons: `${d.reasons}; vs champion seq ${champion.seq}`,
+        reasons: `${d.reasons}${judge.floorNote(run)}; vs champion seq ${champion.seq}`,
         judgedBy: judge.o.owner,
       },
       ...(win

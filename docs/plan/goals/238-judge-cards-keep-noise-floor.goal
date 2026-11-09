@@ -35,11 +35,13 @@ The noise floor is what keeps a rig whose blocks agree by chance from screening 
 
 ## Decisions
 
-- Open, for the owner: whether each card's first calibration may take its judge's time before the queue's screens (item 2), about an hour of each card at a run's start; and whether the parent screens that wait (goal 135) should run at all while screens wait.
+- 2026-11-09, before 00:04 UTC, the owner, asked whether a card falls back to the run's calibration and then calibrates once ahead of its screens (about an hour of each card, once a run), falls back only, or is left as it is: "Fall back, then calibrate (Recommended)". Items 1 and 2 as written.
+- Open, for the owner: whether the parent screens that wait (goal 135) should run at all while screens wait.
 
 ## Progress
 
 - 2026-11-08 23:58 UTC: goal written from the lab. A screen's interval on the rig with runners (job 160, ±0.30% at 3 blocks) was narrower than its floor would allow. Its ledger, read on a copy: 14 `calibrate` jobs, the 10 done all before the runners and with no card; 4 queued with a card, never leased (two for each card, 2026-11-07 06:21 and 07:23 UTC, 2026-11-08 06:22 and 08:04 UTC); 10 `calibration` events, none naming a card. Queued then: 21 parent screens, 14 screens, 4 calibrations.
+- 2026-11-09 00:04 UTC: items 1, 2 and 4 built. `JudgeContext.noise` takes a card's own calibration, else the run's newest, and a verdict on another card's floor says so in its reasons; `maybeScheduleCalibration` queues a card's first calibration of a run at priority 60 (after the confirmations, 50, before the screens, 100), cancels a second one waiting, and moves a waiting first one to 60; the ledger's `jobs.reprioritize`. Tests: `tests/harness/judge/judge.test.ts`. Item 3 (the jobs that wait longest, shown) is next.
 
 ---
 

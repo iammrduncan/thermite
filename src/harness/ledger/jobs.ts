@@ -264,6 +264,17 @@ export class LedgerJobs extends LedgerPart {
     });
   }
 
+  /** A queued job's new place in the queue: the lowest priority number is leased first (goal 238). */
+  reprioritize(jobId: number, priority: number): void {
+    this.execute(
+      "update job set priority = ?, updated_at = ? where id = ? and state = 'queued' and priority <> ?",
+      priority,
+      this.now(),
+      jobId,
+      priority,
+    );
+  }
+
   /** The leased jobs `where` picks go back to the queue, or are blocked, each with a `kind` event. */
   private requeue(where: string, args: SQLInputValue[], actor: string, kind: EventKind): number[] {
     return this.tx(() => {

@@ -420,15 +420,33 @@ export class JudgeContext {
    * interval assumes, so a few blocks that happen to agree on a noisy rig do not decide.
    */
   noiseFloor(run: string): number {
-    // With several judge cards, each card's own noise: a verdict uses the floor of the card it
-    // was measured on.
+    return this.noise(run).sigma;
+  }
+
+  /**
+   * The run's noise floor for this card. With several judge cards, each card's own noise: a
+   * verdict uses the floor of the card it was measured on, and a card with no calibration of its
+   * own the run's newest from any card until it has one (goal 238), never none.
+   */
+  private noise(run: string): { sigma: number; own: boolean } {
     const mine = this.cards > 1 ? this.o.card?.uuid : undefined;
-    const e = this.ledger.events.newest("calibration", {
-      subject: run,
-      body: mine ? { card: mine } : undefined,
-    });
+    const own = mine
+      ? this.ledger.events.newest("calibration", { subject: run, body: { card: mine } })
+      : undefined;
+    const e = own ?? this.ledger.events.newest("calibration", { subject: run });
     const sigma = e ? Number(e.body.sigma) : 0;
-    return Number.isFinite(sigma) && sigma > 0 ? sigma : 0;
+    return {
+      sigma: Number.isFinite(sigma) && sigma > 0 ? sigma : 0,
+      own: !mine || own !== undefined,
+    };
+  }
+
+  /** What a verdict's reasons add when its floor is another card's (goal 238); else nothing. */
+  floorNote(run: string): string {
+    const n = this.noise(run);
+    return n.sigma > 0 && !n.own
+      ? `; noise floor ${(n.sigma * 100).toFixed(3)}% from the run's calibration on another card, until this card has its own`
+      : "";
   }
 
   /** How many judge cards the rig has. */
