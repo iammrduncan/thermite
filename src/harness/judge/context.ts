@@ -20,7 +20,7 @@ import { whileLeased } from "./lease.ts";
 import type { Arm, ArmRun } from "./measure.ts";
 import type { PortFound } from "./ports.ts";
 import { clipReason, REASONS_CHARS } from "./reasons.ts";
-import type { MeasureSpec, RigRunner } from "./runner.ts";
+import type { Measured, MeasureSpec, RigRunner } from "./runner.ts";
 import { RunnerAway } from "./runner-link.ts";
 
 /** A run's kit: loaded, its folder here, and its repository and commit, which name it anywhere. */
@@ -146,7 +146,7 @@ export class JudgeContext {
   readonly ledger: Ledger;
   /** The runner it builds and measures on. */
   readonly target: RigRunner;
-  /** The job this judge holds: its lease is renewed while a build runs (lease.ts). */
+  /** The job this judge holds: its lease is renewed while a build or a run goes on (lease.ts). */
   holding: JobRow | undefined;
 
   constructor(opts: JudgeOptions) {
@@ -309,9 +309,24 @@ export class JudgeContext {
     };
   }
 
-  /** One run of an arm on a cell, on the judge's runner. */
+  /**
+   * One run of an arm on a cell, on the judge's runner, with the held job's lease renewed while it
+   * goes on (goal 240): a run may take as long as its kit allows, and the lease's 15 minutes are
+   * no limit on it. A run that hangs ends at the kit's time limit, as its change's crash.
+   */
+  async measureRun(spec: MeasureSpec, arm: Arm, cell: string): Promise<Measured> {
+    const h = this.holding;
+    const renew = () => h && this.ledger.jobs.heartbeat(h.id, h.fence, this.o.leaseMs);
+    return whileLeased(renew, this.o.leaseMs / 3, () => this.target.measure(spec, arm, cell), {
+      job: h?.id,
+      arm: arm.name,
+      cell,
+    });
+  }
+
+  /** One run of an arm on a cell, on the judge's runner (measureRun). */
   async measure(spec: MeasureSpec, arm: Arm, cell: string): Promise<ArmRun> {
-    return (await this.target.measure(spec, arm, cell)).run;
+    return (await this.measureRun(spec, arm, cell)).run;
   }
 
   /**

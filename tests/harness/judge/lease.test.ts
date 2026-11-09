@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { parseContract } from "../../../src/core/contract.ts";
+import { JudgeContext } from "../../../src/harness/judge/context.ts";
 import { jobsAtStart, whileLeased } from "../../../src/harness/judge/lease.ts";
 import { Ledger, MAX_LEASE_EXPIRIES } from "../../../src/harness/ledger/index.ts";
 import { hillClimbFixture } from "../../helpers/fixtures.ts";
@@ -44,8 +45,8 @@ test("a long build keeps its job's lease: renewed while it runs, and no more onc
   );
 });
 
-/** A ledger with one run, one attempt and its job, on a clock the test moves. */
-function oneJob() {
+/** A ledger with one run, one attempt and its job of `kind`, on a clock the test moves. */
+function oneJob(kind = "evaluate") {
   let now = new Date("2026-10-25T00:00:00Z");
   const dir = mkdtempSync(join(tmpdir(), "thermite-lease-"));
   const ledger = Ledger.open(join(dir, "ledger.db"), () => now);
@@ -76,14 +77,61 @@ function oneJob() {
     },
     "t",
   );
-  const job = ledger.jobs.enqueue({ attempt: "a-1", kind: "evaluate", actor: "t" });
+  const job = ledger.jobs.enqueue({ attempt: "a-1", kind, actor: "t" });
+  const tick = (ms: number) => {
+    now = new Date(now.getTime() + ms);
+  };
   const lose = () => {
     assert.ok(ledger.jobs.lease("executor-0", 1_000));
-    now = new Date(now.getTime() + 2_000);
+    tick(2_000);
     ledger.jobs.expireLeases();
   };
-  return { ledger, job, lose };
+  return { ledger, job, lose, tick };
 }
+
+/** The attempt's newest verdict and its reasons. */
+function verdictOf(ledger: Ledger, attempt: string) {
+  return ledger.db
+    .prepare("select verdict, reasons from verdict where attempt = ? order by id desc limit 1")
+    .get(attempt) as { verdict: string; reasons: string } | undefined;
+}
+
+test("a measurement run longer than the lease keeps it while it goes on, and no more once it ends (goal 240)", async () => {
+  const { ledger, job, tick } = oneJob();
+  const leaseMs = 90;
+  const held = ledger.jobs.lease("executor-0", leaseMs);
+  assert.ok(held);
+  const expired: number[] = [];
+  // The run goes on for more than three leases on the ledger's clock, in steps.
+  const target = {
+    measure: async () => {
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 40));
+        tick(30);
+        expired.push(...ledger.jobs.expireLeases());
+      }
+      return { run: { kind: "ok" }, throttled: undefined };
+    },
+  };
+  const judge = new JudgeContext({
+    service: { ledger } as never,
+    runner: undefined as never,
+    driver: undefined as never,
+    owner: "executor-0",
+    leaseMs,
+    target: target as never,
+  });
+  judge.holding = held;
+  const m = await judge.measureRun({} as never, { name: "candidate" } as never, "bench");
+  assert.equal(m.run.kind, "ok");
+  assert.deepEqual(expired, [], "the lease never ran out while the run went on");
+  assert.equal(ledger.jobs.get(job)?.state, "leased");
+  assert.equal(ledger.jobs.get(job)?.fence, held.fence);
+  // Once the run ends, nothing renews it: a judge that stops loses the job as before.
+  tick(2 * leaseMs);
+  assert.deepEqual(ledger.jobs.expireLeases(), [job]);
+  ledger.close();
+});
 
 test("a job blocked by lost leases ends its attempt, and gets one more try at the harness's start", () => {
   const { ledger, job, lose } = oneJob();
@@ -92,6 +140,12 @@ test("a job blocked by lost leases ends its attempt, and gets one more try at th
   assert.equal(ledger.jobs.get(job)?.state, "blocked");
   // Its attempt is settled, so the lane's round can end without it.
   assert.equal(lifecycle(), "errored");
+  // It says why, with no verdict on the change (goal 240).
+  assert.deepEqual(verdictOf(ledger, "a-1"), {
+    verdict: "crash_infra",
+    reasons:
+      "the judge lost this job 3 times (the judge that held it did not renew its lease in time): no verdict on the change. The job is blocked; the harness tries it once more when it starts again",
+  });
   const said: string[] = [];
   jobsAtStart(ledger, (msg) => said.push(msg));
   assert.deepEqual(said, ["blocked jobs queued again at start"]);
@@ -110,6 +164,16 @@ test("a job blocked by lost leases ends its attempt, and gets one more try at th
   ledger.close();
 });
 
+test("a blocked parent screen leaves its change's verdict and lifecycle as they are (goals 135, 240)", () => {
+  const { ledger, job, lose } = oneJob("parent_screen");
+  ledger.attempts.setLifecycle("a-1", "judged", "t");
+  for (let i = 0; i < MAX_LEASE_EXPIRIES; i++) lose();
+  assert.equal(ledger.jobs.get(job)?.state, "blocked");
+  assert.equal(ledger.attempts.get("a-1")?.lifecycle, "judged");
+  assert.equal(verdictOf(ledger, "a-1"), undefined);
+  ledger.close();
+});
+
 test("a job whose third lost lease is the start's own reclaim stays blocked (goal 163)", () => {
   const { ledger, job, lose } = oneJob();
   for (let i = 0; i < MAX_LEASE_EXPIRIES - 1; i++) lose();
@@ -118,6 +182,10 @@ test("a job whose third lost lease is the start's own reclaim stays blocked (goa
   jobsAtStart(ledger, () => {});
   assert.equal(ledger.jobs.get(job)?.state, "blocked", "never retried for ever");
   assert.equal(ledger.attempts.get("a-1")?.lifecycle, "errored");
+  assert.match(
+    verdictOf(ledger, "a-1")?.reasons ?? "",
+    /^the judge lost this job 3 times \(the harness stopped, or its runner left the rig, while the job ran\)/,
+  );
   // The next start gives it its one more try, as for any blocked job.
   jobsAtStart(ledger, () => {});
   assert.equal(ledger.jobs.get(job)?.state, "queued");

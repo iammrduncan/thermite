@@ -1,0 +1,46 @@
+---
+id: "240"
+title: "A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows"
+status: IN_PROGRESS
+version: "0.2.0"
+depends_on: []
+created: 2026-11-09
+updated: 2026-11-09
+---
+
+# 240 · A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
+
+## What
+
+On the lab, 2026-11-09, a change that added a second barrier phase to a GPU kernel was submitted at 10:25 UTC. Its job's lease ran out three times, the last at 12:00:28 UTC, and the job was blocked; its attempt became `errored` with no reason. The rig's two judge cards gave no verdict from 10:24 to 12:00 UTC. One card took the job at 11:32:30 UTC and its next job at 12:32:35 UTC: 60 minutes, the kit's time limit for a run (3,600 s). The events before 11:19 UTC were no longer kept, so the first two leases' times are inferred from the same hour: about three hours of the cards' time for one change, and no verdict.
+
+The judge renewed a job's 15-minute lease at the start of each block and while it builds (goal 163), never while a run goes on. A run that hangs outlasts the lease, its job goes back to the queue and hangs on the next card, and the first card waits out the kit's limit before its outcome is refused.
+
+1. **The lease is renewed while each run goes on,** as while a build does: a run may take as long as its kit allows, and a run that hangs ends at the kit's limit as its change's crash (`crash_candidate`, `killed: timeout`), on the first try.
+2. **A blocked job says why:** its attempt gets a `crash_infra` verdict with how its leases were lost, and no verdict on the change.
+3. **A blocked parent screen leaves its change as it is** (goal 135): it made the change `errored`.
+4. **Tests:** a run longer than three leases keeps its job's lease, and loses it once it ends; a blocked job's reason, after lost leases and after a start's reclaim; a blocked parent screen.
+
+The campaign's kit gave every case 3,600 s, where a normal run takes about 5 minutes. Its limits are the campaign's (its kit is private), and are set apart from this goal.
+
+Not in this goal: a card whose lease is lost still waits for its run to end before it takes another job. With item 1, a lease is lost only when the judge stops renewing it, so this is rare; stopping the run at once needs a way to cancel a runner's run, which the judge has not.
+
+## Why
+
+A change an agent writes can hang. The judge must give it a verdict, at the cost of one run's time limit on one card.
+
+## Done when
+
+- [x] Items 1 to 4.
+- [x] Pages: Verdicts (the judge job's states), Limits and pacing (a job's lease), Write a kit (sizing a run's limit), the changelog.
+- [ ] On the lab, a change whose run hangs is `crash_candidate` at its kit's limit, with no lost lease.
+
+## Decisions
+
+- 2026-11-09, the owner: "Yes go ahead and fix both" (this goal, and the campaign kit's limits).
+
+## Progress
+
+- 2026-11-09: goal written and items 1 to 4 built.

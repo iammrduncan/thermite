@@ -2,12 +2,13 @@ import { log } from "../../common/env.ts";
 import type { Ledger } from "../ledger/index.ts";
 
 /**
- * The judge's jobs and their leases around builds and restarts. A build of a large project, or
- * the wait for another executor's build of the same key, can take longer than the lease (15
- * minutes): without renewal the lease ran out mid-build, the job went back to the queue, and after
+ * The judge's jobs and their leases around builds, runs and restarts. A build of a large project,
+ * the wait for another executor's build of the same key, or a run of a slow kit, can take longer
+ * than the lease (15 minutes): without renewal the lease ran out mid-build or mid-run, the job went
+ * back to the queue, to hang again on another card when its change hangs (goal 240), and after
  * MAX_LEASE_EXPIRIES it was blocked, its attempt never judged.
- * A build has its own time limit (the kit's), so renewing the lease while it runs can't hold a
- * job forever.
+ * A build and a run each have their own time limit (the kit's), so renewing the lease while they
+ * go on can't hold a job forever.
  */
 
 /**

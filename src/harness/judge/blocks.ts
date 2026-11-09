@@ -33,7 +33,8 @@ async function ready(judge: JudgeContext): Promise<Record<string, unknown>> {
 
 /**
  * Runs `count` interleaved blocks over `cells` and records every value as a measurement.
- * Each block re-checks the target's readiness and renews the lease. With one arm (a baseline),
+ * Each block re-checks the target's readiness and renews the lease, and each run in it renews it
+ * while it goes on (goal 240). With one arm (a baseline),
  * each block runs that arm alone: its values are the block's `candidate` side.
  */
 export async function runBlocks(
@@ -118,11 +119,7 @@ async function runBlock(
       const pair = !b ? [a] : order() < 0.5 ? [a, b] : [b, a];
       for (const arm of pair) {
         // Each run is told its block and its job (goal 233), so a kit measures its once metrics once.
-        const m = await judge.target.measure(
-          { ...ctx, at: { block: n, job: job.kind } },
-          arm,
-          cell,
-        );
+        const m = await judge.measureRun({ ...ctx, at: { block: n, job: job.kind } }, arm, cell);
         const r = m.run;
         const runThrottle = m.throttled ?? 0;
         worstRunThrottle = Math.max(worstRunThrottle, runThrottle);

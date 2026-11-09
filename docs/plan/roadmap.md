@@ -227,6 +227,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [236](goals/236-judge-builds-on-a-builder.goal) The judge's builds on a builder, off the judge cards' clock · `PROPOSED`
 - [237](goals/237-supervisor-roll-keeps-judge.goal) A roll of the supervisor alone keeps the judge measuring · `PROPOSED`
 - [238](goals/238-judge-cards-keep-noise-floor.goal) Every judge card keeps a noise floor, and no judge job starves behind a full queue · `PROPOSED`
+- [240](goals/240-hung-run-holds-judge.goal) A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows · `IN_PROGRESS`
 
 **The owner's asks of 2026-11-03.**
 

@@ -112,7 +112,7 @@ These are a `kit.json`'s placeholders. The **New campaign** page has a shorter s
 - Repeat the work until it takes much longer than starting up, as the smoke kit's `reps` does.
 - Pin what varies: pass thread counts sized to the rig's CPU share, turn off automatic tuning, and set seeds.
 - Size the limits: `timeout_s` (300 seconds), `rss_mib` (1024) and `disk_mib` (256), with the same rule for deep or very large trees as the build.
-- Size `timeout_s` for the ordinary cells. A cell that needs far longer, such as a slow diagnostic, takes its own limit: write it as `{"params": {…}, "timeout_s": 1800}` in `cells`. The [kit manifest reference](../../reference/kit-manifest.md#cells) shows both forms.
+- Size `timeout_s` for the ordinary cells, two or three times a normal run: a change that hangs, such as a GPU kernel that never returns, holds a judge card until this limit stops it. A cell that needs far longer, such as a slow diagnostic, takes its own limit: write it as `{"params": {…}, "timeout_s": 1800}` in `cells`. The [kit manifest reference](../../reference/kit-manifest.md#cells) shows both forms.
 
 A run stopped at a limit, or that exits with an error, makes the change `crash_candidate`.
 

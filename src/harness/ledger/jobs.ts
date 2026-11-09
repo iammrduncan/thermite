@@ -7,6 +7,15 @@ import { type JobRow, toJob } from "./rows.ts";
 /** After this many lease expiries a job is blocked instead of re-queued (poison-pill guard). */
 export const MAX_LEASE_EXPIRIES = 3;
 
+/** Why a job is blocked, in words for its lane and the owner: how its leases were lost. */
+function blockedReason(kind: EventKind, expiries: number): string {
+  const how =
+    kind === "job_lease_expired"
+      ? "the judge that held it did not renew its lease in time"
+      : "the harness stopped, or its runner left the rig, while the job ran";
+  return `the judge lost this job ${expiries} times (${how}): no verdict on the change. The job is blocked; the harness tries it once more when it starts again`;
+}
+
 /** A run's job, with its spec and result read. */
 export interface RunJob {
   id: number;
@@ -279,7 +288,7 @@ export class LedgerJobs extends LedgerPart {
   private requeue(where: string, args: SQLInputValue[], actor: string, kind: EventKind): number[] {
     return this.tx(() => {
       const rows = this.rows<Row>(
-        `select id, expiries, fence, attempt from job where state = 'leased' and ${where}`,
+        `select id, kind, expiries, fence, attempt from job where state = 'leased' and ${where}`,
         ...args,
       );
       for (const r of rows) {
@@ -298,8 +307,20 @@ export class LedgerJobs extends LedgerPart {
           state,
         });
         // A blocked job's attempt ends, so its lane and round go on; a harness start queues it again.
-        if (state === "blocked" && r.attempt !== null)
-          this.ledger.attempts.setLifecycle(String(r.attempt), "errored", actor);
+        // It says why, as crash_infra (goal 240): no verdict on its change. A parent screen's is
+        // no verdict on its change at all, which stays as it is (goal 135).
+        if (state === "blocked" && r.attempt !== null && r.kind !== "parent_screen") {
+          const attempt = String(r.attempt);
+          if (this.ledger.attempts.get(attempt)?.invalidated_by === null)
+            this.ledger.verdicts.record({
+              attempt,
+              verdict: "crash_infra",
+              dependsOnJobs: [Number(r.id)],
+              reasons: blockedReason(kind, expiries),
+              judgedBy: actor,
+            });
+          this.ledger.attempts.setLifecycle(attempt, "errored", actor);
+        }
       }
       return rows.map((r) => Number(r.id));
     });

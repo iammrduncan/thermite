@@ -163,7 +163,7 @@ The dashboard calls an epoch a **round**.
 | The baseline's folder | 64 MiB and 1,000 files, at most 32 folders deep | Fixed. More fails the baseline ([The check's baseline folder](kit-manifest.md#the-checks-baseline-folder)) |
 | Calibration (A/A) | 6 blocks (`THERMITE_CALIBRATION_BLOCKS`), at most once in 24 hours for each hill-climb run, at the lowest priority, and only once its baseline exists | Fewer than 2 blocks turns it off |
 | Goal checks of the champion | Once for each champion. After a failure, up to 3 times, 10 minutes apart | |
-| A job's lease | 15 minutes, renewed every block | A job whose lease ran out 3 times is `blocked` |
+| A job's lease | 15 minutes, renewed every few minutes while each build and each run goes on, however long the kit lets it take | A job whose lease ran out 3 times is `blocked`, and its attempt `errored` with a `crash_infra` verdict that says why |
 | Readiness before each block | Up to 15 retries, 2 s apart | Then an infrastructure failure: `crash_infra`, one retry |
 | A CPU ready for timing | 1-minute load at most 75% of the cores | |
 | A GPU ready for timing | Use at most 5%, memory in use at most 600 MiB, at most 85 °C, no compute processes and no thermal or power slowdown. A value `nvidia-smi` can't give, the list of compute processes too, counts as not ready. A GPU that shares the machine's memory, such as the GB10 of a DGX Spark, reports no memory of its own, its total either: its memory is not checked, the rest is | |
