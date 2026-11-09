@@ -1,7 +1,7 @@
 ---
 id: "239"
 title: "Browser checks of the dashboard"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.4"
 depends_on: []
 created: 2026-11-08
@@ -10,7 +10,7 @@ updated: 2026-11-09
 
 # 239 · Browser checks of the dashboard
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014) · A safeguard in the fix release: every check before it read the dashboard's HTML, and none ran its pages' scripts in a browser.
+**Status:** `VERIFIED` · **Version:** [v0.1.4](../../roadmap.md#v014) · A safeguard in the fix release: every check before it read the dashboard's HTML, and none ran its pages' scripts in a browser.
 
 ## What
 
@@ -30,7 +30,7 @@ Issue 68: New campaign refused every hill climb and goal campaign in v0.1.3, bec
 - `npm run acceptance:browser` runs on a machine with Google Chrome, with no containers and no network, and passes. Done: 30 of 30 checks on 2026-11-09 (00:52 to 00:56 UTC), at 1440 and 820 pixels; and 35 of 35 at 1440, 1150 and 820 pixels (00:42 to 00:48 UTC).
 - It fails on issue 68: without the fix, 8 of its New campaign checks fail and the research campaign's passes. Done, 2026-11-08.
 - It found what it is for, and each finding is fixed or explained. Done: Settings › Retention's form script threw on an apostrophe, so Save never turned on for a new policy (fixed, with a unit test); Add an experiment drew Direction over its first field at 820 and 1150 pixels (fixed: the form lays out by its own width); the demo linked to an attempt its data never recorded (the demo now records a propagated champion as an attempt, as the harness does). Sign in with ChatGPT leaves control for OpenAI's site, by design: noted, not followed.
-- CI's `dashboard in a browser` job passes on a run of the v0.1.4 branch. Open: CI waits for a maintainer's approval.
+- CI's `dashboard in a browser` job passes on a run of the v0.1.4 branch. Done: 30 of 30 checks on GitHub's Ubuntu runner with its Google Chrome, 2026-11-09 (02:21 to 02:25 UTC), on the branch's head 83e45cec.
 
 ## Decisions
 
@@ -47,3 +47,4 @@ Issue 68: New campaign refused every hill climb and goal campaign in v0.1.3, bec
 
 - 2026-11-08: the check written, with its stand-in control and CI job; New campaign's six cases pass, and fail without issue 68's fix.
 - 2026-11-09: the sweep's first runs found the retention form's error, the experiment form's overlap and the demo's missing attempt; each fixed. Passing at three widths.
+- 2026-11-09: CI's `dashboard in a browser` job passed, 30 of 30, on the v0.1.4 branch. Verified; shipped in v0.1.4.

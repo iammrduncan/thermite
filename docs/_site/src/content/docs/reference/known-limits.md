@@ -17,8 +17,8 @@ Thermite is at version 0.x. This page lists what to know before you run it: the 
 | [Research mode searches the web only through an MCP server](#research-mode-searches-the-web-only-through-an-mcp-server) | No goal: give the campaign a search server |
 | [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records them |
 | [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.5.0 |
-| [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.1.3 |
-| [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.1.3 |
+| [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.2.0 |
+| [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.2.0 |
 | [0.x versions make no upgrade promise](#0x-versions-make-no-upgrade-promise) | No goal yet: it holds until 1.0 |
 
 ## Agents run code that a model wrote, on your machine
@@ -85,13 +85,13 @@ Thermite is built to run unattended for as long as a campaign takes, and to reco
 
 The release publishes two CUDA harnesses ([The CUDA harness](harness-image.md#the-cuda-harness)). The CUDA 12 one (`-cuda`) runs Thermite's GPU rigs, on P100 GPUs among others. The CUDA 13 one (`-cuda13`), for Turing to Blackwell and the DGX Spark, is built, and the release's checks hold it to its architectures, but it has not yet run on a GPU. Control sets GPU rigs up from the CUDA 12 image unless `THERMITE_RIG_HARNESS_CUDA_IMAGE` names another, or, for a rig or a runner whose CUDA is 13, from the CUDA 13 image (`THERMITE_RIG_HARNESS_CUDA13_IMAGE`). Control sets it to 13 for an arm64 node or a Blackwell GPU where it can tell: for a rig or a runner on a cluster, and for a runner on a machine. A rig's own GPUs on a machine and the one-machine install have no such choice yet.
 
-**Removed by:** [goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), Rig images for each GPU generation (v0.1.3). If you run it on a Blackwell GPU or a DGX Spark, [tell us how it went](../project/getting-help.md).
+**Removed by:** [goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), Rig images for each GPU generation (v0.2.0). If you run it on a Blackwell GPU or a DGX Spark, [tell us how it went](../project/getting-help.md).
 
 ## A win the champion moved past still asks to be made the champion
 
 A confirmed win can wait for you: under **Needs you** when you ask to decide each promotion, or after an audit. Meanwhile another win can become the champion. The waiting win's card still asks **Make it the champion**, but approving it does not make it the champion at once: the judge screens it again against the new champion, and it becomes the champion only if it still wins there. The change it held may also come back as a port onto the new champion.
 
-**Removed by:** [goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), A waiting win the champion moved past (v0.1.3).
+**Removed by:** [goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), A waiting win the champion moved past (v0.2.0).
 
 ## 0.x versions make no upgrade promise
 

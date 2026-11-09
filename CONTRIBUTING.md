@@ -17,7 +17,7 @@ Thank you for helping. Fixes, documentation, kits, bug reports and ideas are all
 
 ## Send a change
 
-1. Fork the repository, and make a branch in your fork from the branch of the version your change is for: a fix to the released version goes on the next patch's branch, such as `v0.1.4`; anything else goes on the next minor version's branch, such as `v0.2.0`. The pull request goes to that branch. `main` holds only released versions.
+1. Fork the repository, and make a branch in your fork from the branch of the version your change is for: a fix to the released version goes on the next patch's branch, such as `v0.1.5`; anything else goes on the next minor version's branch, such as `v0.2.0`. The pull request goes to that branch. `main` holds only released versions.
 2. Set up your copy. You need Node.js 22.19 or later (22.22 or later to build the documentation site), git, and Docker or Podman:
 
    ```sh

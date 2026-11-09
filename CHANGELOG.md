@@ -2,9 +2,9 @@
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
-## [Unreleased]: v0.1.4
+## [0.1.4] 2026-11-09: New campaign for every mode again, and the dashboard checked in a browser
 
-v0.1.4 is a fix release of v0.1.3.
+v0.1.4 is a fix release of v0.1.3. A v0.1.3 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.4), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. The fixes are all in control's dashboard and its check of a new campaign. It changes no store, setting or secret.
 
 ### Fixes
 
