@@ -1,7 +1,7 @@
 ---
 id: "240"
 title: "A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.2.0"
 depends_on: []
 created: 2026-11-09
@@ -10,7 +10,7 @@ updated: 2026-11-09
 
 # 240 · A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.2.0](../roadmap.md#v020)
+**Status:** `VERIFIED` · **Version:** [v0.2.0](../../roadmap.md#v020)
 
 ## What
 
@@ -35,7 +35,7 @@ A change an agent writes can hang. The judge must give it a verdict, at the cost
 
 - [x] Items 1 to 4.
 - [x] Pages: Verdicts (the judge job's states), Limits and pacing (a job's lease), Write a kit (sizing a run's limit), the changelog.
-- [ ] On the lab, a change whose run hangs is `crash_candidate` at its kit's limit, with no lost lease.
+- [x] On the lab, a change whose run hangs is `crash_candidate` at its kit's limit, with no lost lease.
 
 ## Decisions
 
@@ -45,3 +45,4 @@ A change an agent writes can hang. The judge must give it a verdict, at the cost
 
 - 2026-11-09: goal written and items 1 to 4 built (f4384975; the test's fix-forward 182b8616). On the lab's VM, the six test files the change touches: 67 of 68 at f4384975, the one failure the test's own comparison of a database row with no prototype, fixed in 182b8616.
 - 2026-11-09: the campaign's kit now gives each case 900 s (its quality case 1,200 s), its load 600 s, and its driver ends a request the server sends no byte of for 300 s, in words; the run moved onto that kit commit from its next job. A normal run takes 3 to 5 minutes.
+- 2026-11-09 19:06 UTC: verified on the lab, with control and both rigs on f4384975 (the rig with runners moved at 18:44:37 UTC). At the harness's start the blocked job was queued once more (18:45:12 UTC). One judge card leased it at 18:46:30 UTC, its lease until 19:01:30 UTC; it built until 18:51:07 UTC, and its first run hung as before, until the kit's new 900 s limit stopped it: `crash_candidate`, `killed: timeout`, at 19:06:13 UTC, on that one lease, with no lease lost. About 20 minutes of one card, where it took about three hours of two.

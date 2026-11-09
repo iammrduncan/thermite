@@ -214,7 +214,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [234](goals/234-trial-keeps-its-route.goal) A trial under way keeps its model's route when the rig's workers move to another model · `IN_PROGRESS`
 - [235](goals/_completed/235-supervisor-cpus-for-terminals.goal) The supervisor has the CPUs to start its advisors in their own terminals · `VERIFIED`
 - [238](goals/238-judge-cards-keep-noise-floor.goal) Every judge card keeps a noise floor, and no judge job starves behind a full queue · `IN_PROGRESS`
-- [240](goals/240-hung-run-holds-judge.goal) A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows · `IN_PROGRESS`
+- [240](goals/_completed/240-hung-run-holds-judge.goal) A change that hangs gets its verdict, and holds one judge card for no longer than its kit allows · `VERIFIED`
 - [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `IN_PROGRESS`
 - [203](goals/203-machines-page.goal) Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page · `IN_PROGRESS`
 - [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `IN_PROGRESS`
