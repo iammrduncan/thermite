@@ -141,12 +141,14 @@ describe("a hill climb's baseline (goal 115)", () => {
       .sort((x, y) => x - y);
     assert.equal(b.cells.small?.ops_per_s?.median, small[1]);
     assert.deepEqual(baselineState(env.ledger, "js-1")?.state, "measured");
-    // Then the change, and only after the baseline, the calibration.
+    // Only after the baseline, the calibration: a card's first comes before its screens (goal 238).
     assert.equal(await judge.tick(), true);
-    assert.ok(env.ledger.verdicts.current(id), env.explain(id));
     const cal = env.jobs().find((j) => j.kind === "calibrate");
     const base = env.jobs().find((j) => j.kind === "baseline");
-    assert.ok(cal && base && cal.id > base.id);
+    assert.ok(cal && base && cal.id > base.id && cal.state === "done", env.explain(id));
+    // Then the change.
+    assert.equal(await judge.tick(), true);
+    assert.ok(env.ledger.verdicts.current(id), env.explain(id));
   });
 
   test("a baseline that failed in the judge itself is tried again at once; after a second failure, 10 minutes later", async () => {
