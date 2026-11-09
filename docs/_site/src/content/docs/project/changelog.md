@@ -20,6 +20,11 @@ v0.1.4 is a fix release of v0.1.3.
 - **Settings › Retention saves a new policy again.** The form's script stopped on the words "Each lane's champion builds", whose apostrophe cut short the page's copy of what each kind keeps, so **Save** stayed off after a name was typed, and the boxes for what to keep and the fields for when did not follow the kind.
 - **Add an experiment keeps its fields apart at any width.** Beside the sidebar and the queue's side column, the form on a run's **Experiments** tab left its first field a few pixels at some window widths, such as 820 and 1150 pixels, and drew **Direction** over it. It now lays out by its own width: in two columns when it is narrow, and in one on a phone.
 
+### For contributors
+
+- **The dashboard in a real browser.** `npm run acceptance:browser` drives the dashboard with Playwright in the installed Google Chrome, with no containers and no network: it fills in New campaign as a person does and reads what control stored, then opens every kind of page at 1440 and 820 pixels wide and fails on console errors, failing requests, broken links, anything loaded from another site, a page wider than the window, controls on top of each other and text cut off. It keeps a screenshot of each whole page. CI runs it on every run. See [the contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md#the-browser-acceptance-test).
+- The dashboard demo records a propagated champion as an attempt of its own, as the harness does, so its page opens from the run's attempts.
+
 ## [0.1.3] 2026-11-06: a rig over several machines, and what a first campaign on it needs
 
 v0.1.3 makes a rig a core and its runners on other machines, and holds the fixes its first campaign on three DGX Sparks needed. A v0.1.2 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.3), as [Stop, start and update](../how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. Control adds its new tables as it starts; no setting or secret changes.

@@ -35,6 +35,7 @@
     "smoke:compose": "node scripts/acceptance/compose-smoke.mjs",
     "acceptance:agents": "node scripts/acceptance/agents.mjs",
     "acceptance:backup": "node scripts/acceptance/backup.mjs",
+    "acceptance:browser": "node scripts/acceptance/browser.mjs",
     "acceptance:bus": "node scripts/acceptance/bus.mjs",
     "acceptance:campaign": "node scripts/acceptance/campaign.mjs",
     "acceptance:claude": "node scripts/acceptance/claude.mjs",
@@ -76,6 +77,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
     "@types/node": "22.20.5",
+    "playwright-core": "1.65.0",
     "typescript": "7.0.2"
   }
 }

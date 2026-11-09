@@ -70,6 +70,7 @@ Changes to some parts also need a test that starts containers. Each takes from a
 | Control, the dashboard, MCP or the relay | `COMPOSE="podman compose" npm run acceptance:control` |
 | The workers, the planner, the scheduler, the OpenCode harness in a hill-climb or research trial, or the agents' knowledge-base tools (`kb_search`, `kb_read`, `kb_write`) | `COMPOSE="podman compose" npm run acceptance:agents` |
 | The New campaign page, the campaign builder, a campaign's **Start a run**, kits kept on control, Git access or the supervisor's staging | `COMPOSE="podman compose" npm run acceptance:campaign` |
+| The dashboard: a page, its script or its styles, New campaign, or the dashboard demo's data. No containers: control runs from the source, in the installed Google Chrome | `npm run acceptance:browser` |
 | Machines over SSH, their checks or their install recipes | `COMPOSE="podman compose" npm run acceptance:machine` |
 | Rigs on Kubernetes, including moving a rig onto new images or new CPUs and memory, or control's image | `COMPOSE="podman compose" npm run acceptance:cluster` |
 | Setting rigs up on machines (**Rigs › Add a rig**, the deploy and management scripts, the Quadlet units) or the rig images | `COMPOSE="podman compose" npm run acceptance:rig-deploy` |

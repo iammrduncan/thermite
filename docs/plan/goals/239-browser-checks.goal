@@ -1,0 +1,49 @@
+---
+id: "239"
+title: "Browser checks of the dashboard"
+status: IN_PROGRESS
+version: "0.1.4"
+depends_on: []
+created: 2026-11-08
+updated: 2026-11-09
+---
+
+# 239 · Browser checks of the dashboard
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.4](../roadmap.md#v014) · A safeguard in the fix release: every check before it read the dashboard's HTML, and none ran its pages' scripts in a browser.
+
+## What
+
+An acceptance check that drives the dashboard in headless Chrome with Playwright, as a person uses it, and checks its layouts: `npm run acceptance:browser` (`scripts/acceptance/browser.mjs`). It needs no containers and no network: control runs from the source on the dashboard demo's data, with one more CPU rig and a project lookup that answers for `https://git.example.com/` (`tests/stand-ins/dashboard/main.ts`), and Chrome resolves no address but this machine's.
+
+1. **New campaign, end to end.** The page is filled in with clicks, typing and the page's own buttons, so its script builds each draft; what control stored is read from its store.
+2. **Every kind of page, at each width.** The sweep follows the dashboard's links from the Overview, up to four pages of each route, where each run tab, each Settings area and each page opened with a query is a kind of its own. Each page fails the check on a console error or an uncaught exception, a request that fails, a link that leads nowhere, anything loaded from another site, a page wider than the window, controls drawn on top of each other, text cut off, or an image that doesn't load. A screenshot of each whole page is kept, side by side in an index, for whoever builds a screen to look at.
+
+CI runs it on every run, and keeps the report and the screenshots when it fails.
+
+## Why
+
+Issue 68: New campaign refused every hill climb and goal campaign in v0.1.3, because the page's script sent a key that control's check of the draft did not know. The unit tests read the page's HTML, and the campaign acceptance check sent a draft written by hand, so neither ran the page's script against control. The owner, 2026-11-08: the dashboard gets headless Chrome acceptance tests that check its layouts, used as screens are built, as a safeguard added in v0.1.4.
+
+## Done when
+
+- `npm run acceptance:browser` runs on a machine with Google Chrome, with no containers and no network, and passes. Done: 30 of 30 checks on 2026-11-09 (00:52 to 00:56 UTC), at 1440 and 820 pixels; and 35 of 35 at 1440, 1150 and 820 pixels (00:42 to 00:48 UTC).
+- It fails on issue 68: without the fix, 8 of its New campaign checks fail and the research campaign's passes. Done, 2026-11-08.
+- It found what it is for, and each finding is fixed or explained. Done: Settings › Retention's form script threw on an apostrophe, so Save never turned on for a new policy (fixed, with a unit test); Add an experiment drew Direction over its first field at 820 and 1150 pixels (fixed: the form lays out by its own width); the demo linked to an attempt its data never recorded (the demo now records a propagated champion as an attempt, as the harness does). Sign in with ChatGPT leaves control for OpenAI's site, by design: noted, not followed.
+- CI's `dashboard in a browser` job passes on a run of the v0.1.4 branch. Open: CI waits for a maintainer's approval.
+
+## Decisions
+
+- 2026-11-08, the owner: Playwright, in headless Chrome, for acceptance tests of the dashboard and its layouts, as a safeguard in v0.1.4; used while screens are built.
+- Playwright's `playwright-core`, pinned, with the installed Google Chrome (its "chrome" channel): nothing downloads a browser, and GitHub's runners have Chrome. Not Playwright's own test runner: the check is an acceptance script like the others, with their checks and report.
+- Control runs in the check's own process tree from the source, on the demo's seed, not in containers: the check takes minutes, so it runs on every change to a screen and on every CI run.
+- A control counts as shown when the browser draws it (`checkVisibility`) and no box between it and its scroll area clips it away: a closed menu's pop-up keeps a size, and was counted as drawn before.
+
+## Open questions
+
+- None.
+
+## Progress
+
+- 2026-11-08: the check written, with its stand-in control and CI job; New campaign's six cases pass, and fail without issue 68's fix.
+- 2026-11-09: the sweep's first runs found the retention form's error, the experiment form's overlap and the demo's missing attempt; each fixed. Passing at three widths.

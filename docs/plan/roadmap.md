@@ -186,7 +186,11 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.1.4
 
-**Now v0.2.0 (the owner, 2026-11-08).** The plan below is built as v0.2.0, on its branch `v0.2.0`, and each later version below moves up by one there. v0.1.4 is the fix release of v0.1.3: see the [changelog](../../CHANGELOG.md).
+**Now v0.2.0 (the owner, 2026-11-08).** The plan below is built as v0.2.0, on its branch `v0.2.0`, and each later version below moves up by one there. v0.1.4 is the fix release of v0.1.3: see the [changelog](../../CHANGELOG.md). It also holds one safeguard:
+
+- [239](goals/239-browser-checks.goal) Browser checks of the dashboard: New campaign and every kind of page in headless Chrome with Playwright, their layouts at two widths · `IN_PROGRESS`, in the fix release
+
+The plan built as v0.2.0:
 
 **Moved from v0.1.3 (the owner, 2026-11-06).** v0.1.3's first plan, apart from what multi-machine rigs need: follow-ups from use, the open issues of its milestone, the first release's follow-ups, GPUs on demand and work within a budget. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified.
 
