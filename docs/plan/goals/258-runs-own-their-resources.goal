@@ -41,8 +41,7 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 
 - **Agents never judge.** Measurement, verdicts and promotion stay in code the agents cannot write. Today separate users, the broker and the device fence keep a worker away from the judge's files and GPU on one machine ([Isolation](../../_site/src/content/docs/explanation/isolation.md)). A runner with no container must give the same wall.
 - **A worker's shell is code from a model.** It runs in a sandbox on a runner, never inside the control plane.
-- **A run survives a restart of the control plane.** Today a rig works on while control is away. With the loops in the control plane, they must pick up where they were.
-- **A steady measurement wants the whole device.** Parts at the same time are for experiments, or for metrics that are not timings, until a run's own noise says otherwise.
+- **A restart of one service stops no run.** The control plane is services, each restarted alone (Decisions). Each picks up where it was after its own restart: a loop its trial, the scheduler its queue.
 - **Keys stay in the control plane.** A machine holds none.
 
 ## Done when
@@ -51,14 +50,15 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 
 ## Decisions
 
-- None yet.
+- 2026-11-10, the owner, on how a run shares a device: "This is more documentation and training than a constraint we should have in the system." The system lets a run take a whole device in turns, or a part of it beside other runs, for the judge too. The docs say what each does to a measurement, and the run's own noise figure shows it. No rule of the system forbids a choice.
+- 2026-11-10, the owner, on restarts: "They can be separate services within the control plane... No one said monolithic is required". The control plane is services: the dashboard and the API, the agents' loops, the scheduler with the judge's decisions, the store. A restart of the dashboard or the API stops no run.
 
 ## Open questions
 
 - What gives the wall between a worker and the judge on one machine without a container: users and namespaces set up by the runner itself, or a sandbox per job. What the isolation self-test must prove there.
 - Where a worker's workspace lives when its loop is in the control plane: on a runner, with each command sent there, or in a sandbox the control plane has.
-- What the control plane needs when it holds every run's loops: CPUs, memory, terminals for the agent programs, and what a restart costs.
-- How a part of a GPU is given: memory and CPUs alone, or a share of its time, and what each does to a measurement's noise.
+- Which services the control plane has, what each needs when it serves every run (CPUs, memory, terminals for the agent programs), and what each one's restart stops.
+- How a part of a GPU is given: memory and CPUs alone, or a share of its time. What the docs and the run's noise figure must say, so that the owner's choice is an informed one.
 - What becomes of the rig as a word and as a thing: gone, or the name of a set of machines.
 - How a deployment of today moves over, and whether both shapes run side by side for a time.
 - Whether the judge's decisions may leave the machine at all for a site that wants every part of a run on its own hardware.
