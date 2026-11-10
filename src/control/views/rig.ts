@@ -147,3 +147,16 @@ function readRun(v: RunView, doings: Map<string, TrialDoing>): void {
 /** A RunPod rig whose pod is stopped: it can't report, and that is expected, not stale. */
 export const podStopped = (u: Pick<RigView, "runpod">): boolean =>
   Boolean(u.runpod?.active && u.runpod.status === "EXITED");
+
+/**
+ * The judge's jobs a rig still has to finish: those under way, and the queued jobs it will still
+ * take. The judge never takes a paused or closed run's queued job: those stay in the queue, and the
+ * rig's export carries them. A full reset (goal 165) and a RunPod rig's terminate (goal 201) wait
+ * for these alone, after they pause the rig's runs.
+ */
+export function judgeBusy(v: RigView | undefined): number {
+  if (!v) return 0;
+  const held = new Set(v.runs.filter((r) => r.status !== "running").map((r) => r.id));
+  const queued = v.judge.queued.filter((j) => !j.run || !held.has(j.run)).length;
+  return Number(v.jobs.leased ?? 0) + queued;
+}

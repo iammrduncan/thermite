@@ -4,7 +4,7 @@ import type { OpKind, OpPhase, RigOp, StopWhy } from "../../core/api/control/run
 import { harnessConfirmed, issueCommand } from "../issue/index.ts";
 import { exportLeft, resultsLeft } from "../results-left.ts";
 import type { ControlStore, StoredRunpodRig } from "../store/index.ts";
-import { rigView } from "../views/index.ts";
+import { judgeBusy, rigView } from "../views/index.ts";
 import { getPod, podAction, type RunpodPod, RunpodRefused, terminatePod } from "./cloud.ts";
 import { type RigState, spentBy } from "./rig-view.ts";
 
@@ -364,7 +364,8 @@ export class RunpodLifecycle {
       }
       case "quiescing": {
         const v = rigView(this.store, r.rig, { staleAfterMs: this.staleAfterMs, now: nowMs });
-        const busy = Number(v?.jobs.queued ?? 0) + Number(v?.jobs.leased ?? 0);
+        // The runs it paused keep their queued jobs, which never start: only those it will take.
+        const busy = judgeBusy(v);
         const pending = this.store.commands.pending(r.rig).length;
         if (busy > 0 || pending > 0) {
           if (waited > (TERMINATE_WAIT_MS.quiescing ?? 0))
