@@ -122,7 +122,7 @@ Each advisor is one runtime: where and how its model runs. `runtime` chooses one
 | `usd_per_mtok_out` | number, 0 or more | `0` | The price per million output tokens |
 | `provider` | text, 1 to 100 characters | none | The model provider's name, which the advisor's [model usage](../explanation/how-it-fits-together.mdx#the-model-usage-records) is recorded with. Models from **Edit rig** carry their provider's name from **Settings › Providers** |
 
-With no `api_key_file` (or, for a model from **Edit rig**, no key), every call fails with `advisor <name> has no key`; the supervisor still starts. These advisors can use read-only [tools](#what-each-role-gets).
+With no `api_key_file`, every call fails with `advisor <name> has no key`; the supervisor still starts. A model from **Edit rig** whose provider has no key, such as an OpenAI-compatible server that checks none, is not an error: its calls go through a proxy for the call, which sends no key. These advisors can use read-only [tools](#what-each-role-gets).
 
 ### `cli`: a command-line agent
 
@@ -572,7 +572,7 @@ Each failed teacher round, audit and review, each try at a research paper that g
 
 | Message | Meaning |
 | --- | --- |
-| `advisor <name> has no key` | An `openai`, `opencode` or `codex` runtime has neither `api_key_file` nor `api_key` (OpenCode's own models need none) |
+| `advisor <name> has no key` | An `openai`, `opencode` or `codex` runtime has neither `api_key_file` nor `api_key` (OpenCode's own models need none, and neither does a model from **Edit rig** whose provider has no key) |
 | `timed out after <n> s` | An `openai` call took longer than its `timeout_s` |
 | `no answer` | An `openai` advisor ended without calling `answer` |
 | `the answer was refused <n> times running for the same problems: <problems>` | An `openai` advisor sent `answer` three times running with the same problems, by Pi's check of the tool's schema or by the role's own checks, such as the final writer's `check_paper`. The call ends with no answer, and the role tries again as after any call with no answer |

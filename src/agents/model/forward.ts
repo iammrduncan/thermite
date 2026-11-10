@@ -27,6 +27,7 @@ import { type AnswerTokens, TokensSeen } from "./tokens.ts";
 export interface ForwardTarget {
   api: ModelConfig["api"];
   baseUrl: string;
+  /** Empty for an OpenAI-compatible provider with no key: the call goes with no credential. */
   key: string;
 }
 
@@ -135,7 +136,9 @@ export async function forwardToProvider(
     if (v) headers[k] = v;
   }
   if (target.api === "anthropic") headers["x-api-key"] = target.key;
-  else headers.authorization = `Bearer ${target.key}`;
+  // A provider with no key, such as a local server that takes none, gets no Authorization header,
+  // rather than an empty bearer that some servers refuse.
+  else if (target.key) headers.authorization = `Bearer ${target.key}`;
   let body = call.body;
   // A search request is not a Responses request: it goes as it came.
   if (body && chatgpt && chatgptPath(call.rest) !== CHATGPT_SEARCH_PATH) {

@@ -63,14 +63,16 @@ describe("control dashboard", () => {
       api_key: "sk-wrong-9999",
     });
     assert.match(where(wrong), /HTTP 401 \(is the key right\?\)/);
-    // A new provider needs its key; a change without one keeps the sealed key and lists again.
+    // A new Anthropic provider needs its key (an OpenAI-compatible one may have none: the test
+    // below); a change without one keeps the sealed key and lists again.
     const keyless = await s.post("/ui/settings/providers", {
       csrf,
       name: "other",
-      type: "openai",
-      base_url: "https://models.example/v1",
+      type: "anthropic",
+      base_url: "",
     });
     assert.match(where(keyless), /needs its API key/);
+    assert.equal(s.store.modelProviders.get("other"), undefined);
     await s.post("/ui/settings/providers", {
       csrf,
       name: "opencode",
@@ -308,5 +310,67 @@ describe("control dashboard", () => {
     assert.equal(s.env.service.models.current(), undefined);
     await s.post("/ui/settings/providers/anthropic/delete", { csrf });
     assert.equal(s.store.modelProviders.get("anthropic"), undefined);
+  });
+
+  test("an OpenAI-compatible server that takes no key is saved with none, listed with none, and its route carries none", async () => {
+    // A local server with no key, such as llama.cpp or Ollama: it lists its models to a request
+    // with no Authorization header, and refuses one with a header.
+    const listedWith: (string | null)[] = [];
+    const providerFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get("authorization");
+      if (String(input) !== "https://llama.example/v1/models")
+        return new Response("no", { status: 404 });
+      listedWith.push(auth);
+      return auth === null
+        ? Response.json({ data: [{ id: "local-model", context_length: 32768 }] })
+        : new Response("no", { status: 401 });
+    }) as typeof fetch;
+    const s = await stack("owner_approval", { providerFetch });
+    const dir = mkdtempSync(join(tmpdir(), "thermite-route-"));
+    s.env.service.models = new ModelSource(join(dir, "model-route.json"), undefined);
+    await s.relay();
+    const csrf = s.csrfFrom(await (await s.get("/ui/settings")).text());
+    const where = (r: Response) => decodeURIComponent(r.headers.get("location") ?? "");
+    const added = await s.post("/ui/settings/providers", {
+      csrf,
+      name: "local-llama",
+      type: "openai",
+      base_url: "https://llama.example/v1",
+    });
+    assert.match(where(added), /ok="local-llama" is saved and lists 1 model\./);
+    assert.deepEqual(listedWith, [null]);
+    const saved = s.store.modelProviders.get("local-llama");
+    assert.equal(saved?.key_sealed, "");
+    assert.equal(saved?.key_hint, "");
+    // Its row says it has no key, not that it has OpenCode's free models; its form keeps none.
+    const page = await (await s.get("/ui/settings")).text();
+    assert.match(page, /<span class="chip">no key<\/span>/);
+    assert.match(page, /placeholder="empty: still no key"/);
+    // A change with no key keeps none, and lists again with none.
+    await s.post("/ui/settings/providers", {
+      csrf,
+      name: "local-llama",
+      type: "openai",
+      base_url: "https://llama.example/v1",
+    });
+    assert.equal(s.store.modelProviders.get("local-llama")?.version, 2);
+    assert.deepEqual(listedWith, [null, null]);
+    // The rig's route names the server and carries an empty key: the harness's proxy sends none.
+    await s.post("/ui/settings/rigs", {
+      csrf,
+      rig: "rig-a",
+      choice: "local-llama|local-model",
+      harness: "pi",
+    });
+    const given = (await s.rigConfig("model-route")) as unknown as {
+      route: { api_key: string; type: string; key_hint: string; base_url: string };
+    };
+    assert.equal(given.route.type, "openai");
+    assert.equal(given.route.api_key, "");
+    assert.equal(given.route.key_hint, "");
+    assert.equal(given.route.base_url, "https://llama.example/v1");
+    assert.equal(await handModelRoute(s.cfg, given as never), "set");
+    assert.equal(s.env.service.models.current()?.apiKey, "");
+    assert.equal(s.env.service.models.current()?.model, "local-model");
   });
 });

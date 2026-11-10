@@ -36,7 +36,7 @@ import {
   readOpencodeAnswer,
 } from "../cli.ts";
 import { codexTeacherCatalog } from "../codex-catalog.ts";
-import { type AdvisorRuntime, advisorRoute } from "../config.ts";
+import { type AdvisorRuntime, advisorRoute, keylessRoute } from "../config.ts";
 import { limitInAnswer } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
 import { serveAdvisorTools } from "../tools/index.ts";
@@ -54,7 +54,8 @@ export function cliHarnessModel(
   const key = native
     ? ""
     : (rt.api_key ?? (rt.api_key_file ? readFileSync(rt.api_key_file, "utf8").trim() : ""));
-  if (!native && !key) return `advisor ${rt.name} has no key`;
+  // A provider with no key: the call's proxy sends none.
+  if (!native && !key && !keylessRoute(rt)) return `advisor ${rt.name} has no key`;
   const model: ModelConfig = {
     api: rt.api === "openai" ? undefined : rt.api,
     baseUrl: (rt.base_url ?? "").replace(/\/$/, ""),

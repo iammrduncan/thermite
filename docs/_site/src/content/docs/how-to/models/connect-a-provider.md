@@ -8,7 +8,7 @@ sidebar:
 
 A **model provider** is a service that runs AI models: a hosted API, a gateway, or a model server on your own computer. You add each provider once, on the dashboard's **Providers** page. Control then reads the provider's model list, and you give each [rig](../../reference/glossary.md) the model its agents use.
 
-This guide covers providers reached with an API key, or with no key for OpenCode's free models. For subscriptions, see [Use a Claude subscription](claude-subscription.md) and [Use a ChatGPT subscription](chatgpt-subscription.md). Not sure which model to use? Start with [Choose a model](choose-a-model.md).
+This guide covers providers reached with an API key, or with no key: OpenCode's free models, and an OpenAI-compatible server that checks none. For subscriptions, see [Use a Claude subscription](claude-subscription.md) and [Use a ChatGPT subscription](chatgpt-subscription.md). Not sure which model to use? Start with [Choose a model](choose-a-model.md).
 
 ## Before you start
 
@@ -39,17 +39,17 @@ This guide covers providers reached with an API key, or with no key for OpenCode
    | --- | --- | --- |
    | **Name** | "How it shows in Thermite, and how rigs and campaigns refer to it: for example my-litellm or github-deploy. Letters, digits, dots, dashes and underscores: capitals become lowercase and spaces become dashes." | `my-litellm` |
    | **Base URL** | "Where the provider's API is: for an OpenAI-compatible server, the address ending in /v1. Anthropic and OpenCode: leave it empty for their own." | `https://llm.example.com/v1` |
-   | **API key** | "The provider's key. Control seals it at once and never shows it again. OpenCode: leave it empty for its free models." | |
+   | **API key** | "The provider's key. Control seals it at once and never shows it again. OpenCode: leave it empty for its free models. An OpenAI-compatible server that takes no key, such as a local llama.cpp or Ollama: leave it empty, and its calls go with none." | |
 
-   For a model server on the same computer as Thermite, use `http://host.docker.internal:PORT/v1`, or `host.containers.internal` with Podman. Inside a container, `localhost` is the container itself. An OpenAI-compatible provider always needs a key: if your server checks none, type any word without spaces.
+   For a model server on the same computer as Thermite, use `http://host.docker.internal:PORT/v1`, or `host.containers.internal` with Podman. Inside a container, `localhost` is the container itself. If your server checks no key, as llama.cpp and Ollama do by default, leave **API key** empty. Thermite then sends it no `Authorization` header: not when control lists its models, and not on the calls of the workers, the planner or the advisors.
 
    When the server's model list names no longest reply for the model, Thermite sends no reply limit, and the server's own default applies: it may cut replies short. To set the server's limits yourself, give the rig the model from [its own settings](#use-the-rigs-own-settings-instead), with `THERMITE_MODEL_MAX_TOKENS` and `THERMITE_MODEL_CONTEXT_WINDOW`.
 
 4. Press **Add and list its models**.
 
-   Control seals the key and reads the provider's model list at once. The page shows `"my-litellm" is saved and lists 12 models. Give one to a rig on its Edit rig.` with your name and count.
+   Control seals the key, if you gave one, and reads the provider's model list at once. The page shows `"my-litellm" is saved and lists 12 models. Give one to a rig on its Edit rig.` with your name and count.
 
-   The provider now has a row under **Providers**: its name and type, how many models it lists, its base URL, the end of its key (for example `key …abcd`; OpenCode without a key shows `no key: its free models`), `not HTTPS` for an `http://` address, and which rigs use it. Open the row to see each model.
+   The provider now has a row under **Providers**: its name and type, how many models it lists, its base URL, the end of its key (for example `key …abcd`; OpenCode without a key shows `no key: its free models`, and an OpenAI-compatible provider without one `no key`), `not HTTPS` for an `http://` address, and which rigs use it. Open the row to see each model.
 
 ## Give a rig one of its models
 
@@ -178,7 +178,7 @@ Errors show in a card that starts with **Not done.**
 
 | You see | What to do |
 | --- | --- |
-| "A new provider needs its API key." | Enter a key. Only OpenCode's own provider may have none. |
+| "A new provider needs its API key." | Enter the key: an Anthropic provider needs one. Only OpenCode's own provider and an OpenAI-compatible one may have none. |
 | "An OpenAI-compatible provider needs its base URL." | Enter the address, ending in `/v1`. |
 | "The base URL is http or https, with no credentials, query or fragment in it." | Remove any `user:password@`, `?…` or `#…` from the address. |
 | "…could not list its models: HTTP 401 (is the key right?)" (or 403) | Check the key. |
