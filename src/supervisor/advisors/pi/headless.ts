@@ -5,7 +5,7 @@ import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorResult, AdvisorUsage } from "../call.ts";
-import { type AdvisorRuntime, advisorRoute } from "../config.ts";
+import { type AdvisorRuntime, advisorRoute, keylessRoute } from "../config.ts";
 import { checkAnswer, piAdvisor } from "./agent.ts";
 import { advisorPiTools } from "./tools.ts";
 
@@ -51,8 +51,9 @@ export async function runPi<S extends z.ZodType>(
   };
   const t = input.tools ?? {};
   const { tools, mcpAt } = advisorPiTools(t);
+  // A provider with no key: Pi sends none (buildModel).
   const apiKey = piKey(rt);
-  if (!apiKey) return { ...result, error: `advisor ${rt.name} has no key` };
+  if (!apiKey && !keylessRoute(rt)) return { ...result, error: `advisor ${rt.name} has no key` };
   // Straight to the provider: a ChatGPT sign-in's renewed token reaches the call's later requests.
   const cfg = {
     ...piModel(rt, { baseUrl: rt.base_url.replace(/\/$/, ""), apiKey }),

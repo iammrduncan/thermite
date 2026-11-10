@@ -10,6 +10,12 @@ sidebar:
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](../reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]
+
+### Model use
+
+- **An OpenAI-compatible provider with no key.** A model server that takes no key, such as llama.cpp or Ollama run without one, is added on **Settings › Providers** with **API key** left empty. Control refused it with `A new provider needs its API key.`, and the way round was a made-up key, which the server got as a bearer on every call. Control now lists its models with no key, and the workers, the planner, the model check and the advisors call it with no `Authorization` header: through the harness's proxy, the supervisor's proxy for an advisor's call, or Pi's own client, where an empty key failed with `No API key for provider` or `advisor <name> has no key`. Its row on **Providers** says `no key`. An Anthropic provider still needs its key, and an advisor of the advisors file with no key at all still fails with `advisor <name> has no key` ([issue 76](https://github.com/iammrduncan/thermite/issues/76), from Mahdi3Bani).
+
 ## [0.2.2] 2026-11-10: a paused run's judge jobs hold up nothing, and runners' builds under retention
 
 v0.2.2 is a fix release of v0.2.1: the critical bugs left from a check of [issue 50](https://github.com/iammrduncan/thermite/issues/50) against it. A v0.1.1 to v0.2.1 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.2.2), as [Stop, start and update](../how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig, with its runners. Nothing in control's store, a rig's ledger, the settings or the secrets changes.

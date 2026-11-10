@@ -84,6 +84,21 @@ describe("the model proxy", () => {
       assert.equal(p.seen[1]?.headers["x-api-key"], "real-anthropic-key");
       assert.equal(p.seen[1]?.headers["anthropic-version"], "2023-06-01");
       assert.equal(p.seen[1]?.headers.authorization, undefined);
+      // A provider with no key, such as a local server that takes none: the agents' credential is
+      // still checked, and the provider gets no Authorization header, not an empty bearer.
+      env.service.models = new ModelSource(file, {
+        baseUrl: `${p.url}/v1`,
+        model: "m",
+        apiKey: "",
+        contextWindow: 0,
+        maxTokens: 8192,
+      });
+      assert.equal((await ask({})).status, 401);
+      const none = await ask({ authorization: `Bearer ${token}` });
+      assert.equal(none.status, 200);
+      assert.equal(p.seen.length, 3);
+      assert.equal(p.seen[2]?.url, "/v1/chat/completions?x=1");
+      assert.equal(p.seen[2]?.headers.authorization, undefined);
     } finally {
       p.server.close();
     }

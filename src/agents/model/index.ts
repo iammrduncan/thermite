@@ -293,6 +293,17 @@ export function buildModel(cfg: ModelConfig) {
   return { ...built, models: stallGuarded(built.models) };
 }
 
+/**
+ * An OpenAI-compatible route's key as Pi sends it. A provider with no key, such as a local server
+ * that takes none: Pi and OpenAI's client each need a key to start, so they get this word, and
+ * the Authorization header is dropped (a null header is one OpenAI's client leaves out), so the
+ * word is never sent.
+ */
+const NO_KEY = "no-key";
+function openAIAuth(apiKey: string): { apiKey: string; headers?: { authorization: null } } {
+  return apiKey ? { apiKey } : { apiKey: NO_KEY, headers: { authorization: null } };
+}
+
 function buildUnguarded(cfg: ModelConfig) {
   if (cfg.api === "anthropic") return buildAnthropic(cfg);
   if (cfg.api === "chatgpt") return buildChatGPT(cfg);
@@ -327,7 +338,7 @@ function buildUnguarded(cfg: ModelConfig) {
       auth: {
         apiKey: {
           name: "Model route key",
-          resolve: async () => ({ auth: { apiKey: cfg.apiKey } }),
+          resolve: async () => ({ auth: openAIAuth(cfg.apiKey) }),
         },
       },
       models: [model],

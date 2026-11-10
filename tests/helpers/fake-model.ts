@@ -44,6 +44,8 @@ export type Script = (req: {
   tools: { function: { name: string } }[];
   /** The request's reasoning_effort, when one was sent. */
   reasoning_effort?: string | undefined;
+  /** The request's Authorization header, when one was sent. */
+  authorization?: string | undefined;
 }) => ScriptedTurn;
 
 export interface FakeModel {
@@ -74,6 +76,7 @@ export async function startFakeModel(script: Script): Promise<FakeModel> {
         messages: parsed.messages,
         tools: parsed.tools ?? [],
         reasoning_effort: parsed.reasoning_effort,
+        authorization: req.headers.authorization,
       });
       if (turn.fail) {
         res.writeHead(turn.fail, { "content-type": "application/json" });

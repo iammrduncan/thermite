@@ -182,6 +182,12 @@ describe("a ChatGPT sign-in", () => {
     assert.equal(w.keyNow, undefined);
     const other = { ...m, api: undefined, keyNow: undefined };
     assert.equal(piRoute(other, 8700, "trial.tok"), other);
+    // A route with no key goes through the proxy too: an empty key in a process's environment is
+    // no route, and the proxy sends none to the provider.
+    const keyless = piRoute({ ...other, apiKey: "" }, 8700, "trial.tok");
+    assert.equal(keyless.baseUrl, "http://127.0.0.1:8700/v1/model-proxy");
+    assert.equal(keyless.apiKey, "trial.tok");
+    assert.equal(keyless.api, undefined);
     const now = Date.parse("2026-10-18T12:00:00Z");
     assert.equal(
       usageLimitRetry('429 {"error":{"code":"subscription_sharing_usage_limit_exceeded"}}', now),
