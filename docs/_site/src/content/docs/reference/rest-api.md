@@ -916,7 +916,7 @@ These change a rig's pod through RunPod's API, the owner's alone, as the MCP too
 | --- | --- | --- | --- | --- |
 | `POST /v1/rigs/<rig>/runpod/stop` | Owner | Begins a stop: pauses the rig's running runs and asks for an export. Once that export and every result waiting with it have left the pod, or after 15 minutes, RunPod stops the pod | None | `runpod rig`, with `op` |
 | `POST /v1/rigs/<rig>/runpod/start` | Owner | Starts a stopped pod now. Once it runs, the runs the last stop paused are resumed | None | `runpod rig` |
-| `POST /v1/rigs/<rig>/runpod/terminate` | Owner | Begins a terminate: pauses the runs, waits until no judge job and no command waits on the rig, asks for a full export, and removes the pod and its volume only once every result has left it. Then it retires the rig | `{"confirm":"terminate <rig>"}` | `runpod rig`, with `op`. 400 `confirm with "terminate <rig>"` |
+| `POST /v1/rigs/<rig>/runpod/terminate` | Owner | Begins a terminate: pauses the runs, waits until the judge's jobs under way end and no command waits on the rig (the paused runs' queued jobs never start, and don't hold it), asks for a full export, and removes the pod and its volume only once every result has left it. Then it retires the rig | `{"confirm":"terminate <rig>"}` | `runpod rig`, with `op`. 400 `confirm with "terminate <rig>"` |
 
 Each answers 404 `{"error":"no rig <rig> on a GPU cloud"}` for a rig not launched on a GPU cloud, and 409 `{"error": ...}` with the reason for a refusal:
 

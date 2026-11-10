@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { RunpodRigView } from "../../../../src/control/runpod/rig-view.ts";
+import { ingestReport } from "../../../helpers/control-store.ts";
 import {
   exportName,
   exportOnControl,
@@ -64,6 +65,60 @@ describe("RunPod rigs: terminate", () => {
     assert.ok(s.store.auditLog.list(80).some((a) => a.action === "runpod_rig_terminated"));
     // Gone: nothing more to do.
     await assert.rejects(s.rigs.stop(rig, "owner:api"), /pod is gone/);
+  });
+
+  test("the runs it paused keep their queued judge jobs, which never start: it goes on to the export (goal 201)", async () => {
+    const s = setup();
+    const rig = await working(s);
+    // Two of run-1's jobs wait for the judge, as on a busy hill climb.
+    const at = (n: number) => new Date(Date.now() + 10 + n).toISOString();
+    const queued = (id: number) => ({
+      id,
+      at: at(id),
+      actor: "harness",
+      kind: "job_queued",
+      subject: String(id),
+      body: { kind: "evaluate", run: "run-1", attempt: null },
+    });
+    await ingestReport(s.store, {
+      rig,
+      ledger_id: "l1",
+      cursor: 1,
+      next: 3,
+      summary: { jobs: { queued: 2, leased: 0 } },
+      events: [queued(2), queued(3)],
+    });
+    await s.rigs.terminate(rig, "owner:api", `terminate ${rig}`);
+    await s.advance();
+    assert.deepEqual(
+      pendingOf(s.store, rig).map((c) => c.kind),
+      ["pause_run"],
+    );
+    // The rig pauses run-1: its two jobs stay queued, and the judge never takes them.
+    harnessApplies(s.store, rig, exportName(1));
+    await ingestReport(s.store, {
+      rig,
+      ledger_id: "l1",
+      cursor: 3,
+      next: 4,
+      summary: { jobs: { queued: 2, leased: 0 } },
+      events: [
+        {
+          id: 4,
+          at: at(4),
+          actor: "harness",
+          kind: "run_status",
+          subject: "run-1",
+          body: { status: "paused", reason: "the owner terminates the rig's pod" },
+        },
+      ],
+    });
+    await s.advance();
+    assert.deepEqual(
+      pendingOf(s.store, rig).map((c) => [c.kind, c.payload]),
+      [["export_now", { full: true }]],
+      "the full export starts: no wait for jobs that never start",
+    );
   });
 
   test("refuses when a result can't leave: the pod keeps running, its runs paused", async () => {

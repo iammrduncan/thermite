@@ -129,6 +129,7 @@ export class DevRuns {
     this.waiters.shift()?.wake();
   }
 
+  /** The judge has work it is doing or can take: a paused run's queued jobs don't count (goal 201). */
   private judgeBusy(): boolean {
     return this.ledger.jobs.open(["evaluate", "confirm", "calibrate", "validate"]) > 0;
   }

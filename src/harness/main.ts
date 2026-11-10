@@ -138,6 +138,10 @@ async function main(): Promise<void> {
   parts.devRuns.remote = hub.pools;
   parts.devRuns.judgeHere = judging.length > 0;
   service.runnersNow = () => (hub.state().length ? hub.report() : undefined);
+  service.runnerBuilds = {
+    kept: () => hub.keptBuilds(),
+    remove: (r, key) => hub.removeBuild(r, key),
+  };
   const cards = new JudgeCards();
   const executors = createJudges(ctx, {
     service,

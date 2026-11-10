@@ -65,7 +65,7 @@ A rig's runners move with it: **Update to these images** on the rig's page, or M
 
 - **The core.** For each lane at work at once, the 2,048 MiB its agent program and commands may use on the core (or the contract's `run_rss_mib`), plus the harness, and the supervisor: 4 GiB while the rig's agent programs run in their own terminals, 2 GiB headless. On a cluster, at least 1.5 CPUs and 8 GiB. Disk for the ledger, the run's git and each lane's workspace.
 - **A runner's memory.** What the engine needs to build and serve the model, on the runner's container: set it with the runner's **Memory, in GiB** when you add it on a cluster. A lane's development runs there get it, less the margin above; a GPU whose memory is the machine's, such as a DGX Spark's, shares it with the engine's host memory.
-- **A runner's volume.** The model's files, the engine's builds and their caches. It can't grow later: on a cluster, set **Volume, in GB** when you add the runner, such as 200 GB for a model of about 95 GiB.
+- **A runner's volume.** The model's files, the engine's builds and their caches. **Settings › Space** counts the judge's builds there with the rig's, and a [retention policy](../how-to/operate/retention-policies.md) for the judge's builds removes them there too; nothing is removed unless you set one. It can't grow later: on a cluster, set **Volume, in GB** when you add the runner, such as 200 GB for a model of about 95 GiB.
 - **Where the core runs.** On a machine without a GPU, or on one of the runners' machines. The core and a runner on one machine share its CPUs and memory, which can make the judge's timings noisier: the rig's page notes it when you add the rig.
 
 ## Common mix-ups

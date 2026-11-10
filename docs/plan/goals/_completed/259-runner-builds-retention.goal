@@ -1,0 +1,47 @@
+---
+id: "259"
+title: "A retention policy for the judge's builds reaches the builds on a rig's runners"
+status: VERIFIED
+version: "0.2.2"
+depends_on: []
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 259 · A retention policy for the judge's builds reaches the builds on a rig's runners
+
+**Status:** `VERIFIED` · **Version:** [v0.2.2](../../roadmap.md#v02x)
+
+## What
+
+From a check of [issue 50](https://github.com/iammrduncan/thermite/issues/50) against v0.2.1: its report of the raw outputs the judge keeps (about 0.9 GB for each comparison, a volume full within a 10-hour run). Each timed run's folder is already removed after it. What grows is the judge's builds.
+
+A retention policy of the kind **Judge's builds** removes "the builds the judge made of each candidate, on each rig's volume" (Retention policies). It removes them from the core's own store (`harness/retention.ts`, `buildItems` over the core's state). On a rig whose judge builds and measures on its runners (goal 206), each runner makes and keeps the builds in a store of its own (`harness/runner/host.ts`), which no policy reaches. Its disk only grows, whatever policy the owner set. **Settings › Space** doesn't list those builds either: a runner reports only how many it holds, and its free disk.
+
+1. **The policy reaches the runners.** A rig's **Judge's builds** policy removes builds from each of its runners' stores as from the core's, by the same rules, such as keeping a running run's champion and a build that a job still uses.
+2. **Space counts them.** **Settings › Space** and the rig's `space` report list each runner's builds, with their runner, run, time and bytes, so a policy's preview shows what it would remove there.
+
+As everywhere in Thermite, nothing is removed unless the owner set a policy.
+
+## Why
+
+A rig with runners builds every candidate on them. A long hill climb makes hundreds of builds of a large engine, and the policy the owner set to keep the disks in bounds does nothing there.
+
+## Done when
+
+- [x] Items 1 and 2, with tests.
+- [x] The runners acceptance check.
+- [x] Pages: Retention policies (its Judge's builds row and Settings › Space), the system view's What takes the disk, A rig over several machines, and the changelog.
+
+## Decisions
+
+- 2026-11-10, the owner: v0.2.2 fixes critical bugs only ("Fix only critical bugs, not user experience changes"). A policy that doesn't do what its page says, while runners' disks fill, is one.
+
+## Progress
+
+- 2026-11-10: Goal written from the check of issue 50's raw-output item against v0.2.1 (`main` at 0d984fb7).
+- 2026-11-10 06:58 UTC: verified on `patch/v0.2.2` (2cb1bc55). A runner answers `builds` and `remove_build`; the core's hub asks each runner (60 s), Space counts their builds with the rig's, and a policy run removes those it covers there. `tests/harness/retention.test.ts` (fails on the old code) and the runner host test; the runners acceptance check (11/11) and the full `npm run check` passed. The system view's What takes the disk sums Space's counts, so it needed no change. A runner that doesn't answer is named in the removal's `error`; control's Space page does not show an inventory's `error`, so the pages say the removal record names it. Ships in v0.2.2.
+
+---
+
+Run with `/goal Complete docs/plan/goals/259-runner-builds-retention.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

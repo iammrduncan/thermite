@@ -146,6 +146,17 @@ describe("close_run (goal 087)", () => {
       "cancelled",
     );
     assert.equal(count(env, "select count(*) as n from job where state = 'queued'"), 0);
+    // Its cancel is an event, so control's view of the judge's queue no longer has it (goal 201).
+    const jobId = String(
+      env.ledger.db.prepare("select id from job where attempt = ?").get(sub.attempt)?.id,
+    );
+    assert.deepEqual(env.ledger.latestEventBody("job_cancelled", jobId), {
+      run: "js-1",
+      attempt: sub.attempt,
+      kind: "evaluate",
+      was: "queued",
+      reason: "its run closed",
+    });
     assert.equal(env.ledger.attempts.get(sub.attempt)?.lifecycle, "not_judged");
     assert.equal(
       env.ledger.latestEventBody("attempt_lifecycle", sub.attempt)?.lifecycle,
@@ -253,6 +264,14 @@ describe("close_run (goal 087)", () => {
       ["cancelled", "cancelled", "leased"],
     );
     assert.equal(env.ledger.attempts.get(sub.attempt)?.lifecycle, "not_judged");
+    // Each cancel is an event with its run (goal 201); the taken job has none.
+    for (const id of [attemptJob, validate])
+      assert.equal(
+        env.ledger.latestEventBody("job_cancelled", String(id))?.run,
+        "js-1",
+        String(id),
+      );
+    assert.equal(env.ledger.latestEventBody("job_cancelled", String(taken)), undefined);
     assert.deepEqual(env.ledger.jobs.endClosedRuns("controller-start"), [], "once is enough");
 
     // A paused or running run's jobs wait as before.

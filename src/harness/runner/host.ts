@@ -1,14 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { totalmem } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { freeSpace, gib } from "../../common/disk.ts";
-import type { RunAsk } from "../../core/api/harness/runs.ts";
+import { folderBytes } from "../../common/fs.ts";
+import { RUNNER_BUILDS_MAX, type RunAsk, type RunnerBuilds } from "../../core/api/harness/runs.ts";
 import { laneCacheEnv, prepareWorkspace } from "../agents/index.ts";
 import type { Role, Runner } from "../broker/index.ts";
 import { fetchBundle, hasCommit, initMirror, refTips } from "../git.ts";
 import { importFile } from "../imports.ts";
 import {
+  BUILD_KEY,
   baselineDir,
   CoreRunner,
   exportKit,
@@ -16,6 +26,7 @@ import {
   loadKit,
   prepareBaselineDir,
   removeBaselineDir,
+  removeBuild,
 } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import { readThrottle, type TargetDriver } from "../targets/index.ts";
@@ -46,6 +57,8 @@ interface RunHostOptions {
 export class RunHost {
   private readonly o: RunHostOptions;
   private readonly cards: CoreRunner[];
+  /** Each build's time and bytes, by its key: a build never changes once stored (goal 259). */
+  private readonly buildSizes = new Map<string, { at: number; bytes: number }>();
   /** Each card's run in progress: the next waits for it. */
   private readonly busy = new Map<number, Promise<unknown>>();
 
@@ -120,6 +133,35 @@ export class RunHost {
       ...disk,
       builds: count(join(stateDir, "builds")),
       kits: count(join(stateDir, "kits")),
+    };
+  }
+
+  /**
+   * The judge's builds this runner keeps (goal 259): each as [its key, when it was made, its bytes],
+   * oldest first, for its core's Space and a retention policy, which only its core can judge.
+   */
+  private keptBuilds(): RunnerBuilds {
+    const dir = join(this.o.paths.stateDir, "builds");
+    const all: [string, number, number][] = [];
+    for (const key of existsSync(dir) ? readdirSync(dir) : []) {
+      if (!BUILD_KEY.test(key)) continue;
+      let at: number;
+      try {
+        at = statSync(join(dir, key, "manifest.json")).mtimeMs;
+      } catch {
+        continue;
+      }
+      let size = this.buildSizes.get(key);
+      if (size?.at !== at) {
+        size = { at, bytes: folderBytes(join(dir, key)) };
+        this.buildSizes.set(key, size);
+      }
+      all.push([key, Math.floor(at), size.bytes]);
+    }
+    all.sort((a, b) => a[1] - b[1]);
+    return {
+      builds: all.slice(0, RUNNER_BUILDS_MAX),
+      more: Math.max(0, all.length - RUNNER_BUILDS_MAX),
     };
   }
 
@@ -259,6 +301,13 @@ export class RunHost {
       case "remove":
         await this.card(0).remove(this.runFolder(a.dir));
         return { ok: true };
+      case "builds":
+        return this.keptBuilds();
+      case "remove_build": {
+        const removed = removeBuild(join(this.o.paths.stateDir, "builds"), a.key);
+        this.buildSizes.delete(a.key);
+        return { removed };
+      }
       case "models_have": {
         const models = join(this.o.paths.stateDir, "models");
         return { missing: a.sha256s.filter((sha) => !existsSync(join(models, sha))) };

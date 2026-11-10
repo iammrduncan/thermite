@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -152,6 +159,58 @@ describe("a runner process (goal 206)", () => {
     assert.equal(workspaces().length, 1, "one workspace for the trial");
     await runner.laneEnd("lane-1", "t-0123456789abcdef");
     assert.equal(workspaces().length, 0, "it went when the trial ended");
+  });
+
+  test("it lists the judge's builds it keeps, oldest first with their bytes, and removes one by its key (goal 259)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "thermite-runner-builds-"));
+    const paths = {
+      stateDir: join(root, "state"),
+      scratchDir: join(root, "scratch"),
+      inboxDir: join(root, "inbox"),
+    };
+    for (const d of Object.values(paths)) mkdirSync(d, { recursive: true });
+    const host = new RunHost({
+      runner: new LocalRunner(paths.scratchDir),
+      drivers: [new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY })],
+      paths,
+      ledger: Ledger.open(join(paths.stateDir, "ledger", "ledger.db")),
+    });
+    const builds = join(paths.stateDir, "builds");
+    const build = (key: string, daysOld: number, bytes: number) => {
+      const dir = join(builds, key);
+      mkdirSync(join(dir, "out"), { recursive: true });
+      writeFileSync(join(dir, "out", "bin"), Buffer.alloc(bytes));
+      writeFileSync(join(dir, "manifest.json"), "{}");
+      const at = new Date(Date.now() - daysOld * 86_400_000);
+      utimesSync(join(dir, "manifest.json"), at, at);
+    };
+    build("a".repeat(64), 2, 300);
+    build("b".repeat(64), 9, 100);
+    // Not a build: a half-stored one and another folder are left out.
+    mkdirSync(join(builds, `${"c".repeat(64)}.tmp-1`), { recursive: true });
+    mkdirSync(join(builds, "other"), { recursive: true });
+    const ask = async (a: unknown) =>
+      JSON.parse(JSON.stringify(await host.ask(RunAsk.parse(JSON.parse(JSON.stringify(a))))));
+    const kept = (await ask({ op: "builds" })) as {
+      builds: [string, number, number][];
+      more: number;
+    };
+    assert.equal(kept.more, 0);
+    assert.deepEqual(
+      kept.builds.map(([k]) => k),
+      ["b".repeat(64), "a".repeat(64)],
+      "oldest first",
+    );
+    assert.ok((kept.builds[1]?.[2] ?? 0) >= 300, "with its bytes");
+    assert.deepEqual(await ask({ op: "remove_build", key: "b".repeat(64) }), { removed: true });
+    assert.equal(existsSync(join(builds, "b".repeat(64))), false);
+    assert.deepEqual(await ask({ op: "remove_build", key: "b".repeat(64) }), { removed: false });
+    assert.deepEqual(
+      ((await ask({ op: "builds" })) as { builds: [string][] }).builds.map(([k]) => k),
+      ["a".repeat(64)],
+    );
+    // Only a build's key: never another folder.
+    assert.throws(() => RunAsk.parse({ op: "remove_build", key: "../ledger" }));
   });
 
   test("on a lane's own runner, a run whose memory no one set gets the machine's less a margin (goal 219)", () => {

@@ -74,7 +74,8 @@ export class Judge {
   /** One scheduling step. Returns true when a job was processed. */
   async tick(): Promise<boolean> {
     // A runner of another machine is held for the step (goal 206): on a shared one, only when a
-    // job waits, so the lanes keep it while the judge has nothing to do.
+    // job it can take waits (a paused run's don't, goal 201), so the lanes keep it while the judge
+    // has nothing to do.
     const slot = this.judge.o.slot;
     if (slot?.shared && !this.judge.ledger.jobs.open(JOB_KINDS)) return false;
     this.waiting = slot !== undefined;

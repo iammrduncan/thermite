@@ -123,7 +123,7 @@ describe("the trials' session logs", () => {
       [`old-run/${OTHER}`, "old-run", false, 400],
       [`smoke-1/${TRIAL}`, "smoke-1", true, 400],
     ]);
-    const space = spaceOf(env.service.ledger, state);
+    const space = await spaceOf(env.service.ledger, state);
     assert.equal(space.trial_logs.items.length, 2);
     assert.equal(space.trial_logs.bytes, 800);
 
