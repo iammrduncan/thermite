@@ -366,7 +366,8 @@ export interface UsageCost {
   free_tokens: number;
   /**
    * Input tokens priced as not cached because their records do not report the cache, where the
-   * model's cached price differs from its input price.
+   * model's cached price differs from its input price. The cache writes a record reports are priced
+   * as writes, and not counted here.
    */
   priced_as_not_cached: number;
   /**
@@ -464,12 +465,13 @@ export function sumCost(rows: readonly UsageRow[], pods: readonly PodSpendRow[] 
       free++;
       tokens.free += all;
     } else {
+      // Writes the record reports are priced as writes: only the rest could have been cache reads.
       if (
         r.cached_in === null &&
         p.price.cached_input !== null &&
         p.price.cached_input !== p.price.input
       )
-        asNotCached += r.tokens_in;
+        asNotCached += r.tokens_in - Math.min(r.cache_write_in ?? 0, r.tokens_in);
       const writePrice = p.price.cache_write ?? null;
       if (
         (r.cache_write_in === null || r.cache_write_in === undefined) &&

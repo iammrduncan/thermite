@@ -190,7 +190,7 @@ Each set of sums has these fields. A figure that no record reports is `null`, ne
 | `no_price` | Records whose model has no price known |
 | `free` | Priced records whose model is free: its price is 0 in every part |
 | `on_plan_tokens`, `no_price_tokens`, `free_tokens` | The tokens, in and out, of the records on a plan, with no price, and free |
-| `priced_as_not_cached` | Tokens in priced at the input price because their records do not report the cache, where the model has a lower cached price |
+| `priced_as_not_cached` | Tokens in priced at the input price because their records do not report the cache, where the model has a lower cached price. The cache writes a record reports are priced as writes, and not counted here |
 | `priced_as_not_written` | Tokens in priced at the input price because their records do not report their writes, where the model has a cache-write price other than its input price |
 
 A model's price comes from the provider's model list when the list gives one, as OpenRouter's and Nous Portal's do (`pricing`, in US dollars per token). OpenAI's own list, Anthropic's and OpenCode Zen's give none: the owner sets one.

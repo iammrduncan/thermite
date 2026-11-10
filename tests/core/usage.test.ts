@@ -306,6 +306,26 @@ describe("model usage cost", () => {
     assert.equal(same.cost.usd, 4.26);
   });
 
+  test("a record that reports its writes but not its cache reads: its writes are priced as writes, not counted as priced as not cached", () => {
+    const p = { input: 1, cached_input: 0.1, cache_write: 1.25, output: 2 };
+    const pricing = { kind: "priced" as const, price: p, source: "list" as const };
+    // 140 tokens in, 40 of them written to the cache, its cache reads not reported.
+    const r = { tokens_in: 140, cached_in: null, cache_write_in: 40, tokens_out: 0 };
+    assert.deepEqual(costOf(r, p), {
+      input: (100 * 1 + 40 * 1.25) / 1e6,
+      cache_write: (40 * 1.25) / 1e6,
+      cached_input: 0,
+      output: 0,
+    });
+    const s = sumUsage([row({ ...r, pricing })]);
+    // Only the 100 whose price depends on the cache reads it does not report.
+    assert.equal(s.cost.priced_as_not_cached, 100);
+    assert.equal(s.cost.priced_as_not_written, 0);
+    // A record of writes alone: every token's price is known.
+    const writes = sumUsage([row({ ...r, tokens_in: 40, pricing })]);
+    assert.equal(writes.cost.priced_as_not_cached, 0);
+  });
+
   test("the sums cost the priced records, count those on a plan or with no price, and add the pods' spend", () => {
     const pods: PodSpendRow[] = [
       { rig: "rig-1", run: "run-1", campaign: "matmul", at: "2026-10-21T10:00:00Z", usd: 0.25 },
