@@ -22,7 +22,8 @@ Today the order is machine, then rig, then campaign, then run. A rig owns the ag
 2. **Machines are a pool.** A run asks for what it needs. A machine serves many runs: in turns at a whole GPU, or in parts at the same time (memory, CPUs).
 3. **The agents' loops run in the control plane:** workers, planner, teachers, auditor, review panel, with the run's record and the judge's decisions. A run that builds nothing, such as research, needs no machine.
 4. **A machine runs one light runner:** one program, with no container engine to set up. It does what needs the hardware: a worker's shell and files in a sandbox, builds, measurements.
-5. **Or all on the machine:** the same control-plane parts beside the runner, for a site with no link out, or for people who want a run self-contained.
+5. **The control plane's store is PostgreSQL,** in place of SQLite: several services write to it at once. A run's records can be asked in plain SQL, read only.
+6. **Or all on the machine:** the same control-plane parts beside the runner, for a site with no link out, or for people who want a run self-contained.
 
 ## Why
 
@@ -51,6 +52,7 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 ## Decisions
 
 - 2026-11-10, the owner, on how a run shares a device: "This is more documentation and training than a constraint we should have in the system." The system lets a run take a whole device in turns, or a part of it beside other runs, for the judge too. The docs say what each does to a measurement, and the run's own noise figure shows it. No rule of the system forbids a choice.
+- 2026-11-10, the owner: "postgres". Control's store moves from SQLite to PostgreSQL with this goal, since services that share a store need one that takes several writers. The dashboard's query of a run is plain SQL: a select and nothing else, over a small set of tables for each run (attempts, their metrics, champions, ideas, experiments, trials, notes, events), with a time limit and a row limit, through a role that reads those tables alone. Those tables are a contract. Thermite writes no query language of its own. The message bus stays the transport and the log of events ([decisions](../decisions.md#control-and-operation)).
 - 2026-11-10, the owner, on restarts: "They can be separate services within the control plane... No one said monolithic is required". The control plane is services: the dashboard and the API, the agents' loops, the scheduler with the judge's decisions, the store. A restart of the dashboard or the API stops no run.
 
 ## Open questions
@@ -60,6 +62,8 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 - Which services the control plane has, what each needs when it serves every run (CPUs, memory, terminals for the agent programs), and what each one's restart stops.
 - How a part of a GPU is given: memory and CPUs alone, or a share of its time. What the docs and the run's noise figure must say, so that the owner's choice is an informed one.
 - What becomes of the rig as a word and as a thing: gone, or the name of a set of machines.
+- How control's 37 migrations and its data move from SQLite to PostgreSQL, what the one-machine install gains (one more service), how backup and restore change, and what the tests use in place of an in-memory store.
+- Which tables a run's query may read, with which columns, and how a change to them is announced, since saved views depend on them.
 - How a deployment of today moves over, and whether both shapes run side by side for a time.
 - Whether the judge's decisions may leave the machine at all for a site that wants every part of a run on its own hardware.
 
