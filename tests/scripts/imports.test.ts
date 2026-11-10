@@ -100,6 +100,64 @@ describe("the import rule", () => {
   });
 });
 
+describe("the dashboard's app imports only contracts that run in a browser", () => {
+  const rule = (file: string, spec: string) => broken(file, spec)?.rule ?? null;
+  const files: Record<string, string> = {
+    "web/src/api.ts": 'import { HOME } from "@core/api/control/dashboard.ts";',
+    "src/core/api/control/dashboard.ts": 'import { z } from "zod";\nimport "../route.ts";',
+    "src/core/api/route.ts": 'import type { z } from "zod";',
+  };
+  const found = (more: Record<string, string>) => {
+    const all = { ...files, ...more };
+    return scan(Object.keys(all), (f) => all[f] ?? "");
+  };
+
+  test("the app imports its own files, its packages and the contracts", () => {
+    assert.equal(rule("web/src/app.tsx", "@/parts/tile.tsx"), null);
+    assert.equal(rule("web/src/app.tsx", "./nav.ts"), null);
+    assert.equal(rule("web/src/app.tsx", "react"), null);
+    assert.equal(rule("web/src/api.ts", "@core/api/route.ts"), null);
+    assert.equal(rule("web/src/api.ts", "../../src/core/api/route.ts"), null);
+    assert.deepEqual(found({}), []);
+  });
+  test("the check fails on an import of anything else in the repository", () => {
+    assert.equal(rule("web/src/app.tsx", "../../src/control/store/index.ts"), "app-out");
+    assert.equal(rule("web/src/app.tsx", "../../src/common/errors.ts"), "app-out");
+    assert.equal(rule("web/src/app.tsx", "../../tests/helpers/demo/index.ts"), "app-out");
+    const bad = found({
+      "web/src/bad.tsx": 'import { x } from "../../src/control/views/index.ts";',
+    });
+    assert.deepEqual(
+      bad.map((b) => [b.file, b.target, b.rule]),
+      [["web/src/bad.tsx", "src/control/views/index.ts", "app-out"]],
+    );
+    assert.equal(compare(bad, {}).added.length, 1);
+    assert.match(brokenText(bad[0] as (typeof bad)[number]), /client of control's API alone/);
+  });
+  test("a contract the app loads, straight or through another, imports no Node module", () => {
+    const bad = found({ "src/core/api/route.ts": 'import { createHash } from "node:crypto";' });
+    assert.deepEqual(
+      bad.map((b) => [b.file, b.target, b.rule, b.via]),
+      [["src/core/api/route.ts", "node:crypto", "app-browser", "web/src/api.ts"]],
+    );
+    assert.match(
+      brokenText(bad[0] as (typeof bad)[number]),
+      /the app loads it through web\/src\/api\.ts/,
+    );
+    // A contract the app does not load may import node:crypto, as core's rule allows.
+    assert.deepEqual(found({ "src/core/commands.ts": 'import "node:crypto";' }), []);
+  });
+  test("production code never imports the app", () => {
+    assert.equal(rule("src/control/api/web.ts", "../../../web/src/nav.ts"), "app-in");
+  });
+  test("no exception excuses these rules, and none is listed for them", () => {
+    const bad = found({ "web/src/bad.tsx": 'import "../../src/control/pages.ts";' });
+    const listed = { "web/src/bad.tsx": ["src/control/pages.ts"] };
+    assert.equal(compare(bad, listed).added.length, 1);
+    assert.deepEqual(listOf(bad), {});
+  });
+});
+
 describe("a folder that is a module is imported through its index.ts", () => {
   // The judge and the agents are modules, and the scheduler is one inside the agents.
   const indexed = new Set([

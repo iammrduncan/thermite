@@ -58,7 +58,10 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      # The dashboard's app has packages of its own (web/package-lock.json).
+      - run: npm run web:install
       - run: npm run typecheck
+      - run: npm run web:typecheck
       - run: npm run lint
       # Every test file but the judge's and the broker's, side by side: they run in the next job.
       - run: node scripts/test.mjs --part parallel
@@ -110,10 +113,12 @@ jobs:
       - run: npm run docs:check
 
   # The dashboard in headless Chrome (goal 239): New campaign filled in and sent as a person does,
-  # and every kind of page at two widths, checked for errors and for layout. No containers: control
-  # runs from the source on the demo's data. The runner's own Google Chrome; nothing is downloaded,
-  # and the browser reaches nothing but control. The report and every page's screenshot are kept
-  # when it fails.
+  # and every kind of page at two widths, checked for errors and for layout. Then the dashboard's
+  # app (goal 243), built here from web/: its sign-in, a change that shows with no reload, and
+  # every screen at three widths, in light and in dark. No containers: control runs from the
+  # source on the demo's data. The runner's own Google Chrome; nothing is downloaded, and the
+  # browser reaches nothing but control. The report and every page's screenshot are kept when it
+  # fails.
   browser:
     name: dashboard in a browser
     needs: approval
@@ -126,6 +131,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm run web:install
       - run: npm run acceptance:browser
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
@@ -248,10 +254,12 @@ jobs:
           # becomes when it splits (`^src/core/paths(\.ts$|/)`), so a split or a move into a
           # folder keeps the job running (tests/release/workflows.test.ts holds it).
           #
-          # The containers and compose files, the APIs, the relay and the message bus it goes over,
-          # the advisors' runner, and the smoke test.
+          # The containers and compose files, the dashboard's app that control's image builds,
+          # the APIs, the relay and the message bus it goes over, the advisors' runner, and the
+          # smoke test.
           COMPOSE: |
             ^containers/
+            ^web/
             ^compose[^/]*\.yaml$
             ^package(-lock)?\.json$
             ^kits/smoke-cpu/
@@ -308,6 +316,7 @@ jobs:
           # and the smoke kit the rig's check runs, and this test itself.
           QUICK_START: |
             ^containers/
+            ^web/
             ^compose[^/]*\.yaml$
             ^scripts/release/bundle(\.ts$|/)
             ^src/release/

@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
-import { clientOf } from "../../api/index.ts";
+import { ClientFailures, clientOf } from "../../api/index.ts";
 import { inBackground } from "../../background.ts";
 import {
   actOnClusterRig,
@@ -19,7 +19,6 @@ import { removeCheck } from "../../results-left.ts";
 import { awaitFirstReport, STEP_WORDS } from "../../rigs/index.ts";
 import { fingerprint } from "../../store/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
-import { ClientFailures } from "../session.ts";
 import { placeFollowUrl, rigHelpers } from "./shared.ts";
 
 /** Failed join requests a client may make in a minute before it waits. */

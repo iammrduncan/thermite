@@ -1,7 +1,7 @@
 ---
 id: "243"
 title: "The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks"
-status: READY
+status: IN_PROGRESS
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
@@ -10,11 +10,11 @@ updated: 2026-11-10
 
 # 243 · The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
-A plan only; nothing of it is built. It builds design A of the [UI refresh guide](../ui-refresh-guide.md#3-how-thermite-uses-it-two-designs), which the owner chose on 2026-11-10.
+Built, apart from what "Done when" leaves open: the owner's choice of the navigation, and the owner's look at the app on a real control. It builds design A of the [UI refresh guide](../ui-refresh-guide.md#3-how-thermite-uses-it-two-designs), which the owner chose on 2026-11-10.
 
 The base that every screen of the new dashboard stands on ([how the web app is built](../ui-refresh-guide.md#8-how-the-web-app-is-built)):
 
@@ -44,27 +44,52 @@ The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot".
 
 - [x] The owner chose the design. Done, 2026-11-10: a web app on fxbot's own stack.
 - [ ] The owner chose the navigation from the two variants.
-- [ ] The app builds, and control serves it at `/next`, from source in development and from control's image.
+- [ ] The app builds, and control serves it at `/next`, from source in development and from control's image. From source: done (`npm run web:build`, then any control from the source; the browser check builds it and opens it there). From control's image: the stage is in `containers/Containerfile`; the image's own check is open.
 - [ ] The owner signs in and sees Home, a run's Overview and Settings on a real control, current without a reload.
-- [ ] The import check fails on an import the app may not make, shown by a test of the check.
-- [ ] The browser check passes on the app's screens at three widths, light and dark; CI runs it.
-- [ ] The app's policy has no `'unsafe-inline'`, shown by a test of the header.
-- [ ] The goal says what the browser loads: the size of the app's script and styles.
-- [ ] Pages: the contributor's pages on the dashboard (how to run it, how to add a screen), CONVENTIONS.md's rule for the dashboard, and AGENTS.md's checks.
+- [x] The import check fails on an import the app may not make, shown by a test of the check. Done: `tests/scripts/imports.test.ts`, "the dashboard's app imports only contracts that run in a browser".
+- [x] The browser check passes on the app's screens at three widths, light and dark; CI runs it. Done: `npm run acceptance:browser`, whose third part is the app (`scripts/acceptance/lib/browser-app.mjs`); CI's job **dashboard in a browser** installs the app's packages and runs it.
+- [x] The app's policy has no `'unsafe-inline'`, shown by a test of the header. Done: `tests/control/api/web.test.ts`, "the page carries a fresh nonce, and a policy with no inline script or style"; the browser check fails on a style or script the policy refuses.
+- [x] The goal says what the browser loads: the size of the app's script and styles. Done: [What the browser loads](#what-the-browser-loads), below.
+- [x] Pages: the contributor's pages on the dashboard (how to run it, how to add a screen), CONVENTIONS.md's rule for the dashboard, and AGENTS.md's checks. Done, with the REST reference's section on the session and the app's reads, Tokens and roles, and the contributor guide (`docs/local-development.md`).
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-10: **One session, for the pages, the app and the API.** The sign-in's cookie is for every path. A session is good for each route the owner's token is good for. A change made with a session carries the session's token in the header `X-Thermite-Session-Token`; a request with an `Authorization` header is judged by its token alone, so a wrong token is refused with or without a session. The sign-in, the sign-out and "am I signed in" are routes of `/v1` (`/v1/session`).
+- 2026-11-10: **The policy has a nonce, and no `'unsafe-inline'`.** This answers the plan's first question. One stock part needs a style it adds while it runs: the dialog and the sheet lock the page's scroll with a style element. Control puts a fresh nonce in the page and in its policy at each answer (`style-src 'self' 'nonce-…'`), and the app gives it to that part. No style attribute is in the app's markup; React sets a style through the browser's own style object, which the policy does not stop. The browser check fails on any style the policy refuses.
+- 2026-11-10: **The browser check builds the app each time,** which answers the plan's second question: a build left over from other source can't pass, and the check opens what control serves, with control's policy. The build takes under a second.
+- 2026-11-10: **Three things of goal [244](244-one-door.goal) came first, in the smallest form the three screens need.** Their contracts are in `src/core/api/control/dashboard.ts`. (1) `GET /v1/home` and `GET /v1/runs/<run>/overview` give the screens' words as data. The words are still made by page code (`src/control/ui/words/`, the cards of what needs the owner), so page code registers the two routes (`src/control/dashboard/app/`); they move to the API when the words leave page code (goals 244, 246 and 247). (2) `GET /v1/stream` says only that something changed: control compares, every 2 seconds, a mark of what the rigs reported and of the audit log's newest entry. Goal 244's stream, which says what changed, takes its place. (3) A change that an existing route records is still named `owner:api` in the audit log when a session made it; goal 244 gives each action its caller.
+- 2026-11-10: **The app's packages are its own** (`web/package.json`, `web/package-lock.json`), not a workspace of the root's: control's and the rigs' images take none of them, and the app's build stage takes none of Thermite's. `npm run web:install` installs them.
+- 2026-11-10: **shadcn's tool is not one of the app's packages.** The app needs one style file of it, which is kept beside the stock components (`web/src/components/ui/tailwind.css`), with shadcn's licence. As a package the tool brought 212 packages of its own and all six findings of `npm audit`; without it the app has 190 packages and no finding. A component is added with `npx shadcn@latest add`.
+- 2026-11-10: **The built app carries its licences:** `licenses.md` (the script's packages, by Vite) and `licenses-styles.md` (the fonts, the styles and the stock components), served beside it and linked from Settings › About.
+- 2026-11-10: **One number for what needs the owner:** the count on Home, on the navigation and of the list are the list's rows, a rig that stopped reporting among them. The pages at `/ui` leave that rig out of their count and keep it in their list.
+- 2026-11-10: **A screen's parts follow the room the screen has** (container queries), not the window's width, since the navigation takes part of the window at a tablet's width.
+- 2026-11-10: **What is not built here yet opens its page at `/ui`,** marked with an arrow: Live, Rigs, a need's own page, New campaign, a campaign's page, a run's other tabs, Library, Usage, Logs, and each tab of Settings but About.
+
+## What the browser loads
+
+The built app, 2026-11-10, as Vite writes it (`npm run web:build`):
+
+| File | Size | Compressed (gzip) |
+| --- | --- | --- |
+| The script, one file | 468 kB | 147 kB |
+| The styles, one file | 76 kB | 13 kB |
+| Geist, Latin | 29 kB | a font file is compressed already |
+| Geist Mono, Latin | 23 kB | the same |
+
+The fonts' other alphabets (Latin Extended, Cyrillic, Vietnamese, symbols; 95 kB in nine files) load only when a screen shows a character of theirs. Control serves each file under `assets/` to be kept for a year, since its name changes with its content, so a second visit loads the page alone. Control does not compress its answers; a proxy in front of it may.
 
 ## Open questions
 
-- Whether a stock component needs a style that the policy without `'unsafe-inline'` refuses, and what to do then.
-- Whether the browser check builds the app each time, or reads it from Vite's own server.
+- None. Both of the plan's questions have their answers in Decisions: a stock component's style and the policy, and how the browser check gets the app.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-10: `IN_PROGRESS`. Built: the app in `web/` with fxbot's stack and theme; one session for `/ui`, `/next` and the owner's routes of `/v1`; the app's files served at `/next` with a nonce and a policy with no inline script or style; the client and the reader of the stream; the frame with the navigation in its two variants; Thermite's own parts; Home, a run's Overview and Settings; the gallery at `/next/dev` in a development build; the app's rule in the import check, with its test; the app in the type check, the linter, the size check and the loose-ends check; the browser check's third part; the build stage in control's image; CI and Dependabot; the pages.
+- 2026-11-10: Checked: the type checks, the linter, the size, import and loose-ends checks, the docs build and check, the tests of control, the scripts, the release and the docs, and the browser check with its three parts. Looked at each screen's screenshots at 1,440, 820 and 390 pixels, in light and in dark; found and fixed: a fault on sign-out (an effect that returned a browser's promise), the navigation's needs as cut-off sentences, a folder's campaigns not set apart, two counts of what needs the owner, the run's title cut on a phone, rows laid out by the window's width where the navigation takes part of it, and a chart's words too small on a phone.
+- Open: control's image built with the app's stage and checked; the owner's look at the app on a real control; the owner's choice of the navigation.
 
 ---
 

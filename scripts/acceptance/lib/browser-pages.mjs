@@ -13,7 +13,7 @@ const PER_KIND = 4;
 /** Route parts that pick a kind of page, not a thing: a run's tab, an area of Settings. */
 const KINDS = new Set(["tab", "area"]);
 /** The tallest a page is drawn, to see all of it: the dashboard scrolls inside its content. */
-const TALLEST = 12_000;
+export const TALLEST = 12_000;
 
 /**
  * The route a path is a page of (raw, as the router has it) and its kind: the route with its kind
@@ -61,7 +61,7 @@ function routeOf(routes) {
  * box between it and its scroll area clips it away (a closed section that hides its content).
  * @returns {{ wider: number, overlaps: string[], clipped: string[], images: string[], links: string[] }}
  */
-function inspect() {
+export function inspect() {
   const g = /** @type {any} */ (globalThis);
   const doc = g.document;
   const style = (/** @type {any} */ el) => g.getComputedStyle(el);
@@ -152,7 +152,8 @@ function inspect() {
       )
     )
       continue;
-    if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth === 0 || !shown(el)) continue;
+    // A box one pixel wide holds words for screen readers alone: nobody sees them cut.
+    if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth <= 1 || !shown(el)) continue;
     const s = style(el);
     if ((s.overflowX === "hidden" || s.overflowX === "clip") && s.textOverflow !== "ellipsis")
       clipped.push(name(el));
@@ -171,7 +172,7 @@ function inspect() {
 }
 
 /** The height that shows all of a page: its own, or its tallest scroll area's content. Runs in the page. */
-function fullHeight() {
+export function fullHeight() {
   const g = /** @type {any} */ (globalThis);
   let h = Number(g.document.documentElement.scrollHeight);
   for (const el of g.document.querySelectorAll("*")) {

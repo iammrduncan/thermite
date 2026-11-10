@@ -3,6 +3,32 @@ import { runHref } from "../urls.ts";
 import { span } from "../words/index.ts";
 import { esc } from "./index.ts";
 
+/** A decision's row in plain words, for the app's Needs you list (goal 243). */
+export interface NeedWords {
+  tone: "warn" | "bad" | "violet";
+  /** One or two words for the kind of decision. */
+  label: string;
+  /** What it is about, in one sentence. */
+  headline: string;
+  /** Why it waits for the owner. */
+  why: string;
+  lane: string | null;
+  since: string | null;
+}
+
+/** A card's escaped HTML as the words it shows: no tag, each entity as its character. */
+export const wordsOf = (html: string): string =>
+  html
+    .replace(/<br\s*\/?>/g, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+
 /**
  * A decision as one row that reads at a glance: what it is about, why it waits for the owner,
  * the facts that decide it and its buttons. Opened, it shows the question, the full evidence and
@@ -34,8 +60,17 @@ export function card(o: {
   more?: string | undefined;
   /** The owner's choice already sent for this item, and the rig's answer (see decidedState). */
   decided?: { sent: boolean; html: string } | undefined;
-}): { html: string; box: string; decided: boolean } {
+}): { html: string; box: string; decided: boolean; row: NeedWords } {
   const u = o.u;
+  // The row's words as the owner gave them to the card, before a sent choice adds to them.
+  const row: NeedWords = {
+    tone: o.tone,
+    label: o.kind,
+    headline: wordsOf(o.headline),
+    why: wordsOf(o.why),
+    lane: o.lane ?? null,
+    since: o.since ?? null,
+  };
   const where =
     o.where ??
     (u && o.r
@@ -57,5 +92,5 @@ export function card(o: {
 <span class="dq-side">${o.since ? `<span class="dq-age">waiting ${esc(span(o.since, o.now))}</span>` : ""}<span class="dq-btns">${buttons}</span></span>
 </summary><div class="dq-body"><p class="dq-q">${esc(o.question)}</p><dl class="dc-facts">${o.facts}</dl>
 <dl class="dq-choices">${choices}</dl>${o.more ? `<div class="dq-foot">${o.more}</div>` : ""}</div></details>`;
-  return { html, box, decided: o.decided?.sent === true };
+  return { html, box, decided: o.decided?.sent === true, row };
 }

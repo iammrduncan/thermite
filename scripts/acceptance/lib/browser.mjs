@@ -84,16 +84,18 @@ export async function launchChrome(headed) {
 }
 
 /**
- * A signed-in tab at one width, with what goes wrong on it collected, each with the page shown
- * when it happened: console errors, uncaught exceptions, control's own requests that fail, and
- * anything a page asks of another site, which is refused.
+ * A tab at one width, not signed in, with what goes wrong on it collected, each with the page
+ * shown when it happened: console errors, uncaught exceptions, control's own requests that fail,
+ * and anything a page asks of another site, which is refused.
  * @param {import("playwright-core").Browser} browser
  * @param {Stand} c
  * @param {{ width: number, height: number }} size
+ * @param {{ colorScheme?: "light" | "dark" }} [look] the colours the browser asks pages for
  */
-export async function signedInPage(browser, c, size) {
+export async function watchedPage(browser, c, size, look = {}) {
   const context = await browser.newContext({
     viewport: { width: size.width, height: size.height },
+    ...(look.colorScheme ? { colorScheme: look.colorScheme } : {}),
   });
   /** @type {string[]} */
   const errors = [];
@@ -149,9 +151,6 @@ export async function signedInPage(browser, c, size) {
     return p;
   };
   page = await newTab();
-  await page.goto(`${c.url}/ui/login`);
-  await page.fill('input[name="token"]', c.token);
-  await Promise.all([page.waitForURL(`${c.url}/ui`), page.press('input[name="token"]', "Enter")]);
   /** Takes what went wrong since the last call. */
   const take = () => ({
     errors: errors.splice(0),
@@ -191,4 +190,19 @@ export async function signedInPage(browser, c, size) {
       return page;
     },
   };
+}
+
+/**
+ * A watched tab (watchedPage), signed in on the dashboard's sign-in page.
+ * @param {import("playwright-core").Browser} browser
+ * @param {Stand} c
+ * @param {{ width: number, height: number }} size
+ */
+export async function signedInPage(browser, c, size) {
+  const tab = await watchedPage(browser, c, size);
+  const page = tab.page;
+  await page.goto(`${c.url}/ui/login`);
+  await page.fill('input[name="token"]', c.token);
+  await Promise.all([page.waitForURL(`${c.url}/ui`), page.press('input[name="token"]', "Enter")]);
+  return tab;
 }

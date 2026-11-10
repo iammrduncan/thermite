@@ -5,6 +5,11 @@
       "src/**",
       "tests/**",
       "scripts/**",
+      "web/**",
+      "!web/dist",
+      "!web/node_modules",
+      "!web/package-lock.json",
+      "!web/src/components/ui",
       "*.json",
       "!package-lock.json",
       "!dist",
@@ -21,7 +26,18 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "a11y": {
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": { "inputComponents": ["Input"] }
+        }
+      }
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   },
   "javascript": {

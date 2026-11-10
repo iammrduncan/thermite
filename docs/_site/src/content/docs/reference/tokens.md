@@ -8,6 +8,8 @@ sidebar:
 
 Control knows people and programs by **tokens**: long random strings sent as `Authorization: Bearer <token>`. Each token has one role. Control keeps only a token's SHA-256 hash wherever it can, so the machine control runs on holds nothing that signs in.
 
+The owner's token also signs a browser in to the dashboard. The sign-in is a session: a cookie the browser keeps, which ends after `THERMITE_CONTROL_SESSION_DAYS` unused, at **Sign out**, or when the owner's token changes. A session is good for the dashboard's pages and, from the dashboard's own screens, for [every route the owner's token is good for](rest-api.md#the-dashboards-session-and-screens).
+
 ## People and agents
 
 | Role | Setting | Dashboard | REST API | MCP |

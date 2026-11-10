@@ -176,7 +176,7 @@ The audit of v0.1.1 studied these from their public code and documentation, for 
 
 ### Studied for the v0.3.0 plans
 
-The review of v0.3.0 (goal 242) studied these from their public code, for the plans of goals 243 to 257. Thermite uses none of their code yet; each goal says which it will add, with the owner's yes, and this list moves it to the libraries when it does.
+The review of v0.3.0 (goal 242) studied these from their public code, for the plans of goals 243 to 257. Goal 243 built the dashboard's app from the parts fxbot is built from, which are now among the libraries ([What the dashboard's app is built from](#what-the-dashboards-app-is-built-from)). Of the rest, Thermite uses no code yet; each goal says which it will add, with the owner's yes, and this list moves it to the libraries when it does.
 
 - **The dashboard's refresh (goals 243 to 253):** [fxbot](https://github.com/iammrduncan/fxbot) (the maintainers' own; Apache-2.0), at its `release/0.8.0` branch: its UI system (its theme, its layout and how little each screen holds), its provider set-up (the catalogue, a provider's card, the sign-in panel, a key checked when it is added), its registry of providers and its first-run set-up. Read with it, as the parts fxbot is built from: [shadcn/ui](https://github.com/shadcn-ui/ui) (shadcn; MIT), [Radix UI](https://github.com/radix-ui/primitives) (the Radix UI team; MIT), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) (Tailwind Labs; MIT), [React](https://github.com/facebook/react) (the React team; MIT), [Vite](https://github.com/vitejs/vite) (the Vite team; MIT), [Lucide](https://github.com/lucide-icons/lucide) (the Lucide contributors; ISC, as its package states) and Geist, credited with the site's fonts below.
 - **Providers as a catalogue (goal 245):** [models.dev](https://github.com/anomalyco/models.dev) (the models.dev authors; MIT), the open list of models and what each can do, which fxbot reads; and [LobeHub's icons](https://github.com/lobehub/lobe-icons) (LobeHub; MIT), from which fxbot takes most of its providers' logos. A logo stays its owner's mark, whatever the licence of the icon set.
@@ -234,6 +234,27 @@ Thermite grew out of long hill-climbing campaigns on inference kernels. They tun
 
 Every package Thermite runs, with those packages' own dependencies, is under a permissive licence: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD or the Unlicense. None is copyleft. `package-lock.json` lists each one, with its version.
 
+### What the dashboard's app is built from
+
+The dashboard's app (`web/`, goal 243), which control serves to the owner's browser. Its packages are apart from Thermite's own.
+
+| Library | By | Licence | What it does in the app |
+| --- | --- | --- | --- |
+| [React](https://github.com/facebook/react): `react` and `react-dom` 19.3.1 | Meta and the React team | MIT | The app's components, and how they are drawn |
+| [shadcn/ui](https://github.com/shadcn-ui/ui): its components and its style file, kept in `web/src/components/ui/` as its tool writes them, with its licence | shadcn | MIT | The stock components: buttons, inputs, the dialog, the sheet, menus, tabs, tooltips, tables and the sidebar. Its neutral theme, as fxbot uses it, is the app's theme |
+| [Radix UI](https://github.com/radix-ui/primitives): `radix-ui` 1.8.1 | The Radix UI team (WorkOS) | MIT | What the stock components stand on: focus, the keyboard and screen readers. With it come [Floating UI](https://github.com/floating-ui/floating-ui) (MIT), [react-remove-scroll](https://github.com/theKashey/react-remove-scroll) and its helpers (Anton Korzunov; MIT), aria-hidden (MIT) and tslib (Microsoft; 0BSD) |
+| [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) 4.3.3, with `@tailwindcss/vite` | Tailwind Labs | MIT | The styles |
+| [tw-animate-css](https://github.com/Wombosvideo/tw-animate-css) 1.4.0 | Luca Bosin | MIT | How the stock components open and close |
+| [class-variance-authority](https://github.com/joe-bell/cva) 0.7.1 | Joe Bell | Apache-2.0 | A component's variants |
+| [cn](https://github.com/shadcn-ui/cn) 0.5.1, with [clsx](https://github.com/lukeed/clsx) | shadcn; Luke Edwards | MIT | Joins a component's class names |
+| [Lucide](https://github.com/lucide-icons/lucide): `lucide-react` 1.66.0 | The Lucide contributors | ISC, as its package states | The icons |
+| [get-nonce](https://github.com/theKashey/get-nonce) 1.0.1 | Anton Korzunov | MIT | Gives the page's nonce to a style a component adds while it runs, so the page's Content Security Policy needs no inline style |
+| [Geist and Geist Mono](https://github.com/vercel/geist-font), packaged by [Fontsource](https://github.com/fontsource/fontsource) (`@fontsource-variable/geist`, `@fontsource-variable/geist-mono` 5.3.0) | Vercel; the Fontsource project | The fonts OFL-1.1 | The app's fonts, served by control |
+| Zod, above | Colin McDonnell | MIT | Reads each answer of control with its contract's schema |
+| [Vite](https://github.com/vitejs/vite) 8.3.5, with [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react) and [Rolldown](https://github.com/rolldown/rolldown) | Evan You and the Vite contributors; the Rolldown project | MIT | Builds the app. [Lightning CSS](https://github.com/parcel-bundler/lightningcss) (the Parcel project; MPL-2.0) is used only to build it |
+
+The built app carries the licences of everything in it: `licenses.md` for its script's packages and `licenses-styles.md` for its fonts, styles and stock components, which control serves beside it. `web/package-lock.json` lists every package, with its version.
+
 ### What builds and checks Thermite
 
 [TypeScript](https://github.com/microsoft/TypeScript) (Microsoft, Apache-2.0), [Biome](https://github.com/biomejs/biome) (MIT OR Apache-2.0), [Node.js's type definitions](https://github.com/DefinitelyTyped/DefinitelyTyped) (MIT), [Playwright](https://github.com/microsoft/playwright) (Microsoft, Apache-2.0), whose `playwright-core` drives the installed Google Chrome for the browser acceptance check, and [gitleaks](https://github.com/gitleaks/gitleaks) (MIT) for the secret scan. CI uses GitHub's own actions (MIT) and Docker's (Apache-2.0).
@@ -255,6 +276,7 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 ## Design
 
 - **The dashboard's look** follows [Magnesium](https://github.com/iammrduncan/magnesium) (MIT), the maintainers' agent dashboard, which is a fork of [T3 Code](https://github.com/pingdotgg/t3code) (MIT, © 2026 T3 Tools Inc.): its design tokens, its status words, its tiles and its session board. The colour values are those of [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss)'s palette (MIT).
+- **The dashboard's app's look** (`web/`, goal 243) is that of the maintainers' [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0): shadcn/ui's neutral theme as its tool makes it, Geist, one centred column and small type. The four state colours, the chart colours and Geist Mono for IDs are Thermite's additions.
 - **The site's own pages** (the home page and the overviews of the use cases and studies) follow the home pages of the maintainers' [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh): a frame of their own beside the docs, a command to copy, numbered steps, and a picture drawn from real data. The replay of a real climb and the ledger are Thermite's own.
 - **The icons and the flame** are Thermite's own.
 
@@ -611,7 +633,7 @@ The site's [use cases](https://usethermite.com/use-cases/) say what Thermite can
 ## The maintainers' own public projects
 
 - [tensorless](https://github.com/iammrduncan/tensorless) (Apache-2.0), at [tensorless.dev](https://tensorless.dev): the partner of the first study. It made the PN weight format and Qwen3.8-27B-PN3, and ships the engine that the study's campaigns tuned; the study cites its published receipts and pages, and the study and the site's own pages show its logo. Its home page was also studied for the site's own pages, above.
-- [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0, as fxbot.sh states), at [fxbot.sh](https://fxbot.sh): its home page, studied for the site's own pages, above; and its app's UI system and provider set-up, studied for the v0.3.0 plans, above.
+- [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0, as fxbot.sh states), at [fxbot.sh](https://fxbot.sh): its home page, studied for the site's own pages, above; and its app's UI system and provider set-up, studied for the v0.3.0 plans, above; the dashboard's app follows its UI system.
 - [Magnesium](https://github.com/iammrduncan/magnesium) (MIT): the dashboard's design, above, and its notes on Claude and Codex sign-in, read for subscriptions.
 - [skills](https://github.com/iammrduncan/skills) (MIT): the maintainers' skills for coding agents, among them the ones for Simplified Technical English and for writing documentation.
 
@@ -621,6 +643,7 @@ Thermite's repository holds no code, text or data copied from another project, e
 
 - the licence texts it ships with programs in its images: `containers/control/kubectl/LICENSE` (Apache-2.0, from Kubernetes), `containers/harness/opencode/LICENSE` (MIT, © 2025 opencode), and `containers/harness/codex/LICENSE` and `NOTICE` (Apache-2.0, © 2025 OpenAI, with the Ratatui notice above);
 - the dashboard's colour tokens, from T3 Code through Magnesium, above;
+- shadcn/ui's components and style file, in `web/src/components/ui/` with its licence (MIT, © 2023 shadcn), and its neutral theme's values in `web/src/index.css`, as fxbot has them;
 - tensorless's logo, Bitsy, on the first study's page and on the site's own pages: `docs/_site/src/assets/partners/tensorless.svg` (Apache-2.0, from the maintainers' own tensorless, above);
 - the statistics tests' reference values, numbers computed with SciPy (`tests/helpers/data/stats-reference.json`).
 

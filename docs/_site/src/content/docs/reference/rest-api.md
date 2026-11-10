@@ -27,15 +27,17 @@ Control listens on `THERMITE_CONTROL_LISTEN`, by default `0.0.0.0:8800`. The loc
 | `/v1/join/...` | [Join commands](#join-commands) |
 | `/mcp` | The [MCP server](mcp-tools.md) |
 | `/ui` | The dashboard. `GET /` redirects to `/ui` |
+| `/next` | The dashboard's new screens, a web app that is built up to take the place of `/ui` ([The dashboard's session and screens](#the-dashboards-session-and-screens)). Control serves its built files, each with `X-Content-Type-Options: nosniff`. The page comes with a Content Security Policy that takes scripts, styles, fonts and images from control alone and allows no inline script or style: a style a component adds while it runs carries the answer's nonce |
 
 ## Tokens
 
-Every request except `GET /v1/health` sends a token as `Authorization: Bearer <token>`. [Tokens and roles](tokens.md) says how each token is made.
+Every request except `GET /v1/health` sends a token as `Authorization: Bearer <token>`. [Tokens and roles](tokens.md) says how each token is made. The dashboard's own screens send their sign-in's session instead ([The dashboard's session and screens](#the-dashboards-session-and-screens)).
 
 | Token | Routes it may call |
 | --- | --- |
 | None | `GET /v1/health`, which says only what a probe needs ([Health](#health)) |
 | Owner | Every route under [Routes for people and scripts](#routes-for-people-and-scripts) |
+| None, with the owner's session | The same routes as the owner's token, from a browser that signed in. A change must carry the session's token in `X-Thermite-Session-Token` |
 | Reader | `GET /metrics`, `GET /v1/usage`, `GET /v1/model-prices`, `GET /v1/rigs/<rig>/live`, `GET /v1/kits` and `GET /v1/kits/<name>` only, and the details of `GET /v1/health` |
 | Operator, agent | None. These tokens work only on [MCP](mcp-tools.md) |
 | A rig's own token | The [routes used by rigs](#routes-used-by-rigs), for that rig only |
@@ -50,6 +52,7 @@ Request bodies are JSON, except a champion's patch, a piece of an export's file 
 | 401 | `{"error":"unauthorized"}` | No token, a wrong token, or a token that may not call the route |
 | 400 | `{"error":"the request's body is not JSON"}` | The body of a route that takes JSON does not parse |
 | 400 | `{"error":"invalid request"}` | The body does not match the route's schema. The schema's own message is not sent back. Control writes it to its output and to its audit log, as action `failed`. These routes answer `bad request: <field>: <message>` instead, as each one's section says: a campaign's `runs`, `copy`, `context` and `folder`, `POST /v1/campaign-folders` and its `rename`, and a rig's `model`, `settings` and `cluster/resources` |
+| 403 | `{"error":"bad session token"}` | A change sent with the owner's session and without the session's token in `X-Thermite-Session-Token` |
 | 403 | `{"error":"this rig is retired in control"}` | A rig-facing route, called for a retired rig |
 | 409 | `{"error":"Control cannot work with this rig: …"}` | A rig-facing route, called for a rig whose protocol control cannot work with. See [Rig versions](#rig-versions) |
 | 413 | `Payload Too Large` | A body past its route's limit, as the tables below and [Control's own limits](limits-and-pacing.md#controls-own-limits) give it |
@@ -57,7 +60,7 @@ Request bodies are JSON, except a champion's patch, a piece of an export's file 
 | 409 | `{"error":"<why>"}` | A refusal while control does the work, such as a refused propagation or a reset in the wrong state, in its own words. A command that control refuses (`POST /v1/commands`) answers 400 with the reason, 404 for an unknown rig, or 409 when it would start a stopped RunPod pod that control could not start, or start a run while control's disk is at its floor. A run that control does not start (`POST /v1/campaigns/<campaign>/runs`), or a campaign it does not copy (`POST /v1/campaigns/<campaign>/copy`), answers 400, 404 or 409 with the reason, as [Campaigns](#campaigns) lists; so do a campaign it does not archive or move, and a folder it does not make, rename or delete ([Archive a campaign, and folders](#archive-a-campaign-and-folders)) |
 | 500 | `{"error":"internal error <id>"}` | A fault in control, such as a disk it can't write. The answer names it by an `id` of 8 hexadecimal characters alone. Control writes the fault's own words to its output and to its audit log, as action `failed`, with the same `id` |
 
-Every request that ends in an error inside control, or with a 5xx status, is written to control's output as a JSON line with `"msg":"request failed"`, and to the [audit log](#audit-log-actions) as action `failed`, by the caller its route's token named (`owner:api`, `reader:api` or `rig:<rig>`), or by `control` on a route that takes no token. A refusal, with a status below 500, that repeats is one entry with its count ([Audit log](#audit-log)). A request answered 401, with no token or one its route does not take, is written to control's output as a JSON line with `"msg":"unauthorized"` and the address it came from (`from`), and to the audit log as action `unauthorized` by `control`, one entry for each route, as control names it (such as `/v1/rigs/:rig/view`), with its count.
+Every request that ends in an error inside control, or with a 5xx status, is written to control's output as a JSON line with `"msg":"request failed"`, and to the [audit log](#audit-log-actions) as action `failed`, by the caller its route's token named (`owner:api`, `reader:api` or `rig:<rig>`; `owner:ui` for the owner's session), or by `control` on a route that takes no token. A refusal, with a status below 500, that repeats is one entry with its count ([Audit log](#audit-log)). A request answered 401, with no token or one its route does not take, is written to control's output as a JSON line with `"msg":"unauthorized"` and the address it came from (`from`), and to the audit log as action `unauthorized` by `control`, one entry for each route, as control names it (such as `/v1/rigs/:rig/view`), with its count.
 
 A `limit` in a query string is a whole number. Control keeps it between 1 and 5000; anything that is not a whole number gives the route's default.
 
@@ -84,6 +87,39 @@ Each part of Thermite answers a health route like this one: control here, the ha
 | Supervisor | `live` | `THERMITE_LIVE_INTERVAL_MS` (3 s) | 30 min |
 
 With a token, control's answer also gives its own disk against its floor, [`THERMITE_DISK_FLOOR_GIB`](settings.md#address-and-state): `disk` holds `floor_gib`, `low`, `since`, `checked_at`, `places` (`state`, its state folder, and `bus store`, the room the bus's store has left under its limit, each with `free_gib` and `total_gib`) and `unread` (a place it could not read, with why), and `degraded` is `low`. At its floor control holds new runs but is well, and answers 200 ([Troubleshoot](../how-to/operate/troubleshoot.md#controls-disk-is-at-its-floor)). The harness's answer says `degraded` too, and, to the supervisor's token, the rig's name and its free disk against its floor (`disk`, as the rig's report carries it: [The disk card](rig-page.md#the-disk-card)); a rig at its floor holds new work but is well, and answers 200. The supervisor's gives the rig's name beside its loops. Compose, the release bundle, the machines' units and Kubernetes each check these routes ([Troubleshoot](../how-to/operate/troubleshoot.md#a-part-that-is-unhealthy)).
+
+### The dashboard's session and screens
+
+The dashboard's new screens are a web app, which control serves at `/next` until it takes the place of the pages at `/ui`. The app reaches control through this API alone. It sends no token: the browser's sign-in is a session, and a session is good for every route the owner's token is good for.
+
+| Route | Token | What it does | Request | Answer |
+| --- | --- | --- | --- | --- |
+| `GET /v1/session` | None | Says whether this browser is signed in | None | `{signed_in, token, session_days, control}`. `token` is the session's token for changes, present only when signed in. `session_days` is how long an unused session lasts (`THERMITE_CONTROL_SESSION_DAYS`). `control` is control's own build, `{version, commit}` |
+| `POST /v1/session` | None | Signs in with the owner's token. The answer sets the session's cookie, `thermite_session`: `HttpOnly`, `SameSite=Strict`, for every path, and `Secure` over HTTPS. The pages at `/ui` take the same cookie | `{"token":"<the owner's token>"}`, at most 8 KiB | As `GET /v1/session`, signed in. `403 {"error":"That is not the owner's token."}`; `429 {"error":"Too many failed sign-ins. Wait a minute."}` after 20 failed sign-ins from one address in a minute |
+| `DELETE /v1/session` | None | Signs out: the session ends on control, for `/ui` too | None | `{"ok":true}` |
+| `GET /v1/home` | Owner | Home: what waits for the owner, the runs at work and what happened, in the words the dashboard shows. Archived campaigns are left out | None | `{at, counts, needs, at_work, happened, nav}`, as below |
+| `GET /v1/runs/<run>/overview` | Owner | A run's Overview: how it stands, its result so far and what each of its agents does now | None | `{at, row, said, held, needs, metric, questions, facts, recent, page}`, as below. 404 `{"error":"no run <run>"}` |
+| `GET /v1/stream` | Owner | Tells an open screen to read again, as Server-Sent Events (`text/event-stream`) | None | An event `changed` each time a rig reported or something changed on control, which control looks for every 2 seconds; an event `beat` at once and then every 15 seconds, so a dropped stream shows. Each event's data is `{}` |
+
+A signed-in browser sends its cookie by itself. A change, which is any request but a `GET` or a `HEAD`, must also carry the session's token in the header `X-Thermite-Session-Token`. A request that another site makes the browser send can't know it. Without it the answer is `403 {"error":"bad session token"}`. A request with an `Authorization` header is judged by its token alone: a wrong token answers 401, with or without a session. `DELETE /v1/session` needs no token, because the worst a forged sign-out does is sign the owner out.
+
+`GET /v1/home` and `GET /v1/runs/<run>/overview` give words, not markup: each state, verdict and event is a sentence or a word control made, with one of five tones for its colour: `good`, `needs`, `wrong`, `working` or `none`. Both answers are sent with `Cache-Control: no-store`.
+
+| Field | Meaning |
+| --- | --- |
+| `at` | When control made the answer |
+| `counts` | `{needs, running, judging, queued, rigs, offline}`: the rows of `needs`, the runs at work, the judges that measure now, the changes that wait for a judge, the rigs that should report, and those of them that do not. A stopped RunPod pod is not counted as a rig that should report |
+| `needs` | What waits for the owner, each `{key, kind, tone, label, headline, why, where, since, page}`: `label` is one or two words for the kind of decision, `headline` what it is about, `why` the reason it waits, `where` is `{campaign, run, rig, lane, attempt}` with `null` for each part it has none of, `since` when it began to wait (`null` when control does not know), and `page` its page under `/ui` |
+| `at_work` | Each run at work, `{campaign, run, rig, mode, mode_words, state, judge_only, figure, champion, started_at, now, needs}`. `state` is `{word, tone}`. `judge_only` is `true` for a run with no agents. `figure` is the run's result so far: `{text, steps, goals}`, `text` being its headline, such as `+23.7%` or `4/9 goals` (`null` before the first result), `steps` a hill climb's champions, each `{seq, at, gain}` with `gain` over the starting point as a fraction, and `goals` a goal run's goals, each `{goal, state, reasons}`. `champion` is the current champion's number or `null`. `now` is what each agent does now, each `{who, text, since, busy, tone}`: a lane, the judge, the planner when it waits, the final writer. `needs` counts what waits for the owner in this run |
+| `happened` | The 10 newest events, as sentences, newest first: `{at, tone, text, rig, campaign, run, attempt}` |
+| `nav` | `{campaigns, folders}`: each campaign as `{name, mode, state, folder, run}`, `run` being its newest run or `null`, and the folders' names |
+| `row` | In a run's Overview: the run, as an entry of `at_work` |
+| `said`, `held` | The run's state in one or two sentences; and, for a run that is running with nothing at work, why (`null` otherwise) |
+| `metric` | A hill climb's main metric, `{name, unit, better}`, or `null` |
+| `questions` | A research run's questions, each `{index, question, state, answer}` |
+| `facts` | Facts of the run, each `{label, value}` in words |
+| `recent` | The run's newest events, as `happened` |
+| `page` | The run's page under `/ui`, for what the app does not show yet |
 
 ### Rigs and their history
 

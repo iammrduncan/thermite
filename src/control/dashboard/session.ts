@@ -1,15 +1,14 @@
-import { randomBytes } from "node:crypto";
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { sameSecret } from "../../common/secrets.ts";
-import { clientOf } from "../api/index.ts";
+import { clientOf, SIGN_IN_FAILURES } from "../api/index.ts";
 import { KIT_ARCHIVE_MAX, KIT_BUNDLE_MAX } from "../kits/index.ts";
 import { SESSION_DAYS } from "../settings.ts";
 import { CLIENT_JS } from "../ui/client.ts";
 import { FOLLOW_JS } from "../ui/commands/index.ts";
 import { APPLE_TOUCH_ICON, FAVICON_ICO, FAVICON_SVG, ICON_LINKS } from "../ui/components/index.ts";
 import { STYLE } from "../ui/style/index.ts";
-import { type Ctx, type Dashboard, hashOf } from "./context.ts";
+import type { Ctx, Dashboard } from "./context.ts";
 
 const CSP =
   "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
@@ -20,7 +19,7 @@ const CSP =
  * token), and control's own script.
  */
 export function sessionRoutes(app: Hono, dash: Dashboard): void {
-  const { cookie, csrfOf, opts, sessionMs, sessionOf, store, tokenFp } = dash;
+  const { csrfOf, opts, sessionOf, sessions, store } = dash;
   // Only control's own script runs: even an escaping mistake cannot become code. A route that sets
   // a stricter policy of its own keeps it, as a knowledge base file's download does.
   app.use("/ui/*", async (c, next) => {
@@ -62,7 +61,7 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
   // Failed sign-ins in the last minute, counted for each client apart: past 20, that client
   // waits, and every other client still signs in (the token is random, so this only slows a
   // guesser and keeps the log readable).
-  const failures = new ClientFailures();
+  const failures = sessions.failures;
   app.post("/ui/login", bodyLimit({ maxSize: 8 * 1024 }), async (c) => {
     const now = Date.now();
     const client = clientOf(c);
@@ -70,14 +69,11 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
       return c.text("too many failed sign-ins; wait a minute", 429);
     const form = await c.req.parseBody();
     const token = String(form.token ?? "");
-    if (!opts.admin.matches(token)) {
+    if (!sessions.start(c, token)) {
       if (failures.add(client, now) === SIGN_IN_FAILURES)
         store.auditLog.add("control", "login_throttled", {});
       return c.redirect("/ui/login", 303);
     }
-    const sid = randomBytes(24).toString("base64url");
-    store.uiSessions.create(hashOf(sid), tokenFp, Date.now() + sessionMs);
-    cookie(c, sid);
     store.auditLog.add("owner:ui", "login", {});
     return c.redirect("/ui", 303);
   });
@@ -113,8 +109,7 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
   });
 
   app.post("/ui/logout", (c) => {
-    const sid = sessionOf(c);
-    if (sid) store.uiSessions.delete(hashOf(sid));
+    sessions.end(c);
     return c.redirect("/ui/login", 303);
   });
 
@@ -138,34 +133,3 @@ export const FILE_FORM_MAX_BYTES: ReadonlyMap<string, number> = new Map([
   ["/ui/campaigns/new/kit", KIT_ARCHIVE_MAX + FORM_MAX_BYTES],
   ["/ui/campaigns/new", Math.ceil((KIT_BUNDLE_MAX * 4) / 3) + FORM_MAX_BYTES],
 ]);
-
-/** Failed sign-ins a client may make in a minute before it waits. */
-const SIGN_IN_FAILURES = 20;
-/** Clients whose failures are kept at once; past it, the one that failed longest ago is dropped. */
-const FAILING_CLIENTS = 4096;
-
-/** Each client's failed requests in the last minute: its sign-ins, or its join commands. */
-export class ClientFailures {
-  private readonly byClient = new Map<string, number[]>();
-
-  /** The client's failures in the minute before `now`. */
-  count(client: string, now: number): number {
-    const recent = (this.byClient.get(client) ?? []).filter((t) => t > now - 60_000);
-    if (recent.length > 0) this.byClient.set(client, recent);
-    else this.byClient.delete(client);
-    return recent.length;
-  }
-
-  /** Records a failure, and returns the client's failures in the last minute. */
-  add(client: string, now: number): number {
-    const recent = [...(this.byClient.get(client) ?? []), now];
-    // Kept in the order of each client's last failure, so the first is the oldest.
-    this.byClient.delete(client);
-    this.byClient.set(client, recent);
-    if (this.byClient.size > FAILING_CLIENTS) {
-      const oldest = this.byClient.keys().next().value;
-      if (oldest !== undefined) this.byClient.delete(oldest);
-    }
-    return recent.filter((t) => t > now - 60_000).length;
-  }
-}

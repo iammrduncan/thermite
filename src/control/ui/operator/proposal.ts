@@ -1,7 +1,7 @@
 import { PROPOSED_WORDS, proposalChange } from "../../campaigns/index.ts";
 import { GRANT_OPENS } from "../../kb/index.ts";
 import type { CampaignProposal, ControlStore } from "../../store/index.ts";
-import { card, esc, icon } from "../components/index.ts";
+import { card, esc, icon, type NeedWords } from "../components/index.ts";
 import { campaignHref } from "../urls.ts";
 import type { Need, NeedsContext } from "./index.ts";
 
@@ -21,7 +21,7 @@ export function proposalCard(
   p: CampaignProposal,
   csrf: string,
   now: number,
-): { html: string; box: string } {
+): { html: string; box: string; row: NeedWords } {
   const what = PROPOSED_WORDS[p.field];
   const change = proposalChange(store, p);
   const form = (choice: "approve" | "decline", label: string, cls: string) =>
@@ -58,7 +58,7 @@ export function proposalCard(
       },
     ],
   });
-  return { html: c.html, box: c.box };
+  return { html: c.html, box: c.box, row: c.row };
 }
 
 /** A proposed grant's card: which collection, what it opens, and the campaign's reads now. */
@@ -67,7 +67,7 @@ function grantCard(
   change: { now: string; proposed: string },
   form: (choice: "approve" | "decline", label: string, cls: string) => string,
   now: number,
-): { html: string; box: string } {
+): { html: string; box: string; row: NeedWords } {
   const reads = String(p.value);
   const c = card({
     tone: "violet",
@@ -97,7 +97,7 @@ function grantCard(
       },
     ],
   });
-  return { html: c.html, box: c.box };
+  return { html: c.html, box: c.box, row: c.row };
 }
 
 /** Every proposal that waits for the owner, as Needs you lists them. */

@@ -14,18 +14,23 @@
 //    than the window, controls on top of each other, text cut off and images that don't load. It
 //    keeps a screenshot of each whole page at each width.
 //
-// It writes report.json, the screenshots and index.html (every page's screenshots side by side)
-// to .dev/acceptance/browser/. Chrome is the installed Google Chrome, or THERMITE_BROWSER_CHROME,
+// 3. The dashboard's app at /next (lib/browser-app.mjs): built from web/, then its sign-in, a
+//    change that shows with no reload, and every screen at 1440, 820 and 390 pixels wide, in light
+//    and in dark.
+//
+// It writes report.json, the screenshots, index.html (every page's screenshots side by side) and
+// app.html (every screen of the app) to .dev/acceptance/browser/. Chrome is the installed Google Chrome, or THERMITE_BROWSER_CHROME,
 // the path of a Chrome or Chromium executable. Nothing is downloaded, and the browser reaches
 // nothing but control.
 //
-// Usage: node scripts/acceptance/browser.mjs [--only flows|pages] [--widths 1440,820]
+// Usage: node scripts/acceptance/browser.mjs [--only flows|pages|app] [--widths 1440,820]
 //          [--max-pages N] [--headed]
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { launchChrome, signedInPage, startControl } from "./lib/browser.mjs";
+import { appCheck, buildApp } from "./lib/browser-app.mjs";
 import { pageSweep } from "./lib/browser-pages.mjs";
 import { acceptanceChecks } from "./lib/checks.mjs";
 
@@ -37,8 +42,8 @@ const { values } = parseArgs({
     headed: { type: "boolean", default: false },
   },
 });
-if (values.only && !["flows", "pages"].includes(values.only)) {
-  console.error(`browser.mjs: --only is flows or pages, not ${values.only}`);
+if (values.only && !["flows", "pages", "app"].includes(values.only)) {
+  console.error(`browser.mjs: --only is flows, pages or app, not ${values.only}`);
   process.exit(2);
 }
 /**
@@ -310,13 +315,25 @@ async function newCampaignFlows(browser, c) {
   await tab.context.close();
 }
 
+// The app is built before control starts: control serves what is in web/dist.
+const part = (/** @type {string} */ name) => !values.only || values.only === name;
+let app = false;
+if (part("app")) {
+  const built = buildApp();
+  app = check(
+    "the dashboard's app builds from web/",
+    built.ok,
+    built.ok ? `script ${built.script} bytes, styles ${built.styles} bytes` : built.why,
+  );
+}
 const control = await startControl(OUT);
 let browser;
 try {
   browser = await launchChrome(Boolean(values.headed));
   console.log(`Chrome ${browser.version()}, control at ${control.url}`);
-  if (values.only !== "pages") await newCampaignFlows(browser, control);
-  if (values.only !== "flows")
+  if (part("flows")) await newCampaignFlows(browser, control);
+  if (app) await appCheck(browser, control, { out: OUT, check });
+  if (part("pages"))
     await pageSweep(browser, control, {
       widths: WIDTHS,
       out: OUT,

@@ -1,6 +1,6 @@
-# Dependabot version updates, once a week: Thermite's own packages, the documentation site's packages
-# and the GitHub Actions in the workflows. Minor and patch updates come grouped in one pull request
-# per ecosystem; each major update comes alone. Starlight is still 0.x, where a minor version can
+# Dependabot version updates, once a week: Thermite's own packages, the dashboard app's packages,
+# the documentation site's packages and the GitHub Actions in the workflows. Minor and patch
+# updates come grouped in one pull request per ecosystem; each major update comes alone. Starlight is still 0.x, where a minor version can
 # break the site, so it always comes alone (see docs/writing-docs.md). @types/node gets no major
 # update: its major is the Node.js version Thermite supports (package.json's engines), and a newer
 # one's types would let code use what that Node.js does not have. The pull requests go to the branch
@@ -11,6 +11,18 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: v0.3.0
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /web
     target-branch: v0.3.0
     schedule:
       interval: weekly

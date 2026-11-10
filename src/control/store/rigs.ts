@@ -149,6 +149,25 @@ export class ReportedRigs extends StorePart {
   }
 
   /**
+   * A mark that changes whenever a rig reported or control took a new event of it: each rig's last
+   * report and held cursor, in one string. The dashboard's stream of changes compares it
+   * (api/web.ts); it reads no report's summary, so it is cheap to ask often.
+   */
+  mark(): string {
+    return (
+      this.db
+        .prepare(
+          `select r.id, r.last_seen, r.ledger_id, coalesce(l.through_event, 0) as held
+           from rig r left join rig_ledger l on l.rig = r.id and l.ledger_id = r.ledger_id
+           order by r.id`,
+        )
+        .all() as Row[]
+    )
+      .map((r) => `${r.id}\t${r.last_seen}\t${r.ledger_id ?? ""}\t${r.held}`)
+      .join("\n");
+  }
+
+  /**
    * The ledger a report comes from becomes the rig's current one, before its events go on the
    * events stream: a ledger new to the rig (a full reset's) supersedes the ones before it, for
    * good, as the report's signature proves the harness moved on. A rig with no row gets one, not

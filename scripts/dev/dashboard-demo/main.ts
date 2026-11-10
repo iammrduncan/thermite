@@ -6,6 +6,9 @@
 //   node --experimental-strip-types scripts/dev/dashboard-demo/main.ts [--port 8810]
 //   then open http://127.0.0.1:8810/ui and sign in with the token it prints.
 //
+// The dashboard's app (web/) is at /next once it is built (`npm run web:build`); its development
+// server (`npm run web:dev`) reaches this control by default.
+//
 // Control's store is on the tests' fake message bus, in this process: what control derives from
 // the rigs' events (model usage, the knowledge base, commands' outcomes) is applied from its
 // events stream, as on a real bus, and the demo needs no NATS server.
@@ -37,4 +40,6 @@ serve({
   hostname: "127.0.0.1",
   port,
 });
-console.log(`dashboard demo: http://127.0.0.1:${port}/ui  (token: ${tokens.admin})`);
+console.log(
+  `dashboard demo: http://127.0.0.1:${port}/ui, the app at /next  (token: ${tokens.admin})`,
+);

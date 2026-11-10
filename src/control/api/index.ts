@@ -32,8 +32,10 @@ import { resultRoutes } from "./results.ts";
 import { retentionRoutes } from "./retention.ts";
 import { rigRoutes } from "./rigs.ts";
 import { usageRoutes } from "./usage.ts";
+import { webRoutes } from "./web.ts";
 
 export { type ControlOptions, type ControlTokens, clientOf } from "./context.ts";
+export { ClientFailures, OwnerSessions, SIGN_IN_FAILURES } from "./session.ts";
 
 /**
  * Control HTTP API (v1 core). Admin tokens issue commands and read everything; each rig's token
@@ -52,7 +54,7 @@ export function createControlApi(
 ): Hono {
   const app = new Hono();
   const api = apiContext(app, store, tokens, privateKeyPem, opts);
-  const { control, creds, parts, admin, callerOf } = api;
+  const { control, creds, parts, admin, callerOf, sessions } = api;
   const owner = creds.owner;
   const { secrets, chatgpt, runpodTests, mcpServers, runpodRigs, runpodDriver } = parts;
 
@@ -155,6 +157,8 @@ export function createControlApi(
   reachRoutes(app, api);
   retentionRoutes(app, api);
   commandStatusRoutes(app, api);
+  // The dashboard's app at /next, the owner's session and the stream of changes (goal 243).
+  webRoutes(app, api);
 
   // A draining cluster rig's pods restart once nothing runs on it, and any rig's drain past its
   // deadline is noted (clusters/drain.ts).
@@ -165,6 +169,8 @@ export function createControlApi(
   watchWorkers(parts, opts.workersWatchMs);
   opts.pages?.(app, store, {
     admin: owner,
+    sessions,
+    ownerOnly: admin,
     privateKeyPem,
     staleAfterMs: opts.staleAfterMs,
     driver: opts.driver,

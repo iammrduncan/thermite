@@ -3,6 +3,7 @@ import type { MountPages } from "../pages.ts";
 import type { ControlStore } from "../store/index.ts";
 import { actionRoutes } from "./actions.ts";
 import { agentRoutes } from "./agents.ts";
+import { appReadRoutes } from "./app/routes.ts";
 import { newCampaignRoutes } from "./campaigns/new.ts";
 import { campaignPageRoutes } from "./campaigns/page.ts";
 import { attemptRoutes } from "./campaigns/run/attempt.ts";
@@ -85,6 +86,8 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   editRigRoutes(app, dash);
   runnerRoutes(app, dash);
   commandRoutes(app, dash);
+  // The app's reads that still stand on these pages' words (goal 243).
+  appReadRoutes(app, dash);
   return app;
 }
 

@@ -15,9 +15,9 @@ export const BASELINE_PATH = "scripts/size-baseline.json";
 export const LOWER_COMMAND = "npm run check:sizes -- --lower";
 
 /** The folders in scope: every handwritten file Thermite builds or runs. */
-const SCOPE = ["src/", "tests/", "scripts/", "containers/", "kits/"];
+const SCOPE = ["src/", "tests/", "scripts/", "containers/", "kits/", "web/"];
 /** The files in scope: code and scripts. A kit's target code (C, CUDA) is the target's, not ours. */
-const CODE = /\.(?:ts|mts|cts|js|mjs|cjs|sh|py)$/;
+const CODE = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|sh|py)$/;
 
 export interface BaselineEntry {
   lines: number;

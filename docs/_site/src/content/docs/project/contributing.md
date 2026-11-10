@@ -40,10 +40,11 @@ You need Node.js 22.19 or later (22.22 or later to build this documentation site
 git clone https://github.com/iammrduncan/thermite.git
 cd thermite
 npm ci
+npm run web:install
 npm run check
 ```
 
-`npm run check` runs every fast check. When it passes, your copy works. Thermite is written in TypeScript and runs on Node.js. To run Thermite itself from your copy, build its images with the repository's own `compose.yaml`: `npm run dev:init`, then `docker compose up -d --build`. The [contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md#the-compose-stack-built-from-source) says more. [Install on one machine](../tutorials/first-run.md) runs a release's published images instead.
+`npm run web:install` installs the packages of the dashboard's app, which are apart from Thermite's own (`web/package-lock.json`). `npm run check` runs every fast check. When it passes, your copy works. Thermite is written in TypeScript and runs on Node.js. To run Thermite itself from your copy, build its images with the repository's own `compose.yaml`: `npm run dev:init`, then `docker compose up -d --build`. The [contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md#the-compose-stack-built-from-source) says more. [Install on one machine](../tutorials/first-run.md) runs a release's published images instead.
 
 ## The checks
 
@@ -52,14 +53,15 @@ Run these from the repository root before each commit:
 | Command | What it checks |
 | --- | --- |
 | `npm run typecheck` | The TypeScript types, and those of the acceptance scripts, which are JavaScript with `// @ts-check` and JSDoc types |
-| `npm run lint` | Style and common mistakes, with Biome. `npm run format` fixes what it can |
+| `npm run web:typecheck` | The types of the dashboard's app in `web/`, with the app's own TypeScript settings (a browser's, with JSX). It needs `npm run web:install` once |
+| `npm run lint` | Style and common mistakes, with Biome, in the app too. `npm run format` fixes what it can. The app's stock components in `web/src/components/ui/` are left as their tool writes them |
 | `node scripts/test.mjs <files>` | The test files your change touches. `npm test` runs them all: the files side by side, one for each CPU, then the judge's and the broker's one at a time, alone, because they time real processes. Each file ends when its tests end, so a failed test that leaves a server open fails at once instead of hanging |
 | `npm run check:public` | That no tracked or staged file holds private names (see below). Stage new files first, or run `node scripts/checks/public.mjs --untracked` |
 | `npm run check:sizes` | That no file over 800 lines grows, and no file newly passes 800 lines, unless `scripts/size-baseline.json` records a reason for it. After a split, `npm run check:sizes -- --lower` lowers the file's recorded size; the check fails until it does. `-- --list` lists every file over 500 lines |
 | `npm run check:imports` | That no new import breaks the rule of the parts in CONVENTIONS.md: they import `core`, `common` and `agents`, never each other; `core` does no I/O; domain modules never import page code. Today's exceptions are listed in `scripts/import-exceptions.json`, and the list only shrinks: after a move, `npm run check:imports -- --lower` drops those that are gone. It also holds the folder rule, with no exceptions: code outside a folder that is a module imports the folder's `index.ts`, not a file inside it. The namespaces, whose files are imported one by one (the APIs' routes and clients, the events' kinds and bodies, the message bus's contracts, control's pages and route sections, the command line's commands), are listed in `scripts/checks/lib/imports.ts` |
 | `npm run check:loose-ends` | That no export of `src/` is left that no other file names (an `index.ts` that only passes it on does not count), and that no path in a code comment, a top-level Markdown file or a page of this site names a file or folder that isn't there. Today's are listed in `scripts/loose-ends.json`, and the list only shrinks: after a removal or a fix, `npm run check:loose-ends -- --lower` drops those that are gone |
 
-`npm run check` runs the typecheck, the lint, every test, the public check, the size check, the import check and the loose-ends check, in that order. One test keeps an example in step: after a change to `examples/smoke-project`, or to `kits/smoke-cpu` outside its candidates, `tests/harness/smoke-check.test.ts` fails until `examples/contracts/smoke-cpu-goal.json` names their new commits, and says which field to set to which commit.
+`npm run check` runs the typecheck, the app's typecheck, the lint, every test, the public check, the size check, the import check and the loose-ends check, in that order. The size check and the loose-ends check hold the app's own files too. The import check holds the app to its rule with no exceptions: of this repository, `web/` imports only the contracts in `src/core/` (as `@core/…`); each contract it loads must run in a browser, so it imports no Node.js module and no package but zod; and nothing in `src/` imports the app. One test keeps an example in step: after a change to `examples/smoke-project`, or to `kits/smoke-cpu` outside its candidates, `tests/harness/smoke-check.test.ts` fails until `examples/contracts/smoke-cpu-goal.json` names their new commits, and says which field to set to which commit.
 
 Changes to some parts also need a test that starts containers. Each takes from a few minutes to half an hour. Each acceptance test has an npm script, `npm run acceptance:<name>`, which runs `scripts/acceptance/<name>.mjs` (`npm run` lists them all); the compose smoke test is `npm run smoke:compose`:
 
@@ -70,7 +72,7 @@ Changes to some parts also need a test that starts containers. Each takes from a
 | Control, the dashboard, MCP or the relay | `COMPOSE="podman compose" npm run acceptance:control` |
 | The workers, the planner, the scheduler, the OpenCode harness in a hill-climb or research trial, or the agents' knowledge-base tools (`kb_search`, `kb_read`, `kb_write`) | `COMPOSE="podman compose" npm run acceptance:agents` |
 | The New campaign page, the campaign builder, a campaign's **Start a run**, kits kept on control, Git access or the supervisor's staging | `COMPOSE="podman compose" npm run acceptance:campaign` |
-| The dashboard: a page, its script or its styles, New campaign, or the dashboard demo's data. No containers: control runs from the source, in the installed Google Chrome | `npm run acceptance:browser` |
+| The dashboard: a page, its script or its styles, New campaign, the app in `web/`, or the dashboard demo's data. No containers: control runs from the source, in the installed Google Chrome | `npm run acceptance:browser`. It builds the app first; `--only app` checks the app alone, at 1440, 820 and 390 pixels wide, in light and in dark |
 | Machines over SSH, their checks or their install recipes | `COMPOSE="podman compose" npm run acceptance:machine` |
 | Rigs on Kubernetes, including moving a rig onto new images or new CPUs and memory, or control's image | `COMPOSE="podman compose" npm run acceptance:cluster` |
 | Setting rigs up on machines (**Rigs › Add a rig**, the deploy and management scripts, the Quadlet units) or the rig images | `COMPOSE="podman compose" npm run acceptance:rig-deploy` |
@@ -102,7 +104,7 @@ Continuous integration (`.github/workflows/ci.yml`) runs on every pull request, 
 | Job | What it runs |
 | --- | --- |
 | **approval** | Nothing: it waits for a reviewer of the environment `ci` to approve the run, then every other job starts |
-| **checks (Node 22)**, **checks (Node 24)** | `npm ci`, the typecheck, the lint, every test but the judge's and the broker's (`node scripts/test.mjs --part parallel`), the public check, the size check and the import check, on each Node.js version |
+| **checks (Node 22)**, **checks (Node 24)** | `npm ci`, `npm run web:install`, the typecheck, the app's typecheck, the lint, every test but the judge's and the broker's (`node scripts/test.mjs --part parallel`), the public check, the size check and the import check, on each Node.js version |
 | **judge tests (Node 22)**, **judge tests (Node 24)** | The judge's and the broker's tests, one file at a time, on a machine of their own, because they time real processes (`node scripts/test.mjs --part alone`) |
 | **docs site** | `npm run docs:build` and `npm run docs:check` |
 | **secret scan** | gitleaks over the whole history of the commit (see below) |
@@ -149,6 +151,44 @@ node --experimental-strip-types scripts/dev/dashboard-demo/main.ts   # http://12
 ```
 
 One of the demo's runs has a made-up experiment queue: experiments tried, in progress and up next, a lane's idea and a hand-out. The same run has made-up field notes on its **Journal** tab, and the **Knowledge** page shows the demo campaigns' collections. The demo has no campaign saved on control or assigned through it and no owner's messages, so it shows no **Start a run** and no kept messages. The dashboard's tests cover those. The demo's data is one seed, `tests/helpers/demo/`, which the dashboard's tests read too: a change to it shows in the demo, in the screenshots taken from it and in the tests. This site's screenshots come from the demo, because its data is made up: with the demo running, `node scripts/docs/screenshots.mjs` takes them again, the run's **Journal** tab and the **Knowledge** page among them. [The contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md) has more.
+
+### The dashboard's app
+
+The dashboard is being built again as a web app in `web/`: React, shadcn/ui components on Radix, Tailwind CSS and Vite, with the Geist fonts. Control serves its built files at `/next`, beside the pages at `/ui`, until the app has every screen. The app is a client of [control's API](../reference/rest-api.md#the-dashboards-session-and-screens) and of nothing else: every word of a state, a verdict or an event comes from control.
+
+```sh
+npm run web:install    # once: the app's own packages
+npm run web:build      # writes web/dist, which control serves at /next
+node --experimental-strip-types scripts/dev/dashboard-demo/main.ts   # http://127.0.0.1:8810/next
+```
+
+To work on a screen, leave the demo running and start the app's development server in another terminal. It serves the app at `http://127.0.0.1:5173/next/`, draws a change as you save it, and sends the app's calls on to the demo. `THERMITE_WEB_CONTROL` names another control, such as `http://127.0.0.1:8800` for a local stack:
+
+```sh
+npm run web:dev
+```
+
+`http://127.0.0.1:5173/next/dev` is the gallery: every screen and every part on made-up answers, with a switch for each state (full, empty, loading, a failure), for the navigation's two variants and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
+
+| Folder | What it holds |
+| --- | --- |
+| `web/src/app.tsx` | The owner's session, and the table from an address to its screen. The app has no router library: a screen's address is its path under `/next`, and links are plain links (`web/src/nav.ts`) |
+| `web/src/shell.tsx` | The frame every screen is in: the navigation at the left, a sheet on a phone |
+| `web/src/api.ts` | The one client: `call(route)` for a route of `src/core/api/control/`, and `useRead(route)`, which reads again each time control's stream says something changed |
+| `web/src/screens/` | One file for each screen |
+| `web/src/parts/` | Thermite's own parts: the state badge, the list toolbar, tiles, rows, the chart, the states of loading, nothing and a failure, the dialog a thing is added in |
+| `web/src/components/ui/` | Stock shadcn/ui components and their style file, as shadcn's tool writes them, with its licence: `npx shadcn@latest add <component>` in `web/` downloads one from shadcn's registry (the tool is not one of the app's packages). Change the look in `web/src/index.css`, not here |
+| `web/src/dev/` | The gallery and its made-up answers |
+
+To add a screen:
+
+1. Give the screen's data a route with its contract in `src/core/api/control/`: a `Route` whose `answer` is a zod schema. Control registers the route and makes every word the screen shows. The app reads the answer with the same schema, so the two cannot disagree.
+2. Write the screen in `web/src/screens/`, from the parts in `web/src/parts/`. Split it as the run's Overview is: one component that reads (`useRead`) and one that draws what was read, so the gallery can draw it without a control.
+3. Add its address to the table in `web/src/app.tsx`, and its row to the navigation in `web/src/shell.tsx` if it has one.
+4. Add made-up answers for each of its states to `web/src/dev/fixtures.ts`, and the screen to the gallery.
+5. Add the screen to the browser check's list (`scripts/acceptance/lib/browser-app.mjs`), run `npm run acceptance:browser -- --only app`, and look at its screenshots in `.dev/acceptance/browser/app.html`, at each width, in light and in dark.
+
+A screen takes its meaning from four colours and grey (`good`, `needs`, `wrong`, `working`, `none`: `web/src/parts/tone.ts`), which control picks. The page's Content Security Policy allows no inline style: set no `style` attribute in markup, and give a look a class. The licences of the packages in the built app go out with it, as `/next/licenses.md` and `/next/licenses-styles.md`.
 
 ## Keep the repository public-safe
 

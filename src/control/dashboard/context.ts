@@ -1,15 +1,12 @@
-import { createHash, createHmac } from "node:crypto";
 import type { Context } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
+import { getCookie } from "hono/cookie";
 import { buildInfo } from "../../common/build-info.ts";
-import { sameSecret } from "../../common/secrets.ts";
 import { ADD_HOURS_MAX, HOURS_SPENT } from "../../core/contract.ts";
 import { OPEN_ATTEMPTS_MAX } from "../../core/directives.ts";
 import { McpServers } from "../mcp-servers/index.ts";
 import type { PageOptions } from "../pages.ts";
 import { ChatGPTLogins } from "../providers/index.ts";
 import { RigUpdates, rigHasTeachers } from "../rigs/index.ts";
-import { SESSION_DAYS } from "../settings.ts";
 import type { ControlStore } from "../store/index.ts";
 import { infoLabel } from "../ui/campaigns/new/index.ts";
 import { esc, NAV_COOKIE, type Shell, shell } from "../ui/components/index.ts";
@@ -23,7 +20,6 @@ import {
   runCampaign,
 } from "../views/index.ts";
 
-const DAY_MS = 24 * 3_600_000;
 /** What Close run does, in its ⋯ menu on a run's page (goal 087). */
 const CLOSE_RUN_WORDS =
   "The run ends for good: nothing more starts, and it can't be resumed. Its results stay.";
@@ -48,8 +44,6 @@ const OPEN_WORDS =
 /** What control gives its dashboard (control/pages.ts). */
 export type DashboardOptions = PageOptions;
 
-/** A session's ID as control's store keeps it: hashed. */
-export const hashOf = (sid: string) => createHash("sha256").update(sid).digest("hex");
 /** A run's campaign, as the views name it (a run without one is its own). */
 export const campaignOfRun = (vs: RigView[], rig: string, run: string) => {
   const r = vs.find((u) => u.id === rig)?.runs.find((x) => x.id === run);
@@ -92,38 +86,13 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       offlineAfterMs: opts.offlineAfterMs,
     });
   updates.endUnfinished();
-  // Keyed by control's own signing key and the owner's credential: stable across restarts, void
-  // once the token changes, and not derivable from the token's hash alone (which is not secret).
-  const tokenKey = createHash("sha256")
-    .update(`thermite-ui\0${opts.privateKeyPem}\0${opts.admin.hex}`)
-    .digest();
-  const tokenFp = createHmac("sha256", tokenKey).update("session-fingerprint").digest("hex");
-  const csrfOf = (sid: string) =>
-    createHmac("sha256", tokenKey).update(`csrf\0${sid}`).digest("hex");
-  const sessionMs = (opts.sessionDays ?? SESSION_DAYS) * DAY_MS;
-  const cookie = (c: Ctx, sid: string) =>
-    setCookie(c, "thermite_session", sid, {
-      httpOnly: true,
-      sameSite: "Strict",
-      path: "/ui",
-      maxAge: Math.floor(sessionMs / 1000),
-      // Behind a proxy that ends TLS, the proxy's header says the owner's side is HTTPS.
-      secure:
-        new URL(c.req.url).protocol === "https:" || c.req.header("x-forwarded-proto") === "https",
-    });
-  const sessionOf = (c: Ctx) => {
-    const sid = getCookie(c, "thermite_session");
-    if (!sid) return undefined;
-    const s = store.uiSessions.get(hashOf(sid));
-    const now = Date.now();
-    if (!s || s.expiresAt <= now || !sameSecret(s.tokenFp, tokenFp)) return undefined;
-    // Renewed at most once a day, so a session in use does not run out.
-    if (s.expiresAt - now < sessionMs - DAY_MS) {
-      store.uiSessions.extend(hashOf(sid), now + sessionMs);
-      cookie(c, sid);
-    }
-    return sid;
-  };
+  // The owner's sessions, which these pages share with the app at /next and the owner's routes
+  // of /v1 (api/session.ts).
+  const sessions = opts.sessions;
+  const { tokenFp, sessionMs } = sessions;
+  const csrfOf = (sid: string) => sessions.csrfOf(sid);
+  const cookie = (c: Ctx, sid: string) => sessions.cookie(c, sid);
+  const sessionOf = (c: Ctx) => sessions.sessionOf(c);
   const csrf = (c: Ctx) => csrfOf(sessionOf(c) ?? "");
   const parts = opts.parts;
   const views = parts.views;
@@ -297,6 +266,7 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
     control,
     offlineAfterMs,
     updates,
+    sessions,
     tokenFp,
     csrfOf,
     sessionMs,

@@ -348,6 +348,8 @@ const otherFiles = [
   ...walk(join(root, "tests/stand-ins"), /.*/),
   ...walk(join(root, "scripts"), /\.(mjs|ts|sh)$/),
   ...["compose.yaml", "compose.lifecycle.yaml"].map((f) => join(root, f)),
+  // The dashboard's app reads a setting of its own for its development server.
+  join(root, "web/vite.config.ts"),
 ].filter((f) => existsSync(f) && !f.endsWith("docs-check.mjs"));
 // QWEN_ was the model settings' prefix in Thermite's first deployment. The code reads none of
 // those names now, so a page that still names one fails as a setting the code does not read.

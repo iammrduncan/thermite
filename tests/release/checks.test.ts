@@ -250,6 +250,8 @@ const COPIES: Record<"control" | "harness" | "supervisor", string[]> = {
     "COPY --from=build /src/package.json ./",
     "COPY --from=control-modules /src/node_modules ./node_modules",
     "COPY --from=build /src/dist ./dist",
+    // The dashboard's app, built in a stage of its own (goal 243).
+    "COPY --from=web /src/web/dist ./web/dist",
     "COPY --from=kubectl /kubectl /usr/local/bin/kubectl",
   ],
   harness: [

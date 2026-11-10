@@ -19,6 +19,7 @@ import type { SecretBox } from "../secrets.ts";
 import type { ControlStore } from "../store/index.ts";
 import type { FiguresAsker } from "../system/index.ts";
 import { checkRig, recheckRefusals } from "../versions.ts";
+import { OwnerSessions } from "./session.ts";
 
 /**
  * What control's API sections share: control's credentials and options, who may call (the owner's
@@ -89,6 +90,8 @@ export interface ControlOptions {
   kits?: KitRepos | undefined;
   /** Where control keeps the exports rigs send it (none: it takes none). */
   exportsDir?: string | undefined;
+  /** Where the dashboard app's built files are (default: `web/dist` beside the code). */
+  webDir?: string | undefined;
   /** The knowledge base's files in control's state, which the owner downloads (none: none are served). */
   kbFiles?: KbFiles | undefined;
   /** How the new-campaign page reads a project's repository (tests give their own). */
@@ -176,7 +179,9 @@ export interface ApiContext {
   };
   /** What the dashboard, REST and MCP share, made once (parts.ts). */
   parts: ControlParts;
-  /** The owner's token: what guards the owner's routes. */
+  /** The owner's sign-in sessions, which /ui, /next and the owner's routes here share. */
+  sessions: OwnerSessions;
+  /** The owner's token, or the owner's session: what guards the owner's routes. */
   admin: MiddlewareHandler;
   /** A rig's token, or its tunnel: what guards a rig's own calls, with its version check. */
   rigAuth: MiddlewareHandler;
@@ -244,10 +249,21 @@ export function apiContext(
     throw new Error("the admin, operator, agent and read tokens must all be different");
   // Who each guard let a request through as, for the audit log's entries of what it then refused.
   const callers = new WeakMap<Context, string>();
+  const sessions = new OwnerSessions(store, owner, privateKeyPem, opts.sessionDays);
+  // The owner's token, as a script or the command line sends it; or the owner's session, as the
+  // dashboard's app sends it, with the session's token on every change (api/session.ts).
+  const ownerOf = (c: Context): "owner:api" | "owner:ui" | Response => {
+    const token = bearer(c.req.header("authorization"));
+    if (owner.matches(token)) return "owner:api";
+    // A request with a token that is not the owner's is refused as before, whatever its cookie.
+    if (token) return c.json({ error: "unauthorized" }, 401);
+    const session = sessions.takes(c);
+    return session.ok ? "owner:ui" : c.json({ error: session.error }, session.status);
+  };
   const admin: MiddlewareHandler = async (c, next) => {
-    if (!owner.matches(bearer(c.req.header("authorization"))))
-      return c.json({ error: "unauthorized" }, 401);
-    callers.set(c, "owner:api");
+    const who = ownerOf(c);
+    if (typeof who !== "string") return who;
+    callers.set(c, who);
     await next();
   };
   // A rig's token was made by control when the rig was enrolled: control keeps its hash only.
@@ -290,8 +306,12 @@ export function apiContext(
   // Metrics: the read token is enough (a scraper should not hold the owner's credential).
   const reader: MiddlewareHandler = async (c, next) => {
     const t = bearer(c.req.header("authorization"));
-    if (!owner.matches(t) && !creds.read?.matches(t)) return c.json({ error: "unauthorized" }, 401);
-    callers.set(c, owner.matches(t) ? "owner:api" : "reader:api");
+    if (creds.read?.matches(t)) callers.set(c, "reader:api");
+    else {
+      const who = ownerOf(c);
+      if (typeof who !== "string") return who;
+      callers.set(c, who);
+    }
     await next();
   };
   return {
@@ -303,6 +323,7 @@ export function apiContext(
     viewOpts,
     creds,
     parts,
+    sessions,
     admin,
     rigAuth,
     reader,

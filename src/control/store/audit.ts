@@ -151,6 +151,15 @@ export class AuditLog extends StorePart {
   }
 
   /**
+   * The newest entry's number, 0 with none: it moves with every change the owner, an agent or
+   * control makes, so the dashboard's stream can tell that something changed.
+   */
+  newestId(): number {
+    const row = this.db.prepare("select max(id) as id from audit").get() as Row | undefined;
+    return Number(row?.id ?? 0);
+  }
+
+  /**
    * A refusal of a rig's or a token's call, written as add writes an entry, but once: a repeat
    * (the same actor, action and body, so the same route and reason) adds no entry. It counts on
    * the first one, and moves that one's last time.

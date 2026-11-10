@@ -45,7 +45,7 @@ const PATTERN_NEXT = /^[*<{$]/;
 /** The files whose comments are read for paths. */
 export function codeFile(f: string): boolean {
   return (
-    /^(?:src|tests|scripts|containers|kits|\.github)\/.*\.(?:ts|mts|mjs|js|cjs|sh|ya?ml|py)$/.test(
+    /^(?:src|tests|scripts|containers|kits|web|\.github)\/.*\.(?:ts|tsx|mts|mjs|js|cjs|sh|ya?ml|py)$/.test(
       f,
     ) || /(?:^|\/)Containerfile$/.test(f)
   );
@@ -62,9 +62,13 @@ export function pageFile(f: string): boolean {
   );
 }
 
-/** The files whose exports must be named elsewhere: production TypeScript. */
+/**
+ * The files whose exports must be named elsewhere: production TypeScript, and the dashboard's
+ * app. The app's stock components (web/src/components/ui/, written by the shadcn tool) are kept
+ * as the tool writes them, with every export.
+ */
 export function productionFile(f: string): boolean {
-  return /^src\/.*\.ts$/.test(f);
+  return /^src\/.*\.ts$/.test(f) || /^web\/src\/(?!components\/ui\/).*\.tsx?$/.test(f);
 }
 
 /** `export { a } from "./a.ts"` and `export * from …`: they pass names on, and use none. */
@@ -99,7 +103,7 @@ export function namesOf(text: string): Set<string> {
 
 /** The exports of production files that no other file names. */
 export function unusedExports(files: readonly string[], read: (f: string) => string): Finding[] {
-  const code = files.filter((f) => /\.(?:ts|mts|mjs|js|cjs)$/.test(f));
+  const code = files.filter((f) => /\.(?:ts|tsx|mts|mjs|js|cjs)$/.test(f));
   const where = new Map<string, string[]>();
   for (const f of code)
     for (const n of namesOf(read(f))) {

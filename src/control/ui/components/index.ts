@@ -31,7 +31,7 @@ export { attemptGuards, championGuardLine, guardCharts } from "./guards.ts";
 export { APPLE_TOUCH_ICON, FAVICON_ICO, FAVICON_SVG, ICON_LINKS } from "./icons.ts";
 export { MD_CORE_JS, mdHtml } from "./markdown.ts";
 export { metricsBlock } from "./metrics.ts";
-export { card } from "./need-card.ts";
+export { card, type NeedWords, wordsOf } from "./need-card.ts";
 
 /** Everything the dashboard writes into HTML goes through esc (rig data is never markup). */
 export function esc(v: unknown): string {

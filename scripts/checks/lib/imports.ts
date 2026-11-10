@@ -11,6 +11,11 @@
 // module is every folder under a part but the namespaces below, and every folder with an
 // index.ts. Nested modules are reached through the outermost one that does not hold the importer;
 // inside a module, files import each other directly. The exceptions never excuse this rule.
+//
+// And the dashboard's app (`web/`) is a client of control's API alone (CONVENTIONS.md, "The
+// dashboard"): of this repository it imports only contracts in `src/core/`, each contract it
+// loads runs in a browser (no Node module, no package but zod), and production code never imports
+// the app. The exceptions never excuse these rules either.
 
 /** The exceptions, from the repository's root. */
 export const EXCEPTIONS_PATH = "scripts/import-exceptions.json";
@@ -49,7 +54,17 @@ export const NAMESPACES: readonly string[] = [
   "src/core/link",
 ];
 
-export type Rule = "part" | "core-io" | "page" | "tests" | "folder";
+export type Rule =
+  | "part"
+  | "core-io"
+  | "page"
+  | "tests"
+  | "folder"
+  | "app-out"
+  | "app-browser"
+  | "app-in";
+/** The rules no exception excuses. */
+const NEVER_EXCUSED: readonly Rule[] = ["folder", "app-out", "app-browser", "app-in"];
 export interface Broken {
   file: string;
   /** The file imported, from the repository's root, or a module name such as node:fs. */
@@ -57,6 +72,27 @@ export interface Broken {
   rule: Rule;
   /** For the folder rule: the index.ts to import instead. */
   index?: string;
+  /** For a contract the app loads: the file of the app that reaches it. */
+  via?: string;
+}
+
+/** The dashboard's app, from the repository's root. */
+const APP = "web/";
+/** Where the app's own code is, which its `@/` imports name. */
+const APP_SOURCE = "web/src/";
+/** The contracts, which the app's `@core/` imports name. */
+const CONTRACTS = "src/core/";
+/** The packages a contract the app loads may import: they run in a browser. */
+const BROWSER_PACKAGES: readonly string[] = ["zod"];
+
+/**
+ * The file of the repository one of the app's imports names, from the repository's root: its
+ * aliases (web/vite.config.ts) and relative paths. None for a package.
+ */
+export function appTarget(file: string, spec: string): string | null {
+  if (spec.startsWith("@core/")) return CONTRACTS + spec.slice("@core/".length);
+  if (spec.startsWith("@/")) return APP_SOURCE + spec.slice("@/".length);
+  return spec.startsWith(".") ? resolve(file, spec) : null;
 }
 
 /**
@@ -139,6 +175,13 @@ export function broken(
   spec: string,
   indexed: ReadonlySet<string> = new Set(),
 ): Broken | null {
+  if (file.startsWith(APP)) {
+    // The app: its own files, its packages, and of the repository the contracts alone.
+    const target = appTarget(file, spec);
+    return !target || target.startsWith(APP) || target.startsWith(CONTRACTS)
+      ? null
+      : { file, target, rule: "app-out" };
+  }
   const from = partOf(file);
   if (!from) return null;
   if (!spec.startsWith(".")) {
@@ -149,6 +192,7 @@ export function broken(
   const target = resolve(file, spec);
   if (target.startsWith("tests/") || target.startsWith("scripts/"))
     return { file, target, rule: "tests" };
+  if (target.startsWith(APP)) return { file, target, rule: "app-in" };
   const to = partOf(target);
   if (to && to !== from && !(SHARED[from] ?? FOR_PARTS).includes(to))
     return { file, target, rule: "part" };
@@ -165,8 +209,11 @@ export function scan(files: readonly string[], read: (file: string) => string): 
     files.filter((f) => f.endsWith("/index.ts")).map((f) => f.slice(0, -"/index.ts".length)),
   );
   const out: Broken[] = [];
+  const have = new Set(files);
+  /** The contracts the app loads, each with the file of the app that reaches it first. */
+  const loaded = new Map<string, string>();
   for (const file of files) {
-    if (!/\.(?:ts|mts|cts)$/.test(file)) continue;
+    if (!/\.(?:ts|mts|cts|tsx)$/.test(file)) continue;
     const seen = new Set<string>();
     for (const spec of importsOf(read(file))) {
       const b = broken(file, spec, indexed);
@@ -174,6 +221,19 @@ export function scan(files: readonly string[], read: (file: string) => string): 
         seen.add(b.target);
         out.push(b);
       }
+      const target = file.startsWith(APP) ? appTarget(file, spec) : null;
+      if (target?.startsWith(CONTRACTS) && !loaded.has(target)) loaded.set(target, file);
+    }
+  }
+  // Each contract the app loads, and each one those import in turn, must run in a browser.
+  for (const [file, via] of loaded) {
+    if (!have.has(file)) continue;
+    for (const spec of new Set(importsOf(read(file)))) {
+      if (spec.startsWith(".")) {
+        const target = resolve(file, spec);
+        if (target.startsWith(CONTRACTS) && !loaded.has(target)) loaded.set(target, via);
+      } else if (!BROWSER_PACKAGES.some((p) => spec === p || spec.startsWith(`${p}/`)))
+        out.push({ file, target: spec, rule: "app-browser", via });
     }
   }
   return out.sort((a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target));
@@ -188,7 +248,9 @@ export function compare(
     Object.entries(exceptions).flatMap(([file, ts]) => ts.map((t) => `${file} ${t}`)),
   );
   const now = new Set(found.map((b) => `${b.file} ${b.target}`));
-  const added = found.filter((b) => b.rule === "folder" || !listed.has(`${b.file} ${b.target}`));
+  const added = found.filter(
+    (b) => NEVER_EXCUSED.includes(b.rule) || !listed.has(`${b.file} ${b.target}`),
+  );
   const gone = [...listed]
     .filter((k) => !now.has(k))
     .map((k) => {
@@ -198,11 +260,11 @@ export function compare(
   return { added, gone };
 }
 
-/** The exceptions now: what is broken, by file, sorted; never the folder rule's. */
+/** The exceptions now: what is broken, by file, sorted; never a rule's that nothing excuses. */
 export function listOf(found: readonly Broken[]): Exceptions {
   const out: Exceptions = {};
   for (const b of found) {
-    if (b.rule === "folder") continue;
+    if (NEVER_EXCUSED.includes(b.rule)) continue;
     const targets = out[b.file] ?? [];
     targets.push(b.target);
     out[b.file] = targets;
@@ -241,6 +303,12 @@ const RULE_WORDS: Record<Rule, string> = {
   page: "a domain module imports page code. Move the shared word or rule out of control/ui/, or move the page code into it",
   tests: "production code imports tests or scripts",
   folder: "code outside a folder that is a module imports a file inside it",
+  "app-out":
+    "the dashboard's app imports code of this repository that is not a contract. The app is a client of control's API alone: of the repository it imports only src/core/ (as @core/…). Give the app what it needs through a route, with its contract in src/core/api/",
+  "app-browser":
+    "a contract the dashboard's app loads must run in a browser: it imports no Node module and no package but zod. Keep what needs it in a file the app does not load",
+  "app-in":
+    "production code imports the dashboard's app. Control serves the app's built files; it never imports its source",
 };
 
 /** One broken import in words, with what to do. */
@@ -249,5 +317,7 @@ export function brokenText(b: Broken): string {
     const folder = (b.index ?? "").slice(0, -"/index.ts".length);
     return `${b.file} imports ${b.target}: ${RULE_WORDS.folder}. Import the folder's interface, ${b.index}, instead, and export what this file needs there. If ${folder}/ has no index.ts, give it one. A folder whose files are each an entry or a contract of their own is a namespace instead: name it in NAMESPACES in scripts/checks/lib/imports.ts (CONVENTIONS.md, "Folders and names").`;
   }
+  if (b.rule === "app-out" || b.rule === "app-browser" || b.rule === "app-in")
+    return `${b.file} imports ${b.target}${b.via ? ` (the app loads it through ${b.via})` : ""}: ${RULE_WORDS[b.rule]} (CONVENTIONS.md, "The dashboard").`;
   return `${b.file} imports ${b.target}: ${RULE_WORDS[b.rule]} (CONVENTIONS.md, "The parts and how they import").`;
 }

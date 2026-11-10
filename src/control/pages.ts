@@ -1,5 +1,6 @@
-import type { Hono } from "hono";
+import type { Hono, MiddlewareHandler } from "hono";
 import type { BuildInfo } from "../core/version.ts";
+import type { OwnerSessions } from "./api/index.ts";
 import type { Credential } from "./credential.ts";
 import type { ExportFiles } from "./exports.ts";
 import type { KbFiles } from "./kb/index.ts";
@@ -24,6 +25,10 @@ import type { ControlStore } from "./store/index.ts";
 export interface PageOptions {
   /** The owner's credential (the dashboard signs in with its token). */
   admin: Credential;
+  /** The owner's sign-in sessions, which the pages share with the app and the owner's routes of /v1. */
+  sessions: OwnerSessions;
+  /** What guards an owner's route of /v1 that the pages add: the owner's token or session. */
+  ownerOnly: MiddlewareHandler;
   privateKeyPem: string;
   staleAfterMs: number;
   driver?: DeploymentDriver | undefined;

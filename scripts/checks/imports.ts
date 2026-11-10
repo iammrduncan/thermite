@@ -2,8 +2,10 @@
 // The import-rule check (CONVENTIONS.md, "The parts and how they import"): no new import breaks
 // the rule, and the list of today's exceptions, scripts/import-exceptions.json, only shrinks. It
 // also holds the folder rule (CONVENTIONS.md, "Folders and names"): code outside a folder that is
-// a module imports its index.ts, with no exceptions. The rules, the namespaces the folder rule
-// leaves out, and their words are in scripts/checks/lib/imports.ts.
+// a module imports its index.ts, with no exceptions; and the dashboard's rule (CONVENTIONS.md,
+// "The dashboard"): the app in web/ imports only contracts of src/core/ that run in a browser,
+// with no exceptions. The rules, the namespaces the folder rule leaves out, and their words are
+// in scripts/checks/lib/imports.ts.
 //
 //   npm run check:imports               check; exits 1 on a finding
 //   npm run check:imports -- --lower    drop the exceptions whose import is gone (never adds)
@@ -31,7 +33,7 @@ const listFile = join(root, EXCEPTIONS_PATH);
 
 const files = execFileSync(
   "git",
-  ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "src"],
+  ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "src", "web"],
   { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 )
   .split("\0")

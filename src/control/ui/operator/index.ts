@@ -1,5 +1,6 @@
 import type { ControlStore, Decision } from "../../store/index.ts";
 import type { RigView } from "../../views/index.ts";
+import type { NeedWords } from "../components/index.ts";
 import { stuckNeeds } from "../stuck.ts";
 import { busKeyNeeds, busUsersNeeds, heldCommandNeeds, offBusNeeds } from "./bus.ts";
 import { controlDiskNeeds, diskNeeds, drainNeeds } from "./hold.ts";
@@ -84,6 +85,8 @@ export interface Need {
   at?: string | undefined;
   /** Its row in a list of decisions. */
   html: string;
+  /** The same row in plain words, for the app's list (goal 243). */
+  row?: NeedWords | undefined;
   /**
    * The owner's choice is sent and the rig has not refused it: the lists leave the item out at
    * once, and only the change's own page still shows it. A refused choice, or a new wait, brings

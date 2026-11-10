@@ -8,7 +8,8 @@
 // events in its events stream: the smoke checks that the rig's events are there, and that control
 // applied the stream to its end. The rig's supervisor sends its reports and live lines over the
 // bus, over TLS, and the smoke checks that they reached control that way. It prints how long
-// events took to reach control.
+// events took to reach control. It also checks that control's image serves the dashboard's app
+// at /next (goal 243).
 import {
   api,
   assign,
@@ -104,6 +105,26 @@ try {
     60_000,
   );
   console.log("control's health:", JSON.stringify(health));
+  // Control's image holds the dashboard's app, built in a stage of its own, and serves it at
+  // /next: the page with a nonce and a policy with no inline script or style, its script, and
+  // the licences of what is in it.
+  const page = await fetch(`${control}/next`);
+  const policy = page.headers.get("content-security-policy") ?? "";
+  const script = /src="(\/next\/assets\/[^"]+\.js)"/.exec(await page.text())?.[1];
+  if (page.status !== 200 || !script || !/'nonce-/.test(policy) || /unsafe-inline/.test(policy))
+    throw new Error(
+      `control's image does not serve the dashboard's app at /next: status ${page.status}, policy ${policy}`,
+    );
+  for (const { path, type } of [
+    { path: script, type: /^text\/javascript/ },
+    { path: "/next/licenses.md", type: /^text\/plain/ },
+    { path: "/next/licenses-styles.md", type: /^text\/plain/ },
+  ]) {
+    const res = await fetch(`${control}${path}`);
+    if (!res.ok || !type.test(res.headers.get("content-type") ?? ""))
+      throw new Error(`control's image does not serve ${path}: status ${res.status}`);
+  }
+  console.log("control's image serves the dashboard's app at /next:", script);
   await assign(env, "smoke-1");
   console.log("assign_campaign delivered and accepted");
   const a = submit(

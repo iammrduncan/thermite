@@ -117,14 +117,15 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 
 ### The dashboard
 
-- The dashboard is a web app, built with what the maintainers' fxbot is built with: React, shadcn/ui's components, Tailwind CSS and Geist (the owner, 2026-11-10; [the UI refresh guide](docs/plan/ui-refresh-guide.md)). It is a project of its own, outside `src/`, and control serves its built files.
+- The dashboard is a web app, built with what the maintainers' fxbot is built with: React, shadcn/ui's components, Tailwind CSS and Geist (the owner, 2026-11-10; [the UI refresh guide](docs/plan/ui-refresh-guide.md)). It is a project of its own, in `web/`, with its own packages, and control serves its built files (at `/next`, until it takes the place of the pages at `/ui`).
 - Frontend complexity grows faster than backend complexity, so resist it. The app:
-  - imports `core`'s contracts alone, and reaches control only through its API;
+  - imports `core`'s contracts alone (as `@core/…`), and reaches control only through its API, with one client (`web/src/api.ts`). `npm run check:imports` holds it, with no exceptions: of this repository the app imports only `src/core/`, each contract it loads runs in a browser (no Node.js module, no package but zod), and nothing in `src/` imports the app;
   - holds no rule of the product, and no words for states, verdicts or events: control checks, refuses and words, and the app shows;
-  - uses shadcn's components as its tool makes them, with few parts of its own, each used on more than one screen;
+  - uses shadcn's components as its tool makes them (`web/src/components/ui/`, never edited by hand), with few parts of its own (`web/src/parts/`), each used on more than one screen;
+  - sets no inline style in markup: the page's Content Security Policy allows none, so a look is a class;
   - adds no router, data, state or form library before its second real use.
 - Every screen follows [the rules for screens](docs/plan/ui-refresh-guide.md#4-the-rules-for-screens), and is chosen from a mockup.
-- Until the new dashboard covers every screen, the pages drawn on the server (`src/control/ui/` and `src/control/dashboard/`) are the dashboard in use. From the day the new dashboard's build starts (goal 243), they take fixes only. A browser script there stays a string in its page module; server constants go into it with `JSON.stringify`, and a lint and a parse test cover it.
+- Until the new dashboard covers every screen, the pages drawn on the server (`src/control/ui/` and `src/control/dashboard/`) are the dashboard in use. The new dashboard's build started with goal 243, so they take fixes only. A browser script there stays a string in its page module; server constants go into it with `JSON.stringify`, and a lint and a parse test cover it.
 
 ### New tools and patterns
 
