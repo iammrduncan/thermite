@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import { RunAsServer } from "../../../../src/common/run-as/index.ts";
 import { ADVISOR_RUNS_ENV } from "../../../../src/core/advisor-runs.ts";

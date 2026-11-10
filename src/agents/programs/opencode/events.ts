@@ -85,13 +85,14 @@ function stepUsage(t: OpencodeTally, e: Event): CallUsage | undefined {
   const end = num(e.timestamp);
   const start = s?.start ?? end ?? Date.now();
   const read = num(k.cache?.read);
-  const write = num(k.cache?.write) ?? 0;
+  const write = num(k.cache?.write);
   const reasoning = num(k.reasoning);
   return callUsage({
     at: start,
     calls: 1,
-    tokensIn: (k.input ?? 0) + (read !== undefined ? read + write : 0),
+    tokensIn: (k.input ?? 0) + (read ?? 0) + (write ?? 0),
     cachedIn: read ?? null,
+    cacheWriteIn: write ?? null,
     tokensOut: (k.output ?? 0) + (reasoning ?? 0),
     reasoning: reasoning ?? null,
     firstTokenMs:

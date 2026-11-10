@@ -4,6 +4,7 @@ import {
   CallUsage,
   callUsage,
   costOf,
+  isFree,
   knownTimeZone,
   type PodSpendRow,
   quantile,
@@ -51,6 +52,7 @@ describe("model usage records", () => {
       tokens_in: 1200,
       cached_in: 1200,
       uncached_in: 0,
+      cache_write_in: null,
       tokens_out: 50,
       reasoning: 50,
       first_token_ms: 0,
@@ -64,6 +66,7 @@ describe("model usage records", () => {
     assert.equal(u.calls, null);
     assert.equal(u.cached_in, null);
     assert.equal(u.uncached_in, null);
+    assert.equal(u.cache_write_in, null);
     assert.equal(u.reasoning, null);
     assert.equal(u.first_token_ms, null);
     assert.equal(u.call_ms, null);
@@ -81,6 +84,11 @@ describe("model usage records", () => {
     assert.equal(CallUsage.safeParse({ ...good, cached_in: null }).success, false);
     assert.equal(CallUsage.safeParse({ ...good, reasoning: 11 }).success, false);
     assert.equal(CallUsage.safeParse({ ...good, tokens_in: -1 }).success, false);
+    // Writes are part of the input not read from the cache.
+    assert.ok(CallUsage.safeParse({ ...good, cache_write_in: 60 }).success);
+    assert.equal(CallUsage.safeParse({ ...good, cache_write_in: 61 }).success, false);
+    // A record from before the count existed parses.
+    assert.ok(CallUsage.safeParse({ ...good, cache_write_in: undefined }).success);
   });
 });
 
@@ -118,7 +126,13 @@ describe("model usage sums", () => {
     // Speeds 100, 50 and 25 tokens a second.
     assert.deepEqual(s.out_per_s, { median: 50, p10: 30, p90: 90 });
     assert.equal(s.first_token_ms, 300);
-    assert.deepEqual(s.not_reported, { cached: 3, reasoning: 4, time: 1, first_token: 3 });
+    assert.deepEqual(s.not_reported, {
+      cached: 3,
+      cache_write: 5,
+      reasoning: 4,
+      time: 1,
+      first_token: 3,
+    });
   });
 
   test("with no record reporting a figure, its sum is null, never 0", () => {
@@ -126,6 +140,7 @@ describe("model usage sums", () => {
     assert.equal(s.cached_in, null);
     assert.equal(s.uncached_in, null);
     assert.equal(s.cached_share, null);
+    assert.equal(s.cache_write_in, null);
     assert.equal(s.reasoning, null);
     assert.equal(s.out_per_s, null);
     assert.equal(s.call_ms, null);
@@ -134,6 +149,7 @@ describe("model usage sums", () => {
     assert.equal(none.records, 0);
     assert.equal(none.tokens_in, 0);
     assert.equal(none.cached_in, null);
+    assert.equal(none.cache_write_in, null);
   });
 
   test("periods: today from midnight UTC, the last 7 days, or all", () => {
@@ -249,7 +265,7 @@ describe("model usage cost", () => {
   test("a record's tokens at its price, by part; cached input at the input price when it has none", () => {
     assert.deepEqual(
       costOf({ tokens_in: 1_000_000, cached_in: 600_000, tokens_out: 100_000 }, price),
-      { input: 1.2, cached_input: 0.18, output: 1.5 },
+      { input: 1.2, cache_write: 0, cached_input: 0.18, output: 1.5 },
     );
     const c = costOf(
       { tokens_in: 1_000_000, cached_in: 600_000, tokens_out: 0 },
@@ -258,6 +274,56 @@ describe("model usage cost", () => {
     assert.equal(c.cached_input, 1.8);
     // Cache not reported: every input token at the input price.
     assert.equal(costOf({ tokens_in: 1_000_000, cached_in: null, tokens_out: 0 }, price).input, 3);
+  });
+
+  test("cache writes cost their own price; writes a record does not report are counted, not guessed", () => {
+    const issue = { input: 0.1, cached_input: 0.01, cache_write: 0.125, output: 0.5 };
+    const priced = { kind: "priced" as const, price: issue, source: "list" as const };
+    const tokens = {
+      tokens_in: 211_400_000,
+      cached_in: 202_000_000,
+      tokens_out: 2_600_000,
+    };
+    const c = costOf({ ...tokens, cache_write_in: 9_400_000 }, issue);
+    assert.deepEqual(c, { input: 1.175, cache_write: 1.175, cached_input: 2.02, output: 1.3 });
+    const withWrites = sumUsage([row({ ...tokens, pricing: priced, cache_write_in: 9_400_000 })]);
+    assert.equal(withWrites.cost.usd, 4.495);
+    assert.equal(withWrites.cost.cache_write_usd, 1.175);
+    assert.equal(withWrites.cache_write_in, 9_400_000);
+    assert.equal(withWrites.cost.priced_as_not_written, 0);
+    // The issue's record, which does not say how many tokens it wrote: 0.235 under its provider's bill.
+    const without = sumUsage([row({ ...tokens, pricing: priced })]);
+    assert.equal(without.cost.usd, 4.26);
+    assert.equal(without.cost.cache_write_usd, 0);
+    assert.equal(without.cost.priced_as_not_written, 9_400_000);
+    assert.equal(without.cache_write_in, null);
+    assert.equal(without.not_reported.cache_write, 1);
+    // A write price at the input price has nothing to count as not written.
+    const same = sumUsage([
+      row({ ...tokens, pricing: { ...priced, price: { ...issue, cache_write: 0.1 } } }),
+    ]);
+    assert.equal(same.cost.priced_as_not_written, 0);
+    assert.equal(same.cost.usd, 4.26);
+  });
+
+  test("a record that reports its writes but not its cache reads: its writes are priced as writes, not counted as priced as not cached", () => {
+    const p = { input: 1, cached_input: 0.1, cache_write: 1.25, output: 2 };
+    const pricing = { kind: "priced" as const, price: p, source: "list" as const };
+    // 140 tokens in, 40 of them written to the cache, its cache reads not reported.
+    const r = { tokens_in: 140, cached_in: null, cache_write_in: 40, tokens_out: 0 };
+    assert.deepEqual(costOf(r, p), {
+      input: (100 * 1 + 40 * 1.25) / 1e6,
+      cache_write: (40 * 1.25) / 1e6,
+      cached_input: 0,
+      output: 0,
+    });
+    const s = sumUsage([row({ ...r, pricing })]);
+    // Only the 100 whose price depends on the cache reads it does not report.
+    assert.equal(s.cost.priced_as_not_cached, 100);
+    assert.equal(s.cost.priced_as_not_written, 0);
+    // A record of writes alone: every token's price is known.
+    const writes = sumUsage([row({ ...r, tokens_in: 40, pricing })]);
+    assert.equal(writes.cost.priced_as_not_cached, 0);
   });
 
   test("the sums cost the priced records, count those on a plan or with no price, and add the pods' spend", () => {
@@ -278,6 +344,7 @@ describe("model usage cost", () => {
       input_usd: 1.2,
       cached_input_usd: 0.18,
       output_usd: 1.5,
+      cache_write_usd: 0,
       pod_usd: 0.25,
       priced: 1,
       on_plan: 1,
@@ -287,6 +354,7 @@ describe("model usage cost", () => {
       no_price_tokens: 2200,
       free_tokens: 0,
       priced_as_not_cached: 0,
+      priced_as_not_written: 0,
     });
     // Nothing priced and no pod: no cost, never 0.
     const none = sumUsage([row({ pricing: { kind: "plan" } }), row()]);
@@ -304,6 +372,8 @@ describe("model usage cost", () => {
       price: { input: 0, cached_input: null, output: 0 },
       source: "list" as const,
     };
+    assert.equal(isFree(free.price), true);
+    assert.equal(isFree({ ...free.price, cache_write: 1 }), false);
     const s = sumUsage([
       row({ pricing: free, tokens_in: 500, tokens_out: 50 }),
       // No cache figure, and a cached price below the input price: priced as not cached.

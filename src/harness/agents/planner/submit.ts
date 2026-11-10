@@ -1,4 +1,4 @@
-import { type TSchema, Type } from "@earendil-works/pi-ai";
+import { type TSchema, Type } from "typebox";
 import type { Prompt } from "../../../agents/prompt.ts";
 import { PLAN_LIMITS, type PlannerInput, renderPlanner } from "../../../agents/roles/index.ts";
 import { JOURNAL_FIELD } from "../../../agents/tools/index.ts";

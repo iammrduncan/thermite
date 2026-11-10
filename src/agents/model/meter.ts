@@ -12,6 +12,9 @@ import { type CallUsage, callUsage } from "../../core/usage.ts";
 
 /** A usage key with a number: the provider's answer names cached input tokens. */
 const CACHED = /"(?:cached_tokens|cache_read_input_tokens|prompt_cache_hit_tokens)"\s*:\s*\d/;
+/** The provider's answer names input tokens written to its cache. */
+const WRITTEN =
+  /"(?:cache_write_tokens|cache_creation_input_tokens|cache_write_input_tokens)"\s*:\s*\d/;
 /** The provider's answer names reasoning tokens. */
 const REASONING = /"(?:reasoning_tokens|thinking_tokens)"\s*:\s*\d/;
 
@@ -20,6 +23,7 @@ type Models = ReturnType<typeof createModels>;
 /** What one answer's usage named, as far as the meter has read it. */
 interface Seen {
   cached: boolean;
+  written: boolean;
   reasoning: boolean;
 }
 
@@ -38,7 +42,7 @@ export class PiMeter {
    * model's own text) are escaped there, so they never match.
    */
   readonly fetch: typeof globalThis.fetch = async (input, init) => {
-    const seen: Seen = { cached: false, reasoning: false };
+    const seen: Seen = { cached: false, written: false, reasoning: false };
     this.current = seen;
     const res = await globalThis.fetch(input, init);
     if (!res.body) return res;
@@ -48,6 +52,7 @@ export class PiMeter {
       transform(chunk, ctrl) {
         const text = tail + decoder.decode(chunk, { stream: true });
         if (!seen.cached && CACHED.test(text)) seen.cached = true;
+        if (!seen.written && WRITTEN.test(text)) seen.written = true;
         if (!seen.reasoning && REASONING.test(text)) seen.reasoning = true;
         // A key split between two chunks is found with the next one.
         tail = text.slice(-64);
@@ -93,6 +98,7 @@ export class PiMeter {
         calls: 1,
         tokensIn: u.input + u.cacheRead + u.cacheWrite,
         cachedIn: seen?.cached ? u.cacheRead : null,
+        cacheWriteIn: seen?.written ? u.cacheWrite : null,
         tokensOut: u.output,
         reasoning: seen?.reasoning ? (u.reasoning ?? null) : null,
         firstTokenMs: firstAt !== undefined ? firstAt - start : null,

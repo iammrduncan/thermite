@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { trialBudget } from "../../../src/agents/roles/index.ts";
 import { TrialClock } from "../../../src/harness/agents/trial-clock.ts";
 import { runTrial } from "../../../src/harness/agents/worker/index.ts";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import type { ViewWait } from "../../../../src/agents/pi-view/index.ts";
 import { renderAuditor } from "../../../../src/agents/roles/index.ts";

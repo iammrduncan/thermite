@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";

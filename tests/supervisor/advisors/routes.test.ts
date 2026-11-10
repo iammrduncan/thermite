@@ -292,7 +292,7 @@ process.stdin.on("end", () => {
     chmodSync(bin, 0o755);
     process.env.THERMITE_CLAUDE_BIN = bin;
     const { runAdvisor, AuditAnswer } = await import("../../../src/supervisor/advisors/index.ts");
-    const { Type } = await import("@earendil-works/pi-ai");
+    const { Type } = await import("typebox");
     // The binary's path is read when the module loads: this test file loads it here first.
     const r = await runAdvisor({
       runtime: {

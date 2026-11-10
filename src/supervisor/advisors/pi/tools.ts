@@ -1,5 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { type TSchema, Type } from "@earendil-works/pi-ai";
+import { type TSchema, Type } from "typebox";
 import { kbAgentTools } from "../../../agents/tools/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { PAGE_MAX, SEARCH_MAX } from "../../../core/api/harness/research.ts";

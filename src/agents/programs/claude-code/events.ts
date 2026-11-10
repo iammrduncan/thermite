@@ -118,6 +118,7 @@ export function claudeResultUsage(result: unknown, calls: number | null): CallUs
     calls,
     tokensIn: tokensIn(e.usage),
     cachedIn: num(e.usage.cache_read_input_tokens) ?? null,
+    cacheWriteIn: num(e.usage.cache_creation_input_tokens) ?? null,
     tokensOut: e.usage.output_tokens ?? 0,
     reasoning: null,
     firstTokenMs:
@@ -134,12 +135,16 @@ export function closeClaudeRun(t: ClaudeTally): void {
   if (t.run.size) {
     const all = [...t.run.values()];
     const has = all.every((u) => typeof u.cache_read_input_tokens === "number");
+    const hasWrites = all.every((u) => typeof u.cache_creation_input_tokens === "number");
     t.calls.push(
       callUsage({
         at: t.runAt ?? Date.now(),
         calls: t.run.size,
         tokensIn: all.reduce((n, u) => n + tokensIn(u), 0),
         cachedIn: has ? all.reduce((n, u) => n + (u.cache_read_input_tokens ?? 0), 0) : null,
+        cacheWriteIn: hasWrites
+          ? all.reduce((n, u) => n + (u.cache_creation_input_tokens ?? 0), 0)
+          : null,
         tokensOut: all.reduce((n, u) => n + (u.output_tokens ?? 0), 0),
         reasoning: null,
         firstTokenMs: null,

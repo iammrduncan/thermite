@@ -163,12 +163,13 @@ export function registerModelPrice(tools: ToolContext): void {
       {
         title: "Set a model's price",
         description:
-          "Sets the price of a provider's model in Providers, for the cost model_usage gives, when the provider's model list gives none: input, cached_input (optional; null or left out: the input price) and output, each in US dollars per million tokens. clear: true removes it. Every call of the model is costed at it, the earlier ones too. Refused in words: a subscription's provider (its calls are on its plan), a model the provider does not have, and a model whose list gives a price (that one is used). The providers tool lists the prices in use.",
+          "Sets the price of a provider's model in Providers, for the cost model_usage gives, when the provider's model list gives none: input, cached_input (optional; null or left out: the input price), cache_write (optional; null or left out: the input price) and output, each in US dollars per million tokens. clear: true removes it. Every call of the model is costed at it, the earlier ones too. Refused in words: a subscription's provider (its calls are on its plan), a model the provider does not have, and a model whose list gives a price (that one is used). The providers tool lists the prices in use.",
         inputSchema: {
           provider: z.string().min(1).max(100),
           model: z.string().min(1).max(200),
           input: z.number().min(0).max(1_000_000).optional(),
           cached_input: z.number().min(0).max(1_000_000).nullable().optional(),
+          cache_write: z.number().min(0).max(1_000_000).nullable().optional(),
           output: z.number().min(0).max(1_000_000).optional(),
           clear: z.literal(true).optional(),
         },

@@ -30,12 +30,10 @@ ARG KUBECTL_VERSION=v1.37.1
 FROM ${NODE_IMAGE} AS build
 WORKDIR /src
 COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
-# It patches Pi's streaming tool-call parse after the install (goal 140).
-COPY scripts/patch-pi-ai.mjs ./scripts/
 # No package's install script runs here: this stage has no compiler for node-pty's native part,
 # which the harness's final stage and the supervisor's pty stage build (below), and no other
 # package Thermite runs needs its own.
-RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
+RUN npm ci --no-fund --no-audit --ignore-scripts
 COPY src ./src
 # node-pty's prebuilt modules, for other systems, and its Windows parts stay out of what the images
 # copy: each image that runs the terminal host builds its own module. So do pi-tui's prebuilt

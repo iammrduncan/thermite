@@ -83,6 +83,8 @@ export const CallUsage = z
     cached_in: count.nullable(),
     /** Input tokens not read from the cache (tokens_in less cached_in); null with cached_in. */
     uncached_in: count.nullable(),
+    /** Input tokens written to the provider's cache; null or left out: not reported. */
+    cache_write_in: count.nullable().optional(),
     tokens_out: count,
     /** Output tokens spent on reasoning (part of tokens_out); null: not reported. */
     reasoning: count.nullable(),
@@ -103,7 +105,14 @@ export const CallUsage = z
   )
   .refine((u) => u.reasoning === null || u.reasoning <= u.tokens_out, {
     message: "reasoning is part of tokens_out",
-  });
+  })
+  .refine(
+    (u) =>
+      u.cache_write_in === null ||
+      u.cache_write_in === undefined ||
+      u.cache_write_in <= u.tokens_in - (u.cached_in ?? 0),
+    { message: "cache_write_in is part of the input not read from the cache" },
+  );
 export type CallUsage = z.infer<typeof CallUsage>;
 
 /** Who made the calls, and where: what code adds to a harness's measure. */
@@ -146,6 +155,7 @@ export const ModelCallBody = z.object({
   tokens_in: count,
   cached_in: count.nullable(),
   uncached_in: count.nullable(),
+  cache_write_in: count.nullable().optional(),
   tokens_out: count,
   reasoning: count.nullable(),
   first_token_ms: ms.nullable(),
@@ -165,6 +175,7 @@ export function callUsage(u: {
   calls?: number | null | undefined;
   tokensIn: number;
   cachedIn?: number | null | undefined;
+  cacheWriteIn?: number | null | undefined;
   tokensOut: number;
   reasoning?: number | null | undefined;
   firstTokenMs?: number | null | undefined;
@@ -173,6 +184,8 @@ export function callUsage(u: {
   const tokensIn = whole(u.tokensIn);
   const tokensOut = whole(u.tokensOut);
   const cached = known(u.cachedIn);
+  const written = known(u.cacheWriteIn);
+  const uncached = tokensIn - Math.min(cached ?? 0, tokensIn);
   const reasoning = known(u.reasoning);
   const time = (n: number | null | undefined) => {
     const k = known(n);
@@ -185,6 +198,7 @@ export function callUsage(u: {
     tokens_in: tokensIn,
     cached_in: cached === null ? null : Math.min(cached, tokensIn),
     uncached_in: cached === null ? null : tokensIn - Math.min(cached, tokensIn),
+    cache_write_in: written === null ? null : Math.min(written, uncached),
     tokens_out: tokensOut,
     reasoning: reasoning === null ? null : Math.min(reasoning, tokensOut),
     first_token_ms: time(u.firstTokenMs),
@@ -254,11 +268,13 @@ export function usageSince(period: UsagePeriod, now = new Date(), tz = "UTC"): s
   return new Date(startOfDay(now.getTime(), tz)).toISOString();
 }
 
-/** A model's price in US dollars per million tokens: input, cached input and output. */
+/** A model's price in US dollars per million tokens: input, cached input, cache write and output. */
 export const ModelPrice = z.strictObject({
   input: z.number().min(0).max(1_000_000),
   /** The price of input read from the cache; null: the input price. */
   cached_input: z.number().min(0).max(1_000_000).nullable(),
+  /** The price of input written to the cache; null or left out: the input price. */
+  cache_write: z.number().min(0).max(1_000_000).nullable().optional(),
   output: z.number().min(0).max(1_000_000),
 });
 export type ModelPrice = z.infer<typeof ModelPrice>;
@@ -274,12 +290,16 @@ export type Pricing =
 
 /** What a record's tokens cost at a price, in US dollars, by part. */
 export function costOf(
-  r: Pick<UsageRow, "tokens_in" | "cached_in" | "tokens_out">,
+  r: Pick<UsageRow, "tokens_in" | "cached_in" | "cache_write_in" | "tokens_out">,
   p: ModelPrice,
-): { input: number; cached_input: number; output: number } {
+): { input: number; cache_write: number; cached_input: number; output: number } {
   const cached = r.cached_in ?? 0;
+  const written = Math.min(r.cache_write_in ?? 0, Math.max(0, r.tokens_in - cached));
+  const uncached = r.tokens_in - cached - written;
+  const write = p.cache_write ?? p.input;
   return {
-    input: ((r.tokens_in - cached) * p.input) / 1e6,
+    input: (uncached * p.input + written * write) / 1e6,
+    cache_write: (written * write) / 1e6,
     cached_input: (cached * (p.cached_input ?? p.input)) / 1e6,
     output: (r.tokens_out * p.output) / 1e6,
   };
@@ -312,6 +332,8 @@ export interface UsageRow {
   at: string;
   tokens_in: number;
   cached_in: number | null;
+  /** Input tokens written to the provider's cache; absent or null: not reported. */
+  cache_write_in?: number | null | undefined;
   tokens_out: number;
   reasoning: number | null;
   first_token_ms: number | null;
@@ -328,6 +350,8 @@ export interface UsageCost {
   input_usd: number;
   cached_input_usd: number;
   output_usd: number;
+  /** The cache-write part of input_usd. */
+  cache_write_usd: number;
   /** The GPU cloud pods' spend for these runs; null: none. */
   pod_usd: number | null;
   /** Records with a price, on a subscription's plan, and with no price known. */
@@ -342,14 +366,20 @@ export interface UsageCost {
   free_tokens: number;
   /**
    * Input tokens priced as not cached because their records do not report the cache, where the
-   * model's cached price differs from its input price.
+   * model's cached price differs from its input price. The cache writes a record reports are priced
+   * as writes, and not counted here.
    */
   priced_as_not_cached: number;
+  /**
+   * Input tokens priced at the input price because their records do not report cache writes, where
+   * the model's cache-write price differs from its input price.
+   */
+  priced_as_not_written: number;
 }
 
 /** Whether a price is 0 in every part: a free model. */
 export const isFree = (p: ModelPrice) =>
-  p.input === 0 && p.output === 0 && (p.cached_input ?? 0) === 0;
+  p.input === 0 && p.output === 0 && (p.cached_input ?? 0) === 0 && (p.cache_write ?? 0) === 0;
 
 /** The sums of some records. Each figure a record may not report says how many did not. */
 export interface UsageSums {
@@ -366,6 +396,8 @@ export interface UsageSums {
   uncached_in: number | null;
   /** cached_in over the input of the records that report it; null: none does. */
   cached_share: number | null;
+  /** Input tokens written to the cache, over the records that report it; null: none does. */
+  cache_write_in: number | null;
   tokens_out: number;
   /** Reasoning tokens, over the records that report them; null: none does. */
   reasoning: number | null;
@@ -379,7 +411,13 @@ export interface UsageSums {
   /** The median time to the first token, in milliseconds; null: none reports it. */
   first_token_ms: number | null;
   /** How many records do not report each figure. */
-  not_reported: { cached: number; reasoning: number; time: number; first_token: number };
+  not_reported: {
+    cached: number;
+    cache_write: number;
+    reasoning: number;
+    time: number;
+    first_token: number;
+  };
   cost: UsageCost;
 }
 
@@ -404,6 +442,7 @@ const round = (n: number, places: number) => {
 /** The cost of some records at their prices, with the pods' spend. */
 export function sumCost(rows: readonly UsageRow[], pods: readonly PodSpendRow[] = []): UsageCost {
   let input = 0;
+  let written = 0;
   let cachedInput = 0;
   let output = 0;
   let priced = 0;
@@ -411,6 +450,7 @@ export function sumCost(rows: readonly UsageRow[], pods: readonly PodSpendRow[] 
   let free = 0;
   const tokens = { plan: 0, none: 0, free: 0 };
   let asNotCached = 0;
+  let asNotWritten = 0;
   for (const r of rows) {
     const p = r.pricing;
     const all = r.tokens_in + r.tokens_out;
@@ -424,14 +464,25 @@ export function sumCost(rows: readonly UsageRow[], pods: readonly PodSpendRow[] 
     if (isFree(p.price)) {
       free++;
       tokens.free += all;
-    } else if (
-      r.cached_in === null &&
-      p.price.cached_input !== null &&
-      p.price.cached_input !== p.price.input
-    )
-      asNotCached += r.tokens_in;
+    } else {
+      // Writes the record reports are priced as writes: only the rest could have been cache reads.
+      if (
+        r.cached_in === null &&
+        p.price.cached_input !== null &&
+        p.price.cached_input !== p.price.input
+      )
+        asNotCached += r.tokens_in - Math.min(r.cache_write_in ?? 0, r.tokens_in);
+      const writePrice = p.price.cache_write ?? null;
+      if (
+        (r.cache_write_in === null || r.cache_write_in === undefined) &&
+        writePrice !== null &&
+        writePrice !== p.price.input
+      )
+        asNotWritten += r.tokens_in - (r.cached_in ?? 0);
+    }
     const c = costOf(r, p.price);
     input += c.input;
+    written += c.cache_write;
     cachedInput += c.cached_input;
     output += c.output;
   }
@@ -442,6 +493,7 @@ export function sumCost(rows: readonly UsageRow[], pods: readonly PodSpendRow[] 
     input_usd: usd(input),
     cached_input_usd: usd(cachedInput),
     output_usd: usd(output),
+    cache_write_usd: usd(written),
     pod_usd: pods.length ? usd(pod) : null,
     priced,
     on_plan: onPlan,
@@ -451,6 +503,7 @@ export function sumCost(rows: readonly UsageRow[], pods: readonly PodSpendRow[] 
     no_price_tokens: tokens.none,
     free_tokens: tokens.free,
     priced_as_not_cached: asNotCached,
+    priced_as_not_written: asNotWritten,
   };
 }
 
@@ -462,6 +515,8 @@ export function sumUsage(rows: readonly UsageRow[], pods: readonly PodSpendRow[]
   let cached = 0;
   let cachedOf = 0;
   let cachedRecords = 0;
+  let written = 0;
+  let writtenRecords = 0;
   let reasoning = 0;
   let reasoningRecords = 0;
   let callMs = 0;
@@ -477,6 +532,10 @@ export function sumUsage(rows: readonly UsageRow[], pods: readonly PodSpendRow[]
       cached += r.cached_in;
       cachedOf += r.tokens_in;
       cachedRecords++;
+    }
+    if (r.cache_write_in !== null && r.cache_write_in !== undefined) {
+      written += r.cache_write_in;
+      writtenRecords++;
     }
     if (r.reasoning !== null) {
       reasoning += r.reasoning;
@@ -500,6 +559,7 @@ export function sumUsage(rows: readonly UsageRow[], pods: readonly PodSpendRow[]
     cached_in: cachedRecords ? cached : null,
     uncached_in: cachedRecords ? cachedOf - cached : null,
     cached_share: cachedRecords && cachedOf > 0 ? round(cached / cachedOf, 4) : null,
+    cache_write_in: writtenRecords ? written : null,
     tokens_out: tokensOut,
     reasoning: reasoningRecords ? reasoning : null,
     out_per_s: speeds.length ? { median: speed(0.5), p10: speed(0.1), p90: speed(0.9) } : null,
@@ -507,6 +567,7 @@ export function sumUsage(rows: readonly UsageRow[], pods: readonly PodSpendRow[]
     first_token_ms: firsts.length ? Math.round(quantile(firsts, 0.5) as number) : null,
     not_reported: {
       cached: rows.length - cachedRecords,
+      cache_write: rows.length - writtenRecords,
       reasoning: rows.length - reasoningRecords,
       time: rows.length - timed,
       first_token: rows.length - firsts.length,

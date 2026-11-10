@@ -178,6 +178,7 @@ function stepUsage(at: number, k: z.infer<typeof Tokens>): SessionEvent {
       calls: 1,
       tokensIn: n(k.input) + n(read) + n(k.cache?.write),
       cachedIn: read ?? null,
+      cacheWriteIn: k.cache?.write ?? null,
       tokensOut: n(k.output) + n(k.reasoning),
       reasoning: k.reasoning ?? null,
       firstTokenMs: null,

@@ -114,6 +114,33 @@ describe("OpenCode's events and messages as session events", () => {
     assert.equal(of(both.events, "tool.result").length, 4);
   });
 
+  test("a step's usage, from its messages: the cache write is an input token, reported apart (goal 195)", () => {
+    const message = (tokens: Record<string, unknown>) =>
+      JSON.stringify({
+        id: "m-w",
+        type: "assistant",
+        time: { created: 1000, completed: 2000 },
+        content: [{ type: "text", text: "hi" }],
+        tokens,
+      });
+    const usage = (tokens: Record<string, unknown>) => {
+      const { tally } = read([message(tokens)]);
+      assert.equal(tally.calls.length, 1);
+      return tally.calls[0];
+    };
+    const wrote = usage({ input: 100, output: 10, cache: { write: 40 } });
+    assert.equal(wrote?.tokens_in, 140, "the write counts in the input");
+    assert.equal(wrote?.cached_in, null);
+    assert.equal(wrote?.cache_write_in, 40);
+    const both = usage({ input: 100, output: 10, cache: { read: 600, write: 40 } });
+    assert.equal(both?.tokens_in, 740);
+    assert.equal(both?.cached_in, 600);
+    assert.equal(both?.cache_write_in, 40);
+    const none = usage({ input: 100, output: 10 });
+    assert.equal(none?.tokens_in, 100);
+    assert.equal(none?.cache_write_in, null);
+  });
+
   test("another session's events are left out, and a kind it does not know is counted", () => {
     const { events, unknown } = read([
       'data: {"type":"session.created","created":1,"data":{"sessionID":"ses_a"}}',

@@ -1,7 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { type TSchema, Type } from "@earendil-works/pi-ai";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { type TSchema, Type } from "typebox";
 import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import {
