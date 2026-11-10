@@ -34,7 +34,10 @@ export const SpaceInventory = z.object({
       ]),
     )
     .max(SPACE_ITEMS_MAX * 2),
-  /** Why the kind's items could not be read, when they could not: then there are none. */
+  /**
+   * Why the kind's items could not be read: then there are none; or why some could not, such as a
+   * runner's builds when it doesn't answer (goal 259).
+   */
   error: z.string().max(500).optional(),
 });
 export type SpaceInventory = z.infer<typeof SpaceInventory>;

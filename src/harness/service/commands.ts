@@ -508,7 +508,12 @@ export class Commands {
       // One of the owner's retention policies, run now: the judge's builds it covers go.
       case "retention_run":
         return runRetention(
-          { ledger: svc.ledger, stateDir: svc.paths.stateDir, clock: svc.clock },
+          {
+            ledger: svc.ledger,
+            stateDir: svc.paths.stateDir,
+            clock: svc.clock,
+            runners: svc.runnerBuilds,
+          },
           CommandPayloads.retention_run.parse(payload),
           by,
         );

@@ -77,7 +77,7 @@ describe("the judge's builds under a retention policy", () => {
     s.attempt("a-0000000000000002", "4".repeat(40), "done");
     const ofOpenRun = s.build(key("e"), "4".repeat(40), 90);
 
-    const space = spaceOf(s.ledger, s.state);
+    const space = await spaceOf(s.ledger, s.state);
     assert.deepEqual(space.open_runs, ["smoke-1"]);
     assert.equal(space.builds.items.length, 5);
     assert.ok(space.builds.bytes >= 9000);
@@ -110,6 +110,66 @@ describe("the judge's builds under a retention policy", () => {
     assert.equal(existsSync(ofOpenRun), false);
     assert.ok(existsSync(busy), "never while a judge's job of its commit is queued or under way");
     assert.equal(s.removals().length, 2);
+  });
+
+  test("a rig's runners' builds: Space counts them, and a policy removes them there (goal 259)", async () => {
+    const s = await setup();
+    const now = Date.now();
+    // Builds the judge made on the runner gpu-1, as the core records them; one it doesn't know.
+    const record = (k: string, commit: string) =>
+      s.ledger.builds.record({
+        key: k,
+        repo: "smoke-kernels",
+        commit,
+        kitCommit: "k".repeat(40),
+        ok: true,
+        manifest: { key: k },
+        actor: "judge",
+      });
+    record(key("f"), "5".repeat(40));
+    record(key("g"), "6".repeat(40));
+    s.attempt("a-0000000000000003", "6".repeat(40), "leased");
+    record(key("h"), "7".repeat(40));
+    const onRunner = new Map<string, [number, number]>([
+      [key("f"), [now - 90 * DAY, 4000]],
+      [key("g"), [now - 90 * DAY, 3000]],
+      [key("h"), [now - DAY, 2000]],
+      [key("9"), [now - 90 * DAY, 1000]],
+    ]);
+    const asked: string[] = [];
+    s.env.service.runnerBuilds = {
+      kept: async () => [
+        {
+          runner: "gpu-1",
+          kept: {
+            builds: [...onRunner].map(
+              ([k, [at, bytes]]) => [k, at, bytes] as [string, number, number],
+            ),
+            more: 0,
+          },
+        },
+        { runner: "gpu-2", error: "the runner process gpu-2 is away" },
+      ],
+      remove: async (runner, k) => {
+        asked.push(`${runner}/${k}`);
+        return onRunner.delete(k);
+      },
+    };
+
+    const space = await spaceOf(s.ledger, s.state, s.env.service.runnerBuilds);
+    assert.equal(space.builds.items.length, 4, "gpu-1's four builds");
+    assert.equal(space.builds.bytes, 10_000);
+    assert.match(String(space.builds.error), /runner gpu-2: the runner process gpu-2 is away/);
+
+    const out = await s.run({ kind: "builds", rule: "older", older_n: 30 });
+    assert.equal((out as { accepted: boolean }).accepted, true, JSON.stringify(out));
+    // The old build and the one the core doesn't know go; the one a job holds and the young stay.
+    assert.deepEqual(asked.sort(), [`gpu-1/${key("9")}`, `gpu-1/${key("f")}`].sort());
+    assert.deepEqual([...onRunner.keys()].sort(), [key("g"), key("h")]);
+    const [r] = s.removals();
+    assert.equal(r?.count, 2);
+    assert.equal(r?.bytes, 5000);
+    assert.match(String(r?.error), /runner gpu-2/, "a runner that could not say is named");
   });
 
   test("the advisors' records are the supervisor's; a kind kept on control is refused", async () => {

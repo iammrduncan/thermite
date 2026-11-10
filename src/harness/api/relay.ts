@@ -99,7 +99,9 @@ export function exportRoutes(app: Hono, { service, supervisor }: ApiContext): vo
     const body = EXPORTS_DONE.body.parse(await c.req.json());
     return c.json({ removed: service.removeExports(body.names) });
   });
-  app.get(SPACE.path, supervisor, (c) => c.json(spaceOf(service.ledger, service.paths.stateDir)));
+  app.get(SPACE.path, supervisor, async (c) =>
+    c.json(await spaceOf(service.ledger, service.paths.stateDir, service.runnerBuilds)),
+  );
   app.post(RETENTION_REMOVED.path, supervisor, limitOf(RETENTION_REMOVED), async (c) => {
     recordRemoved(service.ledger, RETENTION_REMOVED.body.parse(await c.req.json()));
     return c.json({ ok: true });

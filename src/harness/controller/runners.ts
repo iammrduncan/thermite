@@ -1,5 +1,6 @@
 import { errorText } from "../../common/errors.ts";
 import { log } from "../../common/log.ts";
+import { RunnerBuilds } from "../../core/api/harness/runs.ts";
 import type { RunnerSetting } from "../../core/rig-settings.ts";
 import {
   type FetchProgress,
@@ -31,6 +32,8 @@ import type { HarnessService } from "../service/index.ts";
 /** How often the core checks that each runner process answers, and how long a check waits. */
 const CHECK_EVERY_MS = 15_000;
 const CHECK_WAIT_MS = 20_000;
+/** How long a runner may take to list its builds (goal 259): the first sizes them all. */
+const BUILDS_WAIT_MS = 60_000;
 /** Checks failed in a row before a runner process is away. */
 const AWAY_AFTER = 2;
 
@@ -217,6 +220,36 @@ export class RunnerHub {
       waited: use.waited,
       waited_since: new Date(this.pools.since).toISOString(),
     };
+  }
+
+  /**
+   * The judge's builds each runner process keeps (goal 259), for Space and a retention policy: as
+   * each answers, or why it could not, such as being away.
+   */
+  async keptBuilds(): Promise<{ runner: string; kept?: RunnerBuilds; error?: string }[]> {
+    return Promise.all(
+      [...this.processes.values()].map(async (p) => {
+        const runner = p.setting.name;
+        if (p.away && !p.up) return { runner, error: p.away };
+        try {
+          const kept = RunnerBuilds.parse(
+            await this.o.link.to(runner).ask({ op: "builds" }, BUILDS_WAIT_MS),
+          );
+          return { runner, kept };
+        } catch (err) {
+          return { runner, error: errorText(err) };
+        }
+      }),
+    );
+  }
+
+  /** One of a runner process's builds removed (goal 259); whether it was there. */
+  async removeBuild(runner: string, key: string): Promise<boolean> {
+    if (!this.processes.has(runner)) throw new Error(`no runner process ${runner} in the rig`);
+    const a = (await this.o.link.to(runner).ask({ op: "remove_build", key })) as {
+      removed?: unknown;
+    };
+    return a.removed === true;
   }
 
   /** Checks every runner process on a timer; the function returned stops it. */
