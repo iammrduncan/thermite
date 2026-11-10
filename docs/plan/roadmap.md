@@ -225,8 +225,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **v0.2.1** (the owner, 2026-11-10) holds several fixes at once: Dependabot's updates (pull requests 69, 71, 72 and 74), the outside contributors' fixes (pull requests 57, 58, 59 and 67; the last is items 1 and 3 of goal [195](goals/195-model-prices-cache-and-tiers.goal)), and these two goals:
 
-- [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `IN_PROGRESS` · v0.2.1
-- [241](goals/241-typed-input-once.goal) Input the owner types into an advisor's terminal reaches it once · `IN_PROGRESS` · v0.2.1
+- [216](goals/_completed/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `VERIFIED` · v0.2.1
+- [241](goals/_completed/241-typed-input-once.goal) Input the owner types into an advisor's terminal reaches it once · `VERIFIED` · v0.2.1
 
 The fixes after it, one version each, in the order to take them:
 
