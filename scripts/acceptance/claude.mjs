@@ -536,10 +536,9 @@ try {
       });
     } catch (err) {
       const said = String(err);
+      // Refused in words: the rig answered, not accepted, with why.
       const inWords =
-        /not accepted: /.test(said) &&
-        /"status":"delivered"/.test(said) &&
-        /"accepted":false/.test(said);
+        /not accepted: /.test(said) && /"accepted":false/.test(said) && /"error":"/.test(said);
       if (!inWords || Date.now() > end)
         throw new Error(
           `the input typed into the auditor's terminal: ${said}; refused before: ${JSON.stringify(typedRefusals)}`,
