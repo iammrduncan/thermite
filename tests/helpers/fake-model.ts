@@ -18,11 +18,17 @@ export interface ScriptedTurn {
   /** The failure's message (default "scripted failure <status>"). */
   failMessage?: string;
   /**
-   * Token usage reported for the reply (default 100 in, 20 out). `cached` and `reasoning`, when
-   * given, are reported as OpenAI does (prompt_tokens_details, completion_tokens_details); else
-   * left out, as many servers do.
+   * Token usage reported for the reply (default 100 in, 20 out). `cached`, `cacheWrite` and
+   * `reasoning`, when given, are reported as OpenAI does (prompt_tokens_details,
+   * completion_tokens_details); else left out, as many servers do.
    */
-  usage?: { prompt: number; completion: number; cached?: number; reasoning?: number };
+  usage?: {
+    prompt: number;
+    completion: number;
+    cached?: number;
+    cacheWrite?: number;
+    reasoning?: number;
+  };
   /** Waits this long before the reply's first token (ms). */
   delayMs?: number;
   /**
@@ -149,13 +155,22 @@ function answer(res: ServerResponse, turn: ScriptedTurn, id: string, model: stri
   res.write(chunk({}, turn.cutOff ? "length" : turn.toolCalls?.length ? "tool_calls" : "stop"));
   const prompt = turn.usage?.prompt ?? 100;
   const completion = turn.usage?.completion ?? 20;
+  const details =
+    turn.usage?.cached !== undefined || turn.usage?.cacheWrite !== undefined
+      ? {
+          prompt_tokens_details: {
+            ...(turn.usage?.cached !== undefined ? { cached_tokens: turn.usage.cached } : {}),
+            ...(turn.usage?.cacheWrite !== undefined
+              ? { cache_write_tokens: turn.usage.cacheWrite }
+              : {}),
+          },
+        }
+      : {};
   const usage = {
     prompt_tokens: prompt,
     completion_tokens: completion,
     total_tokens: prompt + completion,
-    ...(turn.usage?.cached !== undefined
-      ? { prompt_tokens_details: { cached_tokens: turn.usage.cached } }
-      : {}),
+    ...details,
     ...(turn.usage?.reasoning !== undefined
       ? { completion_tokens_details: { reasoning_tokens: turn.usage.reasoning } }
       : {}),

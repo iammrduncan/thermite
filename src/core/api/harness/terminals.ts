@@ -68,6 +68,13 @@ export const ADVISOR_INPUTS = {
 export const ADVISOR_INPUTS_WAIT_MAX_S = 30;
 
 /**
+ * How long the harness waits for what became of an input the supervisor took, in milliseconds;
+ * then it answers the input as refused. The supervisor decides within it (goal 241): it types an
+ * input only if it can start in time, so one the harness answers as refused never goes in.
+ */
+export const ADVISOR_INPUT_ANSWER_MS = 30_000;
+
+/**
  * What became of an input the supervisor took: typed, queued for the usage window's reset (until
  * when, when the program said) or refused (why, in words); and later, for one that waited, typed
  * after the reset or dropped.

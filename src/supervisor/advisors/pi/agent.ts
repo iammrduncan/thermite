@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import type { Message, TSchema } from "@earendil-works/pi-ai";
+import type { Message } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import type { z } from "zod";
 import { TERMINAL_WAIT_MAX_MS } from "../../../agents/cli/index.ts";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";

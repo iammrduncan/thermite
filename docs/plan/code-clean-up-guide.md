@@ -310,7 +310,6 @@ These look wrong, but have a reason. Keep them.
 - **The real differences between the agent programs:** their config formats, event schemas, usage reports, compaction, sign-ins, and which ones run research trials.
 - **The broker's process runner** apart from `common/exec`: it enforces the isolation limits, a different job from running git.
 - **The broker restarting the controller and the supervisor** with a backoff, and the 60-second hold before a fatal exit in the one-container image (it keeps the error in the pod's log).
-- **`scripts/patch-pi-ai.mjs`:** it patches one pinned version and stops the install on any other.
 - **A release builds every layer with no cache,** on bases pinned by digest. With the upgrade of the base's system packages that each image makes when it is built (goal 125), every package gets its distribution's fixes.
 - **The time bounds on set-up waits** (10 and 60 minutes), `FAILING_STOP_MS`, the progress rule and `MCP_WAIT_MS`: product rules and pacing, not caps on research.
 - **Paths from tests to the repository's root:** they stayed right after the move, because a test sits at the same depth as its code did.

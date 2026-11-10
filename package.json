@@ -1,6 +1,6 @@
 {
   "name": "thermite",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Autoresearch harness: agents propose, code they cannot touch judges, one control service steers every campaign.",
   "license": "Apache-2.0",
@@ -13,7 +13,6 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "postinstall": "node scripts/patch-pi-ai.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
@@ -58,9 +57,9 @@
     "acceptance:terminal": "node scripts/acceptance/terminal.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "1.4.0",
-    "@earendil-works/pi-ai": "1.4.0",
-    "@earendil-works/pi-tui": "1.4.0",
+    "@earendil-works/pi-agent-core": "1.5.0",
+    "@earendil-works/pi-ai": "1.5.0",
+    "@earendil-works/pi-tui": "1.5.0",
     "@hono/node-server": "2.1.6",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@nats-io/jetstream": "3.4.0",
@@ -69,13 +68,14 @@
     "@xterm/addon-serialize": "0.14.0",
     "@xterm/headless": "6.0.0",
     "hono": "4.13.16",
+    "typebox": "1.3.27",
     "zod": "4.6.7"
   },
   "optionalDependencies": {
     "node-pty": "1.1.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.6",
     "@types/node": "22.20.5",
     "playwright-core": "1.65.0",
     "typescript": "7.0.2"

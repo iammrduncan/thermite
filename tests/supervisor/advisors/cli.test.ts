@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, type TestContext, test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import type { AdvisorRoutesValue } from "../../../src/core/link/config.ts";
 import { CODEX_ADVISOR_OFF } from "../../../src/supervisor/advisors/cli.ts";

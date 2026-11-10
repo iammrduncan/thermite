@@ -25,6 +25,7 @@ import {
   type TerminalEnded,
 } from "../terminal/index.ts";
 import type { CliProgram, CliRun, CliTally } from "./program.ts";
+import { TypingQueue } from "./typing.ts";
 
 /**
  * The one path for a role in its program's own terminal UI (goal 169): a trial's worker, in the
@@ -232,7 +233,7 @@ export class RoleTerminal<T extends CliTally> {
   private last: ScreenSnapshot | undefined;
   private lastOf: Terminal | undefined;
   /** What is typed into the program, one input at a time: the loop's turns and the owner's. */
-  private typing: Promise<unknown> = Promise.resolve();
+  private readonly typing = new TypingQueue();
   /** Whether its caller's wait before the first message has been awaited: once a run. */
   private waited = false;
 
@@ -331,7 +332,7 @@ export class RoleTerminal<T extends CliTally> {
     try {
       // On the one typing chain from the start: the owner's input typed while a new program gets
       // ready goes in after its message, never before.
-      await this.typed(async () => {
+      await this.typing.type(async () => {
         if (started) {
           await ready(
             h,
@@ -609,24 +610,21 @@ export class RoleTerminal<T extends CliTally> {
     return this.limit;
   }
 
-  /** `work` once what was typed before it has gone in. */
-  private typed<R>(work: () => Promise<R>): Promise<R> {
-    const next = this.typing.then(work);
-    this.typing = next.catch(() => undefined);
-    return next;
-  }
-
   /**
    * The owner's input (terminal_input), into the program now: text, then Enter, or keys by name,
    * after what the loop is typing. Refused in words when no program runs: it is being ended, or
    * it exited and starts again in its session at its run's next turn; and with follow_up, which
-   * only a worker in Pi takes.
+   * only a worker in Pi takes. With `startBy`, refused in words, and never typed, when what the
+   * loop types before it holds it past then (goal 241).
    */
-  async ownerInput(i: {
-    text?: string | undefined;
-    keys?: readonly TerminalKey[] | undefined;
-    follow_up?: true | undefined;
-  }) {
+  async ownerInput(
+    i: {
+      text?: string | undefined;
+      keys?: readonly TerminalKey[] | undefined;
+      follow_up?: true | undefined;
+    },
+    startBy?: number,
+  ) {
     const host = this.host;
     if (i.follow_up)
       throw new Refusal(
@@ -637,9 +635,15 @@ export class RoleTerminal<T extends CliTally> {
       throw new Refusal(
         `${this.p.name} is not running now: it starts again in its session at its next turn, if it has one`,
       );
-    await this.typed(() =>
-      i.text !== undefined ? typeIn(host, i.text) : host.keys([...(i.keys ?? [])]),
-    );
+    const work = () =>
+      i.text !== undefined ? typeIn(host, i.text) : host.keys([...(i.keys ?? [])]);
+    await (startBy === undefined
+      ? this.typing.type(work)
+      : this.typing.typeBy(
+          work,
+          startBy,
+          `${this.p.name} was still taking what went in before it, so nothing was typed: send it again in a moment`,
+        ));
   }
 
   /** Keys as the owner pressed them on Live (goal 187): to the program as they came. */
@@ -650,7 +654,7 @@ export class RoleTerminal<T extends CliTally> {
       throw new Refusal(
         `${this.p.name} is not running now: it starts again in its session at its next turn, if it has one`,
       );
-    await this.typed(() => host.raw(data));
+    await this.typing.type(() => host.raw(data));
   }
 
   /**

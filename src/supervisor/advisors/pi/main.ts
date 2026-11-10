@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import { z } from "zod";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { modelConfigFromEnv, UsageSender } from "../../../agents/model/index.ts";

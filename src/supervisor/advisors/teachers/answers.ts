@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import { JOURNAL_FIELD } from "../../../agents/tools/index.ts";
 import { ExperimentId, QueuePosition } from "../../../core/commands.ts";

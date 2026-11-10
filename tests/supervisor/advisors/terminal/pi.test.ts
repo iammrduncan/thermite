@@ -3,7 +3,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { VIEW_FLAG } from "../../../../src/agents/pi-view/index.ts";
 import { renderAuditor } from "../../../../src/agents/roles/index.ts";
 import type { RoleRunner, RoleRunOutcome, RoleRunRequest } from "../../../../src/agents/runner.ts";

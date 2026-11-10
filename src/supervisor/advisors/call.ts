@@ -1,4 +1,4 @@
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import type { z } from "zod";
 import type { KeptAt } from "../../agents/compaction/index.ts";
 import type { Prompt } from "../../agents/prompt.ts";

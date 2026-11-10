@@ -32,6 +32,7 @@ const call = (o: {
   at: string;
   tokensIn: number;
   cachedIn?: number | null;
+  cacheWriteIn?: number | null;
   tokensOut: number;
   callMs?: number | null;
   calls?: number | null;
@@ -48,6 +49,7 @@ const call = (o: {
     calls: o.calls === undefined ? 1 : o.calls,
     tokensIn: o.tokensIn,
     cachedIn: o.cachedIn ?? null,
+    cacheWriteIn: o.cacheWriteIn ?? null,
     tokensOut: o.tokensOut,
     callMs: o.callMs ?? null,
   }),
@@ -100,7 +102,15 @@ async function stack() {
     [
       "model_call",
       "r-1",
-      call({ trial: "t-1", at: ago(2), tokensIn: 1000, cachedIn: 0, tokensOut: 100, callMs: 4000 }),
+      call({
+        trial: "t-1",
+        at: ago(2),
+        tokensIn: 1000,
+        cachedIn: 0,
+        cacheWriteIn: 400,
+        tokensOut: 100,
+        callMs: 4000,
+      }),
     ],
     [
       "model_call",
@@ -154,7 +164,13 @@ describe("model usage on control (goal 075)", () => {
     assert.equal(r.total.reasoning, null);
     assert.equal(r.total.call_ms, 5000);
     assert.deepEqual(r.total.out_per_s, { median: 62.5, p10: 32.5, p90: 92.5 });
-    assert.deepEqual(r.total.not_reported, { cached: 1, reasoning: 3, time: 1, first_token: 3 });
+    assert.deepEqual(r.total.not_reported, {
+      cached: 1,
+      cache_write: 2,
+      reasoning: 3,
+      time: 1,
+      first_token: 3,
+    });
     assert.deepEqual(
       r.by_agent.map((a) => [a.agent, a.name, a.records]),
       [
@@ -307,6 +323,7 @@ describe("model usage cost on control (goal 075)", () => {
     assert.deepEqual(r1.total.cost, {
       usd: 0.00738,
       input_usd: 0.0042,
+      cache_write_usd: 0.0012,
       cached_input_usd: 0.00018,
       output_usd: 0.003,
       pod_usd: null,
@@ -318,6 +335,7 @@ describe("model usage cost on control (goal 075)", () => {
       no_price_tokens: 550,
       free_tokens: 0,
       priced_as_not_cached: 0,
+      priced_as_not_written: 0,
     });
     // The owner prices small-model: every one of its calls, the earlier ones too.
     const set = await s.post({ provider: "lab", model: "small-model", input: 1, output: 2 });
@@ -376,6 +394,11 @@ describe("model usage cost on control (goal 075)", () => {
       400,
       /^input: a number of US dollars per million tokens/,
     );
+    await refused(
+      { provider: "lab", model: "small-model", clear: true, cache_write: 0.5 },
+      400,
+      /^Give clear: true alone, or a price\.$/,
+    );
     // Only the owner's token sets a price over REST.
     assert.equal(
       (await s.post({ provider: "lab", model: "small-model", clear: true }, TOKENS.read)).status,
@@ -384,6 +407,26 @@ describe("model usage cost on control (goal 075)", () => {
     const cleared = await s.post({ provider: "lab", model: "small-model", clear: true });
     assert.equal(cleared.status, 200);
     assert.equal(modelUsage(s.store, { run: "r-1" }).total.cost.no_price, 1);
+    // A cache write's price goes in with the rest, and is said.
+    const written = await s.post({
+      provider: "lab",
+      model: "small-model",
+      input: 1,
+      output: 2,
+      cache_write: 0.5,
+    });
+    assert.equal(written.status, 200, await written.clone().text());
+    const answer = (await written.json()) as { price: unknown; said: string };
+    assert.deepEqual(answer.price, { input: 1, cached_input: null, cache_write: 0.5, output: 2 });
+    assert.match(
+      answer.said,
+      /^small-model of lab costs 1 USD per million tokens in, 0\.5 USD a cache write and 2 USD out\./,
+    );
+    const withWrite = modelUsage(s.store, { run: "r-1" }).total.cost;
+    // The planner's call reports no cache write: its 500 tokens are priced at input, and counted.
+    assert.equal(withWrite.priced_as_not_written, 500);
+    // The one call that reports a write priced it at its model's input price, which the list gives.
+    assert.equal(withWrite.cache_write_usd, 0.0012);
   });
 
   test("a pod's spend goes to the run its rig was running when control counted it; idle spend to the system only", async () => {
@@ -439,6 +482,26 @@ describe("model usage cost on control (goal 075)", () => {
     assert.deepEqual(JSON.parse(out.content[0]?.text ?? "{}").price, {
       input: 1,
       cached_input: 0.1,
+      cache_write: null,
+      output: 2,
+    });
+    // A write price goes in through the tool, not only through REST.
+    const written = (await client.callTool({
+      name: "set_model_price",
+      arguments: {
+        provider: "lab",
+        model: "small-model",
+        input: 1,
+        cached_input: 0.1,
+        cache_write: 0.5,
+        output: 2,
+      },
+    })) as { content: { text: string }[]; isError?: boolean };
+    assert.equal(written.isError, undefined, written.content[0]?.text);
+    assert.deepEqual(JSON.parse(written.content[0]?.text ?? "{}").price, {
+      input: 1,
+      cached_input: 0.1,
+      cache_write: 0.5,
       output: 2,
     });
     const providers = (await client.callTool({ name: "providers", arguments: {} })) as {

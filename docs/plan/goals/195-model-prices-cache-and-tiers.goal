@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 195 · Model prices: a price for cache writes, and prices by request size
@@ -34,10 +34,13 @@ A budget in dollars (goal [123](123-budgets-made-simple.goal)) holds only if the
 
 - None yet.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner: items 1 and 3, from an outside contributor's pull request (67), ship in v0.2.1, with its review's finding fixed. Item 2 stays on v0.3.0, and this goal stays open for it.
 
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-10: pull request 67 does items 1 and 3: `model_price.cache_write`, `model_call.cache_write_in` (control's store at schema 37), and `cost.priced_as_not_written`. It is taken into v0.2.1.
+- 2026-11-10 02:25 UTC: pull request 67 merged into `patch/v0.2.1` as its contributor's commit. Its review's finding fixed after it: a record that reports its cache writes but not its cache reads counted its writes in `priced_as_not_cached`, though they are priced as writes; now only the rest is counted, with a test of the finding's numbers (140 tokens in, 40 written: 100 counted, where it said 140). The issue's numbers hold: 4.495 with the writes reported, 4.26 without. Every test file the pull request touches passes on macOS (124 tests); the five that failed for its contributor were Windows-only. Migration 37 is the next on `main` and on `v0.3.0`, and its test moves a store at 36 to 37. Left for v0.3.0 with item 2: a field for the cache-write price on **Model prices**, a change to a screen, which waits for the new dashboard (goal 243); until then the price is set over REST or MCP, and the page keeps it.
 
 ---
 

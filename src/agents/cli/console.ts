@@ -23,7 +23,14 @@ import type { ScreenSnapshot } from "../terminal/index.ts";
  * view (pi-view/console.ts).
  */
 export interface ConsoleTerminal {
-  ownerInput(i: Pick<TerminalInput, "text" | "keys" | "follow_up">): Promise<void>;
+  /**
+   * The owner's input, into the program. With `startBy` (milliseconds since the epoch), refused in
+   * words, and never typed, when it can't start by then (goal 241).
+   */
+  ownerInput(
+    i: Pick<TerminalInput, "text" | "keys" | "follow_up">,
+    startBy?: number,
+  ): Promise<void>;
   /** Keys as pressed on Live (goal 187); none for a Pi view, which takes typed lines. */
   ownerRaw?(data: string): Promise<void>;
   limitShown(): { resetsAt?: string | undefined } | undefined;
@@ -74,6 +81,7 @@ export class TrialConsole {
   async input(
     i: Pick<TerminalInput, "text" | "keys" | "wait" | "follow_up">,
     later: ConsoleLater,
+    startBy?: number,
   ): Promise<ConsoleNow> {
     if (this.closed) throw new Refusal(this.closed);
     const limit = this.term.limitShown();
@@ -85,7 +93,7 @@ export class TrialConsole {
       this.waiting.push({ input: inputOf(i), later, until: limit.resetsAt });
       return { outcome: "queued", until: limit.resetsAt };
     }
-    await this.term.ownerInput(inputOf(i));
+    await this.term.ownerInput(inputOf(i), startBy);
     return { outcome: "typed" };
   }
 

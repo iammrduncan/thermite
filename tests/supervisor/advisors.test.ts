@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import { signEnvelope } from "../../src/core/commands.ts";
 import { createHarnessApi } from "../../src/harness/api/index.ts";
@@ -578,7 +578,8 @@ describe("advisors", () => {
       assert.equal(r.output, undefined);
       assert.match(
         r.error ?? "",
-        /refused 3 times running for the same problems: .*pass: must be boolean/s,
+        // pi-ai 1.5 checks a tool's arguments with pi-schema, which words its problems so.
+        /refused 3 times running for the same problems: .*pass: expected boolean, got string/s,
       );
       assert.equal(asked, 3);
       asked = 0;

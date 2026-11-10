@@ -1,5 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { TSchema } from "typebox";
 import { errorText } from "../../common/errors.ts";
 import { type McpCallResult, resultText } from "../../common/mcp-client.ts";
 import { agentToolName, type McpToolInfo } from "../../core/mcp.ts";

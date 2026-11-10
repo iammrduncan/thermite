@@ -1,7 +1,9 @@
 import { judgeGpusByDefault } from "../../../core/hardware.ts";
+import { machineRigImages } from "../../clusters/index.ts";
 import type { Progress } from "../../command-progress.ts";
 import { newToken } from "../../credential.ts";
 import { JOIN_HOURS, joinCommand, joinedCommands } from "../../join.ts";
+import type { MachineFacts } from "../../machines/index.ts";
 import { controlImages, STEP_WORDS } from "../../rigs/index.ts";
 import type { JoinedRig } from "../../store/index.ts";
 import { ago, esc } from "../../ui/components/index.ts";
@@ -151,7 +153,7 @@ export function rigHelpers(dash: Dashboard) {
     const m = store.machines.rig(rig);
     if (m && m.status !== "removed") {
       const known = store.machines.get(m.machine);
-      const images = controlImages(parts, m.gpus.length);
+      const images = machineRigImages(parts, known?.facts as MachineFacts | null, m.gpus, m.images);
       const noUpdate = !known
         ? `The machine ${m.machine} is no longer in Settings › Machines, so control can't reach it.`
         : typeof images === "string"
