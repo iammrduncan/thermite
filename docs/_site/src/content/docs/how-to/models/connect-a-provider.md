@@ -178,7 +178,7 @@ Errors show in a card that starts with **Not done.**
 
 | You see | What to do |
 | --- | --- |
-| "A new provider needs its API key." | Enter the key: an Anthropic provider needs one. Only OpenCode's own provider and an OpenAI-compatible one may have none. |
+| "An Anthropic provider needs its API key." | Enter the key: an Anthropic provider needs one, also when you change a provider with no key to **Anthropic**. Only OpenCode's own provider and an OpenAI-compatible one may have none. |
 | "An OpenAI-compatible provider needs its base URL." | Enter the address, ending in `/v1`. |
 | "The base URL is http or https, with no credentials, query or fragment in it." | Remove any `user:password@`, `?…` or `#…` from the address. |
 | "…could not list its models: HTTP 401 (is the key right?)" (or 403) | Check the key. |

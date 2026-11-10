@@ -71,7 +71,7 @@ describe("control dashboard", () => {
       type: "anthropic",
       base_url: "",
     });
-    assert.match(where(keyless), /needs its API key/);
+    assert.match(where(keyless), /An Anthropic provider needs its API key\./);
     assert.equal(s.store.modelProviders.get("other"), undefined);
     await s.post("/ui/settings/providers", {
       csrf,
@@ -355,6 +355,25 @@ describe("control dashboard", () => {
     });
     assert.equal(s.store.modelProviders.get("local-llama")?.version, 2);
     assert.deepEqual(listedWith, [null, null]);
+    // Its audit entries say it has no key, not that one was kept.
+    const keys = s.store.auditLog
+      .list(50)
+      .filter((e) => e.action.startsWith("model_provider_"))
+      .map((e) => e.body as { name?: string; key?: string })
+      .filter((b) => b.name === "local-llama")
+      .map((b) => b.key);
+    assert.deepEqual(keys, ["none", "none"]);
+    // Changed to Anthropic with no key, it is refused and stays as it was: Anthropic's API needs
+    // a key.
+    const toAnthropic = await s.post("/ui/settings/providers", {
+      csrf,
+      name: "local-llama",
+      type: "anthropic",
+      base_url: "",
+    });
+    assert.match(where(toAnthropic), /error=An Anthropic provider needs its API key\./);
+    assert.equal(s.store.modelProviders.get("local-llama")?.type, "openai");
+    assert.equal(s.store.modelProviders.get("local-llama")?.version, 2);
     // The rig's route names the server and carries an empty key: the harness's proxy sends none.
     await s.post("/ui/settings/rigs", {
       csrf,
