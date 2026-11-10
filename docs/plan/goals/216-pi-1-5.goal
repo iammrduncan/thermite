@@ -1,16 +1,16 @@
 ---
 id: "216"
 title: "Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls"
-status: PROPOSED
-version: "0.2.x"
+status: IN_PROGRESS
+version: "0.2.1"
 depends_on: []
 created: 2026-11-06
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 216 · Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls
 
-**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.1](../roadmap.md#v02x)
 
 ## What
 
@@ -39,6 +39,7 @@ The default worker harness and every advisor in Pi run on these packages, and De
 
 - None yet.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
+- 2026-11-10, the owner: goal 140's patch is retired ("Retire it"); this goal ships in v0.2.1, with Dependabot's pull request 71.
 
 ## Progress
 

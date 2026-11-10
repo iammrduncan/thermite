@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 195 · Model prices: a price for cache writes, and prices by request size
@@ -34,10 +34,12 @@ A budget in dollars (goal [123](123-budgets-made-simple.goal)) holds only if the
 
 - None yet.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner: items 1 and 3, from an outside contributor's pull request (67), ship in v0.2.1, with its review's finding fixed. Item 2 stays on v0.3.0, and this goal stays open for it.
 
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-10: pull request 67 does items 1 and 3: `model_price.cache_write`, `model_call.cache_write_in` (control's store at schema 37), and `cost.priced_as_not_written`. It is taken into v0.2.1.
 
 ---
 

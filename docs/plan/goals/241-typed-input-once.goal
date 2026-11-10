@@ -1,16 +1,16 @@
 ---
 id: "241"
 title: "Input the owner types into an advisor's terminal reaches it once"
-status: PROPOSED
-version: "0.2.x"
+status: IN_PROGRESS
+version: "0.2.1"
 depends_on: []
 created: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 241 · Input the owner types into an advisor's terminal reaches it once
 
-**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
+**Status:** `IN_PROGRESS` · **Version:** [v0.2.1](../roadmap.md#v02x)
 
 ## What
 
@@ -36,6 +36,7 @@ An owner's typed input must reach the program once, as the answer said.
 ## Decisions
 
 - 2026-11-09, the owner: v0.2.0 is published with this check failing ("Publish now"); this goal finds the cause and fixes it as a v0.2.x version of its own.
+- 2026-11-10, the owner: this goal ships in v0.2.1 ("Keep it in v0.2.1").
 
 ## Progress
 
