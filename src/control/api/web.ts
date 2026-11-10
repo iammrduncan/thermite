@@ -101,8 +101,10 @@ export function webRoutes(app: Hono, api: ApiContext): void {
   // rigs reported and of the changes made on control (each one has an entry in the audit log); a
   // `beat` shows the stream is alive, so the app can say when it is not.
   const markNow = () => `${store.auditLog.newestId()}\n${store.reportedRigs.mark()}`;
-  app.get(STREAM_PATH, admin, (c) =>
-    streamSSE(c, async (stream) => {
+  app.get(STREAM_PATH, admin, (c) => {
+    // A proxy in front of control must pass each event on as it comes: nginx obeys this header.
+    c.header("x-accel-buffering", "no");
+    return streamSSE(c, async (stream) => {
       let open = true;
       stream.onAbort(() => {
         open = false;
@@ -123,8 +125,8 @@ export function webRoutes(app: Hono, api: ApiContext): void {
           await stream.writeSSE({ event: "beat", data: "{}" });
         }
       }
-    }),
-  );
+    });
+  });
 
   // ---------------------------------------------------------------- the app's files
   const headers = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };

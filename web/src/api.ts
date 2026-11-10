@@ -93,15 +93,28 @@ function openStream() {
     lastBeat = Date.now();
     setAlive(true);
   };
+  // A tab nobody looks at reads nothing: it reads once when it is looked at again.
+  let missed = false;
+  const readAgain = () => {
+    if (document.hidden) {
+      missed = true;
+      return;
+    }
+    missed = false;
+    for (const fn of listeners) fn();
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && missed) readAgain();
+  });
   source.addEventListener("beat", beat);
   source.addEventListener("changed", () => {
     beat();
-    for (const fn of listeners) fn();
+    readAgain();
   });
   // The browser connects again by itself; a read then makes up for what was missed.
   source.addEventListener("open", () => {
     beat();
-    for (const fn of listeners) fn();
+    readAgain();
   });
   setInterval(() => setAlive(Date.now() - lastBeat < STREAM_BEAT_MS * 2.5), 5_000);
 }

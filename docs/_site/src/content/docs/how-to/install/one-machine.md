@@ -323,7 +323,8 @@ A rig on another machine or a cluster reaches control by connecting to it and to
 
 1. **An HTTPS address the rigs can reach.** Compose publishes control on `127.0.0.1` only, so nothing outside this computer reaches it. Put a reverse proxy on this computer in front of `127.0.0.1:8800` (or the port you chose) that serves HTTPS under a name the rigs can reach, such as `control.example.com`. Thermite doesn't include a proxy or its configuration: use one you know. Have the proxy:
    - send `X-Forwarded-Proto: https`, so control marks the dashboard's sign-in cookie as secure;
-   - accept request bodies of up to 90 MB: rigs send champions' patches, the New campaign page kit archives and `thermite kit add` kit bundles of up to 64 MB, and the New campaign page sends the files of a kit it describes as text, of up to 86 MiB.
+   - accept request bodies of up to 90 MB: rigs send champions' patches, the New campaign page kit archives and `thermite kit add` kit bundles of up to 64 MB, and the New campaign page sends the files of a kit it describes as text, of up to 86 MiB;
+   - pass a long answer on as it comes, and keep it open while lines come: the dashboard's screens at `/next` keep one request open, `GET /v1/stream`, on which control sends a line every 15 seconds. A proxy that holds the lines back, or ends a request after less than a minute, makes those screens say that control is not answering. Control sends `X-Accel-Buffering: no` with the answer, which nginx obeys.
 
    Nothing streams: the live view asks control every two seconds, and MCP answers in plain JSON.
 2. **That address, in control's settings.** In `.env`:

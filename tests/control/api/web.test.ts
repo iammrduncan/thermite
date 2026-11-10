@@ -258,6 +258,8 @@ describe("the app's reads", () => {
     const res = await control.request(STREAM_PATH, { headers: { cookie } });
     assert.equal(res.status, 200);
     assert.match(res.headers.get("content-type") ?? "", /^text\/event-stream/);
+    // A proxy in front of control is told to pass each event on as it comes.
+    assert.equal(res.headers.get("x-accel-buffering"), "no");
     const reader = res.body?.getReader();
     const first = new TextDecoder().decode((await reader?.read())?.value);
     assert.match(first, /event: beat/);

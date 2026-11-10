@@ -4,7 +4,8 @@
 // other source never passes, then:
 //
 // 1. signs in on the app's own page as a person does: a wrong token is refused in words, the
-//    owner's token opens Home, and the same session opens the pages at /ui;
+//    owner's token opens Home, and the same session opens the pages at /ui; and copies a run's ID
+//    with one click;
 // 2. makes a change on control from outside the browser and waits for the open screen to show it,
 //    with no reload;
 // 3. opens every screen at 1440, 820 and 390 pixels wide, in light and in dark, with the
@@ -155,6 +156,28 @@ export async function appCheck(browser, c, { out, check }) {
       },
       { name: "not-found", path: "/next/nowhere", ready: "h1" },
     );
+
+    // An ID is copied with one click.
+    const climb = screens.find((x) => x.name === "run-hill-climb");
+    if (climb) {
+      await tab.context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.goto(`${c.url}${climb.path}`);
+      await page.waitForSelector(climb.ready);
+      const id = decodeURIComponent(climb.path.split("/").at(-1) ?? "");
+      await page.click(`button[aria-label="Copy the run's ID ${id}"]`);
+      const copied = await page
+        .waitForFunction(
+          async (want) =>
+            (await /** @type {any} */ (globalThis).navigator.clipboard.readText()) === want,
+          id,
+          { timeout: 5_000 },
+        )
+        .then(
+          () => true,
+          () => false,
+        );
+      check("a run's ID is copied with one click", copied, id);
+    }
 
     // A change made elsewhere shows on the open screen, with no reload.
     await page.goto(`${c.url}/next`);

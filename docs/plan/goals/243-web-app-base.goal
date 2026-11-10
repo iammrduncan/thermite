@@ -65,6 +65,7 @@ The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot".
 - 2026-11-10: **The built app carries its licences:** `licenses.md` (the script's packages, by Vite) and `licenses-styles.md` (the fonts, the styles and the stock components), served beside it and linked from Settings › About.
 - 2026-11-10: **One number for what needs the owner:** the count on Home, on the navigation and of the list are the list's rows, a rig that stopped reporting among them. The pages at `/ui` leave that rig out of their count and keep it in their list.
 - 2026-11-10: **A screen's parts follow the room the screen has** (container queries), not the window's width, since the navigation takes part of the window at a tablet's width.
+- 2026-11-10: **For a real control:** the stream's answer tells a proxy not to hold its lines back (`X-Accel-Buffering: no`), and Install on one machine says what a proxy must do for it; a tab nobody looks at reads nothing, and reads once when it is looked at again; an ID is copied the older way where a page over plain HTTP has no clipboard, and is selected where nothing copies.
 - 2026-11-10: **What is not built here yet opens its page at `/ui`,** marked with an arrow: Live, Rigs, a need's own page, New campaign, a campaign's page, a run's other tabs, Library, Usage, Logs, and each tab of Settings but About.
 
 ## What the browser loads

@@ -61,7 +61,7 @@ Control has three front ends: REST, MCP and the dashboard. This goal makes each 
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
-- 2026-11-10: Goal [243](243-web-app-base.goal) built three things of this goal in the smallest form its three screens need; its Decisions say which. This goal takes them over: (1) `GET /v1/home` and `GET /v1/runs/<run>/overview`, whose contracts are in `src/core/api/control/dashboard.ts` and which page code registers (`src/control/dashboard/app/`) until the words leave page code (item 7); (2) `GET /v1/stream`, which says only that something changed (item 9 says what changed); (3) the owner's session on `/v1`, where a change an existing route records is still named `owner:api` in the audit log: each action takes its caller when it moves (item 2).
+- 2026-11-10: Goal [243](243-web-app-base.goal) built three things of this goal in the smallest form its three screens need; its Decisions say which. This goal takes them over: (1) `GET /v1/home` and `GET /v1/runs/<run>/overview`, whose contracts are in `src/core/api/control/dashboard.ts` and which page code registers (`src/control/dashboard/app/`) until the words leave page code (item 7); (2) `GET /v1/stream`, which says only that something changed (item 9 says what changed); (3) the owner's session on `/v1`, where a change an existing route records is still named `owner:api` in the audit log: each action takes its caller when it moves (item 2). One limit of that first stream for item 9 to end: each open tab keeps a request of its own open, and a browser opens six to one site over HTTP/1.1, so a sixth tab of the app would wait for the others.
 
 ---
 
