@@ -11,8 +11,9 @@
 # same images for the commit it runs on, tagged with the commit only: no version tag and no
 # release, so a lab can pin a build between releases by its digest (the check's step summary lists
 # them). Run by hand without it, or on a push to main or to a version's branch that changes the
-# images or this release path, it builds the same images and the same bundle, but pushes nothing
-# out and makes no release: the bundle is kept as the run's artifact. (A run by hand needs this
+# images (the dashboard's app in web/ among them, which control's image builds) or this release
+# path, it builds the same images and the same bundle, but pushes nothing out and makes no
+# release: the bundle is kept as the run's artifact. (A run by hand needs this
 # file on the default branch; a push does not.)
 #
 # No run uses runners until a maintainer approves it, as in ci.yml: the first job, approval,
@@ -33,6 +34,7 @@ on:
     paths:
       - .github/workflows/release.yml
       - containers/**
+      - web/**
       - scripts/release/**
       - src/release/**
       - tests/release/**
