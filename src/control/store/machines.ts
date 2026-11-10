@@ -66,7 +66,8 @@ export interface MachineRig {
   gpus: number[];
   /** With two or more GPUs: how many (the lowest-numbered) are the judge's; the rest are the agents'. */
   judge_gpus?: number | undefined;
-  images: { harness: string; supervisor: string };
+  /** With GPUs, `cuda` is the CUDA harness it runs (goal 132): kept when the facts go stale. */
+  images: { harness: string; supervisor: string; cuda?: "12" | "13" | undefined };
   root: boolean;
   /** Its core judges on its runners alone (goal 206): THERMITE_LOCAL_JUDGE=0. */
   judge_on_runners?: boolean | undefined;

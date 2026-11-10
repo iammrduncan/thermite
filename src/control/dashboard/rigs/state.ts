@@ -1,9 +1,9 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
 import { BUS_KEY_CHANGE_STEPS, BUS_KEYS_SEEN_STEP } from "../../bus/index.ts";
-import { updateRigImages } from "../../clusters/index.ts";
+import { machineRigImages, updateRigImages } from "../../clusters/index.ts";
 import { notSent } from "../../command-progress.ts";
-import { tail, updateScript } from "../../machines/index.ts";
+import { type MachineFacts, tail, updateScript } from "../../machines/index.ts";
 import { checkRigPlace, controlImages, NO_RIG_BUS } from "../../rigs/index.ts";
 import { rigHref } from "../../ui/urls.ts";
 import { backTo, type Dashboard, wantsJson } from "../context.ts";
@@ -47,7 +47,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
     if (!r || r.status === "removed") throw new Error(`Control didn't set ${rig} up on a machine.`);
     const m = store.machines.get(r.machine);
     if (!m) throw new Error(`The machine ${r.machine} is no longer in Settings › Machines.`);
-    const images = controlImages(parts, r.gpus.length);
+    const images = machineRigImages(parts, m.facts as MachineFacts | null, r.gpus, r.images);
     if (typeof images === "string") throw new Error(images);
     if (!parts.publicUrl)
       throw new Error("Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL).");

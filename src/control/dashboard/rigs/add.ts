@@ -2,7 +2,13 @@ import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
 import { MAX_LANES, RIG_ID_SENTENCE } from "../../../core/ids.ts";
 import { inBackground } from "../../background.ts";
-import { addClusterRig, leastRigSize, NS, SUPERVISOR_SHARE } from "../../clusters/index.ts";
+import {
+  addClusterRig,
+  leastRigSize,
+  machineRigImages,
+  NS,
+  SUPERVISOR_SHARE,
+} from "../../clusters/index.ts";
 import { newToken } from "../../credential.ts";
 import type { JoinedSpec, JoinForm } from "../../join.ts";
 import { deployScript, MAX_RIG_GPUS, type MachineFacts, tail } from "../../machines/index.ts";
@@ -298,14 +304,8 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
     if (typeof judge === "string") return fail(judge);
     if (gpus.length && !(facts.nvidia_ctk && facts.cdi))
       return fail(`${m.name} needs NVIDIA's container toolkit first: install it under Providers.`);
-    if (gpus.length && !parts.rigImages.harnessCuda)
-      return fail(
-        "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).",
-      );
-    const images = {
-      harness: gpus.length ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
-      supervisor: parts.rigImages.supervisor,
-    };
+    const images = machineRigImages(parts, facts, gpus);
+    if (typeof images === "string") return fail(images);
     const token = newToken();
     store.enrollments.enroll(rig, token.sha256, "owner:ui");
     const placed = {
