@@ -541,6 +541,51 @@ describe("advisors", () => {
     assert.deepEqual(sent, [undefined, "low", "high"]);
   });
 
+  test("an advisor on a provider control has with no key calls it with none; one of the advisors file with no key is still an error", async () => {
+    const auth: (string | undefined)[] = [];
+    const fake = await startFakeModel((req) => {
+      auth.push(req.authorization);
+      return { toolCalls: [{ name: "answer", args: { pass: true, reasons: "ok" } }] };
+    });
+    const runtime = (key: { api_key?: string }) => ({
+      name: "panel-1",
+      runtime: "openai" as const,
+      base_url: fake.url,
+      model: "m",
+      ...key,
+      context_window: 200_000,
+      max_tokens: 8192,
+      max_turns: 24,
+      timeout_s: 60,
+      usd_per_mtok_in: 0,
+      usd_per_mtok_out: 0,
+    });
+    const ask = (key: { api_key?: string }) =>
+      runAdvisor({
+        runtime: runtime(key),
+        prompt: testPrompt("Grade it.", "The change."),
+        schema: z.strictObject({ pass: z.boolean(), reasons: z.string() }),
+        answerSchema: Type.Object({ pass: Type.Boolean(), reasons: Type.String() }),
+      });
+    try {
+      // Control's route for a provider with no key carries an empty key: the call goes through
+      // the call's proxy, which sends no Authorization header.
+      const keyless = await ask({ api_key: "" });
+      assert.ok(keyless.output, keyless.error);
+      assert.deepEqual(auth, [undefined]);
+      // A key goes straight to the provider, as before.
+      const keyed = await ask({ api_key: "k" });
+      assert.ok(keyed.output, keyed.error);
+      assert.deepEqual(auth, [undefined, "Bearer k"]);
+      // An advisor of the advisors file with no key at all fails in words and calls nothing.
+      const none = await ask({});
+      assert.equal(none.error, "advisor panel-1 has no key");
+      assert.equal(auth.length, 2);
+    } finally {
+      await fake.close();
+    }
+  });
+
   test("a Pi advisor refused for the same problems three times running ends its call; changing problems go on", async () => {
     const runtime = {
       name: "panel-1",

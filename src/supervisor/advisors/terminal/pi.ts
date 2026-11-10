@@ -32,7 +32,7 @@ import {
 import { advisorLiveSource } from "../../../core/live.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorCompaction, AdvisorResult } from "../call.ts";
-import { advisorRoute } from "../config.ts";
+import { advisorRoute, keylessRoute } from "../config.ts";
 import {
   advisorPiTools,
   callStamp,
@@ -130,8 +130,9 @@ export async function runInPiView<S extends z.ZodType>(
   at: AdvisorInTerminal,
 ): Promise<AdvisorResult<z.infer<S>>> {
   const fail = (error: string) => ({ output: undefined, error, tokensIn: 0, tokensOut: 0, usd: 0 });
+  // A provider with no key: the call's proxy sends none.
   const key = piKey(rt);
-  if (!key) return fail(`advisor ${rt.name} has no key`);
+  if (!key && !keylessRoute(rt)) return fail(`advisor ${rt.name} has no key`);
   const t = at.terminals;
   const id = nextCallId(rt.name, at.run);
   const fields = { advisor: rt.name, run: at.run, call: id };

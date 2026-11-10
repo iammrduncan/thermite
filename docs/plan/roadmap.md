@@ -233,6 +233,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [201](goals/_completed/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop holding up the rest: other runs' dev runs, a shared runner and a RunPod rig's Terminate, and control's view of the queue (issue 50) · `VERIFIED` · v0.2.2
 - [259](goals/_completed/259-runner-builds-retention.goal) A retention policy for the judge's builds reaches the builds on a rig's runners (issue 50) · `VERIFIED` · v0.2.2
 
+**v0.2.3** (the owner, 2026-11-10) takes an outside contributor's fix: an OpenAI-compatible provider may have no key, and its calls go with none ([pull request 80](https://github.com/iammrduncan/thermite/pull/80), the first item of [issue 76](https://github.com/iammrduncan/thermite/issues/76)), with its review's three findings.
+
 The fixes after them, one version each, in the order to take them:
 
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `IN_PROGRESS`: item 4 shipped in v0.2.0, items 1 to 3 are the fix

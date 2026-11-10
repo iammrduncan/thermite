@@ -31,6 +31,28 @@ describe("the model route check", () => {
     }
   });
 
+  test("a route with no key, such as a local server's that takes none, is checked with no Authorization header", async () => {
+    const auth: (string | undefined)[] = [];
+    const fake = await startFakeModel(({ messages, authorization }) => {
+      auth.push(authorization);
+      if (authorization !== undefined) return { fail: 401, failMessage: "no key, please" };
+      if (messages.some((m) => m.role === "tool")) return { text: "done" };
+      const word = /the word (\S+)\./.exec(JSON.stringify(messages))?.[1] ?? "";
+      return { toolCalls: [{ name: "echo", args: { word } }] };
+    });
+    try {
+      const r = await checkModel({ ...route(fake.url), apiKey: "" });
+      assert.equal(r.ok, true, r.summary);
+      assert.ok(auth.length >= 1);
+      assert.ok(
+        auth.every((a) => a === undefined),
+        JSON.stringify(auth),
+      );
+    } finally {
+      await fake.close();
+    }
+  });
+
   test("a reply without a tool call fails, with what came back instead", async () => {
     const fake = await startFakeModel(() => ({ text: "I cannot call tools." }));
     try {

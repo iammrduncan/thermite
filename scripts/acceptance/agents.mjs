@@ -9,6 +9,9 @@
 //   - a lane's background work runs on across its commands and a dev run, as in a shell;
 //   - no lane process outlives its trial;
 //   - control's model check reaches the model through the rig's route with a correct tool call;
+//   - providers entered on control's settings page (lib/providers.mjs): one with a key, which
+//     the rig's model check uses and no page shows, and one with none, which it calls with no
+//     Authorization header (pull request 80);
 //   - in Pi, the first epoch's planner plans in its Pi view, in a process of its own, takes an
 //     owner's message before its next model call and /status typed into its console;
 //   - under OpenCode, the planner plans in its own terminal and takes an owner's message in its turn;
@@ -41,6 +44,7 @@ import {
   piPlannerScene,
   piPlannerTurn,
 } from "./lib/planner-terminal.mjs";
+import { PROVIDER_KEY, providerScenes } from "./lib/providers.mjs";
 import { hostName as containersHost, scriptedModel } from "./lib/scripted-model.mjs";
 import {
   api,
@@ -486,42 +490,10 @@ try {
       detail: modelCheck.detail,
     },
   );
-  // A provider entered on control's settings page: control lists its models, the rig takes one,
-  // and its model check goes through it with the provider's own key. The key shows nowhere.
-  const providerKey = "provider-key-acceptance-0001";
+  // Providers entered on control's settings page: one with a key, then one with none.
   const ui = await dashboard();
-  const settings = await ui.page("/ui/settings");
-  const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(settings)?.[1] ?? "";
-  await ui.post("/ui/settings/providers", {
-    csrf,
-    name: "scripted-provider",
-    type: "openai",
-    base_url: `http://${hostName}:${port}/v1`,
-    api_key: providerKey,
-  });
-  const listed = await ui.page("/ui/settings");
-  await ui.post("/ui/settings/rigs", {
-    csrf,
-    rig: "local-1",
-    choice: "scripted-provider|scripted",
-  });
-  const taken = await until("the rig takes the provider's model", async () => {
-    const m = (await api("/v1/rigs/local-1/view")).body.model;
-    return m?.source === "control" && m.name === "scripted-provider" ? m : undefined;
-  });
-  keysSeen.clear();
-  const routeCheck = await rigCheck("model");
-  const shown = ["/ui/settings", "/ui/rigs/local-1/edit", "/ui/rigs/local-1"];
-  const pages = (await Promise.all(shown.map((p) => ui.page(p)))).join("");
-  check(
-    "a provider from the settings page lists its models, reaches the rig and its model, and its key shows nowhere",
-    /1 model/.test(listed) &&
-      routeCheck.ok === true &&
-      keysSeen.has(`Bearer ${providerKey}`) &&
-      !pages.includes(providerKey) &&
-      !JSON.stringify(await events()).includes(providerKey),
-    { taken, summary: routeCheck.summary, keys: keysSeen.size },
-  );
+  const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await ui.page("/ui/settings"))?.[1] ?? "";
+  await providerScenes({ ui, csrf, base: `http://${hostName}:${port}/v1`, keys: keysSeen, check });
   // The OpenCode harness with the same provider: OpenCode runs as the lane, in its own terminal
   // on a rig nobody set, submits with thermite-trial, and reaches the provider only through the
   // harness's proxy, which adds the key.
@@ -589,7 +561,7 @@ try {
       Number(ocTrial.body.turns) >= 1 &&
       // Its first command passed the lane's memory limit: the broker killed it, not OpenCode.
       hogSeen.killed === true &&
-      keysSeen.has(`Bearer ${providerKey}`) &&
+      keysSeen.has(`Bearer ${PROVIDER_KEY}`) &&
       ![...keysSeen].some((k) => /Bearer (trial|proxy)\./.test(k)),
     {
       in_terminal: ocInTerminal,

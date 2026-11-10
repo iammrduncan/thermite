@@ -478,8 +478,11 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       base_url: base,
       key: key ? { sealed: opts.secrets.seal(key), hint: keyHint(key) } : undefined,
     });
-    if (r === "needs_key") return fail("A new provider needs its API key.");
-    // The audit names the provider and the key's hint, never the key.
+    // Only Anthropic's API needs a key here: OpenCode's own and an OpenAI-compatible server may
+    // have none.
+    if (r === "needs_key") return fail("An Anthropic provider needs its API key.");
+    // The audit names the provider and the key's hint, never the key; "none" for one with no key.
+    const kept = store.modelProviders.get(name)?.key_sealed ? "kept" : "none";
     store.auditLog.add(
       "owner:ui",
       r === "created" ? "model_provider_added" : "model_provider_changed",
@@ -487,7 +490,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         name,
         type,
         base_url: base,
-        key: key ? `replaced (${keyHint(key)})` : "kept",
+        key: key ? `replaced (${keyHint(key)})` : kept,
       },
     );
     const p = store.modelProviders.get(name);

@@ -42,7 +42,7 @@ A rig receives a provider's key only when you give one of its agents a model fro
 
 Who then uses the key depends on the worker harness:
 
-- **Pi**, the built-in worker harness, runs each worker as its own user, `agent-N`, with the key in its environment. The lane's commands run as another user, which can't read that environment.
+- **Pi**, the built-in worker harness, runs each worker as its own user, `agent-N`, with the key in its environment. The lane's commands run as another user, which can't read that environment. A provider with no key, such as a local server that checks none, has no key to hold: a worker in Pi reaches it through the harness's proxy, with its trial's token, and the proxy sends the provider no key.
 - **OpenCode v2** never gets the key. It reaches the provider through a proxy in the harness, with its trial's token. The proxy adds the key on the way out, and the trial's token stops working when the trial ends.
 - **Codex**, the Codex CLI, never gets the key either. Its configuration names one provider: the same proxy, with its trial's token. It runs as the lane's own user, with a home of its own and its approvals and sandbox off; the user it runs as is the boundary, as for OpenCode.
 - **The planner and the model check** use short-lived tokens for the same proxy, or the route itself inside the harness. A planner with a model of its own in OpenCode or Codex gets a token that the proxy takes to the planner's own provider, with that provider's key.

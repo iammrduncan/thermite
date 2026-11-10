@@ -12,6 +12,7 @@ import { CODEX_ADVISOR_OFF } from "../../../src/supervisor/advisors/cli.ts";
 import { type AdvisorRuntime, runAdvisor } from "../../../src/supervisor/advisors/index.ts";
 import { serveAdvisorModel } from "../../../src/supervisor/advisors/proxy.ts";
 import { advisorsOf } from "../../../src/supervisor/advisors/routes.ts";
+import { cliHarnessModel } from "../../../src/supervisor/advisors/runtimes/opencode-codex.ts";
 import { testPrompt } from "../../helpers/advisor-prompt.ts";
 
 /**
@@ -384,6 +385,19 @@ describe("advisors in OpenCode and the Codex CLI", () => {
       answerSchema: Type.Object({}),
     });
     assert.equal(noKey.error, "advisor auditor has no key");
+    // Control's route for a provider with no key carries an empty key: it runs, and the call's
+    // proxy sends none.
+    const keyless = cliHarnessModel({
+      name: "auditor",
+      runtime: "codex",
+      base_url: p.url,
+      model: "m",
+      api_key: "",
+      context_window: 0,
+      timeout_s: 60,
+    });
+    assert.ok(typeof keyless !== "string", String(keyless));
+    assert.equal(keyless.key, "");
     // The stand-in's facts are not a decision: the answer is refused, with what it said.
     const before = process.env.THERMITE_CODEX_BIN;
     process.env.THERMITE_CODEX_BIN = standIn("codex");

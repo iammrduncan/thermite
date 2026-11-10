@@ -31,9 +31,11 @@ const MODEL_ENV = [...MODEL_ENV_NAMES, ...ALWAYS];
  * The route a Pi process gets, a worker's or a planner's. A ChatGPT sign-in's token is renewed
  * hourly and stays in the harness: the process reaches the model through the harness's proxy with
  * `credential`, its trial's token or its call's, which stops working when the trial or call ends.
+ * So does a route with no key, such as a local server's that takes none: a process's route is
+ * read from its environment, where an empty key is no route, and the proxy sends no key.
  */
 export function piRoute(model: ModelConfig, apiPort: number, credential: string): ModelConfig {
-  if (model.api !== "chatgpt") return model;
+  if (model.api !== "chatgpt" && model.apiKey) return model;
   return {
     ...model,
     baseUrl: `http://127.0.0.1:${apiPort}/v1/model-proxy`,
