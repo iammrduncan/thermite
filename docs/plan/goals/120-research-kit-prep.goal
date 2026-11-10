@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: ["119", "102"]
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-11-10
 ---
 
 # 120 · From research to the next campaign: next experiments in Start a run and New campaign, and kit prep
@@ -52,6 +52,7 @@ The owner, 2026-10-24: "for v0.2.0 we should add the features of 'kit prep' as o
 
 - 2026-10-24, owner: in v0.2.0, as an optional setting of a research campaign.
 - 2026-10-24, owner: Start a run and New campaign using the next experiments belong here, "the automated way to go from research to next steps"; goal 119 is the paper's output and tags.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): its screens are built in the new dashboard, after goal [249](249-new-campaign.goal).
 
 ## Open questions
 

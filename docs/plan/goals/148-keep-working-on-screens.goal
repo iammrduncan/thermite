@@ -1,16 +1,16 @@
 ---
 id: "148"
 title: "Keeping working, on New campaign and on a run's page"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: ["135"]
 created: 2026-10-25
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 148 · Keeping working, on New campaign and on a run's page
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [135](_completed/135-lanes-and-judge-throughput.goal)
+**Status:** `DROPPED`, merged into [247](247-campaigns-and-runs.goal) · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [135](_completed/135-lanes-and-judge-throughput.goal)
 
 ## What
 
@@ -34,12 +34,14 @@ Moved out of goal 135 when the owner froze v0.1.0's scope, 2026-10-25: "we keep 
 
 - 2026-10-25, owner: after v0.1.0.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [247](247-campaigns-and-runs.goal). It is built in the new dashboard, with goal 247.
 
 ## Open questions
 
 ## Progress
 
 - 2026-10-25 22:50 UTC: Moved here from goal 135.
+- 2026-11-10: Merged into goal 247.
 
 ---
 

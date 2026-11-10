@@ -1,7 +1,7 @@
 ---
 id: "244"
 title: "One door for each action and each read: written once, for REST, MCP and the dashboard"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 244 · One door for each action and each read: written once, for REST, MCP and the dashboard
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
@@ -20,7 +20,7 @@ Control has three front ends: REST, MCP and the dashboard. This goal makes each 
 
 1. **The actions that already differ,** first: retire a rig (written three times, and REST's differs), start a full reset (three times), an assignment's briefing and queue (MCP alone adds them), a run's answer (MCP's has a field REST's lacks), the list of rigs (built twice).
 2. **An action is one function in its domain folder,** with its request and answer as schemas in `src/core/api/`. A front end reads the request, calls it and gives the answer; it writes nothing to the store itself.
-3. **One entry for each action** names its REST route, its MCP tool, who may call it and one line of what it does. REST and MCP are registered from the entries ([question 1](../code-structure-guide.md#7-the-owners-questions)).
+3. **One entry for each action** names its REST route, its MCP tool, who may call it and one line of what it does. REST and MCP are registered from the entries: for the actions that move out of page code and for new ones. The 48 pairs that exist move as each is next touched (the owner, 2026-11-10).
 4. **The actions only the dashboard has get their API,** each with its area's goal: providers and Git access (goal [245](245-providers-and-set-up.goal)); New campaign's checks (goal [249](249-new-campaign.goal)); machines, clusters, GPU clouds, a rig on a machine, a joined rig, an update to control's images (goal [250](250-rigs-and-machines.goal)). 42 of the dashboard's 90 form routes have no REST route today.
 5. **The reads every screen needs,** as data: what needs the owner (18 kinds, HTML alone today), the list of campaigns and a campaign, a command's progress in words.
 6. **An answer is built once,** with a schema in `core`: a run, a rig, the rigs. A fact that is derived is derived in one place: a rig's state is one word, where it is three facts read at 41 places. Each answer is built from named fields for each kind of token, with a test of the set.
@@ -51,16 +51,16 @@ Control has three front ends: REST, MCP and the dashboard. This goal makes each 
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
-- Whether the 48 actions that have a route and a tool today move to entries in this goal, or as each is next touched ([question 1](../code-structure-guide.md#7-the-owners-questions) recommends the second).
 - An OpenAPI file for control, which goal 029 asked for: made from the entries, or left out.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

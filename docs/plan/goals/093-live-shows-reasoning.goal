@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-22
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 093 · Live shows what the model thinks and says, not only its tool calls
@@ -34,6 +34,7 @@ The owner, 2026-10-22, watching a worker in Live: "I see tons of fetches. But I 
 - 2026-10-22, owner: a bug fix for v0.1.1.
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): built on the new Live, after goal [248](248-live.goal).
 
 ## Open questions
 

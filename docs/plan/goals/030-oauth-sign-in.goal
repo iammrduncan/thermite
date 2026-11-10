@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-19
-updated: 2026-10-19
+updated: 2026-11-10
 ---
 
 # 030 · Sign in with OAuth or OIDC
@@ -29,6 +29,7 @@ A lab that already runs an identity provider should not manage a separate set of
 ## Decisions
 
 - 2026-10-19, owner: Thermite can use an OAuth provider such as Logto, and MCP can use it for OAuth.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): after the switch to the new dashboard (goal [253](253-the-switch.goal)), which signs in as today.
 
 ## Open questions
 

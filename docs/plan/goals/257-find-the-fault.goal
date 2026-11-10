@@ -1,7 +1,7 @@
 ---
 id: "257"
 title: "Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 257 · Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
@@ -25,7 +25,7 @@ A plan only; nothing of it is built. From the [code structure guide, S6](../code
 7. **A part that restarts says why, where control can read it:** the broker's line for a controller that exited is a warning, and the gap's event carries the exit.
 8. **A dropped error has its reason.** 79 promise catches on the rig's side and 55 catches in control drop an error with no word: each gets a line at the debug level, or a comment that says why not.
 9. **Calls to the outside are logged** where a fault is hardest to find today: control's work on clusters and machines, with the rig and how long each call took.
-10. **A rig's log lines reach control,** and can be searched with control's own (goal [028](028-log-store.goal)); the Logs page of goal [252](252-usage-logs-settings.goal) shows them.
+10. **A rig's log lines reach control,** kept in a table of control's own store with SQLite's text search (the owner, 2026-11-10; goal [028](028-log-store.goal)), and can be searched with control's own. The Logs page of goal [252](252-usage-logs-settings.goal) shows them.
 
 ## Why
 
@@ -57,16 +57,17 @@ About 300 log lines cover the rig's 101,000 lines of code, a third of them with 
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
-- Where a rig's log lines are kept on control: [question 6](../code-structure-guide.md#7-the-owners-questions) recommends a table of control's own store with SQLite's text search.
 - Whether a request's ID also rides on the signed command it causes, so a rig's lines carry it.
+- Goal [028](028-log-store.goal) also asked to search the agents' sessions: trial transcripts, and planner and advisor calls. Whether they are searched in the same store in this goal, or in a goal after it.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

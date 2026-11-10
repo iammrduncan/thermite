@@ -1,7 +1,7 @@
 ---
 id: "256"
 title: "Layers inside the parts, and files split on purpose"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["242", "244"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 256 · Layers inside the parts, and files split on purpose
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal); [244](244-one-door.goal) for control's folders
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal); [244](244-one-door.goal) for control's folders
 
 ## What
 
@@ -19,7 +19,7 @@ A plan only; nothing of it is built. From the [code structure guide, S5](../code
 **The cheap guards, first:**
 
 1. **An order of folders inside the harness and inside control,** written in CONVENTIONS.md and held by `npm run check:imports`. Today's breaches are listed, and the list only shrinks, as the rule between the parts was brought in.
-2. **The size check warns at 700 lines,** so a split is planned and not squeezed into a feature.
+2. **The size check warns at 700 lines,** so a split is planned and not squeezed into a feature. The limit of 800 lines stays (the owner, 2026-11-10).
 
 **Then, each when its area is quiet:**
 
@@ -58,16 +58,16 @@ A plan only; nothing of it is built. From the [code structure guide, S5](../code
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
-- Whether the limit of 800 lines stays ([question 2](../code-structure-guide.md#7-the-owners-questions) recommends that it does).
 - Whether test files, 12 of which are at 700 to 797 lines, get the same warning.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

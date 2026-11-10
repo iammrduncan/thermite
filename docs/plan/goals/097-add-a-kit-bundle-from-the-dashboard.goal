@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: ["096"]
 created: 2026-10-22
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 097 · Give control a kit bundle from the dashboard
@@ -33,6 +33,7 @@ On 2026-10-22 the owner gave control the kit of a campaign written elsewhere. Th
 
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.3.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): built in the new dashboard, after goal [249](249-new-campaign.goal).
 
 ## Open questions
 

@@ -6,7 +6,7 @@ version: "0.3.0"
 part: "GPUs on demand, and work within a budget"
 depends_on: []
 created: 2026-10-25
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 134 · A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back
@@ -43,6 +43,7 @@ The same day, a hill climb on a GPU rig with a GPU for each of its two lanes and
 ## Decisions
 
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): built in the new dashboard, after goal [247](247-campaigns-and-runs.goal).
 
 ## Progress
 

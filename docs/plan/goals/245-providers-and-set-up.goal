@@ -1,7 +1,7 @@
 ---
 id: "245"
 title: "Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["243", "244"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 245 · Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
@@ -39,8 +39,8 @@ A plan only; nothing of it is built. The [UI refresh guide's section 7](../ui-re
 - **A catalogue entry is a preset, not a new type.** No contract between control and a rig changes; a rig of an older version works with a provider added from the catalogue.
 - **Control seals every secret and never shows it again;** a rig gets only what it uses. Control never calls Anthropic with a subscription's token.
 - **A subscription is for the owner's own Thermite** (the decision of 2026-10-18). The same question is answered before any new sign-in is added.
-- **Control fetches no list while it runs** ([question 8](../ui-refresh-guide.md#11-the-owners-questions)). The registry, and a copy of what each model can do, ship with the release.
-- **A logo ships only with its licence checked** and credited in CREDITS.md ([question 9](../ui-refresh-guide.md#11-the-owners-questions)).
+- **Control fetches no list while it runs** (the owner, 2026-11-10). The registry, and a copy of what each model can do, ship with the release; the registry is made from fxbot's file when a release is built.
+- **A logo ships only with its licence checked** and credited in CREDITS.md; a provider with none shows its first letter (the owner, 2026-11-10).
 - **A mockup first:** the catalogue, a card of each kind, the sign-in panel's states, the model step, the set-up pages.
 
 ## Done when
@@ -57,7 +57,7 @@ A plan only; nothing of it is built. The [UI refresh guide's section 7](../ui-re
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
@@ -69,6 +69,7 @@ None yet.
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

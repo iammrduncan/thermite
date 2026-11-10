@@ -1,16 +1,16 @@
 ---
 id: "126"
 title: "UI clean-up: every screen checked against the rules for screens, and the gaps fixed"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-24
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 126 · UI clean-up: every screen checked against the rules for screens, and the gaps fixed
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [253](253-the-switch.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -45,6 +45,7 @@ The owner, 2026-10-24: "v0.1.4 becomes UI Cleanup and UX improvements."
 
 - 2026-10-24, owner: v0.1.4 is the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [253](253-the-switch.goal). Each area's goal builds its screens to the rules for screens, and goal 253 checks every screen against them before the switch.
 
 ## Open questions
 
@@ -53,6 +54,7 @@ The owner, 2026-10-24: "v0.1.4 becomes UI Cleanup and UX improvements."
 ## Progress
 
 - 2026-10-24: Goal written from the owner's words.
+- 2026-11-10: Merged into goal 253.
 
 ---
 

@@ -5,7 +5,7 @@ status: IN_PROGRESS
 version: "0.2.0"
 depends_on: []
 created: 2026-11-04
-updated: 2026-11-06
+updated: 2026-11-10
 ---
 
 # 203 · Machines: a Settings page of where rigs run, apart from Providers; no Rigs' models page
@@ -44,6 +44,7 @@ A provider is a login to an outside service. A machine is a place where rigs run
 - 2026-11-04: Step A built: the Settings area `machines` (group Rigs) with three blocks and **Add a machine** (the add form's type as three choices; providers' client script reads either); Providers lists and adds only logins; every action on a machine, a cluster or a GPU cloud returns to Machines (`machineUrl`); **Add a rig here** on a checked machine or cluster opens Add a rig with `?place=` chosen; Add a rig's and Launch on RunPod's links go to Machines; every message, MCP description and page that said Providers for a machine says Settings › Machines. Test: tests/control/dashboard/settings/machines-page.test.ts; the tests that read machine rows read Machines.
 - 2026-11-04: Step B built: the Settings area `routes` (Rigs' models) is gone and its address opens Rigs; the rig's page shows its row as **The agents' model** (dashboard/rigs/model-line.ts), above **Checks**, with the same sentences, its "taking" chip and the model check followed as it runs; providers' and campaigns' words point at Edit rig and the rig's page. Run your first campaign (agents-with-a-free-model.md) gives the model on Edit rig, and the quick start's acceptance follows it there (tests/helpers/quick-start.ts, scripts/acceptance/quick-start/agents.mjs). Left: the form route `POST /ui/settings/rigs`, which no page shows now, stays for the tests and acceptance scripts that give a rig a model through it; to retire, with them moved to Edit rig's form or REST. The quick-start acceptance runs on the test machine before the tag.
 - 2026-11-04 03:43Z: On the test machine, at 8e02c027, the eleven test files the two steps touched passed (67 of 67), and the lab's control has run 43b577e1, with both steps, since 03:21Z. The quick-start acceptance under Docker Compose passed every step to Run your first campaign's model on Edit rig, but failed at the judge's smoke check: on the test machine, a virtual machine, the no-op came out inconclusive and the check passed with its note that timing is noisy. Run your first campaign says so and tells the reader to go on, but the acceptance script took only the clean pass. It now takes the page's words for both, and in step 7 counts the no-op as inconclusive after a noisy pass, as the page does (tests/helpers/quick-start.ts, scripts/acceptance/quick-start/first-run.mjs). Left: a run of the quick-start acceptance with that fix. Retiring `POST /ui/settings/rigs`, which changes nothing anyone sees, goes to the next version.
+- 2026-11-10: The form route `POST /ui/settings/rigs`, which no page shows, goes with goal [250](250-rigs-and-machines.goal), where the acceptance scripts that used it move to the API.
 
 ---
 

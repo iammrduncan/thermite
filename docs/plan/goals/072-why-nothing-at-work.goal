@@ -1,16 +1,16 @@
 ---
 id: "072"
 title: "Say why a running run has nothing at work"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-21
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 072 · Say why a running run has nothing at work
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [247](247-campaigns-and-runs.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -31,12 +31,14 @@ On 2026-10-21 a goal run had no trial at work for six minutes after its rig rest
 
 - 2026-10-24, owner: moves from v0.2.0 to v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [247](247-campaigns-and-runs.goal). It is built in the new dashboard, with goal 247.
 
 ## Open questions
 
 ## Progress
 
 - 2026-10-21: Goal written from a run the lead session watched after a rig's update.
+- 2026-11-10: Merged into goal 247.
 
 ---
 

@@ -1,11 +1,11 @@
 # The UI refresh guide
 
-This guide is for the refresh of the dashboard in v0.3.0, goals [243](goals/243-web-app-base.goal) to [253](goals/253-the-switch.goal). It is one result of goal [242](goals/242-v030-review.goal), the review of 2026-11-10. Its partner, the [code structure guide](code-structure-guide.md), covers the code behind the screens. The [release plan](release-v0.3.0.md) puts both in one order.
+This guide is for the refresh of the dashboard in v0.3.0, goals [243](goals/243-web-app-base.goal) to [253](goals/253-the-switch.goal). It is one result of goal [242](goals/_completed/242-v030-review.goal), the review of 2026-11-10. Its partner, the [code structure guide](code-structure-guide.md), covers the code behind the screens. The [release plan](release-v0.3.0.md) puts both in one order.
 
 - **What it describes:** the dashboard of v0.2.0, as the browser check drew it on 2026-11-08 (159 pages, each at 1440 and 820 pixels wide, on the demo's data), and the UI of [fxbot](https://github.com/iammrduncan/fxbot) at its `release/0.8.0` branch (commit `ff53429`, read on 2026-11-10).
 - **Where it comes from:** six reviewers on 2026-11-10, each with one area: fxbot's UI system and its provider set-up; every screen of the dashboard; how the dashboard is built; providers in Thermite; control's code; the rig's code. Their reports, with every count, screen and line number, are kept in the maintainers' private notes.
 - **What it is not:** a set of mockups. Each screen is still chosen from a mockup the owner looks at ([rules for every goal](README.md#rules-for-every-goal)). This guide says what each mockup must settle, and what stays the same on every screen.
-- **What is decided and what is proposed:** the owner decided the direction (below). Everything else here is a proposal until the owner answers [the questions](#11-the-owners-questions).
+- **What is decided:** the owner decided the direction (below) and, on 2026-11-10, took the recommended answer to each of [the questions](#11-the-owners-questions). A screen's look is still chosen from its mockup.
 
 The owner, 2026-11-10: "for v0.3.0 release I want to fix our UI and UX experience... I want to utilize the UI/UX system I started for fxbot ... including it's v0.8.0 provider login setup system. Its way cleaner and nicer than our ux. Our ux is cluttered and clunky and hard to navigate/understand."
 
@@ -214,7 +214,9 @@ The faults that reached a release follow from this shape, not from carelessness:
 | Work | More. Every screen is built again, the API is completed, the tests move | Less at first |
 | What it reverses | CONVENTIONS.md's rule for the dashboard, and the clean-up guide's answer on scripts as strings | Nothing |
 
-### Recommended: A
+### Chosen: A
+
+The owner chose A on 2026-11-10. These were the reasons for the recommendation.
 
 1. **It is what was asked for.** fxbot's system is its components and how they behave. They can't be used without their framework; B copies the colours and writes the rest again.
 2. **The dashboard's faults come from how it is built.** A removes two of the four kinds by structure and shrinks the others.
@@ -224,7 +226,7 @@ The faults that reached a release follow from this shape, not from carelessness:
 
 **What A costs, and what keeps it safe.** The work is large. So the old dashboard stays whole and in use until the new one covers everything; each area gets its API first, with tests there; and each area is one goal that ends with its screens in the browser check and its docs pages written again.
 
-**If the owner chooses B.** Sections 1 and 4 to 7 stand: the findings, the rules for screens, the words, the navigation, the provider catalogue. Goal 243 becomes "the stylesheet and the shared parts", goal 253 has nothing to switch, goal 244 is no longer forced by structure, and fxbot's provider pages are built again, not taken.
+**What B would have changed.** Sections 1 and 4 to 7 would stand: the findings, the rules for screens, the words, the navigation, the provider catalogue. Goal 243 would be "the stylesheet and the shared parts", goal 253 would have nothing to switch, goal 244 would not be forced by structure, and fxbot's provider pages would be built again, not taken.
 
 ## 4. The rules for screens
 
@@ -297,7 +299,7 @@ A thing's address goes through what owns it, as CONVENTIONS.md says. Where a run
 
 ### One word for each thing
 
-Today's screens use the words on the left. The new screens use the one on the right, everywhere: screens, API, MCP and docs. These are proposals; the owner confirms each ([question 6](#11-the-owners-questions)), and the [glossary](../_site/src/content/docs/reference/glossary.md), which holds several of the left-hand words as terms of their own, follows.
+Today's screens use the words on the left. The new screens use the one on the right, everywhere: screens, API, MCP and docs. These are the words the mockups use; the owner confirms each on the mockups ([question 6](#11-the-owners-questions)), and the [glossary](../_site/src/content/docs/reference/glossary.md), which holds several of the left-hand words as terms of their own, follows.
 
 | Thing | Words today | The word |
 | --- | --- | --- |
@@ -328,7 +330,7 @@ Today's screens use the words on the left. The new screens use the one on the ri
 
 ## 6. The new navigation
 
-A proposal, to be settled by the first mockups (goal 243). It follows the [jobs](#the-operators-jobs): what the operator works with comes first, and records come second.
+The first mockups (goal 243) settle it. It follows the [jobs](#the-operators-jobs): what the operator works with comes first, and records come second.
 
 ### The left navigation
 
@@ -484,7 +486,7 @@ A new control opens on a set-up page with no navigation around it, as fxbot does
 
 ## 8. How the web app is built
 
-For design A. Goal [243](goals/243-web-app-base.goal) builds this base.
+Goal [243](goals/243-web-app-base.goal) builds this base.
 
 ### Where it lives, and what it may import
 
@@ -529,7 +531,7 @@ A screen's mockup is the real component on the demo's data, at an address that o
 
 Each line is a goal. Each ends with the system working, the old dashboard whole, and nothing left for a later pass.
 
-1. **The owner's answers** to [section 11](#11-the-owners-questions) (goal 242).
+1. **The owner's answers** to [section 11](#11-the-owners-questions) (goal 242). Done, 2026-11-10.
 2. **The base** (goal 243): the app, its shell and navigation, sign-in, the client and the stream, the build into control's image, the browser check on it. Its first three screens are the first mockups: Home, a run's Overview and the frame of Settings.
 3. **One door** (goal [244](goals/244-one-door.goal)), beside the base: the reads every screen needs (Needs you as data, campaigns, the words), and the way an action is written once for REST and MCP.
 4. **Providers and set-up** (goal 245): the first whole area, and the one the owner named. It stands nearly alone, so it proves the way of working.
@@ -561,7 +563,7 @@ Each line is a goal. Each ends with the system working, the old dashboard whole,
 
 ## 11. The owner's questions
 
-Each has a recommendation. An answer goes into goal 242's decisions, and into [decisions.md](decisions.md) where it shapes the product.
+The owner answered these on 2026-11-10: every recommendation below is taken. Where a question is about a look (3, 6 and 12), the recommendation is what is mocked first, and the owner chooses from the mockups. The answers are goal 242's decisions, and those that shape the product are in [decisions.md](decisions.md).
 
 1. **The design: A, the same system, or B, the look alone?** ([Section 3](#3-how-thermite-uses-it-two-designs).)
    - **Recommended:** A. It changes CONVENTIONS.md's rule for the dashboard.

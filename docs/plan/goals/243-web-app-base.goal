@@ -1,7 +1,7 @@
 ---
 id: "243"
 title: "The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
@@ -10,11 +10,11 @@ updated: 2026-11-10
 
 # 243 · The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
-A plan only; nothing of it is built. It is written for design A of the [UI refresh guide](../ui-refresh-guide.md#3-how-thermite-uses-it-two-designs), which the owner has not chosen yet.
+A plan only; nothing of it is built. It builds design A of the [UI refresh guide](../ui-refresh-guide.md#3-how-thermite-uses-it-two-designs), which the owner chose on 2026-11-10.
 
 The base that every screen of the new dashboard stands on ([how the web app is built](../ui-refresh-guide.md#8-how-the-web-app-is-built)):
 
@@ -24,7 +24,7 @@ The base that every screen of the new dashboard stands on ([how the web app is b
 4. **Sign-in:** as today, with the session good for `/v1` too, and a change sent with the session's token in a header.
 5. **The shell:** the left navigation of the [guide's section 6](../ui-refresh-guide.md#6-the-new-navigation) with Needs you as a list, a screen's header, the frame of Settings, the three widths, the sheet on a phone. Every ID can be copied (goal [094](094-copy-id.goal)).
 6. **Thermite's own parts,** each used by more than one screen: the state badge, the list's toolbar, a tile of figures, the empty and error states, the dialog for adding a thing.
-7. **The first three screens, as the first mockups:** Home, a run's Overview and Settings, on the demo's data, in two variants of the navigation ([question 3](../ui-refresh-guide.md#11-the-owners-questions)).
+7. **The first three screens, as the first mockups:** Home, a run's Overview and Settings, on the demo's data, in two variants of the navigation: Library, Usage and Logs as rows with words, which is mocked first, and as icons at the foot, as fxbot has them.
 8. **Delivery:** control serves the built files at `/next`; control's image gains a build stage; the Content Security Policy for the app has no inline style (goal [177](177-dashboard-styles-in-its-stylesheet.goal)'s end, for the new pages).
 9. **Checks:** the app's type check and linter in `npm run check`; the browser check opens the app's screens at 1,440, 820 and 390 pixels, light and dark.
 10. **Mockups are screens:** a route that only a development build has shows a screen on the demo's data, with switches for its states.
@@ -42,7 +42,8 @@ The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot".
 
 ## Done when
 
-- [ ] The owner chose the design (goal 242), and the navigation from the two variants.
+- [x] The owner chose the design. Done, 2026-11-10: a web app on fxbot's own stack.
+- [ ] The owner chose the navigation from the two variants.
 - [ ] The app builds, and control serves it at `/next`, from source in development and from control's image.
 - [ ] The owner signs in and sees Home, a run's Overview and Settings on a real control, current without a reload.
 - [ ] The import check fails on an import the app may not make, shown by a test of the check.
@@ -53,7 +54,7 @@ The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot".
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
@@ -63,6 +64,7 @@ None yet.
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

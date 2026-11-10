@@ -13,6 +13,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 ## Current stage
 
 - v0.2.0 is out (2026-11-09). New features go on toward v0.3.0, on its branch `v0.3.0`. Each fix to v0.2.0 is a patch version of its own, v0.2.1, v0.2.2 and so on: a pull request to `main` from a branch of its own, released when it merges, and then merged into `v0.3.0`.
+- v0.3.0 is the dashboard's refresh, as a web app on the UI system of the maintainers' fxbot, and the work on the code's structure behind it (the owner, 2026-11-10). Its plan is [docs/plan/release-v0.3.0.md](docs/plan/release-v0.3.0.md), with the [UI refresh guide](docs/plan/ui-refresh-guide.md) and the [code structure guide](docs/plan/code-structure-guide.md). Once the new dashboard's build starts (goal 243), the dashboard in use (`src/control/ui/`, `src/control/dashboard/`) takes fixes only: a new screen is built in the new dashboard, from a mockup.
 - The plans are public, in [docs/plan/](docs/plan/README.md): the [roadmap](docs/plan/roadmap.md), the [release plan](docs/plan/release-v0.1.0.md), the [settled decisions](docs/plan/decisions.md) and one goal for each roadmap item.
 
 ## Settled decisions (summary)

@@ -1,16 +1,16 @@
 ---
 id: "088"
 title: "New campaign's buttons show they were pressed"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: ["080"]
 created: 2026-10-22
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 088 · New campaign's buttons show they were pressed
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [080](_completed/080-buttons-show-progress.goal)
+**Status:** `DROPPED`, merged into [249](249-new-campaign.goal) · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [080](_completed/080-buttons-show-progress.goal)
 
 ## What
 
@@ -31,6 +31,7 @@ The owner, 2026-10-22: "clicking start campaign doesn't give immediate feedback 
 - 2026-10-22, owner: in v0.1.1, a quick follow after the first release.
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [249](249-new-campaign.goal). It is built in the new dashboard, with goal 249.
 
 ## Open questions
 
@@ -39,6 +40,7 @@ None.
 ## Progress
 
 - 2026-10-22: Goal written from the owner's feedback.
+- 2026-11-10: Merged into goal 249.
 
 ---
 

@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: ["125"]
 created: 2026-11-01
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 178 · Code clean-up, continued: what v0.1.1 left for later
@@ -40,6 +40,7 @@ CONVENTIONS.md asks for each of these. None changes what Thermite does, so they 
 
 - 2026-11-01, owner: v0.1.1 is tested once goal 125's renames are done; the sweeps and the measurement wait for v0.1.2 ("Finish the renames first").
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): items 3, 4, 6 and 7 are done in goals [257](257-find-the-fault.goal), [256](256-layers-and-splits.goal), [252](252-usage-logs-settings.goal) and [253](253-the-switch.goal). Item 2 is the removal of the spare `export` words alone: the review found no dead code behind the list.
 
 ## Open questions
 

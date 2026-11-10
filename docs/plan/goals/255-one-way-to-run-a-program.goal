@@ -1,7 +1,7 @@
 ---
 id: "255"
 title: "One way to run an agent program: for workers and advisors, headless and in a terminal"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 255 · One way to run an agent program: for workers and advisors, headless and in a terminal
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
@@ -51,7 +51,7 @@ Each agent program (Claude Code, Codex, OpenCode) has an entry in `src/agents` t
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
@@ -60,6 +60,7 @@ None yet.
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

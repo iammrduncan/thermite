@@ -1,7 +1,7 @@
 ---
 id: "247"
 title: "Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["246"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 247 · Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [246](246-home-and-decisions.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [246](246-home-and-decisions.goal)
 
 ## What
 
@@ -52,7 +52,7 @@ A plan only; nothing of it is built. The [UI refresh guide's section 6](../ui-re
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
@@ -62,6 +62,7 @@ None yet.
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

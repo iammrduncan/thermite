@@ -1,16 +1,16 @@
 ---
 id: "029"
 title: "Full API and MCP coverage"
-status: IN_PROGRESS
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-19
-updated: 2026-10-22
+updated: 2026-11-10
 ---
 
 # 029 · Full API and MCP coverage
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [244](244-one-door.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -41,6 +41,7 @@ Other agents must be able to run Thermite through control without the dashboard.
   - **Fields:** the `rig_settings` payload's, each optional, with its types in the request and its ranges refused in its words. `judge_gpus: null` (the rig's default split), and `trial_minutes: null` and `max_turns: null` (no limit; goal 079 for a trial's length), are taken as the payload takes them. A field equal to what the rig reports is no change, so a caller may send back what it read. Two refusals the page never needs, as it has no field for them: a rig whose harness is older and reports no settings, and a number for `judge_gpus` on a rig with no GPU set (in Start a run's words).
   - **Tokens:** REST takes the owner's token, as every route. MCP's `set_rig_settings` takes the owner's and an operator's; an operator's call that would change `promotion` or `judge_gpus` is refused in words (`Only the owner's token changes a rig's promotion rule: leave out promotion.`, and the GPU split's words of `start_run`). Reason: `rig_settings` is an owner-only kind in the harness, but the operator acts for the owner, and its `owner:operator` passes that gate, as for the queue's kinds and `message_agent`. The parts, workers at a time and limits steer a rig, as the operator already does. The promotion rule decides whether a confirmed change waits for the owner, whose approval the operator never gives (`approve_promotion` is the owner's alone). A new GPU split restarts the rig's harness, which `start_run` already keeps from an operator. The agent's token has neither tool: it has no `set_rig_model` either, and a rig's settings are the people's who run it, not a campaign's agents'. `rig_settings` is read with the owner's, an operator's and a reader's token, as `rig_models`.
   - **Command line:** no twin, as the command line has none for the agents' models to mirror.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [244](244-one-door.goal). What is left of it (the other actions, and the test that every action has both) is goal 244, where each action is written once for REST, MCP and the dashboard. The three twins built here stay.
 
 ## Open questions
 
@@ -52,6 +53,7 @@ None.
 - 2026-10-20: **Start a run**'s twin is built: `POST /v1/campaigns/<campaign>/runs`, MCP `start_run` and `thermite run start`, with the panel's refusals in words and a stopped RunPod pod started first (the owner's token only). Tests: `tests/control/start-run.test.ts` (REST against the panel's own assignment, every refusal, a model given first, MCP tokens), `tests/control/runpod-lifecycle.test.ts` (the pod started first; an operator refused), `tests/cli/run.test.ts`. Pages: the REST, MCP and command-line references, **Start a run later** in Start a campaign from the dashboard, and the pages that listed the ways to start or copy a run. The rest of the goal is not started: the other dashboard actions, the OpenAPI file and the twin test.
 - 2026-10-21: Each agent's model on **Edit rig** has its twin: `set_rig_model` and `POST /v1/rigs/<rig>/model` take `agent` and `clear`, and `rig_models` and `GET /v1/rigs/<rig>/model` read each agent's model. An advisor can take a ChatGPT subscription's model; it already could on Edit rig, and the supervisor runs it with read-only tools on the subscription's access token. Tests: `tests/control/rig-model.test.ts` (each agent set and cleared over REST and MCP, the routes the rig then reads, every refusal, the tokens), with `context-cap`, `mcp` and `dashboard` tests still passing. Pages: the MCP and REST references, Tokens, Give each agent its own model (**Over MCP or REST**), Script Thermite with the REST API and Let an agent run Thermite over MCP. The rest of Edit rig (its parts, limits, promotion rule and GPU split) still has no twin.
 - 2026-10-22: The rest of **Edit rig** has its twin: `POST /v1/rigs/<rig>/settings` and MCP's `set_rig_settings` change a rig's parts, workers at a time, a trial's length and turns, its promotion rule and its GPU split through Save changes' own check (`src/control/rig-settings.ts`), sending only what differs as one signed `rig_settings`; `GET /v1/rigs/<rig>/settings` and `rig_settings` read what the rig reports, with its GPU split. An operator changes all but the promotion rule and the GPU split. Tests: `tests/control/rig-settings.test.ts` (each field over REST and MCP, nothing changed, every refusal, the tokens, and the rig's harness taking an operator's change and reporting it), with the `dashboard`, `edit-rig-agents`, `mcp`, `rig-model`, `start-run` and `context-cap` tests still passing. Pages: the MCP and REST references, Tokens, Signed commands, Limits and pacing, Script Thermite with the REST API (**Change a rig's settings**), Let an agent run Thermite over MCP, Give a rig several GPUs, Decide what waits for you, and Sharing a device. Every part of Edit rig now has a twin. The rest of the goal is not started: the other dashboard actions, the OpenAPI file and the twin test.
+- 2026-11-10: Merged into goal 244.
 
 ---
 

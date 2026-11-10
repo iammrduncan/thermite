@@ -1,16 +1,16 @@
 ---
 id: "177"
 title: "The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-30
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 177 · The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [243](243-web-app-base.goal) and [253](253-the-switch.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -43,6 +43,7 @@ The owner, 2026-10-30, asked where this belongs: a goal of its own after v0.1.1 
 
 - 2026-10-30, owner: a goal of its own after v0.1.1.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [243](243-web-app-base.goal) and [253](253-the-switch.goal). The new dashboard is built with no inline style (goal 243), and the policy for all of control's pages has none once the old pages go (goal 253).
 
 ## Open questions
 
@@ -50,7 +51,7 @@ None.
 
 ## Progress
 
-None yet.
+- 2026-11-10: Merged into goal 243 and goal 253.
 
 ---
 

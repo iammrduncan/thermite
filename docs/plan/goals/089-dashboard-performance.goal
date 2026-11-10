@@ -3,9 +3,9 @@ id: "089"
 title: "Faster dashboard pages"
 status: PROPOSED
 version: "0.3.0"
-depends_on: []
+depends_on: ["244"]
 created: 2026-10-22
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 089 · Faster dashboard pages
@@ -30,6 +30,7 @@ The owner, 2026-10-22: "page loads are somewhat slow on campaigns etc, review ap
 
 - 2026-10-24, owner: moves from v0.2.0 to v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): the pages measured are the new dashboard's, and the reads are those of goal [244](244-one-door.goal).
 
 ## Open questions
 

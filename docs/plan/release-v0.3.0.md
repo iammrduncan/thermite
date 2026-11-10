@@ -2,7 +2,7 @@
 
 v0.3.0 is the dashboard's refresh, on the UI system of the maintainers' [fxbot](https://github.com/iammrduncan/fxbot), and the work on the code's structure that the refresh rests on. The [roadmap](roadmap.md) shows what comes after it.
 
-It has two guides. Each says what was found, what changes, in what order, and what the owner has to decide:
+It has two guides. Each says what was found, what changes, in what order, and what the owner decided:
 
 - [The UI refresh guide](ui-refresh-guide.md): the screens.
 - [The code structure guide](code-structure-guide.md): the code behind them.
@@ -11,16 +11,22 @@ It has two guides. Each says what was found, what changes, in what order, and wh
 
 - **2026-11-10, the owner:** v0.3.0 fixes the UI and the UX. "I want to utilize the UI/UX system I started for fxbot ... including it's v0.8.0 provider login setup system. Its way cleaner and nicer than our ux. Our ux is cluttered and clunky and hard to navigate/understand."
 - **2026-11-10, the owner:** with it, a review of the code's organization: "where we have bloat or things that make it hard to debug or tech debt when adding a feature makes it easy to break something", and a plan for "how to separate things correctly".
-- **2026-11-10, the owner:** planning first. The review and this plan are goal [242](goals/242-v030-review.goal); nothing is built until the owner has answered its questions.
+- **2026-11-10, the owner:** planning first. The review and this plan are goal [242](goals/_completed/242-v030-review.goal).
+- **2026-11-10, the owner,** on the plan's questions, took the recommended answer to each. Goal 242 lists all 22; the ones that shape the release:
+  - **The dashboard becomes a web app on fxbot's own stack** (React, shadcn/ui, Tailwind CSS, Geist), a client of control's API alone. CONVENTIONS.md's rule for the dashboard changed with it.
+  - **Where a question is about a look** (the navigation, a run's tabs, the words on the screens), the recommendation is what is mocked first, and the owner chooses from the mockups.
+  - **Every screen works at 390 pixels wide.** Light and dark follow the operating system.
+  - **Providers are added from a catalogue** that ships with each release, made from fxbot's registry. The sign-ins of v0.3.0 are a Claude subscription and ChatGPT as before, and OpenRouter.
+  - **While it is built,** the new dashboard is at `/next`, and the old one takes fixes only.
+  - **One entry for each action of control,** an order of folders inside the harness and inside control held by the import check, and the limit of 800 lines kept, with a warning at 700.
+  - **v0.3.0 takes data from v0.2.0 alone.** A control from before it moves up through v0.2.x first.
+  - **A rig's log lines reach control,** in control's own store.
+  - **v0.3.0 ships when goals 242 to 257 are verified,** with whatever else is verified by then.
 - **2026-11-09, the owner:** new features are built on the branch `v0.3.0` and ship together; each fix to v0.2.0 is a version of its own ([decisions](decisions.md#releases-and-planning)).
 
-## To decide
+## Still to choose
 
-Nothing below is settled. The owner's answers go into goal 242, and into [decisions.md](decisions.md) where they shape the product.
-
-- **14 questions on the screens** ([UI refresh guide, section 11](ui-refresh-guide.md#11-the-owners-questions)). The first decides the rest: the dashboard as a web app on fxbot's own stack, or fxbot's look on today's pages.
-- **7 questions on the code** ([code structure guide, section 7](code-structure-guide.md#7-the-owners-questions)).
-- **The scope of v0.3.0** ([below](#the-other-goals-of-v030)).
+Nothing holds the build. What the owner still chooses is chosen from mockups, in each area's goal: the navigation's variant, a run's tabs, the words on the screens, and each screen before it is built ([rules for every goal](README.md#rules-for-every-goal)).
 
 ## What a tester gets
 
@@ -34,17 +40,17 @@ Nothing below is settled. The owner's answers go into goal 242, and into [decisi
 
 ## Goals
 
-Every goal is `PROPOSED` until the owner accepts it.
+The owner accepted these goals on 2026-11-10.
 
 ### The review
 
 | Goal | Status | Depends on |
 | --- | --- | --- |
-| [242 · The v0.3.0 review, with the guides that set the work up](goals/242-v030-review.goal) | `IN_PROGRESS` | — |
+| [242 · The v0.3.0 review, with the guides that set the work up](goals/_completed/242-v030-review.goal) | `VERIFIED` | — |
 
 ### The dashboard
 
-From the [UI refresh guide](ui-refresh-guide.md). Each area's goal has the same five steps: its mockups, approved; its API, with tests there; its screens; its cases in the browser check; its docs pages.
+From the [UI refresh guide](ui-refresh-guide.md). Each is `READY`. Each area's goal has the same five steps: its mockups, approved; its API, with tests there; its screens; its cases in the browser check; its docs pages.
 
 | Goal | Depends on | Takes in |
 | --- | --- | --- |
@@ -60,11 +66,11 @@ From the [UI refresh guide](ui-refresh-guide.md). Each area's goal has the same 
 | [252 · Usage, Logs and the rest of Settings](goals/252-usage-logs-settings.goal) | 243, 244 | [027](goals/027-logs-page.goal); item 6 of [178](goals/178-clean-up-continued.goal) |
 | [253 · The switch](goals/253-the-switch.goal) | 245 to 252 | [126](goals/126-ui-clean-up.goal); item 7 of 178 |
 
-"Takes in" is a proposal: when the owner accepts a goal here, each goal it takes in is marked as merged into it.
+A goal that is taken in whole is marked as merged into the goal that takes it. Goals 131, 178 and 203 give up the items named and say so.
 
 ### The code's structure
 
-From the [code structure guide](code-structure-guide.md).
+From the [code structure guide](code-structure-guide.md). Each is `READY`.
 
 | Goal | Depends on | Takes in |
 | --- | --- | --- |
@@ -75,7 +81,7 @@ From the [code structure guide](code-structure-guide.md).
 
 ### The other goals of v0.3.0
 
-The [roadmap](roadmap.md#v030) holds about 50 more goals for v0.3.0, from before this plan. A proposal for them:
+The [roadmap](roadmap.md#v030) holds 38 more open goals for v0.3.0, from before this plan. The owner, 2026-11-10:
 
 - **v0.3.0 ships when goals 242 to 257 are verified,** with whatever else is verified by then. The rest moves on at its release, as at v0.2.0.
 - **A goal with a screen is built in the new dashboard,** in or after its area's goal, never on the old pages: [093](goals/093-live-shows-reasoning.goal) after 248; [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) and [120](goals/120-research-kit-prep.goal) after 249; [134](goals/134-run-resource-use.goal) after 247; [123](goals/123-budgets-made-simple.goal) after 252.

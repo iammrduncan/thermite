@@ -1,16 +1,16 @@
 ---
 id: "028"
 title: "Search every log and session"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: ["027"]
 created: 2026-10-19
-updated: 2026-10-19
+updated: 2026-11-10
 ---
 
 # 028 · Search every log and session
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [027](027-logs-page.goal)
+**Status:** `DROPPED`, merged into [257](257-find-the-fault.goal) · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [027](027-logs-page.goal)
 
 ## What
 
@@ -29,6 +29,7 @@ Debugging a campaign means reading what its agents did, across rigs.
 ## Decisions
 
 - 2026-10-19, owner: Thermite needs a way to process every log and to search every session from its rigs that grows with the fleet.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [257](257-find-the-fault.goal). A rig's log lines reach control with goal 257, kept in control's own store with SQLite's text search. The search of the agents' sessions is an open question of that goal.
 
 ## Open questions
 
@@ -37,6 +38,7 @@ None.
 ## Progress
 
 - 2026-10-19: Goal written from the roadmap.
+- 2026-11-10: Merged into goal 257.
 
 ---
 

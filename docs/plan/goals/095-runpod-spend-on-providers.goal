@@ -1,16 +1,16 @@
 ---
 id: "095"
 title: "Providers shows what Thermite spent on a GPU cloud, not only its test pods"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-22
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 095 · Providers shows what Thermite spent on a GPU cloud, not only its test pods
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [250](250-rigs-and-machines.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -31,6 +31,7 @@ The owner, 2026-10-22: "provider page for runpod shouldn't show test costs, it s
 - 2026-10-22, owner: a bug fix for v0.1.1.
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.2, with GPUs on demand.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [250](250-rigs-and-machines.goal). It is built in the new dashboard, with goal 250.
 
 ## Open questions
 
@@ -39,6 +40,7 @@ None.
 ## Progress
 
 - 2026-10-22: Goal written from the owner's feedback.
+- 2026-11-10: Merged into goal 250.
 
 ---
 

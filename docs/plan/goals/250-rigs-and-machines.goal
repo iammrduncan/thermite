@@ -1,7 +1,7 @@
 ---
 id: "250"
 title: "Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["243", "244"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 250 · Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
@@ -40,7 +40,7 @@ A plan only; nothing of it is built.
 ## Constraints
 
 - **A mockup first:** the table; each tab of a rig on a machine, a cluster and RunPod; Add a rig for each kind; Machines; at three widths.
-- **Machines stay in Settings** (the owner, 2026-11-04), unless [question 4](../ui-refresh-guide.md#11-the-owners-questions) is answered otherwise.
+- **Machines stay in Settings** (the owner, 2026-11-04 and 2026-11-10), and Add a rig can add one without leaving.
 - **The acceptance checks' stand-ins are never real machines or clusters.**
 - **A check that pauses a rig's runs says so before it runs.**
 
@@ -55,7 +55,7 @@ A plan only; nothing of it is built.
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
@@ -64,6 +64,7 @@ None yet.
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

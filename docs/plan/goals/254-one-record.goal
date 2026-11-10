@@ -1,7 +1,7 @@
 ---
 id: "254"
 title: "One record for each setting, command and event kind: a feature's facts written once"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 254 · One record for each setting, command and event kind: a feature's facts written once
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
@@ -30,7 +30,7 @@ A plan only; nothing of it is built. From the [code structure guide, S3](../code
 7. **The report's summary has a schema** in `src/core`, with every field optional for an older rig. The harness's object satisfies it, and control parses with it.
 8. **The agents' routes have contracts:** the 15 routes between an agent's process and the harness, with one small typed client. The two programs that may import nothing keep their strings, held to the contract by a test.
 9. **Small tables where a word has a list today:** the agent programs (name, whether it is a CLI program, whether it runs research); the target drivers; the folders that two containers share; the settings of the environment that are strings or paths, each read once.
-10. **The docs' MCP and REST reference pages are made from the code** ([question 7](../code-structure-guide.md#7-the-owners-questions)), with a sentence by hand where one is wanted.
+10. **The docs' MCP and REST reference pages are made from the code** (the owner, 2026-11-10), with a sentence by hand where one is wanted.
 
 ## Why
 
@@ -61,7 +61,7 @@ Measured on the history since 2026-10-28:
 
 ## Decisions
 
-None yet.
+- 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
 ## Open questions
 
@@ -70,6 +70,7 @@ None yet.
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
+- 2026-11-10: Accepted by the owner; `READY`.
 
 ---
 

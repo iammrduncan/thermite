@@ -235,42 +235,42 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [130](goals/130-mcp-tools-after-update.goal) An MCP client sees control's new tools after control is updated · `PROPOSED`
 - [199](goals/199-judge-files-once-disk-ready.goal) The judge copies a job's files once, and checks the disk before it times (issue 50) · `PROPOSED`
 - [216](goals/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `PROPOSED`
-- [131](goals/131-ux-fixes-found-in-use.goal) UX fixes found in use: the screens' small faults that the owner reports · `PROPOSED`
+- [131](goals/131-ux-fixes-found-in-use.goal) UX fixes found in use: the screens' small faults that the owner reports · `DROPPED`, merged into 247 and 251
 
 ## v0.3.0
 
-**The dashboard's refresh, on fxbot's UI system, and the code's structure behind it (the owner, 2026-11-10).** A dashboard that reads at a glance, with providers as a catalogue and a set-up for a new control; every action and every read in the API; and the changes of shape that make a feature smaller and a fault easier to find. Its plan is [release-v0.3.0.md](release-v0.3.0.md), from the [UI refresh guide](ui-refresh-guide.md) and the [code structure guide](code-structure-guide.md). The plan's goals are proposed: the owner's answers to goal 242's questions come first.
+**The dashboard's refresh, on fxbot's UI system, and the code's structure behind it (the owner, 2026-11-10).** A dashboard that reads at a glance, with providers as a catalogue and a set-up for a new control; every action and every read in the API; and the changes of shape that make a feature smaller and a fault easier to find. Its plan is [release-v0.3.0.md](release-v0.3.0.md), from the [UI refresh guide](ui-refresh-guide.md) and the [code structure guide](code-structure-guide.md). The owner accepted the plan on 2026-11-10, with the recommended answer to each of its questions (goal 242): its goals are ready, and v0.3.0 ships when they are verified.
 
 **The review.**
 
-- [242](goals/242-v030-review.goal) The v0.3.0 review: the dashboard's screens, fxbot's UI system and the code's structure, with the guides that set the work up · `IN_PROGRESS`
+- [242](goals/_completed/242-v030-review.goal) The v0.3.0 review: the dashboard's screens, fxbot's UI system and the code's structure, with the guides that set the work up · `VERIFIED`
 
 **The dashboard.** In the order to build them; goal 244 runs beside them, one area ahead.
 
-- [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `PROPOSED`
-- [244](goals/244-one-door.goal) One door for each action and each read: written once, for REST, MCP and the dashboard · `PROPOSED`
-- [245](goals/245-providers-and-set-up.goal) Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow · `PROPOSED`
-- [246](goals/246-home-and-decisions.goal) Home and decisions: what needs you in one list, each decision on one page · `PROPOSED`
-- [247](goals/247-campaigns-and-runs.goal) Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer · `PROPOSED`
-- [248](goals/248-live.goal) Live in the new dashboard: one design for a run, a rig and everything, with the way back · `PROPOSED`
-- [249](goals/249-new-campaign.goal) New campaign and Start a run in the new dashboard: what it needs checked first, a refusal at its field · `PROPOSED`
-- [250](goals/250-rigs-and-machines.goal) Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow · `PROPOSED`
-- [251](goals/251-library.goal) Library: knowledge, reports and exports in one place · `PROPOSED`
-- [252](goals/252-usage-logs-settings.goal) Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system · `PROPOSED`
-- [253](goals/253-the-switch.goal) The switch: the new dashboard alone, the old pages removed, every docs page and screenshot current · `PROPOSED`
+- [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `READY`
+- [244](goals/244-one-door.goal) One door for each action and each read: written once, for REST, MCP and the dashboard · `READY`
+- [245](goals/245-providers-and-set-up.goal) Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow · `READY`
+- [246](goals/246-home-and-decisions.goal) Home and decisions: what needs you in one list, each decision on one page · `READY`
+- [247](goals/247-campaigns-and-runs.goal) Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer · `READY`
+- [248](goals/248-live.goal) Live in the new dashboard: one design for a run, a rig and everything, with the way back · `READY`
+- [249](goals/249-new-campaign.goal) New campaign and Start a run in the new dashboard: what it needs checked first, a refusal at its field · `READY`
+- [250](goals/250-rigs-and-machines.goal) Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow · `READY`
+- [251](goals/251-library.goal) Library: knowledge, reports and exports in one place · `READY`
+- [252](goals/252-usage-logs-settings.goal) Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system · `READY`
+- [253](goals/253-the-switch.goal) The switch: the new dashboard alone, the old pages removed, every docs page and screenshot current · `READY`
 
 **The code's structure.**
 
-- [254](goals/254-one-record.goal) One record for each setting, command and event kind: a feature's facts written once · `PROPOSED`
-- [257](goals/257-find-the-fault.goal) Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line · `PROPOSED`
-- [255](goals/255-one-way-to-run-a-program.goal) One way to run an agent program: for workers and advisors, headless and in a terminal · `PROPOSED`
-- [256](goals/256-layers-and-splits.goal) Layers inside the parts, and files split on purpose · `PROPOSED`
+- [254](goals/254-one-record.goal) One record for each setting, command and event kind: a feature's facts written once · `READY`
+- [257](goals/257-find-the-fault.goal) Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line · `READY`
+- [255](goals/255-one-way-to-run-a-program.goal) One way to run an agent program: for workers and advisors, headless and in a terminal · `READY`
+- [256](goals/256-layers-and-splits.goal) Layers inside the parts, and files split on purpose · `READY`
 
-**From before the plan: run Thermite without the dashboard.** Every dashboard action has an API and MCP twin, all logs are in one place you can search, and sign-in uses your identity provider. Proposed. The [release plan](release-v0.3.0.md#goals) says which of the goals below, and of the lists after them, the plan's goals take in.
+**From before the plan: run Thermite without the dashboard.** Every dashboard action has an API and MCP twin, all logs are in one place you can search, and sign-in uses your identity provider. The plan's goals took in the ones marked as merged, here and in the lists after. The others are proposed: one with a screen is built in the new dashboard, and what is not verified when goals 242 to 257 are moves on at the release ([release plan](release-v0.3.0.md#the-other-goals-of-v030)).
 
-- [027](goals/027-logs-page.goal) One Logs page · `PROPOSED`
-- [028](goals/028-log-store.goal) Search every log and session · `PROPOSED`
-- [029](goals/029-api-mcp-coverage.goal) Full API and MCP coverage · `IN_PROGRESS`
+- [027](goals/027-logs-page.goal) One Logs page · `DROPPED`, merged into 252
+- [028](goals/028-log-store.goal) Search every log and session · `DROPPED`, merged into 257
+- [029](goals/029-api-mcp-coverage.goal) Full API and MCP coverage · `DROPPED`, merged into 244
 - [071](goals/071-bounded-mcp-answers.goal) MCP answers that fit an agent's context · `PROPOSED`
 - [083](goals/083-deep-research-teacher.goal) A deep-research teacher that runs on a trigger · `PROPOSED`
 - [084](goals/084-research-tasks-in-code-runs.goal) Research tasks inside goal and hill-climb runs, with web search · `PROPOSED`
@@ -317,26 +317,26 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [129](goals/129-copy-takes-rubrics.goal) A research campaign's copy can take its own rubrics · `PROPOSED`
 - [146](goals/146-supervisor-alone.goal) Restart or update a rig's supervisor alone, while its harness goes on · `PROPOSED`
 - [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
-- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
+- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `DROPPED`, merged into 243 and 253
 - [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
-- [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
+- [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `DROPPED`, merged into 250
 - [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
 - [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
 - [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
 
 **UI clean-up and UX improvements.** The screens agree with each other, and each one says what you need to know.
 
-- [126](goals/126-ui-clean-up.goal) UI clean-up: every screen checked against the rules for screens, and the gaps fixed · `PROPOSED`
-- [088](goals/088-new-campaign-button-progress.goal) New campaign's buttons show they were pressed · `PROPOSED`
-- [090](goals/090-info-tab.goal) An Info tab for campaigns and runs: everything they were started with · `PROPOSED`
-- [091](goals/091-needs-you-stuck-rigs.goal) Needs you shows a rig that is stuck · `PROPOSED`
+- [126](goals/126-ui-clean-up.goal) UI clean-up: every screen checked against the rules for screens, and the gaps fixed · `DROPPED`, merged into 253
+- [088](goals/088-new-campaign-button-progress.goal) New campaign's buttons show they were pressed · `DROPPED`, merged into 249
+- [090](goals/090-info-tab.goal) An Info tab for campaigns and runs: everything they were started with · `DROPPED`, merged into 247
+- [091](goals/091-needs-you-stuck-rigs.goal) Needs you shows a rig that is stuck · `DROPPED`, merged into 246
 - [093](goals/093-live-shows-reasoning.goal) Live shows what the model thinks and says, not only its tool calls · `PROPOSED`
-- [094](goals/094-copy-id.goal) Copy an ID from any page · `PROPOSED`
-- [109](goals/109-exports-page-shows-what-matters.goal) The Exports page shows what matters, not every slice · `PROPOSED`
-- [110](goals/110-judge-only-runs-show-progress.goal) A judge-only run shows its progress · `PROPOSED`
-- [072](goals/072-why-nothing-at-work.goal) Say why a running run has nothing at work · `PROPOSED`
+- [094](goals/094-copy-id.goal) Copy an ID from any page · `DROPPED`, merged into 243
+- [109](goals/109-exports-page-shows-what-matters.goal) The Exports page shows what matters, not every slice · `DROPPED`, merged into 251
+- [110](goals/110-judge-only-runs-show-progress.goal) A judge-only run shows its progress · `DROPPED`, merged into 247
+- [072](goals/072-why-nothing-at-work.goal) Say why a running run has nothing at work · `DROPPED`, merged into 247
 - [089](goals/089-dashboard-performance.goal) Faster dashboard pages · `PROPOSED`
-- [148](goals/148-keep-working-on-screens.goal) Keeping working, on New campaign and on a run's page · `PROPOSED`
+- [148](goals/148-keep-working-on-screens.goal) Keeping working, on New campaign and on a run's page · `DROPPED`, merged into 247
 
 ## v0.4.0
 

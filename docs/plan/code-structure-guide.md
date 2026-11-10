@@ -1,12 +1,12 @@
 # The code structure guide
 
-This guide is for the work on the code's structure in v0.3.0, goals [244](goals/244-one-door.goal) and [254](goals/254-one-record.goal) to [257](goals/257-find-the-fault.goal). It is one result of goal [242](goals/242-v030-review.goal), the review of 2026-11-10. Its partner, the [UI refresh guide](ui-refresh-guide.md), covers the screens. The [release plan](release-v0.3.0.md) puts both in one order.
+This guide is for the work on the code's structure in v0.3.0, goals [244](goals/244-one-door.goal) and [254](goals/254-one-record.goal) to [257](goals/257-find-the-fault.goal). It is one result of goal [242](goals/_completed/242-v030-review.goal), the review of 2026-11-10. Its partner, the [UI refresh guide](ui-refresh-guide.md), covers the screens. The [release plan](release-v0.3.0.md) puts both in one order.
 
 - **What it describes:** the code at v0.2.0 (branch `v0.3.0`, commit `e62f80cb`), two weeks after the clean-up of v0.1.1 ([guide](code-clean-up-guide.md), goal [125](goals/_completed/125-code-to-the-conventions.goal)).
 - **What it answers:** the owner's questions of 2026-11-10: where the code has bloat, what makes a fault hard to find, and where adding a feature makes it easy to break something; and how to separate things so that it doesn't.
 - **Where it comes from:** three reviewers on 2026-11-10 (control; the harness, the supervisor, the agents' code, `core` and `common`; how the dashboard is built), and counts over the history since 2026-10-28. Their reports, with every count and line number, are kept in the maintainers' private notes. A finding that concerns security is handled as [SECURITY.md](../../SECURITY.md) says, and is not written here.
 - **What it is not:** a second clean-up of everything. The clean-up of v0.1.1 held. This guide names six changes of shape, in the places where the history shows the cost.
-- **What is decided:** nothing here yet. Each change is a proposal until the owner answers [the questions](#7-the-owners-questions).
+- **What is decided:** on 2026-11-10 the owner took the recommended answer to each of [the questions](#7-the-owners-questions), and accepted the goals of the six changes.
 
 ## 1. The state of the code
 
@@ -213,7 +213,7 @@ Each has its goal. Sizes are in files. "The fast checks" means `npm run check`.
 
 ## 4. Rules of shape to add
 
-Proposed additions to CONVENTIONS.md. Each goal adds its own, in a commit the owner reviews, as the clean-up did.
+Additions to CONVENTIONS.md. The first is there since 2026-11-10. Each goal adds its own, in a commit the owner reviews, as the clean-up did.
 
 1. **The dashboard** is a web app that imports `core`'s contracts alone and holds no rule of the product. This replaces today's rule ([UI refresh guide](ui-refresh-guide.md#what-the-app-may-hold)).
 2. **An action has one function.** A front end reads the request, calls it and gives the answer. It writes nothing to the store itself.
@@ -254,6 +254,8 @@ Everything in [section 5 of the clean-up guide](code-clean-up-guide.md#5-what-to
 - **`store.db` in tests.** Making it private would change 60 test files for no gain. Stop adding to them.
 
 ## 7. The owner's questions
+
+The owner answered these on 2026-11-10: every recommendation below is taken. The answers are goal 242's decisions.
 
 1. **One entry for each action,** from which REST and MCP are registered ([S2](#s2-one-door-for-each-action-and-each-read)); or the pattern of today, a route and a tool written by hand that call one function.
    - **Recommended:** entries, for the actions that move out of page code and for new ones. The 48 pairs that exist move as they are touched.

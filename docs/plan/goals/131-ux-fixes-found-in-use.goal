@@ -1,16 +1,16 @@
 ---
 id: "131"
 title: "UX fixes found in use: the screens' small faults that the owner reports"
-status: PROPOSED
+status: DROPPED
 version: "0.2.x"
 depends_on: []
 created: 2026-10-24
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 131 · UX fixes found in use: the screens' small faults that the owner reports
 
-**Status:** `PROPOSED` · **Version:** [v0.2.x](../roadmap.md#v02x)
+**Status:** `DROPPED`, merged into [247](247-campaigns-and-runs.goal) and [251](251-library.goal) · **Version:** [v0.2.x](../roadmap.md#v02x)
 
 ## What
 
@@ -57,6 +57,7 @@ The owner reports these from use, 2026-10-24: "ux fixes to add".
 
 - 2026-10-24, owner: the UX fixes found in use go in v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"), and each fix after it is a version of its own; this goal is a fix, and moves to v0.2.x.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [247](247-campaigns-and-runs.goal) and [251](251-library.goal). Items 1, 3 and 4 are built with a campaign's and a run's new pages (goal 247), and item 2 with Exports (goal 251).
 
 ## Open questions
 
@@ -69,6 +70,7 @@ The owner reports these from use, 2026-10-24: "ux fixes to add".
 - 2026-10-24: Item 2, export status and progress, from the owner's report.
 - 2026-10-24: Item 3, a run's lanes that take turns on a rig with fewer workers at a time, from the owner's report. The rig had 1 worker at a time; raised to 3 over `set_rig_settings`.
 - 2026-10-24: Item 4, archive a campaign from the left navigation's right-click menu, from the owner's report.
+- 2026-11-10: Merged into goal 247 and goal 251.
 
 ---
 

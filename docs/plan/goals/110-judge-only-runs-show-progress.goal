@@ -1,16 +1,16 @@
 ---
 id: "110"
 title: "A judge-only run shows its progress"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-23
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 110 · A judge-only run shows its progress
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [247](247-campaigns-and-runs.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -36,6 +36,7 @@ The owner, 2026-10-23, on a goal campaign's second judge-only check, about 1 h 4
 - 2026-10-23, owner: in v0.1.1 ("yeah file as v0.1.1 goal").
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [247](247-campaigns-and-runs.goal). It is built in the new dashboard, with goal 247.
 
 ## Open questions
 
@@ -44,6 +45,7 @@ The owner, 2026-10-23, on a goal campaign's second judge-only check, about 1 h 4
 ## Progress
 
 - 2026-10-23: Goal written as a plan, from the owner's question.
+- 2026-11-10: Merged into goal 247.
 
 ---
 

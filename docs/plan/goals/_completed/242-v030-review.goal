@@ -1,0 +1,84 @@
+---
+id: "242"
+title: "The v0.3.0 review: the dashboard's screens, fxbot's UI system and the code's structure, with the guides that set the work up"
+status: VERIFIED
+version: "0.3.0"
+depends_on: []
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 242 · The v0.3.0 review: the dashboard's screens, fxbot's UI system and the code's structure, with the guides that set the work up
+
+**Status:** `VERIFIED` · **Version:** [v0.3.0](../../roadmap.md#v030)
+
+## What
+
+A review and a plan; it changed no code.
+
+1. **A review of the dashboard as it is:** every kind of screen, from the browser check's screenshots, against the owner's rules for screens.
+2. **A review of fxbot's UI system** and of its provider set-up (fxbot's `release/0.8.0` branch), and of what Thermite can take from it.
+3. **A review of the code's organization:** where it has bloat, what makes a fault hard to find, and where a new feature spreads.
+4. **The plan:** the [UI refresh guide](../../ui-refresh-guide.md), the [code structure guide](../../code-structure-guide.md), the [release plan for v0.3.0](../../release-v0.3.0.md), and one goal for each piece of work (243 to 257).
+5. **The owner's answers** to the guides' questions, recorded here.
+
+## Why
+
+The owner, 2026-11-10: "for v0.3.0 release I want to fix our UI and UX experience. I also want to review our application code organization and where we have bloat or things that make it hard to debug or tech debt when adding a feature makes it easy to break something. The main goal is refresh on UI/UX... I want to utilize the UI/UX system I started for fxbot ... including it's v0.8.0 provider login setup system. Its way cleaner and nicer than our ux. Our ux is cluttered and clunky and hard to navigate/understand. review this and write some planning."
+
+## Done when
+
+- [x] The reviews are written, each fact with its screen or its line. Done, 2026-11-10: six reports, kept in the maintainers' private notes.
+- [x] The two guides and the release plan are written. Done, 2026-11-10.
+- [x] Each piece of work has a goal, and the roadmap lists them. Done, 2026-11-10: goals 243 to 257.
+- [x] The owner has answered the 14 questions of the UI refresh guide, the 7 of the code structure guide and the question of v0.3.0's scope. Done, 2026-11-10: each answer is under Decisions, and in [decisions.md](../../decisions.md) where it shapes the product.
+- [x] The goals the owner accepts are `READY`, the goals they take in are marked as merged, and CONVENTIONS.md's rule for the dashboard says what was decided. Done, 2026-11-10: goals 243 to 257 are `READY`; 15 goals are merged into them (027, 028, 029, 072, 088, 090, 091, 094, 095, 109, 110, 126, 131, 148 and 177).
+
+## Decisions
+
+- 2026-11-10, the owner: v0.3.0 is the UI and UX refresh, on fxbot's UI system with its provider set-up, and a review of the code's organization. Planning first.
+- 2026-11-10, the owner, asked three questions at the end of the review, took the recommended answer to each: the dashboard as a web app on fxbot's own stack; each of the other 20 recommendations; and v0.3.0 as the refresh and the code's structure first. Where a question is about a look (the navigation, a run's tabs, the words on the screens), the recommendation is what is mocked first, and the owner chooses from the mockups.
+
+**The screens** ([UI refresh guide, section 11](../../ui-refresh-guide.md#11-the-owners-questions)):
+
+1. **The design:** the dashboard becomes a web app on fxbot's own stack (React, shadcn/ui, Tailwind CSS, Geist), a client of control's API alone. CONVENTIONS.md's rule for the dashboard changes with it.
+2. **A field's description** is one hint under the field in a form. An icon to hover stays only on a column or a figure whose meaning is not plain.
+3. **The navigation:** 7 places and Settings. Library, Usage and Logs as rows with words is mocked first; the variant with icons at the foot is mocked beside it.
+4. **Machines stay in Settings,** and Add a rig can add one without leaving.
+5. **Git access has its own tab** in Settings.
+6. **The words** of the guide's table are the words the mockups use; the owner confirms each on the mockups.
+7. **Light and dark follow the operating system,** with four colours for states and no other colour.
+8. **The registry of providers ships with each release,** made from fxbot's file when a release is built. Control fetches no list while it runs.
+9. **A provider's logo ships only with its licence checked** and credited; the first letter for the rest.
+10. **Sign-ins in v0.3.0:** a Claude subscription and ChatGPT as before, in the new card, and OpenRouter. Hugging Face and OrcaRouter after it, each a goal of its own. Grok, Vercel and the clouds are not planned.
+11. **Set up Thermite** shows on a new control, and never on one that has a provider, a rig or a campaign.
+12. **A run's page:** 6 tabs and one panel to steer, from mockups.
+13. **A phone:** every screen works at 390 pixels wide.
+14. **While the work goes on,** the new dashboard is at `/next`, and the old one takes fixes only.
+
+**The code** ([code structure guide, section 7](../../code-structure-guide.md#7-the-owners-questions)):
+
+1. **One entry for each action,** from which REST and MCP are registered: for the actions that move out of page code and for new ones. The pairs that exist move as each is next touched.
+2. **The size rule:** the limit of 800 lines stays, the check warns at 700, and the 7 files at the limit are split on purpose.
+3. **An order of folders inside the harness and inside control,** held by the import check, with today's breaches listed.
+4. **v0.3.0 takes data from v0.2.0 alone.** A control from before it moves up through v0.2.x first, and the code that moves a v0.1.0 store up may go. A store that v0.3.0 can't read is kept, never deleted, and the changelog says what an upgrade needs.
+5. **A rig's harness and supervisor are updated together,** so neither keeps code for an older partner. A core and its runners keep theirs.
+6. **A rig's log lines reach control in v0.3.0,** in a table of control's own store with SQLite's text search.
+7. **The docs' MCP and REST reference pages are made from the code,** with a sentence by hand where one is wanted.
+
+**The scope** ([release plan](../../release-v0.3.0.md#the-other-goals-of-v030)): v0.3.0 ships when goals 242 to 257 are verified, with whatever else is verified by then; the rest moves on at its release. A goal with a screen is built in the new dashboard, never on the old pages.
+
+## Open questions
+
+None. What the mockups settle is in each area's goal.
+
+## Progress
+
+- 2026-11-10 00:27 UTC: started. fxbot's `release/0.8.0` (commit `ff53429`) read from its public repository; the dashboard's 318 screenshots of 2026-11-08 read.
+- 2026-11-10: six reviewers, one area each, read-only: fxbot's UI system and provider set-up; every screen of the dashboard; how the dashboard is built; providers in Thermite; control's code; the rig's code. The history since 2026-11-01 measured: which parts and folders change together.
+- 2026-11-10 01:05 UTC: the two guides, the release plan and goals 243 to 257 written; the roadmap, the plan's index and the credits updated.
+- 2026-11-10 01:38 UTC: the owner answered. The decisions recorded here, in decisions.md, in CONVENTIONS.md and AGENTS.md, in the release plan and in each goal they affect. Verified. No code was written: the first step of the build is goal 243's mockups.
+
+---
+
+Run with `/goal Complete docs/plan/goals/242-v030-review.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

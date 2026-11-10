@@ -1,16 +1,16 @@
 ---
 id: "027"
 title: "One Logs page"
-status: PROPOSED
+status: DROPPED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-19
-updated: 2026-10-19
+updated: 2026-11-10
 ---
 
 # 027 · One Logs page
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [252](252-usage-logs-settings.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -28,6 +28,7 @@ When something fails in a running control, the operator must find out why from t
 ## Decisions
 
 - 2026-10-19, owner: The audit log becomes "Logs", with audit as one category, and every log from control is visible there.
+- 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [252](252-usage-logs-settings.goal). Logs is a place of the new dashboard (goal 252).
 
 ## Open questions
 
@@ -36,6 +37,7 @@ None.
 ## Progress
 
 - 2026-10-19: Goal written from the roadmap.
+- 2026-11-10: Merged into goal 252.
 
 ---
 
