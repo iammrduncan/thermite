@@ -92,9 +92,9 @@ export class AdvisorConsoles {
   /**
    * One owner's input the harness checked and recorded: typed into the call's terminal now, or
    * queued for its usage window's reset (`later` is told then). Refused in words when the call is
-   * not running.
+   * not running, or when it can't start typing by `startBy` (goal 241).
    */
-  input(i: AdvisorInput, later: ConsoleLater): Promise<ConsoleNow> {
+  input(i: AdvisorInput, later: ConsoleLater, startBy?: number): Promise<ConsoleNow> {
     const c = this.open.get(i.call);
     if (!c)
       return Promise.reject(
@@ -107,6 +107,7 @@ export class AdvisorConsoles {
         ...(i.follow_up ? { follow_up: true as const } : {}),
       },
       later,
+      startBy,
     );
   }
 }

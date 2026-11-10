@@ -53,6 +53,7 @@ import {
   plannerInTerminal,
   prepare,
   secret,
+  sleep,
   submit,
   until,
 } from "./lib/smoke-env.mjs";
@@ -518,29 +519,35 @@ try {
     600_000,
     1000,
   );
-  // The terminal takes typed input only while its program runs: one seen between its turns (the
-  // rig's report lags it by a few seconds) refuses it in words, so it is typed again until it takes.
-  /** @type {unknown} */
-  let typedRefused;
-  const typedToAuditor = await until(
-    "the input typed into the auditor's terminal",
-    async () => {
-      try {
-        return await command("terminal_input", {
-          run: "smoke-1",
-          trial: auditing.id,
-          text: "OWNER-TYPED-AUDITOR Look at the timer code.",
-        });
-      } catch (err) {
-        typedRefused = err;
-        return undefined;
-      }
-    },
-    120_000,
-    2000,
-  ).catch((err) => {
-    throw new Error(`${String(err)}; last refusal: ${String(typedRefused)}`);
-  });
+  // The terminal takes typed input only while its program runs and it can start typing in time: one
+  // seen between its turns (the rig's report lags it by a few seconds), or while it still takes its
+  // first message, refuses it in words, so it is typed again until it takes (goal 241). Only after
+  // a refusal in words: any other end, such as a wait that ran out, may have typed it, and fails.
+  /** @type {string[]} */
+  const typedRefusals = [];
+  /** @type {any} */
+  let typedToAuditor;
+  for (const end = Date.now() + 120_000; !typedToAuditor; ) {
+    try {
+      typedToAuditor = await command("terminal_input", {
+        run: "smoke-1",
+        trial: auditing.id,
+        text: "OWNER-TYPED-AUDITOR Look at the timer code.",
+      });
+    } catch (err) {
+      const said = String(err);
+      const inWords =
+        /not accepted: /.test(said) &&
+        /"status":"delivered"/.test(said) &&
+        /"accepted":false/.test(said);
+      if (!inWords || Date.now() > end)
+        throw new Error(
+          `the input typed into the auditor's terminal: ${said}; refused before: ${JSON.stringify(typedRefusals)}`,
+        );
+      typedRefusals.push(said);
+      await sleep(2000);
+    }
+  }
   await command("message_agent", {
     run: "smoke-1",
     to: "auditor",
@@ -582,7 +589,7 @@ try {
       /typed=OWNER-TYPED-AUDITOR /.test(why) &&
       typedToAuditor.outcome?.result?.outcome === "typed" &&
       !/the owner's message none /.test(why),
-    { why, typed: typedToAuditor.outcome },
+    { why, typed: typedToAuditor.outcome, refused_before: typedRefusals },
   );
   const providers = await until(
     "the subscription's usage on the Providers page",

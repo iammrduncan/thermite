@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { ConsoleLater, ConsoleNow, TrialConsole } from "../../agents/cli/index.ts";
 import { Refusal } from "../../common/errors.ts";
-import type { AdvisorInput, AdvisorOutcome } from "../../core/api/harness/terminals.ts";
+import {
+  ADVISOR_INPUT_ANSWER_MS,
+  type AdvisorInput,
+  type AdvisorOutcome,
+} from "../../core/api/harness/terminals.ts";
 import type { TerminalInput } from "../../core/terminal-input.ts";
 
 /**
@@ -16,8 +20,11 @@ import type { TerminalInput } from "../../core/terminal-input.ts";
 
 /** How long an input waits for the supervisor to take it: then it is refused, in words. */
 export const INPUT_UNTAKEN_MS = 15_000;
-/** How long a taken input waits for what became of it: typing it takes seconds at most. */
-export const INPUT_UNANSWERED_MS = 30_000;
+/**
+ * How long a taken input waits for what became of it. The supervisor types one only if it can
+ * start well within it, so an input refused for no answer was not typed (goal 241).
+ */
+export const INPUT_UNANSWERED_MS = ADVISOR_INPUT_ANSWER_MS;
 /** The most inputs one take hands over; the rest wait for the next. */
 export const TAKE_MAX = 20;
 /** The longest a take is held open, in milliseconds. */

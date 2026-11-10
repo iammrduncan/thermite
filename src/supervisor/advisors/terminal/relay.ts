@@ -2,6 +2,7 @@ import type { HarnessClient } from "../../../common/api/harness.ts";
 import { log } from "../../../common/env.ts";
 import { errorText } from "../../../common/errors.ts";
 import {
+  ADVISOR_INPUT_ANSWER_MS,
   ADVISOR_INPUT_OUTCOMES,
   ADVISOR_INPUTS,
   ADVISOR_TERMINALS,
@@ -15,11 +16,18 @@ import type { AdvisorConsoles } from "./consoles.ts";
  * ends, and again every SAY_AGAIN_MS, since a harness that restarted forgets them. It holds a call
  * open to the harness for the owner's inputs the harness checked and recorded (the harness never
  * calls out), types each into its call's terminal, and says what became of it: at once, and again
- * later for one queued for the reset of the program's usage window.
+ * later for one queued for the reset of the program's usage window. The harness answers an input
+ * as refused when it hears nothing in ADVISOR_INPUT_ANSWER_MS, so an input goes in only if it can
+ * start within START_WITHIN_MS of its taking, and is refused, never typed, if not (goal 241).
  */
 
 /** How long the supervisor holds its call for the owner's inputs open, in seconds. */
 export const INPUTS_WAIT_S = 25;
+/**
+ * How long after its taking an input may start going in: well within the harness's wait, since
+ * typing the owner's words and saying so take a second or two.
+ */
+const START_WITHIN_MS = ADVISOR_INPUT_ANSWER_MS - 10_000;
 /** How often the calls in their terminals are said again, unchanged. */
 const SAY_AGAIN_MS = 60_000;
 /** How long it waits after a failed call to its harness before it calls again. */
@@ -27,12 +35,19 @@ const AGAIN_MS = 5_000;
 /** The most characters of why an input was refused or dropped, as the harness takes it. */
 const WHY_MAX = 1000;
 
-/** Takes the owner's inputs for the advisors' terminals until `stopping`; says which calls run. */
+/**
+ * Takes the owner's inputs for the advisors' terminals until `stopping`; says which calls run.
+ * `startWithinMs` and `waitS` are START_WITHIN_MS and INPUTS_WAIT_S unless told (tests tell shorter).
+ */
 export async function relayAdvisorTerminals(o: {
   harness: HarnessClient;
   consoles: AdvisorConsoles;
   stopping: () => boolean;
+  startWithinMs?: number;
+  waitS?: number;
 }): Promise<void> {
+  const startWithinMs = o.startWithinMs ?? START_WITHIN_MS;
+  const waitS = o.waitS ?? INPUTS_WAIT_S;
   let saying = Promise.resolve();
   let sayFailing = false;
   const say = () => {
@@ -68,12 +83,22 @@ export async function relayAdvisorTerminals(o: {
       );
     }
   };
-  /** One input into its call's terminal: what became of it now; `later` hears of a queued one. */
-  const typeIn = async (i: { id: string } & Parameters<AdvisorConsoles["input"]>[0]) => {
+  /**
+   * One input into its call's terminal, if it can start by `startBy`: what became of it now;
+   * `later` hears of a queued one.
+   */
+  const typeIn = async (
+    i: { id: string } & Parameters<AdvisorConsoles["input"]>[0],
+    startBy: number,
+  ) => {
     try {
-      const now = await o.consoles.input(i, (outcome, why) => {
-        void tell([{ id: i.id, outcome, ...(why ? { why: why.slice(0, WHY_MAX) } : {}) }]);
-      });
+      const now = await o.consoles.input(
+        i,
+        (outcome, why) => {
+          void tell([{ id: i.id, outcome, ...(why ? { why: why.slice(0, WHY_MAX) } : {}) }]);
+        },
+        startBy,
+      );
       return now.outcome === "queued"
         ? { id: i.id, outcome: "queued" as const, ...(now.until ? { until: now.until } : {}) }
         : { id: i.id, outcome: "typed" as const };
@@ -85,13 +110,14 @@ export async function relayAdvisorTerminals(o: {
   try {
     while (!o.stopping()) {
       try {
-        const { inputs } = await o.harness.call(ADVISOR_INPUTS, { query: { wait: INPUTS_WAIT_S } });
+        const { inputs } = await o.harness.call(ADVISOR_INPUTS, { query: { wait: waitS } });
         failing = false;
         if (!inputs.length) continue;
-        // One at a time, in order: two inputs to one terminal go in as they were given.
-        const outcomes: AdvisorOutcome[] = [];
-        for (const i of inputs) outcomes.push(await typeIn(i));
-        await tell(outcomes);
+        // The harness's wait for each began as it handed them over.
+        const startBy = Date.now() + startWithinMs;
+        // One at a time, in order: two inputs to one terminal go in as they were given. Each
+        // outcome goes to the harness as soon as it is known, within its wait.
+        for (const i of inputs) await tell([await typeIn(i, startBy)]);
       } catch (err) {
         if (!failing)
           log(

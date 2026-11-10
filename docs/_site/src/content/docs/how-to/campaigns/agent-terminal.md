@@ -47,6 +47,8 @@ The menu in the terminal's bar, such as **3 inputs ▾**, lists your inputs, new
 | `dropped: the trial ended before the program's usage window reset` | It waited, and the trial ended first |
 | `not typed: <why>` | The rig refused it, such as `trial <trial> has ended: nothing more goes into its terminal` |
 
+A `not typed` input never goes in later. An advisor's terminal, such as the auditor's, refuses an input that it can't start typing within 20 seconds, such as while its program still takes its long first message: `<program> was still taking what went in before it, so nothing was typed: send it again in a moment`. Send it again.
+
 The trial's stream says `the owner's input went into its terminal`, and the run's **History** tab records each input in words, such as `You typed “/compact” into lane-1's terminal (trial t-0123456789abcdef).`.
 
 ## A worker in Pi: the Pi view
