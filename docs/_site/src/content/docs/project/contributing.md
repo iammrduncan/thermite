@@ -168,7 +168,7 @@ To work on a screen, leave the demo running and start the app's development serv
 npm run web:dev
 ```
 
-`http://127.0.0.1:5173/next/dev` is the gallery: every screen and every part on made-up answers, with a switch for each state (full, empty, loading, a failure), for the navigation's two variants and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
+`http://127.0.0.1:5173/next/dev` is the gallery: every screen and every part on made-up answers, with a switch for each state (full, empty, loading, a failure) and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
 
 | Folder | What it holds |
 | --- | --- |

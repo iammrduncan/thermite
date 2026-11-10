@@ -18,7 +18,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { follow, to } from "@/nav.ts";
 import { CopyId } from "@/parts/copy-id.tsx";
 import { Header } from "@/parts/header.tsx";
-import type { NavVariant } from "@/variant.ts";
 
 /**
  * Settings: its tabs are links, each with its own address, in a column beside the content on a
@@ -111,14 +110,10 @@ const TABS: Tab[] = [
 export function Settings({
   tab: id,
   session,
-  variant,
-  setVariant,
   signOut,
 }: {
   tab: string | undefined;
   session: SessionAnswer;
-  variant: NavVariant;
-  setVariant: (v: NavVariant) => void;
   signOut: () => void;
 }) {
   const tab = TABS.find((t) => t.id === (id ?? TABS[0]?.id));
@@ -160,12 +155,7 @@ export function Settings({
             {!tab ? (
               <p className="text-sm text-muted-foreground">Settings has no such tab.</p>
             ) : tab.id === "about" ? (
-              <About
-                session={session}
-                variant={variant}
-                setVariant={setVariant}
-                signOut={signOut}
-              />
+              <About session={session} signOut={signOut} />
             ) : (
               <Elsewhere tab={tab} />
             )}
@@ -197,20 +187,7 @@ function Elsewhere({ tab }: { tab: Tab }) {
   );
 }
 
-const label = "grid gap-1.5 text-sm font-medium";
-const hint = "font-normal text-muted-foreground";
-
-function About({
-  session,
-  variant,
-  setVariant,
-  signOut,
-}: {
-  session: SessionAnswer;
-  variant: NavVariant;
-  setVariant: (v: NavVariant) => void;
-  signOut: () => void;
-}) {
+function About({ session, signOut }: { session: SessionAnswer; signOut: () => void }) {
   return (
     <>
       <section className="grid gap-3" aria-label="This control">
@@ -239,32 +216,6 @@ function About({
         </a>
         .
       </p>
-      <section className="grid gap-3" aria-label="The navigation">
-        <h2 className="font-medium">The navigation</h2>
-        <div className={label}>
-          Library, Usage and Logs
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={variant === "rows" ? "default" : "outline"}
-              aria-pressed={variant === "rows"}
-              onClick={() => setVariant("rows")}
-            >
-              Rows with words
-            </Button>
-            <Button
-              variant={variant === "foot" ? "default" : "outline"}
-              aria-pressed={variant === "foot"}
-              onClick={() => setVariant("foot")}
-            >
-              Icons at the foot
-            </Button>
-          </div>
-          <span className={hint}>
-            Two variants to compare while the navigation is chosen. This browser keeps the one you
-            pick.
-          </span>
-        </div>
-      </section>
       <section className="grid gap-3" aria-label="This browser">
         <h2 className="font-medium">This browser</h2>
         <div className="flex items-center gap-3 rounded-xl border p-3 text-sm">

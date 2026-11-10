@@ -14,7 +14,6 @@ import { Home } from "@/screens/home.tsx";
 import { RunScreen } from "@/screens/run.tsx";
 import { Settings } from "@/screens/settings.tsx";
 import { Frame } from "@/shell.tsx";
-import type { NavVariant } from "@/variant.ts";
 import { homeEmpty, homeFull, runs, session } from "./fixtures.ts";
 
 /**
@@ -68,10 +67,6 @@ function Switch<T extends string>({
   );
 }
 
-const VARIANTS: { id: NavVariant; label: string }[] = [
-  { id: "rows", label: "rows with words" },
-  { id: "foot", label: "icons at the foot" },
-];
 const STREAM = [
   { id: "alive", label: "alive" },
   { id: "down", label: "down" },
@@ -80,7 +75,6 @@ const STREAM = [
 export default function Gallery() {
   const [screen, setScreen] = useState<ScreenId>("home");
   const [state, setState] = useState<State>("full");
-  const [variant, setVariant] = useState<NavVariant>("rows");
   const [stream, setStream] = useState<(typeof STREAM)[number]["id"]>("alive");
   const error = state === "error" ? FAILED : "";
   const again = () => setState("full");
@@ -95,15 +89,7 @@ export default function Gallery() {
     );
   else if (screen === "parts") shown = <Parts />;
   else if (screen === "settings")
-    shown = (
-      <Settings
-        tab="about"
-        session={session}
-        variant={variant}
-        setVariant={setVariant}
-        signOut={() => {}}
-      />
-    );
+    shown = <Settings tab="about" session={session} signOut={() => {}} />;
   else
     shown = (
       <RunScreen
@@ -117,7 +103,6 @@ export default function Gallery() {
     <Frame
       home={state === "full" ? homeFull : state === "empty" ? homeEmpty : undefined}
       path={screen === "home" ? "/" : screen === "settings" ? "/settings" : "/dev"}
-      variant={variant}
       alive={stream === "alive"}
     >
       <div className="grid gap-2 border-b bg-muted/40 px-4 py-2">
@@ -128,7 +113,6 @@ export default function Gallery() {
           chosen={state}
           choose={setState}
         />
-        <Switch name="Navigation" choices={VARIANTS} chosen={variant} choose={setVariant} />
         <Switch name="Control's stream" choices={STREAM} chosen={stream} choose={setStream} />
       </div>
       {shown}

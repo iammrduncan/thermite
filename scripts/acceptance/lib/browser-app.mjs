@@ -7,11 +7,12 @@
 //    owner's token opens Home, and the same session opens the pages at /ui;
 // 2. makes a change on control from outside the browser and waits for the open screen to show it,
 //    with no reload;
-// 3. opens every screen at 1440, 820 and 390 pixels wide, in light and in dark, in both variants
-//    of the navigation, and checks each as the sweep checks a page: errors in its console (a
-//    style or script the page's Content Security Policy refuses is one), requests that fail,
-//    anything loaded from another site, a screen wider than the window, controls on top of each
-//    other, text cut off and images that don't load. It keeps a screenshot of each whole screen;
+// 3. opens every screen at 1440, 820 and 390 pixels wide, in light and in dark, with the
+//    navigation's sheet on the phone, and checks each as the sweep checks a page: errors in its
+//    console (a style or script the page's Content Security Policy refuses is one), requests
+//    that fail, anything loaded from another site, a screen wider than the window, controls on
+//    top of each other, text cut off and images that don't load. It keeps a screenshot of each
+//    whole screen;
 // 4. signs out, and control must then refuse the session.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
@@ -285,12 +286,10 @@ export async function appCheck(browser, c, { out, check }) {
           await tab.page.waitForSelector(s.ready);
           await keep(s.name);
         }
-        await places("navigation-rows");
-        // The navigation's other variant: Library, Usage and Logs as icons at its foot.
-        await page.goto(`${c.url}/next?nav=foot`);
+        // Back on Home, the navigation: every place by its name, the icons at its foot too.
+        await page.goto(`${c.url}/next`);
         await page.waitForSelector('section[aria-label="What happened"]');
-        await keep("home-icons-at-the-foot");
-        await places("navigation-icons-at-the-foot");
+        await places("navigation");
       } catch (err) {
         unopened.push(`${at}: ${String(err).split("\n")[0]}`);
       }

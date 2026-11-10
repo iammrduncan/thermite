@@ -37,7 +37,6 @@ import { follow, to } from "@/nav.ts";
 import { ModeAvatar } from "@/parts/mode-avatar.tsx";
 import { runPath } from "@/parts/rows.tsx";
 import { toneDot, toneText } from "@/parts/tone.ts";
-import type { NavVariant } from "@/variant.ts";
 
 /**
  * The frame every screen is in: the navigation at the left (a sheet on a phone) and one screen
@@ -46,7 +45,11 @@ import type { NavVariant } from "@/variant.ts";
  * (docs/plan/ui-refresh-guide.md, section 9).
  */
 
-/** The places still on the dashboard at /ui, by their rows in the navigation. */
+/**
+ * Library, Usage and Logs: icons at the navigation's foot, beside Settings, each with its name
+ * for a pointer that rests on it and for a screen reader (the owner's choice of 2026-11-10, from
+ * two variants; fxbot has its records there too). They are still pages of the dashboard at /ui.
+ */
 const RECORDS: { label: string; icon: LucideIcon; page: string }[] = [
   { label: "Library", icon: LibraryIcon, page: "/ui/knowledge" },
   { label: "Usage", icon: BarChart3Icon, page: "/ui/metrics" },
@@ -56,7 +59,6 @@ const RECORDS: { label: string; icon: LucideIcon; page: string }[] = [
 export function Frame({
   home,
   path,
-  variant,
   alive,
   children,
 }: {
@@ -64,7 +66,6 @@ export function Frame({
   home: HomeAnswer | undefined;
   /** The open screen's own path. */
   path: string;
-  variant: NavVariant;
   /** Whether control's stream of changes is alive. */
   alive: boolean;
   children: ReactNode;
@@ -72,7 +73,7 @@ export function Frame({
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <Navigation home={home} path={path} variant={variant} />
+        <Navigation home={home} path={path} />
         <SidebarInset className="h-dvh overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] md:peer-data-[state=expanded]:pl-0">
           {!alive && (
             <p role="status" className="bg-needs/10 px-4 py-1.5 text-xs text-needs">
@@ -151,15 +152,7 @@ function CampaignRow({ campaign: k, path }: { campaign: NavCampaign; path: strin
   );
 }
 
-function Navigation({
-  home,
-  path,
-  variant,
-}: {
-  home: HomeAnswer | undefined;
-  path: string;
-  variant: NavVariant;
-}) {
+function Navigation({ home, path }: { home: HomeAnswer | undefined; path: string }) {
   const { setOpenMobile } = useSidebar();
   const needs = home?.needs ?? [];
   const campaigns = home?.nav.campaigns ?? [];
@@ -287,18 +280,6 @@ function Navigation({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {variant === "rows" && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Records</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {RECORDS.map((r) => (
-                  <Place key={r.label} href={r.page} icon={r.icon} label={r.label} />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
       <SidebarFooter>
         <div className="flex items-center gap-1">
@@ -310,19 +291,18 @@ function Navigation({
               active={path.startsWith("/settings")}
             />
           </SidebarMenu>
-          {variant === "foot" &&
-            RECORDS.map((r) => (
-              <Tooltip key={r.label}>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" asChild>
-                    <a href={r.page} aria-label={r.label}>
-                      <r.icon />
-                    </a>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{r.label}</TooltipContent>
-              </Tooltip>
-            ))}
+          {RECORDS.map((r) => (
+            <Tooltip key={r.label}>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" asChild>
+                  <a href={r.page} aria-label={r.label}>
+                    <r.icon />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{r.label}</TooltipContent>
+            </Tooltip>
+          ))}
         </div>
       </SidebarFooter>
     </Sidebar>

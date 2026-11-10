@@ -9,7 +9,6 @@ import { Run } from "@/screens/run.tsx";
 import { Settings } from "@/screens/settings.tsx";
 import { SignIn } from "@/screens/sign-in.tsx";
 import { Frame } from "@/shell.tsx";
-import { useNavVariant } from "@/variant.ts";
 
 /**
  * The app: the owner's session, then the frame (shell.tsx) with the screen its address names.
@@ -85,22 +84,12 @@ function Screens({
   // Home's read serves the navigation on every screen: what needs you, and the campaigns.
   const home = useRead(HOME);
   const alive = useAlive();
-  const [variant, setVariant] = useNavVariant();
   let screen: ReactNode;
   const run = /^\/campaigns\/([^/]+)\/runs\/([^/]+)$/.exec(path);
   const settings = /^\/settings(?:\/([a-z-]+))?$/.exec(path);
   if (path === "/") screen = <Home home={home.data} error={home.error} reload={home.reload} />;
   else if (run) screen = <Run run={decodeURIComponent(run[2] ?? "")} />;
-  else if (settings)
-    screen = (
-      <Settings
-        tab={settings[1]}
-        session={session}
-        variant={variant}
-        setVariant={setVariant}
-        signOut={signOut}
-      />
-    );
+  else if (settings) screen = <Settings tab={settings[1]} session={session} signOut={signOut} />;
   else
     screen = (
       <>
@@ -116,7 +105,7 @@ function Screens({
       </>
     );
   return (
-    <Frame home={home.data} path={path} variant={variant} alive={alive}>
+    <Frame home={home.data} path={path} alive={alive}>
       {screen}
     </Frame>
   );
