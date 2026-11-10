@@ -65,6 +65,7 @@ function turnUsage(now: CodexUsage, was: CodexUsage | undefined, at: number): Ca
   const keys = [
     "input_tokens",
     "cached_input_tokens",
+    "cache_write_input_tokens",
     "output_tokens",
     "reasoning_output_tokens",
   ] as const;
@@ -76,6 +77,7 @@ function turnUsage(now: CodexUsage, was: CodexUsage | undefined, at: number): Ca
     calls: null,
     tokensIn: less("input_tokens") ?? 0,
     cachedIn: less("cached_input_tokens"),
+    cacheWriteIn: less("cache_write_input_tokens"),
     tokensOut: less("output_tokens") ?? 0,
     reasoning: less("reasoning_output_tokens"),
     firstTokenMs: null,

@@ -73,6 +73,23 @@ describe("model usage in Pi", () => {
     assert.equal(u?.reasoning, 0);
   });
 
+  test("a provider that names the cache write: written tokens counted apart, even 0 (goal 195)", async () => {
+    const [u] = await oneReply({
+      text: "hi",
+      usage: { prompt: 1000, completion: 50, cached: 600, cacheWrite: 200 },
+    });
+    assert.equal(u?.tokens_in, 1000, "a write is an input token");
+    assert.equal(u?.cached_in, 600);
+    assert.equal(u?.cache_write_in, 200);
+    // 0 written is a figure the provider reports: kept, not taken for not reported.
+    const [z] = await oneReply({
+      text: "hi",
+      usage: { prompt: 300, completion: 7, cacheWrite: 0 },
+    });
+    assert.equal(z?.cache_write_in, 0);
+    assert.equal(z?.cached_in, null);
+  });
+
   test("a compaction's summary call is metered with the agent's", async () => {
     const fake = await startFakeModel(() => ({
       text: "the summary",

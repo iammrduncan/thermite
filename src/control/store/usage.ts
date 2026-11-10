@@ -36,6 +36,7 @@ function usageRowOf(r: Row): UsageRow {
     at: String(r.at),
     tokens_in: Number(r.tokens_in),
     cached_in: num(r.cached_in),
+    cache_write_in: num(r.cache_write_in),
     tokens_out: Number(r.tokens_out),
     reasoning: num(r.reasoning),
     first_token_ms: num(r.first_token_ms),
@@ -67,7 +68,7 @@ export class UsageRecords extends StorePart {
     const rows = this.db
       .prepare(
         `select rig, run, campaign, trial, agent, harness, provider, model, calls, at, tokens_in,
-           cached_in, tokens_out, reasoning, first_token_ms, call_ms from model_call
+           cached_in, cache_write_in, tokens_out, reasoning, first_token_ms, call_ms from model_call
          ${where.length ? `where ${where.join(" and ")}` : ""} order by at`,
       )
       .all(...args) as Row[];
@@ -89,9 +90,9 @@ export class UsageRecords extends StorePart {
     this.db
       .prepare(
         `insert or ignore into model_call (rig, ledger_id, event_id, run, campaign, trial, round,
-           agent, harness, provider, model, calls, at, tokens_in, cached_in, tokens_out, reasoning,
-           first_token_ms, call_ms)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           agent, harness, provider, model, calls, at, tokens_in, cached_in, cache_write_in,
+           tokens_out, reasoning, first_token_ms, call_ms)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         rig,
@@ -109,6 +110,7 @@ export class UsageRecords extends StorePart {
         u.at,
         u.tokens_in,
         u.cached_in,
+        u.cache_write_in ?? null,
         u.tokens_out,
         u.reasoning,
         u.first_token_ms,
@@ -138,7 +140,8 @@ export class UsageRecords extends StorePart {
     const rows = this.db
       .prepare(
         `select rig, run, campaign, trial, round, agent, harness, provider, model, calls, at,
-           tokens_in, cached_in, tokens_out, reasoning, first_token_ms, call_ms from model_call
+           tokens_in, cached_in, cache_write_in, tokens_out, reasoning, first_token_ms, call_ms
+         from model_call
          where rig = ? and run = ? and round like 'review %' order by at`,
       )
       .all(rig, run) as Row[];
@@ -218,6 +221,8 @@ export class UsageRecords extends StorePart {
       price: {
         input: Number(r.input),
         cached_input: r.cached_input === null ? null : Number(r.cached_input),
+        cache_write:
+          r.cache_write === null || r.cache_write === undefined ? null : Number(r.cache_write),
         output: Number(r.output),
       },
       set_by: String(r.set_by),
@@ -236,17 +241,19 @@ export class UsageRecords extends StorePart {
     }
     this.db
       .prepare(
-        `insert into model_price (provider, model, input, cached_input, output, set_by, set_at)
-         values (?, ?, ?, ?, ?, ?, ?)
+        `insert into model_price (provider, model, input, cached_input, cache_write, output,
+           set_by, set_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?)
          on conflict (provider, model) do update set input = excluded.input,
-           cached_input = excluded.cached_input, output = excluded.output,
-           set_by = excluded.set_by, set_at = excluded.set_at`,
+           cached_input = excluded.cached_input, cache_write = excluded.cache_write,
+           output = excluded.output, set_by = excluded.set_by, set_at = excluded.set_at`,
       )
       .run(
         provider,
         model,
         price.input,
         price.cached_input,
+        price.cache_write ?? null,
         price.output,
         by,
         new Date().toISOString(),

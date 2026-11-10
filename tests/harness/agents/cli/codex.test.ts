@@ -149,30 +149,38 @@ describe("the Codex CLI", () => {
   test("its model usage: one record for each turn, what the thread's totals grew by; no count of calls, no times", () => {
     const t = newCodexTally();
     readCodexEvents(events(), t);
-    const turn = (input: number, cached: number, output: number, reasoning: number) =>
+    const turn = (
+      input: number,
+      cached: number,
+      output: number,
+      reasoning: number,
+      wrote?: number,
+    ) =>
       JSON.stringify({
         type: "turn.completed",
         usage: {
           input_tokens: input,
           cached_input_tokens: cached,
+          ...(wrote !== undefined ? { cache_write_input_tokens: wrote } : {}),
           output_tokens: output,
           reasoning_output_tokens: reasoning,
         },
       });
     // The thread resumed: its totals grew.
-    readCodexEvents([JSON.stringify({ type: "turn.started" }), turn(3000, 1500, 150, 60)], t);
+    readCodexEvents([JSON.stringify({ type: "turn.started" }), turn(3000, 1500, 150, 60, 200)], t);
     assert.deepEqual(
       t.calls.map((u) => [
         u.calls,
         u.tokens_in,
         u.cached_in,
+        u.cache_write_in,
         u.uncached_in,
         u.tokens_out,
         u.reasoning,
       ]),
       [
-        [null, 2400, 1200, 1200, 90, 40],
-        [null, 600, 300, 300, 60, 20],
+        [null, 2400, 1200, 0, 1200, 90, 40],
+        [null, 600, 300, 200, 300, 60, 20],
       ],
     );
     assert.ok(t.calls.every((u) => u.call_ms === null && u.first_token_ms === null));
@@ -186,6 +194,7 @@ describe("the Codex CLI", () => {
       bare,
     );
     assert.equal(bare.calls[0]?.cached_in, null);
+    assert.equal(bare.calls[0]?.cache_write_in, null);
     assert.equal(bare.calls[0]?.reasoning, null);
     assert.equal(bare.calls[0]?.tokens_in, 70);
   });

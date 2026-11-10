@@ -26,6 +26,7 @@ import {
   knowledgeSlotNames,
 } from "./kb/index.ts";
 import { dropFollowers, machineRigJudgeOnRunners } from "./machines.ts";
+import { modelPriceCacheWrite } from "./model-price-cache-write.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
@@ -673,6 +674,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   rigWorkersTable,
   // How a rig's runners spent their time, a sample a minute from its reports (goal 231).
   runnerUseTable,
+  // The cache-write price and the input tokens a call wrote to the cache (goal 195).
+  modelPriceCacheWrite,
 ];
 
 /**

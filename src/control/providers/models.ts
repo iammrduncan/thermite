@@ -141,8 +141,9 @@ export function outputOf(m: Record<string, unknown>, type: ProviderType): number
 /**
  * A model's price from its list entry (goal 075), in US dollars per million tokens: the `pricing`
  * object OpenRouter's list gives, as Nous Portal's does too, in US dollars per token, as text
- * (`prompt`, `completion`, `input_cache_read`). OpenAI's own list, Anthropic's and OpenCode Zen's
- * give none. A price that is not a number of 0 or more (OpenRouter's -1 for a router) is none.
+ * (`prompt`, `completion`, `input_cache_read`, `input_cache_write`). OpenAI's own list,
+ * Anthropic's and OpenCode Zen's give none. A price that is not a number of 0 or more
+ * (OpenRouter's -1 for a router) is none.
  */
 export function listedPrice(m: Record<string, unknown>): ModelPrice | undefined {
   const p = m.pricing as Record<string, unknown> | undefined;
@@ -155,7 +156,12 @@ export function listedPrice(m: Record<string, unknown>): ModelPrice | undefined 
   const input = perMillion(p.prompt);
   const output = perMillion(p.completion);
   if (input === undefined || output === undefined) return undefined;
-  return { input, cached_input: perMillion(p.input_cache_read) ?? null, output };
+  return {
+    input,
+    cached_input: perMillion(p.input_cache_read) ?? null,
+    cache_write: perMillion(p.input_cache_write) ?? null,
+    output,
+  };
 }
 
 export async function listModels(

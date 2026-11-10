@@ -111,6 +111,16 @@ describe("Claude Code's transcript as session events", () => {
     assert.equal(replies, 6, "six records of four replies");
     assert.equal(of(whole.events, "usage").length, 4);
     assert.equal(whole.tally.tokensIn, 4 * 1600 + 2 + 3 + 4 + 5);
+    // Each reply's cache write is reported apart (goal 195), and stays in its input.
+    assert.deepEqual(
+      whole.tally.calls.map((c) => [c.tokens_in, c.cached_in, c.cache_write_in]),
+      [
+        [1602, 500, 100],
+        [1603, 500, 100],
+        [1604, 500, 100],
+        [1605, 500, 100],
+      ],
+    );
     // Killed after the first turn, and resumed: the same file and session, two whole turns.
     assert.equal(of(whole.events, "session").length, 1);
     assert.deepEqual(ends(whole.events), ["done", "done"]);
@@ -141,9 +151,17 @@ describe("Claude Code's transcript as session events", () => {
     assert.deepEqual(tallyDifferences(stream, fromLog.tally), {});
     assert.equal(fromLog.tally.turns, 2);
     // The stream gives the run's usage once; the transcript each call's: the same sums.
-    const sum = (calls: { tokens_in: number; cached_in: number | null; tokens_out: number }[]) => [
+    const sum = (
+      calls: {
+        tokens_in: number;
+        cached_in: number | null;
+        cache_write_in?: number | null;
+        tokens_out: number;
+      }[],
+    ) => [
       calls.reduce((n, c) => n + c.tokens_in, 0),
       calls.reduce((n, c) => n + (c.cached_in ?? 0), 0),
+      calls.reduce((n, c) => n + (c.cache_write_in ?? 0), 0),
       calls.reduce((n, c) => n + c.tokens_out, 0),
     ];
     assert.deepEqual(sum(fromLog.tally.calls), sum(stream.calls));
