@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { errorText, Refusal } from "../common/errors.ts";
 import { folderBytes } from "../common/fs.ts";
 import { log } from "../common/log.ts";
+import type { RunnerBuilds } from "../core/api/harness/runs.ts";
 import type { CommandPayloads } from "../core/commands.ts";
 import {
   kindOf,
@@ -48,34 +49,64 @@ function sizeOf(dir: string): { at: number; bytes: number } | undefined {
 }
 
 /**
- * The judge's stored builds as a policy reads them: each with when it was made (its folder's, so a
- * build made again is new), its run, whether that run is open and whether it is a champion's.
- * `busy`: a judge's job of its commit is queued or under way, so no policy removes it now.
+ * The builds a rig's runners on other machines keep (goal 259), where the judge builds and
+ * measures on them: each runner's list, or why it could not say, and the removal of one there.
  */
-function buildItems(
+export interface RunnerBuildStores {
+  kept(): Promise<{ runner: string; kept?: RunnerBuilds; error?: string }[]>;
+  remove(runner: string, key: string): Promise<boolean>;
+}
+
+/** A runner's build as a policy names it: its runner, then its key. */
+const runnerItem = (runner: string, key: string) => `${runner}/${key}`;
+
+/**
+ * The judge's stored builds as a policy reads them, the core's and, with `runners`, each runner's
+ * (goal 259): each with when it was made (its folder's, so a build made again is new), its run,
+ * whether that run is open and whether it is a champion's. `busy`: a judge's job of its commit is
+ * queued or under way, so no policy removes it now. `errors`: the runners that could not say.
+ */
+async function buildItems(
   ledger: Ledger,
   stateDir: string,
-): { items: RetentionItem[]; busy: Set<string> } {
+  runners?: RunnerBuildStores,
+): Promise<{ items: RetentionItem[]; busy: Set<string>; errors: string[] }> {
   const dir = buildsDir(stateDir);
   const items: RetentionItem[] = [];
   const busy = new Set<string>();
-  for (const f of ledger.builds.retentionFacts()) {
+  const facts = ledger.builds.retentionFacts();
+  const item = (id: string, at: number, bytes: number, f: (typeof facts)[number] | undefined) => {
+    if (f?.busy) busy.add(id);
+    items.push({
+      id,
+      rig: null,
+      run: f?.run ?? null,
+      at: new Date(at).toISOString(),
+      bytes,
+      count: 1,
+      open: f?.open ?? false,
+      champion: f?.champion ?? false,
+    });
+  };
+  for (const f of facts) {
     if (!BUILD_KEY.test(f.key)) continue;
     const size = sizeOf(join(dir, f.key));
-    if (!size) continue;
-    if (f.busy) busy.add(f.key);
-    items.push({
-      id: f.key,
-      rig: null,
-      run: f.run,
-      at: new Date(size.at).toISOString(),
-      bytes: size.bytes,
-      count: 1,
-      open: f.open,
-      champion: f.champion,
-    });
+    if (size) item(f.key, size.at, size.bytes, f);
   }
-  return { items, busy };
+  const errors: string[] = [];
+  if (runners) {
+    const byKey = new Map(facts.map((f) => [f.key, f]));
+    for (const r of await runners.kept()) {
+      if (!r.kept) {
+        errors.push(`runner ${r.runner}: ${r.error ?? "no answer"}`);
+        continue;
+      }
+      for (const [key, at, bytes] of r.kept.builds)
+        item(runnerItem(r.runner, key), at, bytes, byKey.get(key));
+      if (r.kept.more) errors.push(`runner ${r.runner}: ${r.kept.more} more builds not listed`);
+    }
+  }
+  return { items, busy, errors };
 }
 
 /** The rig's runs still open: their builds and logs a policy may keep. */
@@ -97,17 +128,38 @@ function packed(what: string, items: () => RetentionItem[]): SpaceInventory {
 }
 
 /**
- * What the rig keeps of the judge's builds and of the trials' session logs, packed for control
- * (GET /v1/space), and its open runs.
+ * What the rig keeps of the judge's builds, its runners' too (goal 259), and of the trials' session
+ * logs, packed for control (GET /v1/space), and its open runs. A runner that can't say what it
+ * keeps is named in the builds' `error`, beside what the others said.
  */
-export function spaceOf(
+export async function spaceOf(
   ledger: Ledger,
   stateDir: string,
-): { builds: SpaceInventory; trial_logs: SpaceInventory; open_runs: string[] } {
+  runners?: RunnerBuildStores,
+): Promise<{ builds: SpaceInventory; trial_logs: SpaceInventory; open_runs: string[] }> {
   const open_runs = openRunsOf(ledger);
   const open = new Set(open_runs);
+  let builds: SpaceInventory;
+  try {
+    const b = await buildItems(ledger, stateDir, runners);
+    builds = packItems(b.items);
+    if (b.errors.length) {
+      const error = `could not read all the runners' builds: ${b.errors.join("; ")}`.slice(0, 500);
+      log(
+        "harness",
+        "a runner's builds could not be read for control's Space table",
+        { error },
+        "warn",
+      );
+      builds = { ...builds, error };
+    }
+  } catch (err) {
+    builds = packed("builds", () => {
+      throw err;
+    });
+  }
   return {
-    builds: packed("builds", () => buildItems(ledger, stateDir).items),
+    builds,
     trial_logs: packed("trials' session logs", () => sessionItems(stateDir, open)),
     open_runs,
   };
@@ -137,11 +189,16 @@ function removal(p: RetentionRun, gone: RetentionItem[], error: string | undefin
  * trials' session logs it covers. The advisors' records are left to the supervisor, which acts
  * once this command is taken. A kind kept on control is refused: control removes it.
  */
-export function runRetention(
-  o: { ledger: Ledger; stateDir: string; clock: () => Date },
+export async function runRetention(
+  o: {
+    ledger: Ledger;
+    stateDir: string;
+    clock: () => Date;
+    runners?: RunnerBuildStores | undefined;
+  },
   p: RetentionRun,
   by: string,
-): unknown {
+): Promise<unknown> {
   const kind = p.rule.kind;
   if (kind === "advisor_records") return { kind, left_to: "the supervisor" };
   if (kind === "trial_logs") {
@@ -173,16 +230,23 @@ export function runRetention(
   }
   if (kind !== "builds")
     throw new Refusal(`${kindOf(kind).label} is kept on control, which removes it: not on a rig`);
-  const { items, busy } = buildItems(o.ledger, o.stateDir);
+  const { items, busy, errors } = await buildItems(o.ledger, o.stateDir, o.runners);
   const r = wouldRemove(p.rule, items, o.clock());
   const dir = buildsDir(o.stateDir);
   const gone: RetentionItem[] = [];
-  let error: string | undefined;
+  // A runner that could not say what it keeps keeps it: the policy's next run reaches it.
+  let error: string | undefined = errors.length
+    ? `could not read all the runners' builds: ${errors.join("; ")}`
+    : undefined;
   for (const x of r.items) {
     if (busy.has(x.id)) continue;
+    const at = x.id.indexOf("/");
     try {
-      if (removeBuild(dir, x.id)) gone.push(x);
-      SIZES.delete(join(dir, x.id));
+      if (at < 0) {
+        if (removeBuild(dir, x.id)) gone.push(x);
+        SIZES.delete(join(dir, x.id));
+      } else if (o.runners && (await o.runners.remove(x.id.slice(0, at), x.id.slice(at + 1))))
+        gone.push(x);
     } catch (err) {
       error ??= `a build could not be removed: ${errorText(err)}`;
     }

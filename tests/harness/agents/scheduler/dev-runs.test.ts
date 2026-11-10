@@ -168,6 +168,59 @@ describe("agent scheduler", () => {
     assert.match(String(off.reason), /not set up/);
   });
 
+  test("a paused run's queued judge jobs hold up no other run's dev run on a shared device (goal 201)", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 1 } });
+    await env.start();
+    // js-1's own jobs are done: only another run's are in the queue.
+    env.ledger.db
+      .prepare("update job set state = 'done' where state in ('queued', 'leased')")
+      .run();
+    // js-0, paused, with a calibration that waits in the queue: the judge never takes it.
+    env.ledger.db
+      .prepare(
+        `insert into run (id, campaign, version, contract_sha, mode, seed_repo, seed_commit, status, created_at, updated_at)
+         select 'js-0', campaign, version, contract_sha, mode, seed_repo, seed_commit, 'paused', created_at, updated_at
+         from run where id = 'js-1'`,
+      )
+      .run();
+    env.ledger.jobs.enqueue({ kind: "calibrate", priority: 10, spec: { run: "js-0" }, actor: "t" });
+    const { DevRuns } = await import("../../../../src/harness/agents/devrun.ts");
+    const runner = new LocalRunner(env.paths.scratchDir);
+    scheduler0(env).registry.startTrial({
+      id: "t-p",
+      run: "js-1",
+      lane: "lane-1",
+      epoch: 1,
+      direction: "f",
+      parent: env.seed,
+      token: "tok",
+    });
+    const { mkdirSync } = await import("node:fs");
+    const cwd = `${env.paths.scratchDir}/lanes/lane-1/ws/repo`;
+    mkdirSync(cwd, { recursive: true });
+    const shared = () =>
+      new DevRuns({
+        runner,
+        ledger: env.ledger,
+        scratchDir: env.paths.scratchDir,
+        gpu: false,
+        maxWaitMs: 300,
+      });
+    type Result = { ran: boolean; reason?: string; stdout?: string };
+    // js-1's lane runs at once: nothing the judge can take holds the device.
+    const ran = (await shared().run({ lane: "lane-1", command: "echo ran", cwd }, "t-p")) as Result;
+    assert.equal(ran.ran, true, JSON.stringify(ran));
+    assert.match(String(ran.stdout), /ran/);
+    // js-0 resumed: the judge can take its calibration, and the lane waits for it, as before.
+    env.ledger.db.prepare("update run set status = 'running' where id = 'js-0'").run();
+    const waited = (await shared().run(
+      { lane: "lane-1", command: "echo ran", cwd },
+      "t-p",
+    )) as Result;
+    assert.equal(waited.ran, false);
+    assert.match(String(waited.reason), /judge kept the device busy/);
+  });
+
   test("a dev run's time limit: none on a dedicated card, the shared default otherwise; a run stuck behind another lane's gives up", async () => {
     const env = makeJudgeEnv({ lanes: { count: 2, trials_per_epoch: 1 } });
     await env.start();

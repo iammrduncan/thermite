@@ -245,7 +245,7 @@ While a change is under way, a card shows it in words, such as `stopping: waitin
 | Stop | Pause the runs at a safe point. Send the waiting results out of the pod. Wait until they have left the pod (15 minutes at most). Ask RunPod to stop the pod |
 | Start | Ask RunPod to start the pod. Wait for the pod to run. Resume the runs the stop paused |
 | Restart | Ask RunPod to stop the pod. Wait for the pod to stop. Ask RunPod to start it again, and wait for it to run. The harness starts again: a trial that was in progress is planned again. A restart pauses no run |
-| Terminate | Pause the runs at a safe point. Wait until no judge job and no command waits on the rig (1 hour at most). Make a full export (30 minutes at most). Wait until every result has left the pod (1 hour at most). Ask RunPod to delete the pod and its volume |
+| Terminate | Pause the runs at a safe point. Wait until the judge's jobs under way end and no command waits on the rig (1 hour at most); the paused runs' queued jobs never start, and don't hold it. Make a full export (30 minutes at most). Wait until every result has left the pod (1 hour at most). Ask RunPod to delete the pod and its volume |
 
 What went wrong last shows in red under them. An error from control's last read of the pod goes at its next good read. A refused terminate, `Not terminated: …`, stays until you stop, start, restart or terminate the pod, or until a newer step in its history, such as a full reset.
 

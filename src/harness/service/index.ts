@@ -34,6 +34,7 @@ import { ModelUsage } from "../model-usage.ts";
 import type { PreviewAsk } from "../prompts.ts";
 import { ExperimentQueue } from "../queue.ts";
 import { Cards, folderRootOf, Papers, RunSearch, SAVED_LANES_DIR } from "../research/index.ts";
+import type { RunnerBuildStores } from "../retention.ts";
 import type { ReviewKind } from "../reviews.ts";
 import { RigSettingsStore } from "../rig-settings-store.ts";
 import { RunResearch } from "../run-research.ts";
@@ -195,6 +196,11 @@ export class HarnessService {
    * undefined for a rig with none.
    */
   runnersNow?: (() => unknown) | undefined;
+  /**
+   * The judge's builds its runners of other machines keep (goal 259), for Space and a retention
+   * policy; undefined for a rig with none.
+   */
+  runnerBuilds?: RunnerBuildStores | undefined;
   /**
    * A subscription's usage windows as its runtime last reported them (Claude Code's 5-hour and
    * weekly windows), for the rig's report: no tokens, only percent used and reset times; and its

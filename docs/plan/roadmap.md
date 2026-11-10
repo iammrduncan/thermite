@@ -228,10 +228,14 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [216](goals/_completed/216-pi-1-5.goal) Pi 1.5.0: the agents' tools in pi-schema, and pi-ai's own fix for long tool calls · `VERIFIED` · v0.2.1
 - [241](goals/_completed/241-typed-input-once.goal) Input the owner types into an advisor's terminal reaches it once · `VERIFIED` · v0.2.1
 
-The fixes after it, one version each, in the order to take them:
+**v0.2.2** (the owner, 2026-11-10) fixes critical bugs only, from a check of [issue 50](https://github.com/iammrduncan/thermite/issues/50) against v0.2.1; changes to how Thermite works for the owner wait for v0.3.0:
+
+- [201](goals/_completed/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop holding up the rest: other runs' dev runs, a shared runner and a RunPod rig's Terminate, and control's view of the queue (issue 50) · `VERIFIED` · v0.2.2
+- [259](goals/_completed/259-runner-builds-retention.goal) A retention policy for the judge's builds reaches the builds on a rig's runners (issue 50) · `VERIFIED` · v0.2.2
+
+The fixes after them, one version each, in the order to take them:
 
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `IN_PROGRESS`: item 4 shipped in v0.2.0, items 1 to 3 are the fix
-- [201](goals/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop, and stop holding up the rest (issue 50) · `PROPOSED`
 - [224](goals/224-update-across-control-restart.goal) A rig's update that a control restart cuts off goes on, or says so · `PROPOSED`
 - [225](goals/225-drain-waits-for-advisors.goal) A drain waits for the supervisor's advisors too · `PROPOSED`
 - [204](goals/204-quiet-ride-through.goal) A supervisor rides through control's restart quietly · `PROPOSED`

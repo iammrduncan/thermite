@@ -8,7 +8,7 @@ import { harnessConfirmed, issueCommand } from "./issue/index.ts";
 import { exportLeft, resultsLeft } from "./results-left.ts";
 import { type RunpodRigs, type RunpodRigView, runpodResetRefusal } from "./runpod/index.ts";
 import type { ControlStore } from "./store/index.ts";
-import { type RigView, rigView } from "./views/index.ts";
+import { judgeBusy, type RigView, rigView } from "./views/index.ts";
 
 /**
  * Lifecycle: restarting a rig's containers, and the owner's full reset. Pause and resume are
@@ -495,16 +495,4 @@ export function inClusterApi(env: NodeJS.ProcessEnv): string {
   if (!host) return "https://kubernetes.default.svc";
   const port = env.KUBERNETES_SERVICE_PORT ?? "443";
   return `https://${host.includes(":") ? `[${host}]` : host}:${port}`;
-}
-
-/**
- * The judge's jobs a full reset waits for before its export (goal 165): those under way, and the
- * queued jobs it will still take. The reset paused the runs, and the judge never takes a paused or
- * closed run's queued job: those stay in the queue, and the export carries them.
- */
-export function judgeBusy(v: RigView | undefined): number {
-  if (!v) return 0;
-  const held = new Set(v.runs.filter((r) => r.status !== "running").map((r) => r.id));
-  const queued = v.judge.queued.filter((j) => !j.run || !held.has(j.run)).length;
-  return Number(v.jobs.leased ?? 0) + queued;
 }

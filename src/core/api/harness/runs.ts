@@ -168,8 +168,28 @@ export const RunAsk = z.discriminatedUnion("op", [
   }),
   /** A trial ended: its workspace on the runner goes. */
   z.object({ op: z.literal("lane_end"), lane: Lane, trial: z.string().regex(TRIAL_ID) }),
+  /** The judge's builds the runner keeps (goal 259), for Space and a retention policy. */
+  z.object({ op: z.literal("builds") }),
+  /** One of its builds removed (goal 259), by its key: a retention policy's. */
+  z.object({ op: z.literal("remove_build"), key: Sha256 }),
 ]);
 export type RunAsk = z.infer<typeof RunAsk>;
+
+/** The most builds a runner lists in one answer (goal 259); it says how many more it keeps. */
+export const RUNNER_BUILDS_MAX = 20_000;
+
+/**
+ * A runner's answer to `builds` (goal 259): each build it keeps as [its key, when it was made in
+ * milliseconds since the epoch, its bytes], oldest first, at most RUNNER_BUILDS_MAX, and how many
+ * more it keeps.
+ */
+export const RunnerBuilds = z.object({
+  builds: z
+    .array(z.tuple([Sha256, z.number().min(0), z.number().int().min(0)]))
+    .max(RUNNER_BUILDS_MAX),
+  more: z.number().int().min(0),
+});
+export type RunnerBuilds = z.infer<typeof RunnerBuilds>;
 
 export const RUN = {
   method: "POST",

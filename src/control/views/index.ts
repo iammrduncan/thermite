@@ -74,7 +74,7 @@ export {
   type StandingView,
   type TaskYieldView,
 } from "./research.ts";
-export { podStopped } from "./rig.ts";
+export { judgeBusy, podStopped } from "./rig.ts";
 export {
   newestRunStart,
   type RunnerShare,

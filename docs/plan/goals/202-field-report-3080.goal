@@ -5,7 +5,7 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: []
 created: 2026-11-03
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # 202 · The 3080 field report: each of its items in a goal
@@ -14,7 +14,7 @@ updated: 2026-11-09
 
 ## What
 
-[issue 50](https://github.com/iammrduncan/thermite/issues/50) is a field report of six days of a CUDA kernel hill climb on v0.1.0, with about thirty items in four parts: run budgeting, the judge's measurements, anti-cheat and the contract, and the environment. Its ranked requests 1, 2, 4 and 5 are goals [198](198-budget-counts-working-time.goal), [199](199-judge-files-once-disk-ready.goal), [200](200-plateau-stop.goal) and [201](201-judge-queue-per-run.goal). This goal places the rest:
+[issue 50](https://github.com/iammrduncan/thermite/issues/50) is a field report of six days of a CUDA kernel hill climb on v0.1.0, with about thirty items in four parts: run budgeting, the judge's measurements, anti-cheat and the contract, and the environment. Its ranked requests 1, 2, 4 and 5 are goals [198](198-budget-counts-working-time.goal), [199](199-judge-files-once-disk-ready.goal), [200](200-plateau-stop.goal) and [201](_completed/201-judge-queue-per-run.goal). This goal places the rest:
 
 - **GPU kernel timing** (request 3: CUDA events beside wall time, and a warm-up until stable): a new goal, v0.2.0 or later.
 - **Anti-cheat:** a held-out speedup the contract can require, rules that read the whole changed file, arena poisoning and a device-allocation audit, sampled output checks: with goal [114](114-hill-climb-contract-gaps.goal) or a goal of their own.
@@ -38,6 +38,34 @@ A report this long only helps once each item has a place and an owner.
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-10: every item checked against v0.2.1 (`main` at 0d984fb7), for the plan of v0.2.2. The owner: v0.2.2 fixes critical bugs only; changes to how Thermite works for the owner wait for v0.3.0. Where each item stands:
+
+  | Item of the report | On v0.2.1 | Where it goes |
+  | --- | --- | --- |
+  | Wall-hours budget counts pauses; a spent run can't resume | Fixed in v0.1.3 | Goal [198](198-budget-counts-working-time.goal) |
+  | A paused run's queued jobs hold up dev runs on a shared device | Still so (`harness/agents/devrun.ts`, `judgeBusy`), and it also holds a shared runner and a RunPod rig's Terminate | v0.2.2, goal [201](_completed/201-judge-queue-per-run.goal) |
+  | A closed run's cancelled jobs still show as queued | Still so: no `job_cancelled` event (`harness/ledger/jobs.ts`, `endClosedRuns`) | v0.2.2, goal 201 |
+  | The judge keeps raw outputs, about 0.9 GB a comparison | Each run's folder is removed; the judge's builds grow, and a retention policy never reaches a runner's | v0.2.2, goal [259](_completed/259-runner-builds-retention.goal) |
+  | Pause and close don't stop the judge's job under way | Still so, by design (Steer a run) | v0.3.0, to place |
+  | Resume pauses another run on the rig without a word | Still so | v0.3.0, to place |
+  | Calibration charged to the budget; lanes can't work beside it on a shared device | Still so; lanes with a GPU or runner of their own don't wait | v0.3.0, to place |
+  | No plateau stop | Still so | Goal [200](200-plateau-stop.goal) |
+  | `POST /v1/campaigns/<c>/runs` can't start from a champion | A new campaign from a champion works today (goal [185](185-a-runs-work-in-git.goal)); a new run of the same campaign still can't | v0.3.0, to place |
+  | Timing readiness doesn't check the disk; the judge copies `run.copy` into every run; receipts lack phase timings and disk figures | Still so (`harness/judge/measure.ts`, `blocks.ts`) | Goal [199](199-judge-files-once-disk-ready.goal) |
+  | No sync right before timing | Already so | Nothing to do |
+  | Built-in GPU kernel timing; warm-up until stable; a persistent worker | None of them | v0.3.0 or later, to place |
+  | A held-out speedup the contract can require; rules over the whole changed file | Still so (`harness/judge/jobs/confirm.ts`, `harness/v0.ts`) | Goal [114](114-hill-climb-contract-gaps.goal), to place |
+  | Arena poisoning and a device-allocation audit; sampled checks | None; a kit can use `THERMITE_ONCE`, `THERMITE_BLOCK` and `THERMITE_ARM` (v0.2.0) | v0.3.0 or later, to place |
+  | Editable files hold only shipped code; rootless ownership for kit authors; CDI 0.7.0 with Podman 4.9; glibc of the CUDA 12 image | Not in the docs | v0.3.0's docs, to place |
+  | CUDA 12 harness on Ubuntu 22.04 (glibc 2.35) | Still so | Goal [132](132-cuda-images-per-gpu.goal) |
+  | A model not yet listed needs Refresh models | Refused with no hint to refresh | v0.3.0, to place |
+  | A worker with no submissions over many trials | Slowed (`scheduler/gates.ts`); no owner setting | v0.3.0, to place |
+  | Another service can load onto the judge's GPU; a pause that waits until the GPU is free | Readiness refuses a busy GPU before each block; no exclusive check, no such pause | v0.3.0, to place |
+  | Codex's effort capped at high | Still so, as the docs say | v0.3.0, to place |
+  | A hint for an offline rig | Control's own rigs have one; a joined rig gets one general line | v0.3.0, to place |
+  | Chained capsules over several kernels | A kit's run command can run a pipeline today | v0.3.0 or later, to place |
+
+  Left for this goal: placing the items marked "to place" in v0.3.0's goals, and closing issue 50 with where each went.
 
 ---
 

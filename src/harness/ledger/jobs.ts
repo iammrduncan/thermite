@@ -203,13 +203,14 @@ export class LedgerJobs extends LedgerPart {
 
   /**
    * A closed run is never resumed, so the judge never takes its queued jobs: they are cancelled,
-   * and an attempt that waited for one ends as not_judged. A leased job finishes as it is. With
-   * no run, every closed run's: at start, for runs closed before a close did this.
+   * each with a `job_cancelled` event, so control's view of the queue drops it (goal 201), and an
+   * attempt that waited for one ends as not_judged. A leased job finishes as it is. With no run,
+   * every closed run's: at start, for runs closed before a close did this.
    */
   endClosedRuns(actor: string, run?: string): number[] {
     return this.tx(() => {
       const rows = this.rows<Row>(
-        `select j.id, j.attempt, a.lifecycle from job j
+        `select j.id, j.attempt, j.kind, i.id as run, a.lifecycle from job j
          left join attempt a on a.id = j.attempt
          join run i on i.id = coalesce(a.run, json_extract(j.spec, '$.run'))
          where j.state = 'queued' and i.status = 'closed' ${run === undefined ? "" : "and i.id = ?"}`,
@@ -221,6 +222,13 @@ export class LedgerJobs extends LedgerPart {
           this.now(),
           Number(r.id),
         );
+        this.ledger.appendEvent(actor, "job_cancelled", String(r.id), {
+          run: String(r.run),
+          attempt: r.attempt === null ? null : String(r.attempt),
+          kind: String(r.kind),
+          was: "queued",
+          reason: "its run closed",
+        });
         if (r.attempt !== null && r.lifecycle === "queued")
           this.ledger.attempts.setLifecycle(String(r.attempt), "not_judged", actor);
       }
@@ -366,10 +374,19 @@ export class LedgerJobs extends LedgerPart {
     }));
   }
 
-  /** How many jobs of these kinds are queued or leased. */
+  /**
+   * How many jobs of these kinds the judge has under way or can take: every leased one, and the
+   * queued ones of a running run or of none. A paused or closed run's queued jobs wait, and the
+   * judge never takes them (lease), so they hold up neither a lane's dev run on a shared device nor
+   * the judge's hold on a shared runner (goal 201).
+   */
   open(kinds: readonly string[]): number {
     const r = this.row<Row>(
-      `select count(*) as n from job where state in ('queued', 'leased') and kind in (${kinds.map(() => "?").join(", ")})`,
+      `select count(*) as n from job j
+       left join attempt a on a.id = j.attempt
+       left join run i on i.id = coalesce(a.run, json_extract(j.spec, '$.run'))
+       where j.kind in (${kinds.map(() => "?").join(", ")})
+         and (j.state = 'leased' or (j.state = 'queued' and (i.status is null or i.status = 'running')))`,
       ...kinds,
     );
     return Number(r?.n ?? 0);
