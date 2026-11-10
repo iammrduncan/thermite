@@ -112,7 +112,10 @@ export interface EventBodies {
     verdicts?: number[] | undefined;
     champions?: number[] | undefined;
   };
-  /** A job cancelled before it ran or while it ran: its attempt's evidence was withdrawn. */
+  /**
+   * A job cancelled before it ran or while it ran: its attempt's evidence was withdrawn, or, queued,
+   * its run closed (goal 201).
+   */
   job_cancelled: {
     run: string | null;
     attempt: string | null;

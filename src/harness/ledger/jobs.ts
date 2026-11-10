@@ -203,13 +203,14 @@ export class LedgerJobs extends LedgerPart {
 
   /**
    * A closed run is never resumed, so the judge never takes its queued jobs: they are cancelled,
-   * and an attempt that waited for one ends as not_judged. A leased job finishes as it is. With
-   * no run, every closed run's: at start, for runs closed before a close did this.
+   * each with a `job_cancelled` event, so control's view of the queue drops it (goal 201), and an
+   * attempt that waited for one ends as not_judged. A leased job finishes as it is. With no run,
+   * every closed run's: at start, for runs closed before a close did this.
    */
   endClosedRuns(actor: string, run?: string): number[] {
     return this.tx(() => {
       const rows = this.rows<Row>(
-        `select j.id, j.attempt, a.lifecycle from job j
+        `select j.id, j.attempt, j.kind, i.id as run, a.lifecycle from job j
          left join attempt a on a.id = j.attempt
          join run i on i.id = coalesce(a.run, json_extract(j.spec, '$.run'))
          where j.state = 'queued' and i.status = 'closed' ${run === undefined ? "" : "and i.id = ?"}`,
@@ -221,6 +222,13 @@ export class LedgerJobs extends LedgerPart {
           this.now(),
           Number(r.id),
         );
+        this.ledger.appendEvent(actor, "job_cancelled", String(r.id), {
+          run: String(r.run),
+          attempt: r.attempt === null ? null : String(r.attempt),
+          kind: String(r.kind),
+          was: "queued",
+          reason: "its run closed",
+        });
         if (r.attempt !== null && r.lifecycle === "queued")
           this.ledger.attempts.setLifecycle(String(r.attempt), "not_judged", actor);
       }
