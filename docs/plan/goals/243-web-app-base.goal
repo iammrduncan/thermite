@@ -100,7 +100,8 @@ The fonts' other alphabets (Latin Extended, Cyrillic, Vietnamese, symbols; 95 kB
 - 2026-11-10: CI passed every job at 4e520ed4, among them the checks on Node.js 22 and 24 with the app's type check, the browser job with the app's part, and the compose smoke test, which reads the app from control's image. It passed again at 17590768, with the changes for a real control.
 - 2026-11-10: The maintainers' test deployment runs control at 17590768, with the app at `/next`.
 - 2026-11-10: The owner put the screens and the plan's structure in question (Decisions). Screen work stopped. A first set of mockups is on a design canvas for the owner to mark up: today's screens, the screens this goal built, and a structure thought out again (Home with decisions made in place, one page for a run with one timeline and one box to write in, one Setup page, New research in four answers).
-- Open: the owner's choice of a structure from mockups; then this goal's screens, the guide's sections 4 to 6 and goals 245 to 252 follow it.
+- 2026-11-10: The owner took the second structure further (a run as Summary, Explore and a side panel with one record; sparklines on every metric; plain SQL for views; a run that owns its agents and its share of machines, goal [258](258-runs-own-their-resources.goal)) and asked for the whole app as mockups on one canvas, each screen one board that is edited in place. That canvas now holds 63 screens in ten rows (sign-in and Home, campaigns, a run's Summary, Explore, steering and setup, goal and research runs, compute, knowledge, setup, the system), drawn from real runs' records, with a map of what owns what. Every item that today's pages show is listed against the board that shows it; what was left out on purpose is listed for the owner's yes or no.
+- Open: the owner's review of the mockups, board by board; then this goal's screens, the guide's sections 4 to 6 and goals 245 to 252 follow it.
 
 ---
 
