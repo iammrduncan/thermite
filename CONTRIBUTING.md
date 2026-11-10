@@ -17,13 +17,16 @@ Thank you for helping. Fixes, documentation, kits, bug reports and ideas are all
 
 ## Send a change
 
-1. Fork the repository, and make a branch in your fork for one change. A fix to the released version starts from `main`, and its pull request goes to `main`: each fix is released alone, as the next patch version (such as v0.2.1), so keep it to that one fix. A new feature starts from the next minor version's branch, such as `v0.3.0`, and its pull request goes there. `main` holds only released versions.
+1. Fork the repository, and make a branch from `main` in your fork for one change. Every pull request goes to `main`. A fix is released alone, as the next patch version (such as v0.2.1), so keep it to that one fix. A new feature is taken by the maintainers into the next minor version's branch, such as `v0.3.0`, and ships with that version. `main` holds only released versions.
 2. Set up your copy. You need Node.js 22.19 or later (22.22 or later to build the documentation site), git, and Docker or Podman:
 
    ```sh
    npm ci
+   npm run web:install
    npm run check
    ```
+
+   `npm run web:install` installs the packages of the dashboard's app (`web/`), which are apart from Thermite's own.
 
 3. Make the change in small commits. Each message says what the commit does.
 4. Update the documentation in the same pull request: every page that describes what you changed, such as screens and their text, commands, settings, routes, events, errors and limits. [Writing the documentation](docs/writing-docs.md) says how. When the change draws on outside work, such as a paper, a system you studied, or a new dependency or bundled program, add it to [CREDITS.md](CREDITS.md) with its licence, and run `npm run docs:credits`.
@@ -36,15 +39,16 @@ Run these from the repository root before each commit:
 | Command | What it checks |
 | --- | --- |
 | `npm run typecheck` | The TypeScript types |
+| `npm run web:typecheck` | The types of the dashboard's app (`web/`) |
 | `npm run lint` | Style and common mistakes, with Biome. `npm run format` fixes what it can |
 | `node scripts/test.mjs <files>` | The test files that your change touches |
 | `npm run check:public` | That no tracked or staged file holds private names or addresses. Stage new files first |
 | `npm run check:sizes` | That no file over 800 lines grows, and no file newly passes 800 lines. After a split, `npm run check:sizes -- --lower` lowers its recorded size |
-| `npm run check:imports` | That no new import breaks the rule of the parts in CONVENTIONS.md, and that code outside a folder that is a module imports its `index.ts`. After a move, `npm run check:imports -- --lower` drops the exceptions that are gone |
+| `npm run check:imports` | That no new import breaks the rule of the parts in CONVENTIONS.md, that code outside a folder that is a module imports its `index.ts`, and that the dashboard's app imports only the contracts in `src/core/`. After a move, `npm run check:imports -- --lower` drops the exceptions that are gone |
 | `npm run check:loose-ends` | That no export of `src/` is left that no other file names, and no path in a comment or a page names a file that isn't there. After a removal or a fix, `npm run check:loose-ends -- --lower` drops the exceptions that are gone |
 | `npm run docs:build` and `npm run docs:check` | The documentation site, when you change it or anything that a page describes. Run `npm run docs:install` once first |
 
-`npm run check` runs the typecheck, the lint, every test, the public check, the size check, the import check and the loose-ends check. Changes to containers, the judge, control or the agents also need a test that starts containers: the [contributor guide](docs/local-development.md) and [AGENTS.md](AGENTS.md#checks) say which.
+`npm run check` runs the typecheck, the app's typecheck, the lint, every test, the public check, the size check, the import check and the loose-ends check. Changes to containers, the judge, control or the agents also need a test that starts containers: the [contributor guide](docs/local-development.md) and [AGENTS.md](AGENTS.md#checks) say which.
 
 ## The rules every change keeps
 

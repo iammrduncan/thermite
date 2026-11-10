@@ -52,6 +52,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 - Work on a branch and commit in reviewable steps with clear messages.
 - `main` holds released versions only, each with its tag ([decisions](docs/plan/decisions.md#releases-and-planning)). New features go on the next minor version's branch, such as `v0.3.0`, and ship together when its goals are verified.
 - Each fix to the released version is a patch version of its own: one branch from `main` (`fix/<what-it-fixes>`) and one pull request to `main`, with its version and its changelog section (v0.2.1, then v0.2.2). When it merges, `main` is tagged and released, and `main` merges into the minor version's branch. Keep a fix's pull request to that one fix.
+- Every pull request goes to `main`, Dependabot's too: a branch that stays, so none is moved when a version ships. A feature's pull request waits there until the maintainers take its commits into the minor version's branch; it shows as merged when that version merges into `main`.
 - Do not rewrite history that has been pushed.
 - `.agents/`, `.claude/` and `skills-lock.json` belong to the maintainers' tooling. Leave them alone unless asked.
 
