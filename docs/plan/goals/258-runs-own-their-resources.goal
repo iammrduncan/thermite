@@ -1,0 +1,72 @@
+---
+id: "258"
+title: "A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work"
+status: PROPOSED
+version: "later"
+depends_on: ["242"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 258 · A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work
+
+**Status:** `PROPOSED` · **Version:** [later](../roadmap.md#later) · **Depends on:** [242](_completed/242-v030-review.goal)
+
+## What
+
+A proposal only; nothing of it is built or decided.
+
+Today the order is machine, then rig, then campaign, then run. A rig owns the agents, their models, the lanes and the runners, and a machine belongs to one rig. This goal asks whether that order can turn around:
+
+1. **A run is what the owner edits.** Its workers at a time, each agent's model and its share of compute are the run's own, changed on the run, from its next trial or job.
+2. **Machines are a pool.** A run asks for what it needs. A machine serves many runs: in turns at a whole GPU, or in parts at the same time (memory, CPUs).
+3. **The agents' loops run in the control plane:** workers, planner, teachers, auditor, review panel, with the run's record and the judge's decisions. A run that builds nothing, such as research, needs no machine.
+4. **A machine runs one light runner:** one program, with no container engine to set up. It does what needs the hardware: a worker's shell and files in a sandbox, builds, measurements.
+5. **Or all on the machine:** the same control-plane parts beside the runner, for a site with no link out, or for people who want a run self-contained.
+
+## Why
+
+The owner, 2026-11-10:
+
+- "If I want to change the models, lane count, machine allocation... I have to go edit the rig, when really I'm editing a run against the resources given to it."
+- "I'd like to be able to run a campaign against only a portion of a gpu or resource etc... so I can run say many campaigns on a single dgx spark."
+- "the core is super idle all the work is on the gpus, the agent loops require basically nothing."
+- "Could runners just be a single binary no docker/podman requirements?"
+- "research goal... never builds stuff... so it doesn't actually need an allocation of rig/resource it can just run agent loops."
+- "IF we do this it simplifies the architecture a lot imo."
+
+A rig's core and its runners already split this way ([A rig's core and its runners](../../_site/src/content/docs/explanation/core-and-runners.md)): the core holds the run's record, the agents and the judge's decisions, and the runners build and measure. The proposal moves the core's part into the control plane and makes the runner the only thing on a machine.
+
+## Constraints
+
+- **Agents never judge.** Measurement, verdicts and promotion stay in code the agents cannot write. Today separate users, the broker and the device fence keep a worker away from the judge's files and GPU on one machine ([Isolation](../../_site/src/content/docs/explanation/isolation.md)). A runner with no container must give the same wall.
+- **A worker's shell is code from a model.** It runs in a sandbox on a runner, never inside the control plane.
+- **A run survives a restart of the control plane.** Today a rig works on while control is away. With the loops in the control plane, they must pick up where they were.
+- **A steady measurement wants the whole device.** Parts at the same time are for experiments, or for metrics that are not timings, until a run's own noise says otherwise.
+- **Keys stay in the control plane.** A machine holds none.
+
+## Done when
+
+- [ ] The owner decides whether this goes on, from mockups and a written design with its costs.
+
+## Decisions
+
+- None yet.
+
+## Open questions
+
+- What gives the wall between a worker and the judge on one machine without a container: users and namespaces set up by the runner itself, or a sandbox per job. What the isolation self-test must prove there.
+- Where a worker's workspace lives when its loop is in the control plane: on a runner, with each command sent there, or in a sandbox the control plane has.
+- What the control plane needs when it holds every run's loops: CPUs, memory, terminals for the agent programs, and what a restart costs.
+- How a part of a GPU is given: memory and CPUs alone, or a share of its time, and what each does to a measurement's noise.
+- What becomes of the rig as a word and as a thing: gone, or the name of a set of machines.
+- How a deployment of today moves over, and whether both shapes run side by side for a time.
+- Whether the judge's decisions may leave the machine at all for a site that wants every part of a run on its own hardware.
+
+## Progress
+
+- 2026-11-10: Written from the owner's words, during the review of the dashboard's first mockups. Mockups of a run's Setup, of Compute and of the two shapes are on the design canvas the owner looks at.
+
+---
+
+Run with `/goal Complete docs/plan/goals/258-runs-own-their-resources.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
