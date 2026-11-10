@@ -62,8 +62,10 @@ function providerOf(r: Row): ModelProvider {
 
 export class ModelProviders extends StorePart {
   /**
-   * Creates or changes a model provider. A change without a new key keeps the sealed one; a new
-   * provider needs a key. Its version moves on every change, so the rigs that use it pick it up.
+   * Creates or changes a model provider. A change without a new key keeps the sealed one. A
+   * provider needs a key unless it is OpenCode's own or OpenAI-compatible: a new one, and one with
+   * no key changed to another type. Its version moves on every change, so the rigs that use it
+   * pick it up.
    */
   put(p: {
     name: string;
@@ -72,8 +74,11 @@ export class ModelProviders extends StorePart {
     key?: { sealed: string; hint: string } | undefined;
   }): "created" | "updated" | "needs_key" {
     const old = this.get(p.name);
-    // OpenCode's own free models need no key; every other provider does.
-    if (!old && !p.key && p.type !== "opencode") return "needs_key";
+    // OpenCode's own free models need no key, and neither does an OpenAI-compatible server that
+    // takes none, such as a local llama.cpp or Ollama: its calls then go with no key. Anthropic's
+    // API does need one, also when a provider with no key is changed to it.
+    if (!p.key && !old?.key_sealed && p.type !== "opencode" && p.type !== "openai")
+      return "needs_key";
     this.db
       .prepare(
         `insert into model_provider (name, type, base_url, key_sealed, key_hint, version, updated_at)

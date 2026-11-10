@@ -139,6 +139,15 @@ const Runtime = z.discriminatedUnion("runtime", [
 export type AdvisorRuntime = z.infer<typeof Runtime> & { keyNow?: (() => string) | undefined };
 
 /**
+ * Whether a runtime is a model control gave a role for a provider with no key, such as an
+ * OpenAI-compatible server that takes none: control sends it an empty key, which the advisors file
+ * can't give (its `api_key` is never empty). Its calls go with no key: Pi sends none, and neither
+ * does the call's proxy of an advisor in OpenCode or Codex. A runtime of the advisors file with no
+ * key at all still fails, with `has no key`.
+ */
+export const keylessRoute = (rt: { api_key?: string | undefined }): boolean => rt.api_key === "";
+
+/**
  * Where an advisor's calls go, for its model usage (goal 075); none for a command-line agent,
  * which says nothing of them.
  */

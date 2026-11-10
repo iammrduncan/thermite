@@ -77,7 +77,7 @@ OpenCode decides which of its models are free, and the list can change. Its list
 A model server that you run yourself, such as Ollama, vLLM or LiteLLM, costs nothing per request. Add it as an **OpenAI-compatible** provider:
 
 - **Base URL**: the server's address, ending in `/v1`. Thermite runs in containers, and inside a container `localhost` is the container itself. Use `host.docker.internal` instead, for example `http://host.docker.internal:8000/v1`. With Podman, `host.containers.internal` works too.
-- **API key**: Thermite asks every new OpenAI-compatible provider for a key. If your server checks none, type any word without spaces.
+- **API key**: the key your server checks. If it checks none, as Ollama and llama.cpp do by default, leave it empty: Thermite then sends the server no key.
 
 Control reads the server's model list from where control runs, and each rig calls the model from where the rig runs, so both must reach the address. On the local stack, control and the harness container both reach `host.docker.internal`.
 

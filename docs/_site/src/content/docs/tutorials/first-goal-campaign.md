@@ -27,14 +27,14 @@ Otherwise, go to the folder that holds your `thermite` folder, and do it all now
 
 ```sh
 cd ..
-git clone --branch v0.2.2 https://github.com/iammrduncan/thermite.git thermite-source
+git clone --branch v0.2.3 https://github.com/iammrduncan/thermite.git thermite-source
 cd thermite-source
 ln -s ../thermite/.dev .dev
 npm ci
 npm run build
 ```
 
-`v0.2.2` is the release your `compose.yaml` names in its first line, `# Thermite 0.2.2`; use yours, with a `v` before it. The link lets the command line read your tokens from `.dev/`, as the commands on this page do. Run every command on this page in the `thermite-source` folder, except the one that opens a shell in step 6: it runs in your `thermite` folder.
+`v0.2.3` is the release your `compose.yaml` names in its first line, `# Thermite 0.2.3`; use yours, with a `v` before it. The link lets the command line read your tokens from `.dev/`, as the commands on this page do. Run every command on this page in the `thermite-source` folder, except the one that opens a shell in step 6: it runs in your `thermite` folder.
 
 ## 2. Read the example contract
 
