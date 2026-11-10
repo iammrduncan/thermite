@@ -14,7 +14,7 @@ updated: 2026-11-10
 
 ## What
 
-[issue 50](https://github.com/iammrduncan/thermite/issues/50) is a field report of six days of a CUDA kernel hill climb on v0.1.0, with about thirty items in four parts: run budgeting, the judge's measurements, anti-cheat and the contract, and the environment. Its ranked requests 1, 2, 4 and 5 are goals [198](198-budget-counts-working-time.goal), [199](199-judge-files-once-disk-ready.goal), [200](200-plateau-stop.goal) and [201](201-judge-queue-per-run.goal). This goal places the rest:
+[issue 50](https://github.com/iammrduncan/thermite/issues/50) is a field report of six days of a CUDA kernel hill climb on v0.1.0, with about thirty items in four parts: run budgeting, the judge's measurements, anti-cheat and the contract, and the environment. Its ranked requests 1, 2, 4 and 5 are goals [198](198-budget-counts-working-time.goal), [199](199-judge-files-once-disk-ready.goal), [200](200-plateau-stop.goal) and [201](_completed/201-judge-queue-per-run.goal). This goal places the rest:
 
 - **GPU kernel timing** (request 3: CUDA events beside wall time, and a warm-up until stable): a new goal, v0.2.0 or later.
 - **Anti-cheat:** a held-out speedup the contract can require, rules that read the whole changed file, arena poisoning and a device-allocation audit, sampled output checks: with goal [114](114-hill-climb-contract-gaps.goal) or a goal of their own.
@@ -43,9 +43,9 @@ A report this long only helps once each item has a place and an owner.
   | Item of the report | On v0.2.1 | Where it goes |
   | --- | --- | --- |
   | Wall-hours budget counts pauses; a spent run can't resume | Fixed in v0.1.3 | Goal [198](198-budget-counts-working-time.goal) |
-  | A paused run's queued jobs hold up dev runs on a shared device | Still so (`harness/agents/devrun.ts`, `judgeBusy`), and it also holds a shared runner and a RunPod rig's Terminate | v0.2.2, goal [201](201-judge-queue-per-run.goal) |
+  | A paused run's queued jobs hold up dev runs on a shared device | Still so (`harness/agents/devrun.ts`, `judgeBusy`), and it also holds a shared runner and a RunPod rig's Terminate | v0.2.2, goal [201](_completed/201-judge-queue-per-run.goal) |
   | A closed run's cancelled jobs still show as queued | Still so: no `job_cancelled` event (`harness/ledger/jobs.ts`, `endClosedRuns`) | v0.2.2, goal 201 |
-  | The judge keeps raw outputs, about 0.9 GB a comparison | Each run's folder is removed; the judge's builds grow, and a retention policy never reaches a runner's | v0.2.2, goal [259](259-runner-builds-retention.goal) |
+  | The judge keeps raw outputs, about 0.9 GB a comparison | Each run's folder is removed; the judge's builds grow, and a retention policy never reaches a runner's | v0.2.2, goal [259](_completed/259-runner-builds-retention.goal) |
   | Pause and close don't stop the judge's job under way | Still so, by design (Steer a run) | v0.3.0, to place |
   | Resume pauses another run on the rig without a word | Still so | v0.3.0, to place |
   | Calibration charged to the budget; lanes can't work beside it on a shared device | Still so; lanes with a GPU or runner of their own don't wait | v0.3.0, to place |

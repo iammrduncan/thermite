@@ -1,7 +1,7 @@
 ---
 id: "201"
 title: "A paused or closed run's judge jobs stop holding up the rest"
-status: PROPOSED
+status: VERIFIED
 version: "0.2.2"
 depends_on: []
 created: 2026-11-03
@@ -10,11 +10,11 @@ updated: 2026-11-10
 
 # 201 · A paused or closed run's judge jobs stop holding up the rest
 
-**Status:** `PROPOSED` · **Version:** [v0.2.2](../roadmap.md#v02x)
+**Status:** `VERIFIED` · **Version:** [v0.2.2](../../roadmap.md#v02x)
 
 ## What
 
-From [issue 50](https://github.com/iammrduncan/thermite/issues/50), the field report's fifth request, as it applies to v0.2.1. Each item was checked against the code on 2026-11-10; goal [202](202-field-report-3080.goal) holds the check of every item of the report.
+From [issue 50](https://github.com/iammrduncan/thermite/issues/50), the field report's fifth request, as it applies to v0.2.1. Each item was checked against the code on 2026-11-10; goal [202](../202-field-report-3080.goal) holds the check of every item of the report.
 
 The judge never takes a paused run's queued jobs: its lease takes only a running run's (`harness/ledger/jobs.ts`, "A paused or closed run's jobs wait in the queue"). Three other places count those jobs as work under way, and wait for work that can't start until the run is resumed:
 
@@ -32,9 +32,9 @@ In the report, one old queued job stalled a new campaign on an idle GPU. The sam
 
 ## Done when
 
-- [ ] Items 1 to 4, each with a test that fails without its fix.
-- [ ] The acceptance checks the changes touch: agents (item 1), runners (item 2), RunPod (item 3) and control (item 4).
-- [ ] Pages: Sharing a device, Steer a run, the RunPod rig's Terminate, and the changelog.
+- [x] Items 1 to 4, each with a test that fails without its fix.
+- [x] The acceptance checks the changes touch: agents (item 1), runners (item 2), RunPod (item 3) and control (item 4).
+- [x] Pages: Sharing a device, Steer a run, the RunPod rig's Terminate, and the changelog.
 
 ## Decisions
 
@@ -45,7 +45,8 @@ In the report, one old queued job stalled a new campaign on an idle GPU. The sam
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
 - 2026-11-10: Rewritten for v0.2.2 from a check of the report against v0.2.1 (`main` at 0d984fb7). Item 3 is new: found while checking the report's paused-run items.
+- 2026-11-10 06:58 UTC: verified on `patch/v0.2.2`. Item 4 (ad574882), items 1 and 2 (fb948f17), item 3 (7dd7073b), each with a test that failed before its fix: the close-run tests, the dev-runs test and `tests/harness/ledger/jobs-open.test.ts`, the RunPod terminate test. Item 3's test confirmed the bug before the fix. The agents (27/27), runners (11/11), RunPod (28/28) and control (17/17) acceptance checks passed, and the full `npm run check`. Ships in v0.2.2.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/201-judge-queue-per-run.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/201-judge-queue-per-run.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

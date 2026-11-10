@@ -1,7 +1,7 @@
 ---
 id: "259"
 title: "A retention policy for the judge's builds reaches the builds on a rig's runners"
-status: PROPOSED
+status: VERIFIED
 version: "0.2.2"
 depends_on: []
 created: 2026-11-10
@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 259 · A retention policy for the judge's builds reaches the builds on a rig's runners
 
-**Status:** `PROPOSED` · **Version:** [v0.2.2](../roadmap.md#v02x)
+**Status:** `VERIFIED` · **Version:** [v0.2.2](../../roadmap.md#v02x)
 
 ## What
 
@@ -29,9 +29,9 @@ A rig with runners builds every candidate on them. A long hill climb makes hundr
 
 ## Done when
 
-- [ ] Items 1 and 2, with tests.
-- [ ] The runners acceptance check.
-- [ ] Pages: Retention policies (its Judge's builds row and Settings › Space), the system view's What takes the disk, A rig over several machines, and the changelog.
+- [x] Items 1 and 2, with tests.
+- [x] The runners acceptance check.
+- [x] Pages: Retention policies (its Judge's builds row and Settings › Space), the system view's What takes the disk, A rig over several machines, and the changelog.
 
 ## Decisions
 
@@ -40,7 +40,8 @@ A rig with runners builds every candidate on them. A long hill climb makes hundr
 ## Progress
 
 - 2026-11-10: Goal written from the check of issue 50's raw-output item against v0.2.1 (`main` at 0d984fb7).
+- 2026-11-10 06:58 UTC: verified on `patch/v0.2.2` (2cb1bc55). A runner answers `builds` and `remove_build`; the core's hub asks each runner (60 s), Space counts their builds with the rig's, and a policy run removes those it covers there. `tests/harness/retention.test.ts` (fails on the old code) and the runner host test; the runners acceptance check (11/11) and the full `npm run check` passed. The system view's What takes the disk sums Space's counts, so it needed no change. A runner that doesn't answer is named in the removal's `error`; control's Space page does not show an inventory's `error`, so the pages say the removal record names it. Ships in v0.2.2.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/259-runner-builds-retention.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/259-runner-builds-retention.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

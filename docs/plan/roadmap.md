@@ -230,8 +230,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **v0.2.2** (the owner, 2026-11-10) fixes critical bugs only, from a check of [issue 50](https://github.com/iammrduncan/thermite/issues/50) against v0.2.1; changes to how Thermite works for the owner wait for v0.3.0:
 
-- [201](goals/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop holding up the rest: other runs' dev runs, a shared runner and a RunPod rig's Terminate, and control's view of the queue (issue 50) · `PROPOSED` · v0.2.2
-- [259](goals/259-runner-builds-retention.goal) A retention policy for the judge's builds reaches the builds on a rig's runners (issue 50) · `PROPOSED` · v0.2.2
+- [201](goals/_completed/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop holding up the rest: other runs' dev runs, a shared runner and a RunPod rig's Terminate, and control's view of the queue (issue 50) · `VERIFIED` · v0.2.2
+- [259](goals/_completed/259-runner-builds-retention.goal) A retention policy for the judge's builds reaches the builds on a rig's runners (issue 50) · `VERIFIED` · v0.2.2
 
 The fixes after them, one version each, in the order to take them:
 
