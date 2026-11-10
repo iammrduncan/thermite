@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
-import { type TSchema, Type } from "@earendil-works/pi-ai";
+import { type TSchema, Type } from "typebox";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
 import { linkSession, type SessionLink } from "../../../agents/live-session.ts";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";

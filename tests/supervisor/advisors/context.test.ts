@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import { advisorPackage } from "../../../src/agents/roles/index.ts";
 import { createHarnessApi } from "../../../src/harness/api/index.ts";

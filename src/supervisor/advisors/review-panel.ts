@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import { type LeftOut, renderResearchReviewer, renderReviewer } from "../../agents/roles/index.ts";
 import { JOURNAL_FIELD } from "../../agents/tools/index.ts";

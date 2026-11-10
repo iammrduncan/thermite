@@ -1,5 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { type TSchema, Type } from "@earendil-works/pi-ai";
+import { type TSchema, Type } from "typebox";
 import {
   READ_MAX,
   researchOutput,

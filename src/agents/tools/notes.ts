@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { errorText } from "../../common/errors.ts";
 import { ABOUT_TYPES, NOTE_KINDS, NOTE_MAX } from "../../core/journal.ts";
 

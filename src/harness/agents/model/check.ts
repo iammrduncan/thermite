@@ -1,5 +1,5 @@
 import { Agent } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { buildModel, type ModelConfig } from "../../../agents/model/index.ts";
 import { messageText, systemText } from "../../../agents/prompt.ts";
 import { renderModelCheck } from "../../../agents/roles/index.ts";

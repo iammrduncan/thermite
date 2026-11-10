@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { z } from "zod";
 import { type AdvisorRuntime, runAdvisor } from "../../../src/supervisor/advisors/index.ts";
 import { advisorKeeper } from "../../../src/supervisor/advisors/pass/index.ts";
