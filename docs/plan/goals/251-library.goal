@@ -1,0 +1,62 @@
+---
+id: "251"
+title: "Library: knowledge, reports and exports in one place"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 251 · Library: knowledge, reports and exports in one place
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+**Library** is the one place for what the runs produced, where today there are three top-level pages and a fourth list on each run.
+
+1. **Knowledge:** the knowledge base's explorer as it is at 1,440 pixels (a tree of collections, a list, a details pane, one line of search, dropdown filters), which is the pattern the owner asked for. At a narrow width the tree and the details become sheets, where today the panes overlap. Its second header goes. One word for a stored thing: **item**.
+2. **Reports:** what each finished run wrote, with filters by mode and campaign. A run that ended before its report is not the page's main thing.
+3. **Exports:** each rig's full exports and its newest, and for each run the export that holds its record, with the smaller ones folded under one line (goal [109](109-exports-page-shows-what-matters.goal)). An export that was asked for shows its progress to the download (item 2 of goal [131](131-ux-fixes-found-in-use.goal)).
+4. **A run's results link here,** and each thing here links back to its run.
+5. **What the knowledge base stores,** as figures, moves to Settings › Storage (goal [252](252-usage-logs-settings.goal)).
+
+## Why
+
+- "Find a result" takes four top-level places today, and the run's page.
+- Knowledge is the clearest standard pattern in the dashboard at 1,440 pixels, and it breaks at 820.
+- The Exports page lists every export for every rig: hundreds after a few days.
+
+## Constraints
+
+- **A mockup first:** each of the three, at three widths.
+- **The hierarchy stays** as settled on 2026-10-27: knowledge base › collection › run › slot › item.
+- **A file an agent wrote or downloaded is shown as data,** with the policy for downloads that it has today.
+
+## Done when
+
+- [ ] The mockups are approved.
+- [ ] The explorer's tree, list, search, filters, an item and its file are routes of the API (most exist), with what is missing added and tested.
+- [ ] The owner browses a collection, searches it, grants another campaign a read, opens a report and downloads an export, in the new dashboard, at a desk and on a phone.
+- [ ] Goal 109's default view and item 2 of goal 131 are done, with tests.
+- [ ] The browser check covers each of the three at three widths.
+- [ ] Pages: the knowledge base's pages, Reports, Exports and getting a rig's results, and their screenshots.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether the Leaderboard belongs here or on its campaign. [The guide](../ui-refresh-guide.md#where-each-page-goes) puts it on the campaign.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/251-library.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -166,6 +166,13 @@ The audit of v0.1.1 studied these from their public code and documentation, for 
 
 - **A rig of a core and its runners (goal 206, first planned as goal 205):** [Qwen3.8 Flash Next on one DGX Spark (TensorFold)](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold) (MiaAI-Lab, MIT), a recipe that serves the model from one DGX Spark. Its stated needs (about 107 GiB free to start, 81 GiB to load the weights, one model to a Spark) are why a rig's judge and its workers need GPUs of their own, each a runner on its own machine. Thermite uses none of its code.
 
+### Studied for the v0.3.0 plans
+
+The review of v0.3.0 (goal 242) studied these from their public code, for the plans of goals 243 to 257. Thermite uses none of their code yet; each goal says which it will add, with the owner's yes, and this list moves it to the libraries when it does.
+
+- **The dashboard's refresh (goals 243 to 253):** [fxbot](https://github.com/iammrduncan/fxbot) (the maintainers' own; Apache-2.0), at its `release/0.8.0` branch: its UI system (its theme, its layout and how little each screen holds), its provider set-up (the catalogue, a provider's card, the sign-in panel, a key checked when it is added), its registry of providers and its first-run set-up. Read with it, as the parts fxbot is built from: [shadcn/ui](https://github.com/shadcn-ui/ui) (shadcn; MIT), [Radix UI](https://github.com/radix-ui/primitives) (the Radix UI team; MIT), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) (Tailwind Labs; MIT), [React](https://github.com/facebook/react) (the React team; MIT), [Vite](https://github.com/vitejs/vite) (the Vite team; MIT), [Lucide](https://github.com/lucide-icons/lucide) (the Lucide contributors; ISC, as its package states) and Geist, credited with the site's fonts below.
+- **Providers as a catalogue (goal 245):** [models.dev](https://github.com/anomalyco/models.dev) (the models.dev authors; MIT), the open list of models and what each can do, which fxbot reads; and [LobeHub's icons](https://github.com/lobehub/lobe-icons) (LobeHub; MIT), from which fxbot takes most of its providers' logos. A logo stays its owner's mark, whatever the licence of the icon set.
+
 ### Engines the earlier campaigns tuned
 
 Thermite grew out of long hill-climbing campaigns on inference kernels. They tuned these engines, and the methods they taught (prove that the changed code ran, measure the noise of the device, check output against a reference) became the judge's. Thermite uses none of their code. The papers those campaigns read are in their own records, not here.
@@ -596,7 +603,7 @@ The site's [use cases](https://usethermite.com/use-cases/) say what Thermite can
 ## The maintainers' own public projects
 
 - [tensorless](https://github.com/iammrduncan/tensorless) (Apache-2.0), at [tensorless.dev](https://tensorless.dev): the partner of the first study. It made the PN weight format and Qwen3.8-27B-PN3, and ships the engine that the study's campaigns tuned; the study cites its published receipts and pages, and the study and the site's own pages show its logo. Its home page was also studied for the site's own pages, above.
-- [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0, as fxbot.sh states), at [fxbot.sh](https://fxbot.sh): its home page, studied for the site's own pages, above.
+- [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0, as fxbot.sh states), at [fxbot.sh](https://fxbot.sh): its home page, studied for the site's own pages, above; and its app's UI system and provider set-up, studied for the v0.3.0 plans, above.
 - [Magnesium](https://github.com/iammrduncan/magnesium) (MIT): the dashboard's design, above, and its notes on Claude and Codex sign-in, read for subscriptions.
 - [skills](https://github.com/iammrduncan/skills) (MIT): the maintainers' skills for coding agents, among them the ones for Simplified Technical English and for writing documentation.
 

@@ -1,0 +1,60 @@
+---
+id: "246"
+title: "Home and decisions: what needs you in one list, each decision on one page"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 246 · Home and decisions: what needs you in one list, each decision on one page
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+1. **Home,** in the new dashboard: what needs the owner, what is at work, what happened, in that order. It keeps the Overview's shape, which works ([what works](../ui-refresh-guide.md#what-works-and-stays)).
+2. **Needs you is one list,** in the navigation and on Home, with one count. The other signals of today go: a decision is signalled in at least 11 places, and the counts beside them differ.
+3. **A decision has one page.** Its card holds the question, the cause, the evidence (the change's files, its measurements, the flaws its author declared, the judge's reasons) and what each choice does, "Do nothing" included. A row in a list opens it; it does not decide in one click.
+4. **Every kind of thing that needs the owner** uses the same card: a change to decide, an auditor's block, a guard that asks, a rig that is offline, a rig that is stuck (goal [091](091-needs-you-stuck-rigs.goal)), a provider whose sign-in ended. An offline rig's card offers a check and a restart before **Retire**.
+5. **An attempt's page:** its title is the change in words; its ID can be copied; its timeline and "every event" stay.
+6. **At work** is drawn once, as one part, used on Home, a campaign and a rig.
+
+## Why
+
+- "See what needs me, and decide" is the operator's first job. Today it has 6 ways in and 5 names.
+- The owner, 2026-10-16: every decision shows what is decided and what each choice does. On today's Overview one click decides, and what each choice does is on another page.
+
+## Constraints
+
+- **A mockup first:** Home at three widths; a decision of each kind; an attempt.
+- **The sentences stay:** the words modules give them, through the API (goal 244).
+- **A decision works on a phone,** at 390 pixels.
+
+## Done when
+
+- [ ] The mockups are approved.
+- [ ] What needs the owner is one read of the API, with every kind and its evidence, and each decision's action has its route and its tool.
+- [ ] Home, the list in the navigation and each decision's page show the same things and the same count, shown by a test on the demo's data.
+- [ ] Each kind of item of goal 091 shows, and goes away by itself once the rig is well.
+- [ ] The browser check covers Home, a decision of each kind and an attempt, at three widths.
+- [ ] Pages: the Overview's and Needs you's pages, the pages on approving a change and on the auditor, and their screenshots.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether Home keeps its four tiles of figures, or the lists alone say it.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/246-home-and-decisions.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

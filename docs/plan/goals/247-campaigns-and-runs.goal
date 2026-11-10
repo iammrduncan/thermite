@@ -1,0 +1,68 @@
+---
+id: "247"
+title: "Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["246"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 247 · Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [246](246-home-and-decisions.goal)
+
+## What
+
+A plan only; nothing of it is built. The [UI refresh guide's section 6](../ui-refresh-guide.md#a-run) has the proposal that the mockups settle.
+
+1. **Campaigns:** the table alone, as the first thing on its page, with one toolbar (search, state, mode, archived). A right-click on a campaign, in the table or in the navigation, opens its menu: Open, Start a run, Move to folder, Archive (item 4 of goal [131](131-ux-fixes-found-in-use.goal)).
+2. **A campaign:** its runs in one table (at work first, then earlier); **Setup**, with its brief, contract, agents' context and additions (goal [090](090-info-tab.goal)); Reviews on a research campaign; the Leaderboard where more than one rig ran it. The agents' context shows the rigs its runs use (item 1 of goal 131).
+3. **A run's header in one line:** its name, mode, rig and state, one main action that fits the state, **Watch**, **Steer** and a menu whose items are words.
+4. **A run's six tabs:**
+   - **Overview:** the sentence of state; why nothing is at work, when nothing is (goal [072](072-why-nothing-at-work.goal)); what needs the owner; the result (the chart and guards, the goals, or the questions); what each lane and the judge do now, with a line when its lanes take turns (item 3 of goal 131). A judge-only run says so, and fills its goals in as they are checked (goal [110](110-judge-only-runs-show-progress.goal)).
+   - **Queue:** up next, in progress, the lanes' ideas, tried. **Add** opens a dialog.
+   - **Results:** champions and attempts in one table with filters, search and pages; on a research run, answers, hypotheses and reviews. A champion's menu sends it to another rig.
+   - **Notes:** the agents' field notes.
+   - **Activity:** everything that happened, with search, filters and days.
+   - **Setup:** what the run was started with (goal 090), its rules in force, its prompts, its usage, and whether its lanes keep working while the judge works (goal [148](148-keep-working-on-screens.goal)).
+5. **Steer, one panel** for today's five surfaces: a message to everyone, a lane or the planner; a rule; an experiment. One line says what each is for.
+6. **One set of words** for the judge's results and for a run's states, from one table ([the words](../ui-refresh-guide.md#one-word-for-each-thing)).
+
+## Why
+
+- A run's page has 9 to 11 tabs, 10 actions, and 260 pixels of cost cards above every tab. Steering is on 5 surfaces; "why is it stuck" takes 6 screens.
+- History (up to 400 sentences) and Attempts have no search, filter or pages.
+- The Attempts tab uses two sets of words for the judge's results on one screen.
+
+## Constraints
+
+- **A mockup first,** on the demo's three modes: a hill climb, a goal run, a research run; each at three widths.
+- **What works stays:** the champion's chart, the goals as a bar and a list, the sentence of state.
+- **A tab with nothing in it doesn't show.**
+
+## Done when
+
+- [ ] The mockups are approved, with the tabs and the words the owner chose.
+- [ ] Each read and action of these screens has its route and its tool: the campaigns, a campaign, a run's parts, its queue, its results with filters, its activity with filters.
+- [ ] The owner does each of these in the new dashboard, on a real run of each mode: see how it does, see why nothing is at work, steer it in each of the three ways, find an attempt and a champion, read its notes.
+- [ ] Each item taken in (goals 072, 090, 110, 148; items 1, 3 and 4 of 131) is done, with its test.
+- [ ] The browser check covers each tab for each mode, at three widths.
+- [ ] Pages: the pages on a campaign's page, a run's page, steering, the experiment queue, the reviews, and their screenshots.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Experiments and tasks: one tab, **Queue**, for both; the things in it keep their two words. The owner confirms ([question 6](../ui-refresh-guide.md#11-the-owners-questions)).
+- Whether a research run's Results is one page or three tabs inside it.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/247-campaigns-and-runs.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

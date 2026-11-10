@@ -6,9 +6,12 @@ Thermite's plans are public. These files hold them:
 | --- | --- |
 | [roadmap.md](roadmap.md) | Every goal, grouped by version, in priority order. One line each. |
 | [release-v0.1.0.md](release-v0.1.0.md) | The plan for v0.1.0, the first release: its scope, its goals, its decisions and the steps to ship it. |
+| [release-v0.3.0.md](release-v0.3.0.md) | The plan for v0.3.0, the dashboard's refresh and the code's structure behind it: what is decided, what the owner has to decide, its goals and their order. |
 | [decisions.md](decisions.md) | Settled decisions that shape the whole product, with dates. |
 | [goals/](goals/) | One goal per roadmap item: what it delivers, why, when it is done, its decisions and its progress. |
 | [code-clean-up-guide.md](code-clean-up-guide.md) | The guide for the code clean-up of v0.1.1 (goal 125), from the v0.1.1 audit: the map of the code, the themes of change, the rules of shape, the order of work, what to leave, the review guide and the owner's questions. |
+| [ui-refresh-guide.md](ui-refresh-guide.md) | The guide for the dashboard's refresh in v0.3.0 (goals 243 to 253), from the review of goal 242: what the review found on every screen, fxbot's UI system, the two designs, the rules for screens, one word for each thing, the new navigation, providers and set-up, the order of work and the owner's questions. |
+| [code-structure-guide.md](code-structure-guide.md) | The guide for the work on the code's structure in v0.3.0 (goals 244 and 254 to 257), from the same review: what the clean-up of v0.1.1 fixed, what a change touches today, the findings, the six changes, the rules of shape to add, the order of work, what to leave and the owner's questions. |
 
 The roadmap says what comes next. A goal says what one piece of work is and when it is done. A release plan says how a version ships.
 

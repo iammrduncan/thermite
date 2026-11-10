@@ -1,0 +1,74 @@
+---
+id: "256"
+title: "Layers inside the parts, and files split on purpose"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["242", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 256 · Layers inside the parts, and files split on purpose
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal); [244](244-one-door.goal) for control's folders
+
+## What
+
+A plan only; nothing of it is built. From the [code structure guide, S5](../code-structure-guide.md#s5-layers-inside-the-parts-and-files-split-on-purpose).
+
+**The cheap guards, first:**
+
+1. **An order of folders inside the harness and inside control,** written in CONVENTIONS.md and held by `npm run check:imports`. Today's breaches are listed, and the list only shrinks, as the rule between the parts was brought in.
+2. **The size check warns at 700 lines,** so a split is planned and not squeezed into a feature.
+
+**Then, each when its area is quiet:**
+
+3. **The files at the limit are split on purpose,** each into a folder named for it, behind an `index.ts` that does not change for its importers: the events' bodies, the commands, the harness's queue, the judge's decision, the bus's client, control's schema.
+4. **The harness's cycle is cut at its cheapest edges:** the ledger no longer imports the judge, the judge no longer imports the service, and the harness's top-level files no longer import the service or the agents' folder. Its cycle of 113 files falls to 19.
+5. **The harness's service is whole when it exists:** its 17 fields that other files set later come in when it is made. A module of the service takes what it needs, not the whole service, as each is next changed.
+6. **The supervisor's `main` becomes a folder,** as the harness's did: what it reads of the environment once, its 7 state files behind one small store, and one module for each loop, each watched and logging under its own name.
+7. **Control is one object made by one function,** which `main` and the test stack both call. Its five bags of options and its nine registries found through the store go, one in each step. Its loops start in one place.
+8. **Control's top-level files get homes** in folders named for what they are, when each area is next worked on.
+
+## Why
+
+- 113 of the harness's 311 files are one import cycle, and 14 of control's 22 folders. No check holds an order inside a part, so each feature adds an edge.
+- The harness's service has 86 public methods, 43 of them one line that hands the whole service on. Its file changed in 34 commits in two weeks and has 9 lines left.
+- The supervisor's `main` is one function of 681 lines in a file of exactly 800.
+- 7 of the most-changed files sit at 780 to 800 lines. Three commits moved code out inside a feature "so the file stays under 800 lines"; each file was back at the limit within days.
+- In control, a thing that is not handed on shows as "empty", not as an error.
+
+## Constraints
+
+- **A split is a move.** The moved code is the same but for its imports; a change of logic is a commit of its own.
+- **Every path that names a moved file follows** ([the list](../code-clean-up-guide.md#paths-that-name-files)).
+- **No test is weakened.** A test changes only to follow a moved interface.
+- **Each move waits until no other branch changes its files.**
+
+## Done when
+
+- [ ] Items 1 and 2 are in `npm run check`, with the lists of today's breaches; each fails on a made-up breach.
+- [ ] No file of `src/` is over 700 lines without a reason recorded, and none was split by line count alone: each new file is in a folder named for its parent.
+- [ ] The harness's largest import cycle is under 20 files, and the goal records the count before and after.
+- [ ] The harness's service has no field set after it is made.
+- [ ] The supervisor's `main` is under 150 lines.
+- [ ] Control has one function that makes it; `grep` finds no registry keyed by the store.
+- [ ] The fast checks at every step, and the acceptance checks of each area: judge, agents, control, steering, backup.
+- [ ] Pages: CONVENTIONS.md's order of folders and its size rule; AGENTS.md's checks.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether the limit of 800 lines stays ([question 2](../code-structure-guide.md#7-the-owners-questions) recommends that it does).
+- Whether test files, 12 of which are at 700 to 797 lines, get the same warning.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/256-layers-and-splits.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

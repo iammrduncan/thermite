@@ -1,0 +1,69 @@
+---
+id: "243"
+title: "The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["242"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 243 · The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+
+## What
+
+A plan only; nothing of it is built. It is written for design A of the [UI refresh guide](../ui-refresh-guide.md#3-how-thermite-uses-it-two-designs), which the owner has not chosen yet.
+
+The base that every screen of the new dashboard stands on ([how the web app is built](../ui-refresh-guide.md#8-how-the-web-app-is-built)):
+
+1. **The app:** `web/` at the repository's root, a project of its own beside `docs/_site/`, with fxbot's stack: React, shadcn/ui in its `radix-nova` style, Tailwind CSS, Geist and Geist Mono, Lucide, built by Vite. Its theme is fxbot's, with four colours for states.
+2. **What it may import:** `src/core`'s contracts alone. `npm run check:imports` holds it, and holds that nothing in `src/` imports the app.
+3. **The client:** one typed call of a route of `src/core/api/control/`, and one reader of control's stream of changes.
+4. **Sign-in:** as today, with the session good for `/v1` too, and a change sent with the session's token in a header.
+5. **The shell:** the left navigation of the [guide's section 6](../ui-refresh-guide.md#6-the-new-navigation) with Needs you as a list, a screen's header, the frame of Settings, the three widths, the sheet on a phone. Every ID can be copied (goal [094](094-copy-id.goal)).
+6. **Thermite's own parts,** each used by more than one screen: the state badge, the list's toolbar, a tile of figures, the empty and error states, the dialog for adding a thing.
+7. **The first three screens, as the first mockups:** Home, a run's Overview and Settings, on the demo's data, in two variants of the navigation ([question 3](../ui-refresh-guide.md#11-the-owners-questions)).
+8. **Delivery:** control serves the built files at `/next`; control's image gains a build stage; the Content Security Policy for the app has no inline style (goal [177](177-dashboard-styles-in-its-stylesheet.goal)'s end, for the new pages).
+9. **Checks:** the app's type check and linter in `npm run check`; the browser check opens the app's screens at 1,440, 820 and 390 pixels, light and dark.
+10. **Mockups are screens:** a route that only a development build has shows a screen on the demo's data, with switches for its states.
+
+## Why
+
+The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot". fxbot's system is its components and how they behave; they need their framework. The faults that reached v0.1.4 came from how today's pages are built: scripts kept as strings that no linter or type check reads, and a page whose request nothing held to control's schema ([the guide](../ui-refresh-guide.md#how-the-dashboard-is-built-today)).
+
+## Constraints
+
+- **The old dashboard is not changed,** and stays where it is.
+- **No rule of the product in the app,** and no words for states, verdicts or events: they come from control ([what the app may hold](../ui-refresh-guide.md#what-the-app-may-hold)).
+- **Stock components,** made by shadcn's tool and not edited. No router, data, state or form library until its second real use.
+- **Every new package is pinned and credited** in CREDITS.md, in the commit that adds it.
+
+## Done when
+
+- [ ] The owner chose the design (goal 242), and the navigation from the two variants.
+- [ ] The app builds, and control serves it at `/next`, from source in development and from control's image.
+- [ ] The owner signs in and sees Home, a run's Overview and Settings on a real control, current without a reload.
+- [ ] The import check fails on an import the app may not make, shown by a test of the check.
+- [ ] The browser check passes on the app's screens at three widths, light and dark; CI runs it.
+- [ ] The app's policy has no `'unsafe-inline'`, shown by a test of the header.
+- [ ] The goal says what the browser loads: the size of the app's script and styles.
+- [ ] Pages: the contributor's pages on the dashboard (how to run it, how to add a screen), CONVENTIONS.md's rule for the dashboard, and AGENTS.md's checks.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether a stock component needs a style that the policy without `'unsafe-inline'` refuses, and what to do then.
+- Whether the browser check builds the app each time, or reads it from Vite's own server.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/243-web-app-base.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

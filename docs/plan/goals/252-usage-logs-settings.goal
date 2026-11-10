@@ -1,0 +1,65 @@
+---
+id: "252"
+title: "Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 252 · Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+1. **Usage:** the one home for tokens and cost. A period, the figures, and tables by model, by campaign, by run and by agent, with a model's price set beside its row. A run's page and a campaign's page show one line and a link here, where today cost has 6 homes and 3 names.
+2. **Logs:** who did what through control, and control's own log, in one table with one toolbar: search, filters by kind, who and rig as chips, a time, pages (goal [027](027-logs-page.goal)). A row leads with what happened, in words; its code name is in its details. A rig's own log lines join here when goal [257](257-find-the-fault.goal) brings them to control.
+3. **Settings,** in fxbot's frame (tabs that are links; a column at a wide window, a row of pills at a narrow one):
+   - **MCP servers,** with **Add** as a dialog.
+   - **Network:** the addresses rigs may reach.
+   - **Knowledge base:** its limits.
+   - **Storage:** what is kept and where, what takes space (control's store, the knowledge base, exports), and the retention policies with "if it ran now". One page, where there are four today.
+   - **Agents:** each role and its texts, which has no entry in today's navigation.
+   - **System:** the message bus, control's health and its loops, each rig's part versions, the log level of control and of each rig's parts (item 6 of goal [178](178-clean-up-continued.goal)), control's version.
+4. **Metrics goes** as a place: its Model use is Usage, and its Bus, Control, Storage and Rigs are under Settings.
+
+## Why
+
+- Metrics mixes money with control's internals under one item of the main navigation.
+- "What takes space" has 3 pages in 3 areas; the message bus has 5 places.
+- The owner, 2026-10-19: the audit log becomes Logs, with audit as one category, and every log of control is visible there.
+
+## Constraints
+
+- **A mockup first:** Usage, Logs, and each tab of Settings; at three widths.
+- **Names of tables, loops and environment variables show under System alone.**
+- **A retention policy removes nothing until the owner turns it on,** as today.
+
+## Done when
+
+- [ ] The mockups are approved.
+- [ ] The log's filters, control's own log lines, and the reads of Storage and System are routes of the API with tests there.
+- [ ] The owner checks a run's cost from its page in one click, sets a price, finds an action in Logs by who and when, and makes a retention policy, in the new dashboard.
+- [ ] Every line control logs is on Logs and can be filtered (goal 027's item).
+- [ ] The browser check covers Usage, Logs and each tab of Settings at three widths.
+- [ ] Pages: Model use, the system view, the audit log's page, retention, the settings pages, and their screenshots.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Goal [123](123-budgets-made-simple.goal) (one budget in dollars) adds to Usage. It is built after this goal.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/252-usage-logs-settings.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

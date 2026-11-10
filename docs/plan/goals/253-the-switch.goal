@@ -1,0 +1,62 @@
+---
+id: "253"
+title: "The switch: the new dashboard alone, the old pages removed, every docs page and screenshot current"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["245", "246", "247", "248", "249", "250", "251", "252"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 253 · The switch: the new dashboard alone, the old pages removed, every docs page and screenshot current
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [245](245-providers-and-set-up.goal) to [252](252-usage-logs-settings.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+1. **Every screen is checked against the [rules for screens](../ui-refresh-guide.md#4-the-rules-for-screens),** and each gap is fixed or has its reason (goal [126](126-ui-clean-up.goal)'s check, on the new screens).
+2. **The new dashboard moves from `/next` to `/`.** An old address under `/ui/` opens the new screen for the same thing.
+3. **The old page code goes:** `src/control/ui/` and `src/control/dashboard/` (169 files, 33,769 lines), with the 3,429 lines of script kept as strings, the stylesheet, and the form routes. What other code used of them was moved out by goal [244](244-one-door.goal).
+4. **The tests that read dashboard HTML go or move:** what they checked of control's behaviour is checked at the API; what they checked of a screen is in the browser check.
+5. **The acceptance checks that posted the old forms** use the API.
+6. **The Content Security Policy** for all of control's pages has no inline style (goal [177](177-dashboard-styles-in-its-stylesheet.goal)).
+7. **The docs:** every page that names a screen is read against it. The screenshots are made by one script from the browser check's captures (item 7 of goal [178](178-clean-up-continued.goal)), and the glossary keeps one word for each thing.
+8. **The conventions:** CONVENTIONS.md's rule for the dashboard, AGENTS.md's checks, and the checks' own lists (sizes, imports, loose ends) say what the code is now.
+
+## Why
+
+- Two dashboards are two things to keep. CONVENTIONS.md: "When two pieces of code do the same job in different ways, keep one of them."
+- The refresh is done when the owner works in the new dashboard alone.
+
+## Constraints
+
+- **Nothing is switched until every area's goal is verified.**
+- **No behaviour of control is tested only by a test that is removed:** each removed test names where its check went, in the commit.
+- **A running deployment moves by updating control alone:** no store changes for the switch.
+
+## Done when
+
+- [ ] Each screen has its line in this goal: checked, with its gaps fixed or explained.
+- [ ] `/` is the new dashboard, and each old address opens its new screen, shown by a test of the addresses.
+- [ ] The old page code, its tests and its scripts are removed; `git grep` finds no import of them; the number of tests of control's behaviour did not fall, shown by a list of where each went.
+- [ ] The full `npm run check`, the browser check at three widths in light and dark, and every acceptance check that used the dashboard pass.
+- [ ] The docs build and check pass; every screenshot on the site is of the new dashboard.
+- [ ] The lab's control runs the new dashboard alone for the owner's own use.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- How long an old address keeps opening its new screen: one version, or always.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/253-the-switch.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -1,0 +1,76 @@
+---
+id: "254"
+title: "One record for each setting, command and event kind: a feature's facts written once"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["242"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 254 · One record for each setting, command and event kind: a feature's facts written once
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+
+## What
+
+A plan only; nothing of it is built. From the [code structure guide, S3](../code-structure-guide.md#s3-one-record-for-each-thing-a-feature-adds).
+
+**The cheap guards, first.** They change no shape and stop new debt:
+
+1. The store's version is a constant that tests read, where today the number is written at 20 places in 5 test files.
+2. One test walks the event kinds: each has a handler in control's views and a sentence, or is on a short list of kinds that have none on purpose.
+3. A check that every tool and argument on the docs' MCP page exists.
+
+**Then one record for each thing:**
+
+4. **A rig setting** is one entry in `src/core`: its schema with its range, its default, its label and hint, who may change it, whether it restarts the rig. The `rig_settings` command's payload, the harness's two default objects, control's request, the reader of a rig's report, the form's range and the MCP description read the entry.
+5. **A command** is one record: its payload, who may issue it, whether it is the owner's alone, whether it is about one run, and one line of what it does. The five lists of kinds and `issue_command`'s description are worked out from the records.
+6. **An event kind's handler takes the body its schema parsed.** The 181 casts by hand in control's views go, one area of the views in each step.
+7. **The report's summary has a schema** in `src/core`, with every field optional for an older rig. The harness's object satisfies it, and control parses with it.
+8. **The agents' routes have contracts:** the 15 routes between an agent's process and the harness, with one small typed client. The two programs that may import nothing keep their strings, held to the contract by a test.
+9. **Small tables where a word has a list today:** the agent programs (name, whether it is a CLI program, whether it runs research); the target drivers; the folders that two containers share; the settings of the environment that are strings or paths, each read once.
+10. **The docs' MCP and REST reference pages are made from the code** ([question 7](../code-structure-guide.md#7-the-owners-questions)), with a sentence by hand where one is wanted.
+
+## Why
+
+Measured on the history since 2026-10-28:
+
+- One rig setting took 27 files. It is named in 10 source files and 18 places, and its range is written three times in the code.
+- One command with its route, tool and menu entry took 34 files; its name goes into up to five lists.
+- An event's body is described three times, and only two of them are held together by the compiler.
+- 39% of the MCP folder's bytes are descriptions in prose, written again by hand on a docs page of 1,762 lines that no check compares.
+- Nothing says that a step was left out.
+
+## Constraints
+
+- **A table, not a framework:** 14 settings and 29 kinds of command.
+- **No wire value changes.** A golden test of each MCP description, of today's report summary and of each command's payload holds the text while its source moves.
+- **A sentence by hand stays possible** in every record.
+- **Signed and hashed fields keep their names.**
+
+## Done when
+
+- [ ] Items 1 to 3 are in `npm run check`, and each fails on a made-up breach.
+- [ ] A new rig setting is one entry and the code that uses it: shown by adding one in a test branch and counting the files.
+- [ ] A new command is one record, its handler and its sentence: shown the same way.
+- [ ] Control's views read no event body by a cast.
+- [ ] The report's summary and the agents' routes are parsed with their schemas on both sides.
+- [ ] The fast checks, the docs checks, and the control, agents and steering acceptance checks pass.
+- [ ] Pages: Signed commands, the MCP and REST references, the settings reference, and the contributor's pages on adding a setting, a command and an event.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether a rig setting's label and hint live in `core` with its schema, or beside the dashboard's words.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/254-one-record.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -1,0 +1,61 @@
+---
+id: "248"
+title: "Live in the new dashboard: one design for a run, a rig and everything, with the way back"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 248 · Live in the new dashboard: one design for a run, a rig and everything, with the way back
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+1. **One design of Live,** for a run, a rig and everything at work. Today a run's Live and a rig's Live are two designs, with two sets of names for the same agents.
+2. **Live is under what it shows:** a run's Live under its run, a rig's under its rig, each with the way back. Live in the navigation lists what is at work.
+3. **The transcript** keeps its shape: the time, who, one line for a tool call and its result, filters by agent, **Follow**. Lines come from control as data, in the order of their time. A trial's ID is not on every line; it can be copied from the trial's divider.
+4. **The message box** is the same Steer of goal [247](247-campaigns-and-runs.goal): who it goes to, and one line that says when each agent reads it.
+5. **A terminal:** an agent program's own screen, as today, filling its pane, with the keys the owner types. The terminal's frames and keys keep their protocol.
+6. **fxbot's chat parts** are the base: its message list, its trace of tool calls and its message box.
+
+## Why
+
+- "Watch a run" is one of the operator's main jobs, and today's Live loses the way back: a run's Live has no path to its run, and a rig's Live is filed under Live.
+- **Message** and **Live** look like two actions and open one page.
+- On Everything, lines are not in the order of their time.
+
+## Constraints
+
+- **A mockup first:** a run's Live with the transcript and with a terminal, a rig's, and everything; at three widths.
+- **Server-Sent Events,** as decided on 2026-10-27.
+- **What an agent wrote is data:** it is shown as text, never as markup.
+
+## Done when
+
+- [ ] The mockups are approved.
+- [ ] Live's lines for a run, a rig and everything, and a terminal's frames and keys, are routes of the API with a stream, with tests there.
+- [ ] The owner watches a run, filters by agent, writes to a lane, opens a terminal and types into it, and goes back to the run, all in the new dashboard.
+- [ ] A line never shows twice or out of order after the stream drops and comes back, shown by a test.
+- [ ] The browser check covers each kind of Live at three widths; the terminal acceptance check reads a terminal through the new routes.
+- [ ] Pages: the Live view's reference, steering a run, typing into a terminal, and their screenshots.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Goal [093](093-live-shows-reasoning.goal) (the model's reasoning on Live) is a fix in the agent programs' code. It is built after this goal, on the new transcript.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/248-live.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

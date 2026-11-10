@@ -1,0 +1,67 @@
+---
+id: "244"
+title: "One door for each action and each read: written once, for REST, MCP and the dashboard"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["242"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 244 · One door for each action and each read: written once, for REST, MCP and the dashboard
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+Control has three front ends: REST, MCP and the dashboard. This goal makes each action and each read one thing that all three use ([code structure guide, S2](../code-structure-guide.md#s2-one-door-for-each-action-and-each-read)). It runs beside the dashboard's goals, one area ahead of each.
+
+1. **The actions that already differ,** first: retire a rig (written three times, and REST's differs), start a full reset (three times), an assignment's briefing and queue (MCP alone adds them), a run's answer (MCP's has a field REST's lacks), the list of rigs (built twice).
+2. **An action is one function in its domain folder,** with its request and answer as schemas in `src/core/api/`. A front end reads the request, calls it and gives the answer; it writes nothing to the store itself.
+3. **One entry for each action** names its REST route, its MCP tool, who may call it and one line of what it does. REST and MCP are registered from the entries ([question 1](../code-structure-guide.md#7-the-owners-questions)).
+4. **The actions only the dashboard has get their API,** each with its area's goal: providers and Git access (goal [245](245-providers-and-set-up.goal)); New campaign's checks (goal [249](249-new-campaign.goal)); machines, clusters, GPU clouds, a rig on a machine, a joined rig, an update to control's images (goal [250](250-rigs-and-machines.goal)). 42 of the dashboard's 90 form routes have no REST route today.
+5. **The reads every screen needs,** as data: what needs the owner (18 kinds, HTML alone today), the list of campaigns and a campaign, a command's progress in words.
+6. **An answer is built once,** with a schema in `core`: a run, a rig, the rigs. A fact that is derived is derived in one place: a rig's state is one word, where it is three facts read at 41 places. Each answer is built from named fields for each kind of token, with a test of the set.
+7. **Words come with the answer.** The modules that turn a state, a verdict or an event into a sentence (`src/control/ui/words/`) move out of page code, unchanged, so REST, MCP and the dashboard give the same words.
+8. **One way to refuse:** typed errors, and one mapping to statuses. A table of today's statuses, made from the tests first, holds every status that scripts rely on.
+9. **One stream of changes** for the dashboard, over Server-Sent Events: what changed, so the screen reads that thing again.
+
+## Why
+
+- A rule fixed in one front end stays wrong in the others: three of the actions above have drifted already.
+- "Other agents must be able to run Thermite through control without the dashboard" (goal [029](029-api-mcp-coverage.goal), the owner, 2026-10-19). This goal takes in what is left of it: the other actions, and the test that every action has both.
+- 105 test files test control's behaviour through dashboard HTML, because for these actions the page is the only door.
+
+## Constraints
+
+- **Move first; change no sentence.** The old dashboard calls the moved functions, and its tests pass with no more than a changed import.
+- **No status of REST changes** but by a decision recorded here.
+- **A table, not a framework:** an entry is data and one function.
+
+## Done when
+
+- [ ] Items 1 and 2: each action named there is one function, called by all three front ends, with a test at the API.
+- [ ] A test fails when an entry lacks its route or its tool, and holds which token gets which tool.
+- [ ] Each area's actions and reads have their REST route and MCP tool before that area's screens are built (goals 245 to 252).
+- [ ] An agent runs a campaign from start to end over MCP only, and a script over REST only (goal 029's item).
+- [ ] The statuses of today are held by a test.
+- [ ] Pages: the REST and MCP references, Tokens, and the pages that say "not in the API yet".
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether the 48 actions that have a route and a tool today move to entries in this goal, or as each is next touched ([question 1](../code-structure-guide.md#7-the-owners-questions) recommends the second).
+- An OpenAPI file for control, which goal 029 asked for: made from the entries, or left out.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/244-one-door.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -239,7 +239,34 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.3.0
 
-**Run Thermite without the dashboard.** Every dashboard action has an API and MCP twin, all logs are in one place you can search, and sign-in uses your identity provider. Proposed.
+**The dashboard's refresh, on fxbot's UI system, and the code's structure behind it (the owner, 2026-11-10).** A dashboard that reads at a glance, with providers as a catalogue and a set-up for a new control; every action and every read in the API; and the changes of shape that make a feature smaller and a fault easier to find. Its plan is [release-v0.3.0.md](release-v0.3.0.md), from the [UI refresh guide](ui-refresh-guide.md) and the [code structure guide](code-structure-guide.md). The plan's goals are proposed: the owner's answers to goal 242's questions come first.
+
+**The review.**
+
+- [242](goals/242-v030-review.goal) The v0.3.0 review: the dashboard's screens, fxbot's UI system and the code's structure, with the guides that set the work up · `IN_PROGRESS`
+
+**The dashboard.** In the order to build them; goal 244 runs beside them, one area ahead.
+
+- [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `PROPOSED`
+- [244](goals/244-one-door.goal) One door for each action and each read: written once, for REST, MCP and the dashboard · `PROPOSED`
+- [245](goals/245-providers-and-set-up.goal) Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow · `PROPOSED`
+- [246](goals/246-home-and-decisions.goal) Home and decisions: what needs you in one list, each decision on one page · `PROPOSED`
+- [247](goals/247-campaigns-and-runs.goal) Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer · `PROPOSED`
+- [248](goals/248-live.goal) Live in the new dashboard: one design for a run, a rig and everything, with the way back · `PROPOSED`
+- [249](goals/249-new-campaign.goal) New campaign and Start a run in the new dashboard: what it needs checked first, a refusal at its field · `PROPOSED`
+- [250](goals/250-rigs-and-machines.goal) Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow · `PROPOSED`
+- [251](goals/251-library.goal) Library: knowledge, reports and exports in one place · `PROPOSED`
+- [252](goals/252-usage-logs-settings.goal) Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system · `PROPOSED`
+- [253](goals/253-the-switch.goal) The switch: the new dashboard alone, the old pages removed, every docs page and screenshot current · `PROPOSED`
+
+**The code's structure.**
+
+- [254](goals/254-one-record.goal) One record for each setting, command and event kind: a feature's facts written once · `PROPOSED`
+- [257](goals/257-find-the-fault.goal) Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line · `PROPOSED`
+- [255](goals/255-one-way-to-run-a-program.goal) One way to run an agent program: for workers and advisors, headless and in a terminal · `PROPOSED`
+- [256](goals/256-layers-and-splits.goal) Layers inside the parts, and files split on purpose · `PROPOSED`
+
+**From before the plan: run Thermite without the dashboard.** Every dashboard action has an API and MCP twin, all logs are in one place you can search, and sign-in uses your identity provider. Proposed. The [release plan](release-v0.3.0.md#goals) says which of the goals below, and of the lists after them, the plan's goals take in.
 
 - [027](goals/027-logs-page.goal) One Logs page · `PROPOSED`
 - [028](goals/028-log-store.goal) Search every log and session · `PROPOSED`

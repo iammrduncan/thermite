@@ -1,0 +1,75 @@
+---
+id: "245"
+title: "Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 245 · Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built. The [UI refresh guide's section 7](../ui-refresh-guide.md#7-providers-and-first-run-set-up) has the design; this goal builds it. It is the first whole area of the new dashboard.
+
+1. **The registry:** a list of providers as data in `src/core`, made from fxbot's `providers-registry.json` (36 entries): each entry's name, one line, group, address, key page, the steps there, how its key is checked, and its quirks. Thermite adds which of its five provider types the entry is, whether its server answers OpenAI's Responses API, and which agent programs can use it.
+2. **The API:** every action as a REST route and an MCP tool, with no secret in any answer: the providers and the catalogue; add, change and remove; a provider's models; a sign-in's start, state, pasted code and cancel. Git access gets the same. The dashboard's old form routes for these call the same functions.
+3. **Add provider, as a catalogue:** search; the groups Sign in, Use a key, Your own server and Custom; a provider's card with its steps, its key and **Add**.
+4. **A key is checked when it is added,** with the provider's own check where its model list is open to anyone. A refused key saves nothing, and says why.
+5. **The model, and who gets it:** a picker with search, what a model can do, then **Give it to** a rig's agents. The rig's model check runs, and its result shows in place.
+6. **The ways in for v0.3.0:** a key (about 20 gateways, OpenAI, Anthropic); a Claude subscription's token, pasted as today, with its year counted and its card saying that the rig's images need Claude Code; ChatGPT's sign-in as today, in the new panel, kept through a restart of control; OpenRouter's sign-in, new.
+7. **Your own server:** a key is optional. A server only a rig can reach is listed by asking that rig. A server on a private network links to Settings › Network.
+8. **A provider's row:** its state, a plan's usage, which rigs' agents use it, and Replace key or Sign in again, Refresh models, Remove.
+9. **Git access as its own tab,** with the same kind of card and **Try it on a repository**.
+10. **Set up Thermite,** on a new control: Connect a model; your rig; give its agents the model and pass the model check; run the sample campaign. **Skip for now** on every step. The step is kept on control. A control that has a provider, a rig or a campaign never sees it.
+11. **Edit rig's model list offers only the pairs that work,** from the registry.
+
+## Why
+
+- The owner, 2026-11-10, named fxbot's "v0.8.0 provider login setup system".
+- Today the owner knows each provider's address by heart, a wrong key passes where the model list is open, and the real test is on another page, later. Connecting a model and giving it to agents takes 2 areas and about 8 screens.
+- No REST route and no MCP tool adds a provider today.
+
+## Constraints
+
+- **A catalogue entry is a preset, not a new type.** No contract between control and a rig changes; a rig of an older version works with a provider added from the catalogue.
+- **Control seals every secret and never shows it again;** a rig gets only what it uses. Control never calls Anthropic with a subscription's token.
+- **A subscription is for the owner's own Thermite** (the decision of 2026-10-18). The same question is answered before any new sign-in is added.
+- **Control fetches no list while it runs** ([question 8](../ui-refresh-guide.md#11-the-owners-questions)). The registry, and a copy of what each model can do, ship with the release.
+- **A logo ships only with its licence checked** and credited in CREDITS.md ([question 9](../ui-refresh-guide.md#11-the-owners-questions)).
+- **A mockup first:** the catalogue, a card of each kind, the sign-in panel's states, the model step, the set-up pages.
+
+## Done when
+
+- [ ] The mockups are approved.
+- [ ] Each action of item 2 has its route and its tool, with tests there: a key in once and never out; a refused key saves nothing; removal refused while a rig's agents use the provider.
+- [ ] The owner adds a provider from the catalogue with a real key, gives its model to a rig and sees the model check pass, without leaving the flow.
+- [ ] A Claude subscription and a ChatGPT subscription are added in the new cards, and a ChatGPT sign-in under way is still there after control restarts.
+- [ ] OpenRouter's sign-in gives a working provider, by coming back and by a pasted code.
+- [ ] A model server that only a rig can reach is listed through that rig.
+- [ ] A new control shows Set up Thermite; a control with data does not; each step can be skipped; a restart lands on the same step.
+- [ ] The quick-start acceptance and the Claude Code, Codex and agents acceptance checks add their providers through the API, and pass.
+- [ ] Pages: Connect a provider, the two subscription pages, Choose a model, Give each agent its own model, the first-run tutorials, Who holds your keys, the REST and MCP references, a page for each provider in the catalogue or one page with all, and the changelog.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether OpenAI gives Thermite's own app a device code for the ChatGPT sign-in. If it does, the card shows a code and a QR in place of the pasted address.
+- Hugging Face's and OrcaRouter's sign-ins need an app registered for Thermite: after v0.3.0, each a goal of its own.
+- A cloud's own sign-in (Vertex AI, Bedrock, Azure, Cloudflare) needs the rigs' model proxy and the agent programs to sign calls in new ways: after v0.3.0.
+- One docs page for each provider, or one page with a section for each.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/245-providers-and-set-up.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -1,0 +1,70 @@
+---
+id: "250"
+title: "Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 250 · Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+1. **Rigs:** the table, with its counted filters, and one word for a rig's state everywhere ([the words](../ui-refresh-guide.md#one-word-for-each-thing)). A column that says the same in every row is left out.
+2. **A rig's page in tabs:**
+   - **Overview:** the sentence of state, what is at work, its runs, and what is wrong with it as one line that links to the check or the setting.
+   - **Agents:** each agent's model, effort, program and context, with fxbot's model picker (search, or type an ID), offering only the pairs of provider and program that work. It is what most visits to Edit rig are for, and it is 900 pixels down that page today.
+   - **Settings:** the rig's parts, its limits and its promotion rule, each group with its own **Save** and "what changes when you save".
+   - **Rig checks:** each check with one line and **Run it**, and its result in place.
+   - **Details:** its hardware, version, keys, runners and their use, and its figures of CPU, memory and disk.
+   - Edit rig as one page of about 45 controls goes.
+3. **A rig's menu** has words: Restart, Update to these images, Full reset, Retire, each with one line and typed confirmation where it can't be undone.
+4. **Add a rig as a set-up page,** with its steps named: the kind, the place, its size, review. A machine, a cluster or a GPU cloud can be added inside it, without leaving for Settings. When control can't set rigs up, the page says why in place of the form.
+5. **Settings › Machines:** computers, clusters and GPU clouds, each with what control found, its rigs and its actions. A GPU cloud's card shows what control spent there (goal [095](095-runpod-spend-on-providers.goal)).
+6. **Where a rig runs is asked in one place** in control's code, where 15 files find it today by looking in two or three stores.
+7. **The API for all of it** (goal [244](244-one-door.goal)): add a machine, a cluster, a GPU cloud; scan, trust, check, install; a rig on a machine or a cluster; a joined rig and its join command; stop, start, restart, remove; update to control's images. The route that redeems a join command leaves page code. The old form route that gives a rig a model, which no page shows since goal [203](203-machines-page.goal), goes.
+
+## Why
+
+- Edit rig is the longest form of the dashboard: 2.6 screens, about 45 controls, 16 sentences of rules.
+- "Add a rig" starts in Settings › Machines and ends under Rigs; "connect a model and give it to agents" ends 900 pixels down Edit rig.
+- A rig on a machine has no API at all: its checks, deploy, stop, start and update live in page code. A control without its pages can't join a rig.
+- The files of these pages are the most changed in control: a rig's page 27 commits, Add a rig 23, Edit rig 19, in two weeks.
+
+## Constraints
+
+- **A mockup first:** the table; each tab of a rig on a machine, a cluster and RunPod; Add a rig for each kind; Machines; at three widths.
+- **Machines stay in Settings** (the owner, 2026-11-04), unless [question 4](../ui-refresh-guide.md#11-the-owners-questions) is answered otherwise.
+- **The acceptance checks' stand-ins are never real machines or clusters.**
+- **A check that pauses a rig's runs says so before it runs.**
+
+## Done when
+
+- [ ] The mockups are approved.
+- [ ] Each action of item 7 is one function with its route and its tool, with tests at the API; the old pages call the same functions.
+- [ ] The owner adds a rig of each kind, gives its agents models, changes a setting, runs each check, updates it and removes it, in the new dashboard.
+- [ ] The machines, cluster, rig deploy and RunPod acceptance checks drive the API, not the old forms, and pass.
+- [ ] The browser check covers the table, each tab and Add a rig, at three widths.
+- [ ] Pages: the rig's page, the rigs list, Add a rig for each kind, Give each agent its own model, Rig checks, Machines, and their screenshots.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether the operations every placement has (check, restart, update, remove) get one interface, or stay four after "where a rig runs" has its one place. The [code structure guide](../code-structure-guide.md#2-the-findings) says: stop at the one place, unless the interface falls out by itself.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/250-rigs-and-machines.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

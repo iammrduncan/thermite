@@ -1,0 +1,73 @@
+---
+id: "257"
+title: "Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["242"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 257 · Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+
+## What
+
+A plan only; nothing of it is built. From the [code structure guide, S6](../code-structure-guide.md#s6-find-the-fault-from-thermites-own-records).
+
+1. **A log line names its module and carries its IDs.** A logger is made for a module, and bound to a run, a trial, a lane, a job or a command, so that no call passes them by hand. An error keeps its cause, and its stack at the debug level.
+2. **One ID for each request to control,** from REST, MCP or the dashboard, on every log line and audit entry the request causes.
+3. **Work that is overdue makes a record.** One family of events, each with what waits, since when and its limit: a message a terminal did not take, an ask not answered, a judge's job not leased, a lease not renewed, a runner away and back, the bus down and up.
+4. **A wait that gives up says which condition was unmet,** in a log line and on Live. Today the terminal's wait types anyway after 20 seconds and says nothing, and one message covers three causes.
+5. **A decision that is weaker than it should be says so:** a verdict with no noise floor names that in its reasons; a finished job whose result was dropped makes an event; every cancelled job makes the event one kind of cancel makes today.
+6. **Every loop is watched the same way,** through the one helper, and the health route shows each loop's last round and last error. A follower of the bus that ends is seen there.
+7. **A part that restarts says why, where control can read it:** the broker's line for a controller that exited is a warning, and the gap's event carries the exit.
+8. **A dropped error has its reason.** 79 promise catches on the rig's side and 55 catches in control drop an error with no word: each gets a line at the debug level, or a comment that says why not.
+9. **Calls to the outside are logged** where a fault is hardest to find today: control's work on clusters and machines, with the rig and how long each call took.
+10. **A rig's log lines reach control,** and can be searched with control's own (goal [028](028-log-store.goal)); the Logs page of goal [252](252-usage-logs-settings.goal) shows them.
+
+## Why
+
+The owner, 2026-11-10, asked what makes a fault hard to find. From 15 recent bug hunts:
+
+- 8 had no log line and no event at the branch that failed.
+- 7 were first seen in evidence outside Thermite's own records.
+- 6 were a timing or a race between loops, and 5 had their state in more than one process.
+- One call waited 11 hours for a message that was never taken. For about 41 hours verdicts were decided with no noise floor, and every record looked normal.
+
+About 300 log lines cover the rig's 101,000 lines of code, a third of them with an ID. Control's 133 lines all say `control`, and eight of its folders log nothing.
+
+## Constraints
+
+- **No secret in a log line or an event:** the logger's scrubber stays in the path, and a new field is checked against it.
+- **An event for overdue work is a record, never a verdict:** it changes no decision.
+- **Volume is bounded:** one record when a wait passes its limit, and one when it ends.
+
+## Done when
+
+- [ ] A logger bound to its IDs exists, and the modules most often at fault use it: the terminal path, the judge's queue, the runners' link, the advisors' calls.
+- [ ] For each kind of overdue work in item 3, a test makes it happen and reads its record.
+- [ ] For each of the three faults that were hardest to find (a terminal that did not take its message, a link that dropped, a verdict with no noise floor), the fault is made in a test and found from the records alone.
+- [ ] The health route shows every loop of each part.
+- [ ] No catch that drops an error lacks its reason, held by a check.
+- [ ] A rig's log lines can be searched on control.
+- [ ] The fast checks, and the agents, runners, terminal and steering acceptance checks pass.
+- [ ] Pages: the events reference, troubleshooting, the logs' page, and the contributor's page on logging.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Where a rig's log lines are kept on control: [question 6](../code-structure-guide.md#7-the-owners-questions) recommends a table of control's own store with SQLite's text search.
+- Whether a request's ID also rides on the signed command it causes, so a rig's lines carry it.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/257-find-the-fault.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

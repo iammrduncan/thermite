@@ -1,0 +1,66 @@
+---
+id: "255"
+title: "One way to run an agent program: for workers and advisors, headless and in a terminal"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["242"]
+created: 2026-11-10
+updated: 2026-11-10
+---
+
+# 255 · One way to run an agent program: for workers and advisors, headless and in a terminal
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](242-v030-review.goal)
+
+## What
+
+A plan only; nothing of it is built. From the [code structure guide, S4](../code-structure-guide.md#s4-one-way-to-run-an-agent-program).
+
+Each agent program (Claude Code, Codex, OpenCode) has an entry in `src/agents` that holds what differs between programs. The harness runs workers and the planner through it. The supervisor runs advisors around it, and Pi's session is set up at five places. This goal makes one way, in steps that each leave the system working:
+
+1. **One suite that every program must pass,** first, so the later steps are held: typed input taken once, a message left in the input, a compaction kept, a usage limit waited out, the owner's message inside a turn. On the stand-in program in the fast checks, and on the real programs in the terminal acceptance check. The stand-in sends what the real program sends at its start.
+2. **One maker of a Pi agent's session,** for its 5 places: the worker, the research worker, the planner, the model check and the advisors.
+3. **The supervisor's headless runs go through each program's entry,** as its terminal runs already do. What an advisor needs differently (no tools, the web tools, the answer's schema) is an option of the entry.
+4. **The supervisor names a program by `core`'s word.** Its second set of names is read as the first, through the one map of names.
+5. **What a program's screen looks like is in its entry:** how it shows a pasted message, and how it shows that a message was kept.
+6. **The waits on the typing path are one table,** each worked out from its neighbour, with a test that an outer wait is longer than the one inside it. 31 named waits sit in 12 files today.
+7. **One "start a trial" and one "plan a round"** in the scheduler, which take the mode's parts, where hill climb and research are two copies today.
+
+## Why
+
+- 5 of 6 sampled fixes to agent programs were made more than once: for another program, for the advisors after the workers, or for the terminal after headless. Two more cases of the same shape followed in v0.2.0.
+- The file that types into a terminal took 7 of the last 23 fix commits to the rig's code.
+- A fifth program would touch about 35 files outside control, 2 of them in the harness: the cost is where the entry is not used.
+- Where the clean-up of v0.1.1 made one module (the one trial loop), that kind of fault did not come back.
+
+## Constraints
+
+- **The real differences between the programs stay:** their settings, their events, their usage reports, their sign-ins.
+- **The programs that may import nothing of Thermite's keep their own code.**
+- **An advisor never judges, and gets no tool it does not have today.**
+
+## Done when
+
+- [ ] The suite of item 1 passes for each program, and fails for a program whose entry breaks one of its cases.
+- [ ] Pi's session is made in one place; a change to it is one file, shown by its history.
+- [ ] No file of the supervisor builds a program's command line itself.
+- [ ] The typing path's waits are one table with its test.
+- [ ] The count of files that name a program outside its own folder and its entry falls, and the goal records the count before and after.
+- [ ] The fast checks, and the agents, Claude Code, real Claude Code, Codex, terminal and steering acceptance checks pass.
+- [ ] Pages: the contributor's page on adding an agent program.
+
+## Decisions
+
+None yet.
+
+## Open questions
+
+- Whether the planner's own process and the worker's share their set-up in this goal, or stay two.
+
+## Progress
+
+- 2026-11-10: Goal written from the review (goal 242).
+
+---
+
+Run with `/goal Complete docs/plan/goals/255-one-way-to-run-a-program.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
