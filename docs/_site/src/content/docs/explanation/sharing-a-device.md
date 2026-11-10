@@ -46,7 +46,7 @@ Three rules keep the turns short and fair:
 
 On a GPU, nothing a development run starts outlives it. Its output is marked `diagnostic only: this number never counts`: only the judge's measurements decide a verdict.
 
-The judge's queue counts every run's jobs, including the jobs of a paused run, which wait in the queue until the run is resumed. While those jobs wait, agents of the running run cannot make development runs on a shared device.
+A paused run's jobs wait in the judge's queue until the run is resumed, and the judge doesn't take them meanwhile, so they hold up no other run's development runs. A job the judge took before the pause goes on, and development runs wait for it as for any other.
 
 ## Dedicated GPUs
 

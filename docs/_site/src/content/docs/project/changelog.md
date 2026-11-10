@@ -16,6 +16,7 @@ v0.2.2 is a fix release of v0.2.1.
 
 ### Fixes
 
+- **A paused run's queued judge jobs hold up no other run.** The judge never takes a paused run's jobs, but a lane's development run on a device the judge shares waited for them, so another run's lanes could not run `run_experiment` until their trials ended. On a runner the judge shares with the lanes, the judge took the runner for each step it had such a job, and gave it back with nothing done. Both now count only the jobs the judge has under way or can take ([issue 50](https://github.com/iammrduncan/thermite/issues/50)).
 - **A closed run's queued judge jobs leave control's view.** Closing a run cancelled its jobs that waited for the judge, but told control nothing, so the rig's page, the run's **Judge queue**, `get_run`'s `judge_waits` and the operator's brief still showed them queued, for good. Each now gets a `job_cancelled` event with the reason `its run closed`, also for a run closed before the harness started ([issue 50](https://github.com/iammrduncan/thermite/issues/50)).
 
 ## [0.2.1] 2026-11-10: Pi 1.5, typed input once, and the first outside contributions

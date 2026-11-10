@@ -23,7 +23,7 @@ Each runner is in one pool. A runner takes one run at a time, so a measurement n
 | Pool | Who runs there |
 | --- | --- |
 | `judge` | The judge alone: its builds and measurements |
-| `shared` | The judge and every lane, in turn, first come, first served |
+| `shared` | The judge and every lane, in turn, first come, first served. The judge takes its turn only for a job it can take: a paused run's queued jobs wait without holding the runner |
 | `lanes` | Every lane, in turn, first come, first served: its `run_experiment`. The judge never measures there |
 | `lane-1` to `lane-16` | That lane alone: its `run_experiment`. The judge never measures there |
 

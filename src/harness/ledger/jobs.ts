@@ -374,10 +374,19 @@ export class LedgerJobs extends LedgerPart {
     }));
   }
 
-  /** How many jobs of these kinds are queued or leased. */
+  /**
+   * How many jobs of these kinds the judge has under way or can take: every leased one, and the
+   * queued ones of a running run or of none. A paused or closed run's queued jobs wait, and the
+   * judge never takes them (lease), so they hold up neither a lane's dev run on a shared device nor
+   * the judge's hold on a shared runner (goal 201).
+   */
   open(kinds: readonly string[]): number {
     const r = this.row<Row>(
-      `select count(*) as n from job where state in ('queued', 'leased') and kind in (${kinds.map(() => "?").join(", ")})`,
+      `select count(*) as n from job j
+       left join attempt a on a.id = j.attempt
+       left join run i on i.id = coalesce(a.run, json_extract(j.spec, '$.run'))
+       where j.kind in (${kinds.map(() => "?").join(", ")})
+         and (j.state = 'leased' or (j.state = 'queued' and (i.status is null or i.status = 'running')))`,
       ...kinds,
     );
     return Number(r?.n ?? 0);
