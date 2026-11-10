@@ -2,9 +2,9 @@
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
-## [Unreleased]: v0.2.1
+## [0.2.1] 2026-11-10: Pi 1.5, typed input once, and the first outside contributions
 
-v0.2.1 is a fix release of v0.2.0.
+v0.2.1 is a fix release of v0.2.0, with Dependabot's updates and four outside contributors' fixes. A v0.1.1 to v0.2.0 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.2.1), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. Control's store moves to schema version 37, for cache writes; a rig's ledger, the settings and the secrets do not change.
 
 ### Fixes
 
