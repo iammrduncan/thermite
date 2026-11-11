@@ -388,6 +388,7 @@ The fixes after them, one version each, in the order to take them:
 **Not scheduled.** Ideas with a clear source and no version yet. Proposed.
 
 - [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `PROPOSED`
+- [260](goals/260-fxbot-and-thermite.goal) fxbot and Thermite as two sides of one platform: fxbot's agent core as the harness, and bots that run the science · `PROPOSED`
 - [051](goals/051-pareto-and-population.goal) Pareto champions and population search · `PROPOSED`
 - [052](goals/052-more-target-drivers.goal) More target drivers · `PROPOSED`
 - [053](goals/053-cross-rig-planning.goal) Planning across rigs · `PROPOSED`

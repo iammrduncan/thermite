@@ -1,0 +1,184 @@
+---
+id: "260"
+title: "fxbot and Thermite as two sides of one platform: fxbot's agent core as the harness, and bots that run the science"
+status: PROPOSED
+version: "later"
+depends_on: ["255", "258"]
+created: 2026-11-11
+updated: 2026-11-11
+---
+
+# 260 · fxbot and Thermite as two sides of one platform: fxbot's agent core as the harness, and bots that run the science
+
+**Status:** `PROPOSED` · **Version:** [later](../roadmap.md#later) · **Depends on:** [255](255-one-way-to-run-a-program.goal), [258](258-runs-own-their-resources.goal)
+
+A discovery only. Nothing of it is built or decided. It says what was found in fxbot's code, docs and site and in Thermite's own agent programs, what fits, what does not, what fxbot would have to change, and what the owner must choose.
+
+## What
+
+The owner's idea, 2026-11-11: "I want to use it's core fxbot sdk as the main harness in thermite with fallback to claude code for only claude subcription folks. Using fxbot's provider login, and providing a integration between fxbot and thermite so you can have agents you work with to help you setup your experiments with thermite etc. They start becoming different sides of a single product platform (two separate services not saying fully combine them) but need to think of how fxbot could get embedded into thermite to give you ai scientist that help you run from ideation -> research -> goals -> hillclimb as autoscientist not just autoresearch. [...] We would drop pi, opencode, codex... it would just be fxbot and claude code as harnesses. anthropic api would go through fxbot."
+
+It is three things, and they can be done apart:
+
+1. **The harness.** The agents of a run (workers, planner, teachers, auditor, reviewers) run on fxbot's agent core. Claude Code stays for a Claude subscription. Pi, OpenCode and Codex go.
+2. **The providers.** One set of providers and sign-ins for both products: fxbot's.
+3. **The scientist.** A bot of fxbot's works with the owner on Thermite: it takes an idea through research, goals and a hill climb. Two services, one platform.
+
+## What was found
+
+[fxbot](https://github.com/iammrduncan/fxbot) (the maintainers' own, Apache-2.0) was read at version 0.9.0, with [libfx](https://fx.sh/docs/lib) 0.0.16, the library under it.
+
+### fxbot's SDK is two layers, and Thermite needs them in different places
+
+- **The agent loop is libfx's**, the JavaScript library of [fx](https://github.com/vercel-labs/fx) (Vercel Labs, Apache-2.0). It runs the model loop, streaming, tool calls, retries, steering and compaction. It takes tools the host gives it, a system prompt the host owns ("no hidden coding prompt"), and a store for its sessions: memory, files, or a database.
+- **`@fxbot/sdk` is the bot system on top**: providers and their sign-ins, bots, each bot's one lasting chat, memories, the library of files, plugins, MCP servers and skills. It needs PostgreSQL with pgvector. It makes one agent for each provider with every tool, and one session for each bot. Every bot gets `chat_history`, `memory_*` and `library_*` tools, and its memories are put into its instructions.
+
+A run's agent is the opposite of a bot. It starts fresh, from context the harness builds; it has no memory; its tools are the harness's; it has limits; and the keys stay out of its reach. So `createFxbot` is not the harness. **The part that fits is libfx with fxbot's providers**, and fxbot does not offer that part by itself today.
+
+Thermite already has this shape. Pi is not a program Thermite starts: it is a library built into Thermite (`pi-agent-core`, `pi-ai`, `pi-tui`), and Thermite gives it every tool. The worker runs as its own user and its file and shell tools run as the lane's user. A libfx harness takes Pi's place, tool for tool. It does not take the place of the three command-line programs' own tool sets, which Thermite does not use in Pi.
+
+### What fits
+
+| Need of a run's agent | libfx 0.0.16 |
+| --- | --- |
+| Tools from the host, as functions | Yes: name, description, input schema, `execute` with a stop signal |
+| The host's own prompt, nothing added | Yes |
+| A fresh session, kept nowhere, or in a file as the session's record | Yes: `memory()`, `local()` |
+| The owner's message inside a running turn | Yes: `session.steer` |
+| Stop a turn | Yes: `session.cancel` |
+| Every model call through the harness's proxy | Yes: the agent takes the host's `fetch`; a provider is a base URL (HTTPS, or HTTP on the loopback address) |
+| Usage for each model call | Yes, in its `model.end` hook: tokens in, out, cache read, cache write, reasoning |
+| Reasoning effort | Yes: `model: { id, effort }` |
+| A ChatGPT plan, a Grok plan | Yes, its own routes with a device-code sign-in. This would take the place of the Codex program and of Thermite's own ChatGPT sign-in and proxy rules |
+| Runs with no network of its own, no file access at start | Yes, as its docs say |
+| The harness image's system (Debian) | Yes: its native part needs glibc 2.34 or newer |
+
+### What does not fit yet
+
+1. **Anthropic by key loses prompt caching and thinking.** libfx speaks Chat Completions to a custom provider, so fxbot reaches Claude "through Anthropic's OpenAI-compatible API", which fxbot's own list calls not ready for production: "It has no prompt caching, and returns no thinking." Pi speaks Anthropic's Messages API with caching. In one real hill-climb run, 87% of the input tokens came from the cache. Without caching, "Anthropic API through fxbot" costs several times more on long trials.
+2. **No Responses API for a provider by key.** libfx speaks it only inside its ChatGPT route. Pi speaks all three shapes.
+3. **No limits and no control of compaction.** libfx has no option for the most turns, the most time or the most tokens of a turn. It compacts by itself and tells the host only in a hook's event. Thermite sets when to compact for each campaign, writes its own summary and records each compaction.
+4. **No view in a terminal.** The Pi view is drawn with `pi-tui` inside the worker. libfx has a terminal for a browser only. With the new dashboard this may be no loss: the run's Watch screen shows the lines and takes a typed message, and "its own terminal" stays for Claude Code.
+5. **A young library that another party owns.** libfx is at 0.0.16, with a release about each week since 2026-08 and breaking changes in most. fxbot pins it exactly and leans on one behaviour its docs do not state. Pi is at 1.5.0.
+6. **No tests.** fxbot's own notes: "There is no automated test suite or CI." Thermite gates each release on tests of its agent programs against stand-ins.
+
+### fxbot's providers and sign-ins
+
+- A list of about 36 providers, with about 200 more from [models.dev](https://github.com/anomalyco/models.dev): sign-ins (ChatGPT, Grok, Vercel, OpenRouter, Hugging Face, OrcaRouter), keys, the clouds' own sign-ins (Vertex AI, Bedrock, Azure, Cloudflare), local servers (Ollama, LM Studio, llama.cpp, vLLM, LiteLLM), and any Chat Completions server.
+- Secrets are sealed in fxbot's database and never come back. Only fxbot's own process uses them. There is no route by which another service makes a model call with them.
+- **No Claude sign-in, on purpose**: Anthropic does not let a third party offer one. So Claude Code as the harness for a Claude subscription is right, and it must stay.
+- The sign-in code is small and has no need of fxbot's server, but the package exports none of it. The package itself is private, ships TypeScript source, and is not on npm.
+- The plan of v0.3.0's dashboard (goal 245) had set libfx's ChatGPT and Grok sign-ins aside, because their tokens are for libfx's own agent. With libfx as the harness, that reason is gone.
+
+### fxbot as a product beside Thermite
+
+- **One owner, no accounts, no sign-in of its own.** Its API listens on the loopback address; a call with no `Origin` header is the owner. No tokens, no roles, no record of who did what.
+- **It reaches out well.** A bot takes tools from a remote MCP server (HTTP, with a header or OAuth), reads skills, and a plugin can add tools, routes, tables, settings with secrets, timers, turns of its own and screens in fxbot's app.
+- **Nothing reaches in.** No MCP server of its own. A message over HTTP always lands in the bot's one chat as the owner. No webhook or trigger (planned, not built). No way to show a line of progress in a chat without a model's turn.
+- **Its chat cannot be put inside another app** except by framing the whole of fxbot. Its UI package exports nothing. A plugin's screen sits inside fxbot's own shell; there is no whole-screen place.
+- **Long work has edges.** A helper or a routine runs for at most 240 minutes and ends at a restart. An approval asked of nobody expires (30 minutes by default).
+
+**What works today with no change to fxbot:** add Thermite's MCP server to fxbot with the operator's token, give the bot a skill that teaches the flow, a routine that looks at a run, and a page for results. The limits: the write tools must be allowed by name, control's address must be allowed as a local one, Thermite cannot tell which bot calls, and Thermite cannot tell a bot that something happened.
+
+## Proposal
+
+### 1. One agent core, used by both, hidden behind fxbot's name
+
+fxbot carves its SDK in two and publishes the lower part:
+
+- **The agent core**: libfx, the provider list and its reader, the sign-ins, the model lists, and a small `agent` that takes the caller's prompt, tools, session store, `fetch`, effort and limits, and reports each model call. No database. No call to the network that the caller did not ask for.
+- **The bot system**: what `@fxbot/sdk` is today, on the core.
+
+Thermite's new program, `fxbot`, is the core in the worker's process: the place Pi has today. The planner, the advisors and the model check use it the same way. Thermite sees fxbot's interface, never libfx's, so a new libfx, or another loop, is fxbot's change and not Thermite's.
+
+Goal [255](255-one-way-to-run-a-program.goal) comes first: it makes a program one thing to add and one thing to remove. Then the order is: add `fxbot` beside Pi; measure the two on the same campaign with the same model (Thermite can do this to itself: wins for each trial, tokens, cost, time); retire Codex and OpenCode; retire Pi last.
+
+What goes with the three programs, from the code: about 6,300 lines that only Pi uses, 1,400 for OpenCode, 1,100 for Codex, 630 for their advisors, their tests, three acceptance checks and their stand-ins, and two programs in every image. The 6,700 lines that the command-line programs share stay for Claude Code alone, and can shrink.
+
+What the new program must then carry alone, because only Pi or OpenCode do it today: research workers; workers, planners and advisors on a key; a ChatGPT plan; the free models of the first tutorial.
+
+### 2. One provider system, as shared code first
+
+Thermite's control takes fxbot's provider list, model lists and sign-ins from the agent core, and seals what they yield in its own store, as today. A run's machine still gets only the route it uses. This is goal 245 on shared code in place of a copy.
+
+A running fxbot that lends its sign-ins to Thermite is a later choice, for an owner who has both and does not want to sign in twice. It needs a model route with a token on fxbot, and it makes fxbot a part that Thermite cannot run without.
+
+### 3. The scientist is a bot of fxbot's; a run's agents are not
+
+Two kinds of agent on one core:
+
+- **A role** (worker, planner, teacher, auditor, reviewer) is Thermite's: fresh each time, no memory, judged by code.
+- **A scientist** is fxbot's: it lasts, it remembers, it talks with the owner. It is an operator of Thermite, with an operator's token and an operator's rights. It never judges: the judge's verdicts and the promotion rule are code, and what the owner marked "ask me" is still asked of the owner.
+
+The flow is Thermite's three modes in a row, with the bot doing what is hard for a person today:
+
+1. **Ideation.** The bot reads the project on its own computer and asks the owner what matters.
+2. **Research.** It starts a research campaign and reads the paper.
+3. **Goals.** It turns findings into a goal campaign's checks. It writes the kit and tries it; writing a kit is the highest step for a new owner today.
+4. **Hill climb.** It starts the run, watches it, steers it, brings the owner the decisions, and proposes the next campaign from what the run learned.
+
+Three steps, each useful alone:
+
+- **Now, no change to fxbot:** Thermite's MCP server in fxbot, and a set of scientist skills kept in Thermite's repository.
+- **A `thermite` plugin for fxbot:** its tools over Thermite's API with the token sealed; a listener on control's stream that tells the bot when a run needs the owner; a Thermite screen in fxbot's app.
+- **The bot inside Thermite's app:** a chat beside the screen the owner looks at, which knows the run on that screen. Both apps are built from the same parts (goal 243), so this is one shared chat part and a token.
+
+## What fxbot would have to change
+
+In the order they block the idea.
+
+**To be the harness:**
+
+1. Carve out and publish the agent core, with a build, and with no database and no network call of its own.
+2. Speak Anthropic's Messages API with prompt caching and thinking, in libfx or beside it.
+3. Report each model call to the caller (libfx has the hook; fxbot does not use it) with the time to the first token, and pass reasoning effort through.
+4. Limits for a turn (turns, time), and control of compaction: when, with whose summary, and an event before and after.
+5. A test suite for the core against a scripted model, and CI. Thermite's stand-ins can be given to it.
+6. The Responses API for a provider by key.
+
+**To be one platform with Thermite:**
+
+7. Tokens for other services, with what each may do. Today there is no sign-in at all.
+8. A turn started from outside in a session of its own, with its source named, and its stream.
+9. Triggers: an event from outside starts or joins a bot's turn, and a line of progress that costs no model turn.
+10. The bot's name on its calls to an MCP server, so Thermite's record says which bot did what.
+11. A chat that another app can hold, and a whole-screen place for a plugin's screen.
+12. Longer work: a routine or helper that outlives a restart, and an approval that waits for the owner.
+
+Not needed now, and said so that nobody builds it early: more than one person; MCP servers started as commands; Kubernetes.
+
+## Why
+
+- Four programs is four sets of settings, events, usage reports, sign-ins and tests. Goal 255 counts about 35 files for a fifth.
+- The maintainers own fxbot. A gap in the harness becomes a change they can make, not a wait on a third party's command-line program.
+- fxbot's provider list is wider than Thermite's five types, and v0.3.0 already planned to copy it.
+- The hardest part of Thermite is before the first run: the idea, the kit, the checks. A bot that does that with the owner is what turns autoresearch into a scientist.
+
+## Constraints
+
+- **Agents never judge.** A scientist is an operator, and an operator's rights stay as they are.
+- **Every agent of a run starts fresh** from context the harness builds. No bot's memory reaches a role.
+- **The keys stay out of the agents' reach**, and a run's machine holds only the routes it uses.
+- **Claude Code stays** for a Claude subscription, and nothing routes a subscription through another program.
+- **Thermite works with no fxbot running.** The agent core is a library; the scientist is an addition.
+- **No program is removed before the new one has run the same campaign as well**, by Thermite's own measure.
+- **The seam stays** (goal 255): a harness is one thing that can be taken out again.
+
+## Done when
+
+This goal is done when the owner has chosen, and each part that goes on has a goal of its own in Thermite and a phase of its own in fxbot.
+
+## Open questions
+
+1. **Code or service for a run's agents?** The proposal is code: the agent core as a library in Thermite's worker. The other way is a running fxbot that Thermite asks for turns; it would put a run's agents in another product's process and store.
+2. **Who carries libfx?** The proposal is that fxbot hides it behind its own interface. The risk stays that a 0.0.x library of another party is under every run.
+3. **Does Pi go before Claude by key is whole again?** The proposal is no: caching first.
+4. **Sign-ins: shared code, or a running fxbot that lends them?** The proposal is shared code first.
+5. **Where does the scientist live first: fxbot's app or Thermite's?** The proposal is fxbot's app, because it needs no change to fxbot's core; the chat inside Thermite's app is second.
+6. **Research workers for an owner who has only a Claude subscription.** Claude Code runs none today (goal 061). With only two harnesses this is a hole, and it needs its own answer.
+7. **The first tutorial** uses OpenCode's free models. What takes their place?
+8. **The view of an agent at work.** Is the dashboard's Watch screen enough for the fxbot harness, with a terminal only for Claude Code?
+
+## Progress
+
+- 2026-11-11: Written from three studies: fxbot's SDK and libfx, fxbot as a product and where another service plugs in, and what a program must do inside Thermite today. Read only; no code was changed in either repository.
