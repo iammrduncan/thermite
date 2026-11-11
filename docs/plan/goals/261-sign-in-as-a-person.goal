@@ -1,0 +1,59 @@
+---
+id: "261"
+title: "Sign in as a person: a user and a password, in place of the owner's token typed into a box"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["243"]
+created: 2026-11-11
+updated: 2026-11-11
+---
+
+# 261 · Sign in as a person: a user and a password, in place of the owner's token typed into a box
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal)
+
+A proposal from the owner's comment on the dashboard's mockups. Nothing of it is built or decided beyond the comment.
+
+## What
+
+The owner, 2026-11-11, on the mockup of the sign-in screen: "can we make this an actual login and not a token system? user password with real auth system?"
+
+Today a person signs in to the dashboard by pasting the owner's token: the same secret that every script and every MCP client of the owner uses. The dashboard's sign-in becomes a user name and a password. The tokens stay what they are good for: programs.
+
+1. **A person has a user name and a password.** The first start of control makes the owner's, as the set-up's first step.
+2. **A session, as today**: one for the pages, the app and the owner's routes of the API (goal 243), ended by Sign out, by its age, or by a change of the password.
+3. **Tokens are for programs**: the command line, scripts, MCP clients, machines. A person never types one into the dashboard.
+4. **The record names the person**, where it says "the owner" today.
+
+## Why
+
+- A token in a password field is a thing to explain, and the sign-in is the first screen a new person meets.
+- The owner's token is the strongest secret of a deployment. Typing it into a browser to read a dashboard uses it far more often, and in more places, than it needs.
+- The record of who changed what can name a person only if a person signs in.
+
+## Constraints
+
+- A password is kept only as the output of a slow, salted hash made for passwords, and never written to a log or the record.
+- Failed sign-ins are slowed down, as they are today.
+- A deployment can still be reached when the password is lost: the owner's token, on the machine that runs control, sets a new one.
+- No program's access changes: REST, MCP and the machines keep their tokens.
+- More than one person, with what each may do, is not this goal. It must not be made harder by it.
+
+## Done when
+
+- [ ] The owner signs in to the dashboard with a user name and a password, and no screen asks for a token.
+- [ ] The first start asks for the owner's user name and password before anything else.
+- [ ] A changed password ends every session.
+- [ ] A lost password is set again with the owner's token, by one command, and the page that says how is in the docs.
+- [ ] The record of a change made in the dashboard names the user.
+- [ ] The docs' pages on signing in, tokens and the security model say what is true.
+
+## Open questions
+
+1. **Its own passwords, or a standard sign-in the owner already has?** A password kept by control is the least to run. A sign-in through a provider the owner trusts (OpenID Connect), or a passkey, keeps no password at all, and needs more set-up. The owner's words name a user and a password.
+2. **One owner, or people?** This goal makes the one owner a person. Operators and readers have tokens today; whether they become people too is its own goal.
+3. **Does the owner's token still open the dashboard**, as a way in for a script that drives a browser, or never?
+
+## Progress
+
+- 2026-11-11: Written from the owner's comment. The sign-in mockup is drawn with a user name and a password.
