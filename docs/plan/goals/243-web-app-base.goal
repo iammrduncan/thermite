@@ -145,7 +145,8 @@ The fonts' other alphabets (Latin Extended, Cyrillic, Vietnamese, symbols; 95 kB
 - 2026-11-12: The owner's three changes to the app in the brand are drawn: Add a provider and a provider's card in fxbot's shape, with five more cards as states; Tools as a part of Setup of its own; downloads on a run's Results and on a campaign's page. The canvas has 102 boards, and the 96 that the checks cover pass.
 - 2026-11-12: The owner agreed the mockup (Decisions). The review of the mockups is closed.
 - 2026-11-12: [The app's build plan](../app-build-plan.md) is written, from a reading of every board against control's code: what is there, what needs a read, what is new behaviour, and what rests on goals 258, 260 and 261; three choices that set the order; ten stages; what changes in the plans on a yes.
-- Open: the plan of the build, for the owner's yes; then this goal's screens, the guide's sections 4 to 6 and goals 245 to 252 follow the mockup.
+- 2026-11-12: After the brand went into every board, each board was looked at as a picture, slice by slice, by five reviewers and then on one contact sheet, and what was off was fixed in place: needs and decisions as amber cards everywhere, healthy and finished states in green, numbers as tiles where a screen had a paragraph of them, icons on common buttons, a goal run and a research run with the Usage tab, the first board of the canvas (the map of the app) redrawn in the brand. The canvas has 105 boards; the 100 that the checks cover pass. Not checked: Thermy's script inside the canvas itself, since no browser of the session reaches it.
+- Open: the owner's word to start the build. The plans are rewritten to the mockup: the build plan, goal 258's design and its steps, goals 245 to 252 and 262 to 266.
 
 ---
 
