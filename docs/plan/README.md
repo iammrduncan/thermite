@@ -10,6 +10,7 @@ Thermite's plans are public. These files hold them:
 | [decisions.md](decisions.md) | Settled decisions that shape the whole product, with dates. |
 | [goals/](goals/) | One goal per roadmap item: what it delivers, why, when it is done, its decisions and its progress. |
 | [code-clean-up-guide.md](code-clean-up-guide.md) | The guide for the code clean-up of v0.1.1 (goal 125), from the v0.1.1 audit: the map of the code, the themes of change, the rules of shape, the order of work, what to leave, the review guide and the owner's questions. |
+| [app-build-plan.md](app-build-plan.md) | The plan for building the dashboard's app from the mockup the owner agreed (2026-11-12): what the mockup needs that Thermite does not have, the choices that set the order, the stages, the new behaviour, and what changes in v0.3.0's plans. Proposed, for the owner's yes. |
 | [ui-refresh-guide.md](ui-refresh-guide.md) | The guide for the dashboard's refresh in v0.3.0 (goals 243 to 253), from the review of goal 242: what the review found on every screen, fxbot's UI system, the two designs, the rules for screens, one word for each thing, the new navigation, providers and set-up, the order of work and the owner's questions. |
 | [code-structure-guide.md](code-structure-guide.md) | The guide for the work on the code's structure in v0.3.0 (goals 244 and 254 to 257), from the same review: what the clean-up of v0.1.1 fixed, what a change touches today, the findings, the six changes, the rules of shape to add, the order of work, what to leave and the owner's questions. |
 

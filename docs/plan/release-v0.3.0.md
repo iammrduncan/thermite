@@ -26,6 +26,8 @@ It has two guides. Each says what was found, what changes, in what order, and wh
 
 ## Still to choose
 
+**2026-11-12:** the owner agreed a mockup of the whole app (goal [243](goals/243-web-app-base.goal)). It differs from this plan in places: its navigation, a run's tabs, no rig on a screen, a sign-in with a user name and a password, and Thermy. [The app's build plan](app-build-plan.md) proposes how the app is built from it and what changes here; it waits for the owner's yes, and until then the sections below stand as written on 2026-11-10.
+
 Nothing holds the build. What the owner still chooses is chosen from mockups, in each area's goal: the navigation's variant, a run's tabs, the words on the screens, and each screen before it is built ([rules for every goal](README.md#rules-for-every-goal)).
 
 ## What a tester gets
