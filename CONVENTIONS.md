@@ -145,6 +145,16 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 - **Tests and scripts may import any part.** Production code never imports them.
 - `npm run check` enforces these imports. Today's exceptions are listed by file in the check, and each is removed when its code moves.
 
+### The order inside a part
+
+- **Inside the harness and inside control, the folders have an order.** A file imports its own folder and the folders before it in the order, never one after. The order is there so that the folders of a part form no cycle: what is low can be changed and tested without what is above it.
+- **The harness,** from the bottom: `schema`, `ledger`, the top-level files, `broker`, `targets`, `kb`, `judge`, `research`, `agents`, `service`, `selftest`, `api`, `controller`, `runner`, `main.ts`.
+- **Control,** from the bottom: `store`, `live`, `views`, `events`, `bus`, the top-level files, `machines`, `providers`, `kits`, `mcp-servers`, `issue`, `runpod`, `rigs`, `clusters`, `kb`, `campaigns`, `retention`, `system`, `mcp`, `api`, `ui`, `dashboard`, `main.ts`.
+- **A part's top-level files are what its folders share.** They have one place in the order, above the folders the whole part stands on: the harness's schema and ledger; control's store, live lines, views, events and bus. A top-level file that needs a folder above that place belongs in a folder. `main.ts` makes the part and imports all of it; nothing imports it.
+- **When an import goes against the order,** move what is needed down, to a folder before both; or hand it in from above, as an argument; or move the code up to where it is used.
+- **A new folder gets a place** in the order, here and in the check (`ORDERS` in `scripts/checks/lib/imports.ts`): after every folder it imports and before every folder that imports it. Change the order itself only on purpose, in a commit of its own.
+- `npm run check:imports` holds the order, for types too. Today's imports against it are listed with the check's exceptions, and that list only shrinks; `npm run check:imports -- --list` says what is left, by pair of folders.
+
 ### Contracts, events and names
 
 - **A wire contract has one home.** Each body that crosses a process boundary has one schema in `core`: a route's request and answer, a signed command, an event, a file that one container hands to another, an environment variable. Route paths and limits are named constants beside it.
@@ -171,6 +181,7 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 - Keep a handwritten production file under 500 lines where you can.
 - A file over 500 lines gets a cohesion review: does it hold one responsibility?
 - A file over 800 lines is normally split.
+- A file is split before the limit, on purpose. `npm run check:sizes` warns at 700 lines: a file that passes 700 fails the check until `scripts/size-baseline.json` lists it as due a split (`npm run check:sizes -- --due`), and then its split is planned. A listed file may still grow up to 800 lines. Don't trim a file to keep it under a number.
 - Split by responsibility and ownership, not only to meet a line count.
 - When you split a file into modules, put them in a folder named for it: for example, `store/runs.ts` and `store/rigs.ts` for `store.ts`, not `store-runs.ts` and `store-rigs.ts` beside it.
 - Many files are over these sizes now. Don't make one of them bigger: add the new code as a module in the file's folder, or split the file first.

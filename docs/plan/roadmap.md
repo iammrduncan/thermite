@@ -289,10 +289,10 @@ The fixes after them, one version each, in the order to take them:
 
 **The code's structure.**
 
-- [254](goals/254-one-record.goal) One record for each setting, command and event kind: a feature's facts written once · `READY`
+- [254](goals/254-one-record.goal) One record for each setting, command and event kind: a feature's facts written once · `IN_PROGRESS`
 - [257](goals/257-find-the-fault.goal) Find the fault from Thermite's own records: a record where work did not happen, and IDs on every log line · `READY`
 - [255](goals/255-one-way-to-run-a-program.goal) One way to run an agent program: for workers and advisors, headless and in a terminal · `READY`
-- [256](goals/256-layers-and-splits.goal) Layers inside the parts, and files split on purpose · `READY`
+- [256](goals/256-layers-and-splits.goal) Layers inside the parts, and files split on purpose · `IN_PROGRESS`
 
 **From before the plan: run Thermite without the dashboard.** Every dashboard action has an API and MCP twin, all logs are in one place you can search, and sign-in uses your identity provider. The plan's goals took in the ones marked as merged, here and in the lists after. The others are proposed: one with a screen is built in the new dashboard, and what is not verified when goals 242 to 257 are moves on at the release ([release plan](release-v0.3.0.md#the-other-goals-of-v030)).
 

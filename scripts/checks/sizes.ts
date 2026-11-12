@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // The size check (goal 125): no file in scope over 800 lines grows, and no file newly passes 800
-// lines, unless scripts/size-baseline.json records a reason for it. The rule and its words are in
-// scripts/checks/lib/sizes.ts.
+// lines, unless scripts/size-baseline.json records a reason for it. It warns at 700 lines (goal
+// 256): a file newly over 700 fails until the baseline lists it as due a split. The rule and its
+// words are in scripts/checks/lib/sizes.ts.
 //
 //   npm run check:sizes                 check; exits 1 on a finding
 //   npm run check:sizes -- --list       also list every file over 500 lines
 //   npm run check:sizes -- --lower      lower the baseline after a split (never raises it)
+//   npm run check:sizes -- --due        list the files newly over 700 lines as due a split
 //   npm run check:sizes -- --start      write the first baseline (only when there is none)
 //
 // It reads the files on disk that Git tracks or would add (untracked, not ignored), so a new
@@ -20,10 +22,12 @@ import {
   findingText,
   inScope,
   lineCount,
+  listDue,
   lower,
   REVIEW_LINES,
   SPLIT_LINES,
   start,
+  WARN_LINES,
 } from "./lib/sizes.ts";
 
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
@@ -64,29 +68,38 @@ if (!existsSync(baselineFile)) {
   console.error(`check-sizes: ${BASELINE_PATH} is missing. Write the first one with --start.`);
   process.exit(1);
 }
-const baseline = JSON.parse(readFileSync(baselineFile, "utf8")) as Baseline;
+let current = JSON.parse(readFileSync(baselineFile, "utf8")) as Baseline;
+const dueCount = (b: Baseline) => (b.split_due ?? []).length;
 
 if (args.has("--lower")) {
-  const before = Object.keys(baseline.files).length;
-  const b = lower(sizes, baseline);
-  write(b);
+  const before = Object.keys(current.files).length;
+  const due = dueCount(current);
+  current = lower(sizes, current);
+  write(current);
   console.log(
-    `check-sizes: lowered ${BASELINE_PATH}: ${Object.keys(b.files).length} files (was ${before}).`,
+    `check-sizes: lowered ${BASELINE_PATH}: ${Object.keys(current.files).length} files over ${SPLIT_LINES} lines (was ${before}), ${dueCount(current)} due a split (was ${due}).`,
+  );
+}
+if (args.has("--due")) {
+  const due = dueCount(current);
+  current = listDue(sizes, current);
+  write(current);
+  console.log(
+    `check-sizes: ${BASELINE_PATH} lists ${dueCount(current)} files as due a split (was ${due}). Plan the split of each new one.`,
   );
 }
 
-const current = args.has("--lower") ? lower(sizes, baseline) : baseline;
 const findings = compare(sizes, current);
 const over = (n: number) => [...sizes].filter(([, lines]) => lines > n);
 
 if (args.has("--list")) {
+  const mark = (lines: number) =>
+    lines > SPLIT_LINES ? "split " : lines > WARN_LINES ? "due   " : "review";
   for (const [file, lines] of over(REVIEW_LINES).sort((a, b) => b[1] - a[1]))
-    console.log(
-      `${String(lines).padStart(6)}  ${lines > SPLIT_LINES ? "split " : "review"}  ${file}`,
-    );
+    console.log(`${String(lines).padStart(6)}  ${mark(lines)}  ${file}`);
 }
 for (const f of findings) console.error(`check-sizes: ${findingText(f)}`);
-const summary = `${sizes.size} files; ${over(REVIEW_LINES).length} over ${REVIEW_LINES} lines, ${over(SPLIT_LINES).length} over ${SPLIT_LINES}`;
+const summary = `${sizes.size} files; ${over(REVIEW_LINES).length} over ${REVIEW_LINES} lines, ${over(WARN_LINES).length} over ${WARN_LINES}, ${over(SPLIT_LINES).length} over ${SPLIT_LINES}`;
 if (findings.length) {
   console.error(
     `check-sizes: ${findings.length} finding${findings.length === 1 ? "" : "s"} (${summary}).`,

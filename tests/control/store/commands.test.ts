@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { ControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import { McpUses } from "../../../src/core/mcp.ts";
 
@@ -262,7 +262,7 @@ describe("each command's run and campaign, in columns of their own", () => {
     twelve.db.close();
 
     const store = new ControlStore(path);
-    assert.equal(version(store), 37);
+    assert.equal(version(store), STORE_VERSION);
     const kept = store.db
       .prepare("select id, signed, run, campaign from command order by issued_at")
       .all() as { id: string; signed: string; run: string | null; campaign: string | null }[];

@@ -6,14 +6,17 @@ import {
   BASELINE_PATH,
   type Baseline,
   compare,
+  DUE_COMMAND,
   type Finding,
   findingText,
   inScope,
   LOWER_COMMAND,
   lineCount,
+  listDue,
   lower,
   SPLIT_LINES,
   start,
+  WARN_LINES,
 } from "../../scripts/checks/lib/sizes.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -92,7 +95,9 @@ describe("the size rule", () => {
     );
   });
   test("a file at exactly 800 lines is not over", () => {
-    assert.deepEqual(compare(sizes({ "src/a.ts": big, "src/b.ts": SPLIT_LINES }), base), []);
+    // It is over 700, so it is listed as due a split: the limit itself does not hold it yet.
+    const listed: Baseline = { ...base, split_due: ["src/b.ts"] };
+    assert.deepEqual(compare(sizes({ "src/a.ts": big, "src/b.ts": SPLIT_LINES }), listed), []);
   });
   test("a recorded reason lets a file stay over 800 lines and grow", () => {
     const why: Baseline = { files: { "src/a.ts": { lines: big, reason: "a table of tests" } } };
@@ -103,6 +108,53 @@ describe("the size rule", () => {
     assert.equal(shrunk.problem, "stale");
     assert.ok(findingText(shrunk).includes(LOWER_COMMAND));
     assert.match(findingText(only(compare(sizes({}), base))), /no longer over 800/);
+  });
+});
+
+describe("the warning at 700 lines", () => {
+  const near = WARN_LINES + 40;
+  const base: Baseline = { files: {}, split_due: ["src/a.ts"] };
+
+  test("a file listed as due a split passes, and may grow up to 800 lines", () => {
+    assert.deepEqual(compare(sizes({ "src/a.ts": near, "src/b.ts": WARN_LINES }), base), []);
+    assert.deepEqual(compare(sizes({ "src/a.ts": SPLIT_LINES }), base), []);
+  });
+  test("a file newly over 700 lines fails until it is listed, with what to do", () => {
+    const f = only(compare(sizes({ "src/a.ts": near, "src/new.ts": WARN_LINES + 1 }), base));
+    assert.deepEqual([f.file, f.problem], ["src/new.ts", "due"]);
+    const text = findingText(f);
+    assert.match(text, /701 lines, newly over 700\. Its split is due before it reaches 800/);
+    assert.ok(text.includes(DUE_COMMAND));
+    assert.match(text, /Don't trim it to stay under\./);
+    // A baseline from before the warning lists none: every file over 700 lines is new to it.
+    const before = compare(sizes({ "src/a.ts": near }), { files: {} });
+    assert.deepEqual(
+      before.map((x) => x.problem),
+      ["due"],
+    );
+  });
+  test("a file at exactly 700 lines is not over", () => {
+    assert.deepEqual(compare(sizes({ "src/b.ts": WARN_LINES }), { files: {}, split_due: [] }), []);
+  });
+  test("a listed file that was split, or is gone, fails until the list is lowered", () => {
+    const split = only(compare(sizes({ "src/a.ts": 300 }), base));
+    assert.equal(split.problem, "not-due");
+    assert.match(findingText(split), /300 lines now, no longer over 700/);
+    assert.ok(findingText(split).includes(LOWER_COMMAND));
+    assert.equal(only(compare(sizes({}), base)).problem, "not-due");
+    assert.deepEqual(lower(sizes({ "src/a.ts": 300 }), base), { files: {}, split_due: [] });
+  });
+  test("a listed file that passes 800 lines is held by the limit, and comes off the list", () => {
+    const found = compare(sizes({ "src/a.ts": SPLIT_LINES + 1 }), base);
+    assert.deepEqual(
+      found.map((f) => f.problem),
+      ["new", "not-due"],
+    );
+    assert.match(findingText(found[1] as Finding), /801 lines now, over 800/);
+  });
+  test("listing adds the files newly over 700 lines, sorted, and takes none off", () => {
+    const now = sizes({ "src/c.ts": near, "src/a.ts": 300, "src/b.ts": big, "src/d.ts": 700 });
+    assert.deepEqual(listDue(now, base), { files: {}, split_due: ["src/a.ts", "src/c.ts"] });
   });
 });
 
@@ -129,12 +181,17 @@ describe("lowering and starting the baseline", () => {
         "src/c.ts": { lines: big },
         "src/d.ts": { lines: big + 7, reason: "kept" },
       },
+      split_due: [],
     });
   });
-  test("the first baseline holds every file over 800 lines", () => {
-    assert.deepEqual(start(sizes({ "src/b.ts": big, "src/a.ts": 801, "src/c.ts": 800 })), {
-      files: { "src/a.ts": { lines: 801 }, "src/b.ts": { lines: big } },
-    });
+  test("the first baseline holds every file over 800 lines, and those over 700 as due a split", () => {
+    assert.deepEqual(
+      start(sizes({ "src/b.ts": big, "src/a.ts": 801, "src/c.ts": 800, "src/e.ts": 700 })),
+      {
+        files: { "src/a.ts": { lines: 801 }, "src/b.ts": { lines: big } },
+        split_due: ["src/c.ts"],
+      },
+    );
   });
   test("the repository's baseline is well formed and sorted", () => {
     const b = JSON.parse(readFileSync(join(ROOT, BASELINE_PATH), "utf8")) as Baseline;
@@ -144,5 +201,7 @@ describe("lowering and starting the baseline", () => {
       assert.ok(Number.isInteger(entry.lines) && entry.lines > SPLIT_LINES, file);
       if (entry.reason !== undefined) assert.ok(entry.reason.trim().length > 0, file);
     }
+    const due = b.split_due ?? [];
+    assert.deepEqual(due, [...new Set(due)].sort());
   });
 });

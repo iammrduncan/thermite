@@ -55,6 +55,9 @@ for (const area of AREAS)
     HANDLERS.set(kind, h);
   }
 
+/** The kinds the fold has a handler for, which the test that walks the event kinds reads. */
+export const foldedKinds = (): string[] => [...HANDLERS.keys()];
+
 /** What the fold holds, to read: the reader never changes it. */
 export interface FoldedRig {
   /** The runs, in the order their first event came. */

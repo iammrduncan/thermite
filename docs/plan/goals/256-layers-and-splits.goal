@@ -1,16 +1,16 @@
 ---
 id: "256"
 title: "Layers inside the parts, and files split on purpose"
-status: READY
+status: IN_PROGRESS
 version: "0.3.0"
 depends_on: ["242", "244"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
 # 256 · Layers inside the parts, and files split on purpose
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal); [244](244-one-door.goal) for control's folders
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal); [244](244-one-door.goal) for control's folders
 
 ## What
 
@@ -47,27 +47,43 @@ A plan only; nothing of it is built. From the [code structure guide, S5](../code
 
 ## Done when
 
-- [ ] Items 1 and 2 are in `npm run check`, with the lists of today's breaches; each fails on a made-up breach.
+- [x] Items 1 and 2 are in `npm run check`, with the lists of today's breaches; each fails on a made-up breach. Done, 2026-11-12.
+  - Item 1: the orders are `ORDERS` in `scripts/checks/lib/imports.ts` and in CONVENTIONS.md; today's 73 imports against them (22 in the harness, 51 in control) are in `scripts/import-exceptions.json`. Made-up breaches: a file of control's store that imports `rigs/`, and a new folder in the harness with no place in the order; `npm run check:imports` failed on each, in words.
+  - Item 2: the 37 files over 700 lines are `split_due` in `scripts/size-baseline.json`. Made-up breach: a new file of 701 lines; `npm run check:sizes` failed on it, in words.
 - [ ] No file of `src/` is over 700 lines without a reason recorded, and none was split by line count alone: each new file is in a folder named for its parent.
 - [ ] The harness's largest import cycle is under 20 files, and the goal records the count before and after.
 - [ ] The harness's service has no field set after it is made.
 - [ ] The supervisor's `main` is under 150 lines.
 - [ ] Control has one function that makes it; `grep` finds no registry keyed by the store.
 - [ ] The fast checks at every step, and the acceptance checks of each area: judge, agents, control, steering, backup.
-- [ ] Pages: CONVENTIONS.md's order of folders and its size rule; AGENTS.md's checks.
+- [x] Pages: CONVENTIONS.md's order of folders and its size rule; AGENTS.md's checks. Done, 2026-11-12, with items 1 and 2: CONVENTIONS.md ("The order inside a part", "Files and their size"), AGENTS.md's checks, CONTRIBUTING.md and the site's Contributing page.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
+- 2026-11-12, item 1, the order (the builder's choice; the owner reviews it in CONVENTIONS.md). One list for each part, lowest first; a file imports its own folder and the folders before it. Each order is the one the code is closest to: the fewest imports against it that I found, 22 in the harness and 51 in control. The review's picture of control gave four levels, with a dozen folders side by side in one; a list with one folder at each place holds an import between two of those as well, and five such imports are against it today.
+  - The harness: `schema`, `ledger`, the top-level files, `broker`, `targets`, `kb`, `judge`, `research`, `agents`, `service`, `selftest`, `api`, `controller`, `runner`, `main.ts`.
+  - Control: `store`, `live`, `views`, `events`, `bus`, the top-level files, `machines`, `providers`, `kits`, `mcp-servers`, `issue`, `runpod`, `rigs`, `clusters`, `kb`, `campaigns`, `retention`, `system`, `mcp`, `api`, `ui`, `dashboard`, `main.ts`.
+- 2026-11-12, item 1, the top-level files (the builder's choice): a part's top-level files have one place in its order, above the folders the whole part stands on. 14 of the harness's 22 breaches and 34 of control's 51 are a top-level file that imports a folder above that place, or a low folder that imports a top-level file. They end as the files get homes (item 8, and the same for the harness). The other way, to leave the top-level files out of the order, would list 8 and 17 imports and let a cycle run through any top-level file.
+- 2026-11-12, item 1: the order holds types too, as the rule between the parts does. A new folder must be given a place, and an order may name no folder that is gone: the check fails on both.
+- 2026-11-12, item 2, what "warns" means (the builder's choice): a file that newly passes 700 lines fails the check until the baseline lists it as due a split, which one command does (`npm run check:sizes -- --due`). The limit stays 800, and a listed file may grow up to it. A line of output that fails nothing would be read by nobody; a list is a plan that item 3 can work through, and it only shrinks by a split.
+- 2026-11-12, item 2, the question below, answered (the builder's choice): test files get the same warning. The size check holds them to the limit of 800 already, and a test file at the limit is squeezed in the same way. Of the 37 files listed, 17 are in `src/`, 18 in `tests/`, 1 in `scripts/` and 1 is a stock component of the app. This goal's own "Done when" asks for splits in `src/` alone.
+
 ## Open questions
 
-- Whether test files, 12 of which are at 700 to 797 lines, get the same warning.
+- None.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: `IN_PROGRESS`. Items 1 and 2, the cheap guards, are built, as step 1 of [v0.3.0, step by step](../v030_release_plan.md). No behaviour of Thermite changed, and no file moved.
+  - **The debt as it stands,** from `npm run check:imports -- --list`. The harness, 22 imports: its top-level files import `agents` (3), `research` (3), `service` (3), `judge` (2), `kb` (1) and `targets` (1); `agents` imports `service` (3); `ledger` imports `judge` (3) and a top-level file (1); `judge` imports `service` (2). Control, 51 imports: its top-level files import 12 folders above them (24); `bus`, `store` and `views` import top-level files (10); `store` imports `kb` (4) and `mcp-servers` (1); `rigs` imports `clusters` (3); `bus` imports `rigs` (2) and `issue` (1); `views` imports `runpod` (2); `events` imports `kb` (1) and `retention` (1); `issue` imports `campaigns` (1) and `rigs` (1).
+  - **The files over 700 lines,** from `npm run check:sizes -- --list`: 37, the largest `src/common/bus/index.ts` and `src/supervisor/main.ts` at 800 lines each.
+  - **Checks run:** typecheck, lint, the public, size, import and loose-ends checks, the docs build and the docs check, and the checks' own tests (`tests/scripts/`). The whole of `npm test` was started beside the push; goal 254's Progress has its result. Not run: the acceptance checks (nothing they test changed).
+  - **Left for the owner:** read the two orders in CONVENTIONS.md, and say where a folder stands wrongly.
+  - **Next:** items 3 to 8, as step 30 of the step-by-step page; item 7 goes with goal 272.
 
 ---
 

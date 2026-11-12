@@ -4,10 +4,13 @@
 // also holds the folder rule (CONVENTIONS.md, "Folders and names"): code outside a folder that is
 // a module imports its index.ts, with no exceptions; and the dashboard's rule (CONVENTIONS.md,
 // "The dashboard"): the app in web/ imports only contracts of src/core/ that run in a browser,
-// with no exceptions. The rules, the namespaces the folder rule leaves out, and their words are
-// in scripts/checks/lib/imports.ts.
+// with no exceptions. And it holds the order of the folders inside the harness and inside control
+// (CONVENTIONS.md, "The order inside a part"), with today's breaches among the exceptions. The
+// rules, the namespaces the folder rule leaves out, the orders and their words are in
+// scripts/checks/lib/imports.ts.
 //
 //   npm run check:imports               check; exits 1 on a finding
+//   npm run check:imports -- --list     also say what the exceptions still excuse, by rule
 //   npm run check:imports -- --lower    drop the exceptions whose import is gone (never adds)
 //   npm run check:imports -- --start    write the first list (only when there is none)
 //
@@ -21,9 +24,11 @@ import {
   EXCEPTIONS_PATH,
   type Exceptions,
   exceptionsJson,
+  exceptionsSummary,
   LOWER_COMMAND,
   listOf,
   lower,
+  orderGaps,
   scan,
 } from "./lib/imports.ts";
 
@@ -64,15 +69,20 @@ if (args.has("--lower")) {
   console.log(`check-imports: lowered ${EXCEPTIONS_PATH}: ${count(exceptions)} (was ${before}).`);
 }
 
+if (args.has("--list")) for (const line of exceptionsSummary(found, exceptions)) console.log(line);
+
 const { added, gone } = compare(found, exceptions);
+const gaps = orderGaps(files);
 for (const b of added) console.error(`check-imports: ${brokenText(b)}`);
+for (const g of gaps) console.error(`check-imports: ${g}`);
 for (const g of gone)
   console.error(
     `check-imports: ${g.file} no longer imports ${g.target}. Drop the exception: ${LOWER_COMMAND}`,
   );
 const summary = `${files.length} files; ${count(exceptions)} exceptions left`;
-if (added.length || gone.length) {
-  console.error(`check-imports: ${added.length + gone.length} findings (${summary}).`);
+if (added.length || gone.length || gaps.length) {
+  const n = added.length + gone.length + gaps.length;
+  console.error(`check-imports: ${n} finding${n === 1 ? "" : "s"} (${summary}).`);
   process.exit(1);
 }
 console.log(`check-imports: ok (${summary}).`);

@@ -3,19 +3,25 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import {
+  againstOrder,
   broken,
   brokenText,
   compare,
   EXCEPTIONS_PATH,
   type Exceptions,
   exceptionsJson,
+  exceptionsSummary,
   importsOf,
   isPage,
   listOf,
   lower,
+  ORDERS,
+  orderGaps,
+  orderName,
   partOf,
   resolve,
   scan,
+  TOP_LEVEL,
 } from "../../scripts/checks/lib/imports.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -239,6 +245,134 @@ describe("a folder that is a module is imported through its index.ts", () => {
       compare(found, listed).added.map((b) => b.target),
       ["src/harness/judge/judge.ts"],
     );
+  });
+});
+
+describe("the folders inside the harness and inside control have an order", () => {
+  const rule = (file: string, spec: string, indexed: string[] = []) =>
+    broken(file, spec, new Set(indexed))?.rule;
+
+  test("a file imports its own folder and the folders before it, never one after", () => {
+    // The ledger is below the judge: the judge reads the ledger, and not the other way.
+    assert.equal(rule("src/harness/judge/decide.ts", "../ledger/index.ts"), undefined);
+    assert.equal(rule("src/harness/ledger/verdicts.ts", "../judge/index.ts"), "order");
+    assert.equal(rule("src/harness/ledger/verdicts.ts", "./rows.ts"), undefined);
+    // Control's store is below its views, and both below the folders that act.
+    assert.equal(rule("src/control/views/rig.ts", "../store/index.ts"), undefined);
+    assert.equal(rule("src/control/store/kb/items.ts", "../../views/index.ts"), "order");
+    assert.equal(rule("src/control/rigs/place.ts", "../views/index.ts"), undefined);
+    assert.equal(rule("src/control/views/rig.ts", "../rigs/index.ts"), "order");
+    // The front ends are last: nothing below imports the API or MCP.
+    assert.equal(rule("src/control/api/rigs.ts", "../rigs/index.ts"), undefined);
+    assert.equal(rule("src/control/rigs/place.ts", "../mcp/index.ts"), "order");
+  });
+
+  test("a part's top-level files have one place, and its main.ts imports all", () => {
+    assert.equal(orderName("src/harness/queue.ts"), TOP_LEVEL);
+    assert.equal(orderName("src/harness/judge/decide.ts"), "judge");
+    assert.equal(orderName("src/harness/main.ts"), "main.ts");
+    // A top-level file of the harness stands on the ledger, and its other folders on it.
+    assert.equal(rule("src/harness/queue.ts", "./ledger/index.ts"), undefined);
+    assert.equal(rule("src/harness/judge/decide.ts", "../queue.ts"), undefined);
+    assert.equal(rule("src/harness/queue.ts", "./judge/index.ts"), "order");
+    assert.equal(rule("src/harness/ledger/rows.ts", "../queue.ts"), "order");
+    assert.equal(rule("src/harness/queue.ts", "./journal.ts"), undefined);
+    assert.equal(rule("src/harness/main.ts", "./controller/index.ts"), undefined);
+    assert.equal(rule("src/harness/main.ts", "./queue.ts"), undefined);
+    assert.equal(rule("src/harness/queue.ts", "./main.ts"), "order");
+  });
+
+  test("it holds types too, and only the parts that have an order", () => {
+    const files: Record<string, string> = {
+      "src/harness/ledger/a.ts": 'import type { Verdict } from "../judge/index.ts";',
+      "src/supervisor/relay/a.ts": 'import { x } from "../advisors/index.ts";',
+      "src/supervisor/advisors/b.ts": 'import { y } from "../relay/index.ts";',
+    };
+    const found = scan(Object.keys(files), (f) => files[f] ?? "");
+    assert.deepEqual(
+      found.map((b) => `${b.rule} ${b.file}`),
+      ["order src/harness/ledger/a.ts"],
+    );
+    assert.equal(againstOrder("src/harness/api/a.ts", "src/control/store/index.ts"), false);
+  });
+
+  test("the folder rule comes first, since nothing excuses it", () => {
+    assert.equal(
+      rule("src/harness/ledger/verdicts.ts", "../judge/decide.ts", ["src/harness/judge"]),
+      "folder",
+    );
+  });
+
+  test("a breach says which folder comes after which, and what to do", () => {
+    const b = broken("src/harness/ledger/verdicts.ts", "../judge/index.ts");
+    assert.ok(b);
+    const text = brokenText(b);
+    assert.match(
+      text,
+      /^src\/harness\/ledger\/verdicts\.ts imports src\/harness\/judge\/index\.ts: /,
+    );
+    assert.match(text, /harness\/judge comes after harness\/ledger in the order/);
+    assert.match(text, /CONVENTIONS\.md, "The order inside a part"/);
+    const top = broken("src/control/store/joined.ts", "../join.ts");
+    assert.ok(top);
+    assert.match(brokenText(top), /control's top-level files comes after control\/store/);
+  });
+
+  test("today's breaches are exceptions: a listed one passes, a new one fails, a mended one is dropped", () => {
+    const files: Record<string, string> = {
+      "src/harness/ledger/a.ts": 'import { clip } from "../judge/index.ts";',
+      "src/harness/ledger/b.ts": 'import { clip } from "../judge/index.ts";',
+    };
+    const found = scan(Object.keys(files), (f) => files[f] ?? "");
+    const listed: Exceptions = { "src/harness/ledger/a.ts": ["src/harness/judge/index.ts"] };
+    assert.deepEqual(
+      compare(found, listed).added.map((b) => `${b.rule} ${b.file}`),
+      ["order src/harness/ledger/b.ts"],
+    );
+    assert.deepEqual(compare([], listed).gone, [
+      { file: "src/harness/ledger/a.ts", target: "src/harness/judge/index.ts" },
+    ]);
+    assert.deepEqual(exceptionsSummary(found, listed), [
+      "order inside harness: 1 imports against it",
+      "    1  ledger imports judge",
+      "order inside control: 0 imports against it",
+    ]);
+  });
+
+  test("a new folder needs a place, and the order names no folder that is gone", () => {
+    const all = Object.entries(ORDERS).flatMap(([part, order]) =>
+      order.map((n) =>
+        n === TOP_LEVEL
+          ? `src/${part}/x.ts`
+          : n === "main.ts"
+            ? `src/${part}/main.ts`
+            : `src/${part}/${n}/index.ts`,
+      ),
+    );
+    assert.deepEqual(orderGaps(all), []);
+    const gaps = orderGaps([...all, "src/harness/newfolder/index.ts"]);
+    assert.equal(gaps.length, 1);
+    assert.match(
+      gaps[0] ?? "",
+      /^src\/harness\/newfolder\/ has no place in the order of harness's folders\./,
+    );
+    const gone = orderGaps(all.filter((f) => f !== "src/control/kits/index.ts"));
+    assert.equal(gone.length, 1);
+    assert.match(gone[0] ?? "", /names kits, and src\/control\/kits\/ is gone/);
+    // A part with no order is not asked for one.
+    assert.deepEqual(orderGaps([...all, "src/supervisor/relay/index.ts"]), []);
+  });
+
+  test("each order names a folder once", () => {
+    for (const [part, order] of Object.entries(ORDERS)) {
+      assert.deepEqual(
+        order.filter((n, i) => order.indexOf(n) !== i),
+        [],
+        part,
+      );
+      assert.equal(order.at(-1), "main.ts", part);
+      assert.ok(order.includes(TOP_LEVEL), part);
+    }
   });
 });
 

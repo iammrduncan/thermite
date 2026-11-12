@@ -60,7 +60,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
 | `trial_session`, `control_log`, `control_log_level`, `providers`, `bus_state`, `system_state`, `rig_models`, `rig_settings`, `runner_use`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
 | `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
-| `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `start_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
+| `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `start_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `set_campaign_kb_writes`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
 | `set_rig_settings` | Yes | Yes, but not the promotion rule or the GPU split | No | No |
 | `set_cluster_rig_resources` | Yes | Yes, but not `judge_gpus` (the GPU split) | No | No |
 | `add_cluster_runner`, `remove_runner` | Yes | No | No | No |

@@ -1,16 +1,16 @@
 ---
 id: "254"
 title: "One record for each setting, command and event kind: a feature's facts written once"
-status: READY
+status: IN_PROGRESS
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
 # 254 · One record for each setting, command and event kind: a feature's facts written once
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
@@ -51,7 +51,10 @@ Measured on the history since 2026-10-28:
 
 ## Done when
 
-- [ ] Items 1 to 3 are in `npm run check`, and each fails on a made-up breach.
+- [x] Items 1 to 3 are in `npm run check`, and each fails on a made-up breach. Done, 2026-11-12: each is a test file that `npm test` runs.
+  - Item 1: `STORE_VERSION` in `src/control/store/schema.ts`; the five test files read it, and `tests/control/store/version.test.ts` fails when a test file writes the version as a number. Made-up breach: a file under `tests/` with `assert.equal(version(null), 37)`; the test named the file and the line.
+  - Item 2: `tests/control/views/event-kinds.test.ts`. Made-up breach: a kind `made_up_kind` added to `core/events/kinds.ts`; the test said it has neither a handler nor a sentence.
+  - Item 3: `tests/docs/mcp-tools.test.ts`. Made-up breach: a row for an input `colour` in `list_commands`'s table on the page; the test said the tool has no argument `colour`.
 - [ ] A new rig setting is one entry and the code that uses it: shown by adding one in a test branch and counting the files.
 - [ ] A new command is one record, its handler and its sentence: shown the same way.
 - [ ] Control's views read no event body by a cast.
@@ -63,6 +66,11 @@ Measured on the history since 2026-10-28:
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
 
+- 2026-11-12, item 1 (the builder's choice): the guard is a test that reads every file under `tests/` and fails on a line that compares the store's version with a number at or above this code's, or puts one in its place. A line of SQL that names a migration by its number ("where version >= 31") is left alone: it names a migration, not this code's version. The rig's ledger needed nothing: its tests read the count of its migrations already.
+- 2026-11-12, item 2 (the builder's choice): a kind is on one of four lists in the test when it has no handler, no sentence or neither, and each list says why. The lists are exact: a kind that gets what its list says it lacks must come off it. The sentences are read from the text of `control/ui/words/`, since a sentence is a branch of a function and not an entry of a table; the handlers are read from the fold's own table (`foldedKinds`).
+- 2026-11-12, item 2, added from the review (the builder's choice): the same test holds that a kind a handler or a sentence reads has a schema, or is on a list of kinds read unchecked. Item 6 needs each handled kind's schema, so a new handler with none would be new debt.
+- 2026-11-12, item 3 (the builder's choice): the test asks control's MCP server as a client does, with the owner's, an operator's, an agent's and a reader's token. It holds the page's tools both ways (each section is a tool, each tool has a section), each input in a section's table, and the page's table of who may call which tool against what each token is offered. It does not hold an argument that a section gives in words, a description or an answer: those wait for item 10, which makes the page from the code.
+
 ## Open questions
 
 - Whether a rig setting's label and hint live in `core` with its schema, or beside the dashboard's words.
@@ -71,6 +79,12 @@ Measured on the history since 2026-10-28:
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: `IN_PROGRESS`. Items 1 to 3, the cheap guards, are built, as step 1 of [v0.3.0, step by step](../v030_release_plan.md). No behaviour of Thermite changed.
+  - **What the walk over the event kinds found.** Of 141 kinds, 67 have a handler and a sentence. 26 have a sentence alone, 20 a handler alone, and 28 neither: 7 of those are read by another part of control (the knowledge base, model use, a run's prompts, retention), and 21 are read by nothing in control, so the timeline keeps them and no page says them in words. Among the 21 are `submission_refused`, `promotion_blocked`, `champion_ref_failed`, `harness_gap`, `trial_stopped` and `fetch_refused`. Whether each is on purpose was not asked; the list is in the test for the owner to read. 10 kinds are read with no schema.
+  - **What the MCP page's test found.** One gap: `set_campaign_kb_writes` was missing from the page's table of who may call which tool. The page has it now. Every other tool, input and token on the page matched the server (91 tools).
+  - **Checks run:** typecheck, lint, the public, size, import and loose-ends checks, the docs build and the docs check, and the test files of `tests/control/store/`, `tests/control/views/`, `tests/scripts/` and `tests/docs/` with `tests/system/events-move.test.ts` and `tests/control/mcp.test.ts` (243 tests), and the app's typecheck. The whole of `npm test` was started beside the push; its result is the next line here. Not run: the acceptance checks (nothing they test changed).
+  - **Left for the owner:** read the four lists in `tests/control/views/event-kinds.test.ts`, the 21 kinds above all.
+  - **Next:** items 4 to 10, as step 9 of the step-by-step page.
 
 ---
 

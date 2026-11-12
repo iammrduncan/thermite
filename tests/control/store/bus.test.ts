@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { copiesOf } from "../../../src/common/db-copy.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { ControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
 import { withEventsTable } from "../../helpers/old-store.ts";
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "thermite-store-")), "control.db");
@@ -19,7 +19,7 @@ describe("the message bus's keys in control's store", () => {
     six.db.close();
     const store = new ControlStore(path);
     const v = store.db.prepare("select max(version) as v from schema_migrations").get();
-    assert.equal(v?.v, 37);
+    assert.equal(v?.v, STORE_VERSION);
     assert.deepEqual(store.busKeys.rigKeys(), []);
     store.db.close();
     assert.deepEqual(

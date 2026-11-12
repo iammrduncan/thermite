@@ -12,6 +12,10 @@
 // index.ts. Nested modules are reached through the outermost one that does not hold the importer;
 // inside a module, files import each other directly. The exceptions never excuse this rule.
 //
+// And inside the harness and inside control the folders have an order (CONVENTIONS.md, "The order
+// inside a part"): a file imports its own folder and the folders before it in ORDERS, never one
+// after. Today's breaches are listed with the exceptions, and that list only shrinks too.
+//
 // And the dashboard's app (`web/`) is a client of control's API alone (CONVENTIONS.md, "The
 // dashboard"): of this repository it imports only contracts in `src/core/`, each contract it
 // loads runs in a browser (no Node module, no package but zod), and production code never imports
@@ -54,12 +58,69 @@ export const NAMESPACES: readonly string[] = [
   "src/core/link",
 ];
 
+/** In a part's order: its top-level files, apart from main.ts. */
+export const TOP_LEVEL = "(top-level files)";
+/** In a part's order: the file that makes the part, which may import all of it. */
+const MAIN = "main.ts";
+
+/**
+ * The order of folders inside a part, lowest first (CONVENTIONS.md, "The order inside a part"). A
+ * file imports its own folder and the ones before it, never one after. A part's top-level files
+ * are what its folders share, so they have one place, above the folders the whole part stands
+ * on; main.ts is last. A new folder gets a place here and in CONVENTIONS.md.
+ */
+export const ORDERS: Record<string, readonly string[]> = {
+  harness: [
+    "schema",
+    "ledger",
+    TOP_LEVEL,
+    "broker",
+    "targets",
+    "kb",
+    "judge",
+    "research",
+    "agents",
+    "service",
+    "selftest",
+    "api",
+    "controller",
+    "runner",
+    MAIN,
+  ],
+  control: [
+    "store",
+    "live",
+    "views",
+    "events",
+    "bus",
+    TOP_LEVEL,
+    "machines",
+    "providers",
+    "kits",
+    "mcp-servers",
+    "issue",
+    "runpod",
+    "rigs",
+    "clusters",
+    "kb",
+    "campaigns",
+    "retention",
+    "system",
+    "mcp",
+    "api",
+    "ui",
+    "dashboard",
+    MAIN,
+  ],
+};
+
 export type Rule =
   | "part"
   | "core-io"
   | "page"
   | "tests"
   | "folder"
+  | "order"
   | "app-out"
   | "app-browser"
   | "app-in";
@@ -146,6 +207,52 @@ export function isNamespace(folder: string): boolean {
 }
 
 /**
+ * What a file is in its part's order: its folder under the part, the top-level files, or main.ts.
+ */
+export function orderName(path: string): string {
+  const rest = path.replace(/^src\/[^/]+\//, "");
+  const slash = rest.indexOf("/");
+  if (slash >= 0) return rest.slice(0, slash);
+  return rest === MAIN ? MAIN : TOP_LEVEL;
+}
+
+/**
+ * Whether an import inside one part goes against the part's order: from a folder to one after it.
+ * A part with no order, and a folder the order does not name (orderGaps reports it), break none.
+ */
+export function againstOrder(file: string, target: string): boolean {
+  const order = ORDERS[partOf(file) ?? ""];
+  if (!order || partOf(target) !== partOf(file)) return false;
+  const from = order.indexOf(orderName(file));
+  const to = order.indexOf(orderName(target));
+  return from >= 0 && to > from;
+}
+
+/**
+ * Where the orders and the folders differ, in words: a folder of an ordered part with no place
+ * in its order, and a folder an order names that is gone.
+ */
+export function orderGaps(files: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const [part, order] of Object.entries(ORDERS)) {
+    const have = new Set(
+      files.filter((f) => partOf(f) === part && /\.(?:ts|mts|cts|tsx)$/.test(f)).map(orderName),
+    );
+    for (const name of [...have].sort())
+      if (!order.includes(name))
+        out.push(
+          `src/${part}/${name}/ has no place in the order of ${part}'s folders. Give it one in ORDERS in scripts/checks/lib/imports.ts and in CONVENTIONS.md ("The order inside a part"): after every folder it imports, before every folder that imports it.`,
+        );
+    for (const name of order)
+      if (name !== TOP_LEVEL && name !== MAIN && !have.has(name))
+        out.push(
+          `The order of ${part}'s folders names ${name}, and src/${part}/${name}/ is gone. Take it out of ORDERS in scripts/checks/lib/imports.ts and of CONVENTIONS.md ("The order inside a part").`,
+        );
+  }
+  return out;
+}
+
+/**
  * The outermost module that holds `target` but not `file`, or none: the folder whose index.ts
  * `file` must import. `indexed` is the folders that have an index.ts.
  */
@@ -199,8 +306,9 @@ export function broken(
   if (to === "control" && to === from && isPage(target) && !isPage(file) && !isMain(file))
     return { file, target, rule: "page" };
   const folder = to ? moduleOf(file, target, indexed) : null;
-  if (!folder || target === `${folder}/index.ts`) return null;
-  return { file, target, rule: "folder", index: `${folder}/index.ts` };
+  if (folder && target !== `${folder}/index.ts`)
+    return { file, target, rule: "folder", index: `${folder}/index.ts` };
+  return againstOrder(file, target) ? { file, target, rule: "order" } : null;
 }
 
 /** Every broken import in a set of files, read through `read`. */
@@ -285,6 +393,34 @@ export function exceptionsJson(e: Exceptions): string {
   return rows.length ? `{\n${rows.join(",\n")}\n}\n` : "{}\n";
 }
 
+/**
+ * The exceptions in words, for a person to read: how many imports each rule still excuses, and
+ * for the order inside a part, each pair of folders with its count, the largest first.
+ */
+export function exceptionsSummary(found: readonly Broken[], exceptions: Exceptions): string[] {
+  const listed = new Set(
+    Object.entries(exceptions).flatMap(([file, ts]) => ts.map((t) => `${file} ${t}`)),
+  );
+  const kept = found.filter((b) => listed.has(`${b.file} ${b.target}`));
+  const out: string[] = [];
+  for (const rule of ["part", "core-io", "page", "tests"] as const) {
+    const of = kept.filter((b) => b.rule === rule);
+    for (const b of of) out.push(`${rule}: ${b.file} imports ${b.target}`);
+  }
+  for (const part of Object.keys(ORDERS)) {
+    const pairs = new Map<string, number>();
+    const of = kept.filter((b) => b.rule === "order" && partOf(b.file) === part);
+    for (const b of of) {
+      const pair = `${orderName(b.file)} imports ${orderName(b.target)}`;
+      pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
+    }
+    out.push(`order inside ${part}: ${of.length} imports against it`);
+    for (const [pair, n] of [...pairs].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])))
+      out.push(`  ${String(n).padStart(3)}  ${pair}`);
+  }
+  return out;
+}
+
 /** The exceptions lowered: those whose import is gone are dropped, and none is added. */
 export function lower(found: readonly Broken[], exceptions: Exceptions): Exceptions {
   const now = new Set(found.map((b) => `${b.file} ${b.target}`));
@@ -303,6 +439,7 @@ const RULE_WORDS: Record<Rule, string> = {
   page: "a domain module imports page code. Move the shared word or rule out of control/ui/, or move the page code into it",
   tests: "production code imports tests or scripts",
   folder: "code outside a folder that is a module imports a file inside it",
+  order: "an import against the order of the part's folders",
   "app-out":
     "the dashboard's app imports code of this repository that is not a contract. The app is a client of control's API alone: of the repository it imports only src/core/ (as @core/…). Give the app what it needs through a route, with its contract in src/core/api/",
   "app-browser":
@@ -316,6 +453,12 @@ export function brokenText(b: Broken): string {
   if (b.rule === "folder") {
     const folder = (b.index ?? "").slice(0, -"/index.ts".length);
     return `${b.file} imports ${b.target}: ${RULE_WORDS.folder}. Import the folder's interface, ${b.index}, instead, and export what this file needs there. If ${folder}/ has no index.ts, give it one. A folder whose files are each an entry or a contract of their own is a namespace instead: name it in NAMESPACES in scripts/checks/lib/imports.ts (CONVENTIONS.md, "Folders and names").`;
+  }
+  if (b.rule === "order") {
+    const part = partOf(b.file) ?? "";
+    const [from, to] = [orderName(b.file), orderName(b.target)];
+    const words = (n: string) => (n === TOP_LEVEL ? `${part}'s top-level files` : `${part}/${n}`);
+    return `${b.file} imports ${b.target}: ${RULE_WORDS.order}. ${words(to)} comes after ${words(from)} in the order, so ${words(from)} may not import it. Move what this file needs down, to a folder before both; or hand it in from above, as an argument; or move this code up to where it is used (CONVENTIONS.md, "The order inside a part").`;
   }
   if (b.rule === "app-out" || b.rule === "app-browser" || b.rule === "app-in")
     return `${b.file} imports ${b.target}${b.via ? ` (the app loads it through ${b.via})` : ""}: ${RULE_WORDS[b.rule]} (CONVENTIONS.md, "The dashboard").`;

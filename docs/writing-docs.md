@@ -145,6 +145,12 @@ A test follows the quick start as a tester would: [Install on one machine](_site
 
 `node scripts/test.mjs tests/docs/quick-start.test.ts` reads the pages as the test does, in a second. The whole test is `scripts/acceptance/quick-start.mjs`: see [the contributor guide](local-development.md#the-quick-start-test).
 
+A test also holds the [MCP tools](_site/src/content/docs/reference/mcp-tools.md) page to control's MCP server: `node scripts/test.mjs tests/docs/mcp-tools.test.ts`, which `npm test` runs. It asks the server what it offers each kind of token, as an MCP client does. So on that page:
+
+- keep each tool in a section of its own under **Tools**, with the tool's name as its `###` heading: every tool the server offers needs one, and a section for a tool that is gone fails;
+- list a tool's inputs in a table whose first column is headed **Input**, each input's name in a code span: an input the tool does not have fails. An input may also be given in words, which the test does not read;
+- name each tool once in **Who may call which tool**, with a cell that starts with `Yes` or `No` for the owner, an operator, an agent and a reader: the test compares each cell with what that token is offered.
+
 ## When Thermite changes
 
 A change to what Thermite does updates the pages that describe it in the same commit, written by whoever changes the code. That covers screens and their text, commands, settings, routes, events, errors and limits. Run `npm run docs:build` and `npm run docs:check` before that commit. Never leave pages for a later pass: a goal is not verified until its pages match the code. The [rules for every goal](plan/README.md#rules-for-every-goal) say so.

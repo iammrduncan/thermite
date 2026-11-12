@@ -34,7 +34,7 @@ It has two guides. Each says what was found, what changes, in what order, and wh
 
 ## Still to choose
 
-- **When the build starts.** The mockup and the build plan are agreed; no screen code is written until the owner says start. [v0.3.0, step by step](v030_release_plan.md) is the order the owner asked for on 2026-11-12: one goal at a time, each with its command, and the owner's own look at each before the next. The build starts when the owner runs its first step.
+- Nothing now. The build started on 2026-11-12, when the owner ran the first step of [v0.3.0, step by step](v030_release_plan.md): the order the owner asked for that day, one goal at a time, each with its command, and the owner's own look at each before the next.
 
 ## What a tester gets
 

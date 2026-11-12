@@ -1,6 +1,6 @@
 # v0.3.0, step by step
 
-**Status:** written on 2026-11-12 for the owner, who asked for it: one command for each step, and what the owner looks at between them. The build starts when the owner runs step 1.
+**Status:** written on 2026-11-12 for the owner, who asked for it: one command for each step, and what the owner looks at between them. The build started on 2026-11-12, when the owner ran step 1; step 1 is built and waits for the owner's look.
 
 [The release plan](release-v0.3.0.md) says what v0.3.0 is and why. [The app's build plan](app-build-plan.md) and [goal 258's design](goal-258-design.md) say how it is built. This page is the run sheet: 35 steps in one line, one goal at a time, from today to the tag.
 
@@ -90,8 +90,10 @@ Five checks that change no shape and stop new debt while the large steps run: th
 
 **Look at:**
 
-- The list of today's breaches of the order of folders, and the list of files between 700 and 800 lines. They are the debt as it stands; each list may only shrink from here.
-- Each check failing on a made-up breach, in the goal's Progress.
+- The two orders of folders in CONVENTIONS.md ("The order inside a part"), and where a folder stands wrongly. `npm run check:imports -- --list` gives today's imports against them, by pair of folders: 22 in the harness and 51 in control.
+- The files over 700 lines: `npm run check:sizes -- --list` marks each `due`. There are 37. Both lists are the debt as it stands; each shrinks only by a move or a split.
+- The lists of event kinds in `tests/control/views/event-kinds.test.ts`: 21 kinds that nothing in control reads, so no page says them in words. Some look like things you would want to be told.
+- Each check failing on a made-up breach, in the two goals' "Done when".
 
 ### 2 · Control's store behind an interface (goal 267, step 1 of goal 258) · XL
 

@@ -678,6 +678,9 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   modelPriceCacheWrite,
 ];
 
+/** The schema version this code brings a store to: how many migrations there are. */
+export const STORE_VERSION = STORE_MIGRATIONS.length;
+
 /**
  * The migration that drops control's events table (goal 168). It waits until the move of the
  * table's rows to the events stream has checked them there (control/events/move.ts), which needs
@@ -750,7 +753,7 @@ export function migrateStore(
       : [],
   );
   const current = Math.max(0, ...applied);
-  const known = STORE_MIGRATIONS.length;
+  const known = STORE_VERSION;
   if (current > known) throw new Error(newerSchemaWords("control store", path, current, known));
   const waits = !applied.has(EVENTS_TABLE_GOES) && !eventsTableMayGo(db, given.eventsMoved);
   // Each migration not applied yet, in order; the events table's drop waits for the move alone.

@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { ControlStore } from "../../../../src/control/store/index.ts";
+import { ControlStore, STORE_VERSION } from "../../../../src/control/store/index.ts";
 import { withKnowledgeBaseBefore175 } from "../../../helpers/old-store.ts";
 
 /**
@@ -80,7 +80,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     const v = store.db.prepare("select max(version) as v from schema_migrations").get() as {
       v: number;
     };
-    assert.equal(v.v, 37);
+    assert.equal(v.v, STORE_VERSION);
     const rows = store.db
       .prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
       .all() as Record<string, unknown>[];

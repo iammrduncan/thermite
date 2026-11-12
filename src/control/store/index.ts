@@ -113,6 +113,7 @@ export type { RetentionRemovalRow } from "./retention.ts";
 export type { RigRunner } from "./runners.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
 export type { RegisteredRun } from "./runs.ts";
+export { STORE_VERSION } from "./schema.ts";
 export type { DbFigures } from "./size.ts";
 export type { TunnelRig } from "./tunnels.ts";
 export type { RunningRun } from "./usage.ts";
