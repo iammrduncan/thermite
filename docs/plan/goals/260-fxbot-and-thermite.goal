@@ -174,6 +174,15 @@ This goal is done when the owner has chosen, and each part that goes on has a go
 - 2026-11-11, the owner, on whether Pi stays until Claude by key has prompt caching again: "drop pi, file a ticket to fxbot repo to ask for cache fixing on things." Pi goes with OpenCode and Codex. Until fxbot speaks Anthropic's own API, Claude by key runs without prompt caching and thinking, and costs more; a Claude subscription through Claude Code is not touched. The ticket is [fxbot's issue 18](https://github.com/iammrduncan/fxbot/issues/18).
 - 2026-11-11, the owner, on where the scientist lives first: "Both, drawn on the mockup". The dashboard's mockups get boards for the scientist in fxbot's app and in Thermite's app, marked as proposed, and the owner chooses from them.
 
+- 2026-11-12, the owner: **the scientist is Thermy.** "The scientists name is thermy and its avatar is a clay flame in the same theme as fxbot avatars, orange and red and it is emotive and follows you like the fxbot avatars and it reacts to you. There is only one bot, thermy, and you can have many sessions/threads with them and work through items. They can be accessed on any page as a popover chat and they can read the page that you are tlaking to them on, they have mcp tools to the app as well. They have a dedicated chat like you have on the auto scientist that they can help you plan, draft, and create kits etc. They can work against a git repo so all your stuff stays organized and it has a skill it invokes on first time to do initialize a blank repo for use." So:
+  - **One bot, many threads.** There is one Thermy. The owner holds many threads with it, each on one piece of work.
+  - **On every page.** Thermy opens as a chat over the page the owner is on, and reads that page.
+  - **A screen of its own,** to plan, draft and create campaigns and kits.
+  - **The app's tools.** Thermy works through Thermite's MCP tools.
+  - **A git repo.** Thermy works against a repo of the owner's, so plans, kits and contracts are files with a history. A skill makes a blank repo ready the first time.
+  - **Its face** is a clay flame in orange and red, in the theme of fxbot's avatars: it shows feeling, its eyes follow the pointer, and it reacts to what the owner does.
+  - The dashboard's mockups draw Thermy on the brand guide (goal [243](243-web-app-base.goal)): its face and moods, its corner on every page, the chat open over a page, its own screen, and the first set-up of a repo. They take the place of the three boards of "the scientist" drawn before, once the owner agrees.
+
 ## Open questions
 
 1. **Who carries libfx?** The proposal is that fxbot hides it behind its own interface. The risk stays that a 0.0.x library of another party is under every run.
@@ -181,8 +190,12 @@ This goal is done when the owner has chosen, and each part that goes on has a go
 3. **Research workers for an owner who has only a Claude subscription.** Claude Code runs none today (goal 061). With only two harnesses this is a hole, and it needs its own answer.
 4. **The first tutorial** uses OpenCode's free models. What takes their place?
 5. **The view of an agent at work.** Is the dashboard's Watch screen enough for the fxbot harness, with a terminal only for Claude Code?
+6. **Where Thermy runs.** The proposal above made the scientist a bot of fxbot's that operates Thermite from outside. The owner now describes Thermy as part of Thermite's app. Is Thermy a bot on a running fxbot, or an agent that Thermite runs itself on the same agent core, with its own threads, memory and repo?
+7. **What Thermy may do without asking.** The mockups propose: it reads freely and drafts freely in its repo; anything that starts work, spends or pushes is a card with a button the owner presses. The owner has not yet said.
+8. **Thermy in fxbot's app.** The owner chose "Both, drawn on the mockup" for the scientist on 2026-11-11. Thermy is drawn in Thermite's app only so far.
 
 ## Progress
 
+- 2026-11-12: The owner named and described the scientist: Thermy (Decisions). It is drawn on the brand guide of the dashboard's mockups. Three questions are added: where Thermy runs, what it may do without asking, and whether fxbot's app shows it.
 - 2026-11-11: The owner answered three of the questions (Decisions). The constraint "No program is removed before the new one has run the same campaign as well" still stands for the order of the work: the new program is added and measured first.
 - 2026-11-11: Written from three studies: fxbot's SDK and libfx, fxbot as a product and where another service plugs in, and what a program must do inside Thermite today. Read only; no code was changed in either repository.
