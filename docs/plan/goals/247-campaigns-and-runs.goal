@@ -1,68 +1,130 @@
 ---
 id: "247"
-title: "Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer"
+title: "Campaigns and a run: a run's five tabs and four buttons, its results and its downloads"
 status: READY
 version: "0.3.0"
-depends_on: ["246"]
+depends_on: ["246", "258"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 247 · Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer
+# 247 · Campaigns and a run: a run's five tabs and four buttons, its results and its downloads
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [246](246-home-and-decisions.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [246](246-home-and-decisions.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
-A plan only; nothing of it is built. The [UI refresh guide's section 6](../ui-refresh-guide.md#a-run) has the proposal that the mockups settle.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 2 of [the app's build plan](../app-build-plan.md#4-the-order). A run's screens are built on the model of goal [258](258-runs-own-their-resources.goal): a run owns its agents and its devices, and no screen shows a rig.
 
-1. **Campaigns:** the table alone, as the first thing on its page, with one toolbar (search, state, mode, archived). A right-click on a campaign, in the table or in the navigation, opens its menu: Open, Start a run, Move to folder, Archive (item 4 of goal [131](131-ux-fixes-found-in-use.goal)).
-2. **A campaign:** its runs in one table (at work first, then earlier); **Setup**, with its brief, contract, agents' context and additions (goal [090](090-info-tab.goal)); Reviews on a research campaign; the Leaderboard where more than one rig ran it. The agents' context shows the rigs its runs use (item 1 of goal 131).
-3. **A run's header in one line:** its name, mode, rig and state, one main action that fits the state, **Watch**, **Steer** and a menu whose items are words.
-4. **A run's six tabs:**
-   - **Overview:** the sentence of state; why nothing is at work, when nothing is (goal [072](072-why-nothing-at-work.goal)); what needs the owner; the result (the chart and guards, the goals, or the questions); what each lane and the judge do now, with a line when its lanes take turns (item 3 of goal 131). A judge-only run says so, and fills its goals in as they are checked (goal [110](110-judge-only-runs-show-progress.goal)).
-   - **Queue:** up next, in progress, the lanes' ideas, tried. **Add** opens a dialog.
-   - **Results:** champions and attempts in one table with filters, search and pages; on a research run, answers, hypotheses and reviews. A champion's menu sends it to another rig.
-   - **Notes:** the agents' field notes.
-   - **Activity:** everything that happened, with search, filters and days.
-   - **Setup:** what the run was started with (goal 090), its rules in force, its prompts, its usage, and whether its lanes keep working while the judge works (goal [148](148-keep-working-on-screens.goal)).
-5. **Steer, one panel** for today's five surfaces: a message to everyone, a lane or the planner; a rule; an experiment. One line says what each is for.
-6. **One set of words** for the judge's results and for a run's states, from one table ([the words](../ui-refresh-guide.md#one-word-for-each-thing)).
+**Campaigns**
+
+1. **Campaigns:** every campaign in one table: its name with what it is for under it, its kind, its state, its best result, when it last did something. A row opens the campaign. One search line, one filter (the group) and the switch to the second view. The list is in order of last activity; the archived campaigns are one link under it. No panel, no tree, and no menu on a row.
+2. **Campaigns › Results,** the second view, in the place of Reports: every run that is not at work, newest first: the run's name with what its campaign is for, its status, what it produced in one line, and when. The one filter is the status. A row opens the run.
+3. **A campaign:** how far it is in one sentence; what it is, in three plain sentences and six facts (its kind, its score, what must not get worse, its project, its kit, when it started); its runs as rows, and from five runs as a table, best first, which is the leaderboard. The one main button starts another run (goal [249](249-new-campaign.goal)). **Download results** is a short menu: the campaign's best change as a patch, each run's export, or all of them as one file. **More** holds Copy, Set its group and Archive.
+4. **A campaign's Setup:** what is changed after a campaign is made: its notes for the agents, its kit and its group. One **Save**, one new version. Advanced holds the rest: the score and the smallest gain, what must not get worse, the files the agents may change, ideas and hypotheses, the limits of a try, tools, where results go, the agents' own context.
+5. **Their other states:** a group is set and a campaign is archived on the press, each with an Undo line; Copy asks one thing, the copy's name; a campaign with a run at work has no Archive; a refusal is one line with the one thing to do; the archived list is the same table with Unarchive on a row.
+
+**A run**
+
+6. **A run's top** is the same on every screen: where it is, its name and its state as one word, four buttons (Watch, Pause, More, Tell the agents), five tabs (Summary, Explore, Usage, Results, Setup), then its sentence. In a state that is not "at work" the sentence says what is true and why, and the main button is the one thing to do. A paused or closed run has no Watch and no Tell the agents.
+7. **Summary,** for a hill climb: the run's own needs, in the row of goal [246](246-home-and-decisions.goal); four tiles (the score with its gain, the numbers that must hold, the changes tried with how they ended as one bar); the progress as one picture, with the best change so far as a line and every change tried as a dot; whether the workers and the judge work or are idle, with why in one line for a part that is idle (goal [072](072-why-nothing-at-work.goal)); where the gains came from, by idea. A run whose kit measures many numbers shows the ones that decide a change as one table, and the others one level down.
+8. **Usage:** what the run costs and uses: its sentence, four facts, tokens over time, the use by agent (a row opens in place with its models), and one closed fold for speed. A budget shows only when one is set.
+9. **Results:** how good the run's best change is and where it is, then its best changes, newest first: what each is, its gain over the one before, when it was kept. A row opens the change, with its patch. The main button is **Push now** while the project's branch is behind, and **Download patch** otherwise. Two links send the newest best change to another run of the campaign, or start a campaign from it (goal 249). Downloads: the best change as one patch, and the run's export as one file. A run at work makes a fresh export when asked, and shows its progress to the download (item 2 of goal [131](131-ux-fixes-found-in-use.goal)); a run that ended has the export of its end ready. A research run has its paper here. A push that failed is one line above the rows.
+10. **Tell the agents:** a form with no tabs: one box, who reads it, once or kept until removed, **Send**. A question that waits is on top. Under the form, what was said, newest first: who, the words in one line, what came of it. One link opens the standing rules: the rules in force and the messages that are kept, one line each, with who set it. Whether the workers keep working while the judge works is one of those rules (goal [148](148-keep-working-on-screens.goal)). Remove is done on the press, with Undo.
+11. **A run's Setup:** a form with the four things people change on a run: the workers' model, the planner's model, workers at a time, and its devices as one line with Change. One **Save**, and a line that says when a change holds. One Advanced section has six groups: the agents (the context default, then a name and a model for each; no model means off), the devices and what each does, what counts as a win, the limits, what the agents know, and the run's facts (goal [090](090-info-tab.goal)). From there, **Where it started:** the score at the start, how steady the measurement is, and the start's numbers.
+12. **More, and closing a run:** More is a menu of what can be done now, the red line last: Add hours (for a run with a stop time), Restart the workers, Ask the teachers, Export now, Close the run. Pause is done on the press, with an Undo line. Closing a run is one dialog with nothing typed.
+
+**Goal runs and research runs**
+
+13. **A goal run's Summary:** how many goals are met and what holds the last one; a goal that is not met as a row that says why; the met goals in one table: the goal's name with what it asks, what the judge measured, when it was met. While few are met, the goals are rows, with the one being checked first. A try of the kit with the judge alone fills its goals in as they are checked (goal [110](110-judge-only-runs-show-progress.goal)).
+14. **One goal:** what it asks and where it stands; each case's result with its number and its limit; how it is checked, as four facts; its history as one fold.
+15. **A research run's Summary:** what it answered and how sure; the questions, each with its answer in one line and how sure it is, in one of three words (Not sure, Fairly sure, Sure); the paper as one row. **One question:** the question as the name, its answer as the sentence, the claims it rests on as a short table with each claim's source; three folds for the whole answer, the gaps and the next experiments. A claim opens in Knowledge (goal [251](251-library.goal)).
+16. **Reviews and hypotheses** are lists in a run's Explore (goal [262](262-the-explorer.goal)). This goal gives what opens beside each list and their acts. A hypothesis has one of five states (Supported, Refuted, Undecided, Proposed, Retired); Promote, Retire and Return are done on the press, with Undo.
+17. **The paper,** read in place on a page of its own: its title, what it concludes, three facts, then its parts as rows that open, the first one open. **Download** is its one button.
+18. **A goal that a person must judge, and a run that asks whether its goal is possible,** are needs, in goal 246's row.
+
+**What it needs from control**
+
+19. **There today:** a run's sentence, state, needs and facts; copy, archive and a campaign's group; a run's best changes, its branch and its push state; sending a best change to another run; messages, rules and their removal; a run's start numbers; goals, questions, reviews, hypotheses and their acts, and the paper; pause, resume, more hours, a restart of the workers, a teachers' round, an export and a close; a run's model use by agent and by model.
+20. **Needs a read:**
+    - The list of campaigns, and one campaign with its facts, notes, kit and runs. Only the old pages have them today.
+    - The runs that ended, with what each produced.
+    - A run's numbers with their history and their limits, the count of each outcome, and the gain by idea. One read, built once.
+    - A run's tokens over time.
+    - A goal's history, and the claims of a question with their sources.
+21. **New behaviour:**
+    - **A run's result has a status:** Complete (it reached its end), Stopped (paused, or closed before an end) or Failed (it could not run or measure). Today a run is running, paused or closed, with a reason in words.
+    - **A reason is optional** when a run is paused or closed, an experiment dropped, a change withdrawn or a hypothesis changed, and can be added after. Today each needs one.
+    - **A campaign's notes and kit change as one new version.** No route changes either today.
+    - **Push now,** for a run's best changes. Today Thermite pushes only when the next win comes.
+    - **Downloads keyed by run,** and a campaign's results as one file. Today an export is asked for by rig.
+    - **"Everyone" also reaches the teachers.** Today it is the workers and the planner.
+    - **Undo** for a kept message and a rule that were removed, where it is cheap.
+22. **One set of words** for an outcome and for a run's state, from the one place the app and the API both read (goal [244](244-one-door.goal), item 7).
+
+**What waits for another goal**
+
+- A run's Explore, with every kind of record, its saved views and SQL: goal 262. The build plan builds a run's Usage in the same stage.
+- Watch: goal [248](248-live.goal). New campaign, another run, a campaign from a best change: goal 249.
+- A plain name for an idea and a change: goal [264](264-plain-names.goal). Until then a screen shows the agents' own name.
+- A question from the agents as a need, and an answer to a note: goal [265](265-agents-ask-the-owner.goal).
+- Search: goal [263](263-search.goal). Thermy's corner: goal [266](266-thermy.goal).
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, on the demo's three kinds of run, at three widths, in light and in dark, with the rules' budget: a list for Campaigns, a detail for a campaign and a run's tabs, a form for the two Setups and Tell the agents.
+5. Its docs pages, in the same commits.
 
 ## Why
 
-- A run's page has 9 to 11 tabs, 10 actions, and 260 pixels of cost cards above every tab. Steering is on 5 surfaces; "why is it stuck" takes 6 screens.
-- History (up to 400 sentences) and Attempts have no search, filter or pages.
-- The Attempts tab uses two sets of words for the judge's results on one screen.
+- Today a run's page has 9 to 11 tabs, 10 actions, and 260 pixels of cost cards above every tab. Steering is on 5 surfaces.
+- The owner, 2026-11-10: "I have to go edit the rig, when really I'm editing a run".
+- The owner, 2026-11-11: a campaign's page says what the campaign is, "and not just runs"; a run's result has a status apart from what it produced; closing a run took three steps and a typed name.
+- The owner, 2026-11-12: "for exports make them available to download from a run page or campaign page".
 
 ## Constraints
 
-- **A mockup first,** on the demo's three modes: a hill climb, a goal run, a research run; each at three widths.
-- **What works stays:** the champion's chart, the goals as a bar and a list, the sentence of state.
-- **A tab with nothing in it doesn't show.**
+- **A mockup first.** Done, on real records of the three kinds: a hill climb, a goal run, a research run.
+- **What works stays:** the best change's picture, the goals as a list, the sentence of state.
+- **A state shows only while it is true:** no "none" line and no dead control.
+- **No caps and no pagers:** a list says its whole count and loads as it is scrolled.
+- **The owner's words never change a verdict.** A message reaches the agents at their next step; the judge decides.
 
 ## Done when
 
-- [ ] The mockups are approved, with the tabs and the words the owner chose.
-- [ ] Each read and action of these screens has its route and its tool: the campaigns, a campaign, a run's parts, its queue, its results with filters, its activity with filters.
-- [ ] The owner does each of these in the new dashboard, on a real run of each mode: see how it does, see why nothing is at work, steer it in each of the three ways, find an attempt and a champion, read its notes.
-- [ ] Each item taken in (goals 072, 090, 110, 148; items 1, 3 and 4 of 131) is done, with its test.
-- [ ] The browser check covers each tab for each mode, at three widths.
-- [ ] Pages: the pages on a campaign's page, a run's page, steering, the experiment queue, the reviews, and their screenshots.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions), with five tabs and the app's words.
+- [ ] Each read of item 20 and each action of item 21 has its route and its tool, with tests there.
+- [ ] The owner does each of these in the app, on a real run of each kind: sees how it does, sees why a part is idle, tells the agents, removes a rule, changes a model and the workers at a time on the run, pauses and closes it with no reason typed, finds a best change, pushes it and downloads it.
+- [ ] The owner changes a campaign's notes and kit in one Save, and downloads a campaign's results as one file.
+- [ ] Campaigns › Results gives each ended run one of the three statuses, with a test for each.
+- [ ] Each item taken in (goals 072, 090, 110, 148; item 2 of 131) is done, with its test.
+- [ ] The browser check covers each screen of items 1 to 18 and its other states, for each kind of run, at three widths, in light and in dark, within the rules' budgets.
+- [ ] Pages: the pages on the campaigns list, a campaign's page, a run's page and each of its tabs, steering, results and downloads, goal runs, research runs and the reviews, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: a run has five tabs (Summary, Explore, Usage, Results, Setup) and four buttons, where the plan and this goal's title had six tabs; the queue, the notes and the events are kinds of record in Explore, which is goal 262; a run's Setup changes the run's own agents and devices, and no screen shows a rig; a campaign's page says what the campaign is; a run's result has a status; downloads are on a run and on a campaign. The mockup answered both open questions: experiments and tasks are one kind of record, the queue, in Explore; a research run has its questions on Summary, its reviews and hypotheses in Explore and its paper on a page of its own. Of goal 131, item 1 went with the rig (no screen lists rigs for a campaign), and Archive (item 4) is one press under More, with Undo.
 
 ## Open questions
 
-- Experiments and tasks: one tab, **Queue**, for both; the things in it keep their two words. The owner confirms ([question 6](../ui-refresh-guide.md#11-the-owners-questions)).
-- Whether a research run's Results is one page or three tabs inside it.
+- Whether the harness itself refuses an empty reason, beside control's check.
+- How a campaign moves to a newer kit today: no route for it was found, and item 21 needs one.
+- Whether a start that failed is told apart from other pauses in the run's events, for the status Failed.
+- A need on a run's Summary: answered through one link, as drawn, or with two buttons, as on Home.
+- Where the owner sets "the workers keep working" on a screen (goal 148). The mockup shows it among the standing rules; a message to the planner makes a rule, and the command line sets one.
+- Whether a run still has two numbers after goal 258, the workers it plans for and the workers at a time, and if so where a screen says that they take turns (item 3 of goal 131).
+- Whether a right-click on a campaign in the navigation opens a menu (item 4 of goal 131). The mockup has no menu on a row.
+- Which removals get an Undo in v0.3.0. To undo a removed rule, Thermite must set it again; a kept message has no way back today.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

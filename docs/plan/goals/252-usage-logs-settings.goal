@@ -1,65 +1,110 @@
 ---
 id: "252"
-title: "Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system"
+title: "The rest of Setup: its first screen, Spend, Storage with Exports and Backup, Logs and System"
 status: READY
 version: "0.3.0"
 depends_on: ["243", "244"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 252 · Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system
+# 252 · The rest of Setup: its first screen, Spend, Storage with Exports and Backup, Logs and System
 
 **Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
-A plan only; nothing of it is built.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 6 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Usage, Logs and the rest of Settings". It is the rest of **Setup**, the place at the foot of the navigation: what Setup holds beside the models, agents, tools and access of goal [245](245-providers-and-set-up.goal) and the account of goal [261](261-sign-in-as-a-person.goal).
 
-1. **Usage:** the one home for tokens and cost. A period, the figures, and tables by model, by campaign, by run and by agent, with a model's price set beside its row. A run's page and a campaign's page show one line and a link here, where today cost has 6 homes and 3 names.
-2. **Logs:** who did what through control, and control's own log, in one table with one toolbar: search, filters by kind, who and rig as chips, a time, pages (goal [027](027-logs-page.goal)). A row leads with what happened, in words; its code name is in its details. A rig's own log lines join here when goal [257](257-find-the-fault.goal) brings them to control.
-3. **Settings,** in fxbot's frame (tabs that are links; a column at a wide window, a row of pills at a narrow one):
-   - **MCP servers,** with **Add** as a dialog.
-   - **Network:** the addresses rigs may reach.
-   - **Knowledge base:** its limits.
-   - **Storage:** what is kept and where, what takes space (control's store, the knowledge base, exports), and the retention policies with "if it ran now". One page, where there are four today.
-   - **Agents:** each role and its texts, which has no entry in today's navigation.
-   - **System:** the message bus, control's health and its loops, each rig's part versions, the log level of control and of each rig's parts (item 6 of goal [178](178-clean-up-continued.goal)), control's version.
-4. **Metrics goes** as a place: its Model use is Usage, and its Bus, Control, Storage and Rigs are under Settings.
+**The screens**
+
+1. **Setup,** its first screen: one sentence that says whether everything works, and one table of Setup's parts: each part with what it holds under its name, and how it is now in one plain line. A row opens the part. One line is coloured, the one that is wrong.
+2. **Spend:** what the models and the rented machines cost, over every run, for a time the owner picks. Its sentence says the cost and why; then four facts, with the calls for each day as a line; the use by campaign; each plan against its limit; the rented machines as one row; and one closed fold, By model. A row opens the campaign. A plan whose use cannot be read says so, with its one act. A budget is a row only when one is set. It takes the place of Metrics › Model use.
+3. **Storage:** what Thermite keeps, where, and what removes it. Its sentence says how much and what removes it; then two facts, one table of the kinds, the largest first, and one closed fold with each machine's share. One button, **Add a rule**: a rule is today's retention policy. With a rule set, a block of rules stands above the table, one row a rule. Exports and Backup are two links. It takes the place of the pages on space, on retention policies and of Metrics › Storage.
+4. **A rule's form** asks five things: its name, what it removes, where, the rule itself and when. The line beside **Save** says what the rule would remove now, before it is saved. As drawn, a saved rule is on, and Turn it off is in its menu (Open questions). Remove is done at once, with Undo: nothing but the rule is lost. Run it now asks once.
+5. **Exports,** from Storage: every export Thermite keeps, the newest first: what was exported with one line on it, its kind, its size, when it was made. A row downloads it as one file. A search and one filter, the kind. A row's menu has Download, Details and Delete; Delete asks once, with the run's name typed. An export that is still arriving says so in its row (item 2 of goal [131](131-ux-fixes-found-in-use.goal)). A run's own export and a campaign's results are downloaded where the work is (goal [247](247-campaigns-and-runs.goal)).
+6. **Backup,** from Storage: when Thermite was last backed up and whether the backup was whole, and two rows, to back up and to restore, each the command in short with **Copy**. The restore's steps are in the guide. A restore that Thermite refused is one line, with the link to the guide.
+7. **Logs:** who changed what, the newest first: when, who, what they did in one sentence, on what. A burst of the same act is one row. One search and one filter, who. A row opens the entry beside the list: its sentence, four facts, and links to what it changed and to its raw fields. The second view is **Commands:** each thing Thermite asked a run or a machine to do, and how far it got. A command that hangs is the first row, with **Cancel it**. It takes the place of the audit log's page.
+8. **System:** whether Thermite itself is well: its sentence; its parts as rows (the part, one line on what it does, one fact, its state as one word); its own resources, each with a line over time and its limit in words; one closed fold, Versions. A part's row opens the part, one level down: the server (its settings, its log level, its loops, its memory), the database (its largest tables), the message bus (its streams as one table, and from a stream its messages). A part that is down turns its row red, with the one thing to do. It takes the place of Metrics › Bus, Control and Rigs, and of the message bus's page.
+9. **The other states** are on the board beside these: a rule set and a rule's menu; an export's menu and its deletion; a refused restore; Commands, with one that hangs; a log entry open; a part that is down; the message bus's streams.
+
+**What it needs from control**
+
+10. **There today:** cost by campaign and by model; the kinds of what is kept; rules with their preview, on and off, a run and their removals; an export's download and deletion; the commands and a command's cancel; the system's parts, the streams and their messages, and control's log level.
+11. **Needs a read:**
+    - One state line for each part of Setup.
+    - On Spend: 30 days as a time, the calls by day, each plan against its limit, and a GPU cloud's bill.
+    - Every export in one list. Today the read is rig by rig.
+    - On Logs: the filter by who, the search, and a burst as one row.
+    - Control's CPU, memory and disk over time.
+12. **New behaviour:**
+    - **The backup command writes its time and its result to Thermite,** and Thermite records a restore it refused. Today Thermite records no backup.
+    - **Undo of a removed rule.**
+
+**What waits for another goal**
+
+- Models, Agents, Tools and Access: goal 245. Your account, and tokens made on a screen: goal 261.
+- A budget in dollars: goal [123](123-budgets-made-simple.goal), built after this goal.
+- A machine's own log: its page in Compute (goal [250](250-rigs-and-machines.goal)); its lines reach control with goal [257](257-find-the-fault.goal).
+- The knowledge base's settings: Knowledge (goal [251](251-library.goal)). A run's own cost: its Usage tab (goal 247). A model's price: its provider's page (goal 245).
+- More parts on System, once goal [258](258-runs-own-their-resources.goal) makes the control plane several services: each is one more row.
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, at three widths, in light and in dark, with the rules' budget: a list for Setup's first screen, Exports and Logs; a detail for Spend, Storage, Backup and System; a form for a rule.
+5. Its docs pages, in the same commits.
 
 ## Why
 
-- Metrics mixes money with control's internals under one item of the main navigation.
+- Today's Metrics mixes money with control's internals under one item of the main navigation.
 - "What takes space" has 3 pages in 3 areas; the message bus has 5 places.
 - The owner, 2026-10-19: the audit log becomes Logs, with audit as one category, and every log of control is visible there.
+- A backup is a command and a docs page today: no screen says when the last one was.
 
 ## Constraints
 
-- **A mockup first:** Usage, Logs, and each tab of Settings; at three widths.
-- **Names of tables, loops and environment variables show under System alone.**
-- **A retention policy removes nothing until the owner turns it on,** as today.
+- **A mockup first.** Done: Setup's first screen, Spend, Storage, Exports, Backup, Logs, System, and their other states.
+- **Names of tables, loops, streams and environment variables show under System alone.**
+- **A rule says what it would remove before it is saved,** and never removes a run's record, the project's branches or an export.
+- **No caps and no pagers:** the log, the commands and the exports say their whole count and load as they are scrolled.
+- **Times are UTC.**
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] The log's filters, control's own log lines, and the reads of Storage and System are routes of the API with tests there.
-- [ ] The owner checks a run's cost from its page in one click, sets a price, finds an action in Logs by who and when, and makes a retention policy, in the new dashboard.
-- [ ] Every line control logs is on Logs and can be filtered (goal 027's item).
-- [ ] The browser check covers Usage, Logs and each tab of Settings at three widths.
-- [ ] Pages: Model use, the system view, the audit log's page, retention, the settings pages, and their screenshots.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] Each read of item 11 is a route of the API with tests there, and the backup command's record has its test.
+- [ ] The owner reads 30 days of spend by campaign and by plan, finds an action in Logs by who did it, cancels a command that hangs, makes a rule after reading what it would remove, downloads and deletes an export, and reads when the last backup was, in the app.
+- [ ] Setup's first screen says each part's state in one line, and colours the one that is wrong, shown by a test on the demo's data.
+- [ ] Goal [027](027-logs-page.goal)'s item, every line control logs in one place with a filter, is done as its open question is answered.
+- [ ] Goal [109](109-exports-page-shows-what-matters.goal)'s item, an Exports list that shows what matters, is done as its open question is answered; item 2 of goal 131 is done for an export that is still arriving.
+- [ ] The log level of control is set under System (item 6 of goal [178](178-clean-up-continued.goal)).
+- [ ] The browser check covers each screen of items 1 to 9, at three widths, in light and in dark, within the rules' budgets.
+- [ ] Pages: Spend, the system view, Logs and commands, storage and its rules, exports, backup and restore, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: the area is the rest of Setup, where it was "Usage, Logs and the rest of Settings"; Usage is Spend, under Setup, and a run's own use is the run's Usage tab; Setup opens on one table of its parts, where the plan had Settings in tabs; Exports and Backup are under Storage, and exports came here from goal 251, with goal 109's item; tool servers, the network's addresses and the agents went to goal 245, and the knowledge base's limits to goal 251; the mockup draws a saved rule as on, where this goal's constraint had a policy that removes nothing until the owner turns it on (Open questions).
 
 ## Open questions
 
-- Goal [123](123-budgets-made-simple.goal) (one budget in dollars) adds to Usage. It is built after this goal.
+- Goal [123](123-budgets-made-simple.goal) (one budget in dollars) adds to Spend. It is built after this goal. Which read gives a budget was not checked.
+- Where control's own log lines show (goal 027). The mockup's Logs holds who changed what and the commands; of control's own log it has the log level alone, under System.
+- Whether a filter by kind is enough for Exports (goal 109). Goal 109 asked that the smaller exports fold under one line; the mockup lists every export, with its kind.
+- Whether a rule is on as soon as it is saved. The mockup says so, because the form says what the rule would remove before Save. This goal's constraint of 2026-11-10 said that a policy removes nothing until the owner turns it on. A rule destroys records, so the owner confirms it.
+- Whether many exports can be deleted at once. The mockup deletes one at a time.
+- Whether the app gets a button that backs up. The mockup shows the command.
+- Whether control's read of the system gives each machine's share of what is kept, for Storage's fold.
+- Where the log level of a machine's parts is set, with no rig (item 6 of goal 178).
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

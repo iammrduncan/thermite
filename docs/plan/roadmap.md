@@ -256,20 +256,25 @@ The fixes after them, one version each, in the order to take them:
 
 - [242](goals/_completed/242-v030-review.goal) The v0.3.0 review: the dashboard's screens, fxbot's UI system and the code's structure, with the guides that set the work up · `VERIFIED`
 
-**The dashboard.** In the order to build them; goal 244 runs beside them, one area ahead.
+**The dashboard.** The owner agreed a mockup of the whole app and [its build plan](app-build-plan.md) on 2026-11-12. Goal 258 is first; beside it go the base, the sign-in and the provider catalogue's back end. The screens follow in the plan's stages, with goal 244 one area ahead.
 
 - [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `IN_PROGRESS`
-- [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first: the app's screens are built on it (the owner, 2026-11-12)
+- [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first; its [design](goal-258-design.md) waits for the owner's yes
 - [261](goals/261-sign-in-as-a-person.goal) Sign in as a person: a user and a password, in place of the owner's token typed into a box · `READY`
 - [244](goals/244-one-door.goal) One door for each action and each read: written once, for REST, MCP and the dashboard · `READY`
-- [245](goals/245-providers-and-set-up.goal) Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow · `READY`
-- [246](goals/246-home-and-decisions.goal) Home and decisions: what needs you in one list, each decision on one page · `READY`
-- [247](goals/247-campaigns-and-runs.goal) Campaigns and runs in the new dashboard: a run's page in six tabs, and one panel to steer · `READY`
-- [248](goals/248-live.goal) Live in the new dashboard: one design for a run, a rig and everything, with the way back · `READY`
-- [249](goals/249-new-campaign.goal) New campaign and Start a run in the new dashboard: what it needs checked first, a refusal at its field · `READY`
-- [250](goals/250-rigs-and-machines.goal) Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow · `READY`
-- [251](goals/251-library.goal) Library: knowledge, reports and exports in one place · `READY`
-- [252](goals/252-usage-logs-settings.goal) Usage, Logs and the rest of Settings: one home for cost, one log, one place for the system · `READY`
+- [246](goals/246-home-and-decisions.goal) Home and what needs you: one list of needs, each decided in its row · `READY`
+- [247](goals/247-campaigns-and-runs.goal) Campaigns and a run: a run's five tabs and four buttons, its results and its downloads · `READY`
+- [248](goals/248-live.goal) Watch and Live: a run's lines and its terminal, and every run at work · `READY`
+- [262](goals/262-the-explorer.goal) The explorer: a run's Explore as one full explorer of its records, with saved views and the query as SQL · `READY`
+- [245](goals/245-providers-and-set-up.goal) Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and its first model asked when it connects · `READY`
+- [249](goals/249-new-campaign.goal) New campaign and another run: one form of seven answers, then Advanced · `READY`
+- [250](goals/250-rigs-and-machines.goal) Compute: machines and their devices as a pool, a machine's page, and Add a machine · `READY`
+- [251](goals/251-library.goal) Knowledge: the knowledge base as a tree, with a folder, a search, an item and its settings · `READY`
+- [252](goals/252-usage-logs-settings.goal) The rest of Setup: its first screen, Spend, Storage with Exports and Backup, Logs and System · `READY`
+- [263](goals/263-search.goal) Search over everything: one box, opened with ⌘K from any screen · `READY`
+- [264](goals/264-plain-names.goal) Plain names: the planner gives an idea and a change a plain name, shown beside the agents' own · `READY`
+- [265](goals/265-agents-ask-the-owner.goal) The agents ask the owner: an agent's question shows as a need, and the owner answers a note · `READY`
+- [266](goals/266-thermy.goal) Thermy, Thermite's one scientist: a chat on every page and a screen of its own, in three steps · `READY` · step 1 in v0.3.0; steps 2 and 3 later
 - [253](goals/253-the-switch.goal) The switch: the new dashboard alone, the old pages removed, every docs page and screenshot current · `READY`
 
 **The code's structure.**
@@ -345,7 +350,7 @@ The fixes after them, one version each, in the order to take them:
 - [091](goals/091-needs-you-stuck-rigs.goal) Needs you shows a rig that is stuck · `DROPPED`, merged into 246
 - [093](goals/093-live-shows-reasoning.goal) Live shows what the model thinks and says, not only its tool calls · `PROPOSED`
 - [094](goals/094-copy-id.goal) Copy an ID from any page · `DROPPED`, merged into 243
-- [109](goals/109-exports-page-shows-what-matters.goal) The Exports page shows what matters, not every slice · `DROPPED`, merged into 251
+- [109](goals/109-exports-page-shows-what-matters.goal) The Exports page shows what matters, not every slice · `DROPPED`, merged into 252
 - [110](goals/110-judge-only-runs-show-progress.goal) A judge-only run shows its progress · `DROPPED`, merged into 247
 - [072](goals/072-why-nothing-at-work.goal) Say why a running run has nothing at work · `DROPPED`, merged into 247
 - [089](goals/089-dashboard-performance.goal) Faster dashboard pages · `PROPOSED`

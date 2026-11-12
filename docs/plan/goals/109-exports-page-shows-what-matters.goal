@@ -10,7 +10,7 @@ updated: 2026-11-10
 
 # 109 · The Exports page shows what matters, not every slice
 
-**Status:** `DROPPED`, merged into [251](251-library.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
+**Status:** `DROPPED`, merged into [252](252-usage-logs-settings.goal) · **Version:** [v0.3.0](../roadmap.md#v030)
 
 ## What
 
@@ -39,6 +39,7 @@ The owner, 2026-10-23, on the new Exports page: "wow there are a lot more export
 - 2026-10-24, owner: v0.1.1 becomes the code clean-up; this goal moves to v0.1.4, the UI clean-up and UX improvements.
 - 2026-11-09, the owner: v0.2.0 ships what was built ("cut v0.2.0 with what changes we have now"); this goal, not started, moves to v0.3.0 with the new features.
 - 2026-11-10, the owner, with the v0.3.0 plan (goal [242](_completed/242-v030-review.goal)): merged into [251](251-library.goal). It is built in the new dashboard, with goal 251.
+- 2026-11-12: goal 251 became Knowledge alone when the plans were rewritten to the agreed mockup. Exports are under Setup, in goal [252](252-usage-logs-settings.goal), with downloads on a run's and a campaign's page in goal [247](247-campaigns-and-runs.goal). This goal's work goes with them.
 
 ## Open questions
 

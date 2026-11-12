@@ -1,0 +1,105 @@
+---
+id: "262"
+title: "The explorer: a run's Explore as one full explorer of its records, with saved views and the query as SQL"
+status: READY
+version: "0.3.0"
+depends_on: ["243", "244", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 262 · The explorer: a run's Explore as one full explorer of its records, with saved views and the query as SQL
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. The agreed mockup draws Explore for each kind of record, its other states and the SQL screen; the [app's build plan](../app-build-plan.md) puts it in stage 3, as the last screens before a release candidate.
+
+Explore is one tab of a run, and the app's one power tool. It has the shape of a log explorer (Grafana's Explore, Loki, Elastic's Discover), and the same shape for every kind of record.
+
+1. **One read for seven kinds of record:** attempts, ideas, the queue, tries, notes, events and prompts. It takes the kind, a filter, a time and an order. It gives:
+   - the rows that match, more as you scroll, with how many match and how many there are in all;
+   - for each facet, how many of the results have each value;
+   - for each field, how many values it has, and its most common values with their counts;
+   - the band: the records over time, stacked by outcome.
+2. **The whole run.** Today's read of a run is made for agents: it cuts long lists to fit an agent's context, and a run's view keeps the newest 400 events and the newest 100 tries. Events, tries and prompts must come from the whole run, back to its start.
+3. **The screen,** from the top:
+   - the query line: the kind of record, the query as typed, two facets as dropdowns, the time to look at;
+   - the saved views, Save view, and the switch between Filters and SQL;
+   - the band, with a legend that counts the whole band; a drag across it picks a time;
+   - the fields beside the results: the fields shown as columns, then the others with how many values each has; one field opens with its most common values as bars, and a click on a value adds it to the query;
+   - the results as dense rows. A chevron opens a row in place.
+4. **A record opens beside its results:** its text or one sentence, a few facts, and links to its parts (an attempt's try, its idea, its notes). Close, or Escape, gives the results their whole width back. This is one of the few places where the app has two columns.
+5. **Each kind, as the mockup draws it:**
+
+   | Kind | A row | The band is stacked by | It takes the place of |
+   | --- | --- | --- | --- |
+   | Attempts | when, the outcome, who, its measure against the best, the change's name | the outcome | the Attempts tab |
+   | Ideas | when it was last tried, whether it gave a win, its tries, what its wins added, the idea | whether the idea gave a win | the Planner tab's list of directions |
+   | Queue | since when, its state, the worker, who proposed it, the experiment | whether it is tried yet | the Experiments tab (Tasks on a research run) |
+   | Tries | when it started, what it handed in, the worker, how long it took, what it was asked | what the try handed in | a try's session page under Live; a list of every try is new |
+   | Notes | when, its kind, who wrote it, its first words | the kind, with questions set apart | the Journal tab |
+   | Events | when, the kind of event, who, one plain sentence | wins and failures | the History tab |
+   | Prompts | when, what it is for, the agent, its size, what it asks | whole prompts and nudges | the Prompts tab and a prompt's own page |
+
+   - A burst of events of one kind by one agent is one row, which opens to its lines.
+   - Bookkeeping events are left out of the list and are in SQL.
+   - An event Thermite cannot read is a row that says so.
+   - The queue keeps its actions on this screen: add an experiment, and on a row move, edit, drop, queue it, send it back. Each exists today as a command.
+6. **Saved views, kept on control.** A view is a saved query with a name. Save view asks one thing, the name. A view works on every run of its campaign and has a link that can be sent. An agent can run a view over MCP.
+7. **The query as text: SQL.** With the switch on SQL, the query line gives way to a select in a box, with Run it and one line that says the same select in words. Under it are the band for the rows it found and the result as a table with the select's own columns. The filters of the other mode write the same select, so a person can start there and edit it. A saved select is a view like any other. It is plain SQL, read only, over the tables of a run's records that come with goal [258](258-runs-own-their-resources.goal)'s store. The tables and their columns are in the docs, and the box completes their names.
+8. **Its other states:** a query with no result says what would match, with the one button that helps. A query or a select that Thermite cannot read says why in one line, and the results stay as they were.
+
+A run's Usage tab is built in the same stage of the build plan, and is goal [247](247-campaigns-and-runs.goal)'s: it is a run's screen, not a kind of record.
+
+## Why
+
+- The owner, 2026-11-12: "That is one page that should follow good design patterns from other log systems for exploring logs/metrics."
+- Today a run's records are in separate tabs, each with its own shape. History stops at 400 sentences and has no filter; the Prompts tab shows the newest 300; Attempts has no search. The dashboard has no query and no saved view.
+- One read for seven kinds is built once and tested once. Seven reads would drift, as control's three front ends did (goal [244](244-one-door.goal)).
+- A saved view is how a finding is passed on: to another run of the campaign, to a person by its link, to an agent over MCP.
+
+## Constraints
+
+- **No caps and no pagers** (the owner, 2026-11-10): a list says its whole count and loads more as you scroll. Search and filters narrow it.
+- **SQL is read only:** a select and nothing else, with a time limit and a row limit, through a role that reads the run's tables alone (goal 258's Decisions). Those tables are a contract, since saved views depend on them.
+- **The words come from control:** an event's sentence and an outcome's word are given by the read, not made in the app (goal 244, item 7).
+- **A view is a query and nothing more.** It reads. It changes no record and no verdict, whoever runs it.
+- **Explore has a budget of its own** in the mockup's rules: six controls on the query's line, so two facets, and a third is typed. The browser check holds a screen to its budget.
+- **A name in a row is the agents' own** until goal [264](264-plain-names.goal) gives a plain one.
+
+## Done when
+
+- [x] Its mockup, agreed. Done, 2026-11-12: Explore on each of the seven kinds, what opens on it, its other states and the SQL screen, with the brand guide's explorer.
+- [ ] The explorer's read, through goal 244's door, with its REST route and its MCP tool: the seven kinds, the filter, the time, the order, rows as you scroll, the counts for facets and fields, and the band. Its tests include a run with more events and tries than today's view keeps: the counts and the band cover the whole run.
+- [ ] Saved views are kept on control: saved under a name, listed on every run of the campaign, opened by a link, and run by an agent over MCP, each with its test.
+- [ ] A select runs read only with its time limit and its row limit, and anything that is not a select is refused in words, each with its test. This item needs goal 258's store.
+- [ ] The screens, from the app's parts: Explore on each kind, a record beside its results, the facet and time menus, Save view, the states with no result and with a query that cannot be read, and the SQL screen.
+- [ ] Its cases in the browser check: each kind and the SQL screen at 1,440, 820 and 390 pixels, in light and in dark, with the explorer's budget. The screenshots are read against the boards.
+- [ ] Its docs pages: Explore and its query, saved views, the run's tables and their columns, the REST and MCP references.
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): the dashboard's query of a run is plain SQL, a select and nothing else, over a small set of tables for each run. Thermite writes no query language of its own.
+- 2026-11-10, the owner (goal [243](243-web-app-base.goal)): no caps and no pagers.
+- 2026-11-12, the owner, on the run's rows of the mockup: "So the explore tab of a run lost its actual grafana/loki/elastic like exploration with saved views and stuff and timeline banding bar etc... That is one page that should follow good design patterns from other log systems for exploring logs/metrics. usage metrics should be in a usage tab still. Good to have that separate." Explore is the app's one power tool, with a query line, saved views, a band that is dragged across to pick a time, the results, a record that opens beside them, and the same query as SQL.
+- 2026-11-12, the owner, of two drawings: "Full explorer". The records' fields are beside the results, each with how many values it has, as Elastic's Discover has them; the band is taller; the rows are dense, twenty to a first view.
+- 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0 with the plan. Saved views are in v0.3.0. A run's records asked in SQL come with goal 258.
+
+## Open questions
+
+1. **What the read is built on.** Goal 258 comes first and gives a run's records as tables. Is the explorer's read a query over those tables, the same that SQL reads, or a fold of the run's events of its own?
+2. **The typed query.** Goal 258 says Thermite writes no query language of its own. The mockup's query line takes a field and a value (`kind:question`) and plain words. What else may it hold, and where does a person go from there: to SQL?
+3. **The tables.** Goal 258 names attempts, their metrics, champions, ideas, experiments, trials, notes and events; the mockup's SQL screen adds the judge's jobs, prompts and model use. Which are in, with which columns, and what happens to a saved view when a column changes (goal 258 asks the same).
+4. **Whose a saved view is:** the campaign's, or a person's. Who may change or remove one. Whether an agent may save a view or only run one, and which agents: those that work through control's MCP tools, or a run's own too.
+5. **Which events are bookkeeping,** and where that is decided.
+6. **Large runs.** What the counts for every field cost on a run with tens of thousands of records, and what the screen says when a count is not of the whole run.
+
+## Progress
+
+- 2026-11-12: Written from the app's build plan and the agreed mockup. Accepted into v0.3.0 with the plan (Decisions).
+
+---
+
+Run with `/goal Complete docs/plan/goals/262-the-explorer.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

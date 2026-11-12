@@ -1,64 +1,97 @@
 ---
 id: "249"
-title: "New campaign and Start a run in the new dashboard: what it needs checked first, a refusal at its field"
+title: "New campaign and another run: one form of seven answers, then Advanced"
 status: READY
 version: "0.3.0"
-depends_on: ["247"]
+depends_on: ["247", "258"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 249 · New campaign and Start a run in the new dashboard: what it needs checked first, a refusal at its field
+# 249 · New campaign and another run: one form of seven answers, then Advanced
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [247](247-campaigns-and-runs.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [247](247-campaigns-and-runs.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
-A plan only; nothing of it is built.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 4 of [the app's build plan](../app-build-plan.md#4-the-order). A new run's agents and devices are the run's own, so the forms are built on the model of goal [258](258-runs-own-their-resources.goal).
 
-1. **New campaign as a set-up page,** with no navigation around it, one question for each step, and its steps named.
-2. **What it needs is checked at the start:** a rig that reports, a model for its agents, Git access for a private repository. What is missing is said there, with the link to add it and the way back. Today a missing one is refused at the last step.
-3. **Fewer fields in view.** Each step shows what most campaigns set; the rest is under **Advanced**, with its default in words. Today's steps 4 and 5 hold about 15 and 20 fields.
-4. **A refusal shows at the field it is about,** on that field's step.
-5. **The last step** keeps its sentence that says what the campaign will do. It has one main button, **Start**, and a menu for **Try the kit first** and **Save without starting**, each with one line. Each button shows that it was pressed, and then what happened (goal [088](088-new-campaign-button-progress.goal)).
-6. **The page builds its request from the schema control checks,** so the two can't disagree.
-7. **Start a run, and Copy,** as dialogs on the campaign's page.
-8. **"The run is starting"** is the run's own page, with its state.
+**The screens**
+
+1. **New campaign,** one form of seven answers, each one that past campaigns set differently: the kind (a hill climb, a goal, research), its name, one sentence on what to improve, the project, the kit, the score, and notes for the agents. Two buttons: **Start**, and **Try it first**, which measures the start with the judge alone. The project is looked up when its field is left. Git access is asked only when the repository needs a key. A check shows only when it fails.
+2. **One Advanced section,** in six groups, each with one line on what it is for: the agents (the context default, then a name and one model for each; "No model" means off), devices and workers, what counts as a win, limits, what the agents may change, and results. Each default is said in words. Advanced also holds, for a campaign that has them: ideas to try and hypotheses, lines that are never allowed, a folder of the repository, tools, and for research the digest's interval and the longest time to run.
+3. **The other two kinds** ask the same first form with their own words: a goal campaign shows the kit's own check where the kit has one.
+4. **Start another run,** a dialog over the campaign's page: one choice, one line, **Start**. Nothing is typed: the new run takes the last run's answers. **Change** opens the new run's Setup, for other devices, other models or a try with the judge alone.
+5. **A new campaign from a run's best change,** reached from the run's Results: three answers, and one line for all that comes along. The project at that change, the kit, the agents, the devices, the limits and the notes come from the first campaign; the new campaign reads the first one's knowledge; the old score becomes a thing that must not get worse. Advanced holds the same groups as New campaign's, filled in.
+6. **A refusal is one line at the field it is about,** with the one thing to do. Start and Try it first show that they were pressed, and then what happened (goal [088](088-new-campaign-button-progress.goal)). The run that starts is its own page, with its state (goal [247](247-campaigns-and-runs.goal)).
+7. **What left the forms,** because the record of past campaigns shows that nobody set it: the on and off of each agent, a trial in its terminal or headless, the turns in a trial, the model check's wait, when a win is kept, the number of devices for the judge, the program a model runs in, and Save without starting. Each keeps its default; the API and a campaign's file still set it.
+
+**What it needs from control**
+
+8. **There today:** another run with the last run's answers; a campaign from a best change, for a best change that is in the project's repository; a start with the judge alone.
+9. **Needs a route and a tool:** New campaign from a draft, the look-up of a project, a kit's upload, and the check of whether a Git access may push. Only the old page's form routes reach them today.
+10. **New behaviour,** in the contract and the builder:
+    - **"Files the agents may change" has a default, the whole project.** Today a campaign must name them.
+    - **A win's least gain has its field, and the default the form says:** 1%, where the code has 5%.
+    - **A research campaign's digest has its field.** Its interval is fixed in code today.
+
+**What waits for another goal**
+
+- How a run is given its devices, and what a second run does to a run at work on the same machine: goal 258.
+- A kit bundle from the app: goal [097](097-add-a-kit-bundle-from-the-dashboard.goal). From research to the next campaign: goal [120](120-research-kit-prep.goal). Each adds to these forms, after this goal.
+- The first model and the first machine, before a first campaign: goals [245](245-providers-and-set-up.goal) and [250](250-rigs-and-machines.goal).
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, at three widths, in light and in dark, with the rules' budget for a form (at most seven things before its button) and for a dialog.
+5. Its docs pages, in the same commits.
 
 ## Why
 
 - New campaign could start no hill climb or goal campaign in v0.1.3: the page sent a field that control's check did not know (issue 68).
-- The prerequisites of a campaign are in three other areas, and the page checks none of them at its start.
-- Three start buttons need three paragraphs to explain today.
+- Today's steps 4 and 5 hold about 15 and 20 fields, and three start buttons need three paragraphs to explain.
+- The owner, 2026-11-11, on the first mockups: "Every page is a myriad of tables, checkboxes, forms, etc." The record of past campaigns shows which settings people set: of 51 starts whose inputs could be read, none set a promotion rule, an ask-me rule or a device split.
 
 ## Constraints
 
-- **A mockup first:** each step for each mode, a refusal, the last step; at three widths.
-- **What works stays:** the step rail, the three choices of mode, the sentence at the end.
+- **A mockup first.** Done: the form, Advanced open with the other two kinds, the dialog, and a campaign from a best change.
+- **Simple first, then advanced:** a form asks at most seven things, then one Advanced section. A field is on the first form only if past campaigns set it differently.
+- **The form builds its request from the schema control checks,** so the two can't disagree.
 - **No rule of a campaign in the page:** control checks the draft, and the page shows control's words.
+- **Every label has its "i".**
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] The checks a step makes (a project's head and paths, whether a Git access may push, a kit's archive and its servers) are routes of the API with tests there, and New campaign itself is a route and a tool.
-- [ ] The owner starts a campaign of each mode, tries a kit first, and saves one without starting, in the new dashboard.
-- [ ] A missing rig, model or Git access is said at the start; a refused field is shown at that field.
-- [ ] The browser check's New campaign cases run against the new page: its six cases of today, and a refusal.
-- [ ] The campaign acceptance check creates its campaign through the new page, and passes.
-- [ ] Pages: Start a campaign from the dashboard, the first-campaign tutorial, and their screenshots.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] The checks a form makes (a project's head and paths, whether a Git access may push, a kit's archive and its servers) are routes of the API with tests there, and New campaign itself is a route and a tool.
+- [ ] The owner starts a campaign of each kind, tries one first, starts another run from the dialog, and makes a campaign from a best change, in the app.
+- [ ] A campaign made with nothing set under Advanced lets the agents change the whole project, with a test; the least gain and the digest's interval are set from their fields.
+- [ ] A missing model, device or Git access is said in one line with the one thing to do; a refused field is shown at that field.
+- [ ] The browser check's New campaign cases run against the new form: today's cases, and a refusal.
+- [ ] The campaign acceptance check creates its campaign through the new form, and passes.
+- [ ] Pages: Start a campaign from the dashboard, start another run, a campaign from a best change, the first-campaign tutorial, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: New campaign is one form of seven answers and one Advanced section, where the plan had a set-up page of named steps; nothing is checked before the form, and a check shows only when it fails; the buttons are Start and Try it first, and Save without starting left the form; a campaign from a best change is a form of this goal; the files the agents may change default to the whole project (the owner, 2026-11-11); a run's agents and devices are its own, with no rig on a form. This goal now follows goal 258.
 
 ## Open questions
 
-- Goals [097](097-add-a-kit-bundle-from-the-dashboard.goal) (a kit bundle from the dashboard) and [120](120-research-kit-prep.goal) (from research to the next campaign) add to this page. Each is built after this goal.
+- Goals [097](097-add-a-kit-bundle-from-the-dashboard.goal) (a kit bundle from the dashboard) and [120](120-research-kit-prep.goal) (from research to the next campaign) add to these forms. Each is built after this goal.
+- What Start another run says of a run at work. The dialog's one line says what the start does to it; what that is follows goal 258's design.
+- How a first run gets its devices when the form names none: goal 258's design.
+- Where results go by default. The form says today's default, Thermite alone; the owner asked for branches of the project (2026-10-27).
+- Whether "the workers keep working while the judge works" has a field under Advanced (goal [148](148-keep-working-on-screens.goal), taken into goal 247). The mockup does not draw one.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

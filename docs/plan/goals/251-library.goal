@@ -1,62 +1,92 @@
 ---
 id: "251"
-title: "Library: knowledge, reports and exports in one place"
+title: "Knowledge: the knowledge base as a tree, with a folder, a search, an item and its settings"
 status: READY
 version: "0.3.0"
 depends_on: ["243", "244"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 251 · Library: knowledge, reports and exports in one place
+# 251 · Knowledge: the knowledge base as a tree, with a folder, a search, an item and its settings
 
 **Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
-A plan only; nothing of it is built.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 6 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Library", one place for knowledge, reports and exports. It is **Knowledge**, a place in the navigation, and it holds the knowledge base alone. Reports are Campaigns › Results (goal [247](247-campaigns-and-runs.goal)). Exports are under Setup › Storage (goal [252](252-usage-logs-settings.goal)), with downloads on a run and on a campaign (goal 247).
 
-**Library** is the one place for what the runs produced, where today there are three top-level pages and a fourth list on each run.
+**The screens**
 
-1. **Knowledge:** the knowledge base's explorer as it is at 1,440 pixels (a tree of collections, a list, a details pane, one line of search, dropdown filters), which is the pattern the owner asked for. At a narrow width the tree and the details become sheets, where today the panes overlap. Its second header goes. One word for a stored thing: **item**.
-2. **Reports:** what each finished run wrote, with filters by mode and campaign. A run that ended before its report is not the page's main thing.
-3. **Exports:** each rig's full exports and its newest, and for each run the export that holds its record, with the smaller ones folded under one line (goal [109](109-exports-page-shows-what-matters.goal)). An export that was asked for shows its progress to the download (item 2 of goal [131](131-ux-fixes-found-in-use.goal)).
-4. **A run's results link here,** and each thing here links back to its run.
-5. **What the knowledge base stores,** as figures, moves to Settings › Storage (goal [252](252-usage-logs-settings.goal)).
+Knowledge is one of the app's tools: a tree at the left, and what is picked at the right. The tree's levels are knowledge base › collection (one for each campaign) › run › slot › item. A collection and a run are folders; a slot is the folder of its writer (a worker, the teachers, and one for what Thermite keeps of the run); an item is a file.
+
+1. **Knowledge, with nothing picked:** the tree shows the collections that changed last as closed folders, each with its count of items, and one line for the rest. A folder's chevron opens it in place; its name picks it. At the right: one search line over the whole knowledge base, and its collections as a table: the collection's name with what its campaign is for, its runs, its items, its last change. The collections of archived campaigns come last, in grey.
+2. **A folder, picked:** the tree is open down to it. At the right: where it is as a path, its state and its last change; one search line with two choices, the kind and who wrote it; and its items, the newest first: an item's first words with its kind under them, the folder it is in, who wrote it, and when. A row opens the item at the right, with its file picked in the tree. **Add a note** is the main button. **More** holds Upload a file, Who may read it and Open its campaign.
+3. **A search:** the tree says where the search looks, and keeps only the folders where the words land, each with its count of matches. At the right: the search line with one choice, the kind, each kind with its count; then the hits, the best first: the line that matched with its words in bold, the item's kind, who wrote it, its folder, and when. A folder that is picked makes the search look only there.
+4. **One item:** the tree is open down to its folder, with the item picked. At the right: the path, its name, three facts (its kind, who wrote it and when, its run), its text with the opening shown and the rest in one fold, then what it rests on and what cites it, each a row that links to that item. **Add a note** is its one button. One closed fold holds its version, which runs' agents can read it, and its address. A file's page shows its name, type and size, and **Download**.
+5. **Settings,** a form, from the first screen: the two settings of the knowledge base's files, each with its default in words; who may read, as one line for each collection that another campaign reads, with **Change**; the space it takes, as one line with the way to Storage. Advanced holds what each agent may write, for each campaign, as sentences.
+6. **The other states** are on the board beside these: a writer's folder; the collection of an archived campaign; an empty folder, with one line and the one thing to do; a search with no hit; an item that was withdrawn, which keeps its place in every list with the word Withdrawn and says who withdrew it and why. **Who may read it** is one small dialog: Allow and Take it back are done at once, with Undo. A note is kept as written and is never removed. An address that an agent read from the web is text, never a link. At a phone's width the tree is one screen and what is picked is the next.
+
+**What it needs from control**
+
+7. **There today:** the tree's levels and folders with their counts, the items with their filters and their order; the search, with its counts by collection, run, writer and kind; an item with its text, facts, versions, what it rests on, what cites it and its file; a note on an item; the settings, who may read, what the agents write, and the space.
+8. **New behaviour, in v0.3.0:** the search also finds a collection by its name.
+9. **New behaviour, later** (the build plan): the owner uploads a file; a note on a folder, about no item; a short name and a first sentence for an item, which Thermite asks of its writer. Until each is there, the app shows what is true today: an item under the title it has, and no Upload a file.
+
+**What waits for another goal**
+
+- What the knowledge base stores, as figures: Setup › Storage (goal 252).
+- A grant that an agent proposes is a need on Home (goal [246](246-home-and-decisions.goal)). A write that was refused is an entry in Logs (goal 252).
+- A claim of a research run's question opens here (goal 247).
+- Search over the whole app: goal [263](263-search.goal).
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone: the tree and the split of a tool are among them.
+4. Its cases in the browser check, at three widths, in light and in dark, with the rules' budget for a tool, and for a form on Settings.
+5. Its docs pages, in the same commits.
 
 ## Why
 
-- "Find a result" takes four top-level places today, and the run's page.
-- Knowledge is the clearest standard pattern in the dashboard at 1,440 pixels, and it breaks at 820.
-- The Exports page lists every export for every rig: hundreds after a few days.
+- The owner, 2026-11-12, on a redraw that had removed the tree: the knowledge base's tree of folders and files "was a hard requirement to stay".
+- Today's Knowledge is the clearest standard pattern in the dashboard at 1,440 pixels, and it breaks at 820, where its panes overlap.
+- A result belongs with the work that made it: a run's paper, patch and export are on the run, and a list of ended runs is under Campaigns. So this area no longer gathers them.
 
 ## Constraints
 
-- **A mockup first:** each of the three, at three widths.
+- **A mockup first.** Done: the first screen, a folder, a search, an item, the settings, and their other states.
 - **The hierarchy stays** as settled on 2026-10-27: knowledge base › collection › run › slot › item.
+- **The tree stays.** It is a hard requirement (the owner, 2026-11-12).
 - **A file an agent wrote or downloaded is shown as data,** with the policy for downloads that it has today.
+- **No caps and no pagers:** a list says its whole count and loads as it is scrolled.
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] The explorer's tree, list, search, filters, an item and its file are routes of the API (most exist), with what is missing added and tested.
-- [ ] The owner browses a collection, searches it, grants another campaign a read, opens a report and downloads an export, in the new dashboard, at a desk and on a phone.
-- [ ] Goal 109's default view and item 2 of goal 131 are done, with tests.
-- [ ] The browser check covers each of the three at three widths.
-- [ ] Pages: the knowledge base's pages, Reports, Exports and getting a rig's results, and their screenshots.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] The tree, a folder's items, the search, an item and its file, the notes and the settings are read through routes of the API (most exist), with what is missing added and tested.
+- [ ] The owner opens the tree down to an item, searches the whole knowledge base and one folder, finds a collection by its name, adds a note, and lets another campaign read a collection and takes that back, in the app, at a desk and on a phone.
+- [ ] The browser check covers each screen of items 1 to 6, at three widths, in light and in dark, within the rules' budgets.
+- [ ] Pages: the knowledge base's pages, its settings, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: the area is Knowledge, where it was "Library"; reports went to Campaigns › Results and exports to Setup › Storage, with downloads on a run and on a campaign, so goal [109](109-exports-page-shows-what-matters.goal)'s view and item 2 of goal [131](131-ux-fixes-found-in-use.goal) go with them to goals 252 and 247; the tree is at the left of every Knowledge screen; an item opens at the right, with no third pane. The mockup answered the open question on the leaderboard: it is a campaign's runs, on the campaign's page.
 
 ## Open questions
 
-- Whether the Leaderboard belongs here or on its campaign. [The guide](../ui-refresh-guide.md#where-each-page-goes) puts it on the campaign.
+- Whether a quick look at an item beside its list is still wanted. The mockup keeps one on the board of other states, from before the tree came back; with the tree it would be a third part.
+- Which version gets the three later things: the owner's upload, a note on a folder, and short names for items.
+- Whether one read gives every grant to read a collection, or the app must ask campaign by campaign.
+- "Search as a run's agents" leaves Knowledge for the run's Setup (goal 247). It is not drawn there.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

@@ -1,0 +1,69 @@
+---
+id: "263"
+title: "Search over everything: one box, opened with ⌘K from any screen"
+status: READY
+version: "0.3.0"
+depends_on: ["243", "244"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 263 · Search over everything: one box, opened with ⌘K from any screen
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built. The agreed mockup draws the box; the [app's build plan](../app-build-plan.md) puts it in stage 7, after the screens it leads to.
+
+1. **One box, on every screen.** ⌘K opens it over the screen the owner is on.
+2. **It finds** runs, campaigns, machines, settings, changes and notes. A machine, a setting or a change is also found by its number.
+3. **At most eight results in one list,** the best first. Each is one line: its name with the match in bold, and its kind as quiet text. Enter opens the marked one.
+4. **Actions.** Words that start with a verb, such as "pause" and a run's name, list actions. An action that needs a confirmation still asks.
+5. **Notes are one row:** "every note that says the word" is one result, which opens the search of notes.
+6. **One read behind it,** in control, with its REST route and its MCP tool (goal [244](244-one-door.goal)), so an agent can search as a person does.
+
+## Why
+
+- The owner, 2026-11-11, on the mockup: "I love having a search, it really is something missing today!"
+- Today only the knowledge base has a search. Each list has its own filter and nothing looks across them, so finding a run, a machine or a change starts with knowing which screen it is on.
+- The app is simple on a first view because much of it is one act away. Search is the short way to what is not on the first view.
+
+## Constraints
+
+- **A result is something its reader may open.** Search gives no way round what a token or a person may read.
+- **An action from the box is the same action as its button:** one door (goal 244), the same record of who did it, the same confirmation. The mockup's rule holds: confirm by what is lost.
+- **The words of a result come from control:** a thing's name, its kind and its state are given by the read.
+- **A name in a result is the agents' own** until goal [264](264-plain-names.goal) gives a plain one.
+
+## Done when
+
+- [x] Its mockup, agreed. Done, 2026-11-12: the box, open over a screen.
+- [ ] The search's read, through goal 244's door, with its REST route and its MCP tool: runs, campaigns, machines, settings, changes and notes, the best first, each with its kind and the place it opens. Its tests include a find by number, and a token that may not read a thing and does not find it.
+- [ ] Actions: words that start with a verb list the actions that fit, each runs through its own door, and one that needs a confirmation asks. Each has its test.
+- [ ] The screen, from the app's parts: the box opens with ⌘K from every screen, Enter opens the marked result, Escape closes it, and it says so in one line when nothing matches.
+- [ ] Its cases in the browser check: the box with results, with none, and with an action that asks, at 1,440, 820 and 390 pixels, in light and in dark.
+- [ ] Its docs pages: searching the dashboard, and the REST and MCP references.
+
+## Decisions
+
+- 2026-11-11, the owner, on the first round of the mockup: search stays. "I love having a search, it really is something missing today!" (goal [243](243-web-app-base.goal)).
+- 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0 with the plan.
+
+## Open questions
+
+1. **What "the best first" is:** a match in a name before a match in a text, a thing at work before one that ended, the newest first, or what the owner opened last.
+2. **How deep it reads:** names and numbers alone, or also a change's description, a note's text and an event's sentence.
+3. **How it is kept:** an index in control's store, which goal [258](258-runs-own-their-resources.goal) changes, or a read of each list when the owner types.
+4. **Which actions,** and where their list comes from: goal 244's entries, or a short list chosen by hand.
+5. **Notes:** the mockup says the row opens "the search of notes". Is that a run's notes in Explore (goal [262](262-the-explorer.goal)), the knowledge base's own search, or both?
+6. **A ninth result.** The box shows eight. Does a line of it open a kind's whole list, as it does for notes?
+7. **On a phone,** with no ⌘K: where the box opens from.
+
+## Progress
+
+- 2026-11-12: Written from the app's build plan and the agreed mockup. Accepted into v0.3.0 with the plan (Decisions).
+
+---
+
+Run with `/goal Complete docs/plan/goals/263-search.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -75,6 +75,7 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 
 ## Progress
 
+- 2026-11-12: [The design](../goal-258-design.md) is written, from two readings of the code: what control, the harness and the supervisor hold today; a proposal for each open question below; ten steps that each leave a working system; the five hard problems; six points for the owner. It waits for the owner's yes.
 - 2026-11-12: Accepted into v0.3.0, first (Decisions). Next: the written design, for the owner's yes.
 - 2026-11-10: Written from the owner's words, during the review of the dashboard's first mockups. Mockups of a run's Setup, of Compute and of the two shapes are on the design canvas the owner looks at.
 

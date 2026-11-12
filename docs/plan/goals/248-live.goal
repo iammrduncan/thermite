@@ -1,61 +1,92 @@
 ---
 id: "248"
-title: "Live in the new dashboard: one design for a run, a rig and everything, with the way back"
+title: "Watch and Live: a run's lines and its terminal, and every run at work"
 status: READY
 version: "0.3.0"
-depends_on: ["243", "244"]
+depends_on: ["243", "244", "258"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 248 · Live in the new dashboard: one design for a run, a rig and everything, with the way back
+# 248 · Watch and Live: a run's lines and its terminal, and every run at work
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
-A plan only; nothing of it is built.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 2 of [the app's build plan](../app-build-plan.md#4-the-order), with a run's other screens (goal [247](247-campaigns-and-runs.goal)). The lines are a run's, so the screens are built on the model of goal [258](258-runs-own-their-resources.goal): no screen shows a rig's Live.
 
-1. **One design of Live,** for a run, a rig and everything at work. Today a run's Live and a rig's Live are two designs, with two sets of names for the same agents.
-2. **Live is under what it shows:** a run's Live under its run, a rig's under its rig, each with the way back. Live in the navigation lists what is at work.
-3. **The transcript** keeps its shape: the time, who, one line for a tool call and its result, filters by agent, **Follow**. Lines come from control as data, in the order of their time. A trial's ID is not on every line; it can be copied from the trial's divider.
-4. **The message box** is the same Steer of goal [247](247-campaigns-and-runs.goal): who it goes to, and one line that says when each agent reads it.
-5. **A terminal:** an agent program's own screen, as today, filling its pane, with the keys the owner types. The terminal's frames and keys keep their protocol.
-6. **fxbot's chat parts** are the base: its message list, its trace of tool calls and its message box.
+**The screens**
+
+1. **Watch,** from the button at a run's top: each agent's lines as they come, the newest at the foot: the time, who, one sentence. One filter (who) and **Follow**. A line that names a change links to it. A line opens in place with its whole text or its command's output. The top keeps Pause and Tell the agents, and the path back to the run. Watch has no message box: the owner writes on Tell the agents (goal 247).
+2. **A need above the lines:** a try that has gone quiet shows its question above Watch's lines, in the row of goal [246](246-home-and-decisions.goal), only while the try is quiet.
+3. **A worker's terminal,** one level down, from a link under the lines: a switch between the workers, the agent program's own screen, one field for a line and **Send**. Single keys are typed into the screen once it is clicked. A line that runs a shell command, or that changes the program's sign-in or permissions, is held until Send is pressed again, and one line says so. The owner's lines to it are one closed fold.
+4. **The terminal's other states,** one line each in its place: a try with no terminal (headless, not started, or its machine restarted), a try that ended (its last screen, kept), lines that wait for the program, a wait for a provider's limit.
+5. **Live, every run:** every run's lines as they come, the newest at the foot: the time, the run, who, one sentence. One filter (the run) and Follow. It has no line in the navigation and no button on Home; search leads to it (goal [263](263-search.goal)).
+
+**What it needs from control**
+
+6. **There today:** a rig's lines with a filter by who, and the command that types into a terminal. On goal 258's model the lines are asked for by run.
+7. **Needs a read:**
+   - A run's lines pushed as they come, as a stream of the API, in the order of their time. Only an old page has a stream today.
+   - A terminal's screen and its keys, as routes of the API. The frames and the keys keep their protocol.
+   - Every run's lines in one list. Today the lines are read rig by rig, and only an old page joins them.
+
+**What waits for another goal**
+
+- The model's reasoning in the lines: goal [093](093-live-shows-reasoning.goal), built after this goal.
+- The path to Live, through search: goal 263.
+- A job's own lines, from a machine's log: goal [250](250-rigs-and-machines.goal).
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, at three widths, in light and in dark, with the rules' budget for a list.
+5. Its docs pages, in the same commits.
 
 ## Why
 
-- "Watch a run" is one of the operator's main jobs, and today's Live loses the way back: a run's Live has no path to its run, and a rig's Live is filed under Live.
-- **Message** and **Live** look like two actions and open one page.
-- On Everything, lines are not in the order of their time.
+- "Watch a run" is one of the operator's main jobs, and today's Live loses the way back: a run's Live has no path to its run.
+- Today a run's Live and a rig's Live are two designs, with two sets of names for the same agents. **Message** and **Live** look like two actions and open one page.
+- On today's view of everything, lines are not in the order of their time.
 
 ## Constraints
 
-- **A mockup first:** a run's Live with the transcript and with a terminal, a rig's, and everything; at three widths.
+- **A mockup first.** Done: Watch, a worker's terminal with its states, and Live.
 - **Server-Sent Events,** as decided on 2026-10-27.
 - **What an agent wrote is data:** it is shown as text, never as markup.
+- **A line that can do harm is never sent on one press:** a shell command, or a change to the program's sign-in.
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] Live's lines for a run, a rig and everything, and a terminal's frames and keys, are routes of the API with a stream, with tests there.
-- [ ] The owner watches a run, filters by agent, writes to a lane, opens a terminal and types into it, and goes back to the run, all in the new dashboard.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] A run's lines, every run's lines, and a terminal's frames and keys are routes of the API with a stream, with tests there.
+- [ ] The owner watches a run, filters by who, opens a line, opens a worker's terminal and types into it, and goes back to the run, all in the app.
+- [ ] A line that runs a shell command waits for the second Send, shown by a test.
 - [ ] A line never shows twice or out of order after the stream drops and comes back, shown by a test.
-- [ ] The browser check covers each kind of Live at three widths; the terminal acceptance check reads a terminal through the new routes.
-- [ ] Pages: the Live view's reference, steering a run, typing into a terminal, and their screenshots.
+- [ ] The browser check covers Watch, the terminal and its states, and Live, at three widths, in light and in dark, within the rules' budgets; the terminal acceptance check reads a terminal through the new routes.
+- [ ] Pages: Watch's and Live's reference, typing into a terminal, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: a run's lines are Watch, a button at the run's top, where the plan and this goal's title had Live under a run and under a rig; no screen shows a rig's Live; the message box left for Tell the agents; the terminal is one level down, with no row of key buttons; Live, for every run, has no place in the navigation. This goal now follows goal 258.
 
 ## Open questions
 
-- Goal [093](093-live-shows-reasoning.goal) (the model's reasoning on Live) is a fix in the agent programs' code. It is built after this goal, on the new transcript.
+- Goal [093](093-live-shows-reasoning.goal) (the model's reasoning on Live) is a fix in the agent programs' code. It is built after this goal, on the new lines.
+- Whether Live stays a screen. A reviewer of the mockup proposes to fold it into Watch as the choice "Every run".
+- How Live is reached before search is built: search is a later stage of the build plan than this goal.
+- Whether control has a plain sentence for each live line, or only for events. The mockup's lines are said in plain words.
+- Where the whole session of a try that ended opens. A run's Explore links to it (goal [262](262-the-explorer.goal)), and the mockup names Watch.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

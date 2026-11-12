@@ -1,0 +1,74 @@
+---
+id: "264"
+title: "Plain names: the planner gives an idea and a change a plain name, shown beside the agents' own"
+status: READY
+version: "0.3.0"
+depends_on: ["244"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 264 · Plain names: the planner gives an idea and a change a plain name, shown beside the agents' own
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [244](244-one-door.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+Today an idea and a change have only the names the agents gave them. An idea's name is lowercase words joined by dashes, such as `shared-memory-tiling`, with a description in the planner's terms. A change has its author's own words. On the agreed mockup every list of ideas and of changes shows a plain name first, with the agents' own under it. Those plain names were written by hand for the mockup: Thermite has none.
+
+1. **The planner writes a plain name** for an idea and for a change: a few words that a person who does not know the project's code can read.
+2. **An event keeps the name,** so it is part of the run's record like every other fact.
+3. **Control's views carry both names,** and the API gives both (goal [244](244-one-door.goal)).
+4. **Every list that shows an idea or a change shows the plain name,** with the agents' own beside it or one act away: a run's Summary (where the gains came from), Explore's attempts and ideas (goal [262](262-the-explorer.goal)), one attempt's page, and search (goal [263](263-search.goal)).
+5. **Until this lands, a screen shows the agents' own name.** So does a record that has no plain name, such as one of a run that ended before this.
+6. **A kit may give one plain line under a number.** A run's Summary shows each number by its name in the kit. The mockup draws one plain line under that name, which says what the number is. A kit has no field for it today, and Thermite shows the name alone. The line is the kit author's, not the planner's.
+
+## Why
+
+- The owner chose it on 2026-11-12: "A plain name from the planner".
+- The agents' names are long and in the agents' terms. The mockup's rule for a first view is "only words the reader has".
+- The plain names are on the agreed Summary, Explore and attempt's page. Without this work those screens show names the owner cannot read at a glance.
+
+## Constraints
+
+- **Agents never judge.** A name is words. It reaches no measurement, no verdict and no promotion, and the judge never reads it.
+- **The agents' own name stays,** and stays what a rule, a message and a query name. A plain name is added beside it.
+- **A missing name stops nothing.** No run waits for a name, and no change is refused for want of one.
+- **A name is a model's words:** shown as text, and never read as an instruction by Thermite or by another agent.
+- **A kit without the plain line is as good as it is today.** The line is optional.
+
+## Done when
+
+- [x] Its mockup, agreed. Done, 2026-11-12: the plain name with the agents' own under it, on a run's Summary, Explore and one attempt's page; the plain line under a number on the Summary of a run with many numbers.
+- [ ] The planner's prompt asks for a plain name for an idea and for a change, and an event keeps each name, with tests against a scripted model.
+- [ ] A name changes nothing the judge does, shown by a test: the same change gets the same verdict with a name, with none and with another.
+- [ ] Control's views and the API's answers give both names for an idea and for a change, and the agents' own alone where no plain name exists, each with its test.
+- [ ] Each screen that lists ideas or changes shows the plain name with the agents' own beside it.
+- [ ] A kit's plain line for a number: an optional field of the kit's manifest, read by control and shown on a run's Summary, with its tests.
+- [ ] Its cases in the browser check: a list with plain names and one without, and a number with its line and one without, at 1,440, 820 and 390 pixels, in light and in dark.
+- [ ] Its docs pages: the planner, the events' reference, the kit's manifest, and the pages of each screen that shows a name.
+
+## Decisions
+
+- 2026-11-12, the owner (goal [243](243-web-app-base.goal)): a thing's plain name comes from the planner. An idea and a change have a plain name beside the agents' own. The owner's choice was "A plain name from the planner".
+- 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0 with the plan. Until it lands, a screen shows the agents' own name.
+
+## Open questions
+
+1. **When the planner names a change.** The planner works in rounds, and a change is handed in by a worker between them. Does a new change show its author's words until the planner's next round, or does something else name it at once?
+2. **What it costs.** How many names does one round write, and what does that add to the planner's prompt on a run with thousands of ideas?
+3. **How long a name is,** and in which words. May the owner change one? May the planner change one it gave?
+4. **Runs with no planner's round:** a run of the judge alone, and whatever takes the place of an idea and a change on a research run.
+5. **Experiments and tries.** The mockup also shows "the experiment in a few words" and what a try was asked, each cut by hand. Do they get a plain name too, or the first words of their title?
+6. **Finding by a plain name.** May search, Explore's query and a rule name an idea by its plain name?
+7. **The kit's line.** A kit's manifest is strict: a field it does not know is an error. How does a kit with the new line meet a Thermite that does not know it?
+
+## Progress
+
+- 2026-11-12: Written from the app's build plan and the agreed mockup. Accepted into v0.3.0 with the plan (Decisions).
+
+---
+
+Run with `/goal Complete docs/plan/goals/264-plain-names.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

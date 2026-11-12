@@ -59,13 +59,13 @@ The owner chose step 1 for v0.3.0, after the screens. Until Thermy is there, the
 
 ### Dark
 
-v0.3.0's plan says light and dark follow the system. The brand guide is drawn in light alone. The owner chose one more board on the brand guide, the brand in dark, agreed before the app's parts are built.
+v0.3.0's plan says light and dark follow the system. The brand guide is drawn in light alone. The owner chose one more board on the brand guide, the brand in dark, and agreed its values on 2026-11-12: a warm dark page with a darker sidebar, the same flame button, a lighter flame for links and for what is chosen, and each state's colour made lighter on a dark tint. Each colour changes by its use (a background, a text, an edge, a mark of a picture), never one by one on a screen.
 
 ## 4. The order
 
 Goal 258 is first (the owner's choice). The stages below follow it; each ends with screens the owner can use at `/next`, on a real control. Goal 244 runs beside the stages, one ahead, as planned: it gives each stage its reads and moves each action out of page code.
 
-Beside goal 258, the plan proposes the work that its model does not change: the brand in the app (stage 0, with the dark board first), the sign-in (stage 1's first half) and the provider catalogue's back end. The owner has not yet said whether these run beside goal 258 or wait for it.
+Beside goal 258 goes the work that its model does not change (the owner, 2026-11-12): the brand in the app (stage 0), the sign-in (stage 1's first half) and the provider catalogue's back end. No screen that shows a run or a machine is built before goal 258.
 
 | Stage | What is built | Goals |
 | --- | --- | --- |
@@ -73,13 +73,13 @@ Beside goal 258, the plan proposes the work that its model does not change: the 
 | **0. The brand in the app** | The theme (the greys, the flame, the state colours, dark). The parts every screen uses, and no others: the frame with its sidebar and a run's top, state chips, changes with arrows, stat tiles with a history, rows, tables, facts, the need card, the tree, the split of a tool, the explorer's fields and results, forms and their "i", dialogs, Undo. The rules' budgets join the browser check, so a screen that breaks one fails. The three screens goal 243 built are rebuilt from their boards. | 243 |
 | **1. Sign in, and Home** | A user name and a password; tokens made and removed on a screen. Home with its needs, each with its choices. One attempt's page. | 261, 246 |
 | **2. Campaigns and a run** | The list of campaigns, a campaign, its Setup. A run's Summary, Results with its downloads, Steer, Watch, a run's Setup, the More menu. Goal runs and research runs. | 247, 248 |
-| **3. Explore** | The explorer for every kind of record, with saved views. A run's Usage. | a new goal |
+| **3. Explore** | The explorer for every kind of record, with saved views. A run's Usage. | [262](goals/262-the-explorer.goal); Usage is 247's |
 | | **A release candidate:** the daily work is in the app. | |
 | **4. Set up, and a new campaign** | Add a provider and a provider's card, the Claude Code sign-in, Models, Agents, Tools, Access. New campaign, another run, a campaign from a best change. | 245, 249 |
 | **5. Compute** | Machines and their devices, a machine, its checks and logs, add a machine, rented machines, a cluster: under the option chosen above. | 250 |
 | **6. Knowledge, and the rest of Setup** | Knowledge with its tree, search, an item, its settings. Spend, Storage, Exports, Backup, Logs, System. | 251, 252 |
-| **7. Search** | ⌘K over runs, campaigns, machines, settings, changes and notes. | a new goal |
-| **8. Thermy, step 1** | The corner, the chat over a page, its own screen with threads, the app's tools; it asks first. | 260 |
+| **7. Search** | ⌘K over runs, campaigns, machines, settings, changes and notes. | [263](goals/263-search.goal) |
+| **8. Thermy, step 1** | The corner, the chat over a page, its own screen with threads, the app's tools; it asks first. | [266](goals/266-thermy.goal) |
 | **9. The switch** | The app moves to `/`, and the old page code goes. | 253 |
 
 Why this order: within the screens, what the owner looks at every day comes first, so the app is useful after stage 3 and is tested in real use while the rest is built. With goal 258 first, that point comes later than it would have on today's model: the owner took that cost.
@@ -96,7 +96,7 @@ A screen that needs behaviour Thermite does not have yet shows what is true toda
 
 ## 5. New behaviour
 
-Each line is work beyond a screen and its reads. "With" names the goal it would join; "a new goal" means one is written on the owner's yes.
+Each line is work beyond a screen and its reads. "With" names the goal that holds it.
 
 | What | Touches | Size | With | In v0.3.0? |
 | --- | --- | --- | --- | --- |
@@ -104,29 +104,30 @@ Each line is work beyond a screen and its reads. "With" names the goal it would 
 | A reason is optional when a run is paused or closed, an experiment dropped, a change withdrawn | Core, the harness's record | M | 247 | Yes |
 | "Files the agents may change" has a default, the whole project; a win's least gain and the digest have their fields | Core, the builder | S | 249 | Yes |
 | A campaign's notes and kit are changed as one new version | Control | M | 247 | Yes |
-| A plain name from the planner, for an idea and a change | The planner's prompt, an event, control | M | a new goal | Yes; until then a screen shows the agents' own name |
-| Saved views in Explore | Control | S to M | the explorer's goal | Yes |
+| A plain name from the planner, for an idea and a change | The planner's prompt, an event, control | M | [264](goals/264-plain-names.goal) | Yes; until then a screen shows the agents' own name |
+| Saved views in Explore | Control | S to M | [262](goals/262-the-explorer.goal) | Yes |
 | Push now, for a run's best changes | A command, the supervisor | M | 247 | Yes |
 | Undo, for a dropped experiment, a kept message, a rule, an answered need | The harness, control | M | each area's goal | Where it is cheap; the rest later |
-| The agents ask the owner a question, as a need; the owner answers a note | The harness, control | M | a new goal | Yes (the owner) |
+| The agents ask the owner a question, as a need; the owner answers a note | The harness, control | M | [265](goals/265-agents-ask-the-owner.goal) | Yes (the owner) |
 | Downloads keyed by run; a campaign's results as one file | Control | M | 247 | Yes |
 | The provider catalogue, a key checked when it is added, device-code sign-ins | Control, core | L | 245 | Yes |
 | A Claude plan through Claude Code's long-lived sign-in | Control, perhaps the harness image | M | 245 | Yes |
 | A model checked with no machine; a provider in use removed | Control | M | 245 | Yes (the owner) |
-| Search over everything | Control | M | a new goal | Yes |
-| Defaults for a new run's agents, kept on control | Control | M | 250 | Yes |
+| Search over everything | Control | M | [263](goals/263-search.goal) | Yes |
+| Defaults for a new run's agents, kept on control | Control | M | 245 | Yes |
+| A mark of when the owner last looked, for Home's "since"; a message to everyone reaches the teachers; search finds a collection by its name | Control, the harness | S each | 246, 247, 251 | Yes |
 | The owner uploads a file to Knowledge; a note on a folder; short names for items | Control, the agents' prompts | M | 251 | Later |
 | The time and result of the last backup | The command line, control | S | 252 | Yes |
 | A run's records asked in SQL | A new store of a run's records | L | 258 | Yes, with goal 258 |
 | Machines as a pool, a run's own devices, a run with no machine | Control, the harness, the runner | L | 258 | Yes, first (the owner) |
-| Thermy | Control, fxbot's agent core | L | 260 | Step 1 (the owner); steps 2 and 3 later |
+| Thermy | Control, fxbot's agent core | L | [266](goals/266-thermy.goal) | Step 1 (the owner); steps 2 and 3 later |
 
 ## 6. What changes in the plans
 
 - **The release plan of v0.3.0:** what a tester gets, the goals' table and the order follow this plan.
 - **The UI refresh guide:** its sections on the navigation, a run's tabs and the rules for screens give way to the agreed mockup and its rules. The rest stays as the record of the review.
-- **Goals 245 to 252:** each goal's "What" is rewritten to the mockup's boards for its area, with the same five steps. Goal 250 is "Compute" in place of "Rigs and machines"; goal 251 is Knowledge, with exports under Setup; goal 252 is Spend, Storage, Logs and System.
-- **New goals,** each written and put on the roadmap: the explorer, search, plain names from the planner, the agents' question as a need.
+- **Goals 245 to 252** were rewritten on 2026-11-12: each goal's "What" follows the mockup's boards for its area, with the same five steps. Goal 250 is "Compute" in place of "Rigs and machines"; goal 251 is Knowledge, with exports under Setup; goal 252 is Spend, Storage, Logs and System.
+- **New goals,** written on 2026-11-12 and on the roadmap: the explorer ([262](goals/262-the-explorer.goal)), search ([263](goals/263-search.goal)), plain names from the planner ([264](goals/264-plain-names.goal)), the agents' question as a need ([265](goals/265-agents-ask-the-owner.goal)), and Thermy ([266](goals/266-thermy.goal)).
 - **Goal 258** is accepted into v0.3.0, first, and **goal 261** is accepted into v0.3.0 (both done on 2026-11-12). **Goal 260** is split: the harness on fxbot's agent core stays one goal, and Thermy becomes its own, in three steps.
 - **The settled decisions:** the app's words (machine, device, run; no rig on a screen), the brand, and Thermy.
 
@@ -139,4 +140,7 @@ Each line is work beyond a screen and its reads. "With" names the goal it would 
 5. **The two rows that were the owner's to place** (the agents' question as a need; a model checked with no machine): both in v0.3.0.
 6. **The rest of the plan:** agreed as written.
 
-Still open: whether the work that goal 258's model does not change (the brand in the app, the sign-in, the provider catalogue's back end) runs beside goal 258 or waits for it; and goal 258's own design, which is written next for the owner's yes.
+7. **Dark:** the values on the brand guide's dark board are agreed.
+8. **Beside goal 258:** the brand in the app, the sign-in and the provider catalogue's back end are built while goal 258 is designed and built.
+
+Still open: goal 258's own design, which is written next for the owner's yes.

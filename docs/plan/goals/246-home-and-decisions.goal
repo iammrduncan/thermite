@@ -1,60 +1,98 @@
 ---
 id: "246"
-title: "Home and decisions: what needs you in one list, each decision on one page"
+title: "Home and what needs you: one list of needs, each decided in its row"
 status: READY
 version: "0.3.0"
-depends_on: ["243", "244"]
+depends_on: ["243", "244", "258", "261"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 246 · Home and decisions: what needs you in one list, each decision on one page
+# 246 · Home and what needs you: one list of needs, each decided in its row
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal), [261](261-sign-in-as-a-person.goal)
 
 ## What
 
-A plan only; nothing of it is built.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 1 of [the app's build plan](../app-build-plan.md#4-the-order), after the sign-in of goal [261](261-sign-in-as-a-person.goal). Home shows runs and machines, so it is built on the model of goal [258](258-runs-own-their-resources.goal).
 
-1. **Home,** in the new dashboard: what needs the owner, what is at work, what happened, in that order. It keeps the Overview's shape, which works ([what works](../ui-refresh-guide.md#what-works-and-stays)).
-2. **Needs you is one list,** in the navigation and on Home, with one count. The other signals of today go: a decision is signalled in at least 11 places, and the counts beside them differ.
-3. **A decision has one page.** Its card holds the question, the cause, the evidence (the change's files, its measurements, the flaws its author declared, the judge's reasons) and what each choice does, "Do nothing" included. A row in a list opens it; it does not decide in one click.
-4. **Every kind of thing that needs the owner** uses the same card: a change to decide, an auditor's block, a guard that asks, a rig that is offline, a rig that is stuck (goal [091](091-needs-you-stuck-rigs.goal)), a provider whose sign-in ended. An offline rig's card offers a check and a restart before **Retire**.
-5. **An attempt's page:** its title is the change in words; its ID can be copied; its timeline and "every event" stay.
-6. **At work** is drawn once, as one part, used on Home, a campaign and a rig.
+**The screens**
+
+1. **Home:** one sentence that says how things stand, then three blocks in this order: what needs the owner, decided there; the runs at work, each saying whether its workers and its judge work or are idle; what changed since the owner last looked, one sentence for each run. With nothing to decide, the first block is not drawn and the sentence says so. An idle part of a run is the one coloured thing in its row. Home has no tiles, no status bar and no line of counts.
+2. **A need is one row,** with the same parts for every kind: who asks, the question in at most 16 words, at most one line on what the first choice does, and one or two buttons. A change to keep or drop says what each choice does, one line each. "Not now" puts a question aside. The row leaves when the owner answers: an Undo line stays where the answer can be undone, and one line of what happened where it cannot.
+3. **Every kind of need has that row:** a change to keep or drop, a change the auditor stopped, a sign-in that ended, a machine that went silent, a full disk, a try that has gone quiet, a goal that a person must judge, a run that asks whether its goal is possible, a grant to read knowledge that an agent proposes, a part of Thermite that is down. Stopping a quiet try asks nothing more: its work goes back to the queue. The facts behind a need are on the page its row opens: the attempt, the review, the machine.
+4. **One count of what needs the owner,** the same wherever it shows, with a silent machine counted. The needs are in order of who asks: runs at work first, then other runs, campaigns, machines, Thermite itself. A run's Summary shows the run's own needs in the same row (goal [247](247-campaigns-and-runs.goal)).
+5. **Home on a phone,** at 390 pixels: the same sentence and the same three blocks, in one column, with the same words. A top bar with the mark, the screen's name and Menu takes the navigation's place. This width is drawn first: what does not fit there is on no first view.
+6. **One attempt's page:** its sentence says what it changed and what the judge found; four facts say what it is; four rows are its measurement, each number with its unit and what it is compared with. Every other part is a closed fold whose line says its state: its steps and how long each took, the judge's words, the auditor, the files it changed, its events, its notes. A change that waits for the owner shows its need as its first row. **More** holds the one rare act: withdrawing its measurement (the judge measures it again) or the whole attempt (it can never be kept). The dialog asks once; nothing is typed.
+7. **What every screen does the same way** is used here first: a menu for a thing's rarer actions; an act confirmed by what is lost (nothing when it can be undone, with an Undo line; one question with two buttons when work is lost; the name typed when records are destroyed); what went wrong in one line with the one thing to do; an empty list as one line and its one button. The parts themselves are goal 243's.
+8. **The other states** are on the board beside Home (each common need as it shows there; after an answer; nothing to decide) and on the board of every kind of need.
+
+**What it needs from control**
+
+9. **There today:** Home's read (the needs, the runs at work, what happened), an answer as a command, one attempt, and the withdrawal of an attempt's evidence.
+10. **Needs a read:**
+    - A need with its choices and what each does, built once for Home, a run's Summary and Watch. Today a need's choices are made in page code, and its row links to an old page.
+    - The time each step of an attempt took, which only page code works out today.
+11. **New behaviour:**
+    - A mark of when the owner last looked, for "what changed since".
+    - Undo after an answer, where the harness can take the answer back.
+
+**What waits for another goal**
+
+- A question from the agents as a need: goal [265](265-agents-ask-the-owner.goal). Home shows that kind when it lands.
+- A change's plain name: goal [264](264-plain-names.goal). Until then the attempt's sentence is the agents' own words.
+- A reason added after a withdrawal: goal 247's work on optional reasons.
+- Search: goal [263](263-search.goal). Thermy's corner: goal [266](266-thermy.goal); until then the app shows no corner.
+- Home with nothing set up yet: goal [245](245-providers-and-set-up.goal).
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, at 1,440, 820 and 390 pixels, in light and in dark, with the rules' budget for Home and for a detail.
+5. Its docs pages, in the same commits.
 
 ## Why
 
-- "See what needs me, and decide" is the operator's first job. Today it has 6 ways in and 5 names.
-- The owner, 2026-10-16: every decision shows what is decided and what each choice does. On today's Overview one click decides, and what each choice does is on another page.
+- "See what needs me, and decide" is the operator's first job. Today it has 6 ways in and 5 names, and the counts beside them differ.
+- The owner, 2026-10-16: every decision shows what is decided and what each choice does. On today's Overview one click decides, and what each choice does is on another page. In the mockup each choice of a decision has its one line, in the row.
+- The owner, 2026-11-11, on the first mockups: "my eyes don't know where to first go or what is the most important thing". Home went from 626 words to about 120.
 
 ## Constraints
 
-- **A mockup first:** Home at three widths; a decision of each kind; an attempt.
-- **The sentences stay:** the words modules give them, through the API (goal 244).
+- **A mockup first.** Done: Home, its other states, Home on a phone, every kind of need, an attempt.
+- **The sentences stay:** the words modules give them, through the API (goal [244](244-one-door.goal)).
 - **A decision works on a phone,** at 390 pixels.
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] What needs the owner is one read of the API, with every kind and its evidence, and each decision's action has its route and its tool.
-- [ ] Home, the list in the navigation and each decision's page show the same things and the same count, shown by a test on the demo's data.
-- [ ] Each kind of item of goal 091 shows, and goes away by itself once the rig is well.
-- [ ] The browser check covers Home, a decision of each kind and an attempt, at three widths.
-- [ ] Pages: the Overview's and Needs you's pages, the pages on approving a change and on the auditor, and their screenshots.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] What needs the owner is one read of the API, with every kind, its choices and what each does, and each answer has its route and its tool, with tests there.
+- [ ] Home and a run's Summary show the same needs in the same row, and every place that shows the count shows the same number, shown by a test on the demo's data.
+- [ ] The owner answers a need of each common kind on Home, on a desk and on a phone, and sees the row leave with its line.
+- [ ] Each kind of item of goal [091](091-needs-you-stuck-rigs.goal) shows as a need, for a machine, and goes away by itself once the machine is well.
+- [ ] "What changed since you last looked" follows the mark of the owner's last look, with a test.
+- [ ] The owner opens an attempt from a need, reads its measurement and its folds, and withdraws its evidence.
+- [ ] The browser check covers Home, each kind of need, Home's other states and an attempt, at three widths, in light and in dark, within the rules' budgets.
+- [ ] Pages: Home's and Needs you's pages, the pages on approving a change and on the auditor, an attempt's page, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: a need is decided in its row on Home, with one line for what each choice does, where the plan had a page for each decision; a need is about a machine, never a rig; a run's line says whether its workers and its judge work or are idle, not what each does; "Do nothing" is not a choice, and "Not now" puts a question aside. The mockup answered the open question on Home's four tiles: one sentence says them. This goal now follows goals 258 and 261.
 
 ## Open questions
 
-- Whether Home keeps its four tiles of figures, or the lists alone say it.
+- Which answers the harness can take back, so which needs get an Undo line. The build plan gives Undo where it is cheap, and the rest later.
+- A choice that the run refused, or that expired: whether its row comes back with one line of cause. It is not drawn.
+- Whether the mark of the last look is kept for the person (goal 261) or for the browser.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

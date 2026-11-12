@@ -1,59 +1,92 @@
 ---
 id: "245"
-title: "Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow"
+title: "Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and its first model asked when it connects"
 status: READY
 version: "0.3.0"
 depends_on: ["243", "244"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 245 · Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow
+# 245 · Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and its first model asked when it connects
 
 **Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
-A plan only; nothing of it is built. The [UI refresh guide's section 7](../ui-refresh-guide.md#7-providers-and-first-run-set-up) has the design; this goal builds it. It is the first whole area of the new dashboard.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)); the [UI refresh guide's section 7](../ui-refresh-guide.md#7-providers-and-first-run-set-up) stays as the record of the review. The screens are stage 4 of [the app's build plan](../app-build-plan.md#4-the-order). The catalogue's back end (items 1 to 3) is built beside goal [258](258-runs-own-their-resources.goal), before the screens.
 
-1. **The registry:** a list of providers as data in `src/core`, made from fxbot's `providers-registry.json` (36 entries): each entry's name, one line, group, address, key page, the steps there, how its key is checked, and its quirks. Thermite adds which of its five provider types the entry is, whether its server answers OpenAI's Responses API, and which agent programs can use it.
-2. **The API:** every action as a REST route and an MCP tool, with no secret in any answer: the providers and the catalogue; add, change and remove; a provider's models; a sign-in's start, state, pasted code and cancel. Git access gets the same. The dashboard's old form routes for these call the same functions.
-3. **Add provider, as a catalogue:** search; the groups Sign in, Use a key, Your own server and Custom; a provider's card with its steps, its key and **Add**.
-4. **A key is checked when it is added,** with the provider's own check where its model list is open to anyone. A refused key saves nothing, and says why.
-5. **The model, and who gets it:** a picker with search, what a model can do, then **Give it to** a rig's agents. The rig's model check runs, and its result shows in place.
-6. **The ways in for v0.3.0:** a key (about 20 gateways, OpenAI, Anthropic); a Claude subscription's token, pasted as today, with its year counted and its card saying that the rig's images need Claude Code; ChatGPT's sign-in as today, in the new panel, kept through a restart of control; OpenRouter's sign-in, new.
-7. **Your own server:** a key is optional. A server only a rig can reach is listed by asking that rig. A server on a private network links to Settings › Network.
-8. **A provider's row:** its state, a plan's usage, which rigs' agents use it, and Replace key or Sign in again, Refresh models, Remove.
-9. **Git access as its own tab,** with the same kind of card and **Try it on a repository**.
-10. **Set up Thermite,** on a new control: Connect a model; your rig; give its agents the model and pass the model check; run the sample campaign. **Skip for now** on every step. The step is kept on control. A control that has a provider, a rig or a campaign never sees it.
-11. **Edit rig's model list offers only the pairs that work,** from the registry.
+**What control must do**
+
+1. **The catalogue:** a list of providers as data in `src/core`, made from fxbot's `providers-registry.json` when a release is built: each entry's name, one line, group, address, key page, the steps there, how its key is checked, and its quirks. Thermite adds which of its provider types the entry is, whether its server answers OpenAI's Responses API, and which agent programs can use it. Search also finds the hosts that [models.dev](https://github.com/anomalyco/models.dev) lists, from the copy that ships with the release. Today Thermite has five provider types of its own and no catalogue.
+2. **Every action as a REST route and an MCP tool,** with no secret in any answer: the providers with their state, their models and a plan's use (no REST route reads them today); the catalogue; add, change and remove; a provider's models, read again; a sign-in's start, state, code and cancel. Git logins get the same: add, try on a repository, remove (forms of the old pages today). The old pages' form routes call the same functions.
+3. **New behaviour,** each with its tests:
+   - **A key is checked when it is added,** with the provider's own check where its model list is open to anyone. A refused key saves nothing, and says why in one line.
+   - **A sign-in with a device code is held by Thermite's server:** the page asks for its state and finishes on its own. It is kept through a restart of control.
+   - **A Claude plan signs in through Claude Code's long-lived sign-in.** Thermite keeps the sign-in sealed, so runs go on while the owner is away. It may need a change to the harness image.
+   - **A model is checked with no machine:** one short question that must come back as a tool call. Today the check is a rig's.
+   - **A provider in use can be removed,** after one confirmation that says its runs stop at their next call. Today the removal is refused.
+
+**The screens**
+
+4. **Home, with nothing set up yet:** a model, a machine, a campaign, in that order, each with one button; only the next step's button is the main one. A step that is done says its state under its name. It takes the place of the set-up pages this goal planned. It needs one read: whether a model, a machine and a campaign exist.
+5. **Setup › Models:** the providers as one table: the provider's mark and name with what it is and how it is connected (a sign-in, a key, your own machine), its state in a word, its count of models, and the share of its limit that is used, where it has one. A row opens the provider. The one main button is **Add a provider**.
+6. **A provider:** its sentence, what it is, four facts, then its models that are in use, each with its calls; the others are one line that opens them in place. A provider with a key shows each model's price, and **Set a price** where the provider lists none. A main button shows only when something is to do (**Sign in again**). **More** is a menu: Check a model, Read its models again, Remove, and Replace the key for a provider with a key. The calls and the prices have their reads today.
+7. **Add a provider,** in fxbot's shape: one search over every provider, then the providers as tiles in four groups, sign-ins first: Sign in, Use a key, Clouds, On your machine. A server that Thermite finds running says so on its tile. Custom takes any server that speaks OpenAI's Chat Completions.
+8. **A provider's card,** as fxbot has it: its mark, its name, one line, then its way in.
+   - A device code: the link as a QR, the code, Copy, and how long the code is good for.
+   - A key: where to make it, in numbered steps, and one field.
+   - A server on the owner's machine: its address, filled in when it was found.
+   - A custom server: its address, a key if it needs one, its model IDs and its context window.
+   - Claude through Claude Code: two steps and one field for the code.
+
+   Once a provider is connected, the page asks for its first model. The same card signs a provider in again or replaces its key.
+9. **Setup › Agents:** what a new run starts with: the context default first, then a model for each agent. An agent is a name and a model; "No model" means off. One **Save**. One link opens effort and context for any agent, and one opens what each agent is told: the roles and their texts, read only (their read is there). The reviewers, the synthesizer and the final writer are under Advanced. Keeping these defaults on control is new: today a rig holds them. The build plan puts that work with goal [250](250-rigs-and-machines.goal); the screen is this goal's. A run's own agents are on the run's Setup (goal [247](247-campaigns-and-runs.goal)).
+10. **Setup › Tools:** the tool servers (MCP) the agents may call, apart from the models: the server, what it does, its count of tools, how many kits name it, its state. A row opens in place with its tools, its sign-in and Remove. **Add a server** asks for its address and how it signs in; Thermite reads its tools and calls none. Their routes are there today.
+11. **Setup › Access:** two blocks of rows. Git logins: the login, what it is, who uses it, its state; a row opens in place with its public half to copy, a try on a repository and Remove. Programs that may reach Thermite: the tokens that exist and what each may do, never the token. Making and removing a token on this screen is goal [261](261-sign-in-as-a-person.goal)'s work. The addresses on the owner's own network are one link, with the list and form of today.
+12. **The other states** are on the board beside each screen: a sign-in that expired, a key the provider refuses, a name that is taken, a list of models that could not be read, a tool server whose sign-in ended or that does not answer, a Git login that cannot read. Each is one line with the one thing to do.
+
+**What waits for another goal**
+
+- Which program a model runs in is asked on no screen: the model decides it. That rests on goal [260](260-fxbot-and-thermite.goal). Until then the catalogue says which pairs work, and a pair that does not is refused in one line at its field.
+- Setup's first screen, Spend and the rest: goal [252](252-usage-logs-settings.goal). Your account: goal 261.
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, at three widths, in light and in dark, with the rules' budget for each kind of screen. Add a provider is a tool; its card and a provider are details; Agents is a form.
+5. Its docs pages, in the same commits.
 
 ## Why
 
 - The owner, 2026-11-10, named fxbot's "v0.8.0 provider login setup system".
-- Today the owner knows each provider's address by heart, a wrong key passes where the model list is open, and the real test is on another page, later. Connecting a model and giving it to agents takes 2 areas and about 8 screens.
+- Today the owner knows each provider's address by heart, a wrong key passes where the model list is open, and the real test is on another page, later.
 - No REST route and no MCP tool adds a provider today.
+- Model providers, tool servers and access were one area. The owner asked for them apart (2026-11-12).
 
 ## Constraints
 
-- **A catalogue entry is a preset, not a new type.** No contract between control and a rig changes; a rig of an older version works with a provider added from the catalogue.
-- **Control seals every secret and never shows it again;** a rig gets only what it uses. Control never calls Anthropic with a subscription's token.
+- **A catalogue entry is a preset, not a new type.** No contract between control and a machine changes for it.
+- **Control seals every secret and never shows it again;** a machine gets only what it uses. No screen and no mockup shows a key, a code or a sign-in.
 - **A subscription is for the owner's own Thermite** (the decision of 2026-10-18). The same question is answered before any new sign-in is added.
-- **Control fetches no list while it runs** (the owner, 2026-11-10). The registry, and a copy of what each model can do, ship with the release; the registry is made from fxbot's file when a release is built.
+- **Control fetches no list while it runs** (the owner, 2026-11-10). The catalogue, and a copy of what each model can do, ship with the release.
 - **A logo ships only with its licence checked** and credited in CREDITS.md; a provider with none shows its first letter (the owner, 2026-11-10).
-- **A mockup first:** the catalogue, a card of each kind, the sign-in panel's states, the model step, the set-up pages.
+- **A mockup first.** Done: the agreed mockup has each screen and, beside it, its other states.
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] Each action of item 2 has its route and its tool, with tests there: a key in once and never out; a refused key saves nothing; removal refused while a rig's agents use the provider.
-- [ ] The owner adds a provider from the catalogue with a real key, gives its model to a rig and sees the model check pass, without leaving the flow.
-- [ ] A Claude subscription and a ChatGPT subscription are added in the new cards, and a ChatGPT sign-in under way is still there after control restarts.
-- [ ] OpenRouter's sign-in gives a working provider, by coming back and by a pasted code.
-- [ ] A model server that only a rig can reach is listed through that rig.
-- [ ] A new control shows Set up Thermite; a control with data does not; each step can be skipped; a restart lands on the same step.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] Each action of item 2 has its route and its tool, with tests there: a key in once and never out; a refused key saves nothing; a removal says what stops and then removes.
+- [ ] The owner adds a provider from the catalogue with a real key, is asked for its first model, and sees the model check pass with no machine, without leaving the flow.
+- [ ] A Claude plan is added through Claude Code's long-lived sign-in, and a run uses it with no person at a terminal.
+- [ ] A sign-in with a device code gives a working provider, and one under way is still there after control restarts.
+- [ ] A new Thermite shows Home with its three steps; each step that is done says its state; a Thermite with a model, a machine and a campaign shows Home.
+- [ ] The owner sets the agents a new run starts with, adds a tool server and a Git login, and tries the login on a repository, in the app.
 - [ ] The quick-start acceptance and the Claude Code, Codex and agents acceptance checks add their providers through the API, and pass.
-- [ ] Pages: Connect a provider, the two subscription pages, Choose a model, Give each agent its own model, the first-run tutorials, Who holds your keys, the REST and MCP references, a page for each provider in the catalogue or one page with all, and the changelog.
+- [ ] The browser check covers each screen of items 4 to 11 and its other states, at three widths, in light and in dark, within the rules' budgets.
+- [ ] Pages: Connect a provider, the two subscription pages, Choose a model, Give each agent its own model, tool servers, Git access, the first-run tutorials, Who holds your keys, the REST and MCP references, a page for each provider in the catalogue or one page with all, and the changelog.
 
 ## Decisions
 
@@ -63,18 +96,24 @@ A plan only; nothing of it is built. The [UI refresh guide's section 7](../ui-re
   - **A Claude plan signs in through Claude Code's long-lived sign-in,** so Thermite can use the plan without a person at a terminal each time. Whether Thermite runs that sign-in on its own server or takes what Claude Code gives on the owner's computer is to be found when it is built.
   - **Model providers and tool servers (MCP) are apart.** Setup has Models for the providers and Tools for the tool servers, each a part of its own; Access keeps the Git logins and the tokens for programs.
   The mockups' boards Models, Add a provider, the provider's card, Tools and Access are drawn this way (goal [243](243-web-app-base.goal)).
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: no step gives a model to a rig, since a provider's first model is asked for when it connects and a run's agents are the run's own; the set-up pages gave way to Home with three steps; a model is checked with no machine, and a provider in use can be removed (the owner: both in v0.3.0); the agents' defaults, Tools and Access are screens of this goal; the catalogue's back end is built beside goal 258. The mockup answered where Git access lives: Setup › Access.
 
 ## Open questions
 
-- Whether OpenAI gives Thermite's own app a device code for the ChatGPT sign-in. If it does, the card shows a code and a QR in place of the pasted address.
+- Whether OpenAI gives Thermite's own app a device code for the ChatGPT sign-in, and whether today's ChatGPT sign-in is a device code or a pasted address. The card shows a code and a QR where a provider gives one.
+- Which sign-ins v0.3.0 has beside a key and the Claude plan: ChatGPT's and OpenRouter's were this goal's plan; the card for a device code is drawn as fxbot's, which goal [260](260-fxbot-and-thermite.goal) studies.
+- Whether Thermite runs the Claude Code sign-in on its own server, or takes what Claude Code gives on the owner's computer (Decisions).
+- A model server that only a machine can reach. With goal 258 the agents' loops run in the control plane, so whether such a server can be used, and how its models are listed, is for goal 258's design.
+- When Home's three steps give way to Home: the mockup draws none done and says a done step shows its state; one or two done is not drawn. Whether a step can be put aside.
 - Hugging Face's and OrcaRouter's sign-ins need an app registered for Thermite: after v0.3.0, each a goal of its own.
-- A cloud's own sign-in (Vertex AI, Bedrock, Azure, Cloudflare) needs the rigs' model proxy and the agent programs to sign calls in new ways: after v0.3.0.
+- A cloud's own sign-in (Vertex AI, Bedrock, Azure, Cloudflare) needs the model proxy and the agent programs to sign calls in new ways: after v0.3.0. Whether the group Clouds shows before then.
 - One docs page for each provider, or one page with a section for each.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 

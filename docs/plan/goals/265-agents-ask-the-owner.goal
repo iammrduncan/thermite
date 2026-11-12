@@ -1,0 +1,86 @@
+---
+id: "265"
+title: "The agents ask the owner: an agent's question shows as a need, and the owner answers a note"
+status: READY
+version: "0.3.0"
+depends_on: ["246"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 265 · The agents ask the owner: an agent's question shows as a need, and the owner answers a note
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [246](246-home-and-decisions.goal)
+
+## What
+
+A plan only; nothing of it is built.
+
+What exists today:
+
+- **An agent can write a question down.** A field note has a kind, and one kind is a question (`src/core/journal.ts`). It sits among the run's other notes. Nothing tells the owner that it is there.
+- **The owner can write to the agents:** a message to everyone working, the planner, the advisors, a worker or one try. A message names no note, so it cannot be the answer to one.
+- **What a run asks the owner is a fixed set, asked by code:** a change to keep or drop, a review's pass, a proposal to end a goal run, and the rest of today's needs. None of them is a question in an agent's own words.
+- **The harness's own "asks" are another thing.** Its route of that name (`src/core/api/harness/runs.ts`) carries a rig's core's asks of its runners: a build, a measurement, files. It carries no question from an agent, so the question's way to the owner is new on the harness's side too.
+
+What this goal adds, as the agreed mockup draws it:
+
+1. **An agent's question for the owner is a need.** It shows on Home and on its run's Summary as the same row as every other need: who asks, the question in at most 16 words, and one button, Answer. The row opens in place with what is behind it: the note's whole text, why the agents ask and what they cite.
+2. **Answer opens Tell the agents,** with the question on top as the thing the owner answers. The owner writes the answer in the one box and sends it.
+3. **The answer belongs to the note.** The agents that asked read it at their next step. The note then shows its answer, and Tell the agents lists it with what came of it.
+4. **A note that is a question says whether it is answered.** In a run's Explore (goal [262](262-the-explorer.goal)) a question has its own colour in the band and in the rows, a view can list the questions nobody answered, and an open question says "Not answered", with Answer.
+5. **The need leaves when the owner answers.** One line stays where the answer cannot be undone.
+6. **The agents go on with other work** until the owner answers. A question that nobody answers ends nothing.
+
+## Why
+
+- Some questions only the owner can rule on, such as whether a kind of change may ship at all. Today such a question is one note among a run's notes, and nothing shows it to the owner.
+- The mockup's Home is "what needs you". A question the agents wait on needs the owner as much as a change to keep or drop does.
+- An answer that names its question is a record: who asked, what, who answered, when. A message that happens to follow a note is not.
+
+## Constraints
+
+- **No default caps.** No question ends a run, pauses it or stops a worker by default, and none runs out after a time. An unanswered question stays a need until it is answered.
+- **Agents never judge, and neither does an answer.** The owner's words reach the agents at their next step and never change a verdict. A change is kept or dropped through its own decision, as today.
+- **A question is a model's words.** It is shown as text. It is never run, and never read as an instruction by Thermite.
+- **Every agent starts fresh.** An agent does not remember that it asked. The answer reaches it in the context the harness builds.
+- **Hands-off by default stays.** Thermite asks the owner only where the owner chose to be asked, and Home stays short. A question is the agents' to ask, so this goal must say how Home is kept from filling with them (Open questions).
+- **The same row and the same read as every need** (goal [246](246-home-and-decisions.goal)): no second list, and one count.
+
+## Done when
+
+- [x] Its mockup, agreed. Done, 2026-11-12: the question as a need on Home and on a run's Summary, every kind of need as one row, Tell the agents with the question on top, and a question open in Explore's notes.
+- [ ] What is still unsure is read in the code and written here: whether an answered need can be undone in the harness.
+- [ ] An agent has one way to ask the owner. The question is an event of the run, and the agent's turn goes on, with tests against a scripted model.
+- [ ] The question is a need in control's one read of needs, with who asks, the question and what is behind it. Answer is an action with its REST route and its MCP tool (goal [244](244-one-door.goal)), each with its test.
+- [ ] The answer reaches the agents that asked at their next step, and the note says it is answered, with tests. A test shows that a question nobody answers pauses and ends nothing.
+- [ ] The screens, from the app's parts: the need's row on Home and on a run's Summary, Tell the agents with the question on top, and the note in Explore with "Not answered" and Answer.
+- [ ] Its cases in the browser check: a question that waits, the question open, and the question answered, at 1,440, 820 and 390 pixels, in light and in dark.
+- [ ] Its docs pages: field notes, steering a run, what needs you, the agents' tools, and the REST and MCP references.
+
+## Decisions
+
+- 2026-11-12, the owner (goal [243](243-web-app-base.goal)): the whole-app mockup is agreed. It draws the agents' question as a need, and an answer to a note.
+- 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): in v0.3.0. The plan left this row for the owner to place.
+
+## Open questions
+
+1. **How an agent asks.** A note of the kind question that its writer marks as for the owner, or a tool of its own. The mockup says that a question "that asks for the owner's ruling" is a need, so not every question is one.
+2. **Who may ask:** the workers, the planner, the teachers, the auditor, the review panel. What keeps Home short when many ask: a run's setting that turns questions off, one need for a run's questions, or nothing.
+3. **The short question.** A need's row holds at most 16 words, and a note holds up to 2,000 characters. Who writes the short line: the agent, as a field of its own?
+4. **Who reads the answer,** and for how long: the agent that asked at its next start, or every agent of the run. Is the answer a message kept until removed, or part of the note?
+5. **What the agents leave alone while they wait.** They go on with other work. Is what depends on the answer theirs to judge, or does the question name it?
+6. **Who may answer:** the owner alone, or an operator's token too. Whether Thermy may ever answer for the owner is asked in goal [266](266-thermy.goal).
+7. **Undo.** The build plan gives Undo to an answered need "where it is cheap". Can an answer be taken back once an agent has read it?
+8. **"Not now".** The need's row on Home has it. What does it do to the need, and for how long?
+9. **A question nobody answered, when its run ends:** does the need go with the run?
+10. **One word, two things.** A research campaign already has questions: the ones it is run to answer. What is the agents' question to the owner called on a research run's screens?
+
+## Progress
+
+- 2026-11-12: Written from the app's build plan and the agreed mockup. Accepted into v0.3.0 with the plan (Decisions).
+- 2026-11-12: The reading for the build plan left one thing unsure: whether the harness's own asks already carry agents' questions. They do not (What, "What exists today"), from the route's contract.
+
+---
+
+Run with `/goal Complete docs/plan/goals/265-agents-ask-the-owner.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

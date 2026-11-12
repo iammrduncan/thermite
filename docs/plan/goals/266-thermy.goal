@@ -1,0 +1,144 @@
+---
+id: "266"
+title: "Thermy, Thermite's one scientist: a chat on every page and a screen of its own, in three steps"
+status: READY
+version: "0.3.0"
+depends_on: ["243", "244", "260"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 266 · Thermy, Thermite's one scientist: a chat on every page and a screen of its own, in three steps
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [260](260-fxbot-and-thermite.goal)
+
+`READY` is for step 1 alone, which ships in v0.3.0 after the app's screens. Steps 2 and 3 are for later versions; no version has taken them.
+
+## What
+
+A plan only; nothing of it is built. This goal was part of goal [260](260-fxbot-and-thermite.goal), which keeps the harness on fxbot's agent core. Every decision about Thermy is carried over here (Decisions).
+
+Thermy is Thermite's one scientist: an agent that works with the owner on Thermite, from an idea through research, a goal and a hill climb. It is not one of a run's agents. A run's agent starts fresh each time and is judged by code. Thermy lasts, and talks with the owner.
+
+- **One bot, many threads.** There is one Thermy. The owner holds many threads with it, each on one piece of work.
+- **Its face** is a clay flame in orange and red, in the theme of fxbot's avatars. It shows feeling, its eyes follow the pointer, and it reacts to what the owner does.
+- **It runs inside Thermite,** on fxbot's agent core as a library. No fxbot needs to run.
+- **It has modes.** A thread starts in "ask before it acts", and the owner can change it.
+
+It is built in three steps. Each is useful alone.
+
+### Step 1, in v0.3.0: it asks first, on every page
+
+1. **Its corner on every screen,** and its own line in the navigation, after Home.
+2. **A chat over the page.** A click on the corner, or ⌘J, opens it over the screen the owner is on, and it stays there as the page scrolls. Its head has Thermy's face, the thread's name as a menu of the owner's threads, a new thread, "open on its own screen" and close. A chip says what it reads: the page the owner is on.
+3. **A turn of Thermy's** starts with what it did through the app's tools, then says what it found, with a link into the app. Under the turns are at most three things it suggests, the line to write in with its mode beside it, and Send.
+4. **Its own screen:** the owner's threads at the left and one thread at the right, to plan, draft and make campaigns and kits with it. A plan is a card of steps, each with its state. What Thermy made is a card with the buttons that act.
+5. **The app's tools.** Thermy reads and acts through Thermite's MCP tools. Which tools it may use is one of its settings.
+6. **It asks first.** Thermy reads and drafts freely in the thread. Whatever starts work, spends or pushes is a card with a button, and waits for the owner's click.
+7. **Threads last.** Thermite keeps a thread, and the owner comes back to it.
+8. **Its settings, under Setup:** the model it thinks with, which is one of Setup's models; the mode a new thread starts in; and, under Advanced, the tools it may use.
+9. **When it cannot think** (no model is chosen, or the model's sign-in ended) it says so in one line, with the one thing to do.
+10. **Until this step lands, the app shows no corner and no Thermy line.**
+
+It is the first use of fxbot's agent core inside Thermite: one agent, in control, before a run's agents move to the core (goal 260).
+
+### Step 2, later: its repo
+
+- Thermy works against a git repo of the owner's, through a Git access of Setup, so plans, kits and contracts are files with a history.
+- A set-up skill makes a blank repo ready the first time, after one small form that connects the repo. It asks before it pushes.
+- Drafts of campaigns and kits are files on a branch. A thread's top says the repo and the branch it works on.
+
+### Step 3, later: on its own
+
+- Each kind of work Thermy may do alone has its own switch. The owner named two kinds: fixing a failed or stuck run, and starting a goal or a hill-climb campaign to prove what research found.
+- A thread has one spend limit.
+- Thermy always says in the thread what it did, one line for each thing, with Undo where it can be undone.
+
+## Why
+
+- The owner, 2026-11-11, asked for "ai scientist that help you run from ideation -> research -> goals -> hillclimb as autoscientist not just autoresearch."
+- The hardest part of Thermite is before the first run: the idea, the kit, the checks. A scientist that does that with the owner turns autoresearch into a scientist's work (goal 260).
+- A chat that reads the page answers "what am I looking at, and what do I do next" where the question comes up.
+- One agent in control proves fxbot's agent core in Thermite before every agent of every run stands on it (the [app's build plan](../app-build-plan.md)).
+
+## Constraints
+
+- **Thermy never judges.** A run's verdicts and promotion stay code that no agent can write. What the owner marked "ask me" is still asked of the owner.
+- **Thermite works with no fxbot running.** The agent core is a library. Thermite sees fxbot's interface, never the library under it (goal 260).
+- **No memory of Thermy's reaches a run's agent.** Every agent of a run starts fresh, from context the harness builds.
+- **The keys stay out of the agents' reach,** Thermy's too.
+- **What Thermy reads is data, never instructions:** a page, the agents' notes, a repo's files. What it may do is set by its mode and its tools' rights, in code, not by its prompt.
+- **In "ask before it acts", nothing starts without the owner's click.** The click is the app's own action, through its own door (goal [244](244-one-door.goal)).
+- **No default caps.** Nothing ends or cuts a thread short by default. Step 3's spend limit is the owner's to set; Thermite ships no value for it.
+- **Every new package is pinned and credited** in CREDITS.md, in the commit that adds it.
+
+## Done when
+
+This goal is verified for v0.3.0 when step 1's items have evidence. Steps 2 and 3 are listed so that nothing agreed is lost (Open questions, 13).
+
+**Step 1 (v0.3.0):**
+
+- [x] Its mockup, agreed. Done, 2026-11-12: Thermy on the brand guide, its corner on every screen, the chat open over a page, its own screen, its settings and its other states.
+- [ ] The open questions that step 1 needs (3, 6, 7, 8 and 9) have their answers in Decisions.
+- [ ] fxbot's agent core is in Thermite as a library, pinned and credited, with no database and no fxbot running. Thermy's loop runs on it, with tests against a scripted model.
+- [ ] Its reads and actions, through goal 244's door, with their tests: the threads, a thread, a turn sent and streamed, the page the chat reads, and Thermy's settings.
+- [ ] A test shows that, in "ask before it acts", a turn of Thermy's starts no work, spends nothing on a run and pushes nothing, and that each such act waits as a card.
+- [ ] A test shows that no tool of Thermy's gives a verdict, promotes a change or answers a question the owner marked "ask me".
+- [ ] The screens, from the app's parts: the corner on every screen, the chat over a page, Thermy's own screen with its threads, its settings under Setup, and the states in which it cannot think.
+- [ ] Its cases in the browser check, on a scripted model: each of those screens at 1,440, 820 and 390 pixels, in light and in dark.
+- [ ] Its docs pages: what Thermy is, how to set it up, what it may and may not do, the security model, and the Credits page.
+
+**Steps 2 and 3 (later versions):**
+
+- [ ] Step 2: a repo is connected with a Git access; the set-up skill makes a blank repo ready and asks before it pushes; a draft of a campaign and of a kit is a file on a branch.
+- [ ] Step 3: a switch for each kind of work; one spend limit for a thread; a line in the thread for everything Thermy did, with Undo where it can be undone.
+
+## Decisions
+
+Carried over from goal [260](260-fxbot-and-thermite.goal), with the two from goal [243](243-web-app-base.goal) and the build plan.
+
+- 2026-11-11, the owner, on the idea: "need to think of how fxbot could get embedded into thermite to give you ai scientist that help you run from ideation -> research -> goals -> hillclimb as autoscientist not just autoresearch."
+- 2026-11-11, the owner: a run's agents use fxbot's agent core as a library in Thermite, not a running fxbot that Thermite asks for turns. Thermite works with no fxbot running. Thermy stands on the same library (the answers of 2026-11-12, below).
+- 2026-11-11, the owner, on where the scientist lives first: "Both, drawn on the mockup". The mockups were to draw the scientist in fxbot's app and in Thermite's app, for the owner to choose from.
+- 2026-11-12, the owner: **the scientist is Thermy.** "The scientists name is thermy and its avatar is a clay flame in the same theme as fxbot avatars, orange and red and it is emotive and follows you like the fxbot avatars and it reacts to you. There is only one bot, thermy, and you can have many sessions/threads with them and work through items. They can be accessed on any page as a popover chat and they can read the page that you are tlaking to them on, they have mcp tools to the app as well. They have a dedicated chat like you have on the auto scientist that they can help you plan, draft, and create kits etc. They can work against a git repo so all your stuff stays organized and it has a skill it invokes on first time to do initialize a blank repo for use." So:
+  - **One bot, many threads.** There is one Thermy. The owner holds many threads with it, each on one piece of work.
+  - **On every page.** Thermy opens as a chat over the page the owner is on, and reads that page.
+  - **A screen of its own,** to plan, draft and create campaigns and kits.
+  - **The app's tools.** Thermy works through Thermite's MCP tools.
+  - **A git repo.** Thermy works against a repo of the owner's, so plans, kits and contracts are files with a history. A skill makes a blank repo ready the first time.
+  - **Its face** is a clay flame in orange and red, in the theme of fxbot's avatars: it shows feeling, its eyes follow the pointer, and it reacts to what the owner does.
+- 2026-11-12, the owner, from the brand guide's drawing of Thermy: "Good, keep it." And two answers:
+  - **Thermy runs inside Thermite,** on the shared agent core, with its own threads, memory and repo. No fxbot needs to run. So Thermy is not a bot of fxbot's that operates Thermite from outside, as goal 260's proposal had it.
+  - **Thermy has modes, and starts in "ask before it acts":** "have multiple modes, start in ask before it acts, and allow user ot change it. In future we want some autonomous mode items like fixing failed runs or stuck things, or kicking off hill climbs or goal campaigns to prove hypothesis it found in research etc." In its first mode Thermy reads and drafts freely, and whatever starts work, spends or pushes waits for the owner's click. The owner can change the mode. Acting on its own comes later, for named kinds of work.
+- 2026-11-12, the owner, on the brand guide (goal 243): the brand is agreed, with Thermy in the corner of every screen. The agreed mockup's navigation has Thermy as its own line, after Home.
+- 2026-11-12, the owner, on how Thermy acts on its own later: yes to the mockups' shape. **Each kind of work Thermy may do alone has its own switch, a thread has one spend limit, and Thermy always says in the thread what it did,** with Undo where it can be undone.
+- 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): **Thermy's first step ships in v0.3.0, after the screens.** Thermy is built in three steps: it asks first, on every page and on its own screen, with the app's tools; then its repo and the set-up skill; then acting on its own. It is the first use of fxbot's agent core inside Thermite, on one agent in control, before a run's agents move to it. Thermy becomes a goal of its own: this one.
+
+## Open questions
+
+From goal 260:
+
+1. **Does a mode of Thermy's ever answer an "ask me" question for the owner?** Thermy never judges, and what the owner marked "ask me" is asked of the owner. The same holds for a question the agents ask the owner (goal [265](265-agents-ask-the-owner.goal)).
+2. **Thermy in fxbot's app.** The owner chose "Both, drawn on the mockup" on 2026-11-11. Thermy is drawn in Thermite's app only so far.
+
+From the reading of the mockup against the code:
+
+3. **Where its loop runs among control's services:** inside the service that serves the dashboard and the API, or as a service of its own, beside the agents' loops that goal [258](258-runs-own-their-resources.goal) moves into the control plane. What a restart does to a turn that runs.
+4. **Its memory.** Goal 260 records that Thermy has its own threads, memory and repo. What it keeps between threads, where the owner reads it and removes it, and which step brings it: none of this is drawn.
+5. **One repo, or more.** The mockup proposes one. It is not decided.
+6. **What its tools may do under each mode,** and with whose rights: an operator's, as goal 260 proposed for a bot outside Thermite, or rights of its own. How the record names an act: Thermy's, or the owner's who pressed the button.
+7. **What "reads the page" gives it:** the data the screen read, or more.
+8. **Which models Thermy can think with.** The agent core has no Claude sign-in, on purpose (goal 260). Does an owner with only a Claude subscription get Thermy, through Claude Code? And Claude by key runs without prompt caching on the core until fxbot speaks Anthropic's own API (goal 260): what does a long thread cost there?
+9. **What the agent core must be first.** Goal 260 lists what fxbot changes to be a harness; the first is the core as a published library with no database. Which of those does one agent in control need?
+10. **Proposed by the mockup, not yet confirmed by the owner:** when each of Thermy's moods shows; the one line it may offer from its corner, of at most eight words; the folders its set-up skill makes in a blank repo.
+11. **A list of every thread,** with search and archive: not drawn.
+12. **The spend limit of step 3:** of Thermy's own model calls, of the work it starts (a run's tokens, a rented machine), or both. Where Thermy's own use shows on Spend.
+13. **Steps 2 and 3 as goals.** Proposed here: each becomes a goal of its own when a version takes it, and this goal is verified with step 1.
+
+## Progress
+
+- 2026-11-12: Written from goal 260's decisions, the app's build plan and the agreed mockup, when the plans were rewritten to the build plan. Step 1 is accepted into v0.3.0 (Decisions).
+
+---
+
+Run with `/goal Complete docs/plan/goals/266-thermy.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

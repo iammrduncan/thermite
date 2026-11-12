@@ -1,70 +1,109 @@
 ---
 id: "250"
-title: "Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow"
+title: "Compute: machines and their devices as a pool, a machine's page, and Add a machine"
 status: READY
 version: "0.3.0"
-depends_on: ["243", "244"]
+depends_on: ["243", "244", "258"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
-# 250 · Rigs and machines in the new dashboard: a rig's page in tabs, the agents' models first, Add a rig in one flow
+# 250 · Compute: machines and their devices as a pool, a machine's page, and Add a machine
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
-A plan only; nothing of it is built.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 5 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Rigs and machines"; it is **Compute**, a place in the navigation. It is built on the model of goal [258](258-runs-own-their-resources.goal): machines and their devices are a pool that runs share, and no screen shows a rig. What a rig's pages held went three ways: a run's agents and devices to the run's Setup (goal [247](247-campaigns-and-runs.goal)), the agents a new run starts with to Setup › Agents (goal [245](245-providers-and-set-up.goal)), and the machine itself to the screens below.
 
-1. **Rigs:** the table, with its counted filters, and one word for a rig's state everywhere ([the words](../ui-refresh-guide.md#one-word-for-each-thing)). A column that says the same in every row is left out.
-2. **A rig's page in tabs:**
-   - **Overview:** the sentence of state, what is at work, its runs, and what is wrong with it as one line that links to the check or the setting.
-   - **Agents:** each agent's model, effort, program and context, with fxbot's model picker (search, or type an ID), offering only the pairs of provider and program that work. It is what most visits to Edit rig are for, and it is 900 pixels down that page today.
-   - **Settings:** the rig's parts, its limits and its promotion rule, each group with its own **Save** and "what changes when you save".
-   - **Rig checks:** each check with one line and **Run it**, and its result in place.
-   - **Details:** its hardware, version, keys, runners and their use, and its figures of CPU, memory and disk.
-   - Edit rig as one page of about 45 controls goes.
-3. **A rig's menu** has words: Restart, Update to these images, Full reset, Retire, each with one line and typed confirmation where it can't be undone.
-4. **Add a rig as a set-up page,** with its steps named: the kind, the place, its size, review. A machine, a cluster or a GPU cloud can be added inside it, without leaving for Settings. When control can't set rigs up, the page says why in place of the form.
-5. **Settings › Machines:** computers, clusters and GPU clouds, each with what control found, its rigs and its actions. A GPU cloud's card shows what control spent there (goal [095](095-runpod-spend-on-providers.goal)).
-6. **Where a rig runs is asked in one place** in control's code, where 15 files find it today by looking in two or three stores.
-7. **The API for all of it** (goal [244](244-one-door.goal)): add a machine, a cluster, a GPU cloud; scan, trust, check, install; a rig on a machine or a cluster; a joined rig and its join command; stop, start, restart, remove; update to control's images. The route that redeems a join command leaves page code. The old form route that gives a rig a model, which no page shows since goal [203](203-machines-page.goal), goes.
+**The screens**
+
+1. **Compute, the pool:** every machine in one table: its name with what it is under it, its state as one word (Online, Setting up, Draining, Stopped, Silent), what runs on it now, and how busy it was in the last day. A row opens the machine. A state has colour only when it is wrong; then the row says why in the place of what runs on it, and Home has the need (goal [246](246-home-and-decisions.goal)). One line under the table leads to the cluster, to the machines rented by the hour and to the removed machines. Search comes from ten rows.
+2. **A machine:** its state and who uses it; what it is, in three sentences and three facts; its devices as rows (its kind, what it does now and for which run, its busy share of the last day); the runs on it. Which device is the judge's and which a worker's is set on the run's Setup, and read here. Checks and Logs are two links. One closed fold, Every detail, holds its hardware, its software and the dates of its keys; no key is ever shown. A machine that is well has no main button; one that is wrong has the one thing to do.
+3. **A machine's More:** Update, Drain, Restart, Stop, Change its size (in a cluster), Wipe, Remove. Each is confirmed by what is lost. Drain is done at once, with Undo. Restart and Stop are done at once: their jobs go back to the queue. Update asks once and says what waits for the running jobs. Remove asks once, with nothing typed: the records stay, and the machine can be added again. Wipe asks for the machine's name.
+4. **A machine's checks:** three rows: what the check proves in plain words, its own name under it, its result as one word (Passed, Failed, Not run), and when. One button, **Check again**. A check that failed says the one thing to do in its row. On a machine at work, Check again is refused in one line. The model check is not here: it is a provider's and a run's.
+5. **A machine's log:** what happened on it, newest first: when, one sentence, and the device it happened on. One search and one filter, the kind of line. Its live figures and its daily reports are two closed folds.
+6. **Add a machine:** the first step is four answers: how the machine is reached, its address and user, its name. **Check it** opens one connection and reads the machine; nothing on it changes. Then one small screen each: what the check found and the devices on it, what gets installed and the owner's yes, the first report. The key a new machine shows at its first connection is compared before anything is installed. "In a cluster" asks for the cluster and a free place; "Rented by the hour" opens the form to rent one. Advanced holds the SSH port, a key of the owner's own, and the command to run on a machine that Thermite cannot reach.
+7. **Rented by the hour:** what is rented now and what it costs, then each machine with its state, when, and its cost. A machine that runs shows its cost an hour and its cost so far against its limit, and is also a row of Compute. To rent one is four answers and a price in the button. Stop is done at once, after its results have left. End it asks once: the machine and its disk are destroyed after its results are in Thermite. Two closed folds hold the account, with what Thermite spent there (goal [095](095-runpod-spend-on-providers.goal)), and the test machines.
+8. **A cluster,** as a source of machines: what it is, three facts, and its machines as rows, each in its place with its size against what the place allows. **Add a machine** puts one in a free place. More: Update its machines, Check the cluster, Change its places, Remove the cluster. One closed fold holds what the last check found.
+9. **The other states** are on the board beside these: a row in each state; a silent machine's page; the removed machines with Add it again; a stop under way; a cluster that cannot be reached; each refusal as one line where it happens.
+
+**What it needs from control**
+
+The reads below are named as control has them today, by rig. On goal 258's model each is by machine.
+
+10. **There today:** the machines with their state, what runs on them and the removed ones; restart, wipe with its confirmation, remove, add again, and a change of size in a cluster; a machine's checks and their results; for rented machines: rent, stop, start, end, limits, their log and the tests.
+11. **Needs a read or a route:**
+    - The busy share of a machine and of each device, hour by hour. Today control has the use of a rig's runners over a window, and no series by hour.
+    - Update, Drain, Stop, Start and the check of a machine's place. They are form routes of the old pages today.
+    - A machine's log as one read. Its events, the steps of an update, its reports and its figures are four reads today.
+    - Add a machine over SSH: scan, trust the key, check, install. Form routes of the old pages today.
+    - A cluster: the cluster, its places, its check, an update of all its machines. No REST route today.
+    - A rented account: its key, its check and its spend by day.
+12. **New behaviour:** the agents a new run starts with are kept on control. Today a rig holds them. The build plan puts this work here; its screen is Setup › Agents (goal 245).
+13. **Each action is one function with its route and its tool** (goal [244](244-one-door.goal)). The old pages call the same functions until [the switch](253-the-switch.goal).
+
+**What waits for another goal**
+
+- The pool itself: a machine that several runs share, a run with no machine, and a device that is not a GPU or a CPU, such as a board reached through a target driver. All of it is goal 258's.
+- A run's devices and models: the run's Setup (goal 247). A machine's place on the message bus: Setup › System (goal [252](252-usage-logs-settings.goal)).
+- A run's own lines: Watch (goal [248](248-live.goal)).
+
+**The five steps,** as for every area ([how a screen is built](../app-build-plan.md#how-a-screen-is-built)):
+
+1. Its mockup, agreed. Done, 2026-11-12.
+2. Its reads and actions, in control, with their tests.
+3. Its screens, from the app's parts alone.
+4. Its cases in the browser check, at three widths, in light and in dark, with the rules' budget: a list for the pool, the checks, the log and the rented machines; a detail for a machine and a cluster; a form for Add a machine.
+5. Its docs pages, in the same commits.
 
 ## Why
 
-- Edit rig is the longest form of the dashboard: 2.6 screens, about 45 controls, 16 sentences of rules.
-- "Add a rig" starts in Settings › Machines and ends under Rigs; "connect a model and give it to agents" ends 900 pixels down Edit rig.
-- A rig on a machine has no API at all: its checks, deploy, stop, start and update live in page code. A control without its pages can't join a rig.
-- The files of these pages are the most changed in control: a rig's page 27 commits, Add a rig 23, Edit rig 19, in two weeks.
+- The owner, 2026-11-10: "I have to go edit the rig, when really I'm editing a run against the resources given to it." A machine's page holds only what is the machine's.
+- The owner, 2026-11-10: "instead of Machine -> GPU... probably should be machine -> device(GPU)".
+- Adding a machine has no API today: its checks, set-up, stop, start and update live in page code. A control without its old pages can't add one.
+- The files of the old pages for this area are the most changed in control.
 
 ## Constraints
 
-- **A mockup first:** the table; each tab of a rig on a machine, a cluster and RunPod; Add a rig for each kind; Machines; at three widths.
-- **Machines stay in Settings** (the owner, 2026-11-04 and 2026-11-10), and Add a rig can add one without leaving.
+- **A mockup first.** Done: the pool, a machine, its checks, its log, Add a machine, the rented machines, a cluster, and their other states.
+- **No rig on a screen,** and no word of the machinery where a plain one serves: machine, device, run.
 - **The acceptance checks' stand-ins are never real machines or clusters.**
-- **A check that pauses a rig's runs says so before it runs.**
+- **A check never stops work unasked:** on a machine at work it is refused in one line, and an update says what waits for the running jobs before it starts.
+- **A rented machine is never ended before its results are in Thermite.**
+- **No key is shown** on any screen.
 
 ## Done when
 
-- [ ] The mockups are approved.
-- [ ] Each action of item 7 is one function with its route and its tool, with tests at the API; the old pages call the same functions.
-- [ ] The owner adds a rig of each kind, gives its agents models, changes a setting, runs each check, updates it and removes it, in the new dashboard.
-- [ ] The machines, cluster, rig deploy and RunPod acceptance checks drive the API, not the old forms, and pass.
-- [ ] The browser check covers the table, each tab and Add a rig, at three widths.
-- [ ] Pages: the rig's page, the rigs list, Add a rig for each kind, Give each agent its own model, Rig checks, Machines, and their screenshots.
+- [x] The mockups are approved. Done, 2026-11-12 (goal 243's Decisions).
+- [ ] Goal 258's parts that these screens stand on are verified.
+- [ ] Each action of items 10 and 11 is one function with its route and its tool, with tests at the API; the old pages call the same functions.
+- [ ] The owner adds a machine of each kind (over SSH, in a cluster, rented by the hour), reads its devices, runs its checks, reads its log, drains it, updates it, removes it and adds it again, in the app.
+- [ ] The busy share of a machine and of a device comes from figures control keeps by hour, with a test.
+- [ ] A rented account's card shows what Thermite spent there (goal 095).
+- [ ] The machines, cluster, rig deploy and RunPod acceptance checks, as goal 258 leaves them, drive the API, not the old forms, and pass.
+- [ ] The browser check covers each screen of items 1 to 9, at three widths, in light and in dark, within the rules' budgets.
+- [ ] Pages: Compute, a machine's page, its checks, its log, Add a machine for each kind, rented machines, a cluster, and their screenshots.
 
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: the area is Compute, where it was "Rigs and machines"; no screen shows a rig, and the order is machine › device; a rig's page in tabs and Edit rig are gone, with the agents' models on the run and on Setup › Agents; Add a rig is Add a machine; Compute is in the navigation, which takes the place of this goal's constraint that machines stay in Settings (the navigation the owner chose on 2026-11-10 and 2026-11-11, in goal 243); this goal now follows goal 258, which the owner put first.
 
 ## Open questions
 
-- Whether the operations every placement has (check, restart, update, remove) get one interface, or stay four after "where a rig runs" has its one place. The [code structure guide](../code-structure-guide.md#2-the-findings) says: stop at the one place, unless the interface falls out by itself.
+- Whether the operations every kind of machine has (check, restart, update, remove) get one interface in control's code, or stay apart. The [code structure guide](../code-structure-guide.md#2-the-findings) says: stop at one place that knows where a machine is, unless the interface falls out by itself. Goal 258's design may settle it.
+- What Add a machine installs and checks once a machine runs one light runner. The steps are drawn; what is in them, and whether today's three checks stay, follows goal 258's design.
+- How control keeps the busy share. The mockup worked it out from the runs' records; control must keep one figure for a machine and one for a device, by hour.
+- Whether Update is a machine's main button while an update waits, and whether the pool's list counts the machines that wait for one.
+- Whether Check again starts through the route for commands. It was not read.
+- Which kinds of device, beside a GPU and a CPU, v0.3.0 has. The mockup draws one as an example.
 
 ## Progress
 
 - 2026-11-10: Goal written from the review (goal 242).
 - 2026-11-10: Accepted by the owner; `READY`.
+- 2026-11-12: Rewritten to the agreed mockup and the app's build plan.
 
 ---
 
