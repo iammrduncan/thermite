@@ -1,0 +1,84 @@
+---
+id: "271"
+title: "A run's tables: views with fixed names and columns, filled from events, read through a role that can only read"
+status: READY
+version: "0.3.0"
+depends_on: ["270", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 271 · A run's tables: views with fixed names and columns, filled from events, read through a role that can only read
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [270](270-move-to-postgresql.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 5 of [goal 258's design](../goal-258-design.md).
+
+Control has no table of a run's attempts, trials or notes today. A run's record is on its rig. Control gets it as events over the message bus (`src/control/ingest.ts`, `src/control/events/apply.ts`) and folds them into views that it holds in memory and builds again at each start (`src/control/views/`). The views have caps: the newest 400 events of a run's history and the newest 100 tries, among others (a reading of the code on 2026-11-12). This step gives control a run's records as tables, for the whole run.
+
+1. **Tables of a run's records in control's PostgreSQL,** filled from the events control already has, by the one part of control that applies each event. They hold the whole run, with no cap.
+2. **A small set of views over them, with fixed names and columns:** attempts, their metrics, champions, ideas, experiments, trials, notes, events. The views are the contract. The tables under them may change.
+3. **A role that can read those views and nothing else.** It cannot write, and it cannot read another table of control's store.
+4. **A query is a select and nothing else,** with a time limit and a row limit, run through that role. Anything else is refused in words. This step gives the function that runs a select, with its tests. Its route, its MCP tool and its screen are goal [262](262-the-explorer.goal)'s.
+5. **The set has a version.** Saved views depend on the columns, so a change to a name or a column counts the version up and is announced: in the changelog and on the docs page of the tables.
+6. **The runs that exist are filled too,** from the stream of events, which control keeps for good. What a retention policy purged from the stream is not in the tables, and a later purge removes the same events from them.
+7. **What stays the same:** the views in memory and every screen that reads them. The rig still holds the run's own record.
+8. **What it lets the next steps do:** the explorer and the query as SQL (goal 262) can be built on the tables: stage 3 of [the app's build plan](../app-build-plan.md#4-the-order), and its row "A run's records asked in SQL". When the loops move to the control plane (goal [275](275-the-agents-in-the-control-plane.goal)), the same views read the run's own tables, and a saved view goes on working.
+
+The design's size for this step is L: a week or more, by the readers' first estimate.
+
+## Why
+
+- The owner chose plain SQL for the dashboard's query of a run, and no query language of Thermite's own (goal 258's Decisions).
+- The explorer must show the whole run, back to its start. The views in memory are cut to the newest records.
+- Filled from events, the tables exist while rigs still run underneath. The explorer does not wait for steps 6 to 9.
+
+## Constraints
+
+- **Read only.** No query changes a record or a verdict, whoever runs it. The role holds that in the database, and not only control's code.
+- **Agents never judge.** The tables are a copy for reading. No verdict, and no decision of the judge, is made from them.
+- **A query has a time limit and a row limit.** They bound one query's cost. They are not a cap on research, and they end no run.
+- **One run's query reads that run.** Who may query a run is who may read it today.
+- **The tables and the views in memory must agree.** Where both hold a record, a test compares them.
+- **Data is never lost.** The tables are built from the stream of events and can be built again from it.
+- **A running campaign keeps its screens.**
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] Each of the eight views exists, with its columns on a docs page, and a test holds the names and the columns against that page.
+- [ ] A test fills a run with more events and tries than the views in memory keep: the tables hold all of them.
+- [ ] For a run of the demo's data, the tables and the views in memory agree, with a test.
+- [ ] The role's tests: a select over the views answers; a write, a read of another table, and anything that is not one select are refused, each in words.
+- [ ] The time limit and the row limit each have a test that reaches the limit.
+- [ ] A run that existed before the step has its tables, filled from the stream, with a test. A retention policy's purge removes the same events from the tables, with a test, and `npm run acceptance:bus` passes.
+- [ ] The set has a version that a reader can ask for, it is on the docs page, and the goal records how a change is announced.
+- [ ] `npm run check`, `npm run acceptance:control`, `npm run docs:build` and `npm run docs:check` pass.
+- [ ] Pages: a reference page of a run's tables and their columns; the events reference where it says what control keeps.
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "postgres". The goal records with it: "The dashboard's query of a run is plain SQL: a select and nothing else, over a small set of tables for each run (attempts, their metrics, champions, ideas, experiments, trials, notes, events), with a time limit and a row limit, through a role that reads those tables alone. Those tables are a contract. Thermite writes no query language of its own."
+- 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed. It makes the contract a set of views, with a version.
+- Not yet answered by the owner, and kept as the design's proposal: the views are filled from the events control already has, first.
+
+## Open questions
+
+- **Filled from events first** (the design's proposal; the owner has not yet said). The other way is to wait for step 9, when the run's own tables are in the control plane.
+- Whether events carry enough to fill every column: a prompt's text, a trial's conversation, a measurement's every number. A column that events cannot fill waits for step 9, or is left out of the first version of the set.
+- Goal 262 asks for more than the eight: the agreed mockup's SQL screen also names the judge's jobs, prompts and model use. Which are in the first version.
+- How one run's query is kept to that run: a set of views for each run, or one set with the run as a column and a rule in the database.
+- Whether the screens of today read the tables in place of the views in memory, and when. The reading names two projections that disagree as this step's risk.
+- What the time limit and the row limit are, who may set them, and what a query that reaches one is told.
+- What a saved view is told when the set's version changes under it (goal 262 asks the same).
+- What filling the tables costs on a large run, at an upgrade and at each event.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/271-a-runs-tables.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

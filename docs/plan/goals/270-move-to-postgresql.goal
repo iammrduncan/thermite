@@ -1,0 +1,84 @@
+---
+id: "270"
+title: "The move to PostgreSQL: the copy at an upgrade, the SQLite file kept as the way back"
+status: READY
+version: "0.3.0"
+depends_on: ["269", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 270 · The move to PostgreSQL: the copy at an upgrade, the SQLite file kept as the way back
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [269](269-knowledge-search-on-postgresql.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 4 of [goal 258's design](../goal-258-design.md).
+
+After steps 1 to 3 a control can run on PostgreSQL, and the copy is proven. This step makes PostgreSQL control's store.
+
+1. **The copy at the upgrade.** A control that moves up has its SQLite store copied by the command of goal [268](268-postgresql-beside-sqlite.goal): every table, the counts checked, control's position in the stream of events carried exactly, the knowledge base's index built again. Control starts only when the counts match.
+2. **The SQLite file is kept as the way back.** The copy does not change it, and nothing removes it. The docs say how to go back to the version before, and what going back loses.
+3. **The old migrations end.** Control's 37 migrations on SQLite stay as they are, since the copy needs them to bring an older store to its last SQLite version first. No new one is added. PostgreSQL has its own list.
+4. **The install's new service.** The compose files (`compose.yaml`, and the release bundle's `containers/release/compose.template.yaml`) gain PostgreSQL, with its volume, its sign-in and a check that it is ready before control starts. Its image is pinned by digest.
+5. **Backup and restore are PostgreSQL's:** a dump before the bus's snapshot, as goal 268 built it.
+6. **The tests and the acceptance checks run on PostgreSQL.** The scripts that opened control's store file read another way.
+7. **The release notes and the docs** say what an upgrade does, how long control is away, what the machine gains, and how to go back.
+8. **What stays the same:** what control does, on every screen and route. A rig's own record stays on SQLite until step 9 (goal [275](275-the-agents-in-the-control-plane.goal)).
+9. **What it lets the next steps do:** more than one service may write to the store. That is what a run's tables with their read-only role (goal [271](271-a-runs-tables.goal)) and the door apart from the record (goal [272](272-the-door-apart-from-the-record.goal)) need. It lets no screen be built by itself.
+
+The design's size for this step is M: a few days, by the readers' first estimate.
+
+## Why
+
+- The control plane is services that share a store (goal 258's Decisions). SQLite takes one writer.
+- A run's records asked in plain SQL, through a role that can only read, need a database server.
+- One store in use means one set of tests, one backup and one upgrade.
+
+## Constraints
+
+- **A version upgrades the data of the one before in place** ([decisions](../decisions.md#releases-and-planning), 2026-10-31 and 2026-11-10). v0.3.0 takes a control's data from v0.2.0: the copy is that upgrade.
+- **A store that cannot be read is kept, never deleted** (the same decisions). A copy that fails leaves the SQLite file as it was, and control says why in words.
+- **Data is never lost.** The copy is checked by its counts before control starts on PostgreSQL.
+- **A running campaign goes on.** Runs go on while control is away for the copy, as they do at any restart of control today: a rig holds its run and its reports wait.
+- **The one-machine install stays one command,** with one more service.
+- **No secret in a tracked file.** The store's sign-in is made at the install, as the other secrets are.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] An upgrade test: a control of v0.2.x with data in every table moves up; the counts match; control goes on from the same event; the SQLite file is unchanged.
+- [ ] A failed copy has its test: control does not start on a store that is not whole, and says why.
+- [ ] Going back has its test, by the docs' own steps.
+- [ ] `npm run check` passes on PostgreSQL.
+- [ ] These acceptance checks pass: `npm run smoke:compose`, `npm run acceptance:quick-start`, `npm run acceptance:control`, `npm run acceptance:backup`, `npm run acceptance:bus` and `npm run acceptance:browser`.
+- [ ] The check of the images pinned by digest holds the PostgreSQL image.
+- [ ] PostgreSQL and the package that reaches it are in [CREDITS.md](../../../CREDITS.md), with their licences.
+- [ ] Pages: Install on one machine, [Back up and restore](../../_site/src/content/docs/how-to/operate/backup-and-restore.md), the settings reference, ports, volumes and secrets, [compatibility](../../_site/src/content/docs/reference/compatibility.md), the known limits, and the changelog's section on the upgrade.
+- [ ] [decisions.md](../decisions.md): the store of control, and where a rig's log lines are searched.
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "postgres". "Control's store moves from SQLite to PostgreSQL with this goal, since services that share a store need one that takes several writers" (the goal's words).
+- 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed. It says of the move: "a command copies a control's data at the upgrade, checks the counts, and keeps the SQLite file as the way back. The 37 migrations end there, and PostgreSQL starts its own list."
+- 2026-11-12, from the design, what the move costs: "the one-machine install gains a service; backup becomes a dump taken before the bus's snapshot; the fast tests need a PostgreSQL to run on (a proposal; the owner has not yet said)."
+
+## Open questions
+
+- Whether control runs the copy at its first start on the new version, or a person runs the command. The settled decision on upgrades in place points to the first.
+- How long the copy takes on a large store, and what control and the command line say in that time.
+- What going back loses: what was written after the move and is not in the stream of events, such as a setting, a token or a provider.
+- Whether a backup made on SQLite can be restored after the move, through the copy.
+- Whether the SQLite store's code stays after the move, for the fast tests or for the copy alone. This follows the owner's answer on a PostgreSQL for the fast tests (goal 268).
+- A control that runs on a cluster: the reading found no tracked manifest for control itself. Who gives it its PostgreSQL.
+- A deployment that brings its own PostgreSQL server (goal 268's question).
+- The rig's own record has 30 migrations of its own. The reading leaves them open; the design reads a rig's record into the run's tables once, and this plan puts that at step 9.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/270-move-to-postgresql.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

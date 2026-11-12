@@ -1,0 +1,81 @@
+---
+id: "269"
+title: "The knowledge base's search on PostgreSQL's own text search"
+status: READY
+version: "0.3.0"
+depends_on: ["268", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 269 · The knowledge base's search on PostgreSQL's own text search
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [268](268-postgresql-beside-sqlite.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 3 of [goal 258's design](../goal-258-design.md).
+
+The knowledge base's search is the last part of control that only SQLite can serve. It is SQLite's text search over passages: words and their stems, a ranking by weighted BM25 (the title three times the text, the context twice), excerpts with the matched words marked, the count of items that hold each word, and "did you mean" from the index's own list of words. The ranks are joined in TypeScript (`src/common/search/`, `src/control/store/kb/`: about 3,100 lines in 15 files, by a reading of the code on 2026-11-12). It has no vectors and needs none.
+
+1. **The same search on PostgreSQL's own text search,** for a control on PostgreSQL: an index of each passage's words, a ranking, excerpts, the counts for each word, and close words for "did you mean". The reading names PostgreSQL's parts for each: a `tsvector` with a GIN index, `ts_rank_cd`, `ts_headline`, and `pg_trgm` or `ts_stat`.
+2. **What a search asks and what it answers do not change:** the two modes, the fields of a hit, why it matched, its passage, the counts, `did_you_mean`. The REST route and the MCP tools keep their shapes.
+3. **What changes for the reader, and is said in the docs:**
+   - **The order of results.** PostgreSQL's ranking is not BM25, so the same search can give its hits in another order.
+   - **The "exact" mode's syntax.** Today it passes SQLite's own query syntax as written: a phrase in quotes, a prefix with a star, `NEAR`, `AND`, `OR`, `NOT`, groups, and a filter by column (`src/common/search/query.ts`). That syntax goes. The step gives the exact mode a syntax that PostgreSQL can serve, and a search in the old syntax is answered in words, as a query that cannot be read is today.
+4. **The index is built again, not copied.** The copy command of goal [268](268-postgresql-beside-sqlite.goal) copies the items; control builds their index on PostgreSQL.
+5. **A run's own research index.** A research run's index on its rig is built and read by the same engine (`src/harness/research/search/index.ts`), and the docs say "one engine". The rig's record stays on SQLite until step 9 (goal [275](275-the-agents-in-the-control-plane.goal)). This step says what holds until then, in the code and in the docs (Open questions).
+6. **A control on SQLite keeps today's search** until the move (goal [270](270-move-to-postgresql.goal)).
+7. **What it lets the next step do:** nothing of a control on PostgreSQL needs SQLite, so the move can be made. A rig's log lines, which were to be searched with SQLite's text search (goal [257](257-find-the-fault.goal), item 10), use this step's instead. It lets no screen be built by itself; Knowledge's search (goal [251](251-library.goal)) is built on it.
+
+The design's size for this step is L: a week or more, by the readers' first estimate.
+
+## Why
+
+- A control cannot leave SQLite while one part of it needs SQLite.
+- Agents and people both search the knowledge base. A change to what they find must be known and written down, not found by surprise.
+- PostgreSQL has a text search of its own. Thermite needs no second engine beside its store.
+
+## Constraints
+
+- **Data is never lost.** No item, note or stored file of the knowledge base changes. Only its index does.
+- **A search that cannot be read is answered in words,** never with an error of the database.
+- **Every query reaches the database as a value,** never as SQL, as today.
+- **What a run may read does not change:** a campaign's collections and grants hold for every search, as today.
+- **No package without need.** The design names PostgreSQL's own text search. A new package, if one is needed, is credited in [CREDITS.md](../../../CREDITS.md) in the same commit.
+- **A running campaign keeps its screens,** and its agents keep their search tools.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] The knowledge base's search tests pass on both stores. Where a result differs by the engine, the test says so and holds each engine's own.
+- [ ] A set of searches with their hits on both engines is kept as a test, and the goal records what changed in the order.
+- [ ] The exact mode's new syntax has its tests: each form it takes, and each form of the old syntax that it refuses, with the words of the refusal.
+- [ ] "Did you mean" and the counts for each word have tests on PostgreSQL.
+- [ ] A control on PostgreSQL starts with no SQLite file, with a test.
+- [ ] A research run's `search_research` and `search_corpus` pass their tests unchanged, and `npm run acceptance:agents` passes.
+- [ ] `npm run check`, `npm run docs:build` and `npm run docs:check` pass.
+- [ ] Pages: [the knowledge base's reference](../../_site/src/content/docs/reference/knowledge-base.md) (the ranking, the exact mode, "one engine"), the MCP tools' reference, and the changelog's note on the order and the syntax.
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "postgres".
+- 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed. It says of this step: "The order of results changes, since its ranking is another, and the \"exact\" search loses SQLite's own syntax."
+- 2026-11-12, from the design: one settled decision changes. A rig's log lines were to be searched with SQLite's text search (goal [257](257-find-the-fault.goal)), and will use PostgreSQL's. [decisions.md](../decisions.md) is changed when this step lands.
+
+## Open questions
+
+- What the exact mode's syntax is: PostgreSQL's own, or a small one of Thermite's that is turned into it. Goal 258 says Thermite writes no query language of its own for a run's records; whether that holds here too.
+- Whether the same words match. SQLite's stems and PostgreSQL's may differ, so a search can find other items, not only another order.
+- How far the weights carry over: the title three times the text and the context twice.
+- Whether a run's research index keeps SQLite's engine until step 9, with two syntaxes for an agent in that time, or the exact mode gets one syntax that both engines serve.
+- What "did you mean" costs on a large knowledge base, and which of PostgreSQL's two ways it uses.
+- Whether search over everything (goal [263](263-search.goal)) uses the same text search.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/269-knowledge-search-on-postgresql.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

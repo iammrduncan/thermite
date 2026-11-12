@@ -1,0 +1,80 @@
+---
+id: "277"
+title: "A runner with no container engine to set up: a study of microsandbox as the system that runs the work, carried in Thermite's program"
+status: PROPOSED
+version: "0.4.0"
+depends_on: ["275"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 277 · A runner with no container engine to set up: a study of microsandbox as the system that runs the work, carried in Thermite's program
+
+**Status:** `PROPOSED` · **Version:** [v0.4.0](../roadmap.md#v040) · **Depends on:** [275](275-the-agents-in-the-control-plane.goal)
+
+A proposal, from the owner's direction for v0.4.0. Nothing of it is built, and nothing of it is studied yet. A study comes first; no code is written before the owner agrees it.
+
+## What
+
+The owner, 2026-11-12: "for v0.4.0 we look at microsandbox as execution image system and bundling it into our program for distribution."
+
+In v0.3.0 the runner is one program in one image (goal [275](275-the-agents-in-the-control-plane.goal)). The container is the wall between a worker's experiment and the judge on a machine, so a machine still needs a container engine. This goal asks whether the runner can be a program that brings its own wall.
+
+Nothing is said here about what microsandbox is or does: it has not been read. The study reads it from its public repository, and it is credited in [CREDITS.md](../../../CREDITS.md), with its owner, its link and its licence, in the same commit as the study.
+
+The study answers:
+
+1. **What microsandbox is,** from its own repository and docs: what it runs work in, what a machine must have for it, which systems and processors it runs on, how it is kept up, and its licence. Whether its licence lets Thermite carry it, under Thermite's own (Apache License 2.0).
+2. **What the isolation self-test must prove with it.** Today's proofs rest on the container ([Isolation](../../_site/src/content/docs/explanation/isolation.md)): one user for each kind of work, an image that holds nothing else, dropped rights, the network's rules, and a fence around each device. For each proof: what gives it there, or what takes its place, and how the self-test shows it.
+3. **Devices.** How a GPU, and a device of another kind, reaches work inside it, and whether the judge's check that a device is quiet still holds.
+4. **The judge's clock.** Whether a measurement inside it is as steady as one in a container, by the run's own noise figure.
+5. **Whether the control plane's zones can use it too** (the design: "The same study can say whether the control plane's zones use it too").
+6. **How Thermite's program would carry it:** what is bundled, how large it is, how it is updated, and whether the runner can then be one program with its native parts. What a machine needs before the runner starts.
+7. **What it is compared with:** the two ways goal [258](258-runs-own-their-resources.goal) first named, users and namespaces that the runner sets up itself, and a sandbox for each job; and the runner in an image, which v0.3.0 is to have.
+8. **What it costs and in which order:** the parts, their sizes, what each leaves working, and what the owner decides.
+
+The study's result is a written design for the owner's yes, as goal 258's was. The goals that build it are written after that.
+
+## Why
+
+- The owner, 2026-11-10: "Could runners just be a single binary no docker/podman requirements?"
+- A machine with nothing to set up but one program is easier to add, and more kinds of machine can join the pool.
+- The wall is what makes "agents never judge" true on a machine. It is studied before it is changed.
+
+## Constraints
+
+- **Agents never judge.** A runner with no container must give the same wall as one with it (goal 258's Constraints). If the study cannot show that, the runner stays in an image.
+- **No code before the study is agreed.**
+- **Credit as you go:** every work the study reads or compares goes in CREDITS.md in the same commit, by its public name, with its licence.
+- **Nothing is stated about an outside work that was not read** in its own public sources.
+- **Keys stay in the control plane. A machine holds none.**
+- **A machine that runs a container engine today keeps working:** the runner in an image stays a supported shape unless the owner decides otherwise.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold.
+
+## Done when
+
+- [ ] The study is written, with an answer to each of the eight items, its sources named and credited in CREDITS.md, and `npm run docs:credits` run.
+- [ ] For each proof of today's isolation self-test, the study says what holds it without a container engine, or that nothing does.
+- [ ] The owner agrees the study, or drops the goal. The answer is recorded here.
+- [ ] If agreed: each part is a goal of its own on the roadmap, and this goal is done when they are.
+
+## Decisions
+
+- 2026-11-12, the owner, on [goal 258's design](../goal-258-design.md): "for v0.3.0 keep it one runner in an image so container stay s the wall. for v0.4.0 we look at microsandbox as execution image system and bundling it into our program for distribution."
+- 2026-11-12, from the design: "That is a goal of its own. The same study can say whether the control plane's zones use it too."
+
+## Open questions
+
+- Everything the study is asked: none of it is answered.
+- Whether the study needs a machine with a GPU to try it on. That needs the approval of whoever owns the machine.
+- Whether one program can hold the runner with its native parts, such as its terminal library and its device fence. A reading of the code on 2026-11-12 did not check it.
+- Whether memory and disk limits, which are kept by watchdogs today, would be the sandbox's own.
+- Which machines Thermite supports for a runner with no container engine, and whether a rented machine or a place in a cluster, which are containers already, gain anything from it.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/277-runner-without-a-container-engine.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

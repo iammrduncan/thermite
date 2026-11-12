@@ -259,7 +259,17 @@ The fixes after them, one version each, in the order to take them:
 **The dashboard.** The owner agreed a mockup of the whole app and [its build plan](app-build-plan.md) on 2026-11-12. Goal 258 is first; beside it go the base, the sign-in and the provider catalogue's back end. The screens follow in the plan's stages, with goal 244 one area ahead.
 
 - [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `IN_PROGRESS`
-- [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first; its [design](goal-258-design.md) waits for the owner's yes
+- [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first, by the ten steps of its agreed [design](goal-258-design.md); the screens start after step 8
+  - [267](goals/267-store-behind-an-interface.goal) Step 1: Control's store behind an interface whose calls can wait, still on SQLite · `READY`
+  - [268](goals/268-postgresql-beside-sqlite.goal) Step 2: PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore · `READY`
+  - [269](goals/269-knowledge-search-on-postgresql.goal) Step 3: The knowledge base's search on PostgreSQL's own text search · `READY`
+  - [270](goals/270-move-to-postgresql.goal) Step 4: The move to PostgreSQL: the copy at an upgrade, the SQLite file kept as the way back · `READY`
+  - [271](goals/271-a-runs-tables.goal) Step 5: A run's tables: views with fixed names and columns, filled from events, read through a role that can only read · `READY`
+  - [272](goals/272-the-door-apart-from-the-record.goal) Step 6: The door apart from the record: the dashboard and the API as a service of their own · `READY`
+  - [273](goals/273-a-run-owns-its-agents.goal) Step 7: A run owns its agents: their models and its workers are the run's own, changed on the run from its next trial · `READY`
+  - [274](goals/274-machines-as-a-pool.goal) Step 8: Machines and their devices as a pool: a scheduler in control places a run on today's machines · `READY`
+  - [275](goals/275-the-agents-in-the-control-plane.goal) Step 9: The agents in the control plane: the loops, each worker's zone and the judge's decisions, with a runner of one program in one image · `READY`
+  - [276](goals/276-the-rig-goes.goal) Step 10: The rig goes: its tables, its bus users, its commands, its set-up and its words · `READY`
 - [261](goals/261-sign-in-as-a-person.goal) Sign in as a person: a user and a password, in place of the owner's token typed into a box · `READY`
 - [244](goals/244-one-door.goal) One door for each action and each read: written once, for REST, MCP and the dashboard · `READY`
 - [246](goals/246-home-and-decisions.goal) Home and what needs you: one list of needs, each decided in its row · `READY`
@@ -360,6 +370,7 @@ The fixes after them, one version each, in the order to take them:
 
 **Rigs you can trust.** Setting up and removing rigs on machines and clusters is safe to repeat, and lanes are kept off the local network. Proposed.
 
+- [277](goals/277-runner-without-a-container-engine.goal) A runner with no container engine to set up: a study of microsandbox as the system that runs the work, carried in Thermite's program · `PROPOSED`
 - [032](goals/032-deploy-checks.goal) Checks before a rig is deployed · `PROPOSED`
 - [033](goals/033-slot-helper.goal) Slots made easy · `PROPOSED`
 - [034](goals/034-trustworthy-removal.goal) Removal you can trust · `PROPOSED`

@@ -191,6 +191,8 @@ This goal is done when the owner has chosen, and each part that goes on has a go
 
 - 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): **Thermy's first step ships in v0.3.0, after the screens.** Thermy is built in three steps: it asks first, on every page and on its own screen, with the app's tools; then its repo and the set-up skill; then acting on its own. It is the first use of fxbot's agent core inside Thermite, on one agent in control, before a run's agents move to it. Thermy becomes a goal of its own when the plans are rewritten to the build plan; this goal keeps the harness.
 
+- 2026-11-12, the owner, on [goal 258's design](../goal-258-design.md): **the agents work in the control plane,** Claude Code among them, each worker in a zone of its own there. "claude code should still work on the control in its user zone etc and still submits code/changes to machine runners etc... only thing that runs on machines is execution that needs the machine resourcees for that." So the two harnesses of this goal, fxbot's agent core and Claude Code, both run in the control plane, and a sign-in for a model never reaches a machine.
+
 ## Open questions
 
 1. **Who carries libfx?** The proposal is that fxbot hides it behind its own interface. The risk stays that a 0.0.x library of another party is under every run.

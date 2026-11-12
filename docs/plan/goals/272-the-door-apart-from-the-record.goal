@@ -1,0 +1,86 @@
+---
+id: "272"
+title: "The door apart from the record: the dashboard and the API as a service of their own"
+status: READY
+version: "0.3.0"
+depends_on: ["271", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 272 · The door apart from the record: the dashboard and the API as a service of their own
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [271](271-a-runs-tables.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 6 of [goal 258's design](../goal-258-design.md).
+
+Control is one process today (`src/control/main.ts`). It serves REST, MCP, both dashboards and the stream of changes; it takes what the rigs report and applies each event; and it runs 15 loops and six followers of the message bus (a reading of the code on 2026-11-12). A restart of it takes the screens away until every view in memory is built again from the stream of events. This step makes the first two of the design's four services.
+
+1. **The door:** the dashboard, REST, MCP and the stream of changes, as a service of its own. Its restart stops nothing.
+2. **The record:** the one writer of what happened. It takes what the machines report, writes the events and a run's tables (goal [271](271-a-runs-tables.goal)), and is the only part that applies an event. Its restart makes the screens lag until it is back. No work stops: reports wait on the bus, as they do today.
+3. **Both share the store and the bus.** The door writes what an action records: a setting, a command, a line of the audit log. The record writes what happened.
+4. **Everything that lives in the process's memory today gets a home:** a table, the bus, or one service's own memory, built again at its start. By the reading these are:
+   - the views of each rig's record (`src/control/views/cache.ts`), and the days and sizes of the events;
+   - the watched terminal screens and the keys that wait for them (`src/control/live/screens.ts`);
+   - the commands that are held and sent again;
+   - set-up work in flight, such as an update of a rig (`src/control/background.ts`), and the exchanges of pull mode;
+   - nine registries that are found through the store object.
+5. **The loops and the followers have one home each,** so that none runs twice. By the order of the reading, they go with the record.
+6. **A change that the record writes reaches an open screen** through the door's stream, with no reload, as today.
+7. **The install runs both,** each restarted alone: under compose, and in the release bundle.
+8. **What stays the same:** every route, tool and page, and their addresses. A person and a script see one control.
+9. **What it lets the next steps do:** the scheduler (goal [274](274-machines-as-a-pool.goal)) and the agents (goal [275](275-the-agents-in-the-control-plane.goal)) are services of the same kind, beside these two. It lets no screen be built by itself; every screen gains from it, since an update of the dashboard no longer stops anything.
+
+The design's size for this step is L: a week or more, by the readers' first estimate.
+
+## Why
+
+- The owner, 2026-11-10: "They can be separate services within the control plane... No one said monolithic is required".
+- The dashboard changes most often in v0.3.0. Its restart should cost nothing.
+- One writer of the record is easy to reason about. Two that apply the same event are not.
+
+## Constraints
+
+- **One writer of what happened.** No event is applied twice and none is lost, across a restart of either service.
+- **A restart of one service stops no run** (goal 258's Constraints).
+- **A running campaign keeps its screens:** while the record is away the door still answers, and what it shows lags.
+- **Keys stay where they are safe.** A key that signs a command or opens a secret is held by one service, and the goal records which.
+- **Sign-in holds across both:** one session for the pages, the app and the owner's routes, as today (goals [243](243-web-app-base.goal) and [261](261-sign-in-as-a-person.goal)).
+- **The one-machine install stays one command.**
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] The door and the record start and stop alone, under compose and in the release bundle.
+- [ ] A test restarts the door while a run works: reports are taken, events are applied, commands go out, and the owner's session holds.
+- [ ] A test restarts the record while a run works: the door answers, and every event reported in that time is applied once when the record is back.
+- [ ] Each thing of item 4 has its home in the goal's Progress, and `grep` finds no registry keyed by the store object (goal [256](256-layers-and-splits.goal), item 7).
+- [ ] Each loop and each follower runs in one service, shown on the health route (goal [257](257-find-the-fault.goal), item 6).
+- [ ] `npm run check` passes, and these acceptance checks: `npm run smoke:compose`, `npm run acceptance:control`, `npm run acceptance:bus`, `npm run acceptance:backup`, `npm run acceptance:quick-start` and `npm run acceptance:browser`, with its case of a change made on control that shows on the open screen.
+- [ ] Pages: How it fits together, How the parts talk, Install on one machine, ports, volumes and secrets, the settings reference, Troubleshoot (what a restart of each service does).
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)), on restarts: "They can be separate services within the control plane... No one said monolithic is required". The goal records with it: "A restart of the dashboard or the API stops no run."
+- 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed. Its control plane has four services, with PostgreSQL and the message bus beside them: the door, the record, the agents and the scheduler. This step makes the first two.
+
+## Open questions
+
+- Where the door reads a run from: the tables of goal 271, or views in memory of its own. Views of its own keep today's wait at each start of the door.
+- Which service owns each loop that is not about the record: the bus's users and settings, the knowledge base's upkeep, resets, rented machines, pull mode, quiet rigs, the disk, retention. The reading leaves it open, with the nine registries.
+- Set-up work over SSH and on a cluster runs for minutes. Which service holds it, and how it goes on after a restart, where today it ends with a line that says control restarted.
+- Where the watched terminals live until step 9 gives them to the agents' service.
+- How the record tells the door that something changed: through the store, or over the bus. Goal [244](244-one-door.goal), item 9, makes the stream say what changed.
+- Which service holds the keys that sign commands.
+- One image with two commands, or two images.
+- Whether the knowledge base's files and a rig's uploads are the door's or the record's.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/272-the-door-apart-from-the-record.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

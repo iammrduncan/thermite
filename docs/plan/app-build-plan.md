@@ -43,7 +43,7 @@ The mockup has no rig. Goal 258, which removes it, is proposed for a later versi
 | **B. Goal 258 first, then the screens (the owner's choice)** | The screens are built once, on the model they were drawn for. | Nothing to test for a long time; the old dashboard stays in use through all of it. |
 | C. Screens with rigs | Redraw Compute and a run's Setup. | Against the agreed mockup. |
 
-The owner chose B. Goal 258 is accepted into v0.3.0 and comes before every screen that shows a run or a machine. Its first step is its written design, for the owner's yes.
+The owner chose B. Goal 258 is accepted into v0.3.0 and comes before every screen that shows a run or a machine. [Its design](goal-258-design.md) is agreed (2026-11-12): ten steps, each a goal of its own (267 to 276). The screens start after its step 8, when the app's model is true at the API; its last two steps, which move the agents into the control plane and remove the rig, go on beside the screens and change none of them.
 
 ### Thermy
 
@@ -69,7 +69,7 @@ Beside goal 258 goes the work that its model does not change (the owner, 2026-11
 
 | Stage | What is built | Goals |
 | --- | --- | --- |
-| **Before the screens: runs own their resources** | The written design, agreed; then the control plane's services, the store, the light runner and the pool, in parts. A run's records can be asked in SQL. | 258 |
+| **Before the screens: runs own their resources** | Steps 1 to 8 of goal 258's design: the store behind an interface, PostgreSQL, a run's tables, the door apart from the record, a run that owns its agents, machines as a pool. Steps 9 and 10 go on beside the screens. | 258, as 267 to 276 |
 | **0. The brand in the app** | The theme (the greys, the flame, the state colours, dark). The parts every screen uses, and no others: the frame with its sidebar and a run's top, state chips, changes with arrows, stat tiles with a history, rows, tables, facts, the need card, the tree, the split of a tool, the explorer's fields and results, forms and their "i", dialogs, Undo. The rules' budgets join the browser check, so a screen that breaks one fails. The three screens goal 243 built are rebuilt from their boards. | 243 |
 | **1. Sign in, and Home** | A user name and a password; tokens made and removed on a screen. Home with its needs, each with its choices. One attempt's page. | 261, 246 |
 | **2. Campaigns and a run** | The list of campaigns, a campaign, its Setup. A run's Summary, Results with its downloads, Steer, Watch, a run's Setup, the More menu. Goal runs and research runs. | 247, 248 |
@@ -143,4 +143,6 @@ Each line is work beyond a screen and its reads. "With" names the goal that hold
 7. **Dark:** the values on the brand guide's dark board are agreed.
 8. **Beside goal 258:** the brand in the app, the sign-in and the provider catalogue's back end are built while goal 258 is designed and built.
 
-Still open: goal 258's own design, which is written next for the owner's yes.
+9. **Goal 258's design:** agreed, with the screens starting after its step 8, one runner in an image for v0.3.0, and the agents and the writing of code in the control plane.
+
+Still open: when the build starts. No code is written until the owner says start.

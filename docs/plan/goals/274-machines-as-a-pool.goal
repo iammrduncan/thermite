@@ -1,0 +1,88 @@
+---
+id: "274"
+title: "Machines and their devices as a pool: a scheduler in control places a run on today's machines"
+status: READY
+version: "0.3.0"
+depends_on: ["273", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 274 · Machines and their devices as a pool: a scheduler in control places a run on today's machines
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [273](273-a-run-owns-its-agents.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 8 of [goal 258's design](../goal-258-design.md). From here the app's model is true at the API, and the screens start (the owner, 2026-11-12).
+
+Today a run is started on a rig that the request names (`src/control/campaigns/start-run.ts`). Control has no queue of runs: a rig takes one run at a time, and a new run pauses the one at work. Inside a rig, a runner is held whole, in pools for the judge, for the workers or for both, and the judge goes first (`src/harness/judge/pools.ts`). No part of a device or of a machine is given (a reading of the code on 2026-11-12). This step puts a pool and a scheduler above that.
+
+1. **Control's record has machines and their devices.** The order is machine › device. A device has a kind: a GPU, or another kind that a target driver reaches. They are filled from what the rigs and their runners report today.
+2. **A run asks for devices,** for its judge and for its workers: any free device that fits, or devices that it names. They are the run's own, read and changed on the run, as its agents are (goal [273](273-a-run-owns-its-agents.goal)).
+3. **A run asks for a device whole, in turns, or shared, beside other runs.** The scheduler gives what is asked. No rule of the system forbids a choice. Sharing a device by slices of its time is not in the first version.
+4. **A scheduler in control gives each run its devices from the pool.** It takes the place of the rig that a request names, and of the rule that a new run pauses the one at work. Underneath, it picks the rig and the runners of today and sends today's signed commands. A run that has no device yet says what it waits for.
+5. **The words at the API are machine, device and run.** REST and MCP give machines with their devices and their state, what runs on each, and a run's devices. The app needs no answer that names a rig. The routes and tools that name a rig stay, for the old dashboard and for scripts, until step 10 (goal [276](276-the-rig-goes.goal)).
+6. **The docs say what each choice does to a measurement,** and the run's own noise figure shows it.
+7. **What stays the same:** the rig underneath, with its core, its supervisor and its runners; the judge's decisions on the rig; the wall between a worker and the judge; how a machine is set up.
+8. **What it lets be built:** Compute (goal [250](250-rigs-and-machines.goal)); New campaign and another run (goal [249](249-new-campaign.goal)); the devices of a run's Setup (goal [247](247-campaigns-and-runs.goal)). The stages of [the app's build plan](../app-build-plan.md#4-the-order) follow this step, and steps 9 and 10 go on beside them.
+9. **What waits for step 9** (goal [275](275-the-agents-in-the-control-plane.goal)), by the design: a run with no machine, and several runs on one machine. The API's model holds both from this step.
+
+The design's size for this step is XL: several weeks, by the readers' first estimate.
+
+## Why
+
+- The owner, 2026-11-10: "I'd like to be able to run a campaign against only a portion of a gpu or resource etc... so I can run say many campaigns on a single dgx spark."
+- The agreed mockup shows no rig. Its Compute is a pool, and a run's Setup holds its devices. The screens can only be built once on a model that is true.
+- With a scheduler, the owner starts a run and names what it needs, not where it goes.
+
+## Constraints
+
+- **Agents never judge.** The scheduler places work and gives devices. A verdict stays the judge's, in code the agents cannot write.
+- **The judge's measurement is protected as today** when a run asks for a device whole: the target driver's check that the device is quiet does not change.
+- **No rule forbids a choice, and none is hidden.** A shared device makes a measurement noisier; the docs and the run's noise figure say so.
+- **No default caps.** Nothing ends a run, or a run's wait for a device, by default.
+- **A running campaign keeps its screens and its machines.** No run at work is moved or paused by the step itself.
+- **A request that names a rig still works** until step 10.
+- **The isolation self-test passes,** unchanged: nothing of the wall moves in this step.
+- **Not every target is a GPU** ([AGENTS.md](../../../AGENTS.md#settled-decisions-summary)). Nothing of the model is tied to GPUs.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] Machines and their devices are read at the API, by REST and by MCP, with their state and what runs on each, with tests.
+- [ ] A run started with "any free device that fits" is placed, and one that names its devices gets them, with tests.
+- [ ] A run for which no device is free does what the goal's Decisions then say (Open questions), and says what it waits for, with a test.
+- [ ] A run's devices are read and changed on the run, with a test of when a change holds.
+- [ ] Each of the two ways to ask for a device has a test, and the run's noise figure is read at the API.
+- [ ] No answer that the app's screens need names a rig, held by a test over the contracts the app loads.
+- [ ] `npm run check` passes, and these acceptance checks: `npm run smoke:compose`, `npm run acceptance:control`, `npm run acceptance:runners`, `npm run acceptance:campaign`, `npm run acceptance:multigpu` and `npm run acceptance:browser`.
+- [ ] Pages: [Sharing a device](../../_site/src/content/docs/explanation/sharing-a-device.md), the glossary (machine, device, pool), the REST and MCP references, Start a campaign from the dashboard and from the command line, and the command line reference.
+- [ ] [decisions.md](../decisions.md): the names, where a run is "one campaign on one rig".
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)), on how a run shares a device: "This is more documentation and training than a constraint we should have in the system." The system lets a run take a whole device in turns, or a part of it beside other runs, for the judge too.
+- 2026-11-10, the owner, on the mockups' words: "instead of Machine -> GPU... probably should be machine -> device(GPU)... we may hav eother types of devices/components that need to be worked against like esp32 boards etc. we want to be able to assign devices to run experiments against vs just locked into gpus." The hierarchy is machine › device, and a device has a kind.
+- 2026-11-12, the owner, on [the design](../goal-258-design.md): the screens start after this step, when the app's model is true at the API; the last two steps go on beside them.
+
+## Open questions
+
+- **What "shared" and "several runs" mean while a rig is underneath.** A rig takes one run at a time and holds a runner whole. The design gives several runs on one machine to step 9. What the scheduler does at this step with a request that today's rig cannot serve: it waits, or it is refused in words.
+- **A run with no machine,** such as research that builds nothing, also waits for step 9. What the API and the app say of it until then.
+- **When no device that fits is free:** the run waits in a queue on control, which is new, or the start is refused in words. The design does not say.
+- Whether the scheduler is a service of its own from this step, as the design's table of services has it, or part of the record's service until step 9.
+- The order among runs that wait, and what is fair between campaigns. The reading names fairness and noise in measurements as this step's risks.
+- What a part of a device is: a share of its memory and of the machine's CPUs, by the design. How it is asked for and how it is held.
+- What happens to a worker's use of a device when another run's judge needs it. Inside a rig the judge goes first.
+- How today's shapes map to machines: a machine that holds several rigs, a rig of one core and runners on other machines, a place in a cluster, a machine rented by the hour that exists only while it works.
+- A device of another kind needs a target driver. Today there are two, for CPUs and for CUDA GPUs. No new driver is part of this step.
+- Which reads of Compute are this step's and which are goal 250's, such as the busy share of a device hour by hour.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/274-machines-as-a-pool.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

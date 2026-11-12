@@ -1,0 +1,122 @@
+---
+id: "275"
+title: "The agents in the control plane: the loops, each worker's zone and the judge's decisions, with a runner of one program in one image"
+status: READY
+version: "0.3.0"
+depends_on: ["274", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 275 · The agents in the control plane: the loops, each worker's zone and the judge's decisions, with a runner of one program in one image
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [274](274-machines-as-a-pool.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 9 of [goal 258's design](../goal-258-design.md), and the largest. **It will be split into parts when it is planned,** each a goal of its own that leaves a working system. The parts that can be seen today are named below.
+
+Today the work of a run is on its rig. The harness holds the run's record, the scheduler, the planner, the judge and the workers with their agent programs; the supervisor holds the teachers, the auditor and the review panel ([A rig's core and its runners](../../_site/src/content/docs/explanation/core-and-runners.md)). After this step they are in the control plane, and a machine runs one runner, which does only what needs the machine.
+
+**What moves to the control plane**
+
+1. **The loops:** the workers, the planner, the teachers, the auditor, the review panel and the other advisors, in the design's third service, the agents. The terminals of the agent programs are there too.
+2. **Each worker's zone:** its own user, its copy of the project, its shell and its agent program. Claude Code runs there, as do Thermite's own loop and fxbot's.
+3. **The control plane's own sandboxes.** The wall between two workers, and between a worker and the record with the judge's decisions, is now in the control plane. In v0.3.0 it is built as today's is: users, groups and a container that Thermite made. The isolation self-test moves with it and proves the same things ([Isolation](../../_site/src/content/docs/explanation/isolation.md)).
+4. **The judge's decisions,** in the design's fourth service, the scheduler: the queue of jobs, who holds a job, and the verdict. The judge's builds and its timed runs stay on the machine, and so does its clock, so a measurement's timing does not change.
+5. **The run's record.** What a rig keeps in its own SQLite (49 tables and 30 migrations, by a reading of the code on 2026-11-12) becomes tables of the control plane's store. The views of goal [271](271-a-runs-tables.goal) read them. The project's Git, the kits and the results' branches are handled there too.
+6. **Conversations are in the record,** not in a process's memory. A restart of the agents' service stops turns in flight; they go on from the conversation the record holds, and a worker's zone is kept. A restart stops no run.
+7. **No sign-in for a model reaches a machine.** The keys, the model proxy and a subscription's sign-in are in the control plane.
+
+**What stays on a machine**
+
+8. **A change goes to a machine as a commit,** and its output comes back as it runs. The runner does a build for the device, a measurement, and a worker's experiment on a device.
+9. **The runner is one program in one image:** one process on a machine, with no supervisor beside it and no core. It speaks to the message bus itself. The container stays the wall there, and the isolation self-test proves the same things on it. A machine still needs a container engine.
+
+**What it lets happen, and what holds through it**
+
+10. **A run with no machine,** such as research that builds nothing. **Several runs on one machine. No sign-in on a machine.** The first two are what the app's screens draw and step 8 could not make true: they show in Compute, in New campaign and in a run's Setup with no change to a screen.
+11. **Both shapes run side by side.** A run that started on a rig ends on it. A rig's own record is read into the run's tables once. The rig's containers stay until its runs have ended or moved. The rig's code goes at step 10 (goal [276](276-the-rig-goes.goal)).
+12. **A one-machine install** runs the control plane's services, PostgreSQL, the bus and one runner with compose. A site that wants every part of a run on its own hardware runs the control plane there.
+
+**The parts that can be seen today**
+
+| Part | What it is | What the reading says of it |
+| --- | --- | --- |
+| A. The link | A commit to a runner, and output as it comes. | Today's link carries one request and one answer, with no stream and no shell that stays open. |
+| B. The runner | One program in one image; the runner's supervisor joins it. | Today's runner is the whole harness image and a supervisor. |
+| C. The record | The rig's tables in the control plane's store; a rig's record read in once. | Every call into a store that answers at once becomes one that waits, as in goal [267](267-store-behind-an-interface.goal). |
+| D. The judge's decisions | The queue, the leases and the verdict in the scheduler. | They already sit behind one seam; builds and timed runs do not move. |
+| E. The zones and the sandboxes | A worker's user, copy, shell and limits; the self-test. | The wall is built from the container today. |
+| F. Thermite's own worker loop, the planner and the scheduler of trials | The loops that already ask for each file and shell tool as a request. | One worker loop already separates from the machine. |
+| G. The agent programs | Claude Code and the others in a zone, with their terminals. | A program with its own shell is its own loop, and edits and runs beside the files. |
+| H. The advisors | The teachers, the auditor and the review panel, from the supervisor. | Model calls with tools that only read. |
+| I. Conversations in the record | A turn in flight goes on after a restart. | A conversation lives in a process's memory today. |
+| J. Keys, the model proxy and Git | In the control plane alone. | Git's keys already suit the control plane. |
+
+The design's size for this step is XL: several weeks, by the readers' first estimate.
+
+## Why
+
+- The owner, 2026-11-10: "the core is super idle all the work is on the gpus, the agent loops require basically nothing."
+- The owner, 2026-11-10: "research goal... never builds stuff... so it doesn't actually need an allocation of rig/resource it can just run agent loops."
+- The owner, 2026-11-10: "IF we do this it simplifies the architecture a lot imo."
+- With the loops and the record in one place, a run no longer stops with one machine, and a machine serves many runs.
+
+## Constraints
+
+- **Agents never judge.** Measurement, verdicts and promotion stay in code the agents cannot write. A worker's zone cannot reach the record, the judge's decisions, the held-out data or another worker's zone, and the isolation self-test proves it in the control plane and on a runner.
+- **A worker's shell is code from a model.** It runs in its zone, as a user of its own, never as a service's user.
+- **Keys stay in the control plane, out of a worker's reach as they are today. A machine holds none.**
+- **A restart of one service stops no run.**
+- **The judge's clock stays on the machine.** No measurement is timed across the link.
+- **A worker does not wait on a machine for work its zone can do.**
+- **No default caps.** The limits of a zone on CPUs, memory and disk keep zones apart; they end no research.
+- **A running campaign keeps its screens. A run in progress is never restarted** by the move: a run on a rig ends there.
+- **Data is never lost.** A rig's record that is read in is checked, and the rig's own file is kept.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold. Each part ends with the system working.
+
+## Done when
+
+- [ ] The step is split into parts, each a goal with its own "Done when", and each is verified.
+- [ ] A hill climb runs from its start to a kept win with its loops and its workers' zones in the control plane and one runner on a machine. A research run runs with no machine.
+- [ ] Two runs work on one machine at one time, each with the devices it asked for.
+- [ ] The isolation self-test passes in the control plane and on a runner, and each proof it holds today has its place in one of the two.
+- [ ] Each service is restarted while a run works: the door, the record, the agents, the scheduler. The run goes on; a turn in flight goes on from the record; a measurement in flight ends on its machine and is reported.
+- [ ] A runner leaves and comes back while the judge measures on it: the job goes back to the queue with no verdict against the change.
+- [ ] No sign-in for a model, and no key, is on a machine, shown by a check of what a runner is given.
+- [ ] A run that started on a rig ends on its rig, beside runs of the new shape, and a rig's record is read into the run's tables with its counts checked.
+- [ ] These acceptance checks pass on the new shape: `npm run acceptance:judge`, `npm run acceptance:multigpu`, `npm run acceptance:terminal`, `npm run acceptance:claude-real` and `npm run acceptance:bus`; and, rewritten for it, `npm run smoke:compose`, `npm run acceptance:control`, `npm run acceptance:campaign`, `npm run acceptance:agents`, `npm run acceptance:steering`, `npm run acceptance:claude`, `npm run acceptance:codex`, `npm run acceptance:runners` and `npm run acceptance:quick-start`. The checks of the rig's shape pass until step 10.
+- [ ] `npm run check` passes at every part.
+- [ ] Pages: How it fits together, How the parts talk, Isolation, the security model, Who holds your keys, Install on one machine, the runner's set-up, the harness image's reference, the settings reference, and ports, volumes and secrets.
+
+## Decisions
+
+- 2026-11-12, the owner, on [the design](../goal-258-design.md) (goal [258](258-runs-own-their-resources.goal)): "claude code should still work on the control in its user zone etc and still submits code/changes to machine runners etc... only thing that runs on machines is execution that needs the machine resourcees for that. but agent loops and writing code etc can all happen in the control plane. Now control becomes a control plane... so it might need its own sandboxes and stuff..." So a worker's copy of the project, its shell and its agent program are in the control plane, in a zone of its own; a change goes to a machine as a commit; no sign-in for a model reaches a machine.
+- 2026-11-12: that answer took the place of the design's first proposal, which kept a worker's workspace and Claude Code on the machine. Goal 258's Constraints, written on 2026-11-10, still say that a worker's shell runs in a sandbox on a runner and never inside the control plane. The owner's answer is the later one, and it holds here.
+- 2026-11-12, the owner, on the runner: "for v0.3.0 keep it one runner in an image so container stay s the wall. for v0.4.0 we look at microsandbox as execution image system and bundling it into our program for distribution." The second half is goal [277](277-runner-without-a-container-engine.goal).
+- 2026-11-10, the owner, on restarts: "They can be separate services within the control plane... No one said monolithic is required".
+- 2026-11-12, from the design: the judge's decisions may leave the machine, by default. They are the scheduler's. A site that does not want that runs the control plane on its own machine.
+
+## Open questions
+
+- **Which of a worker's commands run in its zone and which go to a runner, and who says so:** the kit, or the kind of command. The design leaves it to this goal.
+- **How a zone is made:** one container that holds every zone as users, as a rig's core does today, or a container for each worker. What gives a zone its limits on CPUs, memory and disk.
+- **How much room the control plane needs** for every worker's zone at once, and the tools each project needs to be read and changed. What a one-machine install needs then.
+- **The link:** whether output as it comes goes over the message bus or over a connection of its own; how large it may be; what happens to a process a worker leaves running on a machine.
+- **What a commit means for what is not in Git:** model weights and large files that a build or a measurement needs on the machine.
+- **How a turn in flight goes on** for an agent program that keeps its own session files, such as Claude Code: the zone is kept, and what else.
+- **What takes the place of a rig's signed reports** as the record's proof of where an event came from, once no rig reports.
+- **How a rig's record is read in:** at the upgrade or when its runs end, and what becomes of the rig's 30 migrations. The reading asks whether the rig's tables become the run's tables or control goes on filling them from events; the design says the views read the run's own tables.
+- **Which agent programs move.** Goal [260](260-fxbot-and-thermite.goal) proposes fxbot's agent core and Claude Code alone; goal [255](255-one-way-to-run-a-program.goal) makes one way to run a program. Which of the two comes first, so that the fewest programs are moved.
+- **Rented machines and clusters:** how a machine that exists only while it works, a place in a cluster and a machine that calls out to control become runners.
+- **The order of the parts,** and which of them can be built beside the screens.
+- Whether one binary can hold the runner with its native parts is goal 277's question, not this step's.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/275-the-agents-in-the-control-plane.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

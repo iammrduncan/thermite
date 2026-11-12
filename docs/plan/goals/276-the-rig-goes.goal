@@ -1,0 +1,86 @@
+---
+id: "276"
+title: "The rig goes: its tables, its bus users, its commands, its set-up and its words"
+status: READY
+version: "0.3.0"
+depends_on: ["275", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 276 · The rig goes: its tables, its bus users, its commands, its set-up and its words
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [275](275-the-agents-in-the-control-plane.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 10 of [goal 258's design](../goal-258-design.md), the last.
+
+After step 9 a run works with its loops in the control plane and a runner on each machine, and a rig still exists underneath for the runs that started on one. This step removes the rig, as a thing and as a word. What is keyed by rig is keyed by run or by machine. The counts below are from a reading of the code on 2026-11-12 and were not checked again.
+
+1. **Its tables.** 35 of control's 68 ordinary tables are keyed by rig. Each becomes a run's or a machine's, or goes. A run's key is a run and a rig today, and an event's is a rig, its record and the event's number. No row of what happened is dropped, and a rig's history is kept.
+2. **Its bus users and subjects.** Every user of the message bus and most of its subjects are a rig's today (`src/core/link/`, `src/control/bus/consumers.ts`). They become a runner's and a run's.
+3. **Its commands.** All 37 kinds of command go to a rig. Each goes to a run or to a machine, becomes an action of a service of the control plane, or goes. The tokens of a rig become a runner's.
+4. **Its set-up.** What sets a rig up on a machine over SSH, in a cluster and on a rented machine sets up a runner: one program in one image. The compose files lose the harness and the supervisor and gain a runner (`compose.yaml`, `compose.runners.yaml`, `compose.lifecycle.yaml`, the release bundle). The one-container rig image (`containers/rig/`) becomes the runner's, or goes.
+5. **Its code.** The harness's and the supervisor's parts that step 9 moved or replaced are removed: the rig's own record with its 30 migrations, the relay of signed reports, the core's side of the link to its runners.
+6. **Its routes, its tools and its commands of the command line.** What names a rig at REST, MCP and `thermite` goes, or stays for a time under its old name beside the new one (Open questions), and the changelog says which.
+7. **The acceptance checks.** About 13 of them assume a rig as a core and a supervisor: the compose smoke, control, agents, steering, runners, Claude Code, Codex, cluster, rig deploy, rig image, RunPod, campaign and the quick start. Those that step 9 rewrote lose their rig-shaped twin here; the others are rewritten here. The checks of the bus, the leaf node, the judge, several GPUs and the terminals mostly stay, with a runner where they had a rig.
+8. **Its words.** The docs, the glossary, the command line's help, the errors and the events' sentences say machine, runner, device and run. By the reading, 366 of control's 463 files name a rig, 64 of core's 91, 22 of the command line's 31 and 458 of 673 test files.
+9. **The settled decisions.** [decisions.md](../decisions.md) and the summary in [AGENTS.md](../../../AGENTS.md#settled-decisions-summary) say what a deployment is after this step: the names, a rig as one core and its runners, what the harness and the supervisor reach.
+10. **What it lets happen:** one model in the code. A change to a run or a machine is made in one place, and no screen, route or page needs the word rig. It lets no new screen be built; the screens are built from step 8 on.
+
+The design's size for this step is XL: several weeks, by the readers' first estimate.
+
+## Why
+
+- The owner, 2026-11-10: "IF we do this it simplifies the architecture a lot imo." That holds only when the old shape is gone.
+- Two models in one code base cost twice at every change, and each new feature must choose one.
+- The owner chose to rebuild the back end with no rig, so that the screens are built once (goal 258's Decisions, 2026-11-12).
+
+## Constraints
+
+- **Data is never lost.** A run's record, a rig's history, its exports and its reports are kept, under a run or a machine. A store that cannot be read is kept, never deleted.
+- **Events keep the words they were written with** ([decisions](../decisions.md#releases-and-planning), 2026-10-31). An old event that names a rig is still read, under today's names (`src/core/names.ts`).
+- **A run in progress is never restarted.** No rig is removed while a run still works on it: the rig's containers stay until its runs have ended or moved (the design).
+- **A running campaign keeps its screens.** The old dashboard's rig pages go with the old dashboard (goal [253](253-the-switch.goal)), not before it.
+- **Agents never judge,** and the isolation self-test passes on a runner and in the control plane after every removal.
+- **No default caps.**
+- **The owner's OK first** for anything that changes a running deployment.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] No table, bus user, subject, command or token of control is keyed by a rig, shown by a test over the schema and over the bus's users file.
+- [ ] An upgrade test: a control with rigs, their history and their runs moves up, and each run and each machine holds what its rig held.
+- [ ] Old events that name a rig are read, with a test.
+- [ ] A machine is set up as a runner over SSH, in a cluster and as a rented machine, each from the app's Add a machine (goal [250](250-rigs-and-machines.goal)) and from the API.
+- [ ] The word rig is in no route, tool, page, error or sentence but where an old name is read; a check holds it.
+- [ ] Every acceptance check of [AGENTS.md](../../../AGENTS.md#checks) passes in its new shape, and AGENTS.md describes each as it then is. `npm run acceptance:bus`, `npm run acceptance:leaf`, `npm run acceptance:judge`, `npm run acceptance:multigpu` and `npm run acceptance:terminal` pass with a runner in the place of a rig.
+- [ ] `npm run check`, `npm run docs:build` and `npm run docs:check` pass, and the size, import and loose-ends lists are lowered.
+- [ ] Pages: every page that names a rig, and among them Kits and rigs, A rig's core and its runners, the install pages for a rig on a machine, on a cluster and on RunPod, Join a rig, Check a rig, the rig's lifecycle, the rig page's and the rigs list's references, the glossary, the settings reference and the signed commands' reference.
+- [ ] [decisions.md](../decisions.md), AGENTS.md's summary and [CONVENTIONS.md](../../../CONVENTIONS.md) say what is true.
+
+## Decisions
+
+- 2026-11-12, the owner (goal [258](258-runs-own-their-resources.goal)), on the app's build plan: "Goal 258 first." The back end is rebuilt with no rig, and the screens are then built once, on the model they were drawn for.
+- 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed. It answers what becomes of the rig: "Gone, as a thing and as a word. A machine has a runner. A run has agents and devices. What is keyed by rig today is keyed by run or by machine. Until the last step of the order below, a rig still exists underneath, and nothing new is written for it."
+- 2026-11-12, the owner: the screens start after step 8, and steps 9 and 10 go on beside them.
+
+## Open questions
+
+- **Whether a released version holds both shapes.** The design says a run that started on a rig ends on it, and v0.3.0 takes a deployment's data from v0.2.0. If steps 9 and 10 ship in one version, a deployment that moves up has runs at work on rigs and no rig's code. Either this step ships a version later than step 9, or the upgrade says what a run at work must do first.
+- Which old routes, tools and commands stay for a time under their old names, and for how long.
+- What a rig's name becomes where a person knows a machine by it: the machine's name, or a line of its history.
+- A machine that held several rigs, and a rig whose runners are on several machines: what each becomes in the pool, and whose its history is.
+- The reading listed control's set-up of rigs on machines, in clusters and on rented machines, with pull mode and the leaf node, and did not read them. Their size is not known.
+- What signs a command to a runner, and which commands a runner takes at all, once the loops are in the control plane.
+- The goals of [v0.4.0](../roadmap.md#v040) and later that are written about rigs: each is read again against the new model.
+- Whether this step waits for goal 253, since the old dashboard reads what this step removes.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/276-the-rig-goes.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

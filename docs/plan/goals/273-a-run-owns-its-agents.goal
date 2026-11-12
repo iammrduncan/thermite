@@ -1,0 +1,81 @@
+---
+id: "273"
+title: "A run owns its agents: their models and its workers are the run's own, changed on the run from its next trial"
+status: READY
+version: "0.3.0"
+depends_on: ["272", "258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 273 · A run owns its agents: their models and its workers are the run's own, changed on the run from its next trial
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [272](272-the-door-apart-from-the-record.goal), [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 7 of [goal 258's design](../goal-258-design.md).
+
+Today a rig owns the agents. Each agent's model, its effort, the program it runs in and its context window are set on a rig's Edit rig page, and so is the number of workers at a time. Control keeps them in tables keyed by rig, and a run takes whatever its rig has. This step makes them the run's own. The run is still sent to a rig underneath.
+
+1. **A run's record on control holds its agents:** for the workers, the planner, the teachers, the auditor, the review panel and the other advisors, each one's model or none, which means off; and the run's workers at a time.
+2. **A new run gets them** from its request, from the answers of its campaign's last run, or from the defaults for a new run's agents that control keeps (goal [245](245-providers-and-set-up.goal)).
+3. **A change is made on the run,** over REST and MCP, through the door of goal [244](244-one-door.goal). It holds from the run's next trial. The run's history says who changed what, and when.
+4. **Underneath, control tells the rig.** When a run starts or goes on at a rig, and when its agents change, control sends the rig the run's agents by the signed commands of today. The rig's own values stop being what the owner edits.
+5. **What stays the same:** the rig, its core and its runners; where each agent runs; the providers and their keys; the model check. The run's devices are still the rig's, until step 8 (goal [274](274-machines-as-a-pool.goal)).
+6. **What it lets be built:** the agents' part of a run's Setup (goal [247](247-campaigns-and-runs.goal), item 11): the workers' model, the planner's model, workers at a time, and under Advanced a name and a model for each agent. The screens themselves start after step 8 (the owner, 2026-11-12).
+7. **What it lets the next step do:** a run that carries its own agents can be placed on any machine that fits, since nothing of it is left on a rig.
+
+The design's size for this step is L: a week or more, by the readers' first estimate.
+
+## Why
+
+- The owner, 2026-11-10: "If I want to change the models, lane count, machine allocation... I have to go edit the rig, when really I'm editing a run against the resources given to it."
+- Two runs on the same machines can then differ in their models, with no edit between them.
+- It is the half of the app's model that needs no scheduler, so it can be made true and tested first.
+
+## Constraints
+
+- **Agents never judge.** A run's agents are who works and who advises. What counts as a win, and the judge's settings, are the contract's and are not changed here.
+- **No default caps.** A run's agents come with no limit of turns, time or spend that nobody set.
+- **A running campaign keeps its screens, and a run at work is not restarted** by this step or by a change of its agents. A change waits for the next trial.
+- **Data is never lost.** A run from before the step loses nothing of its record.
+- **Keys stay where they are.** A run names a model; it holds no key.
+- **The old dashboard works through all of it.**
+- **The isolation self-test passes,** unchanged: nothing of the wall moves in this step.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
+
+## Done when
+
+- [ ] A run's agents and its workers at a time are read and changed at the API, by REST and by MCP, each with a test.
+- [ ] A test changes a worker's model on a run at work: the trial in flight ends on the old model, and the next starts on the new one.
+- [ ] A test changes the workers at a time on a run at work, up and down.
+- [ ] Two runs of one campaign, one after the other on the same rig, run with their own models, with no edit of the rig between them.
+- [ ] The run's history holds each change, with who made it.
+- [ ] `npm run check` passes, and these acceptance checks: `npm run acceptance:control`, `npm run acceptance:agents`, `npm run acceptance:steering`, `npm run acceptance:claude`, `npm run acceptance:codex` and `npm run acceptance:browser`.
+- [ ] Pages: Give each agent its own model, the agent roles' reference, the REST and MCP references, the settings reference, and the glossary.
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "If I want to change the models, lane count, machine allocation... I have to go edit the rig, when really I'm editing a run against the resources given to it." The goal's first item follows it: a run's "workers at a time, each agent's model and its share of compute are the run's own, changed on the run, from its next trial or job."
+- 2026-11-10, the owner, from the whole-app mockups (goal 258): no screen shows a rig, and a run's Setup holds its agents, their models and the machines it may use.
+- 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed, and the screens start after its step 8.
+
+## Open questions
+
+- Which of a rig's settings become the run's and which stay the machine's. Goal [254](254-one-record.goal) counts 14 rig settings and makes each one entry; the two goals touch the same code.
+- A setting that restarts the rig today cannot hold "from its next trial". Which those are, and what the owner is told.
+- What the old dashboard's Edit rig does after this step: it changes the run at work on that rig, or it only shows.
+- A rig's advisors file and the rig's own model settings stand in today when no model is chosen. Whether a run falls back to them, or only to control's defaults.
+- The program a model runs in, its effort and its context window: the run's too, or set with the model. Goal [249](249-new-campaign.goal) takes the program out of the forms, and goal [260](260-fxbot-and-thermite.goal) proposes fewer programs.
+- What a run from before the step shows as its agents: what its rig had then, if control can still tell, or nothing.
+- What a run's agents are when it moves to another rig, or is sent a best change from another run.
+- Whether a change can be asked to hold at once, by ending the trial in flight, or always waits.
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/273-a-run-owns-its-agents.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -1,0 +1,75 @@
+---
+id: "267"
+title: "Control's store behind an interface whose calls can wait, still on SQLite"
+status: READY
+version: "0.3.0"
+depends_on: ["258"]
+created: 2026-11-12
+updated: 2026-11-12
+---
+
+# 267 · Control's store behind an interface whose calls can wait, still on SQLite
+
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [258](258-runs-own-their-resources.goal)
+
+## What
+
+A plan only; nothing of it is built. This is step 1 of [goal 258's design](../goal-258-design.md): the first of the four steps that move control's store from SQLite to PostgreSQL.
+
+Control's store is Node's built-in SQLite, opened once by one process, and every call into it answers at once. A store that several services share cannot answer at once. This step changes how the store is called, and nothing else.
+
+1. **An interface for control's store,** in `src/control/store/`. Each of its calls gives its answer later: the caller waits for it. The store has 376 methods today and none of them waits (a reading of the code on 2026-11-12; its counts were not checked again).
+2. **SQLite stays behind the interface:** the same file, the same schema, the same 37 migrations, the same copy before a migration. All of control's SQL is already in the store's folder, and it stays there.
+3. **Every caller waits.** By the same reading: about 1,100 calls from 170 files outside the store, about 320 of them in 50 files of the old dashboard's pages, and about 1,270 calls in the tests.
+4. **A unit of work that is one transaction today stays one.** Of about 30 places in control that open a transaction, about 15 are outside the store. Each still holds or drops its changes together.
+5. **The tests follow.** They keep a store in memory (`tests/helpers/control-store.ts`), and reach it through the interface.
+6. **What stays the same:** every route, tool, page, event and command; the store's version; backup and restore; the old dashboard and the app at `/next`. The rig's own record is not touched.
+7. **What it lets the next step do:** a second store behind the same interface (goal [268](268-postgresql-beside-sqlite.goal)). It lets no screen be built by itself: every later step of the design needs it.
+
+The design's size for this step is XL: several weeks, by the readers' first estimate.
+
+## Why
+
+- A store on a server answers over a connection, so a call must be able to wait. Today no call can.
+- Done first and alone, the change can be checked against a simple rule: no behaviour changes.
+- The design names it as one of its five hard problems: it touches about 170 files and most of control's tests.
+
+## Constraints
+
+- **No behaviour changes.** A test changes only to wait for the store. No test is weakened or removed.
+- **A running campaign keeps its screens,** and the old dashboard works through all of it.
+- **Data is never lost.** The schema and the migrations do not change in this step.
+- **What happened in one piece still happens in one piece.** Where two calls follow each other with nothing between them today, a wait must not let another request's work change what the second call relies on.
+- **The rules of shape hold:** all SQL stays in the store's folder, and the import and size checks pass.
+- **The public rules** of [AGENTS.md](../../../AGENTS.md#public-repository-rules).
+- The step ends with the system working, as every step of the design does.
+
+## Done when
+
+- [ ] The store's interface exists, and the types refuse a caller that does not wait for an answer.
+- [ ] No file outside `src/control/store/` reaches SQLite for control's store.
+- [ ] Each place that opens a transaction outside the store has a test that its changes are kept together or dropped together.
+- [ ] `npm run check` passes, and the count of tests is no lower than before the step.
+- [ ] These acceptance checks pass: `npm run smoke:compose`, `npm run acceptance:control`, `npm run acceptance:backup`, `npm run acceptance:campaign` and `npm run acceptance:browser`.
+- [ ] Pages: none for the people who use Thermite, since nothing they see changes. [CONVENTIONS.md](../../../CONVENTIONS.md) says how control's store is called.
+
+## Decisions
+
+- 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "postgres". Control's store moves from SQLite to PostgreSQL, since services that share a store need one that takes several writers. This step is the first of that move.
+- 2026-11-12, the owner, on [the design](../goal-258-design.md): agreed, and each step of it is a goal of its own.
+
+## Open questions
+
+- Whether the change is made in one piece or area by area. Area by area needs the old calls beside the new ones for a time.
+- How a transaction is given to a caller outside the store: the work moves into the store, or the interface takes the whole unit of work as one call.
+- Which places rely on two calls with nothing between them, and how each is found. The reading names a transaction held across a wait as this step's main risk.
+- The old dashboard's pages hold about 320 of the calls. Goal [244](244-one-door.goal) moves actions out of page code, and goal [253](253-the-switch.goal) removes the pages. Which of them is done before this step, to change less code that will go.
+- Goal [256](256-layers-and-splits.goal) makes control one object and ends the nine registries that are found through the store. Whether that comes before this step, or with step 6 (goal [272](272-the-door-apart-from-the-record.goal)).
+
+## Progress
+
+- 2026-11-12: Written from goal 258's design, which the owner agreed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/267-store-behind-an-interface.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

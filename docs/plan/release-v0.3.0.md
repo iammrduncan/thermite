@@ -27,13 +27,13 @@ It has two guides. Each says what was found, what changes, in what order, and wh
   - **Goal [258](goals/258-runs-own-their-resources.goal) comes first, in v0.3.0:** a run owns its agents and its share of compute, machines are a pool, and no screen shows a rig. The screens are built once, on that model.
   - **Sign-in is a user name and a password** (goal [261](goals/261-sign-in-as-a-person.goal)), in v0.3.0.
   - **Thermy's first step is in v0.3.0,** after the screens (goal [260](goals/260-fxbot-and-thermite.goal)).
-  - **The brand is drawn in dark** on the brand guide, for the owner's yes, before the app's parts are built.
+  - **The brand is drawn in dark** on the brand guide, and its values are agreed.
+  - **[Goal 258's design](goal-258-design.md) is agreed:** ten steps, each a goal (267 to 276). The screens start after its step 8. The agents' loops and the writing of code run in the control plane, each worker in a zone of its own, Claude Code among them; a machine runs one runner in one image, which does only what needs the machine. The runner with no container engine is a goal for v0.4.0 (277).
   - So v0.3.0 is larger than the plan of 2026-11-10. The goals' table and the order below were rewritten to the build plan on 2026-11-12, goals 245 to 252 were rewritten to the mockup, and goals 262 to 266 were added.
 - **2026-11-09, the owner:** new features are built on the branch `v0.3.0` and ship together; each fix to v0.2.0 is a version of its own ([decisions](decisions.md#releases-and-planning)).
 
 ## Still to choose
 
-- **Goal 258's design** ([the design](goal-258-design.md)): its answers to the goal's open questions, its ten steps, and where the screens start. It waits for the owner's yes.
 - **When the build starts.** The mockup and the build plan are agreed; no screen code is written until the owner says start.
 
 ## What a tester gets
@@ -87,6 +87,25 @@ From the mockup the owner agreed on 2026-11-12 and [the app's build plan](app-bu
 
 A goal that is taken in whole is marked as merged into the goal that takes it. Goals 131, 178 and 203 give up the items named and say so.
 
+### Runs own their resources
+
+Goal [258](goals/258-runs-own-their-resources.goal), by the ten steps of [its design](goal-258-design.md). Each depends on the one before it and leaves a working system. The screens start after step 8.
+
+| Goal | What it does |
+| --- | --- |
+| [267 · Step 1](goals/267-store-behind-an-interface.goal) | Control's store behind an interface whose calls can wait, still on SQLite |
+| [268 · Step 2](goals/268-postgresql-beside-sqlite.goal) | PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore |
+| [269 · Step 3](goals/269-knowledge-search-on-postgresql.goal) | The knowledge base's search on PostgreSQL's own text search |
+| [270 · Step 4](goals/270-move-to-postgresql.goal) | The move to PostgreSQL: the copy at an upgrade, the SQLite file kept as the way back |
+| [271 · Step 5](goals/271-a-runs-tables.goal) | A run's tables: views with fixed names and columns, filled from events, read through a role that can only read |
+| [272 · Step 6](goals/272-the-door-apart-from-the-record.goal) | The door apart from the record: the dashboard and the API as a service of their own |
+| [273 · Step 7](goals/273-a-run-owns-its-agents.goal) | A run owns its agents: their models and its workers are the run's own, changed on the run from its next trial |
+| [274 · Step 8](goals/274-machines-as-a-pool.goal) | Machines and their devices as a pool: a scheduler in control places a run on today's machines |
+| [275 · Step 9](goals/275-the-agents-in-the-control-plane.goal) | The agents in the control plane: the loops, each worker's zone and the judge's decisions, with a runner of one program in one image |
+| [276 · Step 10](goals/276-the-rig-goes.goal) | The rig goes: its tables, its bus users, its commands, its set-up and its words |
+
+A runner with no container engine to set up is goal [277](goals/277-runner-without-a-container-engine.goal), proposed for v0.4.0.
+
 ### The code's structure
 
 From the [code structure guide](code-structure-guide.md). Each is `READY`.
@@ -102,7 +121,7 @@ From the [code structure guide](code-structure-guide.md). Each is `READY`.
 
 The [roadmap](roadmap.md#v030) holds 38 more open goals for v0.3.0, from before this plan. The owner, 2026-11-10:
 
-- **v0.3.0 ships when goals 242 to 258, 261 to 265 and the first step of 266 are verified,** with whatever else is verified by then (the line of 2026-11-10 named goals 242 to 257; the owner's choices of 2026-11-12 added the rest). The rest moves on at its release, as at v0.2.0.
+- **v0.3.0 ships when goals 242 to 258 (with its steps, 267 to 276), 261 to 265 and the first step of 266 are verified,** with whatever else is verified by then (the line of 2026-11-10 named goals 242 to 257; the owner's choices of 2026-11-12 added the rest). The rest moves on at its release, as at v0.2.0.
 - **A goal with a screen is built in the new dashboard,** in or after its area's goal, never on the old pages: [093](goals/093-live-shows-reasoning.goal) after 248; [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) and [120](goals/120-research-kit-prep.goal) after 249; [134](goals/134-run-resource-use.goal) after 247; [123](goals/123-budgets-made-simple.goal) after 252.
 - **A goal with no screen goes on beside the refresh,** as before: the judge, rigs and images, costs, what a hill climb keeps.
 - **[089](goals/089-dashboard-performance.goal), faster pages,** measures the new reads after goal 244, where it would have measured the old pages.
@@ -113,7 +132,7 @@ The [roadmap](roadmap.md#v030) holds 38 more open goals for v0.3.0, from before 
 ```text
 242 the review, and the owner's answers
  │
- ├── 258 runs own their resources: its design, then its ten steps ───────────┐
+ ├── 258 runs own their resources: steps 1 to 8 (goals 267 to 274) ──────────┐
  │                                                                            │
  ├── 243 the base: the brand in the app, its parts, the frame ──┐             │
  ├── 261 sign in as a person ───────────────────────────────────┤             │
@@ -126,6 +145,7 @@ The [roadmap](roadmap.md#v030) holds 38 more open goals for v0.3.0, from before 
  │      245 Add a provider, 249 New campaign ── 250 Compute ── 251 Knowledge, 252 the rest of Setup
  │      263 search ── 264 plain names, 265 the agents ask the owner ── 266 Thermy, step 1
  │      253 the switch
+ │      beside the screens: 258's steps 9 and 10 (goals 275 and 276)
  │
  ├── 254 one record
  ├── 257 find the fault ── 255 one way to run a program
