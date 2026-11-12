@@ -22,11 +22,18 @@ It has two guides. Each says what was found, what changes, in what order, and wh
   - **v0.3.0 takes data from v0.2.0 alone.** A control from before it moves up through v0.2.x first.
   - **A rig's log lines reach control,** in control's own store.
   - **v0.3.0 ships when goals 242 to 257 are verified,** with whatever else is verified by then.
+- **2026-11-12, the owner,** from the mockup of the whole app and [the app's build plan](app-build-plan.md):
+  - **The mockup is agreed,** and the app is built from it.
+  - **Goal [258](goals/258-runs-own-their-resources.goal) comes first, in v0.3.0:** a run owns its agents and its share of compute, machines are a pool, and no screen shows a rig. The screens are built once, on that model.
+  - **Sign-in is a user name and a password** (goal [261](goals/261-sign-in-as-a-person.goal)), in v0.3.0.
+  - **Thermy's first step is in v0.3.0,** after the screens (goal [260](goals/260-fxbot-and-thermite.goal)).
+  - **The brand is drawn in dark** on the brand guide, for the owner's yes, before the app's parts are built.
+  - So v0.3.0 is larger than the plan of 2026-11-10, and the line "v0.3.0 ships when goals 242 to 257 are verified" no longer holds as written: the goals' table and the order below are rewritten to the build plan.
 - **2026-11-09, the owner:** new features are built on the branch `v0.3.0` and ship together; each fix to v0.2.0 is a version of its own ([decisions](decisions.md#releases-and-planning)).
 
 ## Still to choose
 
-**2026-11-12:** the owner agreed a mockup of the whole app (goal [243](goals/243-web-app-base.goal)). It differs from this plan in places: its navigation, a run's tabs, no rig on a screen, a sign-in with a user name and a password, and Thermy. [The app's build plan](app-build-plan.md) proposes how the app is built from it and what changes here; it waits for the owner's yes, and until then the sections below stand as written on 2026-11-10.
+**2026-11-12:** the owner agreed a mockup of the whole app (goal [243](goals/243-web-app-base.goal)). It differs from this plan in places: its navigation, a run's tabs, no rig on a screen, a sign-in with a user name and a password, and Thermy. [The app's build plan](app-build-plan.md) says how the app is built from it; the owner agreed it on 2026-11-12, with goal 258 first (Decided, above). The sections below still read as written on 2026-11-10 until they are rewritten to it.
 
 Nothing holds the build. What the owner still chooses is chosen from mockups, in each area's goal: the navigation's variant, a run's tabs, the words on the screens, and each screen before it is built ([rules for every goal](README.md#rules-for-every-goal)).
 

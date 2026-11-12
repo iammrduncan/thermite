@@ -1,20 +1,20 @@
 ---
 id: "258"
 title: "A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work"
-status: PROPOSED
-version: "later"
+status: READY
+version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
 # 258 · A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work
 
-**Status:** `PROPOSED` · **Version:** [later](../roadmap.md#later) · **Depends on:** [242](_completed/242-v030-review.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [242](_completed/242-v030-review.goal)
 
 ## What
 
-A proposal only; nothing of it is built or decided.
+Accepted by the owner on 2026-11-12, as the first work of v0.3.0's app. Nothing of it is built, and its design is not written yet.
 
 Today the order is machine, then rig, then campaign, then run. A rig owns the agents, their models, the lanes and the runners, and a machine belongs to one rig. This goal asks whether that order can turn around:
 
@@ -47,7 +47,10 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 
 ## Done when
 
-- [ ] The owner decides whether this goes on, from mockups and a written design with its costs.
+- [x] The owner decides whether this goes on. 2026-11-12: yes, and before the app's screens.
+- [ ] A written design answers the open questions below, with its costs and the order of its parts, and the owner agrees it. No code before that.
+- [ ] Each part of the design is a goal of its own, and each is verified.
+- [ ] The app's screens for Compute and a run's Setup are built on it, as the agreed mockup draws them (the [app's build plan](../app-build-plan.md)).
 
 ## Decisions
 
@@ -56,6 +59,7 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 - 2026-11-10, the owner, on restarts: "They can be separate services within the control plane... No one said monolithic is required". The control plane is services: the dashboard and the API, the agents' loops, the scheduler with the judge's decisions, the store. A restart of the dashboard or the API stops no run.
 - 2026-11-10, the owner, from the whole-app mockups: the dashboard's mockups stay on this goal's model. No screen shows a rig: a run's Setup holds its agents, their models and the machines it may use, and Compute is the pool of machines. This goal is still proposed; the choice means the new screens need it, or a part of it, before they can be built as drawn.
 - 2026-11-10, the owner, on the mockups' words: "instead of Machine -> GPU... probably should be machine -> device(GPU)... we may hav eother types of devices/components that need to be worked against like esp32 boards etc. we want to be able to assign devices to run experiments against vs just locked into gpus." The hierarchy is machine › device. A device has a kind: a GPU, or another kind that a target driver reaches. A run is given devices, for its judge and for its workers; nothing in the model is tied to GPUs. This is the settled decision "not every target is a GPU", carried into how compute is given to a run.
+- 2026-11-12, the owner, on the app's build plan, which asked whether the screens are built first on today's model with the rig behind the words, or after this goal: **"Goal 258 first."** The back end is rebuilt with no rig, and the screens are then built once, on the model they were drawn for. This goal is accepted into v0.3.0 and comes before the screens that show a run or a machine. The owner took the cost that was named with it: nothing new to test for a long time, and the old dashboard in use through all of it.
 
 ## Open questions
 
@@ -71,6 +75,7 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 
 ## Progress
 
+- 2026-11-12: Accepted into v0.3.0, first (Decisions). Next: the written design, for the owner's yes.
 - 2026-11-10: Written from the owner's words, during the review of the dashboard's first mockups. Mockups of a run's Setup, of Compute and of the two shapes are on the design canvas the owner looks at.
 
 ---

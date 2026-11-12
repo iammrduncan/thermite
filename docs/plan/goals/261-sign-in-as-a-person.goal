@@ -1,16 +1,16 @@
 ---
 id: "261"
 title: "Sign in as a person: a user and a password, in place of the owner's token typed into a box"
-status: PROPOSED
+status: READY
 version: "0.3.0"
 depends_on: ["243"]
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # 261 · Sign in as a person: a user and a password, in place of the owner's token typed into a box
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal)
 
 A proposal from the owner's comment on the dashboard's mockups. Nothing of it is built or decided beyond the comment.
 
@@ -48,6 +48,10 @@ Today a person signs in to the dashboard by pasting the owner's token: the same 
 - [ ] The record of a change made in the dashboard names the user.
 - [ ] The docs' pages on signing in, tokens and the security model say what is true.
 
+## Decisions
+
+- 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0. It is built before the screens, with tokens made and removed on a screen.
+
 ## Open questions
 
 1. **Its own passwords, or a standard sign-in the owner already has?** A password kept by control is the least to run. A sign-in through a provider the owner trusts (OpenID Connect), or a passkey, keeps no password at all, and needs more set-up. The owner's words name a user and a password.
@@ -56,4 +60,5 @@ Today a person signs in to the dashboard by pasting the owner's token: the same 
 
 ## Progress
 
+- 2026-11-12: Accepted into v0.3.0 (Decisions).
 - 2026-11-11: Written from the owner's comment. The sign-in mockup is drawn with a user name and a password.

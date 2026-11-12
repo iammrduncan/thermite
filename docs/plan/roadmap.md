@@ -259,7 +259,8 @@ The fixes after them, one version each, in the order to take them:
 **The dashboard.** In the order to build them; goal 244 runs beside them, one area ahead.
 
 - [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `IN_PROGRESS`
-- [261](goals/261-sign-in-as-a-person.goal) Sign in as a person: a user and a password, in place of the owner's token typed into a box · `PROPOSED`
+- [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first: the app's screens are built on it (the owner, 2026-11-12)
+- [261](goals/261-sign-in-as-a-person.goal) Sign in as a person: a user and a password, in place of the owner's token typed into a box · `READY`
 - [244](goals/244-one-door.goal) One door for each action and each read: written once, for REST, MCP and the dashboard · `READY`
 - [245](goals/245-providers-and-set-up.goal) Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and a model given to a rig in one flow · `READY`
 - [246](goals/246-home-and-decisions.goal) Home and decisions: what needs you in one list, each decision on one page · `READY`
@@ -388,7 +389,6 @@ The fixes after them, one version each, in the order to take them:
 
 **Not scheduled.** Ideas with a clear source and no version yet. Proposed.
 
-- [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `PROPOSED`
 - [260](goals/260-fxbot-and-thermite.goal) fxbot and Thermite as two sides of one platform: fxbot's agent core as the harness, and bots that run the science · `PROPOSED`
 - [051](goals/051-pareto-and-population.goal) Pareto champions and population search · `PROPOSED`
 - [052](goals/052-more-target-drivers.goal) More target drivers · `PROPOSED`
