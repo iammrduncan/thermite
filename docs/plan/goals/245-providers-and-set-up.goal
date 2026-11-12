@@ -58,6 +58,11 @@ A plan only; nothing of it is built. The [UI refresh guide's section 7](../ui-re
 ## Decisions
 
 - 2026-11-10, the owner: accepted into v0.3.0, with the plan of goal [242](_completed/242-v030-review.goal). The dashboard is a web app on fxbot's own stack, and each recommendation of the two guides is taken; where a question is about a look, the recommendation is what is mocked first, and the owner chooses from the mockups.
+- 2026-11-12, the owner, from the mockups: "for provider setup, please use fxbot's provider setup method page view etc... that works relaly well and supports good device code, custom providers etc. Separate model providers from mcp, have claude code do long living oauth token thing so we can use it." So:
+  - **Add a provider is fxbot's own page, and a provider's card is fxbot's own card.** One search over every provider; the providers as tiles in groups, sign-ins first (Sign in, Use a key, Clouds, On your machine); a tile opens the provider's card with its way in: a device code with its link as a QR, a key walked through in numbered steps, a server on the machine with its address filled in when it is found, or a custom server. Once a provider is connected, the page asks for its first model. The same card signs a provider in again or replaces its key.
+  - **A Claude plan signs in through Claude Code's long-lived sign-in,** so Thermite can use the plan without a person at a terminal each time. Whether Thermite runs that sign-in on its own server or takes what Claude Code gives on the owner's computer is to be found when it is built.
+  - **Model providers and tool servers (MCP) are apart.** Setup has Models for the providers and Tools for the tool servers, each a part of its own; Access keeps the Git logins and the tokens for programs.
+  The mockups' boards Models, Add a provider, the provider's card, Tools and Access are drawn this way (goal [243](243-web-app-base.goal)).
 
 ## Open questions
 

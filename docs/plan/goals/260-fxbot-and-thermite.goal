@@ -187,6 +187,8 @@ This goal is done when the owner has chosen, and each part that goes on has a go
   - **Thermy runs inside Thermite,** on the shared agent core, with its own threads, memory and repo. No fxbot needs to run. So the scientist is not a bot of fxbot's that operates Thermite from outside, as the proposal above had it; the proposal's steps for a `thermite` plugin in fxbot are no longer the way to Thermy.
   - **Thermy has modes, and starts in "ask before it acts":** "have multiple modes, start in ask before it acts, and allow user ot change it. In future we want some autonomous mode items like fixing failed runs or stuck things, or kicking off hill climbs or goal campaigns to prove hypothesis it found in research etc." In its first mode Thermy reads and drafts freely, and whatever starts work, spends or pushes waits for the owner's click. The owner can change the mode. Acting on its own comes later, for named kinds of work: fixing a failed or stuck run; starting a goal or a hill-climb campaign to prove what research found.
 
+- 2026-11-12, the owner, on how Thermy acts on its own later: yes to the mockups' shape. **Each kind of work Thermy may do alone has its own switch, a thread has one spend limit, and Thermy always says in the thread what it did,** with Undo where it can be undone.
+
 ## Open questions
 
 1. **Who carries libfx?** The proposal is that fxbot hides it behind its own interface. The risk stays that a 0.0.x library of another party is under every run.
@@ -194,9 +196,8 @@ This goal is done when the owner has chosen, and each part that goes on has a go
 3. **Research workers for an owner who has only a Claude subscription.** Claude Code runs none today (goal 061). With only two harnesses this is a hole, and it needs its own answer.
 4. **The first tutorial** uses OpenCode's free models. What takes their place?
 5. **The view of an agent at work.** Is the dashboard's Watch screen enough for the fxbot harness, with a terminal only for Claude Code?
-6. **What "on its own" allows, exactly.** The mockups propose that each kind of work Thermy may do alone is switched on by itself, within a spend limit the owner sets, and that Thermy always says what it did, with Undo where it can be undone. The owner named the kinds; the switches and the limit are the mockups' proposal.
-7. **Thermy never judges.** A run's verdicts and promotion stay code, and what the owner marked "ask me" is still asked of the owner. Does a mode of Thermy's ever answer such a question for the owner?
-8. **Thermy in fxbot's app.** The owner chose "Both, drawn on the mockup" for the scientist on 2026-11-11. Thermy is drawn in Thermite's app only so far.
+6. **Thermy never judges.** A run's verdicts and promotion stay code, and what the owner marked "ask me" is still asked of the owner. Does a mode of Thermy's ever answer such a question for the owner?
+7. **Thermy in fxbot's app.** The owner chose "Both, drawn on the mockup" for the scientist on 2026-11-11. Thermy is drawn in Thermite's app only so far.
 
 ## Progress
 
