@@ -34,7 +34,7 @@ It has two guides. Each says what was found, what changes, in what order, and wh
 
 ## Still to choose
 
-- **When the build starts.** The mockup and the build plan are agreed; no screen code is written until the owner says start.
+- **When the build starts.** The mockup and the build plan are agreed; no screen code is written until the owner says start. [v0.3.0, step by step](v030_release_plan.md) is the order the owner asked for on 2026-11-12: one goal at a time, each with its command, and the owner's own look at each before the next. The build starts when the owner runs its first step.
 
 ## What a tester gets
 
@@ -163,7 +163,7 @@ The [roadmap](roadmap.md#v030) holds 38 more open goals for v0.3.0, from before 
 
 - **The old dashboard stays whole and in use** until goal 253. The new one is at `/next`. A running campaign is never without its screens.
 - **The old pages take fixes only,** from the day goal 243 starts.
-- **One goal at a time,** each run with `/goal`, each ending with the system working.
+- **One goal at a time,** each run with `/goal`, each ending with the system working, and each looked at by the owner before the next ([v0.3.0, step by step](v030_release_plan.md)).
 - **Fixes to v0.2.0** go on as their own versions, and merge into the branch `v0.3.0`.
 
 ## Before the tag

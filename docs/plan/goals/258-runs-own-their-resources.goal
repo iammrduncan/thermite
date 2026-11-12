@@ -48,7 +48,7 @@ A rig's core and its runners already split this way ([A rig's core and its runne
 ## Done when
 
 - [x] The owner decides whether this goes on. 2026-11-12: yes, and before the app's screens.
-- [ ] A written design answers the open questions below, with its costs and the order of its parts, and the owner agrees it. No code before that.
+- [x] A written design answers the open questions below, with its costs and the order of its parts, and the owner agrees it. No code before that. Done, 2026-11-12: [the design](../goal-258-design.md).
 - [ ] Each part of the design is a goal of its own, and each is verified.
 - [ ] The app's screens for Compute and a run's Setup are built on it, as the agreed mockup draws them (the [app's build plan](../app-build-plan.md)).
 

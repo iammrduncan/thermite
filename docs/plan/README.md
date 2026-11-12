@@ -7,6 +7,7 @@ Thermite's plans are public. These files hold them:
 | [roadmap.md](roadmap.md) | Every goal, grouped by version, in priority order. One line each. |
 | [release-v0.1.0.md](release-v0.1.0.md) | The plan for v0.1.0, the first release: its scope, its goals, its decisions and the steps to ship it. |
 | [release-v0.3.0.md](release-v0.3.0.md) | The plan for v0.3.0, the dashboard's refresh and the code's structure behind it: what is decided, what the owner has to decide, its goals and their order. |
+| [v030_release_plan.md](v030_release_plan.md) | v0.3.0, step by step: the 35 steps from the agreed plans to the tag, one goal at a time. For each, the command that runs it, what the owner is asked first, and what the owner looks at and changes before the next. |
 | [decisions.md](decisions.md) | Settled decisions that shape the whole product, with dates. |
 | [goals/](goals/) | One goal per roadmap item: what it delivers, why, when it is done, its decisions and its progress. |
 | [code-clean-up-guide.md](code-clean-up-guide.md) | The guide for the code clean-up of v0.1.1 (goal 125), from the v0.1.1 audit: the map of the code, the themes of change, the rules of shape, the order of work, what to leave, the review guide and the owner's questions. |

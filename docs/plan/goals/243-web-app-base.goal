@@ -5,7 +5,7 @@ status: IN_PROGRESS
 version: "0.3.0"
 depends_on: ["242"]
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 ---
 
 # 243 · The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks
@@ -28,6 +28,7 @@ The base that every screen of the new dashboard stands on ([how the web app is b
 8. **Delivery:** control serves the built files at `/next`; control's image gains a build stage; the Content Security Policy for the app has no inline style (goal [177](177-dashboard-styles-in-its-stylesheet.goal)'s end, for the new pages).
 9. **Checks:** the app's type check and linter in `npm run check`; the browser check opens the app's screens at 1,440, 820 and 390 pixels, light and dark.
 10. **Mockups are screens:** a route that only a development build has shows a screen on the demo's data, with switches for its states.
+11. **The brand in the app** (stage 0 of [the app's build plan](../app-build-plan.md#4-the-order); the owner, 2026-11-12): the theme of the agreed brand guide in light and in dark; the parts every screen uses, and no others; the frame, with the sidebar's five places and Setup at its foot and a run's top with its five tabs and four buttons; the sign-in screen from its board; and the rules' budgets in the browser check. The three screens of 2026-11-10 take the theme and stay until goals [246](246-home-and-decisions.goal), [247](247-campaigns-and-runs.goal) and [252](252-usage-logs-settings.goal) build each from its board.
 
 ## Why
 
@@ -45,7 +46,11 @@ The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot".
 - [x] The owner chose the design. Done, 2026-11-10: a web app on fxbot's own stack.
 - [x] The owner chose the navigation from the two variants. Done, 2026-11-10: Library, Usage and Logs as icons at the foot.
 - [x] The app builds, and control serves it at `/next`, from source in development and from control's image. Done. From source: `npm run web:build`, then any control from the source; the browser check builds it and opens it there. From control's image: the compose smoke test builds the image and reads `/next`, its script and its licences from it, and CI's job **compose-smoke** passed at 4e520ed4 (2026-11-10).
-- [ ] The owner signs in and sees Home, a run's Overview and Settings on a real control, current without a reload. The app is served on a real control since 2026-11-10; the screens themselves are in question (Decisions), so this item waits for approved mockups.
+- [ ] The theme is the brand guide's, in light and in dark: the warm greys, the flame as the one accent, a colour for every state. A colour changes by its use, never one by one on a screen.
+- [ ] Each part of the brand guide is in the app and on the gallery at `/next/dev`, with its states: state chips, changes with arrows, stat tiles with a history, rows, tables, facts, the need card, the tree, the split of a tool, the explorer's fields and results, forms and their "i", dialogs, the menu and Undo.
+- [ ] The frame and the sign-in screen are built from their boards.
+- [ ] The rules' budgets are in the browser check: a screen over its kind's budget fails, shown by a test.
+- [ ] The owner sees the sign-in and the frame in the brand on a real control, and every part on the gallery, in light and in dark, at a desk and on a phone. Home and a run's Summary are goals 246 and 247.
 - [x] The import check fails on an import the app may not make, shown by a test of the check. Done: `tests/scripts/imports.test.ts`, "the dashboard's app imports only contracts that run in a browser".
 - [x] The browser check passes on the app's screens at three widths, light and dark; CI runs it. Done: `npm run acceptance:browser`, whose third part is the app (`scripts/acceptance/lib/browser-app.mjs`); CI's job **dashboard in a browser** installs the app's packages and runs it, and passed at 4e520ed4 (2026-11-10).
 - [x] The app's policy has no `'unsafe-inline'`, shown by a test of the header. Done: `tests/control/api/web.test.ts`, "the page carries a fresh nonce, and a policy with no inline script or style"; the browser check fails on a style or script the policy refuses.
@@ -148,7 +153,8 @@ The fonts' other alphabets (Latin Extended, Cyrillic, Vietnamese, symbols; 95 kB
 - 2026-11-12: [The app's build plan](../app-build-plan.md) is written, from a reading of every board against control's code: what is there, what needs a read, what is new behaviour, and what rests on goals 258, 260 and 261; three choices that set the order; ten stages; what changes in the plans on a yes.
 - 2026-11-12: After the brand went into every board, each board was looked at as a picture, slice by slice, by five reviewers and then on one contact sheet, and what was off was fixed in place: needs and decisions as amber cards everywhere, healthy and finished states in green, numbers as tiles where a screen had a paragraph of them, icons on common buttons, a goal run and a research run with the Usage tab, the first board of the canvas (the map of the app) redrawn in the brand. The canvas has 105 boards; the 100 that the checks cover pass. Not checked: Thermy's script inside the canvas itself, since no browser of the session reaches it.
 - 2026-11-12: The owner agreed every screen and section of the mockup (Decisions).
-- Open: the owner's word to start the build. The plans are rewritten to the mockup: the build plan, goal 258's design and its steps, goals 245 to 252 and 262 to 266.
+- 2026-11-12: This goal's own part of the build, the brand in the app, has its item in What (11) and its lines in Done when, from the build plan's stage 0 and the owner's decision of the same day. The line about Home and a run's Overview on a real control gave way to them: those two screens are goals 246 and 247.
+- Open: the owner's word to start the build. The plans are rewritten to the mockup: the build plan, goal 258's design and its steps, goals 245 to 252 and 262 to 266. The order, one goal at a time, is [v0.3.0, step by step](../v030_release_plan.md); this goal is its step 3.
 
 ---
 
