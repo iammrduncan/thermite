@@ -30,7 +30,7 @@ The goal as first written (2026-10-23) planned a rig on macOS itself, without co
 
 ## Why
 
-The owner, 2026-10-23, on the one-machine install: "If they have just mac it will pick up the unified memory and the apple silicon GPU for running mlx style stuff etc..." For v0.1.0 the install said plainly that a Mac's rig gets the virtual machine's CPUs and memory and no Apple GPU ([037](_completed/037-gpu-compose.goal)).
+The owner, 2026-10-23, on the one-machine install: a machine that is a Mac should give its rig the Mac's unified memory and its Apple silicon GPU, for MLX and work like it. For v0.1.0 the install said plainly that a Mac's rig gets the virtual machine's CPUs and memory and no Apple GPU ([037](_completed/037-gpu-compose.goal)).
 
 On 2026-11-13 the owner wanted a second, local-only Thermite on a Mac for trying v0.3.0, with the Mac's own GPU for small models.
 
@@ -55,13 +55,13 @@ Not in this goal:
 
 ## Decisions
 
-- 2026-11-13, the owner, asked what GPU the local-only Thermite on a Mac should use for trying v0.3.0: "use this local mac. For tests we can do very small models. we should make an mlx, metal capable rig image." So this goal was wanted, for small models first. No step of [v0.3.0, step by step](../v030_release_plan.md) holds it: it was built beside the steps, at the owner's command of the same day.
-- 2026-11-13, the owner, later the same day: "figure out how to get my mac to have 10gb of its GPU as a runner... there has to be a way to do this, someone has figured it out... check out apple/containers." The study of that day is in Progress.
-- The builder's note on "image", of that day, before the study: an image alone can't give a rig the Mac's GPU, since a container on macOS runs in a Linux virtual machine that can't reach Metal. The study then found the one kind of machine that carries Vulkan to it.
-- 2026-11-13, the owner, asked whether to run the proof (krunkit and its parts from Homebrew, a second Podman machine, one small model): "Run the proof now".
-- 2026-11-13, the owner, when the build began: "just do one libkrun podman machine and run both control and runner containers on it etc... its fine we can use that qwen model and it will never use all my ram." So:
+- 2026-11-13, the owner, asked what GPU the local-only Thermite on a Mac should use for trying v0.3.0: the Mac's own, with very small models for tests, and a rig image that can do MLX and Metal work. So this goal was wanted, for small models first. No step of [v0.3.0, step by step](../v030_release_plan.md) holds it: it was built beside the steps, at the owner's command of the same day.
+- 2026-11-13, the owner, later the same day: find how the Mac can give about 10 GB of its GPU to a runner. Others have surely solved it; Apple's container tool was named as a place to look. The study of that day is in Progress.
+- The builder's note on a rig image, of that day, before the study: an image alone can't give a rig the Mac's GPU, since a container on macOS runs in a Linux virtual machine that can't reach Metal. The study then found the one kind of machine that carries Vulkan to it.
+- 2026-11-13, the owner, asked whether to run the proof (krunkit and its parts from Homebrew, a second Podman machine, one small model): yes, at once.
+- 2026-11-13, the owner, when the build began: one Podman machine on libkrun holds both control's containers and the runner's; the small Qwen model of the proof is the test model, and it never fills the Mac's memory. So:
   - **One machine.** Control, the bus and the rig run in the one libkrun machine. Thermite makes no machine of its own: the machine is the Mac owner's, and `local init` and `thermite doctor` read it.
-  - **No limit on the GPU's memory.** The "10 GB" of the earlier words is not built. The Vulkan device gives no figure to hold a limit to, and the owner's test models are small.
+  - **No limit on the GPU's memory.** The limit of about 10 GB, asked for earlier, is not built. The Vulkan device gives no figure to hold a limit to, and the owner's test models are small.
 - The builder's choices, 2026-11-13. Each can be changed:
   - **The way through Vulkan,** and MLX apart (goal 279), as the study's "What fits Thermite as it is" says.
   - **The target is named for what it reaches through, `vulkan-gpu`,** not for Apple: its driver reads any Vulkan device and refuses the software one. Only a Mac's GPU is tested.
@@ -93,9 +93,9 @@ Settled on 2026-11-13: a container with Vulkan through the virtual machine was w
 
   - **What fits Thermite as it is:** the second way. A runner stays what it is, a harness container and its supervisor, with the same wall and the same isolation self-test, and it is given the Mac's GPU as a Vulkan device. It needs a target class for a Vulkan GPU beside `cuda-gpu` and `cpu`, a harness image with the Vulkan parts, and a kit whose engine has a Vulkan back end. It does not give MLX.
   - **What MLX needs:** a runner on macOS itself, as What says. That is the larger piece, with the wall as its open question, and is one question with goal 277.
-  - **"10 GB of its GPU":** no page read gives a setting that caps the GPU's memory for a libkrun guest. Its makers state one limit: the guest's memory and the GPU's together are at most 64 GB. So the cap would be the runner's own: the target says how much it may use, and refuses a model and context that need more. To be measured in a proof.
+  - **A limit of about 10 GB on the GPU:** no page read gives a setting that caps the GPU's memory for a libkrun guest. Its makers state one limit: the guest's memory and the GPU's together are at most 64 GB. So the cap would be the runner's own: the target says how much it may use, and refuses a model and context that need more. To be measured in a proof.
   - **A limit found:** Podman runs one machine at a time, and a machine's provider is chosen when it is made. So a local Thermite and its GPU runner live in one libkrun machine, and a machine of the other provider can't run beside it.
-- 2026-11-13: **The proof, on one Mac, at the owner's yes** ("Run the proof now"). An M4 Pro with 24 GB, macOS 26.5, Podman 5.8.2 from Homebrew. Nothing of Thermite's code changed.
+- 2026-11-13: **The proof, on one Mac, at the owner's yes.** An M4 Pro with 24 GB, macOS 26.5, Podman 5.8.2 from Homebrew. Nothing of Thermite's code changed.
   - **Set up:** krunkit 1.3.2 with libkrun 1.19.8 and MoltenVK 1.4.2, from the libkrun makers' Homebrew tap; a second Podman machine made with the libkrun provider (6 CPUs, 10 GiB); a Fedora 44 image with the makers' patched Mesa (25.3.6) and llama.cpp built in it with its Vulkan back end.
   - **The GPU is there:** the machine has `/dev/dri`, and a container given `--device /dev/dri` lists `Virtio-GPU Venus (Apple M4 Pro)`, Vulkan 1.2, driver `venus`.
   - **Speed,** one 0.5B model (Qwen2.5-0.5B-Instruct, Q4_K_M, 463 MiB), llama.cpp at one commit, `llama-bench` with 512 prompt tokens and 128 generated, 3 runs each:

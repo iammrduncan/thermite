@@ -18,7 +18,7 @@ A proposal, split from goal [106](106-apple-silicon-rig.goal) when that goal was
 
 A runner that runs on macOS itself, on a Mac with Apple silicon, so that a campaign's work can use Metal directly: MLX work first of all.
 
-The owner, 2026-11-13: "we should make an mlx, metal capable rig image."
+The owner, 2026-11-13, wanted a rig that can do MLX and Metal work on a Mac.
 
 ### What Thermite does today
 
@@ -41,7 +41,7 @@ The owner, 2026-11-13: "we should make an mlx, metal capable rig image."
 
 ## Why
 
-- The owner's words above, and of 2026-10-23 on the one-machine install: "If they have just mac it will pick up the unified memory and the apple silicon GPU for running mlx style stuff etc..."
+- The owner's wish above, and of 2026-10-23 on the one-machine install: a machine that is a Mac should give its rig the Mac's unified memory and its Apple silicon GPU, for MLX and work like it.
 - Goal 106 gives a Mac's GPU to engines with a Vulkan back end only, at about three quarters of Metal's speed. MLX is the framework made for Apple silicon, and it is what the owner named.
 
 ## Constraints
