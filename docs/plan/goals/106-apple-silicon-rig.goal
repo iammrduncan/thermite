@@ -5,10 +5,12 @@ status: PROPOSED
 version: "0.3.0"
 depends_on: []
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-11-13
 ---
 
 # 106 · A rig on Apple silicon that uses its GPU
+
+**Status:** `PROPOSED` · **Tracked in:** [GitHub issue 87](https://github.com/iammrduncan/thermite/issues/87), the source of truth for this work. This file keeps its context.
 
 **Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
 
@@ -33,9 +35,13 @@ The owner, 2026-10-23, on the one-machine install: "If they have just mac it wil
 
 ## Decisions
 
-None yet.
+- 2026-11-13, the owner, asked what GPU the local-only Thermite on a Mac should use for trying v0.3.0: "use this local mac. For tests we can do very small models. we should make an mlx, metal capable rig image." So this goal is wanted, for small models first. It is not built, and no step of [v0.3.0, step by step](../v030_release_plan.md) holds it yet: the owner says where it goes.
+- The builder's note on "image": an image alone can't give a rig the Mac's GPU, since a container on macOS runs in a Linux virtual machine that can't reach Metal. What is wanted is met by a runner on macOS itself, as What says, or by another wall than a Linux container. It is an open question below, for the owner.
 
 ## Open questions
+
+- Whether this is one piece of work with goal [277](277-runner-without-a-container-engine.goal), the runner with no container engine to set up, which the owner put in v0.4.0: a runner on macOS itself needs the same thing, a wall that is not a Linux container.
+- Whether a container with Vulkan through the virtual machine is worth a look, for engines with a Vulkan path. MLX needs Metal, so it would not serve MLX.
 
 - Which macOS mechanism can fence the agents as strictly as Linux users, groups and Landlock do, and whether it can be tested in CI.
 - Whether the judge on a native Mac rig should time with the GPU idle for the agents, or keep its own measurement windows.

@@ -308,7 +308,7 @@ The fixes after them, one version each, in the order to take them:
 - [120](goals/120-research-kit-prep.goal) From research to the next campaign: next experiments in Start a run and New campaign, and kit prep · `PROPOSED`
 - [121](goals/121-hill-climb-stages.goal) Stages: a hill climb that improves several metrics, one after the other · `PROPOSED`
 - [105](goals/105-amd-gpus.goal) AMD GPUs in rigs · `PROPOSED`
-- [106](goals/106-apple-silicon-rig.goal) A rig on Apple silicon that uses its GPU · `PROPOSED`
+- [106](goals/106-apple-silicon-rig.goal) A rig on Apple silicon that uses its GPU ([issue 87](https://github.com/iammrduncan/thermite/issues/87)) · `PROPOSED`
 - [107](goals/107-runs-side-by-side.goal) Several runs at once on one rig, within its resources · `PROPOSED`
 - [030](goals/030-oauth-sign-in.goal) Sign in with OAuth or OIDC · `PROPOSED`
 - [031](goals/031-design-docs.goal) The design reasons, in public docs · `PROPOSED`

@@ -8,10 +8,10 @@
 
 1. **You run the step's command.** It names a goal's file.
 2. **I ask you the step's questions first,** where the goal leaves a choice that is yours ("I ask you first", below). The other open questions I settle as I build, and write each answer in the goal's Decisions.
-3. **I build until the goal is complete:** every "Done when" item that a check can prove has its evidence, the docs pages match the code, the change is pushed, and the test deployment runs it, unless the step waits for your yes.
+3. **I build until the goal is complete:** every "Done when" item that a check can prove has its evidence, the docs pages match the code, the change is pushed, and the test deployment runs it. The test deployment is a second, local-only Thermite on your own machine (the owner, 2026-11-13: "I don't want to touch live control/deployment of my thermite with 0.3.0 until we get it to where I want"). The live deployment is not updated with v0.3.0 until you say so.
 4. **I read it all again before I say done** (the command's last sentence): the goal's every item against its evidence, the whole diff, the changed docs pages, and for a screen its screenshots against its board.
 5. **I hand it back** in the goal's Progress: what was built, which checks ran and which did not, the answers I took, and what is left for you.
-6. **We go hands on together.** You go through the step's "Look at" list on a real control. What you want changed, I change in place. The items that say "the owner does ..." are ticked here.
+6. **We go hands on together.** You go through the step's "Look at" list on a real control: the local-only one, wherever a step below says "your control", until you say the live one takes v0.3.0. What you want changed, I change in place. The items that say "the owner does ..." are ticked here.
 7. **You say done.** The goal is `VERIFIED` and moves to `goals/_completed/`. Then the next command.
 
 A step that changes a running deployment in a way that is hard to undo, or that spends money, waits for your yes at that point. The steps that do are marked.
@@ -105,7 +105,7 @@ Every call into control's store can wait for its answer. Still SQLite, the same 
 
 **Look at:**
 
-- **Your control after the update, for a day of real use:** the old dashboard and `/next` as before, a campaign at work through the update, a backup taken.
+- **The local-only Thermite on this step's code, in real use:** the old dashboard and `/next` as before, a campaign started and at work, a backup taken.
 - The count of tests, which may not fall, and the 36 places that hold a transaction outside the store, each with its test in `tests/control/together/`.
 - How it was done (in one piece, by a script), and the short list of what a person could notice, in the goal's Decisions.
 
