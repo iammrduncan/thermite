@@ -36,6 +36,7 @@ The owner, 2026-10-23, on the one-machine install: "If they have just mac it wil
 ## Decisions
 
 - 2026-11-13, the owner, asked what GPU the local-only Thermite on a Mac should use for trying v0.3.0: "use this local mac. For tests we can do very small models. we should make an mlx, metal capable rig image." So this goal is wanted, for small models first. It is not built, and no step of [v0.3.0, step by step](../v030_release_plan.md) holds it yet: the owner says where it goes.
+- 2026-11-13, the owner, later the same day: "figure out how to get my mac to have 10gb of its GPU as a runner... there has to be a way to do this, someone has figured it out... check out apple/containers." The study of that day is in Progress.
 - The builder's note on "image": an image alone can't give a rig the Mac's GPU, since a container on macOS runs in a Linux virtual machine that can't reach Metal. What is wanted is met by a runner on macOS itself, as What says, or by another wall than a Linux container. It is an open question below, for the owner.
 
 ## Open questions
@@ -49,6 +50,21 @@ The owner, 2026-10-23, on the one-machine install: "If they have just mac it wil
 ## Progress
 
 - 2026-10-23: Goal written as a plan, from the owner's words.
+- 2026-11-13: **A study of how others give contained work a Mac's GPU.** Read from public pages only; nothing was installed or run, and nothing is built. The works are in [CREDITS.md](../../../CREDITS.md).
+
+  | Way | What the contained work gets | Where it stands |
+  | --- | --- | --- |
+  | Apple's `container` tool and its Containerization framework | No GPU. Linux guests only | A maintainer, June 2025: "we do not currently support this". No release up to 1.7.1 names a GPU |
+  | Podman with a libkrun machine (krunkit) | Vulkan, for compute only, in a Linux container given `/dev/dri`: Mesa's Venus driver in the container, virglrenderer and MoltenVK on the Mac, then Metal | Works today. Its makers measured llama.cpp's Vulkan back end in a container at 74 to 80% of Metal's speed on an M4 Pro (June 2025). The container needs their patched Mesa |
+  | llama.cpp's GGML-VirtGPU back end over the same machine | llama.cpp alone, near Metal's speed: its calls go straight to the Mac's Metal back end | In llama.cpp since January 2026. It needs a virglrenderer with patches not yet in its upstream, and its makers say the first versions are not safe for more than one tenant |
+  | A program on the Mac that holds the GPU, which containers ask | Whatever that program offers: text generation from a model, in the ones read (Docker Model Runner; an MLX toolkit for Apple's `container`) | Works, but the work on the GPU is the program's, outside the wall. A kit's own engine does not run there |
+  | MLX in a Linux container | Nothing: MLX needs Metal, which no Linux guest has | Not possible. MLX runs on macOS itself |
+
+  - **What fits Thermite as it is:** the second way. A runner stays what it is, a harness container and its supervisor, with the same wall and the same isolation self-test, and it is given the Mac's GPU as a Vulkan device. It needs a target class for a Vulkan GPU beside `cuda-gpu` and `cpu`, a harness image with the Vulkan parts, and a kit whose engine has a Vulkan back end. It does not give MLX.
+  - **What MLX needs:** a runner on macOS itself, as What says. That is the larger piece, with the wall as its open question, and is one question with goal 277.
+  - **"10 GB of its GPU":** no page read gives a setting that caps the GPU's memory for a libkrun guest. Its makers state one limit: the guest's memory and the GPU's together are at most 64 GB. So the cap would be the runner's own: the target says how much it may use, and refuses a model and context that need more. To be measured in a proof.
+  - **A limit found:** Podman runs one machine at a time, and a machine's provider is chosen when it is made. So a local Thermite and its GPU runner live in one libkrun machine, and a machine of the other provider can't run beside it.
+  - **Next, at the owner's word:** a proof on one Mac: a libkrun machine, a container that sees the GPU as a Vulkan device, a small model on llama.cpp's Vulkan back end, its speed beside Metal's, and how much memory it can be held to. It installs krunkit and makes a second Podman machine, so it waits for the owner's yes.
 
 ---
 
