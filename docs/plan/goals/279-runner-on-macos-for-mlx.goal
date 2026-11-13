@@ -1,0 +1,63 @@
+---
+id: "279"
+title: "A runner on macOS itself, for MLX and Metal work"
+status: PROPOSED
+version: "later"
+depends_on: []
+created: 2026-11-13
+updated: 2026-11-13
+---
+
+# 279 · A runner on macOS itself, for MLX and Metal work
+
+**Status:** `PROPOSED` · **Version:** [Later](../roadmap.md#later), until the owner gives it one · **Tracked in:** [GitHub issue 93](https://github.com/iammrduncan/thermite/issues/93), the source of truth for this work. This file keeps its context.
+
+A proposal, split from goal [106](106-apple-silicon-rig.goal) when that goal was built. Nothing of it is built.
+
+## What
+
+A runner that runs on macOS itself, on a Mac with Apple silicon, so that a campaign's work can use Metal directly: MLX work first of all.
+
+The owner, 2026-11-13: "we should make an mlx, metal capable rig image."
+
+### What Thermite does today
+
+- A rig on a Mac uses the Mac's GPU as a Vulkan device inside its Linux container (goal [106](106-apple-silicon-rig.goal), the target `vulkan-gpu`): Mesa's Venus driver in the container, the Mac's Metal behind it. That serves engines with a Vulkan back end. In the one measurement made, llama.cpp's Vulkan back end ran there at 76 to 77% of its Metal back end's speed on macOS itself.
+- It does not serve MLX. MLX needs Metal, and no Linux container has Metal: a container on macOS runs in a Linux virtual machine. Goal 106's study read the other ways too (Apple's `container` tool, a program on the Mac that containers ask); none gives a kit's own engine Metal inside a wall.
+
+### What this goal delivers
+
+1. **A runner process on macOS,** beside a core that may stay in a container. A runner is already apart from its core (goal [206](_completed/206-core-and-runners.goal)); this one is a program on the Mac, not a container.
+2. **A fence by macOS's own mechanisms,** with the same promises as on Linux: the agents can't read the judge, its kits, the record or secrets, and can't change a measurement. An isolation self-test that proves each one.
+3. **A target for Metal,** with what macOS reports of the GPU and its memory, and a smoke kit on MLX or Metal.
+4. **Setup** from the one-machine install, with the same checks.
+
+### Open questions
+
+- What the wall is on macOS (users and groups, the sandbox, a virtual machine of macOS), and whether it can be tested in CI.
+- Whether this is one piece of work with goal [277](277-runner-without-a-container-engine.goal), the runner with no container engine to set up, which the owner put in v0.4.0: both need a wall that is not a Linux container.
+- Whether the judge on such a runner times with the GPU idle for the agents, as a rig with one GPU does today.
+- How much of a Mac's unified memory a run may take. Goal 106 found that the Vulkan device reports the whole memory and no use; macOS itself reports more.
+
+## Why
+
+- The owner's words above, and of 2026-10-23 on the one-machine install: "If they have just mac it will pick up the unified memory and the apple silicon GPU for running mlx style stuff etc..."
+- Goal 106 gives a Mac's GPU to engines with a Vulkan back end only, at about three quarters of Metal's speed. MLX is the framework made for Apple silicon, and it is what the owner named.
+
+## Constraints
+
+- **Agents never judge.** The fence on macOS keeps the same promises as the one on Linux, and the self-test proves them before a run starts.
+- **No default caps.**
+- A study of the wall comes first; no code is written before the owner agrees it.
+
+## Done when
+
+- [ ] Written when the goal is accepted into a version.
+
+## Progress
+
+- 2026-11-13: proposed, when goal 106 was built on the Vulkan way and left MLX apart.
+
+---
+
+Run with `/goal Complete docs/plan/goals/279-runner-on-macos-for-mlx.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

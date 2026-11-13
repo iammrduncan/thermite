@@ -84,9 +84,9 @@ The supervisor does all of the rig's git work. It holds no signing key: it carri
 
 ## Targets and drivers
 
-A **target** is what a campaign is measured on. The judge reaches it through a **target driver**. Thermite has drivers for CPUs (`cpu`) and for NVIDIA GPUs (`cuda-gpu`). A rig with GPUs measures on `cuda-gpu`, and a rig without measures on `cpu`.
+A **target** is what a campaign is measured on. The judge reaches it through a **target driver**. Thermite has drivers for CPUs (`cpu`), for NVIDIA GPUs (`cuda-gpu`) and for a GPU reached through Vulkan (`vulkan-gpu`), such as a Mac's. A rig with NVIDIA GPUs measures on `cuda-gpu`, a rig on a Mac's GPU on `vulkan-gpu`, and a rig without GPUs on `cpu`.
 
-A driver identifies the device, so that results from different devices are never compared. It checks that the device is idle and healthy before every timed block, and reports anything that spoiled a block, such as a GPU too hot to keep its speed, so the block is measured again. It does not hold the clock: the broker times every measured run from outside, so nothing a change prints about itself is ever its score.
+A driver identifies the device, so that results from different devices are never compared. It checks that the device is idle and healthy before every timed block, and reports anything that spoiled a block, such as a GPU too hot to keep its speed, so the block is measured again. A Vulkan device gives no such figures, so its driver checks only that the GPU is there. It does not hold the clock: the broker times every measured run from outside, so nothing a change prints about itself is ever its score.
 
 Each kit names the one kind of target it measures on, and a rig accepts only a kit for its own kind. [Kits and rigs, side by side](kits-and-rigs.md) explains how the two meet, and [Sharing a device](sharing-a-device.md) explains when the judge and the agents share one device and when each has its own. Drivers for other hardware, such as boards on a serial line, are planned in [goal 052](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/052-more-target-drivers.goal).
 

@@ -12,7 +12,7 @@ A **rig** can check itself in three ways. Each check runs inside the rig's **har
 | --- | --- | --- | --- | --- | --- | --- |
 | Model route | `model` | **Model route** | The rig's model answers with a correct tool call, through the same harness its agents use | A model route | 120 s | No |
 | Isolation | `isolation` | **Isolation** | Each role's user is refused what it must not reach, and reaches what it must | The broker: the harness container running as root | 30 s for each role | Yes |
-| Smoke | `smoke` | **Judge smoke** | The judge gives each change in a known set its expected verdict, on the rig's own device, or on its runners for a core that judges on them alone ([runners](../how-to/install/runners.md)), with the smoke kit of their kind | A `cpu` or `cuda-gpu` target, and the smoke kits in the image | 3 hours for the whole check | Yes |
+| Smoke | `smoke` | **Judge smoke** | The judge gives each change in a known set its expected verdict, on the rig's own device, or on its runners for a core that judges on them alone ([runners](../how-to/install/runners.md)), with the smoke kit of their kind | A `cpu`, `cuda-gpu` or `vulkan-gpu` target, and the smoke kits in the image | 3 hours for the whole check | Yes |
 
 ## How a check runs
 
@@ -141,7 +141,7 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `research-write`, `research-create` | Write, create a file | A claim's file in a run's [research folder](../explanation/campaign-modes.md#research), and its `claims/` folder, written the way the harness writes them |
 | `controller-environ` | Read | The environment of the harness's controller process |
 | `pid1-environ` | Read | The environment of the container's first process, which holds what the container was started with |
-| `device:<node>` | Open | Each GPU device node, for roles that must not use the device |
+| `device:<node>` | Open | Each GPU device node, for roles that must not use the device: NVIDIA's (`/dev/nvidia*`), such as `device:nvidia0`, and on a rig whose target is `vulkan-gpu`, the nodes Vulkan opens the GPU by (`/dev/dri/renderD*` and `/dev/dri/card*`), such as `device:dri/renderD128` and `device:dri/card0` |
 
 On Kubernetes, `lane-1` also tries the cluster's network: `cluster-network` opens a TCP connection to the cluster's API server, at the address and port Kubernetes gives every pod (`KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`). The rig's network rules must stop it. It passes with the error it met, such as `ECONNREFUSED`, or with `no answer in 3 s`; `ALLOWED: connected to <host> port <port>` fails.
 
@@ -238,7 +238,7 @@ Each probe's result is the error the operation met (refused, as it must be), `re
 
 `<devices>` is one of these:
 
-- `shared (fence: <fence>)`: one device for all, with how the broker keeps the other roles off it. `groups`: the device nodes' group; `groups+landlock`: the group and the GPU fence; `landlock`: the fence alone, where the nodes keep the owner and mode they came with, as on RunPod and under rootless Podman;
+- `shared (fence: <fence>)`: one device for all, with how the broker keeps the other roles off it. `groups`: the device nodes' group; `groups+landlock`: the group and the GPU fence; `landlock`: the fence alone, where the nodes keep the owner and mode they came with, as on RunPod, under rootless Podman, and for a Mac's GPU in Podman's machine;
 - `shared`: one device, with no record from the broker of how;
 - `shared, NOT SET UP: <error>`: the broker could neither give the nodes to the `gpu` group nor fence them;
 - `dedicated: judge <nodes>, development <nodes>`;
@@ -250,7 +250,7 @@ The details hold every probe's result for every role, the container's checks, an
 
 The smoke check runs a small campaign with no agents on the rig's own target. The changes it submits, called candidates, each have a known right verdict. It passes when every candidate gets it, with one exception: [noisy timing](#noisy-timing).
 
-1. It picks the smoke kit for the rig's target: `smoke-cpu` for `cpu`, `smoke-cuda` for `cuda-gpu`. It reads the kits and their projects from `/opt/thermite/checks` in the harness image, or from `THERMITE_CHECKS_DIR`. In the image, only the harness's controller may read that folder; the isolation check makes sure every role is refused it (`image-checks-list`, `image-kit-read`).
+1. It picks the smoke kit for the rig's target: `smoke-cpu` for `cpu`, `smoke-cuda` for `cuda-gpu`, `smoke-vulkan` for `vulkan-gpu`. It reads the kits and their projects from `/opt/thermite/checks` in the harness image, or from `THERMITE_CHECKS_DIR`. In the image, only the harness's controller may read that folder; the isolation check makes sure every role is refused it (`image-checks-list`, `image-kit-read`).
 2. It makes a git repository of the project and one of the kit (without its candidates), with fixed dates, so the same files always give the same commits.
 3. It assigns a judge-only run named `check-smoke-` and eight hexadecimal digits, of a campaign named `rig-check-<kit>-` and the first eight digits of the kit's commit. The contract is the image's `examples/contracts/smoke-cpu.json`, with the rig's target. Assigning pauses the rig's running runs, with the reason `replaced by check-smoke-…`.
 4. It submits every candidate except `good`, and waits until each is settled: `judged`, `rejected_v0`, `duplicate`, `promoted`, `awaiting_approval` or `errored`.
@@ -287,18 +287,31 @@ Every candidate is judged against the seed, the project as it is. The run is a h
 | `broken` | Skips half of the sum | `invalid` |
 | `fallback` | Calls the reference code | `invalid` |
 
+### The Vulkan candidates
+
+The project's kernel is a compute shader in GLSL (`src/kernel/matmul.comp`) and the C function that launches it (`src/kernel/matmul.c`). The expected verdicts are the CUDA kit's.
+
+| Candidate | The change | Expected |
+| --- | --- | --- |
+| `good` | Register tiling: each workgroup loads tiles of 32 × 8 and 8 × 32 into shared memory, and each thread keeps a 4 × 4 block of outputs | `win_confirmed` |
+| `noop` | A renamed variable | `neutral` |
+| `broken` | Skips half of the sum | `invalid` |
+| `fallback` | Calls the reference code | `invalid` |
+
 ### The smoke kits and contract
 
-Both kits multiply two square matrices of floats, many times over (`reps`), so that the work takes much longer than starting the process. The build links the candidate's kernel with the kit's driver and wraps the reference function, so the kit can see whether the candidate called it. The kit's check computes the product again in double precision (the CUDA kit checks 64 evenly spaced rows, since its matrices are larger), allows an error of at most 0.002, and fails a run with values that are not numbers or that called the reference.
+The three kits multiply two square matrices of floats, many times over (`reps`), so that the work takes much longer than starting the process. The build links the candidate's kernel with the kit's driver and wraps the reference function, so the kit can see whether the candidate called it. The kit's check computes the product again in double precision (the CUDA and Vulkan kits check 64 evenly spaced rows, since their matrices are larger), allows an error of at most 0.002, and fails a run with values that are not numbers or that called the reference.
 
-| | `smoke-cpu` | `smoke-cuda` |
-| --- | --- | --- |
-| Cases (`n`) | `small` 128, `large` 256, `held` 192 | `small` 1024, `large` 2048, `held` 1536 |
-| Metric | `flops_per_s` (FLOP/s) | `flops_per_s` (FLOP/s) |
-| Build limits | 120 s, 1024 MiB memory, 256 MiB disk | 300 s, 2048 MiB memory, 512 MiB disk |
-| Run limits | 60 s, 256 MiB memory, 32 MiB disk | 120 s, 2048 MiB memory, 64 MiB disk |
-| Check time limit | 60 s | 300 s |
-| Compiler | `cc` | `nvcc`, with native code for each GPU generation its CUDA builds for, and PTX for newer GPUs, so a run on one of those generations does not compile the kernel at start: with CUDA 12, `sm_60`, `sm_70`, `sm_75`, `sm_80`, `sm_86`, `sm_89` and `sm_90`; with CUDA 13, `sm_75`, `sm_80`, `sm_86`, `sm_89`, `sm_90`, `sm_100` and `sm_120`, whose code also runs on the DGX Spark's `sm_121`. Its build script, run by hand with `CUDA_ARCH` set, such as `sm_86`, builds for that architecture only; the judge's builds don't set it |
+The Vulkan kit's driver uses core Vulkan 1.0 and compute alone, with no extension and no window system. It takes the first device that is a GPU, never the software device, which computes on the CPU: with no GPU, the run stops and says so. Its build only compiles, so the `builder` user needs no GPU.
+
+| | `smoke-cpu` | `smoke-cuda` | `smoke-vulkan` |
+| --- | --- | --- | --- |
+| Cases (`n`) | `small` 128, `large` 256, `held` 192 | `small` 1024, `large` 2048, `held` 1536 | `small` 1536, `large` 2048, `held` 1792 |
+| Metric | `flops_per_s` (FLOP/s) | `flops_per_s` (FLOP/s) | `flops_per_s` (FLOP/s) |
+| Build limits | 120 s, 1024 MiB memory, 256 MiB disk | 300 s, 2048 MiB memory, 512 MiB disk | 300 s, 2048 MiB memory, 512 MiB disk |
+| Run limits | 60 s, 256 MiB memory, 32 MiB disk | 120 s, 2048 MiB memory, 64 MiB disk | 120 s, 2048 MiB memory, 64 MiB disk |
+| Check time limit | 60 s | 300 s | 300 s |
+| Compiler | `cc` | `nvcc`, with native code for each GPU generation its CUDA builds for, and PTX for newer GPUs, so a run on one of those generations does not compile the kernel at start: with CUDA 12, `sm_60`, `sm_70`, `sm_75`, `sm_80`, `sm_86`, `sm_89` and `sm_90`; with CUDA 13, `sm_75`, `sm_80`, `sm_86`, `sm_89`, `sm_90`, `sm_100` and `sm_120`, whose code also runs on the DGX Spark's `sm_121`. Its build script, run by hand with `CUDA_ARCH` set, such as `sm_86`, builds for that architecture only; the judge's builds don't set it | `glslc`, which compiles the two shaders to SPIR-V for Vulkan 1.0, and `gcc`, which builds them into the kit's driver with the launchers, linked with the Vulkan loader |
 
 The contract measures `small` and `large`, keeps `held` for confirmation, and lets changes touch only `src/kernel/**`. It sets `min_effect` 0.1, `equivalence_band` 0.05 and `runs_per_cell` 3, because timing on a shared CPU is noisy. Its audit triggers are set to 1000, so no smoke candidate is audited. It forbids added lines that match `clock_gettime`, `gettimeofday`, `\brdtsc`, `\btimes\s*\(`, `__real_`, `__wrap_` and `thermite_ref_calls`.
 
@@ -309,7 +322,7 @@ The contract measures `small` and `large`, keeps `held` for confirmation, and le
 | `smoke on <kit>: all <n> candidates were judged as expected (run <run>)` | Passed |
 | `smoke on <kit>: <n-1> of <n> candidates were judged as expected; the no-op came out inconclusive, not neutral (run <run>). Note: The timing on this machine is noisy. Results here need more repeats.` | Passed, with a note: see [Noisy timing](#noisy-timing) |
 | `smoke on <kit>: <k> of <n> candidates were judged otherwise: <name> expected <x>, got <y>; …` | Failed. Each wrong candidate is listed |
-| `there is no smoke kit for a <type> target` | The rig's target is neither `cpu` nor `cuda-gpu` |
+| `there is no smoke kit for a <type> target` | The rig's target is none of `cpu`, `cuda-gpu` and `vulkan-gpu` |
 | `the smoke kit is not in this image (<dir>)` | The image has no smoke kit at that path |
 | `the judge did not settle <names> within 180 min` | The 3-hour limit passed |
 

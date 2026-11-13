@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { readNumber } from "../../common/settings.ts";
 import { judgeGpusByDefault } from "../../core/hardware.ts";
@@ -252,6 +252,32 @@ export function cardsOf(layout: GpuLayout): { judges: GpuCard[]; devs: GpuCard[]
   return { judges: layout.judges ?? [layout.judge], devs: layout.devs ?? [layout.dev] };
 }
 
+/**
+ * The GPU's device nodes in this container: NVIDIA's (`/dev/nvidia*`), and on a rig whose target
+ * is a GPU reached through Vulkan, the DRM nodes Vulkan opens (`/dev/dri/renderD*` and
+ * `/dev/dri/card*`). The broker restricts them, the fence leaves them out for a role with no
+ * GPU, and the isolation selftest tries each as every role.
+ */
+export function gpuDeviceNodes(target: string | undefined, dev = "/dev"): string[] {
+  const chars = (dir: string, wanted: (name: string) => boolean): string[] => {
+    try {
+      return readdirSync(dir)
+        .filter(wanted)
+        .map((name) => join(dir, name))
+        .filter((p) => !lstatSync(p).isDirectory())
+        .sort();
+    } catch {
+      return [];
+    }
+  };
+  const nvidia = chars(dev, (name) => name.startsWith("nvidia"));
+  if (target !== "vulkan-gpu") return nvidia;
+  return [...nvidia, ...chars(join(dev, "dri"), (name) => /^(renderD|card)\d+$/.test(name))];
+}
+
+/** The fence's argument that keeps a role off the DRM nodes, on a rig with a Vulkan GPU. */
+const NO_DRI = "--no-dri";
+
 export interface Identity {
   uid: number;
   gid: number;
@@ -268,10 +294,10 @@ export interface Identity {
  * its own opens that card and the control nodes; a role in the gpu group (one shared card)
  * opens every node, so it needs no fence; every other role opens no GPU node at all.
  */
-export function fenceArgs(id: Identity): string[] | undefined {
+export function fenceArgs(id: Identity, target?: string | undefined): string[] | undefined {
   if (id.card) return ["--card", basename(id.card), "--control"];
   if (id.gid === IDS.gpuGroup) return undefined;
-  return [];
+  return target === "vulkan-gpu" ? [NO_DRI] : [];
 }
 
 /**

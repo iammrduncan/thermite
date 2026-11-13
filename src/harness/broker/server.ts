@@ -28,6 +28,8 @@ export interface BrokerServerOptions {
   runCpus?: Record<string, string> | undefined;
   /** The GPU fence's program (thermite-devfence), where the kernel has Landlock; none: no fence. */
   fence?: string | undefined;
+  /** The rig's target type: with a GPU reached through Vulkan, the fence also closes /dev/dri. */
+  target?: string | undefined;
 }
 
 const LANE_ROLES: Role[] = Array.from({ length: IDS.maxLanes }, (_, i) => [
@@ -104,7 +106,7 @@ function supervised(
   if (r.devCard !== undefined && !r.gpu) throw new Error("devCard comes only with gpu");
   const identity = identityFor(r.role, r.gpu === true, opts.gpuLayout, r.devCard ?? 0);
   const { uid, gid, groups, cuda } = identity;
-  const fence = opts.fence ? fenceArgs(identity) : undefined;
+  const fence = opts.fence ? fenceArgs(identity, opts.target) : undefined;
   const lane = /^lane-\d+$/.test(r.role);
   return {
     argv: r.argv,

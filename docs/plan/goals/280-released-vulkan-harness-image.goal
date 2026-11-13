@@ -1,0 +1,57 @@
+---
+id: "280"
+title: "A release publishes the Vulkan harness image, so a Mac's GPU works from a release"
+status: PROPOSED
+version: "0.3.0"
+depends_on: ["106"]
+created: 2026-11-13
+updated: 2026-11-13
+---
+
+# 280 · A release publishes the Vulkan harness image, so a Mac's GPU works from a release
+
+**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [106](106-apple-silicon-rig.goal) · **Tracked in:** [GitHub issue 94](https://github.com/iammrduncan/thermite/issues/94), the source of truth for this work. This file keeps its context.
+
+A proposal, left over from goal [106](106-apple-silicon-rig.goal). Nothing of it is built.
+
+## What
+
+A release publishes the harness image for a rig whose GPU is reached through Vulkan (the target `vulkan-gpu`), as it publishes the CUDA harness images. Then `thermite local init` on a Mac, next to a release's `compose.yaml`, writes a `compose.gpu.yaml` that names the released image, and the Mac's GPU works with no build from the source.
+
+### What Thermite does today
+
+- The image builds from the source: the `harness` target of [`containers/Containerfile`](../../../containers/Containerfile) on its `vulkan-base` stage. A checkout's `compose.gpu.yaml` builds it (goal 106).
+- No release builds or publishes it. Next to a release's `compose.yaml`, the file `local init` writes requires `THERMITE_RIG_HARNESS_VULKAN_IMAGE` in `.env`, and says so in words.
+
+### What this goal delivers
+
+1. **The image in the release workflow** ([`release.yml`](../../../.github/workflows/release.yml)): an entry with its tag suffix, its licence label and its checks, on arm64, the one platform it is tested on.
+2. **The image in the release bundle** ([`bundle.ts`](../../../src/release/bundle.ts) and the bundle's compose template): its digest as the default of `THERMITE_RIG_HARNESS_VULKAN_IMAGE`, and in the bundle's list of images.
+3. **`local init` reads that default,** as it reads the CUDA harness's.
+4. **The pages** that list the released images.
+
+### Open questions
+
+- Whether the image is also published for amd64. Mesa's drivers in it might serve other GPUs on Linux; none is tested (AMD GPUs are goal [105](105-amd-gpus.goal)).
+- How a release run checks the image with no such GPU on a CI runner. A runner can show the Vulkan smoke kit's build, and the software device refused in words.
+
+## Why
+
+- The quick start installs from a release. Without the image there, a Mac's GPU is for people who build from the source.
+- It was left out of goal 106 because a change to the release workflow is proven only by a release run, and that goal was proven on one Mac from a checkout.
+
+## Constraints
+
+- The release's rules hold: the base image pinned by its digest, the licence label, the image's checks before its version tag.
+
+## Done when
+
+- [ ] Written when the goal is accepted.
+
+## Progress
+
+- 2026-11-13: proposed, when goal 106 was built.
+
+---
+
+Run with `/goal Complete docs/plan/goals/280-released-vulkan-harness-image.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

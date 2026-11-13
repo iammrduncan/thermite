@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { IDS } from "../../src/harness/broker/index.ts";
+import { loadKit } from "../../src/harness/judge/index.ts";
 import {
   NOISY_TIMING_NOTE,
   type SmokeResult,
@@ -93,6 +94,46 @@ describe("the smoke rig check", () => {
         `${file}: set ${field} to ${want}, the smoke check's ${what} (it is ${got})`,
       );
   });
+
+  // The GPU kits build and measure on a device no test host has (the CPU kit's whole run is the
+  // first test above): what is held here is that each is whole, where the smoke check looks.
+  for (const [kitName, target, projectName] of [
+    ["smoke-cpu", "cpu", "smoke-project"],
+    ["smoke-cuda", "cuda-gpu", "smoke-cuda-project"],
+    ["smoke-vulkan", "vulkan-gpu", "smoke-vulkan-project"],
+  ] as const)
+    test(`the ${target} target's smoke kit is whole: ${kitName} and its project`, async () => {
+      const kitDir = join(repoRoot, "kits", kitName);
+      const projectDir = join(repoRoot, "examples", projectName);
+      const kit = loadKit(kitDir);
+      assert.equal(kit.name, kitName);
+      assert.equal(kit.target, target);
+      const candidates = JSON.parse(
+        readFileSync(join(kitDir, "candidates", "candidates.json"), "utf8"),
+      ) as Record<string, { hypothesis: string; expect: string }>;
+      for (const want of ["noop", "broken", "fallback", "good"])
+        assert.ok(candidates[want], `${kitName} has the candidate ${want}`);
+      // A candidate is the project's files as the candidate leaves them, by their own paths.
+      const filesOf = (dir: string, under = ""): string[] =>
+        readdirSync(join(dir, under)).flatMap((name) => {
+          const at = join(under, name);
+          return statSync(join(dir, at)).isDirectory() ? filesOf(dir, at) : [at];
+        });
+      for (const name of Object.keys(candidates)) {
+        const files = filesOf(join(kitDir, "candidates", name));
+        assert.ok(files.length > 0, `${kitName}'s candidate ${name} changes a file`);
+        for (const file of files)
+          assert.ok(
+            statSync(join(projectDir, file), { throwIfNoEntry: false })?.isFile(),
+            `${kitName}'s candidate ${name} changes ${file}, a file of ${projectName}`,
+          );
+      }
+      // The same files give the same commits: a second check reuses the first one's repositories.
+      const a = await seedSmokeRepos(repoRoot, kitName, mkdtempSync(join(tmpdir(), "thermite-s-")));
+      const b = await seedSmokeRepos(repoRoot, kitName, mkdtempSync(join(tmpdir(), "thermite-s-")));
+      assert.deepEqual(b, a);
+      assert.deepEqual([a.projectRepo, a.kitRepo], [`${kitName}-project`, `${kitName}-kit`]);
+    });
 
   test("a target without a smoke kit is reported, not attempted", async () => {
     const env = makeJudgeEnv();

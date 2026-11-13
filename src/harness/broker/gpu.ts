@@ -1,15 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  chmodSync,
-  chownSync,
-  existsSync,
-  lstatSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, chownSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { errorText } from "../../common/errors.ts";
 import { log, logWarn } from "../../common/log.ts";
@@ -19,6 +9,7 @@ import {
   expectedNodeGroups,
   formatCpuList,
   type GpuLayout,
+  gpuDeviceNodes,
   LAYOUT_FILE,
   type LayoutRecord,
   nodeGroups,
@@ -39,12 +30,8 @@ import { IDS } from "./runner.ts";
  * timed runs are pinned to.
  */
 
-export function deviceNodes(): string[] {
-  if (!existsSync("/dev")) return [];
-  return readdirSync("/dev")
-    .filter((name) => name.startsWith("nvidia"))
-    .map((name) => join("/dev", name))
-    .filter((p) => !lstatSync(p).isDirectory());
+export function deviceNodes(target = process.env.THERMITE_TARGET): string[] {
+  return gpuDeviceNodes(target);
 }
 
 /**

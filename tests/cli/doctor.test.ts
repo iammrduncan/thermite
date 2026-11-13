@@ -620,8 +620,8 @@ describe("thermite doctor", () => {
 
     // A Mac with Apple silicon: no GPU in the containers.
     const mac = await doctor(probes({ platform: "darwin", arch: "arm64", cmds: podmanMac }));
-    assert.match(one(mac, "gpu-driver").said, /can't reach its Apple GPU/);
-    assert.match(one(mac, "rig").said, /MLX-style work can't run in a rig yet/);
+    assert.match(one(mac, "gpu-driver").said, /reaches its GPU only as a Vulkan device/);
+    assert.match(one(mac, "rig").said, /MLX-style work needs Metal, which no container has/);
 
     // No engine answers: the rig is not checked.
     assert.equal((await check({}, "rig")).status, "skip");

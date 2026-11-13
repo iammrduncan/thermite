@@ -134,6 +134,7 @@ if (broker.isRoot) {
     assertDevices: () => assertDevices(broker, gpuLayout),
     runCpus: chooseRunCpus(broker, gpuLayout, lists),
     fence: broker.fenceAbi ? FENCE : undefined,
+    target: broker.env.THERMITE_TARGET,
   };
   log("broker", "GPU fence", { landlock_abi: broker.fenceAbi, used: broker.fenceAbi > 0 });
   // nvidia-smi as root (the bus query above) resets nvidia-uvm to 0666: put it back now.

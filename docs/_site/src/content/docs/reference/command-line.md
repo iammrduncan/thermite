@@ -339,7 +339,8 @@ usage: thermite <command> [options]
                                       kept. Run as root, it gives what it makes to the owner of
                                       DIR's parent folder. It says what the local rig gets
                                       (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
-                                      have, writes compose.gpu.yaml next to DIR for the engine
+                                      have, or a Mac's GPU that its Podman machine gives,
+                                      writes compose.gpu.yaml next to DIR for the engine
                                       named, or the one it finds. Each rig's token for control
                                       starts empty: local enroll fills it
   local enroll RIG --control URL --token-file F --out FILE
@@ -415,9 +416,9 @@ The checks, in the order it runs them:
 | Control's port (`port`) | Whether a program listens on `127.0.0.1` at the port. If one does, whether it is control: `GET /v1/health`. A rig listens on no port of its own on its machine; it needs to reach control's port, which the **Control** check tests | Another program has the port | | |
 | Disk (`disk`) | Free space for the engine's images: Podman's own numbers (`podman info`), or on Linux the file system of Docker's root folder. Free space in the current folder | Under 5 GB for the images, or under 1 GB in the folder | Under 15 GB for the images, or under 5 GB in the folder | Neither can be read. Docker Desktop's own disk can't be read: the check says where to look |
 | Clock (`clock`) | With `--control`: control's `Date` header. Without it, on Linux: `timedatectl`, whether the system says its clock is synchronized | More than 300 s from control's clock. Control refuses a rig's reports from more than 5 minutes ahead | More than 30 s from control's clock, or not synchronized | Without `--control` on macOS, or on Linux without `timedatectl`; or when control does not answer |
-| GPU driver (`gpu-driver`) | On Linux, with an NVIDIA GPU (`/dev/nvidia0`, `/proc/driver/nvidia/gpus`, or an NVIDIA display controller in `lspci`): `nvidia-smi` | `nvidia-smi` is missing or fails | | No NVIDIA GPU, or macOS. The line names AMD GPUs and a Mac's Apple GPU, which the rig does not use |
+| GPU driver (`gpu-driver`) | On Linux, with an NVIDIA GPU (`/dev/nvidia0`, `/proc/driver/nvidia/gpus`, or an NVIDIA display controller in `lspci`): `nvidia-smi` | `nvidia-smi` is missing or fails | | No NVIDIA GPU, or macOS. The line names AMD GPUs, which the rig does not use. On a Mac with Apple silicon it says `A Mac has no GPU driver to check: a rig reaches its GPU only as a Vulkan device, through a Podman machine made on libkrun (the Local rig check says whether this one does). A CPU rig needs no GPU driver.` |
 | GPU container toolkit (`gpu-toolkit`) | `nvidia-ctk --version`, and what the engine the rig runs on needs from it: with Docker, NVIDIA's runtime in `docker info`; with Podman, a CDI spec at `/etc/cdi/nvidia.yaml` or `/var/run/cdi/nvidia.yaml`, or one that `nvidia-ctk cdi list` shows as `nvidia.com/gpu=all`. With no engine that answers, or GPUs that `nvidia-smi` doesn't list: the toolkit and a CDI spec | The toolkit, the runtime or the CDI spec is missing. The fix says how to install or make it | | No NVIDIA GPU, or macOS |
-| Local rig (`rig`) | What the local rig gets: the CPUs and memory of `docker info` or `podman info` (on a Mac, the virtual machine's, with how to give it more; when both engines answer, the other one's too), the NVIDIA GPUs `nvidia-smi` lists and whether the engine can give them to containers, AMD GPUs (`/sys/class/drm` cards with AMD's vendor id, or `/dev/kfd`), and a Mac's Apple GPU. With GPUs the rig can have, it says how `thermite local init` puts the rig on them | | The machine has NVIDIA GPUs that the rig can't have: the driver doesn't list them, or the engine can't give them to containers | No engine answers |
+| Local rig (`rig`) | What the local rig gets: the CPUs and memory of `docker info` or `podman info` (on a Mac, the virtual machine's, with how to give it more; when both engines answer, the other one's too), the NVIDIA GPUs `nvidia-smi` lists and whether the engine can give them to containers, AMD GPUs (`/sys/class/drm` cards with AMD's vendor id, or `/dev/kfd`), and a Mac's GPU. On a Mac with Apple silicon whose rig runs on Podman, it asks whether Podman's machine gives containers the GPU: `podman machine list --format json` for the machine that runs and its provider, and, for one made on `libkrun`, `podman machine ssh NAME ls /dev/dri` for a `renderD` device. With GPUs the rig can have, it says how `thermite local init` puts the rig on them | | The machine has NVIDIA GPUs that the rig can't have: the driver doesn't list them, or the engine can't give them to containers. Or a Mac's Podman machine gives containers no GPU: it runs on another provider than `libkrun`, or it has no GPU device. The fix says how to make one that does | No engine answers |
 | Control (`control`) | `GET /v1/health` at `--control` | No answer, an answer that is not control's, or control's 503 while it starts or one of its loops is late (`Control answers at <address>, but one of its loops is late: /v1/health answered HTTP 503.`) | | No `--control` |
 | Model server (`model`) | `GET` at `--model-url`. Any HTTP answer counts, even `401` or `404`: the rig's [Model route check](rig-checks.md) tests the model itself | No answer | | No `--model-url` |
 
@@ -1136,7 +1137,7 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 
 ### `local init`
 
-`thermite local init DIR [--engine docker|podman]` makes `DIR`, the `.dev` folder that the local compose stack reads, and keeps every file that is there already. Then it says what the local rig gets, and on a machine with NVIDIA GPUs the rig can have, it writes `compose.gpu.yaml` next to `DIR`. A release's compose file runs it in its `init` service as `thermite local init /work/.dev`, with the folder of `compose.yaml` mounted at `/work`. In a checkout of the source code, `npm run dev:init` makes the same folder without a build, and says nothing about the machine. It needs no network.
+`thermite local init DIR [--engine docker|podman]` makes `DIR`, the `.dev` folder that the local compose stack reads, and keeps every file that is there already. Then it says what the local rig gets, and on a machine with NVIDIA GPUs the rig can have, or on a Mac whose Podman machine gives containers the GPU, it writes `compose.gpu.yaml` next to `DIR`. A release's compose file runs it in its `init` service as `thermite local init /work/.dev`, with the folder of `compose.yaml` mounted at `/work`. In a checkout of the source code, `npm run dev:init` makes the same folder without a build, and says nothing about the machine. It needs no network.
 
 | What | Mode | Made |
 | --- | --- | --- |
@@ -1151,14 +1152,14 @@ Run as root, when the folder that holds `DIR` belongs to another user, it gives 
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--engine docker` or `--engine podman` | In a container, the one that runs it. On the machine: the one that can give containers the GPUs, else Docker, else Podman | The engine that the rig runs on, and that `compose.gpu.yaml` is written for. Any other value: `--engine is docker or podman`, exit 2 |
+| `--engine docker` or `--engine podman` | In a container, the one that runs it. On the machine: the one that can give containers the NVIDIA GPUs; else, on a Mac, Podman when its machine gives containers the GPU; else Docker; else Podman | The engine that the rig runs on, and that `compose.gpu.yaml` is written for. Any other value: `--engine is docker or podman`, exit 2 |
 
-**What the rig gets.** Lines that start with `rig:` say what the local rig can use, as the **Local rig** check of [`doctor`](#doctor) does: the CPUs and memory, the NVIDIA GPUs it can have and how the judge and the agents split them, AMD GPUs and a Mac's Apple GPU, which it doesn't use, and a line that starts with `rig: Fix:` when GPUs are kept from it. [What the rig gets](../how-to/install/one-machine.md#what-the-rig-gets) says what each kind of machine gets. Where it looks depends on where it runs:
+**What the rig gets.** Lines that start with `rig:` say what the local rig can use, as the **Local rig** check of [`doctor`](#doctor) does: the CPUs and memory, the NVIDIA GPUs it can have and how the judge and the agents split them, AMD GPUs, which it doesn't use, a Mac's GPU and whether the rig can have it, and a line that starts with `rig: Fix:` when GPUs are kept from it. [What the rig gets](../how-to/install/one-machine.md#what-the-rig-gets) says what each kind of machine gets. Where it looks depends on where it runs:
 
 | Where it runs | What it reads | Whether the engine can give containers the GPUs |
 | --- | --- | --- |
-| On the machine | `docker info` or `podman info`, `nvidia-smi`, `nvidia-ctk`, `lspci`, `/sys/class/drm` | Checked: NVIDIA's runtime for Docker, a CDI spec for Podman |
-| In a container, as the release's `init` service | The container's CPUs and memory, the GPUs under `/proc/driver/nvidia/gpus`, and `/sys/class/drm`. The engine is the one that runs the container, from the file it puts there (`/.dockerenv` or `/run/.containerenv`) | Not checked: its `rig:` line says to run `thermite doctor` on the machine |
+| On the machine | `docker info` or `podman info`, `nvidia-smi`, `nvidia-ctk`, `lspci`, `/sys/class/drm`. On a Mac with Apple silicon where Podman answers: `podman machine list`, and `/dev/dri` in a machine made on `libkrun` | Checked: NVIDIA's runtime for Docker, a CDI spec for Podman; for a Mac's GPU, a Podman machine made on `libkrun` that has a GPU device |
+| In a container, as the release's `init` service | The container's CPUs and memory, the GPUs under `/proc/driver/nvidia/gpus`, and `/sys/class/drm`. The engine is the one that runs the container, from the file it puts there (`/.dockerenv` or `/run/.containerenv`) | Not checked: its `rig:` line says to run `thermite doctor` on the machine. A Mac's GPU is not seen at all: from the container, nothing says that the machine is a Mac |
 
 **`compose.gpu.yaml`.** When the rig can have NVIDIA GPUs, `local init` writes `compose.gpu.yaml` in the folder that holds `DIR` (when `DIR` is a link, the folder that holds its target), mode 0644, again at every run, and prints `wrote compose.gpu.yaml: start Thermite with docker compose -f compose.yaml -f compose.gpu.yaml up -d` (or `podman compose`). It changes only the `harness` service:
 
@@ -1171,6 +1172,30 @@ Run as root, when the folder that holds `DIR` belongs to another user, it gives 
 | Podman | The CDI device `nvidia.com/gpu=all`, and `label=disable` |
 
 A rig takes 16 GPUs at most. On a machine with more, the file names the first 16 by number in place of all of them.
+
+On a Mac with Apple silicon, when Podman is the rig's engine and its machine gives containers the GPU, `local init` writes the same file for the Mac's GPU, and prints the same line with `podman compose`. Its `rig:` line then says `This Mac has Apple silicon. Podman's machine <name> is made on libkrun, which gives containers the Mac's GPU as a Vulkan device, so the rig can have it. The judge and the agents share it. It runs engines with a Vulkan back end; MLX needs Metal, which no container has.` The file changes only the `harness` service:
+
+| What | Value |
+| --- | --- |
+| `image` | Next to a checkout's `compose.yaml`, which builds the harness: `thermite-harness:local-vulkan`, built with the build argument `BASE_IMAGE: vulkan-base` ([The Vulkan harness](harness-image.md#the-vulkan-harness)). Otherwise `${THERMITE_RIG_HARNESS_VULKAN_IMAGE:?…}`: no release has a Vulkan harness, so compose stops and asks for the setting, with `put THERMITE_RIG_HARNESS_VULKAN_IMAGE in .env: the harness built on the Vulkan base (containers/Containerfile, --target harness --build-arg BASE_IMAGE=vulkan-base); no release has one yet` |
+| `THERMITE_TARGET` | `vulkan-gpu` |
+| `devices` | `/dev/dri`, the device folder the machine's GPU is in |
+| `security_opt` | `label=disable` |
+
+It sets no GPU list: the rig has the one GPU, which the judge and the agents share. [Use a Mac's GPU](../how-to/install/one-machine.md#use-a-macs-gpu) has the steps before it.
+
+When the machine gives no GPU, it writes no file, and its `rig:` lines say why:
+
+| `rig:` line | When |
+| --- | --- |
+| `This Mac has Apple silicon. The rig can't have its GPU yet: Podman's machine <name> runs on <provider>, which gives containers no GPU. So it uses the virtual machine's CPUs and memory.` | The machine that runs is not made on `libkrun` |
+| `This Mac has Apple silicon. The rig can't have its GPU yet: Podman's machine <name> is made on libkrun but has no GPU device (/dev/dri). So it uses the virtual machine's CPUs and memory.` | `ls /dev/dri` in the machine fails or lists no `renderD` device |
+| `This Mac has Apple silicon. Containers on macOS run in a Linux virtual machine, and only one kind gives them the Mac's GPU: a Podman machine made on libkrun, as a Vulkan device. MLX-style work needs Metal, which no container has. The rig gets the virtual machine's CPUs and memory, not the GPU.` | The rig's engine is Docker, or Podman names no machine that runs |
+
+The first two come with a fix, and the **Local rig** check of `doctor` warns:
+
+- `rig: Fix: Install krunkit (brew tap slp/krun, then brew install krunkit), stop the machine that runs, and make one on libkrun: CONTAINERS_MACHINE_PROVIDER=libkrun podman machine init --now. Podman runs one machine at a time, so Thermite's containers and the GPU are in that one. Then run thermite local init again.`
+- `rig: Fix: Update krunkit (brew upgrade krunkit; 1.3.2 gives its machines a GPU), then stop the machine and start it again. Then run thermite local init again.`
 
 
 ### `local enroll`

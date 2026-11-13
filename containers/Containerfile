@@ -10,9 +10,14 @@
 #
 # The harness's default base is the Node image (CPU rigs). GPU rigs build it with BASE_IMAGE set
 # to a CUDA devel image: CUDA 12 for Pascal to Hopper, CUDA 13 (which dropped Maxwell, Pascal and
-# Volta) for Turing to Blackwell (goal 132).
+# Volta) for Turing to Blackwell (goal 132). A rig whose GPU is reached through Vulkan (a Mac's,
+# through a Podman machine that gives its containers one; goal 106) builds it with
+# BASE_IMAGE=vulkan-base, the stage below.
 ARG NODE_IMAGE=docker.io/library/node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 ARG BASE_IMAGE=${NODE_IMAGE}
+# The Vulkan base's distribution: one whose own Mesa is 26.2 or newer, the first whose Venus driver
+# opens the GPU of a libkrun machine as it comes (Ubuntu 26.04's 26.0 and Debian 13's 25.0 do not).
+ARG VULKAN_IMAGE=docker.io/library/ubuntu:26.10@sha256:b5194b8e58989da0865ebc80078bf9f5f8742ec6a867c53f6ae699f6036756f7
 # The programs the images carry, each at one pinned release. OpenCode v2, in the harness and the
 # supervisor, with its release's MIT LICENSE (containers/harness/opencode/; update it with the
 # version). The Codex CLI, in both too, with its release's LICENSE and NOTICE
@@ -277,6 +282,17 @@ ENV THERMITE_COMMIT=${THERMITE_COMMIT}
 # the supervisor keeps none.
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "/opt/thermite/dist/supervisor/advisor-runs/main.js"]
+
+# --- vulkan-base: the harness's base for a GPU reached through Vulkan (goal 106) ---------------------
+# Mesa's Vulkan drivers, Venus among them, which carries Vulkan from a virtual machine's guest to
+# its host's GPU; the loader; vulkaninfo, which the target's driver reads the device from; and what
+# a kit's build needs for an engine with a Vulkan back end: the headers and the shader compiler.
+# The harness stage adds the rest, as on every base.
+FROM ${VULKAN_IMAGE} AS vulkan-base
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      mesa-vulkan-drivers libvulkan1 vulkan-tools libvulkan-dev glslc spirv-headers \
+ && rm -rf /var/lib/apt/lists/*
 
 # --- harness: a rig's judge, broker and agents -----------------------------------------------------
 FROM ${BASE_IMAGE} AS harness

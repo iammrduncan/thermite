@@ -28,6 +28,7 @@ import { Research, ResearchFolder, SAVED_LANES_DIR } from "../research/index.ts"
 import type { RigSettingsStore } from "../rig-settings-store.ts";
 import type { HarnessService } from "../service/index.ts";
 import { keepSession } from "../sessions.ts";
+import { onGpu } from "../targets/index.ts";
 import type { ControllerContext } from "./context.ts";
 import type { Targets } from "./targets.ts";
 
@@ -64,7 +65,7 @@ export function agentParts(
     runner,
     ledger,
     scratchDir: paths.scratchDir,
-    gpu: driver.type === "cuda-gpu",
+    gpu: onGpu(driver.type),
     dedicated: devCard?.layout !== undefined,
     cards: devCards.length || undefined,
     unavailable: devCard?.error,

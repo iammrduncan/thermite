@@ -404,7 +404,7 @@ function gpuFindings(p: Probes, m: MachineFacts): Finding[] {
   const toolkit = "GPU container toolkit";
   if (m.platform !== "linux" || !m.nvidia.present) {
     const said = m.appleSilicon
-      ? "Thermite uses NVIDIA GPUs on Linux only: containers on a Mac can't reach its Apple GPU. A CPU rig needs no GPU driver."
+      ? "A Mac has no GPU driver to check: a rig reaches its GPU only as a Vulkan device, through a Podman machine made on libkrun (the Local rig check says whether this one does). A CPU rig needs no GPU driver."
       : m.platform === "darwin"
         ? "Thermite uses NVIDIA GPUs on Linux only. A CPU rig needs no GPU driver."
         : m.amd.count
@@ -513,6 +513,10 @@ function rigFinding(m: MachineFacts): Finding {
   if (r.gpus)
     said.push(
       `thermite local init writes ${GPU_OVERRIDE}, which gives them to the rig. Then start Thermite with ${upWithGpus(r.gpus.engine)}.`,
+    );
+  else if (r.vulkan)
+    said.push(
+      `thermite local init writes ${GPU_OVERRIDE}, which gives it to the rig. Then start Thermite with ${upWithGpus(r.vulkan.engine)}.`,
     );
   return {
     check: "rig",

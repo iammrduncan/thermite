@@ -113,7 +113,7 @@ flowchart TB
 
 - A **rig** is two containers. The **harness** does the research. It needs only DNS, the internet and its model endpoint; on Kubernetes, network rules keep it to those, and under compose or on a machine it can also reach the local network ([known limits](https://usethermite.com/reference/known-limits/)). The **supervisor** does everything that needs more reach: git, reporting and relaying signed commands from control.
 - Rigs run under docker-compose or podman-compose on one machine. **Control** can also set rigs up on your own machines over SSH, or on a Kubernetes cluster.
-- **Target drivers** connect the judge to what is measured: CUDA GPUs and CPUs today.
+- **Target drivers** connect the judge to what is measured: CPUs, CUDA GPUs and, through Vulkan, a Mac's own GPU today.
 
 More in [architecture](https://usethermite.com/explanation/how-it-fits-together/).
 

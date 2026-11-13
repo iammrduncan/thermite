@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { readHardware } from "../../src/core/hardware.ts";
 import { collectHardware, parseCudaVersion, parseDevice } from "../../src/harness/hardware.ts";
 import { CpuDriver } from "../../src/harness/targets/cpu.ts";
+import { VulkanDriver } from "../../src/harness/targets/vulkan.ts";
 
 // Shaped like nvidia-smi's output for a 16 GB Pascal card (no real host data).
 const ROW =
@@ -84,5 +85,49 @@ describe("rig hardware", () => {
       if (before === undefined) delete process.env.THERMITE_IMAGE_ID;
       else process.env.THERMITE_IMAGE_ID = before;
     }
+  });
+
+  test("a GPU reached through Vulkan is the rig's one device, with what Vulkan gives of it", async () => {
+    const dir = mkdtempSync(`${tmpdir()}/thermite-hw-`);
+    const summary = [
+      "GPU0:",
+      "\tdeviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU",
+      "\tdeviceName         = Virtio-GPU Venus (Apple M4 Pro)",
+      "\tdriverInfo         = Mesa 26.2.4-1ubuntu1",
+      "\tdeviceUUID         = 0f1e2d3c-4b5a-5678-8a9b-c0d1e2f3a4b5",
+      "",
+    ].join("\n");
+    const h = await collectHardware({
+      driver: new VulkanDriver({ targetClass: "vulkan-gpu", info: async () => summary }),
+      deviceMode: "shared",
+      stateDir: dir,
+      scratchDir: dir,
+    });
+    assert.deepEqual(h.errors, []);
+    assert.deepEqual(h.devices, [
+      {
+        role: "shared",
+        name: "Virtio-GPU Venus (Apple M4 Pro)",
+        uuid: "0f1e2d3c-4b5a-5678-8a9b-c0d1e2f3a4b5",
+        bus: "",
+        memory_mib: null,
+        driver: "Mesa 26.2.4-1ubuntu1",
+        cuda: null,
+        power_limit_w: null,
+        max_sm_mhz: null,
+        max_mem_mhz: null,
+        pcie: null,
+        vbios: null,
+      },
+    ]);
+    // With no GPU listed the target is an error of the hardware, and no device is made up.
+    const none = await collectHardware({
+      driver: new VulkanDriver({ targetClass: "vulkan-gpu", info: async () => "" }),
+      deviceMode: "shared",
+      stateDir: dir,
+      scratchDir: dir,
+    });
+    assert.deepEqual(none.devices, []);
+    assert.match(none.errors.join(" "), /Vulkan lists no device/);
   });
 });

@@ -29,7 +29,7 @@ import {
   removeBuild,
 } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
-import { readThrottle, type TargetDriver } from "../targets/index.ts";
+import { onGpu, readThrottle, type TargetDriver } from "../targets/index.ts";
 
 /**
  * A runner process (goal 206): the target resources of its machine, each a runner by its place
@@ -393,8 +393,8 @@ export class RunHost {
         disk,
         ...nproc,
         captureBytes: 32 * 1024,
-        gpu: this.card(0).driver.type === "cuda-gpu",
-        ...(this.card(0).driver.type === "cuda-gpu" ? {} : { keepBackground: true }),
+        gpu: onGpu(this.card(0).driver.type),
+        ...(onGpu(this.card(0).driver.type) ? {} : { keepBackground: true }),
       });
       return {
         ran: true,

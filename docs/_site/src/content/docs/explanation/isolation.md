@@ -84,12 +84,12 @@ The results of hidden test cases stay in a table of the ledger that never goes i
 
 A GPU is a device file, and whoever can open the file can use the card. The broker decides who can open each one.
 
-- **One GPU, shared.** Every GPU device file belongs to the `gpu` group. Only the judge's timing user and a lane's development runs have it. The judge and the development runs take turns on the card ([Sharing a device](sharing-a-device.md)).
+- **One GPU, shared.** Every GPU device file belongs to the `gpu` group: NVIDIA's files, and for a GPU reached through Vulkan, such as a Mac's, the files in `/dev/dri` that Vulkan opens it by. Only the judge's timing user and a lane's development runs have it. The judge and the development runs take turns on the card ([Sharing a device](sharing-a-device.md)).
 - **Several GPUs, dedicated.** Each card's device file gets a group of its own. The judge's timing user for a card gets that card's group, and a development run gets the group of the card it was given. A program can't open a card its groups don't name, whatever its environment says. Every card in the container must have its place in the layout, or the rig refuses the layout.
 
 Where the container allows it, the broker puts each device file's owner and permissions back before every run, and at regular intervals.
 
-The **GPU fence** adds a second lock where the kernel supports it: a Landlock rule set on each role's command, which its child processes keep. It leaves out every device file the role may not open. It lets the role move and link its files between folders, which a build's cache does, and the kernel still refuses a move that would give a file access it lacks where it is. Where the device files' owner and permissions can't be changed inside the container, as on some GPU clouds and under rootless Podman, the fence is the lock that keeps roles off the cards.
+The **GPU fence** adds a second lock where the kernel supports it: a Landlock rule set on each role's command, which its child processes keep. It leaves out every device file the role may not open. It lets the role move and link its files between folders, which a build's cache does, and the kernel still refuses a move that would give a file access it lacks where it is. Where the device files' owner and permissions can't be changed inside the container, as on some GPU clouds, under rootless Podman, and for a Mac's GPU in Podman's machine, the fence is the lock that keeps roles off the cards.
 
 If a rig can't set up its GPU layout this way, it neither times anything nor allows development runs. It never falls back to sharing the cards.
 

@@ -11,9 +11,12 @@ import {
   type EngineName,
   gpuOverride,
   harnessImageFrom,
+  LIBKRUN_FIX,
   LOCAL_CUDA_TAG,
+  LOCAL_VULKAN_TAG,
   localGpuPlan,
   rigReport,
+  vulkanOverride,
 } from "../../src/cli/machine.ts";
 import { effectiveGpuLists } from "../../src/harness/broker/devices.ts";
 import { COMPOSE_NEEDS, placeholders, render } from "../../src/release/bundle.ts";
@@ -253,7 +256,7 @@ describe("what the local rig gets", () => {
     assert.equal(r.gpus, undefined);
     assert.equal(
       r.lines[1],
-      "This machine has 2 AMD GPUs (Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [Radeon RX 7900 XTX] ×2). The rig does not get them: Thermite's GPU images are built on CUDA, which runs on NVIDIA GPUs only, and AMD GPUs need a ROCm image, which Thermite does not have yet.",
+      "This machine has 2 AMD GPUs (Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [Radeon RX 7900 XTX] ×2). The rig does not get them: Thermite's published GPU images are built on CUDA, which runs on NVIDIA GPUs only, and AMD GPUs need a ROCm image, which Thermite does not have yet.",
     );
     // Only /dev/kfd, no lspci: one AMD GPU, without a name.
     const kfd = rigReport(await on({ cmds: dockerInfo(), files: ["/dev/kfd"] }, ["docker"]));
@@ -275,12 +278,13 @@ describe("what the local rig gets", () => {
     assert.equal(r.status, "ok");
     assert.deepEqual(r.lines, [
       "Podman's virtual machine has 7 CPUs and 8.6 GB of memory, and the rig can use all of them. This Mac has 14 CPUs and 38.7 GB. To give it more, stop it and set them: podman machine stop, then podman machine set --cpus 14 --memory 18432, then podman machine start.",
-      "This Mac has Apple silicon. Containers on macOS run in a Linux virtual machine, which can't reach the Apple GPU (Metal), so MLX-style work can't run in a rig yet. The rig gets the virtual machine's CPUs and memory, not the GPU.",
+      "This Mac has Apple silicon. Containers on macOS run in a Linux virtual machine, and only one kind gives them the Mac's GPU: a Podman machine made on libkrun, as a Vulkan device. MLX-style work needs Metal, which no container has. The rig gets the virtual machine's CPUs and memory, not the GPU.",
     ]);
     // nvidia-smi, lspci and the toolkit are never asked on a Mac.
     const p = probes(mac);
     await detectOnMachine(p, ["podman"]);
-    assert.deepEqual(p.ran, ["podman info --format json"]);
+    // A Mac is also asked whether its Podman machine gives containers the GPU.
+    assert.deepEqual(p.ran, ["podman info --format json", "podman machine list --format json"]);
     const docker = rigReport(
       await on(
         {
@@ -305,6 +309,7 @@ describe("what the local rig gets", () => {
       ],
       fix: undefined,
       gpus: undefined,
+      vulkan: undefined,
     });
     const none = rigReport(await on({ files: nvidiaFiles, cmds: smi(RTX) }, []));
     assert.equal(none.status, "skip");
@@ -472,5 +477,135 @@ services:
     const text = gpuOverride("docker", ["NVIDIA\nservices:\n  evil: {}"], { kind: "unset" });
     assert.match(text, /^# 1 NVIDIA GPU \(NVIDIAservices: {2}evil: \{\}\)\. /m);
     assert.equal((text.match(/^services:$/gm) ?? []).length, 1);
+  });
+});
+
+describe("a Mac's GPU (goal 106)", () => {
+  const mac = { platform: "darwin" as const, arch: "arm64", cpus: 14, memBytes: 24e9 };
+  const machines = (...list: [string, string, boolean][]) => ({
+    "podman machine list --format json": {
+      stdout: JSON.stringify(list.map(([Name, VMType, Running]) => ({ Name, VMType, Running }))),
+    },
+  });
+  const dri = (name: string, out: string) => ({
+    [`podman machine ssh ${name} ls /dev/dri`]: { stdout: out },
+  });
+
+  test("a Podman machine made on libkrun gives the rig the GPU, as a Vulkan device", async () => {
+    const m = await on(
+      {
+        ...mac,
+        cmds: {
+          ...podmanInfo(8, 12e9),
+          ...machines(["thermite-gpu", "libkrun", true], ["old", "libkrun", false]),
+          ...dri("thermite-gpu", "by-path\ncard0\nrenderD128\n"),
+        },
+      },
+      ["podman"],
+    );
+    assert.deepEqual(m.macGpu, { ok: true, machine: "thermite-gpu" });
+    const r = rigReport(m);
+    assert.equal(r.status, "ok");
+    assert.deepEqual(r.vulkan, { engine: "podman", machine: "thermite-gpu" });
+    assert.equal(r.gpus, undefined);
+    assert.match(
+      r.lines.join(" "),
+      /Podman's machine thermite-gpu is made on libkrun, which gives containers the Mac's GPU as a Vulkan device, so the rig can have it\. The judge and the agents share it\..*MLX needs Metal/,
+    );
+  });
+
+  test("with Docker and Podman both there, Podman is the rig's engine where its machine gives the GPU", async () => {
+    const cmds = {
+      ...dockerInfo({ NCPU: 14, MemTotal: 8e9, OperatingSystem: "Docker Desktop" }),
+      ...podmanInfo(8, 12e9),
+      ...machines(["thermite-gpu", "libkrun", true]),
+      ...dri("thermite-gpu", "card0\nrenderD128\n"),
+    };
+    const m = await on({ ...mac, cmds }, ["docker", "podman"]);
+    assert.equal(m.engine?.name, "podman");
+    assert.equal(m.other?.name, "docker");
+    // Docker asked for by name stays the engine: its containers get no GPU.
+    const asked = await on({ ...mac, cmds }, ["docker", "podman"], "docker");
+    assert.equal(asked.engine?.name, "docker");
+    assert.equal(asked.macGpu, undefined);
+    assert.equal(rigReport(asked).vulkan, undefined);
+    assert.match(rigReport(asked).lines.join(" "), /only one kind gives them the Mac's GPU/);
+  });
+
+  test("a machine on Apple's hypervisor gives none: the report says so, and how to get one", async () => {
+    const m = await on(
+      {
+        ...mac,
+        cmds: { ...podmanInfo(7, 8e9), ...machines(["podman-machine-default", "applehv", true]) },
+      },
+      ["podman"],
+    );
+    assert.deepEqual(m.macGpu, {
+      ok: false,
+      why: "Podman's machine podman-machine-default runs on applehv, which gives containers no GPU.",
+      fix: LIBKRUN_FIX,
+    });
+    const r = rigReport(m);
+    assert.equal(r.status, "warn");
+    assert.equal(r.vulkan, undefined);
+    assert.match(
+      r.lines.join(" "),
+      /The rig can't have its GPU yet: Podman's machine podman-machine-default runs on applehv/,
+    );
+    assert.equal(r.fix, `${LIBKRUN_FIX} Then run thermite local init again.`);
+  });
+
+  test("a libkrun machine with no GPU device, no machine running, or a list Podman can't give", async () => {
+    const noDevice = await on(
+      {
+        ...mac,
+        cmds: {
+          ...podmanInfo(8, 12e9),
+          ...machines(["m", "libkrun", true]),
+          ...dri("m", "by-path\n"),
+        },
+      },
+      ["podman"],
+    );
+    assert.equal(noDevice.macGpu?.ok, false);
+    assert.match(
+      noDevice.macGpu?.ok === false ? `${noDevice.macGpu.why} ${noDevice.macGpu.fix}` : "",
+      /made on libkrun but has no GPU device \(\/dev\/dri\)\. Update krunkit/,
+    );
+    const stopped = await on(
+      { ...mac, cmds: { ...podmanInfo(8, 12e9), ...machines(["m", "libkrun", false]) } },
+      ["podman"],
+    );
+    assert.equal(stopped.macGpu, undefined);
+    const noList = await on({ ...mac, cmds: podmanInfo(8, 12e9) }, ["podman"]);
+    assert.equal(noList.macGpu, undefined);
+    assert.match(rigReport(noList).lines.join(" "), /only one kind gives them the Mac's GPU/);
+    // A Linux machine is not asked about Podman's machines at all.
+    const p = probes({ cmds: podmanInfo(32, 128e9) });
+    await detectOnMachine(p, ["podman"]);
+    assert.ok(!p.ran.some((line) => line.startsWith("podman machine")));
+  });
+
+  test("compose.gpu.yaml for it: the harness built on the Vulkan base, with /dev/dri and the target", () => {
+    const text = vulkanOverride("podman", "thermite-gpu", { kind: "build" });
+    assert.match(text, new RegExp(`^    image: ${LOCAL_VULKAN_TAG}$`, "m"));
+    assert.match(text, /^ {6}args:\n {8}BASE_IMAGE: vulkan-base$/m);
+    assert.deepEqual(overrideEnv(text), { THERMITE_TARGET: "vulkan-gpu" });
+    assert.match(text, /^ {4}devices:\n {6}- \/dev\/dri\n {4}security_opt:\n {6}- label=disable$/m);
+    assert.match(text, /podman compose -f compose\.yaml -f compose\.gpu\.yaml up -d/);
+    // The stage it names is one of the image file's.
+    assert.match(read("containers/Containerfile"), /^FROM \$\{VULKAN_IMAGE\} AS vulkan-base$/m);
+    // A release's compose file builds nothing: the image must be named, and it says how.
+    for (const image of [
+      { kind: "image" as const, fallback: "ghcr.io/example/thermite-harness@sha256:abc" },
+      { kind: "unset" as const },
+    ]) {
+      const named = vulkanOverride("podman", "thermite-gpu", image);
+      assert.match(
+        named,
+        /image: "\$\{THERMITE_RIG_HARNESS_VULKAN_IMAGE:\?put THERMITE_RIG_HARNESS_VULKAN_IMAGE in \.env: /,
+      );
+      assert.doesNotMatch(named, /build:/);
+    }
   });
 });

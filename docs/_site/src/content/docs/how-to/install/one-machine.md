@@ -16,6 +16,7 @@ This guide sets Thermite up to stay on one computer: control, its message bus an
 - **Docker** with Docker Compose, or **Podman** with `podman compose` or podman-compose. `docker-compose` 1.x, the old Compose v1, can't read Thermite's compose file, and `podman compose` uses it first when it is installed: [remove it](../operate/troubleshoot.md#compose-wont-start-name-does-not-match-any-of-the-regexes). On a Mac, start Podman's virtual machine first (`podman machine start`).
 - `curl`, and access to `github.com` and `ghcr.io`, where the release and its images are.
 - For the rig to use NVIDIA GPUs: Linux, NVIDIA's driver and NVIDIA's container toolkit. See [Use the machine's NVIDIA GPUs](#use-the-machines-nvidia-gpus).
+- For the rig to use a Mac's GPU: a Mac with Apple silicon, Podman and krunkit. See [Use a Mac's GPU](#use-a-macs-gpu).
 
 To check the computer before the first `up`, build [the command line](#the-command-line) and run `npx thermite doctor` in its folder. It checks Docker or Podman and the compose tool, port 8800, free disk and the clock, and, on a computer with an NVIDIA GPU, the driver and NVIDIA's container toolkit. It also says what the rig will get: CPUs, memory and GPUs. Each problem it finds comes with a `Fix:` line. See [Check the machine](../operate/troubleshoot.md#check-the-machine).
 
@@ -71,7 +72,7 @@ Run `npx thermite` in your `thermite-source` folder; from another folder, `npx` 
 | --- | --- |
 | `control` | The dashboard, the REST API and MCP, on port 8800 |
 | `nats` | The [message bus](../operate/message-bus.md): a NATS server that carries the rig's reports and live lines to control, and control's commands and the rig's config to the rig, over TLS, on port 4222 |
-| `harness` | The rig `local-1`: its judge and its agents, on the CPU, or on the machine's NVIDIA GPUs with `compose.gpu.yaml`. It has no port outside the stack |
+| `harness` | The rig `local-1`: its judge and its agents, on the CPU, or with `compose.gpu.yaml` on the machine's NVIDIA GPUs or on a Mac's GPU. It has no port outside the stack |
 | `supervisor` | The rig's link to control. It also does the rig's git work |
 | `init` | Makes `.dev/` and your tokens, then stops. `up` runs it too; it finds the files there and keeps them |
 | `enroll` | At each `up`, once control answers and before the supervisor starts: enrolls the rig `local-1` with control and writes the token control made into `.dev/secrets/control-rig-token`, then stops. A token written before is kept while control has the rig enrolled ([`thermite local enroll`](../../reference/command-line.md#local-enroll)). `enroll-2` does the same for `local-2` |
@@ -90,8 +91,9 @@ The compose file sets no CPU or memory limits, so the rig can use all that Docke
 | --- | --- |
 | Linux | Every CPU and all the memory |
 | Linux with NVIDIA GPUs | Every CPU and all the memory, and every NVIDIA GPU once NVIDIA's container toolkit is installed and Thermite starts with `compose.gpu.yaml` ([below](#use-the-machines-nvidia-gpus)). Without the toolkit, the CPUs and memory only |
-| Linux with AMD GPUs | Every CPU and all the memory. The AMD GPUs are found but not used yet: Thermite's GPU images are built on CUDA, which runs on NVIDIA GPUs only, and AMD GPUs need a ROCm image, which Thermite does not have yet |
-| A Mac, with Apple silicon or Intel | The CPUs and memory of Docker's or Podman's virtual machine ([give it more](#give-the-virtual-machine-more-on-a-mac)). No GPU: containers on macOS run in a Linux virtual machine, which can't reach the Apple GPU (Metal), so MLX-style work can't run in a rig yet |
+| Linux with AMD GPUs | Every CPU and all the memory. The AMD GPUs are found but not used yet: Thermite's published GPU images are built on CUDA, which runs on NVIDIA GPUs only, and AMD GPUs need a ROCm image, which Thermite does not have yet |
+| A Mac with Apple silicon | The CPUs and memory of Docker's or Podman's virtual machine ([give it more](#give-the-virtual-machine-more-on-a-mac)). The Mac's GPU too, as a Vulkan device, when Thermite runs in a Podman machine made with the `libkrun` provider and starts with `compose.gpu.yaml` ([below](#use-a-macs-gpu)). Docker's virtual machine and Podman's default one give no GPU. MLX needs Metal, which no container has, so MLX work can't run in a rig |
+| A Mac with an Intel processor | The CPUs and memory of Docker's or Podman's virtual machine. No GPU |
 
 `init` says what it found, in lines that start with `rig:`. On a Linux machine with Docker, for example:
 
@@ -99,7 +101,13 @@ The compose file sets no CPU or memory limits, so the rig can use all that Docke
 rig: The containers have 32 CPUs and 134.0 GB of memory (on a Mac, the virtual machine's), and the stack sets no limits, so the rig can use all of them.
 ```
 
-`init` runs in a container, so it sees the CPUs and memory that containers get and the GPUs that NVIDIA's driver lists, but not the machine's programs. `npx thermite doctor`, from [the command line](#the-command-line), checks the machine itself: its **Local rig** check says the same, names AMD and Apple GPUs, and says how to fix what keeps a GPU from the rig.
+On a Mac with Apple silicon whose Podman machine gives containers the GPU, `npx thermite local init .dev` says, after the line for the CPUs and memory:
+
+```text
+rig: This Mac has Apple silicon. Podman's machine podman-machine-default is made on libkrun, which gives containers the Mac's GPU as a Vulkan device, so the rig can have it. The judge and the agents share it. It runs engines with a Vulkan back end; MLX needs Metal, which no container has.
+```
+
+`init` runs in a container, so it sees the CPUs and memory that containers get and the GPUs that NVIDIA's driver lists, but not the machine's programs, and not that the machine is a Mac. `npx thermite doctor`, from [the command line](#the-command-line), checks the machine itself: its **Local rig** check says the same, names AMD GPUs and a Mac's GPU, and says how to fix what keeps a GPU from the rig.
 
 ### Use the machine's NVIDIA GPUs
 
@@ -147,6 +155,79 @@ To tell that it worked, open the rig's page: **What it runs on** shows the **Jud
 - `init` writes the file again each time it runs, from what the machine has then, for the engine that runs it. Put changes of your own in another override file. With both Docker and Podman installed, `npx thermite local init .dev --engine podman` names the engine.
 - Only `local-1` gets the GPUs. `local-2`, the second rig, runs on the CPU.
 - With rootless Podman, the harness container can't change the GPU device files' group. The harness's log then says `could not set the gpu group on /dev/nvidia0` (and the same for each NVIDIA device file), and on a machine with one GPU the isolation check says `devices: shared (fence: landlock)`: the GPU fence, which uses the Linux kernel's Landlock, keeps the other roles off the card on its own, as on RunPod ([Isolation inside a rig](../../explanation/isolation.md#gpus-device-groups-and-the-fence)). This is expected. A kernel without Landlock can't fence the card: the rig then neither times on it nor gives it to development runs ([Compatibility](../../reference/compatibility.md)).
+
+### Use a Mac's GPU
+
+On a Mac with Apple silicon, the rig can use the Mac's own GPU. Containers on macOS run in a Linux virtual machine, and only one kind gives its containers the GPU: a Podman machine made with the `libkrun` provider, which the program krunkit runs. A container there sees the GPU as a Vulkan device, with a name such as `Virtio-GPU Venus (Apple M4 Pro)`, through the device folder `/dev/dri`. Docker Desktop's virtual machine, Podman's default provider (`applehv`) and Apple's own `container` tool give no GPU.
+
+The rig's [target](../../reference/glossary.md) is then `vulkan-gpu`, and the judge and the agents share the one GPU. What it can measure:
+
+| Work | On this rig |
+| --- | --- |
+| An engine with a Vulkan back end, such as llama.cpp's | Runs. llama.cpp's Vulkan back end in the container ran at 76 to 77% of its speed with Metal on macOS itself: one measurement, with one 0.5B model on an M4 Pro |
+| MLX, and any other work that needs Metal | Does not run: no container has Metal. It needs a runner on macOS itself, which is not built ([goal 279](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/279-runner-on-macos-for-mlx.goal)) |
+
+You need Podman, Homebrew and [the command line](#the-command-line), built in `thermite-source`.
+
+1. Install krunkit:
+
+   ```sh
+   brew tap slp/krun
+   brew install krunkit
+   ```
+
+   This guide was checked with krunkit 1.3.2.
+2. Make a Podman machine on libkrun. Podman runs one machine at a time, so stop the one that runs first:
+
+   ```sh
+   podman machine stop
+   CONTAINERS_MACHINE_PROVIDER=libkrun podman machine init --now
+   ```
+
+   Podman lists only the machines of the provider that is set (Podman 5.8). So keep the provider set for every later command: put it in `~/.config/containers/containers.conf`, or set `CONTAINERS_MACHINE_PROVIDER=libkrun` in each terminal.
+
+   ```toml title="~/.config/containers/containers.conf"
+   [machine]
+   provider = "libkrun"
+   ```
+
+   Thermite's containers (control, the message bus and the rig) and the GPU are all in that one machine. A new machine has none of the other machine's images and volumes, so Thermite starts there as a new install: to keep a stack's state, [back it up](../operate/backup-and-restore.md) first. To give the machine more CPUs and memory, see [below](#give-the-virtual-machine-more-on-a-mac).
+3. Check the machine: in `thermite-source`, run `npx thermite doctor`. Its **Local rig** check says `ok`, with `Podman's machine podman-machine-default is made on libkrun, which gives containers the Mac's GPU as a Vulkan device, so the rig can have it.` If it says `WARN`, do what its `Fix:` line says.
+4. Build the harness for a Vulkan GPU, in `thermite-source`. No release has this image yet ([goal 280](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/280-released-vulkan-harness-image.goal)):
+
+   ```sh
+   podman build --target harness --build-arg BASE_IMAGE=vulkan-base \
+     --build-arg THERMITE_COMMIT=$(git rev-parse HEAD) \
+     -t thermite-harness:local-vulkan -f containers/Containerfile .
+   ```
+
+   `THERMITE_COMMIT` lets the harness report the commit it is built from, as the release's images do.
+
+   Then name it in `.env`, next to the release's `compose.yaml`:
+
+   ```text title=".env"
+   THERMITE_RIG_HARNESS_VULKAN_IMAGE=thermite-harness:local-vulkan
+   ```
+
+   A stack that runs from a checkout of the source code skips this step: there, `compose.gpu.yaml` builds the image itself.
+5. Write `compose.gpu.yaml`: in `thermite-source`, run `npx thermite local init .dev`. It writes the file next to `compose.yaml`, and says so: `wrote compose.gpu.yaml: start Thermite with podman compose -f compose.yaml -f compose.gpu.yaml up -d`. Only the command line writes it for a Mac: the `init` container can't see the Mac from inside.
+6. Start Thermite with the file, in the folder that holds `compose.yaml`:
+
+   ```sh
+   podman compose -f compose.yaml -f compose.gpu.yaml up -d
+   ```
+
+   Name `compose.gpu.yaml` in every later `up`, as [Settings and override files](#settings-and-override-files) says. A start without it puts the rig back on the CPU.
+
+To tell that it worked, open the rig's page: **What it runs on** names the GPU as the **Judge**'s device, such as `Virtio-GPU Venus (Apple M4 Pro)`, and under **Every detail** the GPU has a row for **Judge + dev runs**, with its driver, such as `Mesa 26.2.4-1ubuntu1`. Then run its **Isolation** and **Judge smoke** checks ([Check a rig](../operate/check-a-rig.md)): the isolation check says `devices: shared (fence: landlock)`, and the smoke check runs the kit `smoke-vulkan` on the GPU.
+
+- `compose.gpu.yaml` gives the harness the image, the device folder `/dev/dri`, SELinux labels off, and `THERMITE_TARGET` `vulkan-gpu` ([`local init`](../../reference/command-line.md#local-init) lists it).
+- With Docker installed too, the rig's engine is Podman when its machine gives the GPU. `npx thermite local init .dev --engine docker` keeps the rig on Docker, without the GPU.
+- The rig has one GPU, which the judge and the agents' runs share, as a rig with one NVIDIA GPU does. It can't have a GPU for development runs alone.
+- The GPU says that it has all of the Mac's memory (24 GiB on a Mac with 24 GB), whatever the size of Podman's machine, and it gives no memory in use, no temperature and no load. Thermite sets no limit on it, and the rig's page shows no memory for it. Keep what a campaign loads on the GPU within what the Mac can spare.
+- In Podman's machine, the harness container can't change the group of the GPU's device files (`/dev/dri/renderD128`, `/dev/dri/card0`). The GPU fence, which uses the Linux kernel's Landlock, keeps the other roles off them on its own ([Isolation inside a rig](../../explanation/isolation.md#gpus-device-groups-and-the-fence)). This is expected.
+- A kit for this rig names the target `vulkan-gpu`. The image has the Vulkan headers and the shader compiler `glslc` for its builds ([The Vulkan harness](../../reference/harness-image.md#the-vulkan-harness)).
+- Only `local-1` gets the GPU. Control's **Add a rig** sets up no rig with a Vulkan GPU.
 
 ### Give the virtual machine more, on a Mac
 
@@ -246,7 +327,7 @@ Any other setting needs an **override file**: a second compose file next to `com
 
 | File | Made in | What it adds |
 | --- | --- | --- |
-| `compose.gpu.yaml` | Written by `init` on a machine with NVIDIA GPUs: [Use the machine's NVIDIA GPUs](#use-the-machines-nvidia-gpus) | The CUDA harness and the machine's GPUs for the rig `local-1` |
+| `compose.gpu.yaml` | Written by `init` on a machine with NVIDIA GPUs: [Use the machine's NVIDIA GPUs](#use-the-machines-nvidia-gpus). Written by `npx thermite local init .dev` on a Mac whose Podman machine gives the GPU: [Use a Mac's GPU](#use-a-macs-gpu) | The CUDA harness and the machine's GPUs for the rig `local-1`, or the Vulkan harness and the Mac's GPU |
 | `compose.tokens.yaml` | [Use an owner's token of your own](#use-an-owners-token-of-your-own) | Control's token settings |
 | `compose.claude.yaml` | [Use a Claude subscription](../models/claude-subscription.md#2-build-the-images-with-claude-code) | Claude Code in the harness and supervisor images. It builds them from the source code: the published images never carry Claude Code |
 | `compose.model.yaml` | [Connect a model provider](../models/connect-a-provider.md#use-the-rigs-own-settings-instead) | Model settings that `compose.yaml` doesn't pass, such as `THERMITE_AGENT_HARNESS` |

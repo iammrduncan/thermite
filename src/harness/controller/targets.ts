@@ -11,7 +11,16 @@ import {
 } from "../broker/index.ts";
 import { collectHardware } from "../hardware.ts";
 import type { HarnessService } from "../service/index.ts";
-import { CpuDriver, CudaDriver, smiAs, smiAsRun, type TargetDriver } from "../targets/index.ts";
+import {
+  CpuDriver,
+  CudaDriver,
+  onGpu,
+  smiAs,
+  smiAsRun,
+  type TargetDriver,
+  VulkanDriver,
+  vulkanInfoAs,
+} from "../targets/index.ts";
 import type { ControllerContext } from "./context.ts";
 
 /**
@@ -39,10 +48,7 @@ export function targetDrivers(ctx: ControllerContext): Targets {
   if (env.THERMITE_DEV_GPU_INDEX !== undefined && target !== "cuda-gpu") {
     throw new Error("THERMITE_DEV_GPU_INDEX needs THERMITE_TARGET=cuda-gpu");
   }
-  if (
-    target === "cuda-gpu" &&
-    (env.THERMITE_DEV_GPU_INDEX !== undefined || env.THERMITE_BROKER_SOCKET)
-  ) {
+  if (onGpu(target) && (env.THERMITE_DEV_GPU_INDEX !== undefined || env.THERMITE_BROKER_SOCKET)) {
     devCard = readLayout(env.THERMITE_BROKER_SOCKET);
     log(
       "harness",
@@ -76,7 +82,17 @@ export function targetDrivers(ctx: ControllerContext): Targets {
           unusable: devCard?.error,
         }),
     );
-  } else throw new Error(`no target driver ${target}; this build has cpu and cuda-gpu`);
+  } else if (target === "vulkan-gpu") {
+    // One GPU, which the judge and the lanes' runs share: Vulkan gives no way here to tell two
+    // cards apart for two users.
+    drivers = [
+      new VulkanDriver({
+        targetClass: env.THERMITE_TARGET_CLASS ?? "vulkan-gpu",
+        info: vulkanInfoAs(runner, runRole(0), join(paths.scratchDir, "thermite", "gpu-query")),
+        unusable: devCard?.error,
+      }),
+    ];
+  } else throw new Error(`no target driver ${target}; this build has cpu, cuda-gpu and vulkan-gpu`);
   const driver = drivers[0] as TargetDriver;
   return { devCard, judgeCards, devCards, drivers, driver };
 }
@@ -146,12 +162,11 @@ export async function rigHardware(
                 smi: smiAsRun(runner, gpuQuery),
               },
             ],
-    deviceMode:
-      driver.type !== "cuda-gpu"
-        ? "none"
-        : env.THERMITE_DEV_GPU_INDEX !== undefined
-          ? "dedicated"
-          : "shared",
+    deviceMode: !onGpu(driver.type)
+      ? "none"
+      : env.THERMITE_DEV_GPU_INDEX !== undefined
+        ? "dedicated"
+        : "shared",
     stateDir: paths.stateDir,
     scratchDir: paths.scratchDir,
   });

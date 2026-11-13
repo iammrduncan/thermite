@@ -1,0 +1,28 @@
+#version 450
+#include "matmul.glsl"
+
+/* An 8 x 8 tile is a workgroup of 64 threads: every Vulkan device takes one of up to 128. */
+#define TILE 8
+
+layout(local_size_x = TILE, local_size_y = TILE) in;
+
+shared float ta[TILE][TILE];
+shared float tb[TILE][TILE];
+
+void main() {
+  int tx = int(gl_LocalInvocationID.x);
+  int ty = int(gl_LocalInvocationID.y);
+  int row = int(gl_WorkGroupID.y) * TILE + ty;
+  int col = int(gl_WorkGroupID.x) * TILE + tx;
+  float s = 0.0;
+  for (int t = 0; t < (n + TILE - 1) / TILE; t++) {
+    int ak = t * TILE + tx;
+    int bk = t * TILE + ty;
+    ta[ty][tx] = (row < n && ak < n) ? a[row * n + ak] : 0.0;
+    tb[ty][tx] = (bk < n && col < n) ? b[bk * n + col] : 0.0;
+    barrier();
+    for (int k = 0; k < TILE; k++) s += ta[ty][k] * tb[k][tx];
+    barrier();
+  }
+  if (row < n && col < n) c[row * n + col] = s;
+}

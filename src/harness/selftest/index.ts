@@ -1,4 +1,4 @@
-import { chownSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { chownSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ADVISOR_RUNS_SOCKET } from "../../core/advisor-runs.ts";
 import type { SupervisorIsolation } from "../../core/api/harness/supervisor.ts";
@@ -9,6 +9,7 @@ import {
   cardsOf,
   checkerRole,
   driverRole,
+  gpuDeviceNodes,
   IDS,
   judgeCardOf,
   type Role,
@@ -297,9 +298,8 @@ export async function isolationSelftest(opts: {
   const pid = opts.controllerPid ?? controllerPid();
   if (pid) probes.push({ name: "controller-environ", op: "read", path: `/proc/${pid}/environ` });
   else skipped.push("controller-environ (controller not found)");
-  const nodes = (existsSync("/dev") ? readdirSync("/dev") : [])
-    .filter((d) => d.startsWith("nvidia") && !statSync(join("/dev", d)).isDirectory())
-    .map((d) => join("/dev", d));
+  // NVIDIA's nodes, and on a rig with a GPU reached through Vulkan the DRM nodes it is opened by.
+  const nodes = gpuDeviceNodes(process.env.THERMITE_TARGET);
   // A dedicated development card is probed as the broker set it up; a failed setup fails here.
   const card = opts.dedicated ? readLayout(opts.socketPath) : {};
   const cards = card.layout ? cardsOf(card.layout) : undefined;

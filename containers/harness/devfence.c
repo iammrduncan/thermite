@@ -13,12 +13,14 @@
  * run in a user namespace), and a second fence where they can.
  *
  *   thermite-devfence --abi                 prints the kernel's Landlock ABI (0: none)
- *   thermite-devfence [--card nvidiaN]... [--control] -- argv...
+ *   thermite-devfence [--card nvidiaN]... [--control] [--no-dri] -- argv...
  *
  * Without --card or --control no /dev/nvidia* node opens. --card lets that card's node open;
  * --control lets the nodes every CUDA process needs open (nvidiactl, nvidia-uvm and the other
- * non-card nodes). It refuses to run the command without Landlock (exit 126): the broker asks
- * --abi first and uses the fence only where it works.
+ * non-card nodes). --no-dri leaves out /dev/dri too, the DRM nodes a GPU reached through Vulkan
+ * is opened by: the broker gives it on a rig with such a GPU, to every role that has none. It
+ * refuses to run the command without Landlock (exit 126): the broker asks --abi first and uses
+ * the fence only where it works.
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -68,7 +70,11 @@ static int is_card(const char *name) {
   return 1;
 }
 
+/* Set by --no-dri: /dev/dri is left out. */
+static int no_dri = 0;
+
 static int allowed(const char *name, char **cards, int ncards, int control) {
+  if (no_dri && !strcmp(name, "dri")) return 0;
   if (strncmp(name, "nvidia", 6) != 0) return 1;
   if (!is_card(name)) return control;
   for (int i = 0; i < ncards; i++)
@@ -115,16 +121,19 @@ int main(int argc, char **argv) {
   }
   for (; i < argc && strcmp(argv[i], "--"); i++) {
     if (!strcmp(argv[i], "--control")) control = 1;
+    else if (!strcmp(argv[i], "--no-dri")) no_dri = 1;
     else if (!strcmp(argv[i], "--card") && i + 1 < argc && ncards < MAX_CARDS && is_card(argv[i + 1]))
       cards[ncards++] = argv[++i];
     else {
-      fprintf(stderr, "thermite-devfence: %s: give --card a card's node (nvidiaN), or --control\n",
+      fprintf(stderr,
+              "thermite-devfence: %s: give --card a card's node (nvidiaN), --control or --no-dri\n",
               argv[i]);
       return 126;
     }
   }
   if (i + 1 >= argc) {
-    fprintf(stderr, "usage: thermite-devfence [--card nvidiaN]... [--control] -- argv...\n");
+    fprintf(stderr,
+            "usage: thermite-devfence [--card nvidiaN]... [--control] [--no-dri] -- argv...\n");
     return 126;
   }
   if (abi() < 1) {

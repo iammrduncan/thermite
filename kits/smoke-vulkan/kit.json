@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "name": "smoke-vulkan",
+  "target": "vulkan-gpu",
+  "build": {
+    "copy": [
+      "bench"
+    ],
+    "command": [
+      "sh",
+      ".kit/bench/build.sh"
+    ],
+    "outputs": [
+      "out/bench"
+    ],
+    "timeout_s": 300,
+    "rss_mib": 2048,
+    "disk_mib": 512
+  },
+  "cells": {
+    "small": {
+      "n": 1536,
+      "reps": 120,
+      "seed": 11,
+      "work": 869730877440
+    },
+    "large": {
+      "n": 2048,
+      "reps": 50,
+      "seed": 23,
+      "work": 858993459200
+    },
+    "held": {
+      "n": 1792,
+      "reps": 75,
+      "seed": 37,
+      "work": 863187763200
+    }
+  },
+  "run": {
+    "command": [
+      "{build:out/bench}",
+      "{params}",
+      "{out}"
+    ],
+    "timeout_s": 120,
+    "rss_mib": 2048,
+    "disk_mib": 64
+  },
+  "metrics": {
+    "flops_per_s": {
+      "unit": "FLOP/s",
+      "work": "work"
+    }
+  },
+  "check": {
+    "command": [
+      "node",
+      "{kit:check.mjs}",
+      "{params_json}",
+      "{out}"
+    ],
+    "timeout_s": 300
+  }
+}

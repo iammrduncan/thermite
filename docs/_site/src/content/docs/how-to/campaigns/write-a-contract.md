@@ -66,7 +66,7 @@ Optional, in every mode:
 }
 ```
 
-- `target` is required in a hill climb, and optional in the other modes. `type` is `cpu` or `cuda-gpu`. `class` is a free name for the kind of device, such as `generic-cpu`: it is required with `type`, but nothing checks it yet.
+- `target` is required in a hill climb, and optional in the other modes. `type` is `cpu`, `cuda-gpu` or `vulkan-gpu`. `class` is a free name for the kind of device, such as `generic-cpu`: it is required with `type`, but nothing checks it yet.
 - `editable_paths` are the files a change may touch: `**` matches any folders, `*` any part of a name. `forbidden_patterns` are regular expressions. A change outside the paths, or one that adds a matching line, is refused before it is built.
 - `objective.primary` names one of the kit's metrics, which way is better (`max` or `min`), and `min_effect`, the smallest gain that counts, as a fraction: `0.05` is 5%.
 - `cells` are measured for every change. `held_out_cells` run only when the judge confirms a change that already looked better. On each, the change's output must pass the kit's check, and its primary metric may be worse than the champion's by no more than twice `acceptance.equivalence_band`. In a goal campaign, a goal checked on a held-out cell must be met there too.

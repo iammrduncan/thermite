@@ -30,6 +30,7 @@ import {
   harnessImageFrom,
   rigReport,
   upWithGpus,
+  vulkanOverride,
 } from "../machine.ts";
 import { fail } from "./shared.ts";
 import { USAGE } from "./usage.ts";
@@ -153,6 +154,15 @@ export async function thermiteLocal(rest: string[]): Promise<void> {
     process.stdout.write(
       `wrote ${GPU_OVERRIDE}: start Thermite with ${upWithGpus(report.gpus.engine)}\n`,
     );
+  } else if (report.vulkan) {
+    // A Mac's GPU, as a Vulkan device: the same file, for the harness on the Vulkan base.
+    const { engine: with_, machine: vm } = report.vulkan;
+    writeGpuOverride(
+      root,
+      vulkanOverride(with_, vm, harnessImageFrom(readStackCompose(root))),
+      owner,
+    );
+    process.stdout.write(`wrote ${GPU_OVERRIDE}: start Thermite with ${upWithGpus(with_)}\n`);
   }
   process.stdout.write(`local init: ${name} ready (${made.length} made, ${kept.length} kept)\n`);
 }

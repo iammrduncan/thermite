@@ -14,6 +14,7 @@ export {
   effectiveGpuLists,
   type GpuCard,
   type GpuLayout,
+  gpuDeviceNodes,
   judgeCardOf,
   LAYOUT_FILE,
   type LayoutRecord,

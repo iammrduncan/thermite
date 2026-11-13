@@ -8,11 +8,11 @@ sidebar:
 
 The harness image is where your project is built, timed and changed: the judge's builds and timed runs and the agents' commands all run inside it. If your project needs a tool the image lacks, such as another compiler or a library, build your own image `FROM` Thermite's harness image and add it.
 
-The image already has a C and C++ toolchain (`gcc`, `g++`, `make`), CMake, Ninja, ccache, Python 3 with numpy, git, Node.js, OpenCode and the Codex CLI. A CUDA image also has what its base carries, such as `nvcc`. The CPU image is Debian bookworm; a CUDA image has its base's system. The [harness image reference](../../reference/harness-image.md) lists it in full.
+The image already has a C and C++ toolchain (`gcc`, `g++`, `make`), CMake, Ninja, ccache, Python 3 with numpy, git, Node.js, OpenCode and the Codex CLI. A CUDA image also has what its base carries, such as `nvcc`. An image built on the Vulkan base has Mesa's Vulkan drivers, the Vulkan headers and the shader compiler `glslc`. The CPU image is Debian bookworm; a CUDA image has its base's system, and the Vulkan base is Ubuntu 26.10. The [harness image reference](../../reference/harness-image.md) lists it in full.
 
 ## Before you start
 
-- Thermite's harness image: a published one, such as `ghcr.io/iammrduncan/thermite-harness:0.1.0` for CPU rigs or `ghcr.io/iammrduncan/thermite-harness:0.1.0-cuda` for GPU rigs ([Published images](../../reference/harness-image.md#published-images)), or one you built ([Push the images to your own registry](own-registry.md)). Extend the CPU image for CPU rigs and the CUDA image for GPU rigs.
+- Thermite's harness image: a published one, such as `ghcr.io/iammrduncan/thermite-harness:0.1.0` for CPU rigs or `ghcr.io/iammrduncan/thermite-harness:0.1.0-cuda` for GPU rigs ([Published images](../../reference/harness-image.md#published-images)), or one you built ([Push the images to your own registry](own-registry.md)). Extend the CPU image for CPU rigs and the CUDA image for GPU rigs. No Vulkan harness is published: for a rig on a Mac's GPU, build it first ([The Vulkan harness](../../reference/harness-image.md#the-vulkan-harness)), extend that, and keep its Mesa at 26.2 or newer.
 - A registry your rigs can pull from without signing in, for your image.
 
 ## 1. Write a Containerfile
@@ -72,7 +72,7 @@ A rig you already have keeps the image it runs:
 - **A rig that control set up on a cluster** can move onto your image. Its page then offers **Update to these images** ([Move a rig onto new images](../operate/rig-lifecycle.md#a-rig-on-a-cluster)). Every such rig whose image differs from control's offers it, so press it only on the rigs that should have your tools.
 - **A rig you joined yourself** can't move to a new image from control yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)), so add a new rig. A rig control set up on a machine moves with **Update to** control's version on its page only when its Thermite version is behind control's.
 
-Thermite doesn't know which rigs carry your tools. A kit names only its target (`cpu` or `cuda-gpu`), and on a rig without the tools the judge's builds of your project fail. Start campaigns that need them only on rigs added from your image; a name that says so, such as `rig-fortran-1`, helps.
+Thermite doesn't know which rigs carry your tools. A kit names only its target (`cpu`, `cuda-gpu` or `vulkan-gpu`), and on a rig without the tools the judge's builds of your project fail. Start campaigns that need them only on rigs added from your image; a name that says so, such as `rig-fortran-1`, helps.
 
 ### On the local stack
 

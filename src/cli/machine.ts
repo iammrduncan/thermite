@@ -12,6 +12,10 @@ import type { Probes, RunResult } from "./doctor/index.ts";
  * engine has: on Linux the machine's, on a Mac its virtual machine's. GPUs need the harness's
  * CUDA image and the devices passed in: compose.gpu.yaml does both, for Docker through NVIDIA's
  * runtime and for Podman through the CDI spec of NVIDIA's container toolkit.
+ *
+ * A Mac's own GPU reaches a container one way (goal 106): as a Vulkan device, on a Podman machine
+ * made with the libkrun provider. compose.gpu.yaml then gives the harness the Vulkan base and
+ * `/dev/dri`. It runs engines with a Vulkan back end; MLX needs Metal, which no container has.
  */
 
 export type EngineName = "docker" | "podman";
@@ -36,6 +40,15 @@ export const CUDA_BASE_IMAGE =
   "docker.io/nvidia/cuda:12.6.3-devel-ubuntu22.04@sha256:d49bb8a4ff97fb5fe477947a3f02aa8c0a53eae77e11f00ec28618a0bcaa2ad1";
 /** The tag a checkout's GPU override gives the CUDA harness it builds. */
 export const LOCAL_CUDA_TAG = "thermite-harness:local-cuda";
+/** The stage of containers/Containerfile a checkout builds the Vulkan harness on, and its tag. */
+const VULKAN_BASE_STAGE = "vulkan-base";
+export const LOCAL_VULKAN_TAG = "thermite-harness:local-vulkan";
+/** How a Mac gets a Podman machine whose containers have its GPU. */
+export const LIBKRUN_FIX =
+  "Install krunkit (brew tap slp/krun, then brew install krunkit), stop the machine that runs, and make one on libkrun: CONTAINERS_MACHINE_PROVIDER=libkrun podman machine init --now. Podman runs one machine at a time, so Thermite's containers and the GPU are in that one.";
+
+/** Whether a Mac's Podman machine gives containers the Mac's GPU, as a Vulkan device. */
+type MacGpu = { ok: true; machine: string } | { ok: false; why: string; fix: string };
 
 export interface EngineFacts {
   name: EngineName;
@@ -81,8 +94,10 @@ export interface MachineFacts {
   pass?: GpuPass | undefined;
   /** AMD GPUs: how many, and their names where lspci gives them. */
   amd: { count: number; names: string[] };
-  /** A Mac with Apple silicon: containers there can't reach its GPU. */
+  /** A Mac with Apple silicon: containers there reach its GPU only as `macGpu` says. */
   appleSilicon: boolean;
+  /** On a Mac with Apple silicon and Podman: whether its machine gives containers the GPU. */
+  macGpu?: MacGpu | undefined;
 }
 
 export const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
@@ -263,9 +278,15 @@ export async function detectOnMachine(
   const toolkit = present ? await p.run("nvidia-ctk", ["--version"]) : undefined;
   const passes = new Map<EngineName, GpuPass>();
   if (names.length) for (const f of facts) passes.set(f.name, await nvidiaPass(p, f, toolkit));
+  const appleSilicon = p.platform === "darwin" && p.arch === "arm64";
+  // A Mac's GPU reaches containers through Podman alone, so Podman is the rig's engine where its
+  // machine gives it, unless another engine was asked for.
+  const podman = facts.find((f) => f.name === "podman");
+  const mac = appleSilicon && podman ? await macGpu(p) : undefined;
   const engine =
     facts.find((f) => f.name === prefer) ??
     facts.find((f) => passes.get(f.name)?.ok === true) ??
+    (mac?.ok === true ? podman : undefined) ??
     facts.find((f) => f.name === "docker") ??
     facts[0];
   return {
@@ -279,8 +300,42 @@ export async function detectOnMachine(
     nvidia: { present, names, smi, toolkit },
     pass: engine ? passes.get(engine.name) : undefined,
     amd: linux ? await amdGpus(p, true) : { count: 0, names: [] },
-    appleSilicon: p.platform === "darwin" && p.arch === "arm64",
+    appleSilicon,
+    macGpu: engine?.name === "podman" ? mac : undefined,
   };
+}
+
+/**
+ * Whether the Podman machine that runs gives its containers the Mac's GPU: one made with the
+ * libkrun provider does, as the DRM device /dev/dri, which Vulkan opens; one on Apple's
+ * hypervisor provider does not. Undefined when no machine runs or Podman does not say.
+ */
+export async function macGpu(p: Probes): Promise<MacGpu | undefined> {
+  const r = await p.run("podman", ["machine", "list", "--format", "json"]);
+  if (r.code !== 0) return undefined;
+  let machines: { Name?: unknown; VMType?: unknown; Running?: unknown }[];
+  try {
+    machines = JSON.parse(r.stdout) as typeof machines;
+  } catch {
+    return undefined;
+  }
+  const running = Array.isArray(machines) ? machines.find((m) => m.Running === true) : undefined;
+  if (!running || typeof running.Name !== "string") return undefined;
+  const name = clean(running.Name);
+  if (running.VMType !== "libkrun")
+    return {
+      ok: false,
+      why: `Podman's machine ${name} runs on ${clean(String(running.VMType ?? "another provider"))}, which gives containers no GPU.`,
+      fix: LIBKRUN_FIX,
+    };
+  const dri = await p.run("podman", ["machine", "ssh", running.Name, "ls", "/dev/dri"]);
+  if (dri.code !== 0 || !/\brenderD\d+\b/.test(dri.stdout))
+    return {
+      ok: false,
+      why: `Podman's machine ${name} is made on libkrun but has no GPU device (/dev/dri).`,
+      fix: "Update krunkit (brew upgrade krunkit; 1.3.2 gives its machines a GPU), then stop the machine and start it again.",
+    };
+  return { ok: true, machine: name };
 }
 
 /**
@@ -366,6 +421,8 @@ export interface RigReport {
   fix?: string | undefined;
   /** The NVIDIA GPUs the rig gets through compose.gpu.yaml, when it can have them. */
   gpus?: { engine: EngineName; names: string[] } | undefined;
+  /** A Mac's GPU, which the rig gets as a Vulkan device through compose.gpu.yaml. */
+  vulkan?: { engine: EngineName; machine: string } | undefined;
 }
 
 function resourceWords(m: MachineFacts, e: EngineFacts): string {
@@ -444,14 +501,26 @@ export function rigReport(m: MachineFacts): RigReport {
         ? gpuWords(m.amd.names, "AMD")
         : plural(m.amd.count, "AMD GPU");
     lines.push(
-      `This machine has ${what}. The rig does not get ${m.amd.count === 1 ? "it" : "them"}: Thermite's GPU images are built on CUDA, which runs on NVIDIA GPUs only, and AMD GPUs need a ROCm image, which Thermite does not have yet.`,
+      `This machine has ${what}. The rig does not get ${m.amd.count === 1 ? "it" : "them"}: Thermite's published GPU images are built on CUDA, which runs on NVIDIA GPUs only, and AMD GPUs need a ROCm image, which Thermite does not have yet.`,
     );
   }
-  if (m.appleSilicon)
+  let vulkan: RigReport["vulkan"];
+  if (m.appleSilicon && m.macGpu?.ok === true) {
+    vulkan = { engine: e.name, machine: m.macGpu.machine };
     lines.push(
-      "This Mac has Apple silicon. Containers on macOS run in a Linux virtual machine, which can't reach the Apple GPU (Metal), so MLX-style work can't run in a rig yet. The rig gets the virtual machine's CPUs and memory, not the GPU.",
+      `This Mac has Apple silicon. Podman's machine ${m.macGpu.machine} is made on libkrun, which gives containers the Mac's GPU as a Vulkan device, so the rig can have it. The judge and the agents share it. It runs engines with a Vulkan back end; MLX needs Metal, which no container has.`,
     );
-  return { status, lines, fix, gpus };
+  } else if (m.appleSilicon && m.macGpu?.ok === false) {
+    status = "warn";
+    lines.push(
+      `This Mac has Apple silicon. The rig can't have its GPU yet: ${m.macGpu.why} So it uses the virtual machine's CPUs and memory.`,
+    );
+    fix = `${m.macGpu.fix} Then run thermite local init again.`;
+  } else if (m.appleSilicon)
+    lines.push(
+      "This Mac has Apple silicon. Containers on macOS run in a Linux virtual machine, and only one kind gives them the Mac's GPU: a Podman machine made on libkrun, as a Vulkan device. MLX-style work needs Metal, which no container has. The rig gets the virtual machine's CPUs and memory, not the GPU.",
+    );
+  return { status, lines, fix, gpus, vulkan };
 }
 
 // ---------------------------------------------------------------- compose.gpu.yaml
@@ -474,6 +543,44 @@ export function harnessImageFrom(compose: string | undefined): HarnessImage {
       compose,
     );
   return m?.[1] ? { kind: "image", fallback: m[1] } : { kind: "unset" };
+}
+
+/** How to name the Vulkan harness image where the compose file does not build it. */
+const VULKAN_IMAGE_UNSET =
+  "put THERMITE_RIG_HARNESS_VULKAN_IMAGE in .env: the harness built on the Vulkan base (containers/Containerfile, --target harness --build-arg BASE_IMAGE=vulkan-base); no release has one yet";
+
+/**
+ * compose.gpu.yaml for a Mac's GPU: the harness of the local rig (local-1) on the Vulkan base,
+ * with the machine's DRM device and the target set. A checkout's compose.yaml builds the harness,
+ * so the override builds it on the Vulkan stage; a release's must be given the image.
+ */
+export function vulkanOverride(engine: EngineName, machine: string, image: HarnessImage): string {
+  const imageLines =
+    image.kind === "build"
+      ? [
+          `    image: ${LOCAL_VULKAN_TAG}`,
+          "    build:",
+          "      args:",
+          `        BASE_IMAGE: ${VULKAN_BASE_STAGE}`,
+        ]
+      : [`    image: "\${THERMITE_RIG_HARNESS_VULKAN_IMAGE:?${VULKAN_IMAGE_UNSET}}"`];
+  return [
+    "# Written by thermite local init: the local rig's harness on this Mac's GPU.",
+    `# Podman's machine ${clean(machine)} is made on libkrun, which gives containers the GPU as a Vulkan device.`,
+    "# The judge and the agents share it. Start Thermite with it:",
+    `#   ${upWithGpus(engine)}`,
+    "# local init writes this file again each time it runs. Leave it out of up to keep the rig on the CPU.",
+    "services:",
+    "  harness:",
+    ...imageLines,
+    "    environment:",
+    '      THERMITE_TARGET: "vulkan-gpu"',
+    "    devices:",
+    "      - /dev/dri",
+    "    security_opt:",
+    "      - label=disable",
+    "",
+  ].join("\n");
 }
 
 /**

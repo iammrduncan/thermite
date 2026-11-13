@@ -113,6 +113,27 @@ export async function collectHardware(opts: {
       errors.push(`${card.role} card: ${String(err).slice(0, 200)}`);
     }
   }
+  // A GPU reached through Vulkan has no nvidia-smi: its one device is what the driver named, and
+  // what Vulkan does not give (its memory, its bus, its limits) is left empty.
+  const named =
+    "details" in id
+      ? (id.details as { name?: unknown; driver_info?: unknown; uuid?: unknown })
+      : {};
+  if (opts.driver.type === "vulkan-gpu" && typeof named.name === "string")
+    devices.push({
+      role: "shared",
+      name: named.name,
+      uuid: typeof named.uuid === "string" ? named.uuid : "",
+      bus: "",
+      memory_mib: null,
+      driver: typeof named.driver_info === "string" ? named.driver_info : null,
+      cuda: null,
+      power_limit_w: null,
+      max_sm_mhz: null,
+      max_mem_mhz: null,
+      pcie: null,
+      vbios: null,
+    });
   const cpuinfo = readOr("/proc/cpuinfo") ?? "";
   const quotaText = readOr("/sys/fs/cgroup/cpu.max")?.trim().split(/\s+/);
   const quota =

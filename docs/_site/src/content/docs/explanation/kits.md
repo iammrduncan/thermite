@@ -29,7 +29,7 @@ A kit is a git repository with a manifest, `kit.json`, and whatever scripts the 
 
 | Part | What it is |
 | --- | --- |
-| **Target** | The kind of hardware the kit measures on: `cpu` or `cuda-gpu` |
+| **Target** | The kind of hardware the kit measures on: `cpu`, `cuda-gpu` or `vulkan-gpu` |
 | **Build** | A command that builds a changed version from its source, the files that make up the result, and limits on time, memory and disk |
 | **Cells** | The test cases, which the dashboard calls **cases**. Each is a name and the parameters that make it different, such as a problem size, a seed or an input file, and, if it needs one, its own time limit |
 | **Run** | A command that runs one build on one cell and writes its outputs, with its own limits |
@@ -116,4 +116,4 @@ A kit that fails quietly looks like a stream of bad changes. So a kit is tested 
 
 ## Kits and targets
 
-A kit measures on one kind of target. A rig accepts a kit only if the kit's target matches its own: a `cpu` kit on a rig without GPUs, a `cuda-gpu` kit on a rig with them. A project measured on both kinds has two kits. [Kits and rigs, side by side](kits-and-rigs.md) says more about how the two fit.
+A kit measures on one kind of target. A rig accepts a kit only if the kit's target matches its own: a `cpu` kit on a rig without GPUs, a `cuda-gpu` kit on a rig with NVIDIA GPUs, a `vulkan-gpu` kit on a rig whose GPU is reached through Vulkan, such as a Mac's. A project measured on two kinds has two kits. [Kits and rigs, side by side](kits-and-rigs.md) says more about how the two fit.

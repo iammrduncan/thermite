@@ -28,7 +28,7 @@ Most first-run problems are in the machine, not in Thermite. `thermite doctor` c
 
 3. Do what each `Fix:` line says, then run the doctor again.
 
-The last line says `No check failed.` when the machine is ready. A check that says `skip` did not apply: for example, a machine without an NVIDIA GPU needs no GPU driver. The **Local rig** line says what the rig on this machine gets, and warns when the machine has NVIDIA GPUs that the rig can't have yet ([What the rig gets](../install/one-machine.md#what-the-rig-gets)). [Command line](../../reference/command-line.md#doctor) lists every check and its limits.
+The last line says `No check failed.` when the machine is ready. A check that says `skip` did not apply: for example, a machine without an NVIDIA GPU needs no GPU driver. The **Local rig** line says what the rig on this machine gets, and warns when the machine has NVIDIA GPUs that the rig can't have yet, or when a Mac's Podman machine gives containers no GPU ([What the rig gets](../install/one-machine.md#what-the-rig-gets)). [Command line](../../reference/command-line.md#doctor) lists every check and its limits.
 
 ## Where the logs are
 
@@ -175,6 +175,24 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 - **You see:** `up -d` with `-f compose.gpu.yaml` does not start the harness. Podman says `unresolvable CDI devices nvidia.com/gpu=all`; Docker gives an error about the `nvidia` device driver.
 - **Why:** the engine can't give containers the GPUs: NVIDIA's container toolkit is missing, Podman has no CDI spec, or Docker has no NVIDIA runtime. The release's `init` writes `compose.gpu.yaml` from the GPUs that NVIDIA's driver lists, but from its container it can't check the toolkit.
 - **Do:** in your `thermite-source` folder, run `npx thermite doctor`, and do what the `Fix:` line of its **GPU container toolkit** check says. Then start again with both files. To keep the rig on the CPU meanwhile, start without `-f compose.gpu.yaml`. See [Use the machine's NVIDIA GPUs](../install/one-machine.md#use-the-machines-nvidia-gpus).
+
+On a Mac:
+
+- **You see:** `up -d` with `-f compose.gpu.yaml` stops, with `put THERMITE_RIG_HARNESS_VULKAN_IMAGE in .env: the harness built on the Vulkan base (containers/Containerfile, --target harness --build-arg BASE_IMAGE=vulkan-base); no release has one yet`.
+- **Why:** on a Mac, `compose.gpu.yaml` puts the rig on the Mac's GPU, which needs the harness built for a Vulkan GPU. No release has that image, so the file takes its name from `.env`.
+- **Do:** build the image and name it in `.env`, as step 4 of [Use a Mac's GPU](../install/one-machine.md#use-a-macs-gpu) says. Then start again with both files.
+
+### A Mac's GPU is kept from the rig
+
+- **You see:** on a Mac with Apple silicon, `npx thermite local init .dev` writes no `compose.gpu.yaml`, and its `rig:` lines, like the **Local rig** check of `npx thermite doctor`, say one of these:
+
+  | The line | Why |
+  | --- | --- |
+  | `The rig can't have its GPU yet: Podman's machine podman-machine-default runs on applehv, which gives containers no GPU. So it uses the virtual machine's CPUs and memory.` | The Podman machine that runs is made with Podman's default provider |
+  | `The rig can't have its GPU yet: Podman's machine podman-machine-default is made on libkrun but has no GPU device (/dev/dri). So it uses the virtual machine's CPUs and memory.` | The machine is on libkrun, but its krunkit gives it no GPU |
+  | `Containers on macOS run in a Linux virtual machine, and only one kind gives them the Mac's GPU: a Podman machine made on libkrun, as a Vulkan device. MLX-style work needs Metal, which no container has. The rig gets the virtual machine's CPUs and memory, not the GPU.` | The rig's engine is Docker, or Podman lists no machine that runs. Podman lists only the machines of the provider that is set |
+
+- **Do:** for the first two, do what the `Fix:` line says: make a machine on libkrun, or update krunkit (`brew upgrade krunkit`) and start the machine again. For the third, use Podman, and set its provider to `libkrun` for the terminal you work in. Then run `npx thermite local init .dev` again. [Use a Mac's GPU](../install/one-machine.md#use-a-macs-gpu) has every step.
 
 ### The first build is slow
 
@@ -375,6 +393,8 @@ Two causes are common on a laptop:
 
 - `not now: …`: the rig has open trials or judge jobs. Make it idle as [Check a rig](check-a-rig.md#before-you-start) says, then run the check again.
 - **Judge smoke** fails with some candidates "judged otherwise", and the harness's log has `job failed` lines that say `target not ready for timing: load … above 75% of … cores`. The computer was too busy for fair timing. Close other heavy programs and run the check again.
+
+On a rig whose target is `vulkan-gpu`, the same `job failed` lines may say `target not ready for timing: Vulkan lists no GPU, only llvmpipe (…), which computes on the CPU: the container was not given the GPU's device (/dev/dri), or its Vulkan driver can't use it`, or `Vulkan lists no device: the container was not given the GPU's device (/dev/dri)`. The rig sees only Mesa's software device, or none, and it never times on the CPU in the GPU's place. The rig's page then shows no GPU under **What it runs on**. Check that the Podman machine that runs is the one made on libkrun (`npx thermite doctor`), and that the harness image is built on the Vulkan base, whose Mesa is 26.2 or newer: an older Mesa does not open the GPU ([Use a Mac's GPU](../install/one-machine.md#use-a-macs-gpu)).
 
 **Run it** for the model check is greyed out in the rig's **Checks** while the rig takes the model you just gave it, and says why on hover. Over REST or MCP the check is refused then: `rig-1 is taking my-model now: it checks the model itself once it has it, within a minute. Check it again after that.` Wait a minute: the rig checks the new model itself, and its result shows under **Checks**.
 

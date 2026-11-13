@@ -60,7 +60,7 @@ Unknown fields are refused at every level.
 | --- | --- | --- | --- |
 | `schema_version` | `1` | required | The manifest format |
 | `name` | text matching `^[a-z0-9][a-z0-9._-]{0,63}$` | required | The kit's name |
-| `target` | text | required | The kind of device the kit measures on. This version has the drivers `cpu` and `cuda-gpu`. A rig only measures with a kit whose `target` is its own |
+| `target` | text | required | The kind of device the kit measures on. This version has the drivers `cpu`, `cuda-gpu` and `vulkan-gpu`. A rig only measures with a kit whose `target` is its own |
 | `build.copy` | list of kit paths | `[]` | Kit files and folders copied into the source tree under `.kit/<path>` before the build |
 | `build.command` | list of text, at least one | required | The build's command and arguments, run in the source tree. Placeholders are not expanded here |
 | `build.outputs` | list of paths, at least one | required | Paths, relative to the source tree, that make up the build |
@@ -128,7 +128,7 @@ The contract chooses which cells count: `cells` for every block, `held_out_cells
 
 Every value must be above zero, because the judge compares runs by their ratio, apart from a check's metric with `"may_be_zero": true`, which may be 0 or more. A kit's metrics can serve several campaigns, and each run needs only the metrics it decides by: its [priority and guard metrics](#what-each-metric-is-for), the kit's guards included, and a threshold goal's (informational metrics are not among them). A run whose check prints no number above zero for one of those check metrics is invalid: `the check reported no <field> above zero (got <value>)`, or for one that may be zero, `the check reported no <field> of zero or above (got <value>)`. Each case the contract runs needs the `work` parameter of each rate the contract decides by, a number above zero: the [check against the contract](#the-kit-against-the-contract) refuses a case without it. A rate the contract decides by whose `work` parameter is still missing, zero or not a number at a run is an infrastructure error: `kit metric <name>: bad work <value> or time <seconds>`. The kit's other metrics are kept where a run gives them, a number above zero, and left out where it does not: a case whose check prints no `prefill_tps` is not invalid for a contract that decides by decode speed alone. On a held-out case, the agents get only `a held-out check could not finish (an infrastructure failure)`, and the rig's log keeps the error.
 
-The device's driver also refuses values it cannot believe. The `cpu` driver refuses values that are not finite; the `cuda-gpu` driver refuses values that are not finite or not above zero.
+The device's driver also refuses values it cannot believe. The `cpu` and `vulkan-gpu` drivers refuse values that are not finite; the `cuda-gpu` driver refuses values that are not finite or not above zero.
 
 #### What each metric is for
 

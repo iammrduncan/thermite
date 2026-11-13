@@ -59,7 +59,8 @@ The workflow builds control, the harness images and the supervisor with `THERMIT
 | Argument | Images | Default | Effect |
 | --- | --- | --- | --- |
 | `NODE_IMAGE` | All three | `docker.io/library/node:22.23.4-bookworm-slim`, pinned by its sha256 digest | The Node.js image every stage starts from |
-| `BASE_IMAGE` | Harness | `NODE_IMAGE` | The harness's final base. GPU rigs set a CUDA 12 or CUDA 13 development image: see [The CUDA harness](#the-cuda-harness) |
+| `BASE_IMAGE` | Harness | `NODE_IMAGE` | The harness's final base. GPU rigs set a CUDA 12 or CUDA 13 development image: see [The CUDA harness](#the-cuda-harness). A rig whose GPU is reached through Vulkan sets `vulkan-base`, a stage of the same file: see [The Vulkan harness](#the-vulkan-harness) |
+| `VULKAN_IMAGE` | Harness, on `vulkan-base` | `docker.io/library/ubuntu:26.10`, pinned by its sha256 digest | The image the `vulkan-base` stage starts from. Its own Mesa must be 26.2 or newer |
 | `HARNESS_KEEP_BASE` | Harness | `0` | `1` keeps `BASE_IMAGE`'s system packages as its publisher built them: no `apt-get upgrade`, and a package the base has already is not installed again at a newer version (`apt-get install --no-upgrade`). For a project measured in its publisher's environment, such as an engine built in NVIDIA's PyTorch container. `0`: the base's packages are upgraded first, as for every image |
 | `OPENCODE_VERSION` | Harness, supervisor | `2.1.4` | The OpenCode release installed |
 | `CLAUDE_CODE_VERSION` | Harness, supervisor | empty | A Claude Code release to install. Empty: Claude Code is not installed |
@@ -88,7 +89,7 @@ The workflow builds control, the harness images and the supervisor with `THERMIT
 | OpenCode | `OPENCODE_VERSION`, 2.1.4 by default. Always installed. One of the [worker harnesses](glossary.md); Pi, the default one, is a library built into Thermite. Pi gives its workers Thermite's tools directly: in a code trial `note`, `fetch`, `read_source`, `search_corpus`, `add_claim` and `add_source_note` beside its others, and in a research trial `note` beside the research tools. OpenCode is under the MIT license; its release's `LICENSE` is kept beside it | `/usr/local/bin/opencode`, with its `LICENSE` in `/usr/local/share/doc/opencode` |
 | Claude Code | `CLAUDE_CODE_VERSION`. Installed only when that argument names a version. It brings its own `ripgrep` for its Grep and Glob tools. The harness runs it with its own sandbox off, so the agent's commands run inside the rig's isolation, as OpenCode's do. An advisor's Claude Code, which has none of its own tools, also runs with its sandbox off, so the image has no `bubblewrap` | `/usr/local/bin/claude` |
 | Codex CLI | `CODEX_VERSION`, 0.162.1 by default. Installed unless that argument is empty. OpenAI's coding agent, under the Apache License 2.0; one of the [worker harnesses](glossary.md), for a ChatGPT subscription or an OpenAI-compatible provider. Its release's whole Linux package is kept, with its `LICENSE` and `NOTICE` | `/opt/codex`, with `/usr/local/bin/codex` linked to `/opt/codex/bin/codex` |
-| `thermite-devfence` | Built from `containers/harness/devfence.c` | `/usr/local/bin/thermite-devfence`. The GPU fence: it starts each role's command with the GPU device nodes it may not open left out, using the kernel's Landlock |
+| `thermite-devfence` | Built from `containers/harness/devfence.c` | `/usr/local/bin/thermite-devfence`. The GPU fence: it starts each role's command with the GPU device nodes it may not open left out, using the kernel's Landlock: NVIDIA's nodes (`/dev/nvidia*`), and with `--no-dri` the folder `/dev/dri` too, which the broker gives on a rig with a Vulkan GPU to every role that has no GPU |
 | C and C++ toolchain | From the base image's apt repository; not pinned | `gcc`, `g++`, `libc6-dev`, `make`, `cmake`, `ninja-build`, `ccache` |
 | Python | From the base's apt repository; not pinned | `python3`, `python3-numpy` |
 | Other packages | From the base's apt repository; not pinned | `git`, `tini`, `ca-certificates`. The build fails unless `setpriv`, `prlimit`, `taskset` and `setsid` exist |
@@ -109,7 +110,30 @@ Control sets rigs up from the CUDA 12 image (`THERMITE_RIG_HARNESS_CUDA_IMAGE`).
 
 An agent's own commands under OpenCode, Claude Code or Codex get a fixed `PATH`, not the image's: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, with `/usr/local/cuda/bin` first where the image has it, so `nvcc` is found by name on a CUDA image. Pi's commands, and the judge's builds and timed runs, get the image's own `PATH`.
 
-The CPU image has no `nvcc`, so it cannot build GPU kits. Control finds the CUDA image through `THERMITE_RIG_HARNESS_CUDA_IMAGE` (rigs it sets up, and the image it moves a cluster rig with GPUs onto) and `THERMITE_RUNPOD_TEST_IMAGE` (test pods). Under compose, the local stack's rig runs on the CPU image unless Thermite starts with `compose.gpu.yaml`, which `thermite local init` writes on a machine with NVIDIA GPUs. That file gives the harness the release's CUDA image, or the one `.env` names in `THERMITE_RIG_HARNESS_CUDA_IMAGE`; next to a checkout's `compose.yaml`, it builds the harness on the CUDA base instead, as `thermite-harness:local-cuda` ([Use the machine's NVIDIA GPUs](../how-to/install/one-machine.md#use-the-machines-nvidia-gpus)).
+The CPU image has no `nvcc`, so it cannot build CUDA kits. Control finds the CUDA image through `THERMITE_RIG_HARNESS_CUDA_IMAGE` (rigs it sets up, and the image it moves a cluster rig with GPUs onto) and `THERMITE_RUNPOD_TEST_IMAGE` (test pods). Under compose, the local stack's rig runs on the CPU image unless Thermite starts with `compose.gpu.yaml`, which `thermite local init` writes on a machine with NVIDIA GPUs. That file gives the harness the release's CUDA image, or the one `.env` names in `THERMITE_RIG_HARNESS_CUDA_IMAGE`; next to a checkout's `compose.yaml`, it builds the harness on the CUDA base instead, as `thermite-harness:local-cuda` ([Use the machine's NVIDIA GPUs](../how-to/install/one-machine.md#use-the-machines-nvidia-gpus)).
+
+### The Vulkan harness
+
+A rig whose GPU is reached through Vulkan, such as a Mac's GPU in a Podman machine ([Use a Mac's GPU](../how-to/install/one-machine.md#use-a-macs-gpu)), needs the same image built on the stage `vulkan-base` of `containers/Containerfile`:
+
+```sh
+podman build --target harness --build-arg BASE_IMAGE=vulkan-base -t thermite-harness:local-vulkan -f containers/Containerfile .
+```
+
+No release publishes this image yet ([goal 280](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/280-released-vulkan-harness-image.goal)). Next to a checkout's `compose.yaml`, the `compose.gpu.yaml` that `thermite local init` writes on a Mac builds it, as `thermite-harness:local-vulkan`; next to a release's, the file takes the image's name from `THERMITE_RIG_HARNESS_VULKAN_IMAGE` in `.env`. Control has no setting for it, and sets no rig up from it.
+
+The stage is Ubuntu 26.10 (`VULKAN_IMAGE`, pinned by its digest), with these packages from its apt repository, not pinned:
+
+| Package | What it is for |
+| --- | --- |
+| `mesa-vulkan-drivers` | Mesa's Vulkan drivers. Venus, among them, carries Vulkan from a virtual machine to its host's GPU |
+| `libvulkan1` | The Vulkan loader |
+| `vulkan-tools` | `vulkaninfo`. The `vulkan-gpu` target's driver reads the device from `vulkaninfo --summary` |
+| `libvulkan-dev`, `glslc`, `spirv-headers` | For a kit's build of an engine with a Vulkan back end: the Vulkan headers, the shader compiler and the SPIR-V headers. The Vulkan smoke kit builds with `glslc` |
+
+Mesa must be 26.2 or newer: the first whose Venus driver opens the GPU of a `libkrun` machine as it comes. Ubuntu 26.04's Mesa 26.0 and Debian 13's 25.0 do not open it. The harness stage adds everything else, as on every base.
+
+The image has only Mesa's drivers, and it has been run on one kind of GPU: a Mac's, through Venus ([Compatibility](compatibility.md#gpus-cuda-and-drivers)).
 
 ### Users and groups
 
@@ -134,7 +158,7 @@ The broker runs each kind of work as its own user. The numbers are fixed in the 
 
 | Group | gid | Owns |
 | --- | --- | --- |
-| `gpu` | 10500 | The GPU device nodes on a rig with one shared device; the first judge GPU on a rig with dedicated GPUs |
+| `gpu` | 10500 | The GPU device nodes on a rig with one shared device, a Vulkan GPU's `/dev/dri/renderD*` and `/dev/dri/card*` among them; the first judge GPU on a rig with dedicated GPUs |
 | `gpudev` | 10501 | The first development GPU |
 | `gpuctl` | 10502 | The control nodes every CUDA process needs, on a rig with dedicated GPUs |
 | `gpu-j1` … `gpu-j7` | 10511 … 10517 | Judge GPUs 2 to 8 |

@@ -167,6 +167,7 @@ The dashboard calls an epoch a **round**.
 | Readiness before each block | Up to 15 retries, 2 s apart | Then an infrastructure failure: `crash_infra`, one retry |
 | A CPU ready for timing | 1-minute load at most 75% of the cores | |
 | A GPU ready for timing | Use at most 5%, memory in use at most 600 MiB, at most 85 °C, no compute processes and no thermal or power slowdown. A value `nvidia-smi` can't give, the list of compute processes too, counts as not ready. A GPU that shares the machine's memory, such as the GB10 of a DGX Spark, reports no memory of its own, its total either: its memory is not checked, the rest is | |
+| A GPU reached through Vulkan, ready for timing | Vulkan lists a GPU that is not the software device. The device gives no use, memory in use or temperature, so nothing more is checked | |
 | A slowed-down block | Thrown away and run again when the harness was CPU-throttled for more than 2% of it or of any one run, or the device reports a problem afterwards. 3 tries | Then an infrastructure failure |
 
 ### The rig and control
@@ -292,6 +293,7 @@ The owner may change a running run's command, development run, workspace and pro
 | CPUs and memory of a rig control sets up on a cluster, when they are set | At least 1.5 CPUs and 8 GiB while its agent programs run in their own terminal, the default, or 6 GiB headless: the supervisor takes a quarter of the CPUs, at least half a CPU and at most 2, and 4 GiB (half a CPU and 2 GiB headless), the harness the rest, at least 1 CPU and 4 GiB. Less is refused in words ([The supervisor's share](../how-to/install/rig-on-a-cluster.md#the-supervisors-share)). The local stack and other compose rigs, a rig on a machine over SSH and a rig on RunPod set no limit on the supervisor |
 | GPUs on the local stack's rig | 16: on a machine with more, `compose.gpu.yaml` gives it the first 16 ([Use the machine's NVIDIA GPUs](../how-to/install/one-machine.md#use-the-machines-nvidia-gpus)) |
 | GPUs in a RunPod pod | 1 to 8 |
+| GPUs on a rig whose target is `vulkan-gpu` | 1, which the judge and the agents share |
 
 ## The owner's messages
 

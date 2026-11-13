@@ -23,7 +23,7 @@ A campaign brings the two together. This page compares them and shows how they m
 | **Who makes it** | You write it, or the **New campaign** page writes a simple one from your answers | You start it with compose or a join command, or control sets it up over SSH or on Kubernetes |
 | **How it is named** | Its repository and commit, in the contract | Its name, such as `rig-1` |
 | **How it changes** | Every change is a new commit, so a new contract version | Its settings change on its **Edit rig** page and apply at once; a new GPU split restarts its harness |
-| **Kind of hardware** | Names one: `cpu` or `cuda-gpu` | Has one: `cpu` without GPUs, `cuda-gpu` with them |
+| **Kind of hardware** | Names one: `cpu`, `cuda-gpu` or `vulkan-gpu` | Has one: `cpu` without GPUs, `cuda-gpu` with NVIDIA GPUs, `vulkan-gpu` with a GPU reached through Vulkan, such as a Mac's |
 | **Can agents see it?** | Never | They work inside it, each as its own user, with no way into the judge's files |
 | **Does it keep results?** | No. It holds no results at all | Yes. Its ledger keeps every run, attempt and verdict |
 
@@ -66,7 +66,7 @@ How many agents really work at the same moment depends on both: the contract's n
 
 ## One kit on many rigs
 
-A campaign can run on several rigs at once, all with the same kit commit. A `cuda-gpu` kit runs on any GPU rig, whatever the GPU model, so two rigs can give quite different raw numbers. Thermite never compares them:
+A campaign can run on several rigs at once, all with the same kit commit. A `cuda-gpu` kit runs on any rig with NVIDIA GPUs, whatever the GPU model, so two rigs can give quite different raw numbers. Thermite never compares them:
 
 - each rig measures every change against its own starting point, on its own device;
 - a rig's champion can be sent to another rig, whose own judge measures it again against that rig's champion. If it wins there too, it is shown as **cross-verified**.
@@ -84,6 +84,7 @@ The rig's own **smoke check** is an example. The harness image carries a small s
 ## Common mix-ups
 
 - **"Each project needs its own rig."** It does not. A rig runs any project whose kit matches its hardware, one run at a time.
-- **"A CPU kit can run on my GPU rig."** It cannot. A rig with GPUs measures on `cuda-gpu`, so it refuses a `cpu` kit. Use a rig without GPUs, or write a `cuda-gpu` kit.
+- **"A CPU kit can run on my GPU rig."** It cannot. A rig with NVIDIA GPUs measures on `cuda-gpu`, so it refuses a `cpu` kit. Use a rig without GPUs, or write a `cuda-gpu` kit.
+- **"A CUDA kit can run on my Mac's GPU."** It cannot. A rig on a Mac's GPU measures on `vulkan-gpu`: the container sees the GPU as a Vulkan device, with no CUDA and no Metal. Its kit names `vulkan-gpu`, and its engine needs a Vulkan back end ([Use a Mac's GPU](../how-to/install/one-machine.md#use-a-macs-gpu)).
 - **"The kit installs the compiler."** It does not. Builds run inside the rig's harness image and use the tools in it. A project that needs more tools needs an extended image.
 - **"Changing a rig's settings changes the verdicts."** It does not. Verdicts follow the kit and the contract. A rig's settings change the model, the pace and who decides promotions, never what counts as better.

@@ -57,6 +57,19 @@ async function seedRepo(from: string, to: string, skip: string[]): Promise<strin
   return git(to, "rev-parse", "HEAD");
 }
 
+/** The smoke kit of each target type, and the project each kit measures (in the image's checks). */
+type SmokeKit = "smoke-cpu" | "smoke-cuda" | "smoke-vulkan";
+const SMOKE_KITS: Record<string, SmokeKit | undefined> = {
+  cpu: "smoke-cpu",
+  "cuda-gpu": "smoke-cuda",
+  "vulkan-gpu": "smoke-vulkan",
+};
+const SMOKE_PROJECTS: Record<SmokeKit, string> = {
+  "smoke-cpu": "smoke-project",
+  "smoke-cuda": "smoke-cuda-project",
+  "smoke-vulkan": "smoke-vulkan-project",
+};
+
 /**
  * The smoke project's and kit's repositories, seeded in `work` (project/ and kit/, the kit
  * without its candidates), with their names and commits. The same files always give the same
@@ -64,15 +77,11 @@ async function seedRepo(from: string, to: string, skip: string[]): Promise<strin
  */
 export async function seedSmokeRepos(
   checksDir: string,
-  kitName: "smoke-cpu" | "smoke-cuda",
+  kitName: SmokeKit,
   work: string,
 ): Promise<{ projectRepo: string; project: string; kitRepo: string; kit: string }> {
   const kitDir = join(checksDir, "kits", kitName);
-  const projectDir = join(
-    checksDir,
-    "examples",
-    kitName === "smoke-cuda" ? "smoke-cuda-project" : "smoke-project",
-  );
+  const projectDir = join(checksDir, "examples", SMOKE_PROJECTS[kitName]);
   const project = await seedRepo(projectDir, join(work, "project"), []);
   const kit = await seedRepo(kitDir, join(work, "kit"), ["candidates"]);
   return { projectRepo: `${kitName}-project`, project, kitRepo: `${kitName}-kit`, kit };
@@ -89,8 +98,7 @@ export async function smokeCheck(o: {
   pollMs?: number | undefined;
   timeoutMs?: number | undefined;
 }): Promise<RigCheckReport> {
-  const kitName =
-    o.targetType === "cuda-gpu" ? "smoke-cuda" : o.targetType === "cpu" ? "smoke-cpu" : undefined;
+  const kitName = SMOKE_KITS[o.targetType];
   if (!kitName) return { ok: false, summary: `there is no smoke kit for a ${o.targetType} target` };
   const kitDir = join(o.checksDir, "kits", kitName);
   if (!existsSync(join(kitDir, "kit.json")))

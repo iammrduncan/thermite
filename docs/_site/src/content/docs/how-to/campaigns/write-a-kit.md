@@ -14,7 +14,7 @@ A [kit](../../reference/glossary.md) is the judge's recipe for your project: how
 
 - The project in a git repository, and a way to build and run it with no one at the keyboard.
 - A way to tell a right answer from a wrong one, such as reference outputs or a slower reference implementation.
-- The target of the rigs that will measure it: `cpu` or `cuda-gpu`.
+- The target of the rigs that will measure it: `cpu`, `cuda-gpu` (NVIDIA GPUs) or `vulkan-gpu` (a GPU reached through Vulkan, such as [a Mac's](../install/one-machine.md#use-a-macs-gpu)).
 
 `kits/smoke-cpu` in Thermite's repository is a complete small kit: `kit.json`, a `bench/` folder with its build script and sources, and `check.mjs`, the check. Its manifest:
 

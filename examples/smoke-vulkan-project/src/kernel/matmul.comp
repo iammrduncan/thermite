@@ -1,0 +1,13 @@
+#version 450
+#include "matmul.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+void main() {
+  int row = int(gl_GlobalInvocationID.y);
+  int col = int(gl_GlobalInvocationID.x);
+  if (row >= n || col >= n) return;
+  float s = 0.0;
+  for (int k = 0; k < n; k++) s += a[row * n + k] * b[k * n + col];
+  c[row * n + col] = s;
+}

@@ -308,7 +308,8 @@ The fixes after them, one version each, in the order to take them:
 - [120](goals/120-research-kit-prep.goal) From research to the next campaign: next experiments in Start a run and New campaign, and kit prep · `PROPOSED`
 - [121](goals/121-hill-climb-stages.goal) Stages: a hill climb that improves several metrics, one after the other · `PROPOSED`
 - [105](goals/105-amd-gpus.goal) AMD GPUs in rigs · `PROPOSED`
-- [106](goals/106-apple-silicon-rig.goal) A rig on Apple silicon that uses its GPU ([issue 87](https://github.com/iammrduncan/thermite/issues/87)) · `PROPOSED`
+- [106](goals/106-apple-silicon-rig.goal) A rig on Apple silicon that uses its GPU, as a Vulkan device in its container ([issue 87](https://github.com/iammrduncan/thermite/issues/87)) · `IN_PROGRESS`
+- [280](goals/280-released-vulkan-harness-image.goal) A release publishes the Vulkan harness image, so a Mac's GPU works from a release ([issue 94](https://github.com/iammrduncan/thermite/issues/94)) · `PROPOSED`
 - [107](goals/107-runs-side-by-side.goal) Several runs at once on one rig, within its resources · `PROPOSED`
 - [030](goals/030-oauth-sign-in.goal) Sign in with OAuth or OIDC · `PROPOSED`
 - [031](goals/031-design-docs.goal) The design reasons, in public docs · `PROPOSED`
@@ -406,6 +407,7 @@ The fixes after them, one version each, in the order to take them:
 **Not scheduled.** Ideas with a clear source and no version yet. Proposed.
 
 - [278](goals/278-one-goal-at-a-time.goal) A goal campaign works one goal at a time: each experiment aimed at one goal, its verdict on that goal and the goals already met, and the other goals handed out by lane ([issue 85](https://github.com/iammrduncan/thermite/issues/85)) · `PROPOSED`
+- [279](goals/279-runner-on-macos-for-mlx.goal) A runner on macOS itself, for MLX and Metal work ([issue 93](https://github.com/iammrduncan/thermite/issues/93)) · `PROPOSED`
 - [260](goals/260-fxbot-and-thermite.goal) fxbot and Thermite as two sides of one platform: fxbot's agent core as the harness, and bots that run the science · `PROPOSED`
 - [051](goals/051-pareto-and-population.goal) Pareto champions and population search · `PROPOSED`
 - [052](goals/052-more-target-drivers.goal) More target drivers · `PROPOSED`

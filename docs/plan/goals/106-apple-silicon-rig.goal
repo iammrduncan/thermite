@@ -1,7 +1,7 @@
 ---
 id: "106"
 title: "A rig on Apple silicon that uses its GPU"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.3.0"
 depends_on: []
 created: 2026-10-23
@@ -10,42 +10,73 @@ updated: 2026-11-13
 
 # 106 · A rig on Apple silicon that uses its GPU
 
-**Status:** `PROPOSED` · **Tracked in:** [GitHub issue 87](https://github.com/iammrduncan/thermite/issues/87), the source of truth for this work. This file keeps its context.
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Tracked in:** [GitHub issue 87](https://github.com/iammrduncan/thermite/issues/87), the source of truth for this work. This file keeps its context.
 
-**Status:** `PROPOSED` · **Version:** [v0.3.0](../roadmap.md#v030)
+Built on 2026-11-13 and proven on one Mac. It waits for the owner's hands-on look.
 
 ## What
 
-A plan only; nothing of it is built.
+A rig on a Mac with Apple silicon uses the Mac's GPU. The rig stays what a rig is, a harness container and its supervisor with the same wall, and the GPU reaches the harness as a Vulkan device.
 
-A rig on a Mac with Apple silicon can run campaigns that use its GPU and its unified memory, such as MLX work. Containers on macOS run in a Linux virtual machine with no access to the Apple GPU (Metal), so such a rig runs natively on macOS, without containers. It needs:
+- **How the GPU gets there.** Containers on macOS run in a Linux virtual machine. One kind gives its containers the Mac's GPU: a Podman machine made with the libkrun provider. The container sees `/dev/dri`; Mesa's Venus driver in the container carries Vulkan to the Mac, where it becomes Metal.
+- **What it serves.** Engines with a Vulkan back end. It does not serve MLX, which needs Metal: that is a runner on macOS itself, goal [279](279-runner-on-macos-for-mlx.goal).
+- **What was built,** each part in Progress:
+  1. A target, `vulkan-gpu`, beside `cpu` and `cuda-gpu`.
+  2. The harness on a Vulkan base, and the rig's device setup, fence and isolation check for a GPU that is `/dev/dri`.
+  3. The one-machine install on a Mac: `thermite doctor` and `thermite local init` say whether the Mac's machine gives its GPU, and `local init` writes the compose file that gives it to the rig.
+  4. A smoke kit for the target, which the judge's smoke check runs.
 
-- **Isolation without Linux's tools.** The rig's isolation rests on Linux users, groups and Landlock. A native macOS rig needs its own fence with the same promises (agents can't read the judge, its kits, the ledger or secrets, and can't change measurements), with macOS's own mechanisms, and an isolation self-test that proves them.
-- **The judge and the agents on one GPU.** Apple silicon has one GPU and shared memory, so the judge's measurements and the agents' runs share it, as a rig with one GPU does today, with the agents' runs waiting while the judge measures.
-- **A target class and a smoke kit** for Apple silicon (Metal or MLX).
-- **Setup** from the one-machine install and from **Add a rig**, with the same checks.
+The goal as first written (2026-10-23) planned a rig on macOS itself, without containers, for MLX. The study of 2026-11-13 found the way through Vulkan, which keeps the rig's wall as it is, and the owner chose it. The rig on macOS itself is goal 279 now.
 
 ## Why
 
-The owner, 2026-10-23, on the one-machine install: "If they have just mac it will pick up the unified memory and the apple silicon GPU for running mlx style stuff etc..." For v0.1.0 the install says plainly that a Mac's rig gets the virtual machine's CPUs and memory and no Apple GPU ([037](_completed/037-gpu-compose.goal)).
+The owner, 2026-10-23, on the one-machine install: "If they have just mac it will pick up the unified memory and the apple silicon GPU for running mlx style stuff etc..." For v0.1.0 the install said plainly that a Mac's rig gets the virtual machine's CPUs and memory and no Apple GPU ([037](_completed/037-gpu-compose.goal)).
+
+On 2026-11-13 the owner wanted a second, local-only Thermite on a Mac for trying v0.3.0, with the Mac's own GPU for small models.
 
 ## Done when
 
-- [ ] Written when the goal is accepted into a version.
+Written by the builder on 2026-11-13, when the build began.
+
+- [x] **The target.** A rig with `THERMITE_TARGET=vulkan-gpu` names its device (a name, a driver, a UUID, an id that stays the same), and is ready for timing only when Vulkan lists a real GPU. A rig that sees only the software device, or none, says so in words and measures nothing.
+- [x] **The wall holds.** On a rig with a Vulkan GPU, the roles that must not use the GPU can't open its device nodes, and the isolation check proves it for each role and each node, on the real machine.
+- [x] **The install.** On a Mac, `thermite doctor` and `thermite local init` say whether Podman's machine gives the GPU, and what to do when it doesn't. When it does, `local init` writes `compose.gpu.yaml`, and the stack started with it has a rig that reports the GPU to control.
+- [x] **The judge measures on it.** The smoke check of that rig, asked through control, passes with the Vulkan smoke kit: each candidate gets its expected verdict from the real judge, on the Mac's GPU.
+- [x] **The pages and the credits** say what exists.
+- [ ] **The owner has tried it,** hands-on.
+
+Not in this goal:
+
+- MLX and Metal work, which need a runner on macOS itself: goal [279](279-runner-on-macos-for-mlx.goal).
+- A released Vulkan harness image. The image builds from the source: goal [280](280-released-vulkan-harness-image.goal).
+- A limit on the GPU's memory. The owner, 2026-11-13: none is needed (Decisions).
+- A rig with a Vulkan GPU set up by control on a machine or a cluster, more than one Vulkan GPU in a rig, and a development GPU of the agents' own. A Mac has one GPU and runs the one-machine install.
+- Other GPUs through Vulkan on Linux (AMD's, Intel's). The target's code does not name Apple, but nothing else is tested. AMD GPUs are goal [105](105-amd-gpus.goal).
 
 ## Decisions
 
-- 2026-11-13, the owner, asked what GPU the local-only Thermite on a Mac should use for trying v0.3.0: "use this local mac. For tests we can do very small models. we should make an mlx, metal capable rig image." So this goal is wanted, for small models first. It is not built, and no step of [v0.3.0, step by step](../v030_release_plan.md) holds it yet: the owner says where it goes.
+- 2026-11-13, the owner, asked what GPU the local-only Thermite on a Mac should use for trying v0.3.0: "use this local mac. For tests we can do very small models. we should make an mlx, metal capable rig image." So this goal was wanted, for small models first. No step of [v0.3.0, step by step](../v030_release_plan.md) holds it: it was built beside the steps, at the owner's command of the same day.
 - 2026-11-13, the owner, later the same day: "figure out how to get my mac to have 10gb of its GPU as a runner... there has to be a way to do this, someone has figured it out... check out apple/containers." The study of that day is in Progress.
-- The builder's note on "image": an image alone can't give a rig the Mac's GPU, since a container on macOS runs in a Linux virtual machine that can't reach Metal. What is wanted is met by a runner on macOS itself, as What says, or by another wall than a Linux container. It is an open question below, for the owner.
+- The builder's note on "image", of that day, before the study: an image alone can't give a rig the Mac's GPU, since a container on macOS runs in a Linux virtual machine that can't reach Metal. The study then found the one kind of machine that carries Vulkan to it.
+- 2026-11-13, the owner, asked whether to run the proof (krunkit and its parts from Homebrew, a second Podman machine, one small model): "Run the proof now".
+- 2026-11-13, the owner, when the build began: "just do one libkrun podman machine and run both control and runner containers on it etc... its fine we can use that qwen model and it will never use all my ram." So:
+  - **One machine.** Control, the bus and the rig run in the one libkrun machine. Thermite makes no machine of its own: the machine is the Mac owner's, and `local init` and `thermite doctor` read it.
+  - **No limit on the GPU's memory.** The "10 GB" of the earlier words is not built. The Vulkan device gives no figure to hold a limit to, and the owner's test models are small.
+- The builder's choices, 2026-11-13. Each can be changed:
+  - **The way through Vulkan,** and MLX apart (goal 279), as the study's "What fits Thermite as it is" says.
+  - **The target is named for what it reaches through, `vulkan-gpu`,** not for Apple: its driver reads any Vulkan device and refuses the software one. Only a Mac's GPU is tested.
+  - **The image is built on a distribution's own Mesa,** Ubuntu 26.10's 26.2, pinned by digest. The proof used the machine's makers' patched Mesa; the build then found that Mesa 26.2 and newer open the GPU as they come, and older ones do not (Progress). No third party's package source is in the image.
+  - **The fence alone keeps roles off the GPU.** In a rootless container on the machine the broker can't give the device nodes a group, so the layout is the shared one with the Landlock fence, which a rig with NVIDIA GPUs already has for that case. The fence got one new rule, for `/dev/dri`.
+  - **The judge can't ask whether the GPU is quiet.** The device reports no load, memory in use or temperature. The target is ready when the GPU is listed; a disturbed measurement shows in the run's own repeats and its noise figure.
+  - **On a Mac where Docker and Podman both answer, Podman is the rig's engine** when its machine gives the GPU, unless `--engine` names another.
 
 ## Open questions
 
-- Whether this is one piece of work with goal [277](277-runner-without-a-container-engine.goal), the runner with no container engine to set up, which the owner put in v0.4.0: a runner on macOS itself needs the same thing, a wall that is not a Linux container.
-- Whether a container with Vulkan through the virtual machine is worth a look, for engines with a Vulkan path. MLX needs Metal, so it would not serve MLX.
+- Whether a run on this GPU needs a memory budget of its own later, for larger models: the device reports the Mac's whole memory as its own, and the Mac's other work shares it.
+- Whether the same target serves AMD and Intel GPUs on Linux, whose Mesa drivers the image also carries. Not tested; goal [105](105-amd-gpus.goal).
+- Whether the checks can cover this path without a Mac. Today they hold the parts (the driver on real `vulkaninfo` text, the device nodes and the fence's rule, the compose file, the kit's shape); the GPU itself needs a libkrun machine, which no CI runner has.
 
-- Which macOS mechanism can fence the agents as strictly as Linux users, groups and Landlock do, and whether it can be tested in CI.
-- Whether the judge on a native Mac rig should time with the GPU idle for the agents, or keep its own measurement windows.
+Settled on 2026-11-13: a container with Vulkan through the virtual machine was worth the look, and it is what was built; the wall on macOS itself, and whether that is one piece of work with goal [277](277-runner-without-a-container-engine.goal), moved to goal 279.
 
 ## Progress
 
@@ -78,12 +109,39 @@ The owner, 2026-10-23, on the one-machine install: "If they have just mac it wil
     The container's GPU runs at 76% of Metal for the prompt and 77% for generation, as its makers measured. A model this small generates as fast on the CPU; the GPU's gain shows in the prompt, ten times the CPU's.
   - **Memory:** the Vulkan device reports one heap of 24 GiB, the Mac's whole memory, whatever the machine's own size (10 GiB here), and gives no figures of what is in use. So nothing below holds the work to 10 GB: the runner must keep the budget itself, by what it loads.
   - **One machine at a time, as read:** the default machine had to stop while the libkrun one ran, and the local Thermite with it. Its containers did not come back by themselves when the default machine started again; `compose up -d` brought them back.
-  - **What is left to build, for a runner that uses a Mac's GPU this way:**
-    1. A target class for a Vulkan GPU beside `cuda-gpu` and `cpu`: its identity, its readiness for timing and its memory budget, with no `nvidia-smi` to ask.
-    2. A harness image with the Vulkan loader and the patched Mesa, and the rig's GPU setup for a device that is `/dev/dri` and not NVIDIA's.
-    3. The one-machine install on a Mac: Thermite's own machine made on libkrun, since one machine runs at a time, and `local init` and `thermite doctor` saying so.
-    4. A smoke kit whose engine has a Vulkan back end.
-    5. MLX stays apart: it needs a runner on macOS itself.
+  - **What was left to build then,** for a runner that uses a Mac's GPU this way: a target for a Vulkan GPU, a harness image with the Vulkan parts and the rig's GPU setup for `/dev/dri`, the one-machine install on a Mac, and a smoke kit; MLX apart. The next entry is that build.
+- 2026-11-13: **Built, and proven on the same Mac.** The same M4 Pro, with one Podman machine on libkrun (8 CPUs, 12 GiB) holding control, the bus and the rig.
+  - **The target, `vulkan-gpu`** ([`vulkan.ts`](../../../src/harness/targets/vulkan.ts)). It reads the devices from `vulkaninfo --summary`, run as the role that may open the GPU. Its identity is the device's name, driver and UUID, with an id made from the name and Vulkan's vendor and device numbers. It takes the first real GPU and never the software device (Mesa's llvmpipe, which computes on the CPU): with only that one, or none, the rig is not ready and says why. The rig's hardware report shows the device; its memory, bus and limits are empty, because the device reports none.
+  - **A Mesa that opens the GPU as it comes.** The proof's image had the machine's makers' patched Mesa. Tried on the same machine, each distribution's own Mesa:
+
+    | Base | Mesa | The GPU |
+    | --- | --- | --- |
+    | Debian 13 | 25.0.7 | Not opened: `ERROR_OUT_OF_HOST_MEMORY` |
+    | Ubuntu 25.10 | 25.2.8 | Not opened, the same |
+    | Ubuntu 26.04 | 26.0.8 | Not opened, the same |
+    | Debian testing | 26.1.6 | Not opened, the same |
+    | Ubuntu 26.10 | 26.2.4 | Opened |
+    | Fedora 44 | 26.2.6 | Opened |
+
+    So the harness's Vulkan base is Ubuntu 26.10, pinned by digest: the stage `vulkan-base` of [`containers/Containerfile`](../../../containers/Containerfile), with Mesa's Vulkan drivers, the Vulkan loader, `vulkaninfo`, the headers and `glslc`. The harness is the same `harness` target, built on that stage.
+  - **The wall.** The rig's GPU device nodes are `/dev/dri/renderD*` and `/dev/dri/card*` on this target ([`devices.ts`](../../../src/harness/broker/devices.ts)). The broker starts every role without the GPU behind the fence's new `--no-dri` ([`devfence.c`](../../../containers/harness/devfence.c)), and the isolation check tries each node as each role. On the Mac, asked through control: "isolation holds: every probe of 10 roles came out as it must (devices: shared (fence: landlock))", with `/dev/dri/card0` and `/dev/dri/renderD128` refused (`EACCES`) to each role that must not have them.
+  - **The install** ([`machine.ts`](../../../src/cli/machine.ts)). On a Mac with Apple silicon and Podman, `thermite doctor` and `thermite local init` ask Podman for its machines and look for `/dev/dri` in the one that runs. Each case has its sentence and its fix: no machine running, a machine of another provider, a libkrun machine with no GPU device. With the GPU there, `local init` writes `compose.gpu.yaml`: the harness on the Vulkan base, `THERMITE_TARGET=vulkan-gpu`, and `/dev/dri`. A checkout's file builds the image; a release's must be told one (goal 280).
+  - **The smoke kit** ([`kits/smoke-vulkan`](../../../kits/smoke-vulkan/kit.json), with [`examples/smoke-vulkan-project`](../../../examples/smoke-vulkan-project/README.md)): a matrix product in a Vulkan compute shader, as `smoke-cuda`'s is in CUDA, with the same four candidates and a proof that the reference was not called.
+  - **The judge's smoke check on the Mac's GPU,** asked through the local control, passed, every candidate as expected:
+
+    | Candidate | What it is | Verdict |
+    | --- | --- | --- |
+    | The baseline | | 582 GFLOP/s on both cells (small ±0.16%, large ±1.94%) |
+    | A/A | The baseline against itself | -0.05% [-1.20%, 1.11%], block sigma 1.4% |
+    | `noop` | A renamed variable | `neutral` |
+    | `broken` | Half of the sum skipped | `invalid`: "max abs error 10.31 above 0.002" |
+    | `fallback` | Calls the reference | `invalid`: "dispatch proof failed: reference op called 120 times" |
+    | `good` | A 4 by 4 block of outputs for each thread | `win_screened`, then `win_confirmed`, +228% |
+
+  - **The local-only Thermite** now runs this way: its rig reports its hardware to control as "shared: Virtio-GPU Venus (Apple M4 Pro)", with the device's UUID.
+  - **What the checks hold, and what they can't.** Tests hold the driver on real `vulkaninfo` text (the Mac's device, the software device, none), the device nodes and the fence's argument for each role, the hardware report, each answer of Podman about its machine, the compose file `local init` writes, and that the kit is whole. No check reaches a real GPU through Vulkan: that needs a libkrun machine, so the isolation check and the smoke check above were run by hand, and `--no-dri` was tried by hand in the image.
+  - **Changed on the Mac, outside Thermite:** Homebrew installed krunkit, libkrun and MoltenVK; Podman's provider there is libkrun now, and its machine of the default provider is stopped and kept.
+  - **Checks run:** the whole test suite (3,044 of 3,048 side by side with 4 skipped, 214 of 215 alone with 1 skipped, none failed), the types, the lint, the public, size, import and loose-ends checks, the image pins, and the documentation's build and check. The compose form of the Mac's file for a release was resolved by compose both ways: with the image named, and without, where compose stops with the file's own words. Not run: the heavy acceptance checks. None of them reaches this target, and the path they share (the CPU and CUDA rigs) is held by the tests.
 
 ---
 

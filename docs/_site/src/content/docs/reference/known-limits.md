@@ -18,6 +18,7 @@ Thermite is at version 0.x. This page lists what to know before you run it: the 
 | [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records them |
 | [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.6.0 |
 | [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.3.0 |
+| [A Mac's GPU runs Vulkan work only, from an image you build](#a-macs-gpu-runs-vulkan-work-only-from-an-image-you-build) | [Goal 280](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/280-released-vulkan-harness-image.goal), v0.3.0, for the image; [goal 279](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/279-runner-on-macos-for-mlx.goal) for MLX |
 | [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), a v0.2.x fix |
 | [0.x versions make no upgrade promise](#0x-versions-make-no-upgrade-promise) | No goal yet: it holds until 1.0 |
 
@@ -86,6 +87,18 @@ Thermite is built to run unattended for as long as a campaign takes, and to reco
 The release publishes two CUDA harnesses ([The CUDA harness](harness-image.md#the-cuda-harness)). The CUDA 12 one (`-cuda`) runs Thermite's GPU rigs, on P100 GPUs among others. The CUDA 13 one (`-cuda13`), for Turing to Blackwell and the DGX Spark, is built, and the release's checks hold it to its architectures, but it has not yet run on a GPU. Control sets GPU rigs up from the CUDA 12 image unless `THERMITE_RIG_HARNESS_CUDA_IMAGE` names another, or, for a rig or a runner whose CUDA is 13, from the CUDA 13 image (`THERMITE_RIG_HARNESS_CUDA13_IMAGE`). Control sets it to 13 for an arm64 node or a Blackwell GPU where it can tell: for a rig or a runner on a cluster, and for a runner on a machine. A rig's own GPUs on a machine and the one-machine install have no such choice yet.
 
 **Removed by:** [goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), Rig images for each GPU generation (v0.3.0). If you run it on a Blackwell GPU or a DGX Spark, [tell us how it went](../project/getting-help.md).
+
+## A Mac's GPU runs Vulkan work only, from an image you build
+
+A rig on a Mac with Apple silicon can use the Mac's GPU, as one Vulkan device in a Podman machine made with the `libkrun` provider ([Use a Mac's GPU](../how-to/install/one-machine.md#use-a-macs-gpu)). What that means for you:
+
+- It runs engines with a Vulkan back end. MLX, and any other work that needs Metal, does not run: no container has Metal.
+- No release has the harness image for it: you build it from the source code.
+- Only the one-machine install has it. Control sets up no rig with a Vulkan GPU on a machine or a cluster. The rig has one GPU, which the judge and the agents share.
+- The GPU says that it has all of the Mac's memory, and gives no memory in use, temperature or load. Thermite sets no limit on it, and the judge can't ask whether it is idle before it times.
+- It has run on one Mac, an M4 Pro. No other GPU has run through the `vulkan-gpu` target ([Compatibility](compatibility.md#gpus-cuda-and-drivers)).
+
+**Removed by:** [goal 280](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/280-released-vulkan-harness-image.goal), A release publishes the Vulkan harness image (v0.3.0), for the image. [Goal 279](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/279-runner-on-macos-for-mlx.goal), A runner on macOS itself, for MLX and Metal work, has no version yet. The rest has no goal yet.
 
 ## A win the champion moved past still asks to be made the champion
 

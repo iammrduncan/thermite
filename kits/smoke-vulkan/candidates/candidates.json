@@ -1,0 +1,9 @@
+{
+  "good": {
+    "hypothesis": "register tiling: a 4x4 block of outputs per thread",
+    "expect": "win_confirmed"
+  },
+  "noop": { "hypothesis": "rename the accumulator", "expect": "neutral" },
+  "broken": { "hypothesis": "skip half of the reduction", "expect": "invalid" },
+  "fallback": { "hypothesis": "call the reference implementation", "expect": "invalid" }
+}

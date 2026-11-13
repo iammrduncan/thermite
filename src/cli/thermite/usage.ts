@@ -309,7 +309,8 @@ export const USAGE = `usage: thermite <command> [options]
                                       kept. Run as root, it gives what it makes to the owner of
                                       DIR's parent folder. It says what the local rig gets
                                       (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
-                                      have, writes compose.gpu.yaml next to DIR for the engine
+                                      have, or a Mac's GPU that its Podman machine gives,
+                                      writes compose.gpu.yaml next to DIR for the engine
                                       named, or the one it finds. Each rig's token for control
                                       starts empty: local enroll fills it
   local enroll RIG --control URL --token-file F --out FILE

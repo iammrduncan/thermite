@@ -127,8 +127,8 @@ The harness container runs a **broker**, which runs as root and starts the other
 | Variable | Type | Default | Secret | Meaning |
 | --- | --- | --- | --- | --- |
 | `THERMITE_RIG_ID` | string | required | no | The rig's name, as control knows it |
-| `THERMITE_TARGET` | `cpu` or `cuda-gpu` | `cpu` | no | The [target](glossary.md) driver. Anything else stops the harness with `no target driver <value>; this build has cpu and cuda-gpu` |
-| `THERMITE_TARGET_CLASS` | string | `generic-cpu` on `cpu`, `cuda-gpu` on `cuda-gpu` | no | A name for the kind of device. The dashboard shows it with the rig's hardware, and the **New campaign** page and the smoke check copy it into the contracts they write. Nothing compares it |
+| `THERMITE_TARGET` | `cpu`, `cuda-gpu` or `vulkan-gpu` | `cpu` | no | The [target](glossary.md) driver: the CPUs, NVIDIA GPUs through CUDA, or one GPU reached through Vulkan, which needs the harness built on the Vulkan base ([The Vulkan harness](harness-image.md#the-vulkan-harness)) and the GPU's device folder, `/dev/dri`, in the container. Anything else stops the harness with `no target driver <value>; this build has cpu, cuda-gpu and vulkan-gpu` |
+| `THERMITE_TARGET_CLASS` | string | `generic-cpu` on `cpu`, `cuda-gpu` on `cuda-gpu`, `vulkan-gpu` on `vulkan-gpu` | no | A name for the kind of device. The dashboard shows it with the rig's hardware, and the **New campaign** page and the smoke check copy it into the contracts they write. Nothing compares it |
 | `THERMITE_CONTROL_PUBKEY_FILE` | path | required | no | Control's command-signing public key, to verify signed commands. The harness waits up to 120 seconds for the file to appear, then stops with `timed out waiting for <path>`. In the one-container rig image in pull mode, the broker writes it from enrollment before it starts the harness |
 | `THERMITE_LISTEN` | `host:port` | `0.0.0.0:8700` | no | Where the harness serves its API, for the rig's supervisor, a proposer's `thermite submit` and the agents' tools. Rigs that control sets up expect port 8700 |
 | `THERMITE_ROLE` | `runner` or not set | not set | no | `runner`: the harness serves its target resources to its rig's core, one run at a time on each: a build, a measurement with its check, a baseline's folder, and a lane's command on its change. It keeps its own builds, kits, model files and kept baselines, and no run of its own: no scheduler, planner, judge's queue or agents. Not set: the harness is the rig's core, as always |
@@ -159,7 +159,7 @@ Where a host empties the container's disk when it stops, as RunPod does, the bro
 | Variable | Type | Default | Secret | Meaning |
 | --- | --- | --- | --- | --- |
 | `THERMITE_GPU_INDEX` | GPU index or list (`0`, `0,1`) | `0` | no | The judge's GPU, or several. Each judge GPU times runs on its own. At most 8 |
-| `THERMITE_DEV_GPU_INDEX` | GPU index or list | not set | no | GPUs for the agents' development runs, never one of the judge's. At most 8. Not set: development runs share the judge's GPU and wait for it. Needs `THERMITE_TARGET=cuda-gpu`, or the harness stops with `THERMITE_DEV_GPU_INDEX needs THERMITE_TARGET=cuda-gpu` |
+| `THERMITE_DEV_GPU_INDEX` | GPU index or list | not set | no | GPUs for the agents' development runs, never one of the judge's. At most 8. Not set: development runs share the judge's GPU and wait for it. Needs `THERMITE_TARGET=cuda-gpu`, or the harness stops with `THERMITE_DEV_GPU_INDEX needs THERMITE_TARGET=cuda-gpu`: a rig on `vulkan-gpu` has one GPU, which the judge and the development runs share |
 | `THERMITE_GPUS` | GPU list (`0,1,2,3`) | not set | no | The rig's GPU set, in place of the two lists above. The first GPUs are the judge's and the rest the agents'. One GPU is shared by both. At most 16: up to 8 for the judge and 8 for the agents. With it, `THERMITE_GPU_INDEX` is ignored. It is itself ignored when `THERMITE_DEV_GPU_INDEX` is set |
 | `THERMITE_JUDGE_GPUS` | integer, 1 or more | half of `THERMITE_GPUS`, rounded up | no | With `THERMITE_GPUS`: how many are the judge's at first. The rig's own setting (**GPUs for the judge** on **Edit rig**, or the campaign deployed on the rig) comes first. A value that does not fit (below 1, the whole set, or more than 8 on either side) is ignored |
 | `THERMITE_RUN_CPUS` | `auto`, `off` or a CPU list (`0-7`, `0,2,4`) | `auto` on `cuda-gpu`, otherwise `off` | no | The CPUs that timed runs are pinned to. `auto`: each judge GPU's local CPUs. A list is shared out between the judge GPUs, with no CPU in two. A bad list stops the harness with `not a CPU list: <value>` |
@@ -384,7 +384,9 @@ It also has a `backup` service, in the `backup` profile, which `up` never starts
 
 On a machine with NVIDIA GPUs, `thermite local init` also writes `compose.gpu.yaml`, which changes the harness of `local-1` only: `THERMITE_TARGET` `cuda-gpu`, `THERMITE_GPUS` and `THERMITE_JUDGE_GPUS` (or `THERMITE_GPU_INDEX` `0` for one GPU), the GPUs themselves, and the CUDA image: beside a release's `compose.yaml`, the release's CUDA harness, which `THERMITE_RIG_HARNESS_CUDA_IMAGE` in `.env` replaces; beside the repository's, one it builds on the CUDA base. See [`local init`](command-line.md#local-init).
 
-These five are read by the compose files. Thermite's services never read them; `thermite doctor` reads `THERMITE_CONTROL_PORT` to find control's port:
+On a Mac whose Podman machine gives containers the GPU, it writes the same file for the Mac's GPU: `THERMITE_TARGET` `vulkan-gpu`, the device folder `/dev/dri`, and the Vulkan harness: beside the repository's `compose.yaml`, one it builds on the Vulkan base; beside a release's, the image `THERMITE_RIG_HARNESS_VULKAN_IMAGE` names.
+
+These six are read by the compose files. Thermite's services never read them; `thermite doctor` reads `THERMITE_CONTROL_PORT` to find control's port:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -392,6 +394,7 @@ These five are read by the compose files. Thermite's services never read them; `
 | `THERMITE_NATS_PUBLISH` | `127.0.0.1:4222` | Where the message bus's port is published on this machine: an address and a port. Rigs on other machines reach the bus here: `0.0.0.0:4222` publishes it on every address. Inside the stack the bus stays at `nats:4222` |
 | `THERMITE_NATS_MEMORY` | `256m` | The message bus's memory limit, as compose writes one, such as `512m` or `1g`. The server tells Go 78% of it. It holds the index of each stream's subjects and the blocks a read loads, not the messages, which are on disk. A [restore](../how-to/operate/backup-and-restore.md#restore-a-backup) needs more for its run: about 1 KiB a message over 128 MiB, which `thermite restore` prints |
 | `THERMITE_NATS_STORE` | not set | The most the message bus keeps on its volume, such as `20G`. Not set: 75% of the volume's free space when the server starts. Keep it under what the disk has free: a server whose disk is full turns JetStream off |
+| `THERMITE_RIG_HARNESS_VULKAN_IMAGE` | not set | `compose.gpu.yaml` on a Mac only, beside a release's `compose.yaml`: the harness image built on the Vulkan base, which you build from the source code ([Use a Mac's GPU](../how-to/install/one-machine.md#use-a-macs-gpu)). No release has one. Not set: compose stops and asks for it. Control never reads it: it sets up no rig with a Vulkan GPU |
 | `THERMITE_ENGINE_SOCKET_HOST` | `/var/run/docker.sock` | `compose.lifecycle.yaml` only: the container engine's socket on the host, mounted into control as `/run/engine.sock` |
 
 ## Scripts and test images
@@ -416,7 +419,8 @@ The images take these build arguments. [Harness image](harness-image.md) says wh
 | Argument | Images | Default | Meaning |
 | --- | --- | --- | --- |
 | `NODE_IMAGE` | control, harness, supervisor | Node.js 22 on Debian bookworm (slim), pinned by digest | The Node.js image each image is built from |
-| `BASE_IMAGE` | harness | `NODE_IMAGE` | The harness's base. For GPU rigs, a CUDA development image: CUDA 12.x for the `-cuda` harness, CUDA 13.x for the `-cuda13` one |
+| `BASE_IMAGE` | harness | `NODE_IMAGE` | The harness's base. For GPU rigs, a CUDA development image: CUDA 12.x for the `-cuda` harness, CUDA 13.x for the `-cuda13` one. For a rig whose GPU is reached through Vulkan, `vulkan-base`, a stage of the same file |
+| `VULKAN_IMAGE` | harness | Ubuntu 26.10, pinned by digest | The image the `vulkan-base` stage is built from. Its Mesa must be 26.2 or newer |
 | `OPENCODE_VERSION` | harness, supervisor | `2.1.4` | The OpenCode version installed: for the workers and the planner, and for advisors in OpenCode |
 | `CLAUDE_CODE_VERSION` | harness, supervisor | empty: Claude Code is not installed | The Claude Code version to download at build time, for agents or advisors on a Claude subscription |
 | `CODEX_VERSION` | harness, supervisor | `0.162.1` | The Codex CLI version installed: for the workers and the planner, and for advisors in Codex. Empty: the image has no Codex CLI |

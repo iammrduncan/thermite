@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -10,6 +10,7 @@ import {
   fenceArgs,
   formatCpuList,
   type GpuLayout,
+  gpuDeviceNodes,
   identityFor,
   judgeGroup,
   LAYOUT_FILE,
@@ -433,5 +434,36 @@ describe("a rig configured with its GPU set", () => {
       () => effectiveGpuLists({ THERMITE_GPUS: `${sixteen},16` }),
       /THERMITE_GPUS names 17 GPUs; a rig takes at most 16$/,
     );
+  });
+});
+
+describe("a GPU reached through Vulkan (goal 106)", () => {
+  test("its DRM nodes are the rig's device nodes, on a rig with that target alone", () => {
+    const dev = mkdtempSync(join(tmpdir(), "thermite-dev-"));
+    mkdirSync(join(dev, "dri", "by-path"), { recursive: true });
+    for (const name of ["nvidia0", "nvidiactl", "null", "dri/renderD128", "dri/card0", "dri/x"])
+      writeFileSync(join(dev, name), "");
+    assert.deepEqual(gpuDeviceNodes("vulkan-gpu", dev), [
+      join(dev, "nvidia0"),
+      join(dev, "nvidiactl"),
+      join(dev, "dri", "card0"),
+      join(dev, "dri", "renderD128"),
+    ]);
+    // A CUDA rig and a CPU rig keep NVIDIA's nodes alone, as before.
+    for (const target of ["cuda-gpu", "cpu", undefined])
+      assert.deepEqual(gpuDeviceNodes(target, dev), [join(dev, "nvidia0"), join(dev, "nvidiactl")]);
+    // No /dev/dri, or no /dev at all: none, and no failure.
+    assert.deepEqual(gpuDeviceNodes("vulkan-gpu", join(dev, "dri", "by-path")), []);
+    assert.deepEqual(gpuDeviceNodes("vulkan-gpu", join(dev, "gone")), []);
+  });
+
+  test("the fence closes /dev/dri to every role that has no GPU, and only on such a rig", () => {
+    for (const role of ["builder", "driver", "lane-1", "planner"] as const) {
+      assert.deepEqual(fenceArgs(identityFor(role, false), "vulkan-gpu"), ["--no-dri"], role);
+      assert.deepEqual(fenceArgs(identityFor(role, false), "cuda-gpu"), [], role);
+    }
+    // The judge's timed runs and a lane's run on the device have the gpu group: no fence.
+    assert.equal(fenceArgs(identityFor("run", false), "vulkan-gpu"), undefined);
+    assert.equal(fenceArgs(identityFor("lane-2", true), "vulkan-gpu"), undefined);
   });
 });
