@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mapInTurn } from "../../common/in-turn.ts";
 import { NAME_PATTERN } from "../../core/ids.ts";
 import {
   KB_ITEM_TYPES,
@@ -148,23 +149,22 @@ function sorted(xs: KbFolder[], sort: KbListSort, order: "asc" | "desc" | undefi
  * told), with what control knows of each now: which campaigns are archived (store.archive) and
  * which runs are running (the rigs' views). None in a slot.
  */
-export function kbFolders(
+export async function kbFolders(
   store: ControlStore,
   vs: readonly RigView[],
   at: KbListAt,
   o: { sort?: KbListSort | undefined; order?: "asc" | "desc" | undefined } = {},
-): KbFolder[] {
+): Promise<KbFolder[]> {
   const childLevel = LEVELS[LEVELS.indexOf(levelOf(at)) + 1];
   if (!childLevel) return [];
-  const archived = new Set(store.archive.list().map((a) => a.campaign));
+  const archived = new Set((await store.archive.list()).map((a) => a.campaign));
   const running = new Set(
     vs.flatMap((u) => u.runs.filter((r) => r.status === "running").map((r) => r.id)),
   );
   const base = kbPlacePath(at);
-  const folders = store
-    .kb()
-    .folders(at)
-    .map((f: KbFolderRow): KbFolder => {
+  const folders = await mapInTurn(
+    await store.kb().folders(at),
+    async (f: KbFolderRow): Promise<KbFolder> => {
       const folder: KbFolder = {
         name: f.name,
         path: base ? `${base}/${f.name}` : f.name,
@@ -178,20 +178,21 @@ export function kbFolders(
         folder.fresh = f.fresh;
       }
       if (childLevel === "slot" && at.run)
-        folder.writer = slotWriter(store, { run: at.run, slot: f.name }).words;
+        folder.writer = (await slotWriter(store, { run: at.run, slot: f.name })).words;
       return folder;
-    });
+    },
+  );
   return sorted(folders, o.sort ?? "modified", o.order);
 }
 
 /** A place with what its parent's list says of it; or, when the knowledge base has none, why. */
-function placeOf(
+async function placeOf(
   store: ControlStore,
   vs: readonly RigView[],
   at: KbListAt,
-): KbFolder | { error: string } {
+): Promise<KbFolder | { error: string }> {
   if (at.campaign === undefined) {
-    const all = kbFolders(store, vs, {});
+    const all = await kbFolders(store, vs, {});
     return {
       name: "",
       path: "",
@@ -210,7 +211,7 @@ function placeOf(
         ? { campaign: at.campaign }
         : {};
   const name = at.slot ?? at.run ?? at.campaign;
-  const found = kbFolders(store, vs, parent).find((f) => f.name === name);
+  const found = (await kbFolders(store, vs, parent)).find((f) => f.name === name);
   if (found) return found;
   if (at.slot !== undefined) return { error: `${at.campaign}/${at.run} has no slot ${at.slot}` };
   if (at.run !== undefined) return { error: `${at.campaign} has no run ${at.run}` };
@@ -252,18 +253,18 @@ export interface KbListAnswer {
 }
 
 /** The owner's list of a place: the place, its folders, and a page of the items under it. */
-export function ownerKbList(
+export async function ownerKbList(
   store: ControlStore,
   vs: readonly RigView[],
   q: KbListQuery,
-): KbListAnswer | { error: string } {
+): Promise<KbListAnswer | { error: string }> {
   const at = readKbPlace(q.at);
   if (!at) return { error: `no place ${q.at} in the knowledge base` };
-  const place = placeOf(store, vs, at);
+  const place = await placeOf(store, vs, at);
   if ("error" in place) return place;
   const limit = q.limit ?? KB_LIST_DEFAULT;
   const offset = q.offset ?? 0;
-  const r = store.kb().list(at, {
+  const r = await store.kb().list(at, {
     kinds: q.kinds,
     outcomes: q.outcomes,
     types: q.types,
@@ -276,12 +277,12 @@ export function ownerKbList(
   return {
     note: KB_IS_DATA,
     at: place,
-    folders: kbFolders(store, vs, at, { sort: q.sort, order: q.order }),
+    folders: await kbFolders(store, vs, at, { sort: q.sort, order: q.order }),
     total: r.total,
     matched: r.matched,
     next_offset: limit > 0 && offset + r.items.length < r.matched ? offset + r.items.length : null,
     counts: r.counts,
     items: r.items.map(listedItem),
-    summary: placeSummary(store, vs, at, place),
+    summary: await placeSummary(store, vs, at, place),
   };
 }

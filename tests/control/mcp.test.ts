@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Credential } from "../../src/control/credential.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { figuresCall } from "../helpers/control-store.ts";
 
@@ -11,7 +12,9 @@ const text = (r: unknown) =>
 
 describe("control over MCP", () => {
   test("an agent lists rigs and pauses a run; a reader can only read", async () => {
-    const { env, store, control, relay } = controlStack({ tokens: { read: "read-token-abcdef" } });
+    const { env, store, control, relay } = await controlStack({
+      tokens: { read: "read-token-abcdef" },
+    });
     await env.service.applyCommand(env.assign);
     await relay();
 
@@ -83,8 +86,8 @@ describe("control over MCP", () => {
         },
       }),
     );
-    const signed = store.db
-      .prepare("select signed from command where kind = 'assign_campaign'")
+    const signed = sqliteBehind(store)
+      .db.prepare("select signed from command where kind = 'assign_campaign'")
       .get() as { signed: string };
     const copied = (
       JSON.parse(signed.signed) as {
@@ -99,7 +102,7 @@ describe("control over MCP", () => {
         ["copied", "words of the caller's own"],
       ],
     );
-    const audit = store.auditLog.list(100).map((a) => a.action);
+    const audit = (await store.auditLog.list(100)).map((a) => a.action);
     assert.ok(audit.includes("mcp:issue_command"));
     // A tool the token lacks, and inputs that don't match a tool, are refusals in the log too.
     for (const call of [
@@ -108,8 +111,7 @@ describe("control over MCP", () => {
       { name: "control_log", arguments: { limit: "all" } },
     ])
       assert.equal((await reader.callTool(call)).isError, true);
-    const refused = store.auditLog
-      .list(100, { action: "refused" })
+    const refused = (await store.auditLog.list(100, { action: "refused" }))
       .filter((a) => a.actor === "reader:mcp")
       .map((a) => [(a.body as { tool: string }).tool, a.count]);
     assert.deepEqual(refused, [
@@ -123,7 +125,7 @@ describe("control over MCP", () => {
   });
 
   test("an operator messages a run's agents for the owner, never approves; an agent never messages", async () => {
-    const { env, store, control, relay } = controlStack({
+    const { env, store, control, relay } = await controlStack({
       tokens: {
         // Deployed as a hash: control holds nothing that signs in as the owner.
         admin: Credential.ofHash(createHash("sha256").update("admin-token-abcdef").digest("hex")),
@@ -206,15 +208,15 @@ describe("control over MCP", () => {
     );
     // The queue and the removal of rules are the owner's: an operator changes them for the
     // owner; an agent may add rules, but never changes the queue or removes a rule.
-    const queued = () =>
-      store.commands
-        .list(100)
-        .filter((c) => c.kind.startsWith("queue_") || c.kind === "drop_directive").length;
+    const queued = async () =>
+      (await store.commands.list(100)).filter(
+        (c) => c.kind.startsWith("queue_") || c.kind === "drop_directive",
+      ).length;
     assert.ok(
       await issue(operator, "queue_add", { run: "js-1", title: "unroll the loop" }),
       "the operator may add an experiment",
     );
-    assert.equal(queued(), 1);
+    assert.equal(await queued(), 1);
     const id = "x-000000000000";
     for (const [kind, payload] of [
       ["queue_add", { run: "js-1", title: "tile the loop" }],
@@ -225,7 +227,7 @@ describe("control over MCP", () => {
       ["drop_directive", { run: "js-1", id: 1 }],
     ] as const)
       assert.equal(await issue(agent, kind, payload), undefined, `an agent may not ${kind}`);
-    assert.equal(queued(), 1, "nothing the agent sent was signed");
+    assert.equal(await queued(), 1, "nothing the agent sent was signed");
     assert.ok(
       await issue(agent, "redirect", {
         run: "js-1",
@@ -247,7 +249,7 @@ describe("control over MCP", () => {
   });
 
   test("metrics are bounded series with the admin token", async () => {
-    const { control } = controlOnly({ tokens: { rigs: {} } });
+    const { control } = await controlOnly({ tokens: { rigs: {} } });
     assert.equal((await control.request("/metrics")).status, 401);
     const r = await control.request("/metrics", {
       headers: { authorization: "Bearer admin-token-abcdef" },
@@ -257,7 +259,7 @@ describe("control over MCP", () => {
   });
 
   test("whoever runs control reads its log and its providers over MCP; no key in either; agents don't", async () => {
-    const { store, control } = controlOnly({
+    const { store, control } = await controlOnly({
       tokens: {
         operator: "operator-token-abcdef",
         agent: "agent-token-abcdef",
@@ -265,21 +267,21 @@ describe("control over MCP", () => {
         rigs: {},
       },
     });
-    store.gpuClouds.add({
+    await store.gpuClouds.add({
       name: "runpod",
       kind: "runpod",
       key_sealed: "sealed-cloud-key-000",
       key_hint: "…9z9z",
       by: "owner:ui",
     });
-    store.gpuClouds.setFacts("runpod", {
+    await store.gpuClouds.setFacts("runpod", {
       facts: { gpus: [{ id: "a4000", name: "RTX A4000", price_secure: 0.25 }], pods: [] },
     });
-    store.auditLog.add("owner:ui", "refused", {
+    await store.auditLog.add("owner:ui", "refused", {
       path: "/ui/settings/add",
       why: "a name is lowercase",
     });
-    store.auditLog.add("control", "failed", {
+    await store.auditLog.add("control", "failed", {
       method: "GET",
       path: "/ui/x",
       status: 500,
@@ -311,7 +313,7 @@ describe("control over MCP", () => {
     );
     assert.ok(all.entries.some((e) => e.action === "mcp:providers"));
     // Paging (goal 015): a page at a time, older then newer, every entry once, filters kept.
-    for (let i = 0; i < 5; i++) store.auditLog.add("owner:ui", `step_${i}`, { i });
+    for (let i = 0; i < 5; i++) await store.auditLog.add("owner:ui", `step_${i}`, { i });
     const call = async (args: Record<string, unknown>): Promise<Page> =>
       text(await operator.callTool({ name: "control_log", arguments: { limit: 3, ...args } }));
     const newest = await call({});
@@ -353,7 +355,7 @@ describe("control over MCP", () => {
   });
 
   test("the log keeps an MCP call's inputs with each secret hidden and credentials in text masked, for every token", async () => {
-    const { control } = controlOnly({
+    const { control } = await controlOnly({
       tokens: { operator: "operator-token-abcdef", read: "read-token-abcdef", rigs: {} },
     });
     const operator = await mcpClient(control, "operator-token-abcdef");
@@ -389,20 +391,20 @@ describe("control over MCP", () => {
   });
 
   test("an operator gives a rig's agents a model over MCP, as Edit rig does; a wrong model is refused", async () => {
-    const { store, control } = controlOnly({
+    const { store, control } = await controlOnly({
       tokens: { operator: "operator-token-abcdef", rigs: {} },
     });
-    store.db
-      .prepare(
+    sqliteBehind(store)
+      .db.prepare(
         "insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at) values (?, ?, ?, null, '{}', ?)",
       )
       .run("cpu-1", new Date().toISOString(), new Date().toISOString(), new Date().toISOString());
-    store.modelProviders.put({
+    await store.modelProviders.put({
       name: "zen",
       type: "opencode",
       base_url: "https://opencode.ai/zen/v1",
     });
-    store.modelProviders.setModels("zen", [{ id: "deepseek-v4.1-flash-free" }]);
+    await store.modelProviders.setModels("zen", [{ id: "deepseek-v4.1-flash-free" }]);
     const operator = await mcpClient(control, "operator-token-abcdef");
     const r = text(
       await operator.callTool({
@@ -411,7 +413,7 @@ describe("control over MCP", () => {
       }),
     );
     assert.equal(r.model, "deepseek-v4.1-flash-free");
-    assert.deepEqual(store.agentModels.byRig()["cpu-1"], {
+    assert.deepEqual((await store.agentModels.byRig())["cpu-1"], {
       provider: "zen",
       model: "deepseek-v4.1-flash-free",
       harness: "opencode",
@@ -422,13 +424,13 @@ describe("control over MCP", () => {
     })) as { isError?: boolean };
     assert.ok(wrong.isError);
     // The Codex CLI, for a provider OpenAI's Responses API reaches; never for OpenCode's own.
-    store.modelProviders.put({
+    await store.modelProviders.put({
       name: "openai",
       type: "openai",
       base_url: "https://api.openai.com/v1",
       key: { sealed: "s1:not-opened-here", hint: "…abcd" },
     });
-    store.modelProviders.setModels("openai", [{ id: "gpt-test" }]);
+    await store.modelProviders.setModels("openai", [{ id: "gpt-test" }]);
     const codex = text(
       await operator.callTool({
         name: "set_rig_model",
@@ -436,7 +438,7 @@ describe("control over MCP", () => {
       }),
     );
     assert.match(String(codex.said), /cpu-1 takes gpt-test from "openai" under Codex/);
-    assert.equal(store.agentModels.byRig()["cpu-1"]?.harness, "codex");
+    assert.equal((await store.agentModels.byRig())["cpu-1"]?.harness, "codex");
     const notCodex = await operator.callTool({
       name: "set_rig_model",
       arguments: {
@@ -449,7 +451,7 @@ describe("control over MCP", () => {
     assert.equal(notCodex.isError, true);
     assert.match(JSON.stringify(notCodex), /Codex runs only with a ChatGPT subscription/);
     assert.equal(
-      store.agentModels.byRig()["cpu-1"]?.harness,
+      (await store.agentModels.byRig())["cpu-1"]?.harness,
       "codex",
       "the refused call changed nothing",
     );

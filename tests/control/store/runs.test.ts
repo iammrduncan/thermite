@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { runNameUsed } from "../../../src/control/run-names.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import { answerCommand, controlStore, ingestReport } from "../../helpers/control-store.ts";
 import { keepOldRows, withEventsTable } from "../../helpers/old-store.ts";
@@ -50,40 +51,43 @@ const created = async (store: ControlStore, rig: string, run: string, campaign =
 describe("control's run registry", () => {
   test("an assignment uses its name until it is refused; a run a rig created keeps it", async () => {
     const store = controlStore();
-    store.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
-    store.commands.enqueue(assignment("c-2", "rig-a", "sort-speed-2"));
-    assert.equal(runNameUsed(store, "sort-speed-1"), "rig-a");
-    assert.deepEqual([...store.runRegistry.usedNames("sort-speed-")].sort(), [
+    await store.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
+    await store.commands.enqueue(assignment("c-2", "rig-a", "sort-speed-2"));
+    assert.equal(await runNameUsed(store, "sort-speed-1"), "rig-a");
+    assert.deepEqual([...(await store.runRegistry.usedNames("sort-speed-"))].sort(), [
       "sort-speed-1",
       "sort-speed-2",
     ]);
     // A refused assignment frees its name; a delivered one keeps it.
-    answerCommand(store, "rig-a", "c-2", "failed", { error: "x" });
-    answerCommand(store, "rig-a", "c-1", "delivered", {});
-    assert.equal(runNameUsed(store, "sort-speed-2"), undefined);
+    await answerCommand(store, "rig-a", "c-2", "failed", { error: "x" });
+    await answerCommand(store, "rig-a", "c-1", "delivered", {});
+    assert.equal(await runNameUsed(store, "sort-speed-2"), undefined);
     assert.deepEqual(
-      store.runRegistry.assignedCampaigns("rig-a"),
+      await store.runRegistry.assignedCampaigns("rig-a"),
       new Map([["sort-speed-1", "sort-speed"]]),
     );
     // A run a rig reports creating uses its name, though control never assigned it there.
     await created(store, "rig-b", "other-1", "other");
-    assert.equal(runNameUsed(store, "other-1"), "rig-b");
+    assert.equal(await runNameUsed(store, "other-1"), "rig-b");
     // What a rig claims is not what control assigned it.
-    assert.deepEqual(store.runRegistry.assignedCampaigns("rig-b"), new Map());
+    assert.deepEqual(await store.runRegistry.assignedCampaigns("rig-b"), new Map());
   });
 
   test("a run's campaign on a rig is known once the rig reports creating it", async () => {
     const store = controlStore();
-    store.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
+    await store.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
     // Assigned, not created yet: the rig has no such run.
-    assert.equal(store.runRegistry.createdOn("sort-speed-1", "rig-a"), undefined);
-    assert.equal(store.runRegistry.campaignOf("sort-speed-1", "rig-a"), undefined);
+    assert.equal(await store.runRegistry.createdOn("sort-speed-1", "rig-a"), undefined);
+    assert.equal(await store.runRegistry.campaignOf("sort-speed-1", "rig-a"), undefined);
     await created(store, "rig-a", "sort-speed-1");
-    assert.equal(store.runRegistry.campaignOf("sort-speed-1", "rig-a"), "sort-speed");
-    assert.equal(store.runRegistry.createdOn("sort-speed-1", "rig-a")?.ledger_id, "ledger-rig-a");
+    assert.equal(await store.runRegistry.campaignOf("sort-speed-1", "rig-a"), "sort-speed");
+    assert.equal(
+      (await store.runRegistry.createdOn("sort-speed-1", "rig-a"))?.ledger_id,
+      "ledger-rig-a",
+    );
     // Another rig has no run of that name.
-    assert.equal(store.runRegistry.createdOn("sort-speed-1", "rig-b"), undefined);
-    assert.equal(store.runRegistry.campaignOf("sort-speed-1", "rig-b"), undefined);
+    assert.equal(await store.runRegistry.createdOn("sort-speed-1", "rig-b"), undefined);
+    assert.equal(await store.runRegistry.campaignOf("sort-speed-1", "rig-b"), undefined);
     // A run created without a campaign is its own: it has none to give.
     await ingestReport(store, {
       rig: "rig-b",
@@ -102,28 +106,28 @@ describe("control's run registry", () => {
       ],
       summary: {},
     });
-    assert.equal(store.runRegistry.createdOn("solo-1", "rig-b")?.campaign, null);
-    assert.equal(store.runRegistry.campaignOf("solo-1", "rig-b"), undefined);
+    assert.equal((await store.runRegistry.createdOn("solo-1", "rig-b"))?.campaign, null);
+    assert.equal(await store.runRegistry.campaignOf("solo-1", "rig-b"), undefined);
   });
 
   test("a rig's word is no run: a name control assigned another rig is refused, and a campaign control knows is never taken from a rig", async () => {
     const store = controlStore();
-    store.campaigns.put({
+    await store.campaigns.put({
       campaign: "saved-only",
       version: 1,
       contract: { campaign: "saved-only" },
       sha: "0".repeat(64),
       by: "owner:ui",
     });
-    store.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
+    await store.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
     await created(store, "rig-a", "sort-speed-1");
     // rig-b claims rig-a's run: not registered, and the audit log says so.
     await created(store, "rig-b", "sort-speed-1", "sort-speed");
-    assert.equal(store.runRegistry.createdOn("sort-speed-1", "rig-b"), undefined);
-    assert.equal(store.runRegistry.created("sort-speed-1")?.rig, "rig-a");
-    assert.deepEqual(store.runRegistry.rigsOf("sort-speed-1"), ["rig-a"]);
+    assert.equal(await store.runRegistry.createdOn("sort-speed-1", "rig-b"), undefined);
+    assert.equal((await store.runRegistry.created("sort-speed-1"))?.rig, "rig-a");
+    assert.deepEqual(await store.runRegistry.rigsOf("sort-speed-1"), ["rig-a"]);
     assert.deepEqual(
-      store.auditLog.list(10, { action: "run_refused" }).map((e) => e.body),
+      (await store.auditLog.list(10, { action: "run_refused" })).map((e) => e.body),
       [
         {
           rig: "rig-b",
@@ -135,34 +139,34 @@ describe("control's run registry", () => {
     // A run control did not assign, naming a campaign control assigned or saved: its own campaign.
     await created(store, "rig-b", "planted-1", "sort-speed");
     await created(store, "rig-b", "planted-2", "saved-only");
-    assert.equal(store.runRegistry.createdOn("planted-1", "rig-b")?.campaign, null);
-    assert.equal(store.runRegistry.createdOn("planted-2", "rig-b")?.campaign, null);
+    assert.equal((await store.runRegistry.createdOn("planted-1", "rig-b"))?.campaign, null);
+    assert.equal((await store.runRegistry.createdOn("planted-2", "rig-b"))?.campaign, null);
     assert.deepEqual(
-      store.runRegistry.ofCampaign("sort-speed").map((r) => [r.run, r.rig]),
+      (await store.runRegistry.ofCampaign("sort-speed")).map((r) => [r.run, r.rig]),
       [["sort-speed-1", "rig-a"]],
     );
-    assert.deepEqual(store.runRegistry.ofCampaign("saved-only"), []);
+    assert.deepEqual(await store.runRegistry.ofCampaign("saved-only"), []);
     // A campaign control knows nothing of (a rig check, a run started on the rig) is taken.
     await created(store, "rig-b", "rig-check-smoke-1", "rig-check-smoke-cpu-0123abcd");
     assert.equal(
-      store.runRegistry.createdOn("rig-check-smoke-1", "rig-b")?.campaign,
+      (await store.runRegistry.createdOn("rig-check-smoke-1", "rig-b"))?.campaign,
       "rig-check-smoke-cpu-0123abcd",
     );
     // An assigned run's campaign is its assignment's, whatever its event names.
-    store.commands.enqueue(assignment("c-2", "rig-b", "sort-speed-2"));
+    await store.commands.enqueue(assignment("c-2", "rig-b", "sort-speed-2"));
     await created(store, "rig-b", "sort-speed-2", "something-else");
-    assert.equal(store.runRegistry.campaignOf("sort-speed-2", "rig-b"), "sort-speed");
+    assert.equal(await store.runRegistry.campaignOf("sort-speed-2", "rig-b"), "sort-speed");
   });
 
-  test("a store from before has its registry made from its commands and its rigs' events", () => {
+  test("a store from before has its registry made from its commands and its rigs' events", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "thermite-store-")), "control.db");
-    const old = new ControlStore(path);
-    old.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
-    old.commands.enqueue(assignment("c-2", "rig-a", "sort-speed-2"));
-    answerCommand(old, "rig-a", "c-2", "failed", { error: "x" });
+    const old = openControlStore(path);
+    await old.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
+    await old.commands.enqueue(assignment("c-2", "rig-a", "sort-speed-2"));
+    await answerCommand(old, "rig-a", "c-2", "failed", { error: "x" });
     // As a store at version 5 left it: its events in its events table, no registry yet.
-    withEventsTable(old.db, 5);
-    keepOldRows(old.db, [
+    withEventsTable(sqliteBehind(old).db, 5);
+    keepOldRows(sqliteBehind(old).db, [
       {
         rig: "rig-b",
         ledger: "ledger-rig-b",
@@ -172,14 +176,17 @@ describe("control's run registry", () => {
         body: { campaign: "other" },
       },
     ]);
-    old.db.exec("drop table run_registry");
-    old.db.close();
-    const store = new ControlStore(path);
-    assert.deepEqual([...store.runRegistry.usedNames()].sort(), ["other-1", "sort-speed-1"]);
+    sqliteBehind(old).db.exec("drop table run_registry");
+    await old.close();
+    const store = openControlStore(path);
+    assert.deepEqual([...(await store.runRegistry.usedNames())].sort(), [
+      "other-1",
+      "sort-speed-1",
+    ]);
     assert.deepEqual(
-      store.runRegistry.assignedCampaigns("rig-a"),
+      await store.runRegistry.assignedCampaigns("rig-a"),
       new Map([["sort-speed-1", "sort-speed"]]),
     );
-    store.db.close();
+    await store.close();
   });
 });

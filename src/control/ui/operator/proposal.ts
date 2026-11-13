@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { PROPOSED_WORDS, proposalChange } from "../../campaigns/index.ts";
 import { GRANT_OPENS } from "../../kb/index.ts";
 import type { CampaignProposal, ControlStore } from "../../store/index.ts";
@@ -16,14 +17,14 @@ export const proposalAction = (p: CampaignProposal, choice: "approve" | "decline
   `${campaignHref(p.campaign)}/proposals/${p.id}/${choice}`;
 
 /** One proposal's card, with its two forms. */
-export function proposalCard(
+export async function proposalCard(
   store: ControlStore,
   p: CampaignProposal,
   csrf: string,
   now: number,
-): { html: string; box: string; row: NeedWords } {
+): Promise<{ html: string; box: string; row: NeedWords }> {
   const what = PROPOSED_WORDS[p.field];
-  const change = proposalChange(store, p);
+  const change = await proposalChange(store, p);
   const form = (choice: "approve" | "decline", label: string, cls: string) =>
     `<form class="inline" method="post" action="${esc(proposalAction(p, choice))}"><input type="hidden" name="csrf" value="${esc(csrf)}"><button class="${cls}">${label}</button></form>`;
   if (p.field === "kb_grant") return grantCard(p, change, form, now);
@@ -101,11 +102,11 @@ function grantCard(
 }
 
 /** Every proposal that waits for the owner, as Needs you lists them. */
-export function proposalNeeds(c: NeedsContext, store: ControlStore): Need[] {
-  return store.proposals.waiting().map((p) => ({
+export async function proposalNeeds(c: NeedsContext, store: ControlStore): Promise<Need[]> {
+  return mapInTurn(await store.proposals.waiting(), async (p) => ({
     kind: "proposal",
     rig: "",
     at: p.proposed_at,
-    ...proposalCard(store, p, c.f.csrf, c.now),
+    ...(await proposalCard(store, p, c.f.csrf, c.now)),
   }));
 }

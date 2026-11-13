@@ -40,7 +40,13 @@ const fileBytes = (path: string) => {
   }
 };
 
-export class StoreSize extends StorePart {
+export interface StoreSize {
+  /** control.db's figures now. */
+  measure(now?: number): Promise<DbFigures>;
+}
+
+/** StoreSize on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteStoreSize extends StorePart {
   /** control.db's figures now. */
   measure(now = Date.now()): DbFigures {
     const db = this.db;

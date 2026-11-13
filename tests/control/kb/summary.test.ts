@@ -25,7 +25,7 @@ const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
 async function control() {
   const dir = mkdtempSync(join(tmpdir(), "thermite-kb-files-"));
   let files: KbFiles | undefined;
-  const made = controlOnly({
+  const made = await controlOnly({
     tokens: { rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" } },
     options: (store) => {
       files = new KbFiles(dir, store);
@@ -34,7 +34,7 @@ async function control() {
   });
   await fillReader(made.store, files);
   // A write control refused worker-1 of gs-1.
-  made.store.auditLog.add("control", "kb_item_refused", {
+  await made.store.auditLog.add("control", "kb_item_refused", {
     ...KB_RIG,
     event: 77,
     run: "gs-1",
@@ -168,8 +168,9 @@ describe("a place's summary", () => {
       404,
     );
     assert.equal(
-      s.store.auditLog.list(50).filter((a) => a.action === "kb_grant" && a.actor === "owner:api")
-        .length,
+      (await s.store.auditLog.list(50)).filter(
+        (a) => a.action === "kb_grant" && a.actor === "owner:api",
+      ).length,
       1,
     );
     // The command line, through the same routes.
@@ -202,7 +203,7 @@ describe("a place's summary", () => {
         JSON.parse(revoked.stdout).said,
         /^attic's agents no longer read gemv's collection/,
       );
-      assert.deepEqual(s.store.kb().reads("attic"), []);
+      assert.deepEqual(await s.store.kb().reads("attic"), []);
       const once = await cli("kb", "revoke", "attic", "gemv");
       assert.notEqual(once.code, 0);
       assert.match(once.stderr, /attic does not read gemv\./);

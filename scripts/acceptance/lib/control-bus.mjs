@@ -21,7 +21,7 @@ const { followReports } = await import("../../../src/control/ingest.ts");
 const { sendCommandsOn } = await import("../../../src/control/issue/index.ts");
 const { followKbFiles, KbFiles, serveKbAsks } = await import("../../../src/control/kb/index.ts");
 const { followLive, LiveTaken } = await import("../../../src/control/live/index.ts");
-const { ControlStore } = await import("../../../src/control/store/index.ts");
+const { openControlStore } = await import("../../../src/control/store/index.ts");
 const { storeOnBus } = await import("../../../tests/helpers/control-store.ts");
 
 /** How often control's loops on the bus look again here: faster than main.ts's, for a check. */
@@ -60,8 +60,8 @@ export async function startControlBus({ name, port, secrets }) {
     sh(engine, ["cp", `${files}/.`, `${box}:/etc/nats/thermite`]);
   };
   let serverUp = false;
-  const store = new ControlStore(join(work, "control.db"));
-  const busUsers = new BusUsers({
+  const store = openControlStore(join(work, "control.db"));
+  const busUsers = await BusUsers.open({
     store,
     secrets,
     file: join(files, "users.conf"),

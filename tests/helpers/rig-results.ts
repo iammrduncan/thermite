@@ -11,34 +11,40 @@ import { answerCommand } from "./control-store.ts";
 export const exportName = (n: number) => `20261020T12${String(n).padStart(4, "0")}Z-0123abcd`;
 
 /** The rig's commands that wait for it, oldest first: [id, kind, payload]. */
-export function pendingOf(store: ControlStore, rig: string) {
-  return store.commands
-    .pending(rig)
-    .map((c) => ({ id: c.envelope.id, kind: c.envelope.kind, payload: c.envelope.payload }));
+export async function pendingOf(store: ControlStore, rig: string) {
+  return (await store.commands.pending(rig)).map((c) => ({
+    id: c.envelope.id,
+    kind: c.envelope.kind,
+    payload: c.envelope.payload,
+  }));
 }
 
 /** The harness applied every command waiting for the rig; an export_now makes the export `name`. */
-export function harnessApplies(store: ControlStore, rig: string, name: string): void {
-  for (const c of pendingOf(store, rig))
-    answerCommand(store, rig, c.id, "delivered", {
+export async function harnessApplies(
+  store: ControlStore,
+  rig: string,
+  name: string,
+): Promise<void> {
+  for (const c of await pendingOf(store, rig))
+    await answerCommand(store, rig, c.id, "delivered", {
       source: "harness",
       result: c.kind === "export_now" ? { export: name, through_event: 9 } : {},
     });
 }
 
 /** The harness applied every command waiting; an export of each open run found every run closed. */
-export function harnessExportsNoRun(store: ControlStore, rig: string): void {
-  for (const c of pendingOf(store, rig))
-    answerCommand(store, rig, c.id, "delivered", {
+export async function harnessExportsNoRun(store: ControlStore, rig: string): Promise<void> {
+  for (const c of await pendingOf(store, rig))
+    await answerCommand(store, rig, c.id, "delivered", {
       source: "harness",
       result: c.kind === "export_now" ? { export: null, exports: [], through_event: 9 } : {},
     });
 }
 
 /** The harness refused the rig's waiting export_now, in its signed outcome. */
-export function harnessRefusesExport(store: ControlStore, rig: string): void {
-  for (const c of pendingOf(store, rig))
-    answerCommand(
+export async function harnessRefusesExport(store: ControlStore, rig: string): Promise<void> {
+  for (const c of await pendingOf(store, rig))
+    await answerCommand(
       store,
       rig,
       c.id,
@@ -50,12 +56,12 @@ export function harnessRefusesExport(store: ControlStore, rig: string): void {
 }
 
 /** The supervisor's export figures in its report: it sends its exports to control. */
-export function supervisorReports(
+export async function supervisorReports(
   store: ControlStore,
   rig: string,
   o: { waiting?: number; champions_waiting?: number; to?: "control" | "none" } = {},
-): void {
-  store.reportedRigs.setSupervisor(rig, {
+): Promise<void> {
+  await store.reportedRigs.setSupervisor(rig, {
     at: new Date().toISOString(),
     export: {
       remote: false,
@@ -73,13 +79,17 @@ export function supervisorReports(
 }
 
 /** Control holds every file of export `name` from the rig, each checked: it has left the rig. */
-export function exportOnControl(store: ControlStore, rig: string, name: string): void {
-  store.exports.begin(rig, name, {
+export async function exportOnControl(
+  store: ControlStore,
+  rig: string,
+  name: string,
+): Promise<void> {
+  await store.exports.begin(rig, name, {
     manifest: { from_event: 0, through_event: 9, files: { a: "a".repeat(64) } },
     files: { a: { size: 1, sha256: "a".repeat(64) } },
     full: true,
     fromEvent: 0,
     throughEvent: 9,
   });
-  store.exports.fileDone(rig, name, "a");
+  await store.exports.fileDone(rig, name, "a");
 }

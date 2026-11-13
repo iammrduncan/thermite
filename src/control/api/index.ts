@@ -46,14 +46,14 @@ export { ClientFailures, OwnerSessions, SIGN_IN_FAILURES } from "./session.ts";
  * the owner's, the rigs' and the reader's routes). They are added in this order, the order Hono
  * matches them in; then the dashboard's pages and MCP.
  */
-export function createControlApi(
+export async function createControlApi(
   store: ControlStore,
   tokens: ControlTokens,
   privateKeyPem: string,
   opts: ControlOptions = { staleAfterMs: 180_000 },
-): Hono {
+): Promise<Hono> {
   const app = new Hono();
-  const api = apiContext(app, store, tokens, privateKeyPem, opts);
+  const api = await apiContext(app, store, tokens, privateKeyPem, opts);
   const { control, creds, parts, admin, callerOf, sessions } = api;
   const owner = creds.owner;
   const { secrets, chatgpt, runpodTests, mcpServers, runpodRigs, runpodDriver } = parts;
@@ -85,8 +85,8 @@ export function createControlApi(
       const failed = { method: c.req.method, path, status, error, ...(id ? { id } : {}) };
       log("control", "request failed", failed, "error");
       const by = callerOf(c) ?? "control";
-      if (status < 500) store.auditLog.refusal(by, "failed", failed);
-      else store.auditLog.add(by, "failed", failed);
+      if (status < 500) await store.auditLog.refusal(by, "failed", failed);
+      else await store.auditLog.add(by, "failed", failed);
       return;
     }
     // A request with no token, or one its route does not take: in control's output with where it
@@ -96,7 +96,11 @@ export function createControlApi(
       const from = clientOf(c);
       log("control", "unauthorized", { method: c.req.method, path, from, token }, "warn");
       const route = c.req.routePath;
-      store.auditLog.refusal("control", "unauthorized", { method: c.req.method, route, token });
+      await store.auditLog.refusal("control", "unauthorized", {
+        method: c.req.method,
+        route,
+        token,
+      });
       return;
     }
     if (!path.startsWith("/ui/") || c.req.method !== "POST") return;
@@ -107,7 +111,7 @@ export function createControlApi(
     if (why || status >= 400) {
       const reason = redact(why ?? `status ${status}`);
       log("control", "refused", { path, why: reason }, "warn");
-      store.auditLog.refusal("owner:ui", "refused", { path, why: reason });
+      await store.auditLog.refusal("owner:ui", "refused", { path, why: reason });
     }
   });
 
@@ -167,7 +171,7 @@ export function createControlApi(
   watchRunners(parts, opts.runnersWatchMs);
   // Add a rig's Workers at a time is given to the new rig once it reports (rigs/workers.ts).
   watchWorkers(parts, opts.workersWatchMs);
-  opts.pages?.(app, store, {
+  await opts.pages?.(app, store, {
     admin: owner,
     sessions,
     ownerOnly: admin,

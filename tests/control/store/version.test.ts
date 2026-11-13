@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { ControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
 
 /**
  * The store's version is written once (goal 254, item 1): STORE_VERSION, which is how many
@@ -40,13 +41,15 @@ function breaches(text: string, version: number): { line: number; text: string }
 }
 
 describe("the store's version is written once", () => {
-  test("a new store is at STORE_VERSION", () => {
-    const store = new ControlStore(":memory:");
-    const row = store.db.prepare("select max(version) as v from schema_migrations").get() as {
+  test("a new store is at STORE_VERSION", async () => {
+    const store = openControlStore(":memory:");
+    const row = sqliteBehind(store)
+      .db.prepare("select max(version) as v from schema_migrations")
+      .get() as {
       v: number;
     };
     assert.equal(row.v, STORE_VERSION);
-    store.db.close();
+    await store.close();
   });
 
   test("the rule finds a version written as a number, and leaves a migration's own number", () => {

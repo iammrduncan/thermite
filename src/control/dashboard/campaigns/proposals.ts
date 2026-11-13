@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { decideProposal } from "../../campaigns/index.ts";
 import { esc } from "../../ui/components/index.ts";
 import { proposalCard } from "../../ui/operator/index.ts";
@@ -15,9 +16,9 @@ export function proposalRoutes(app: Hono, dash: Dashboard): void {
   const decide = (approve: boolean) => async (c: Ctx) => {
     const campaign = c.req.param("campaign") ?? "";
     const id = Number(c.req.param("id"));
-    const p = Number.isSafeInteger(id) ? store.proposals.get(id) : undefined;
+    const p = Number.isSafeInteger(id) ? await store.proposals.get(id) : undefined;
     if (!p || p.campaign !== campaign) return c.text("No such proposal.", 404);
-    const out = decideProposal(store, id, approve, "owner:ui");
+    const out = await decideProposal(store, id, approve, "owner:ui");
     const k = out.state === "refused" ? "error" : "ok";
     const said = out.state === "refused" ? out.error : out.said;
     return c.redirect(
@@ -30,8 +31,8 @@ export function proposalRoutes(app: Hono, dash: Dashboard): void {
 }
 
 /** The campaign's proposals that wait for the owner, as cards; none: nothing. */
-export function proposalsBlock(dash: Dashboard, c: Ctx, campaign: string): string {
-  const waiting = dash.store.proposals.waiting(campaign);
+export async function proposalsBlock(dash: Dashboard, c: Ctx, campaign: string): Promise<string> {
+  const waiting = await dash.store.proposals.waiting(campaign);
   const said = c.req.query("on") === "proposals";
   const error = said ? dash.said(c) : undefined;
   const ok = said ? c.req.query("ok") : undefined;
@@ -42,6 +43,11 @@ export function proposalsBlock(dash: Dashboard, c: Ctx, campaign: string): strin
       : "";
   if (!waiting.length && !note) return "";
   const now = Date.now();
-  const cards = waiting.map((p) => proposalCard(dash.store, p, dash.csrf(c), now).html).join("");
+  const cards = (
+    await mapInTurn(
+      waiting,
+      async (p) => (await proposalCard(dash.store, p, dash.csrf(c), now)).html,
+    )
+  ).join("");
   return `<div class="block" id="proposals"><div class="head"><h2>Proposed to you</h2><span class="n">${waiting.length}</span></div>${note}${cards}</div>`;
 }

@@ -29,7 +29,22 @@ const joinedRigOf = (r: Row): JoinedRig => ({
   created_by: String(r.created_by),
 });
 
-export class JoinedRigs extends StorePart {
+export interface JoinedRigs {
+  add(r: { rig: string; form: JoinForm; spec: JoinedSpec; by: string }): Promise<void>;
+  get(rig: string): Promise<JoinedRig | undefined>;
+  /** A new join command for the rig (its hash); any earlier one stops working. */
+  setToken(rig: string, sha256: string, expiresAt: string, by: string): Promise<void>;
+  revokeToken(rig: string, by: string): Promise<void>;
+  /**
+   * Uses the rig's join command, once: true when the token is its current one, unused and not
+   * expired; it then stops working.
+   */
+  useToken(rig: string, token: string): Promise<boolean>;
+  set(rig: string, change: { status?: string; spec?: JoinedSpec }): Promise<void>;
+}
+
+/** JoinedRigs on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteJoinedRigs extends StorePart {
   add(r: { rig: string; form: JoinForm; spec: JoinedSpec; by: string }): void {
     this.db
       .prepare(

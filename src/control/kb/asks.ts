@@ -100,28 +100,28 @@ function refusal(err: { issues: { path: PropertyKey[]; message: string }[] }): s
  * Control's answer to one ask of a rig: a search's hits, an item read whole, or why not, in words.
  * `raw` is the ask's body as the rig sent it.
  */
-export function answerKbAsk(
+export async function answerKbAsk(
   store: ControlStore,
   rig: string,
   kind: KbAskKind,
   raw: unknown,
-): KbAskAnswer {
+): Promise<KbAskAnswer> {
   const ask = (kind === "search" ? KbSearchAsk : KbReadAsk).safeParse(raw);
   if (!ask.success) return { refused: refusal(ask.error) };
   const { run } = ask.data;
   // Only a run control assigned to this rig, of the campaign it assigned.
-  const campaign = store.runRegistry.assignedCampaigns(rig).get(run);
+  const campaign = (await store.runRegistry.assignedCampaigns(rig)).get(run);
   if (!campaign)
     return {
       refused: `control did not assign run ${run} to ${rig}: it reads no knowledge base for it`,
     };
   const kb = store.kb();
-  const { scope, where } = kb.scopeWhere(campaign, run);
+  const { scope, where } = await kb.scopeWhere(campaign, run);
   const view = { collection: campaign, fresh: scope.fresh, granted: scope.granted };
   if ("q" in ask.data) {
     const s = ask.data;
     // The runs and collections it keeps only narrow what the run reads: `where` is its scope.
-    const r = kb.find([s.q, ...(s.queries ?? [])], where, kbFindOf(s));
+    const r = await kb.find([s.q, ...(s.queries ?? [])], where, kbFindOf(s));
     if (r.refused) return { refused: r.refused };
     log("control", "knowledge base searched", {
       rig,
@@ -134,18 +134,18 @@ export function answerKbAsk(
     return { note: KB_IS_DATA, scope: view, ...foundOf(r), hits: r.hits.map((x) => hitOf(x, x)) };
   }
   const { address, version, offset } = ask.data;
-  const x = kb.at(address, where);
+  const x = await kb.at(address, where);
   if (!x)
     return {
       refused: `no item ${address} in what run ${run} reads: ${scope.fresh ? `its own items of ${campaign}` : `the collection ${campaign}`}${scope.granted.length ? `, and ${scope.granted.join(", ")}` : ""}`,
     };
-  const versions = kb.versions(x.id);
+  const versions = await kb.versions(x.id);
   const v = version === undefined ? versions.at(-1) : versions.find((o) => o.version === version);
   if (!v)
     return { refused: `${address} has versions 1 to ${versions.length}, not version ${version}` };
   // A kept conversation stored before the scrubbing: an agent reads its scrubbed versions only
   // (store/kb/kept.ts). The owner reads every version.
-  const from = kb.agentsReadFrom(x.id);
+  const from = await kb.agentsReadFrom(x.id);
   if (v.version < from)
     return {
       refused: `version ${v.version} of ${address} is not read by agents: Thermite's code scrubbed it into version ${from}, which agents read, and its newer versions`,
@@ -159,7 +159,7 @@ export function answerKbAsk(
       title: v.title,
       version: v.version,
       at: v.at,
-      ...textPage(kb.versionText(v), offset),
+      ...textPage(await kb.versionText(v), offset),
       versions: versions.length,
       links: v.links.flatMap((l) => {
         const rel = KbLinkRel.safeParse(l.rel);
@@ -190,7 +190,7 @@ export class KbAskLimit {
    * loop, so the asks that arrive together are in flight together and wait their turn; past the
    * limit, an ask is refused in words.
    */
-  async run(rig: string, answer: () => KbAskAnswer): Promise<KbAskAnswer> {
+  async run(rig: string, answer: () => KbAskAnswer | Promise<KbAskAnswer>): Promise<KbAskAnswer> {
     const n = this.busy.get(rig) ?? 0;
     if (n >= this.max) {
       log(
@@ -206,7 +206,7 @@ export class KbAskLimit {
     this.busy.set(rig, n + 1);
     try {
       await new Promise((r) => setImmediate(r));
-      return answer();
+      return await answer();
     } finally {
       const left = (this.busy.get(rig) ?? 1) - 1;
       if (left > 0) this.busy.set(rig, left);
@@ -240,7 +240,7 @@ export function serveKbAsks(
       );
       return undefined;
     }
-    if (!answerStaysWithRig(store, at.rig, r.reply)) {
+    if (!(await answerStaysWithRig(store, at.rig, r.reply))) {
       const what = { rig: at.rig, kind: at.kind, reply: r.reply ?? null };
       log(
         "control",
@@ -256,7 +256,9 @@ export function serveKbAsks(
     } catch (err) {
       return JSON.stringify({ refused: `the ask is not JSON: ${errorText(err)}` });
     }
-    return JSON.stringify(await limit.run(at.rig, () => answerKbAsk(store, at.rig, at.kind, body)));
+    return JSON.stringify(
+      await limit.run(at.rig, async () => answerKbAsk(store, at.rig, at.kind, body)),
+    );
   };
   return Promise.all([
     bus.serve(KB_SEARCH_SUBJECTS, answer),

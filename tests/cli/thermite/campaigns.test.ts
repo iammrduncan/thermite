@@ -35,10 +35,10 @@ async function cli(...args: string[]): Promise<{ code: number; stdout: string; s
 
 describe("thermite campaign copy (goal 069)", () => {
   test("copies a campaign through control, and says its refusals", async () => {
-    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
+    const { keys, store, control: api } = await controlOnly({ tokens: TOKENS });
     // sort-speed was assigned over the API before, with a real contract, and the rig ran it;
     // control saved it as version 1 as it sent the assignment (goal 182).
-    enrollRigs(store, ["rig-a"]);
+    await enrollRigs(store, ["rig-a"]);
     const goal = JSON.parse(
       readFileSync(
         join(import.meta.dirname, "../../../examples/contracts/goal-example.json"),
@@ -47,7 +47,7 @@ describe("thermite campaign copy (goal 069)", () => {
     ) as Record<string, unknown>;
     const contract = parseContract({ ...goal, campaign: "sort-speed" });
     assert.ok(contract.ok);
-    issueCommand(store, keys.privateKeyPem, {
+    await issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: {
@@ -87,7 +87,7 @@ describe("thermite campaign copy (goal 069)", () => {
 
       const copied = await cli("campaign", "copy", "sort-speed", "sort-speed-b", ...at);
       assert.equal(copied.code, 0, copied.stderr);
-      const [saved] = store.campaigns.versions("sort-speed-b");
+      const [saved] = await store.campaigns.versions("sort-speed-b");
       assert.ok(saved);
       assert.deepEqual(JSON.parse(copied.stdout), {
         campaign: "sort-speed-b",
@@ -170,10 +170,7 @@ describe("thermite campaign copy (goal 069)", () => {
       );
       assert.equal(extra.code, 2);
       assert.deepEqual(
-        store.campaigns
-          .versions()
-          .map((v) => v.campaign)
-          .sort(),
+        (await store.campaigns.versions()).map((v) => v.campaign).sort(),
         ["sort-speed", "sort-speed-b"].sort(),
         "only the one copy was saved, beside the version the assignment saved",
       );
@@ -185,7 +182,7 @@ describe("thermite campaign copy (goal 069)", () => {
 
 describe("thermite campaign context, and campaign copy's context options (goal 070)", () => {
   test("sets a campaign's own context settings through control, removes them, and gives a copy its own", async () => {
-    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
+    const { keys, store, control: api } = await controlOnly({ tokens: TOKENS });
     const goal = JSON.parse(
       readFileSync(
         join(import.meta.dirname, "../../../examples/contracts/goal-example.json"),
@@ -203,7 +200,7 @@ describe("thermite campaign context, and campaign copy's context options (goal 0
       events: [],
       summary: {},
     });
-    issueCommand(store, keys.privateKeyPem, {
+    await issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: {
@@ -242,7 +239,7 @@ describe("thermite campaign context, and campaign copy's context options (goal 0
         set.stderr,
         /^Version 2 of sort-speed is saved\. Its runs' agents: a context window of 131,072 tokens, compaction at 70% of the window\./,
       );
-      const [v2] = store.campaigns.versions("sort-speed");
+      const [v2] = await store.campaigns.versions("sort-speed");
       assert.ok(v2);
       assert.deepEqual((v2.contract as Record<string, unknown>).agents_context, {
         context_window: 131_072,
@@ -253,7 +250,7 @@ describe("thermite campaign context, and campaign copy's context options (goal 0
       const none = await cli("campaign", "context", "sort-speed", ...at);
       assert.equal(none.code, 0, none.stderr);
       assert.equal((JSON.parse(none.stdout) as { agents_context: unknown }).agents_context, null);
-      const v3 = store.campaigns.versions("sort-speed")[0];
+      const v3 = (await store.campaigns.versions("sort-speed"))[0];
       assert.ok(v3);
       assert.equal("agents_context" in (v3.contract as object), false);
       // Refused in words before anything is sent, or by control.
@@ -284,7 +281,7 @@ describe("thermite campaign context, and campaign copy's context options (goal 0
       assert.deepEqual((JSON.parse(copied.stdout) as { agents_context: unknown }).agents_context, {
         context_window: 65_536,
       });
-      const copy = store.campaigns.versions("sort-speed-b")[0];
+      const copy = (await store.campaigns.versions("sort-speed-b"))[0];
       assert.ok(copy);
       assert.deepEqual((copy.contract as Record<string, unknown>).agents_context, {
         context_window: 65_536,

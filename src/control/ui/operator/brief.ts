@@ -18,19 +18,19 @@ const introText = (s: string) => s.replace(/^(research )?trial on [^:]+: /, "");
  * `detail`, each lane also shows its last step and the judge its latest line; `lane` adds to a
  * lane's row and below it (a drain's trial: ui/rigs/drain.ts).
  */
-export function runBrief(
+export async function runBrief(
   store: ControlStore,
   u: RigView,
   r: RunView,
   now: number,
   opts: { heading?: boolean; detail?: boolean; waiting?: number; lane?: LaneExtra } = {},
-): string {
+): Promise<string> {
   const rows: string[] = [];
   const row = (who: string, what: string, when = "", cls = "") =>
     rows.push(
       `<div class="br ${cls}"><span class="br-who">${esc(who)}</span><span class="br-what">${what}</span><span class="br-when">${when}</span></div>`,
     );
-  const trials = store.liveLines.trials(u.id).filter((t) => t.run === r.id);
+  const trials = (await store.liveLines.trials(u.id)).filter((t) => t.run === r.id);
   const lanes = [
     ...new Set([
       ...Object.keys(r.at_work),
@@ -41,7 +41,7 @@ export function runBrief(
   // A stuck trial's lane gets a chip that leads to its card under Needs you (goal 143).
   const stuck = stuckTrials(u, r, now);
   for (const lane of lanes) {
-    const extra = opts.lane?.(lane);
+    const extra = await opts.lane?.(lane);
     const t = trials.find((x) => x.lane === lane);
     const plan = r.epoch?.assignments.find((a) => a.lane === lane);
     const work = r.at_work[lane];
@@ -105,8 +105,7 @@ export function runBrief(
       esc(span(r.paper.requested_at, now)),
     );
   // The planner, only when it waits for something.
-  const planner = store.liveLines
-    .tail(u.id, 40, "planner")
+  const planner = (await store.liveLines.tail(u.id, 40, "planner"))
     .filter((l) => !l.run || l.run === r.id)
     .at(-1);
   if (
@@ -121,7 +120,7 @@ export function runBrief(
   const j = u.judge.now && mine(u.judge.now) ? u.judge.now : null;
   const queued = u.judge.queued.filter(mine).length;
   if (j) {
-    const line = opts.detail ? store.liveLines.tail(u.id, 1, "judge")[0] : undefined;
+    const line = opts.detail ? (await store.liveLines.tail(u.id, 1, "judge"))[0] : undefined;
     row(
       "judge",
       `${jobHtml(u, j)}${queued ? ` <span class="muted">· ${queued} more queued</span>` : ""}${line && j.started_at && line.at >= j.started_at && !/: started$/.test(line.text) ? `<span class="br-more">now: ${esc(clip(line.text, 120))}</span>` : ""}`,

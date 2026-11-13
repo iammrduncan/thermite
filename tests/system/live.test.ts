@@ -6,8 +6,8 @@ import { ADMIN, controlStack } from "../helpers/control-stack.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
 /** The stack, with a supervisor that may alter its live lines on their way to the bus. */
-function setup() {
-  const s = controlStack({ env: makeHarnessEnv("rig-a") });
+async function setup() {
+  const s = await controlStack({ env: makeHarnessEnv("rig-a") });
   let tamper: ((body: string) => string) | undefined;
   const bus = s.bus;
   s.cfg.bus = {
@@ -20,7 +20,7 @@ function setup() {
 
 describe("the live view, on the message bus", () => {
   test("the harness's lines reach control signed; the supervisor's are kept as unsigned; a tampered batch is refused", async () => {
-    const s = setup();
+    const s = await setup();
     // The rig's key is pinned by its first report.
     await s.relay();
     s.env.service.live.append({ source: "planner", kind: "status", text: "planning epoch 1" });
@@ -50,11 +50,14 @@ describe("the live view, on the message bus", () => {
     s.setTamper((b) => b.replace("lane-1: tiling", "lane-1: something else"));
     await s.live();
     assert.equal(s.taken.refused["bad live signature"], 1);
-    assert.notEqual(s.store.liveLines.tail("rig-a", 10).at(-1)?.text, "lane-1: something else");
+    assert.notEqual(
+      (await s.store.liveLines.tail("rig-a", 10)).at(-1)?.text,
+      "lane-1: something else",
+    );
   });
 
   test("a line of a kind control does not know is left out, the rest kept", async () => {
-    const s = setup();
+    const s = await setup();
     await s.relay();
     for (const text of ["before", "a newer harness's line", "after"])
       s.env.service.live.append({ source: "planner", kind: "status", text });
@@ -67,8 +70,7 @@ describe("the live view, on the message bus", () => {
     st = await s.live();
     assert.equal(st.cursor, 4);
     assert.deepEqual(
-      s.store.liveLines
-        .tail("rig-a", 10)
+      (await s.store.liveLines.tail("rig-a", 10))
         .filter((e) => e.source === "planner")
         .map((e) => e.text),
       ["before", "after"],
@@ -77,17 +79,20 @@ describe("the live view, on the message bus", () => {
   });
 
   test("before the rig's key is accepted, live lines are refused", async () => {
-    const s = setup();
+    const s = await setup();
     s.env.service.live.append({ source: "judge", kind: "log", text: "x" });
     await s.live();
     assert.equal(s.taken.refused["the rig's report key is not accepted yet"], 1);
-    assert.equal(s.store.liveLines.tail("rig-a", 10).filter((e) => e.source === "judge").length, 0);
+    assert.equal(
+      (await s.store.liveLines.tail("rig-a", 10)).filter((e) => e.source === "judge").length,
+      0,
+    );
   });
 });
 
 describe("the owner's messages to agents", () => {
   test("a message to a lane reaches its trial once; the planner's waits for the next plan; agents cannot send one", async () => {
-    const s = setup();
+    const s = await setup();
     const issue = (body: unknown, token = ADMIN) =>
       s.control.request("/v1/commands", {
         method: "POST",
@@ -143,8 +148,9 @@ describe("the owner's messages to agents", () => {
     );
     // Each refusal is in the audit log, as the dashboard's and MCP's are.
     assert.equal(
-      s.store.auditLog.list(50).filter((a) => a.action === "refused" && a.actor === "owner:api")
-        .length,
+      (await s.store.auditLog.list(50)).filter(
+        (a) => a.action === "refused" && a.actor === "owner:api",
+      ).length,
       3,
     );
     await s.relay();

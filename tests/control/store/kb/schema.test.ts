@@ -3,7 +3,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { ControlStore, STORE_VERSION } from "../../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { openControlStore, STORE_VERSION } from "../../../../src/control/store/index.ts";
 import { withKnowledgeBaseBefore175 } from "../../../helpers/old-store.ts";
 
 /**
@@ -41,13 +42,19 @@ const item = (
 });
 
 describe("the knowledge base's hierarchy (store migration 14)", () => {
-  test("a store's items go into their runs' records slots, with their ids and seqs", () => {
+  test("a store's items go into their runs' records slots, with their ids and seqs", async () => {
     const path = fresh();
-    const old = new ControlStore(path);
+    const old = openControlStore(path);
     // A campaign saved on control with no run yet, and one known only by a rig's runs.
-    old.campaigns.put({ campaign: "saved", version: 1, contract: {}, sha: "a", by: "owner:ui" });
+    await old.campaigns.put({
+      campaign: "saved",
+      version: 1,
+      contract: {},
+      sha: "a",
+      by: "owner:ui",
+    });
     withKnowledgeBaseBefore175(
-      old.db,
+      sqliteBehind(old).db,
       [
         item(1, 4, {
           kind: "experiment",
@@ -74,15 +81,17 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
         ],
       },
     );
-    old.db.close();
+    await old.close();
 
-    const store = new ControlStore(path);
-    const v = store.db.prepare("select max(version) as v from schema_migrations").get() as {
+    const store = openControlStore(path);
+    const v = sqliteBehind(store)
+      .db.prepare("select max(version) as v from schema_migrations")
+      .get() as {
       v: number;
     };
     assert.equal(v.v, STORE_VERSION);
-    const rows = store.db
-      .prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
+    const rows = sqliteBehind(store)
+      .db.prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
       .all() as Record<string, unknown>[];
     assert.deepEqual(
       rows.map((r) => ({ ...r })),
@@ -93,7 +102,9 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
       ],
     );
     // Each item's version 1 is kept, and the cursors count on from where they were.
-    const versions = store.db.prepare("select item, version from kb_version order by item").all();
+    const versions = sqliteBehind(store)
+      .db.prepare("select item, version from kb_version order by item")
+      .all();
     assert.deepEqual(
       versions.map((r) => ({ ...r })),
       [
@@ -102,37 +113,35 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
         { item: 7, version: 1 },
       ],
     );
-    const cursor = store.db.prepare("select seq, item_seq from kb_cursor").get() as {
+    const cursor = sqliteBehind(store).db.prepare("select seq, item_seq from kb_cursor").get() as {
       item_seq: number;
     };
     assert.equal(cursor.item_seq, 15);
     // The rig's runs are known as before.
-    store.db
-      .prepare(
+    sqliteBehind(store)
+      .db.prepare(
         "insert into rig (id, first_seen, last_seen, ledger_id, summary) values ('rig-a', 'x', 'x', 'ledger-a', '{}')",
       )
       .run();
-    assert.equal(store.kb().runCampaign("rig-a", "other-run"), undefined);
-    store.db
-      .prepare(
+    assert.equal(await store.kb().runCampaign("rig-a", "other-run"), undefined);
+    sqliteBehind(store)
+      .db.prepare(
         "insert into kb_run (rig, ledger, run, campaign) values ('rig-a', 'ledger-a', 'gs-2', 'gemv')",
       )
       .run();
-    assert.equal(store.kb().runCampaign("rig-a", "gs-2"), "gemv");
+    assert.equal(await store.kb().runCampaign("rig-a", "gs-2"), "gemv");
     // Every campaign control knows has its collection: one saved, ones with runs or items.
-    assert.deepEqual(
-      store
-        .kb()
-        .collections()
-        .map((c) => c.campaign)
-        .sort(),
-      ["gemv", "only-runs", "saved", "survey"],
-    );
+    assert.deepEqual((await store.kb().collections()).map((c) => c.campaign).sort(), [
+      "gemv",
+      "only-runs",
+      "saved",
+      "survey",
+    ]);
     // The words index holds the items from before, each in its passages (store migration 17).
     const words = (q: string) =>
       (
-        store.db
-          .prepare(
+        sqliteBehind(store)
+          .db.prepare(
             "select p.item from kb_words join kb_passage p on p.id = kb_words.rowid where kb_words match ? order by p.item",
           )
           .all(q) as { item: number }[]
@@ -140,7 +149,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     assert.deepEqual(words("loads"), [1]);
     assert.deepEqual(words("verifier"), [7]);
     // A new item takes an id after every one given before, the deleted one's too.
-    store.kb().index(
+    await store.kb().index(
       { rig: "rig-a", ledger: "ledger-a" },
       {
         at: "2026-10-29T10:00:00.000Z",
@@ -150,20 +159,22 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
         body: { id: 3, by: "lane-1", kind: "surprise", text: "Faster than the guide" },
       },
     );
-    const added = store.db.prepare("select id, seq from kb_item where ref = '3'").get() as {
+    const added = sqliteBehind(store)
+      .db.prepare("select id, seq from kb_item where ref = '3'")
+      .get() as {
       id: number;
       seq: number;
     };
     assert.ok(added.id > 7, `id ${added.id}`);
     assert.equal(added.seq, 16);
-    store.db.close();
+    await store.close();
   });
 
-  test("store migration 26: the agents' slots take the agents' names everywhere the store keeps one, and a grant's copies go", () => {
+  test("store migration 26: the agents' slots take the agents' names everywhere the store keeps one, and a grant's copies go", async () => {
     const path = fresh();
-    const old = new ControlStore(path);
+    const old = openControlStore(path);
     const RIG = { rig: "rig-a", ledger: "ledger-a" };
-    old.kb().index(RIG, {
+    await old.kb().index(RIG, {
       at: "2026-11-01T10:00:00.000Z",
       actor: "harness",
       kind: "run_created",
@@ -180,9 +191,9 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
       text: "The panel read the diff and the judge's findings: the gain is real.",
       links: [],
     };
-    assert.equal(old.kb().write({ ...at, event: 10 }, review), undefined);
+    assert.equal(await old.kb().write({ ...at, event: 10 }, review), undefined);
     assert.equal(
-      old.kb().write(
+      await old.kb().write(
         { ...at, event: 11 },
         {
           slot: "teachers",
@@ -199,7 +210,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     // The store as an earlier build kept it: the slots spelled as before, and a grant's copies.
     // The words index holds the same words either way: `_` and `-` part words, and the stemmer
     // reads teachers as teacher.
-    old.db.exec(`
+    sqliteBehind(old).db.exec(`
 drop trigger kb_version_never_changed;
 update kb_item set slot = 'review-panel', by = 'review-panel',
   context = replace(context, 'review_panel', 'review-panel') where slot = 'review_panel';
@@ -214,11 +225,13 @@ create index kb_grant_item_seq on kb_grant_item (campaign, seq);
 create trigger kb_version_never_changed before update on kb_version
 begin select raise(abort, 'a version of an item is never changed'); end;
 delete from schema_migrations where version >= 26;`);
-    old.db.close();
+    await old.close();
 
-    const store = new ControlStore(path);
+    const store = openControlStore(path);
     const rows = (sql: string) =>
-      (store.db.prepare(sql).all() as Record<string, unknown>[]).map((r) => ({ ...r }));
+      (sqliteBehind(store).db.prepare(sql).all() as Record<string, unknown>[]).map((r) => ({
+        ...r,
+      }));
     assert.deepEqual(rows("select slot, by from kb_item where slot != 'records' order by id"), [
       { slot: "review_panel", by: "review_panel" },
       { slot: "teachers", by: "teachers" },
@@ -238,31 +251,33 @@ delete from schema_migrations where version >= 26;`);
     assert.match(context[0] ?? "", /\breview_panel\b/);
     assert.match(context[1] ?? "", /\bteachers\b/);
     // The words index agrees with the rows, and still finds the items.
-    store.db.exec("insert into kb_words (kb_words) values ('integrity-check')");
-    const found = store.db
-      .prepare(
+    sqliteBehind(store).db.exec("insert into kb_words (kb_words) values ('integrity-check')");
+    const found = sqliteBehind(store)
+      .db.prepare(
         "select distinct p.item from kb_words join kb_passage p on p.id = kb_words.rowid where kb_words match ? order by p.item",
       )
       .all("panel") as { item: number }[];
     assert.equal(found.length, 2);
     // An address given before still finds its item; the link reads under today's name.
-    assert.equal(store.kb().at("gemv/gs-1/review-panel/review:1")?.slot, "review_panel");
-    assert.equal(store.kb().at("gemv/gs-1/teacher/note:1")?.title, "Blocking next");
+    assert.equal((await store.kb().at("gemv/gs-1/review-panel/review:1"))?.slot, "review_panel");
+    assert.equal((await store.kb().at("gemv/gs-1/teacher/note:1"))?.title, "Blocking next");
     // The table of a grant's copies is gone; the versions are kept as they were written again.
     assert.equal(
-      store.db.prepare("select 1 from sqlite_master where name = 'kb_grant_item'").get(),
+      sqliteBehind(store)
+        .db.prepare("select 1 from sqlite_master where name = 'kb_grant_item'")
+        .get(),
       undefined,
     );
     assert.throws(
-      () => store.db.exec("update kb_version set by = 'someone'"),
+      () => sqliteBehind(store).db.exec("update kb_version set by = 'someone'"),
       /a version of an item is never changed/,
     );
-    store.db.close();
+    await store.close();
   });
 
-  test("a new store has the hierarchy, empty, and opening it again changes nothing", () => {
+  test("a new store has the hierarchy, empty, and opening it again changes nothing", async () => {
     const path = fresh();
-    const store = new ControlStore(path);
+    const store = openControlStore(path);
     for (const t of [
       "kb_item",
       "kb_version",
@@ -272,31 +287,47 @@ delete from schema_migrations where version >= 26;`);
       "kb_scope",
       "kb_words",
     ])
-      assert.ok(store.db.prepare("select 1 from sqlite_master where name = ?").get(t), t);
-    store.campaigns.put({ campaign: "gemv", version: 1, contract: {}, sha: "a", by: "owner:ui" });
-    store.db.close();
-    const again = new ControlStore(path);
+      assert.ok(
+        sqliteBehind(store).db.prepare("select 1 from sqlite_master where name = ?").get(t),
+        t,
+      );
+    await store.campaigns.put({
+      campaign: "gemv",
+      version: 1,
+      contract: {},
+      sha: "a",
+      by: "owner:ui",
+    });
+    await store.close();
+    const again = openControlStore(path);
     assert.deepEqual(
-      again
-        .kb()
-        .collections()
-        .map((c) => c.campaign),
+      (await again.kb().collections()).map((c) => c.campaign),
       ["gemv"],
     );
-    again.db.close();
+    await again.close();
   });
 
-  test("store migration 28: the public names in the knowledge base, its versions and its words index", () => {
+  test("store migration 28: the public names in the knowledge base, its versions and its words index", async () => {
     const path = fresh();
-    const old = new ControlStore(path);
+    const old = openControlStore(path);
     const RIG = { rig: "rig-a", ledger: "ledger-a" };
     const at = "2026-11-01T10:00:00.000Z";
-    const index = (kind: string, body: Record<string, unknown>) =>
+    const index = async (kind: string, body: Record<string, unknown>) =>
       old.kb().index(RIG, { at, actor: "lane-1", kind, subject: "gs-1", body });
-    index("run_created", { campaign: "gemv", mode: "goal" });
-    index("journal_note", { id: 1, by: "lane-1", kind: "other", text: "an aside on the loop" });
-    index("source_note", { note: 1, by: "lane-1", text: "the guide on vector loads", sources: [] });
-    index("experiment_added", {
+    await index("run_created", { campaign: "gemv", mode: "goal" });
+    await index("journal_note", {
+      id: 1,
+      by: "lane-1",
+      kind: "other",
+      text: "an aside on the loop",
+    });
+    await index("source_note", {
+      note: 1,
+      by: "lane-1",
+      text: "the guide on vector loads",
+      sources: [],
+    });
+    await index("experiment_added", {
       id: "x-000000000001",
       title: "tile it",
       direction: "tiling",
@@ -305,7 +336,7 @@ delete from schema_migrations where version >= 26;`);
     });
     // The rows as v0.1.0 kept them: a field note of no other kind and a source note had the
     // sub-kind `note`, and an experiment's direction was `family`.
-    old.db.exec(`
+    sqliteBehind(old).db.exec(`
 drop trigger kb_version_never_changed;
 update kb_item set sub = 'note' where kind = 'note';
 update kb_version set sub = 'note' where item in (select id from kb_item where kind = 'note');
@@ -315,11 +346,13 @@ update kb_version set meta = replace(meta, '"direction"', '"family"')
 create trigger kb_version_never_changed before update on kb_version
 begin select raise(abort, 'a version of an item is never changed'); end;
 delete from schema_migrations where version >= 28;`);
-    old.db.close();
+    await old.close();
 
-    const store = new ControlStore(path);
+    const store = openControlStore(path);
     const rows = (sql: string) =>
-      (store.db.prepare(sql).all() as Record<string, unknown>[]).map((r) => ({ ...r }));
+      (sqliteBehind(store).db.prepare(sql).all() as Record<string, unknown>[]).map((r) => ({
+        ...r,
+      }));
     assert.deepEqual(rows("select ref, sub from kb_item where kind = 'note' order by ref"), [
       { ref: "1", sub: "other" },
       { ref: "rn-1", sub: "source_note" },
@@ -344,10 +377,16 @@ delete from schema_migrations where version >= 28;`);
     }
     // The words index follows: a search finds each under its new sub-kind.
     const kb = store.kb();
-    assert.equal(kb.search("aside", ["gemv"])[0]?.sub, "other");
-    assert.equal(kb.search("vector loads", ["gemv"], { kinds: ["note"] })[0]?.sub, "source_note");
+    assert.equal((await kb.search("aside", ["gemv"]))[0]?.sub, "other");
+    assert.equal(
+      (await kb.search("vector loads", ["gemv"], { kinds: ["note"] }))[0]?.sub,
+      "source_note",
+    );
     // Versions stay unchanged from now on.
-    assert.throws(() => store.db.prepare("update kb_version set sub = 'x'").run(), /never changed/);
-    store.db.close();
+    assert.throws(
+      () => sqliteBehind(store).db.prepare("update kb_version set sub = 'x'").run(),
+      /never changed/,
+    );
+    await store.close();
   });
 });

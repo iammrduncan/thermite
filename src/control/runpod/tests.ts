@@ -261,16 +261,16 @@ export class RunpodTests {
     return new Date(this.now()).toISOString();
   }
 
-  private key(cloud: string): string | undefined {
-    const g = this.store.gpuClouds.get(cloud);
+  private async key(cloud: string): Promise<string | undefined> {
+    const g = await this.store.gpuClouds.get(cloud);
     return g ? this.secrets.open(g.key_sealed) : undefined;
   }
 
   /** Starts a test pod (billed from now). Throws, in words, when it can't. */
   async start(cloud: string, req: TestRequest, by: string): Promise<TestView> {
-    const key = this.key(cloud);
+    const key = await this.key(cloud);
     if (!key) throw new Error(`no GPU cloud "${cloud}"`);
-    const running = this.store.runpod.tests({ cloud, active: true })[0];
+    const running = (await this.store.runpod.tests({ cloud, active: true }))[0];
     if (running)
       throw new Error(
         `test ${running.id} is still running on "${cloud}": end it first, or wait for it`,
@@ -289,7 +289,7 @@ export class RunpodTests {
       throw new Error("a limit is 5 minutes or more");
     // A fresh read: prices and stock change.
     const facts = await readRunpod(key, this.fetchImpl);
-    this.store.gpuClouds.setFacts(cloud, { facts });
+    await this.store.gpuClouds.setFacts(cloud, { facts });
     const gpu = req.gpu
       ? facts.gpus.find((g) => g.id === req.gpu || g.name === req.gpu)
       : cheapestGpu(facts, cloudType);
@@ -337,8 +337,8 @@ export class RunpodTests {
       billed_since: now,
       notes: [],
     };
-    this.store.runpod.addTest({ id, cloud, state, by });
-    this.store.auditLog.add(by, "runpod_test_started", {
+    await this.store.runpod.addTest({ id, cloud, state, by });
+    await this.store.auditLog.add(by, "runpod_test_started", {
       id,
       cloud,
       pod: pod.id,
@@ -348,29 +348,36 @@ export class RunpodTests {
       image,
       stop_after_minutes: limit ?? null,
     });
-    return this.view(id) as TestView;
+    return (await this.view(id)) as TestView;
   }
 
-  /** Ends a test now: its pod is removed. */
+  /**
+   * Ends a test now: its pod is removed. The test's state is read, set to ending and saved whole
+   * in one transaction: a save by control's own step between the read and the save would be
+   * undone, and a test it had just ended would end again.
+   */
   async end(id: string, by: string): Promise<TestView> {
-    const t = this.store.runpod.test(id);
-    if (!t) throw new Error(`no test ${id}`);
-    if (t.active) {
+    const active = await this.store.tx(async () => {
+      const t = await this.store.runpod.test(id);
+      if (!t) throw new Error(`no test ${id}`);
+      if (!t.active) return false;
       const s = t.state as TestState;
       if (s.phase !== "ending" && s.phase !== "done") {
         s.notes.push(`Ended by ${by} while ${PHASE_WORDS[s.phase]}.`);
         s.phase = "ending";
-        this.store.runpod.saveTest(id, s, true);
+        await this.store.runpod.saveTest(id, s, true);
       }
-      this.store.auditLog.add(by, "runpod_test_ended", { id, cloud: t.cloud });
-      await this.stepOnce(id);
-    }
-    return this.view(id) as TestView;
+      await this.store.auditLog.add(by, "runpod_test_ended", { id, cloud: t.cloud });
+      return true;
+    });
+    // The step waits for RunPod: after the transaction.
+    if (active) await this.stepOnce(id);
+    return (await this.view(id)) as TestView;
   }
 
   /** One step for every running test. Control calls it every few seconds. */
   async advance(): Promise<void> {
-    for (const t of this.store.runpod.tests({ active: true, limit: 100 }))
+    for (const t of await this.store.runpod.tests({ active: true, limit: 100 }))
       await this.stepOnce(t.id);
   }
 
@@ -383,14 +390,14 @@ export class RunpodTests {
   }
 
   private async step(id: string): Promise<void> {
-    const t = this.store.runpod.test(id);
+    const t = await this.store.runpod.test(id);
     if (!t?.active) return;
     const s = t.state as TestState;
-    const key = this.key(t.cloud);
+    const key = await this.key(t.cloud);
     if (!key) {
       s.error = `the GPU cloud "${t.cloud}" was deleted, so control can't reach pod ${s.pod_id}: remove it in RunPod's console`;
       s.phase = "done";
-      this.store.runpod.saveTest(id, s, false);
+      await this.store.runpod.saveTest(id, s, false);
       return;
     }
     const now = this.iso();
@@ -470,7 +477,7 @@ export class RunpodTests {
           billStop();
           s.ended_at = now;
           s.phase = "done";
-          this.store.auditLog.add("control", "runpod_test_done", {
+          await this.store.auditLog.add("control", "runpod_test_done", {
             id,
             cloud: t.cloud,
             cost_usd: costOf(s),
@@ -492,7 +499,7 @@ export class RunpodTests {
         s.phase = "ending";
       }
     }
-    this.store.runpod.saveTest(id, s, s.phase !== "done");
+    await this.store.runpod.saveTest(id, s, s.phase !== "done");
   }
 
   private async readReport(s: TestState): Promise<unknown> {
@@ -510,13 +517,13 @@ export class RunpodTests {
   }
 
   /** A test as shown: its state (never the report's secret path), cost and findings. */
-  view(id: string): TestView | undefined {
-    const t = this.store.runpod.test(id);
+  async view(id: string): Promise<TestView | undefined> {
+    const t = await this.store.runpod.test(id);
     return t ? viewOf(t, this.now()) : undefined;
   }
 
-  list(cloud?: string, limit = 20): TestView[] {
-    return this.store.runpod.tests({ cloud, limit }).map((t) => viewOf(t, this.now()));
+  async list(cloud?: string, limit = 20): Promise<TestView[]> {
+    return (await this.store.runpod.tests({ cloud, limit })).map((t) => viewOf(t, this.now()));
   }
 }
 

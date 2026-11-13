@@ -73,11 +73,11 @@ export interface RigLive {
 }
 
 /** The live stream's limits, what control took from it, and each rig's counts. */
-function liveState(store: ControlStore, taken: LiveTaken) {
+async function liveState(store: ControlStore, taken: LiveTaken) {
   const rigs: RigLive[] = [];
   const seen = new Set(taken.rigs.keys());
-  for (const r of store.reportedRigs.list()) {
-    const sup = store.reportedRigs.supervisor(r.id);
+  for (const r of await store.reportedRigs.list()) {
+    const sup = await store.reportedRigs.supervisor(r.id);
     const live = sup?.live as LiveFigures | undefined;
     if (!live && !seen.has(r.id)) continue;
     seen.delete(r.id);
@@ -157,9 +157,9 @@ export async function busState(store: ControlStore, view: BusView | undefined) {
     streams,
     events: {
       ...writerState(view.events, view.move.published),
-      apply: applyState(store, view.apply, eventsPlace),
+      apply: await applyState(store, view.apply, eventsPlace),
     },
-    live: liveState(store, view.live),
-    config: configState(store, view.config),
+    live: await liveState(store, view.live),
+    config: await configState(store, view.config),
   };
 }

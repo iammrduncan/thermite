@@ -54,10 +54,13 @@ export interface KbSettings {
 }
 
 /** The settings now; `orphanHoursDefault`: THERMITE_CONTROL_KB_ORPHAN_HOURS as control read it. */
-export function kbSettingsOf(store: ControlStore, orphanHoursDefault = 0): KbSettings {
+export async function kbSettingsOf(
+  store: ControlStore,
+  orphanHoursDefault = 0,
+): Promise<KbSettings> {
   const rows = store.kb().settings;
-  const max = rows.get("max_file_mib");
-  const hours = rows.get("orphan_hours");
+  const max = await rows.get("max_file_mib");
+  const hours = await rows.get("orphan_hours");
   const last = [max, hours]
     .filter((r) => r !== undefined)
     .sort((a, b) => b.set_at.localeCompare(a.set_at))[0];
@@ -91,12 +94,12 @@ export type KbSettingsOutcome =
   | { ok: false; error: string };
 
 /** A change of the settings by `by`, checked, kept and audited; refused in words. */
-export function setKbSettings(
+export async function setKbSettings(
   store: ControlStore,
   raw: unknown,
   orphanHoursDefault: number,
   by: string,
-): KbSettingsOutcome {
+): Promise<KbSettingsOutcome> {
   const r = KbSettingsBody.safeParse(raw);
   if (!r.success)
     return {
@@ -107,13 +110,13 @@ export function setKbSettings(
     };
   const rows = store.kb().settings;
   const b = r.data;
-  store.tx(() => {
+  await store.tx(async () => {
     // Empty or 0 is no limit: the default, so no row is kept for it.
-    if (b.max_file_mib !== undefined) rows.set("max_file_mib", b.max_file_mib || null, by);
-    if (b.orphan_hours !== undefined) rows.set("orphan_hours", b.orphan_hours, by);
-    store.auditLog.add(by, "kb_settings_set", b);
+    if (b.max_file_mib !== undefined) await rows.set("max_file_mib", b.max_file_mib || null, by);
+    if (b.orphan_hours !== undefined) await rows.set("orphan_hours", b.orphan_hours, by);
+    await store.auditLog.add(by, "kb_settings_set", b);
   });
-  const settings = kbSettingsOf(store, orphanHoursDefault);
+  const settings = await kbSettingsOf(store, orphanHoursDefault);
   return { ok: true, settings, said: kbSettingsWords(settings) };
 }
 

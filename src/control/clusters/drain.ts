@@ -11,19 +11,31 @@ import { IMAGES_REASON, RESIZE_REASON, rigWork, undrain, workWords } from "./rig
 /** How often the drain watch looks at a draining rig's report by default. */
 const DRAIN_WATCH_MS = 10_000;
 
-/** The owner calls the update off: the rig goes back to work on its images. */
-export function cancelDrain(
+/**
+ * The owner calls the update off: the rig goes back to work on its images. Its status is read
+ * and set in one transaction: a rig the drain watch began to move between the two is not shown
+ * as running and called off.
+ */
+export async function cancelDrain(
   parts: ControlParts,
   rig: string,
   by: string,
-): { ok: string } | { error: string } {
+): Promise<{ ok: string } | { error: string }> {
+  return parts.store.tx(() => cancelDrainNow(parts, rig, by));
+}
+
+async function cancelDrainNow(
+  parts: ControlParts,
+  rig: string,
+  by: string,
+): Promise<{ ok: string } | { error: string }> {
   const { store } = parts;
-  const r = store.clusters.rig(rig);
+  const r = await store.clusters.rig(rig);
   if (r?.status !== "draining") return { error: `${rig} is not draining.` };
-  undrain(parts, rig, by);
-  store.clusters.setRigStatus(rig, "running");
+  await undrain(parts, rig, by);
+  await store.clusters.setRigStatus(rig, "running");
   if (r.pending) {
-    store.rigHistory.add(
+    await store.rigHistory.add(
       rig,
       "drain",
       true,
@@ -31,13 +43,18 @@ export function cancelDrain(
     );
     return { ok: `${rig} goes back to work with its GPUs, CPUs and memory as they were.` };
   }
-  store.rigHistory.add(rig, "drain", true, "called off: the rig goes back to work on its images");
+  await store.rigHistory.add(
+    rig,
+    "drain",
+    true,
+    "called off: the rig goes back to work on its images",
+  );
   return { ok: `${rig} goes back to work on its images.` };
 }
 
 /** A drain as a rig's last report gives it, with what still runs; undefined when none. */
-function drainOf(parts: ControlParts, rig: string) {
-  const w = workOf(parts.store.reportedRigs.list().find((x) => x.id === rig)?.summary);
+async function drainOf(parts: ControlParts, rig: string) {
+  const w = workOf((await parts.store.reportedRigs.list()).find((x) => x.id === rig)?.summary);
   return w?.draining ? { ...w, draining: w.draining } : undefined;
 }
 
@@ -49,16 +66,16 @@ export const DEADLINE_STEP = "drain_deadline";
  * step once, with what still runs, and Needs you asks the owner. Nothing is chosen for the owner:
  * the rig goes on starting nothing new.
  */
-function noteDeadline(parts: ControlParts, rig: string): void {
-  const d = drainOf(parts, rig);
+async function noteDeadline(parts: ControlParts, rig: string): Promise<void> {
+  const d = await drainOf(parts, rig);
   if (!d?.draining.deadline_reached) return;
   const since = Date.parse(d.draining.since);
-  const noted = parts.store.rigHistory
-    .list(rig)
-    .some((s) => s.step === DEADLINE_STEP && Date.parse(s.at) >= since);
+  const noted = (await parts.store.rigHistory.list(rig)).some(
+    (s) => s.step === DEADLINE_STEP && Date.parse(s.at) >= since,
+  );
   if (noted) return;
   const minutes = Math.round((Date.parse(d.draining.deadline_reached) - since) / 60_000);
-  parts.store.rigHistory.add(
+  await parts.store.rigHistory.add(
     rig,
     DEADLINE_STEP,
     false,
@@ -67,11 +84,11 @@ function noteDeadline(parts: ControlParts, rig: string): void {
 }
 
 /** What the owner's choice does at a drain's deadline, in words, before it is made (goal 173). */
-export function drainChoices(
+export async function drainChoices(
   store: ControlStore,
   rig: string,
-): { apply: { label: string; does: string }; end: { label: string; does: string } } {
-  const r = store.clusters.rig(rig);
+): Promise<{ apply: { label: string; does: string }; end: { label: string; does: string } }> {
+  const r = await store.clusters.rig(rig);
   const onCluster = r?.status === "draining";
   return {
     apply: onCluster
@@ -110,11 +127,16 @@ export async function chooseAtDeadline(
   by: string,
 ): Promise<{ ok: string } | { error: string }> {
   const { store } = parts;
-  const r = store.clusters.rig(rig);
-  const d = drainOf(parts, rig);
+  const r = await store.clusters.rig(rig);
+  const d = await drainOf(parts, rig);
   if (r?.status === "draining") {
     if (choice === "end") return cancelDrain(parts, rig, by);
-    store.rigHistory.add(rig, "drain", true, "at its deadline the owner chose to go ahead now");
+    await store.rigHistory.add(
+      rig,
+      "drain",
+      true,
+      "at its deadline the owner chose to go ahead now",
+    );
     const done = r.pending
       ? await setClusterRigResources(parts, rig, {}, by, { wait: false, owner: true })
       : await updateRigImages(parts, rig, by, { wait: false });
@@ -122,13 +144,18 @@ export async function chooseAtDeadline(
   }
   if (!d) return { error: `${rig} is not draining.` };
   if (choice === "end") {
-    issueCommand(store, parts.privateKeyPem, {
+    await issueCommand(store, parts.privateKeyPem, {
       rig,
       kind: "drain_rig",
       payload: { drain: false, reason: "the owner ended the drain at its deadline" },
       issuedBy: by,
     });
-    store.rigHistory.add(rig, "drain", true, "ended by the owner at its deadline: back to work");
+    await store.rigHistory.add(
+      rig,
+      "drain",
+      true,
+      "ended by the owner at its deadline: back to work",
+    );
     return { ok: `${rig} goes back to work.` };
   }
   const open = d.open ?? [];
@@ -137,14 +164,14 @@ export async function chooseAtDeadline(
       ok: `${rig} runs no trial now${d.judge_jobs ? ": the judge's job under way ends as it would" : ""}. It still drains, for your change.`,
     };
   for (const t of open)
-    issueCommand(store, parts.privateKeyPem, {
+    await issueCommand(store, parts.privateKeyPem, {
       rig,
       kind: "stop_trial",
       payload: { run: t.run, trial: t.trial, reason: "the drain reached its deadline" },
       issuedBy: by,
     });
   const n = open.length === 1 ? "1 trial" : `${open.length} trials`;
-  store.rigHistory.add(rig, "drain", true, `at its deadline the owner stopped ${n}`);
+  await store.rigHistory.add(rig, "drain", true, `at its deadline the owner stopped ${n}`);
   return {
     ok: `${n} of ${rig} stop${open.length === 1 ? "s" : ""} now, each with its task back in its run's queue. It still drains, for your change.`,
   };
@@ -166,10 +193,13 @@ export function watchDrains(parts: ControlParts, everyMs = DRAIN_WATCH_MS): void
    * before the drain took effect and reach control after the ask was taken.
    */
   const undrained = new Map<string, { ask: string; seen: string }>();
-  const redrain = (rig: string) => {
-    const last = store.commands.latest(rig, "drain_rig", 1)[0];
+  // The last ask is read and the new one issued in one transaction: the owner's cancel between
+  // the two is not followed by a new drain.
+  const redrain = async (rig: string) => store.tx(() => redrainNow(rig));
+  const redrainNow = async (rig: string) => {
+    const last = (await store.commands.latest(rig, "drain_rig", 1))[0];
     if (last?.payload.drain !== true || last.status === "pending" || !last.acked_at) return;
-    const seen = store.reportedRigs.list().find((x) => x.id === rig)?.last_seen;
+    const seen = (await store.reportedRigs.list()).find((x) => x.id === rig)?.last_seen;
     if (!seen || Date.parse(seen) <= Date.parse(last.acked_at)) return;
     const first = undrained.get(rig);
     if (first?.ask !== last.id) {
@@ -178,16 +208,16 @@ export function watchDrains(parts: ControlParts, everyMs = DRAIN_WATCH_MS): void
     }
     if (first.seen === seen) return;
     undrained.delete(rig);
-    issueCommand(store, parts.privateKeyPem, {
+    await issueCommand(store, parts.privateKeyPem, {
       rig,
       kind: "drain_rig",
       payload: {
         drain: true,
-        reason: store.clusters.rig(rig)?.pending ? RESIZE_REASON : IMAGES_REASON,
+        reason: (await store.clusters.rig(rig))?.pending ? RESIZE_REASON : IMAGES_REASON,
       },
       issuedBy: "control:drain",
     });
-    store.rigHistory.add(
+    await store.rigHistory.add(
       rig,
       "drain",
       true,
@@ -195,16 +225,25 @@ export function watchDrains(parts: ControlParts, everyMs = DRAIN_WATCH_MS): void
     );
   };
   const moving = new Set<string>();
-  every(parts.loops, "control", "drains", everyMs, () => {
-    for (const u of store.reportedRigs.list()) noteDeadline(parts, u.id);
-    for (const r of store.clusters.rigs().filter((x) => x.status === "draining")) {
+  every(parts.loops, "control", "drains", everyMs, async () => {
+    for (const u of await store.reportedRigs.list()) await noteDeadline(parts, u.id);
+    for (const r of (await store.clusters.rigs()).filter((x) => x.status === "draining")) {
       if (moving.has(r.rig)) continue;
-      const w = rigWork(parts, r.rig);
-      if (w && w.draining === null) redrain(r.rig);
+      const w = await rigWork(parts, r.rig);
+      if (w && w.draining === null) await redrain(r.rig);
       else undrained.delete(r.rig);
       if (!w || w.draining === null || w.trials > 0 || w.judge_jobs > 0) continue;
-      store.rigHistory.add(r.rig, "drain", true, "nothing runs any more: its pods restart now");
+      // Looked at again: this round waited for the store since its first look, and rounds may
+      // overlap. The rig is noted as moving before the next wait.
+      if (moving.has(r.rig)) continue;
       moving.add(r.rig);
+      try {
+        const now = "nothing runs any more: its pods restart now";
+        await store.rigHistory.add(r.rig, "drain", true, now);
+      } catch (err) {
+        moving.delete(r.rig);
+        throw err;
+      }
       const move = r.pending
         ? applyResize(parts, r.rig, r.pending, "control:drain")
         : updateRigImages(parts, r.rig, "control:drain", { wait: false });

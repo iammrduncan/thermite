@@ -27,6 +27,9 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "a11y": {
         "noLabelWithoutControl": {
           "level": "error",

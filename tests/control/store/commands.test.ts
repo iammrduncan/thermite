@@ -3,7 +3,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { ControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import {
+  type ControlStore,
+  openControlStore,
+  STORE_VERSION,
+} from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import { McpUses } from "../../../src/core/mcp.ts";
 
@@ -15,7 +20,11 @@ import { McpUses } from "../../../src/core/mcp.ts";
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "thermite-store-")), "control.db");
 const version = (store: ControlStore) =>
-  (store.db.prepare("select max(version) as v from schema_migrations").get() as { v: number }).v;
+  (
+    sqliteBehind(store).db.prepare("select max(version) as v from schema_migrations").get() as {
+      v: number;
+    }
+  ).v;
 const minutes = (n: number) => new Date(Date.now() + n * 60_000).toISOString();
 
 let made = 0;
@@ -113,8 +122,8 @@ function commands(): [SignedCommand | string, string, number?][] {
 function keepOld(store: ControlStore, rows: [SignedCommand | string, string, number?][]): void {
   for (const [i, [c, status, ago]] of rows.entries()) {
     const e = typeof c === "string" ? undefined : c.envelope;
-    store.db
-      .prepare(
+    sqliteBehind(store)
+      .db.prepare(
         "insert into command (id, rig, kind, signed, issued_by, issued_at, status, acked_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
@@ -131,20 +140,23 @@ function keepOld(store: ControlStore, rows: [SignedCommand | string, string, num
 }
 
 /** Each row through enqueue, then brought to its status. */
-function enqueueAll(store: ControlStore, rows: [SignedCommand | string, string, number?][]): void {
+async function enqueueAll(
+  store: ControlStore,
+  rows: [SignedCommand | string, string, number?][],
+): Promise<void> {
   for (const [c, status, ago] of rows) {
     if (typeof c === "string") continue;
-    store.commands.enqueue(c);
-    store.db
-      .prepare("update command set status = ?, acked_at = ? where id = ?")
+    await store.commands.enqueue(c);
+    sqliteBehind(store)
+      .db.prepare("update command set status = ?, acked_at = ? where id = ?")
       .run(status, ago === undefined ? null : minutes(-ago), c.envelope.id);
   }
 }
 
 /** A store at schema 12, as this goal's step 4 left it before the columns. */
 function storeAtTwelve(path: string): ControlStore {
-  const store = new ControlStore(path);
-  store.db.exec(`drop index command_run;
+  const store = openControlStore(path);
+  sqliteBehind(store).db.exec(`drop index command_run;
     drop index command_campaign;
     alter table command drop column run;
     alter table command drop column campaign;
@@ -169,8 +181,8 @@ function namedInJson(signed: string): { run: string | null; campaign: string | n
 /** The readers as they read each command's JSON before the columns (goal 168, step 4). */
 const byJson = {
   latestAssignments(store: ControlStore) {
-    const rows = store.db
-      .prepare(
+    const rows = sqliteBehind(store)
+      .db.prepare(
         "select id, rig, signed, issued_at from command where kind = 'assign_campaign' and status in ('pending', 'delivered') order by issued_at desc",
       )
       .all() as { id: string; rig: string; signed: string; issued_at: string }[];
@@ -195,8 +207,8 @@ const byJson = {
   },
   assignedMcpServers(store: ControlStore, rig: string) {
     const out = new Map<string, unknown>();
-    for (const r of store.db
-      .prepare(
+    for (const r of sqliteBehind(store)
+      .db.prepare(
         "select signed from command where rig = ? and kind = 'assign_campaign' and status not in ('failed', 'rejected', 'expired') order by issued_at",
       )
       .all(rig) as { signed: string }[]) {
@@ -212,13 +224,13 @@ const byJson = {
     }
     return out;
   },
-  pendingStarts(store: ControlStore, campaign: string) {
+  async pendingStarts(store: ControlStore, campaign: string) {
     const now = Date.now();
     const out: { rig: string; run: string; kind: string }[] = [];
     const assigned = new Map<string, Map<string, string>>();
     const since = new Date(now - 10 * 60_000).toISOString();
-    for (const r of store.db
-      .prepare(
+    for (const r of sqliteBehind(store)
+      .db.prepare(
         `select rig, kind, status, signed from command where kind in ('assign_campaign', 'resume_run')
            and (status = 'pending' or (status = 'delivered' and kind = 'assign_campaign' and acked_at > ?))
          order by issued_at`,
@@ -237,15 +249,15 @@ const byJson = {
       const run = typeof env.payload?.run === "string" ? env.payload.run : "";
       if (!run) continue;
       if (r.status === "pending" && Date.parse(env.expires_at ?? "") < now) continue;
-      if (r.status === "delivered" && store.runRegistry.campaignOf(run, rig) !== undefined)
+      if (r.status === "delivered" && (await store.runRegistry.campaignOf(run, rig)) !== undefined)
         continue;
       let of: string | undefined;
       if (r.kind === "assign_campaign") {
         const named = env.payload?.contract?.campaign;
         of = typeof named === "string" ? named : undefined;
       } else {
-        if (!assigned.has(rig)) assigned.set(rig, store.runRegistry.assignedCampaigns(rig));
-        of = assigned.get(rig)?.get(run) ?? store.runRegistry.campaignOf(run, rig);
+        if (!assigned.has(rig)) assigned.set(rig, await store.runRegistry.assignedCampaigns(rig));
+        of = assigned.get(rig)?.get(run) ?? (await store.runRegistry.campaignOf(run, rig));
       }
       if (of === campaign) out.push({ rig, run, kind: String(r.kind) });
     }
@@ -254,17 +266,17 @@ const byJson = {
 };
 
 describe("each command's run and campaign, in columns of their own", () => {
-  test("the migration fills them from each command's JSON, on a store at schema 12", () => {
+  test("the migration fills them from each command's JSON, on a store at schema 12", async () => {
     const path = fresh();
     const twelve = storeAtTwelve(path);
     const rows = commands();
     keepOld(twelve, rows);
-    twelve.db.close();
+    await twelve.close();
 
-    const store = new ControlStore(path);
+    const store = openControlStore(path);
     assert.equal(version(store), STORE_VERSION);
-    const kept = store.db
-      .prepare("select id, signed, run, campaign from command order by issued_at")
+    const kept = sqliteBehind(store)
+      .db.prepare("select id, signed, run, campaign from command order by issued_at")
       .all() as { id: string; signed: string; run: string | null; campaign: string | null }[];
     assert.equal(kept.length, rows.length);
     for (const r of kept)
@@ -277,21 +289,23 @@ describe("each command's run and campaign, in columns of their own", () => {
       ["sort-1", "sort-speed"],
     );
     assert.ok(kept.some((r) => r.run === null && r.signed === "{"));
-    const indexes = store.db
-      .prepare("select name from sqlite_master where type = 'index' and tbl_name = 'command'")
+    const indexes = sqliteBehind(store)
+      .db.prepare("select name from sqlite_master where type = 'index' and tbl_name = 'command'")
       .all()
       .map((r) => (r as { name: string }).name);
     assert.ok(
       indexes.includes("command_run") && indexes.includes("command_campaign"),
       `${indexes}`,
     );
-    store.db.close();
+    await store.close();
   });
 
-  test("enqueue writes them, as the migration reads them", () => {
-    const store = new ControlStore(":memory:");
-    enqueueAll(store, commands());
-    const kept = store.db.prepare("select signed, run, campaign from command").all() as {
+  test("enqueue writes them, as the migration reads them", async () => {
+    const store = openControlStore(":memory:");
+    await enqueueAll(store, commands());
+    const kept = sqliteBehind(store)
+      .db.prepare("select signed, run, campaign from command")
+      .all() as {
       signed: string;
       run: string | null;
       campaign: string | null;
@@ -301,42 +315,48 @@ describe("each command's run and campaign, in columns of their own", () => {
       assert.deepEqual({ run: r.run, campaign: r.campaign }, namedInJson(r.signed), r.signed);
   });
 
-  test("each reader by run or campaign answers as the commands' JSON did", () => {
+  test("each reader by run or campaign answers as the commands' JSON did", async () => {
     const path = fresh();
     const twelve = storeAtTwelve(path);
     // Half kept before the columns, filled by the migration; half through enqueue after it.
     const rows = commands();
     keepOld(twelve, rows.slice(0, 14));
-    twelve.db.close();
-    const store = new ControlStore(path);
-    enqueueAll(store, rows.slice(14));
+    await twelve.close();
+    const store = openControlStore(path);
+    await enqueueAll(store, rows.slice(14));
     // A run of matmul a rig reported, so a delivered assignment of it waits no more.
-    store.runRegistry.registerRunCreated("rig-b", "l-1", {
+    await store.runRegistry.registerRunCreated("rig-b", "l-1", {
       kind: "run_created",
       subject: "mm-1",
       body: { campaign: "matmul" },
       at: minutes(-1),
     });
 
-    const latest = store.commands.latestAssignments();
+    const latest = await store.commands.latestAssignments();
     assert.deepEqual(latest, byJson.latestAssignments(store));
     assert.deepEqual([...latest.keys()].sort(), ["blank", "matmul", "numbers", "sort-speed"]);
     for (const rig of ["rig-a", "rig-b", "rig-c"])
       assert.deepEqual(
-        store.commands.assignedMcpServers(rig, new Set()),
+        await store.commands.assignedMcpServers(rig, new Set()),
         byJson.assignedMcpServers(store, rig),
         rig,
       );
-    assert.deepEqual([...store.commands.assignedMcpServers("rig-a", new Set()).keys()], ["mm-5"]);
+    assert.deepEqual(
+      [...(await store.commands.assignedMcpServers("rig-a", new Set())).keys()],
+      ["mm-5"],
+    );
     // A closed run's servers are no longer handed.
-    assert.deepEqual([...store.commands.assignedMcpServers("rig-a", new Set(["mm-5"])).keys()], []);
+    assert.deepEqual(
+      [...(await store.commands.assignedMcpServers("rig-a", new Set(["mm-5"]))).keys()],
+      [],
+    );
     for (const campaign of ["sort-speed", "matmul", "numbers", "blank", "7", "none"])
       assert.deepEqual(
-        store.commands.pendingStarts(campaign),
-        byJson.pendingStarts(store, campaign),
+        await store.commands.pendingStarts(campaign),
+        await byJson.pendingStarts(store, campaign),
         campaign,
       );
-    assert.ok(store.commands.pendingStarts("sort-speed").length >= 2);
-    store.db.close();
+    assert.ok((await store.commands.pendingStarts("sort-speed")).length >= 2);
+    await store.close();
   });
 });

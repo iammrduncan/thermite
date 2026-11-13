@@ -40,31 +40,40 @@ export type KbNoteOutcome =
   | { ok: false; error: string };
 
 /** Writes the owner's note on the item at `address`; `by` is who wrote it, for the audit log. */
-export function writeOwnerNote(store: ControlStore, n: KbNoteQuery, by: string): KbNoteOutcome {
+export async function writeOwnerNote(
+  store: ControlStore,
+  n: KbNoteQuery,
+  by: string,
+): Promise<KbNoteOutcome> {
   const kb = store.kb();
-  const x = kb.at(n.address);
-  if (!x) return { ok: false, error: `the knowledge base has no item ${n.address}` };
-  const next = kb.nextItem(x, KB_OWNER);
-  const first = n.text.split("\n")[0]?.trim() ?? "";
-  const title = n.title ?? (first.length > 120 ? `${first.slice(0, 119)}…` : first);
-  const body = KbItemBody.safeParse({
-    slot: KB_OWNER,
-    item: next,
-    version: 1,
-    kind: "note",
-    title,
-    text: n.text,
-    links: [{ rel: "follows", to: n.address }],
+  // The note's number is the next one of its slot: read and written in one transaction, so two
+  // notes at once do not take the same number.
+  const written = await store.tx(async () => {
+    const x = await kb.at(n.address);
+    if (!x) return { ok: false as const, error: `the knowledge base has no item ${n.address}` };
+    const next = await kb.nextItem(x, KB_OWNER);
+    const first = n.text.split("\n")[0]?.trim() ?? "";
+    const title = n.title ?? (first.length > 120 ? `${first.slice(0, 119)}…` : first);
+    const body = KbItemBody.safeParse({
+      slot: KB_OWNER,
+      item: next,
+      version: 1,
+      kind: "note",
+      title,
+      text: n.text,
+      links: [{ rel: "follows", to: n.address }],
+    });
+    if (!body.success)
+      return { ok: false as const, error: body.error.issues.map((i) => i.message).join("; ") };
+    const at = new Date().toISOString();
+    const refused = await kb.write({ rig: x.rig, ledger: x.ledger, run: x.run, at }, body.data);
+    if (refused) return { ok: false as const, error: refused };
+    return { x, next };
   });
-  if (!body.success)
-    return { ok: false, error: body.error.issues.map((i) => i.message).join("; ") };
-  const at = new Date().toISOString();
-  const refused = store.tx(() =>
-    kb.write({ rig: x.rig, ledger: x.ledger, run: x.run, at }, body.data),
-  );
-  if (refused) return { ok: false, error: refused };
+  if (written.ok === false) return { ok: false, error: written.error };
+  const { x, next } = written;
   const address = kbAddress({ ...x, slot: KB_OWNER, kind: "note", ref: String(next) });
-  store.auditLog.add(by, "kb_note", { address, follows: n.address });
+  await store.auditLog.add(by, "kb_note", { address, follows: n.address });
   return {
     ok: true,
     address,

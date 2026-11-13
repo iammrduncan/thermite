@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { copyCampaign } from "../../../../../src/control/campaigns/copy.ts";
-import { ControlStore } from "../../../../../src/control/store/index.ts";
+import { openControlStore } from "../../../../../src/control/store/index.ts";
 import { COPY_CORE_JS, COPY_JS } from "../../../../../src/control/ui/campaigns/copy/client.ts";
 import { suggestCopyName } from "../../../../../src/control/ui/campaigns/copy/index.ts";
 import { parseContract } from "../../../../../src/core/contract.ts";
@@ -71,9 +71,9 @@ describe("the Copy panel's script (goal 069)", () => {
     assert.equal(core.nameCheck("!!!", TAKEN, []).fix, "");
   });
 
-  test("the script refuses what control refuses, and lets through what control copies", () => {
+  test("the script refuses what control refuses, and lets through what control copies", async () => {
     // Control is the judge of names: the same name, the same answer.
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const example = JSON.parse(
       readFileSync(
         join(import.meta.dirname, "../../../../../examples/contracts/goal-example.json"),
@@ -82,7 +82,7 @@ describe("the Copy panel's script (goal 069)", () => {
     ) as Record<string, unknown>;
     const src = parseContract({ ...example, campaign: "src", version: 1 });
     assert.ok(src.ok);
-    store.campaigns.put({
+    await store.campaigns.put({
       campaign: "src",
       version: 1,
       contract: src.contract,
@@ -92,7 +92,12 @@ describe("the Copy panel's script (goal 069)", () => {
     });
     for (const name of ["ok-name", "Bad", "rig-check-x", "src", "a".repeat(64), "a".repeat(65)]) {
       const panel = core.nameCheck(name, ["src"], []);
-      const control = copyCampaign(store, { from: "src", name }, "owner:test", new Set(["src"]));
+      const control = await copyCampaign(
+        store,
+        { from: "src", name },
+        "owner:test",
+        new Set(["src"]),
+      );
       if (control.state === "refused") {
         assert.equal(panel.ok, false, name);
         assert.equal(panel.say, control.error, name);

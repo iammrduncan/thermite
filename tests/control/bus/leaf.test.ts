@@ -16,7 +16,8 @@ import {
 } from "../../../src/control/bus/leaf.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import {
   fromEnvLine,
@@ -55,31 +56,31 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
     assert.ok(!pod.checkIssued(new X509Certificate(again.podCa)));
   });
 
-  test("a launch gives the pod its leaf with control's authority, and none launches without it; control keeps the pod's authority, never its key", () => {
-    const store = new ControlStore(":memory:");
+  test("a launch gives the pod its leaf with control's authority, and none launches without it; control keeps the pod's authority, never its key", async () => {
+    const store = openControlStore(":memory:");
     const control = makeCa(new Date(), 30);
     const keys = generateSigningKeys();
     const tunnels = new ControlTunnels(store, SecretBox.ephemeral(), keys.privateKeyPem, {
       busCa: control.cert,
     });
-    const minted = tunnels.mint({ by: "owner:ui", rig: "rp-1" });
+    const minted = await tunnels.mint({ by: "owner:ui", rig: "rp-1" });
     for (const name of Object.values(LEAF_ENV)) assert.ok(minted.env[name], name);
-    const kept = store.tunnels.get("rp-1");
+    const kept = await store.tunnels.get("rp-1");
     assert.ok(kept?.leaf_ca && kept.leaf_address === null);
-    const dump = JSON.stringify(store.db.prepare("select * from tunnel_rig").all());
+    const dump = JSON.stringify(sqliteBehind(store).db.prepare("select * from tunnel_rig").all());
     assert.ok(!dump.includes("PRIVATE KEY") && !dump.includes(minted.env[LEAF_ENV.key] ?? "?"));
     // Without control's authority, no pod: it could not join the bus.
     const plain = new ControlTunnels(store, SecretBox.ephemeral(), keys.privateKeyPem);
-    assert.throws(
-      () => plain.mint({ by: "owner:ui", rig: "rp-2" }),
+    await assert.rejects(
+      async () => plain.mint({ by: "owner:ui", rig: "rp-2" }),
       /control has no authority for its message bus/,
     );
-    assert.equal(store.tunnels.get("rp-2"), undefined);
-    store.db.close();
+    assert.equal(await store.tunnels.get("rp-2"), undefined);
+    await store.close();
   });
 
-  test("the pod's address: kept when it changes, with a step in the rig's history, and cleared while the pod has none", () => {
-    const store = new ControlStore(":memory:");
+  test("the pod's address: kept when it changes, with a step in the rig's history, and cleared while the pod has none", async () => {
+    const store = openControlStore(":memory:");
     const tunnels = new ControlTunnels(
       store,
       SecretBox.ephemeral(),
@@ -88,19 +89,25 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
         busCa: makeCa(new Date(), 30).cert,
       },
     );
-    tunnels.mint({ by: "owner:ui", rig: "rp-1" });
-    assert.equal(store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123"), true);
-    assert.equal(store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123"), false, "the same");
-    assert.equal(store.tunnels.setLeafAddress("rp-1", null), true, "stopped");
-    assert.equal(store.tunnels.get("rp-1")?.leaf_address, null);
-    assert.equal(store.tunnels.setLeafAddress("rp-1", "198.51.100.7:41000"), true);
-    const steps = store.rigHistory.list("rp-1").filter((e) => e.step === "runpod_leaf_address");
+    await tunnels.mint({ by: "owner:ui", rig: "rp-1" });
+    assert.equal(await store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123"), true);
+    assert.equal(
+      await store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123"),
+      false,
+      "the same",
+    );
+    assert.equal(await store.tunnels.setLeafAddress("rp-1", null), true, "stopped");
+    assert.equal((await store.tunnels.get("rp-1"))?.leaf_address, null);
+    assert.equal(await store.tunnels.setLeafAddress("rp-1", "198.51.100.7:41000"), true);
+    const steps = (await store.rigHistory.list("rp-1")).filter(
+      (e) => e.step === "runpod_leaf_address",
+    );
     assert.deepEqual(
       steps.map((e) => e.detail),
       ["203.0.113.5:40123", "198.51.100.7:41000"],
     );
     // A rig launched before the leaf node, as an older store holds it, keeps no address.
-    store.tunnels.add({
+    await store.tunnels.add({
       rig: "rp-2",
       port: 8790,
       prefix_sealed: "x",
@@ -112,18 +119,18 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
       created_by: "owner:ui",
       leaf_ca: null,
     });
-    assert.equal(store.tunnels.setLeafAddress("rp-2", "203.0.113.9:4000"), false);
-    store.db.close();
+    assert.equal(await store.tunnels.setLeafAddress("rp-2", "203.0.113.9:4000"), false);
+    await store.close();
   });
 
   test("the users file names a leaf rig's account from its launch, and its pod only once the server took the account in an earlier reload; retired, both go", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-leaf-"));
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
     const tunnels = new ControlTunnels(store, secrets, generateSigningKeys().privateKeyPem, {
       busCa: makeCa(new Date(), 30).cert,
     });
-    tunnels.mint({ by: "owner:ui", rig: "rp-1" });
+    await tunnels.mint({ by: "owner:ui", rig: "rp-1" });
     const reloaded: string[] = [];
     const file = () => readFileSync(join(dir, "users.conf"), "utf8");
     const options = {
@@ -134,15 +141,15 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
         reloaded.push(file());
       },
     };
-    const users = new BusUsers(options);
+    const users = await BusUsers.open(options);
     await users.sync();
     assert.match(file(), new RegExp(`"${leafAccount("rp-1")}"`), "its account from the launch");
     assert.doesNotMatch(file(), /leafnodes/, "no address yet: no connection");
     assert.equal(
       readFileSync(join(dir, leafCaFile("rp-1")), "utf8"),
-      store.tunnels.get("rp-1")?.leaf_ca,
+      (await store.tunnels.get("rp-1"))?.leaf_ca,
     );
-    store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123");
+    await store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123");
     await users.sync();
     assert.match(file(), /"tls:\/\/203\.0\.113\.5:40123"/);
     assert.match(file(), new RegExp(`"${join(BUS_SERVER_DIR, leafCaFile("rp-1"))}"`));
@@ -157,8 +164,8 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
     ]);
 
     // A second rig whose address is there before its account: the account first, then its pod.
-    tunnels.mint({ by: "owner:ui", rig: "rp-2" });
-    store.tunnels.setLeafAddress("rp-2", "203.0.113.6:40124");
+    await tunnels.mint({ by: "owner:ui", rig: "rp-2" });
+    await store.tunnels.setLeafAddress("rp-2", "203.0.113.6:40124");
     await users.sync();
     await users.sync();
     const two = reloaded.slice(2).map((t) => ({
@@ -172,20 +179,20 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
 
     // Control started again: it reads which accounts the server has from the file, and keeps
     // their pods, with no reload.
-    const again = new BusUsers(options);
+    const again = await BusUsers.open(options);
     const before = reloaded.length;
-    assert.equal(again.text(), file());
-    store.retired.add("rp-1", "owner:ui");
-    store.retired.add("rp-2", "owner:ui");
+    assert.equal(await again.text(), file());
+    await store.retired.add("rp-1", "owner:ui");
+    await store.retired.add("rp-2", "owner:ui");
     await again.sync();
     assert.doesNotMatch(file(), /leafnodes|LEAF_rp/);
     assert.ok(!existsSync(join(dir, leafCaFile("rp-1"))), "its authority's file goes too");
     assert.equal(reloaded.length, before + 1);
-    store.db.close();
+    await store.close();
   });
 
-  test("the leaf rigs as the users file names them: the server's own paths, and the runs each rig has", () => {
-    const store = new ControlStore(":memory:");
+  test("the leaf rigs as the users file names them: the server's own paths, and the runs each rig has", async () => {
+    const store = openControlStore(":memory:");
     const tunnels = new ControlTunnels(
       store,
       SecretBox.ephemeral(),
@@ -194,9 +201,9 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
         busCa: makeCa(new Date(), 30).cert,
       },
     );
-    tunnels.mint({ by: "owner:ui", rig: "rp-1" });
-    store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123");
-    const named = leafRigsFor(store, leafRigsOf(store));
+    await tunnels.mint({ by: "owner:ui", rig: "rp-1" });
+    await store.tunnels.setLeafAddress("rp-1", "203.0.113.5:40123");
+    const named = await leafRigsFor(store, await leafRigsOf(store));
     assert.deepEqual(named.rigs, [
       {
         rig: "rp-1",
@@ -207,7 +214,7 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
     ]);
     assert.equal(named.certFile, join(BUS_SERVER_DIR, "server-cert.pem"));
     assert.equal(named.keyFile, join(BUS_SERVER_DIR, "server-key.pem"));
-    store.db.close();
+    await store.close();
   });
 
   test("an authority's file is written only when it changed, and one that is no certificate is refused", () => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { ControlStore } from "../store/index.ts";
 import { campaignKnown, campaignViews, type RigView } from "../views/index.ts";
 
@@ -31,14 +32,18 @@ export type ShelfOutcome<T> =
 const refused = (error: string, status: 400 | 404 | 409) => ({ ok: false, error, status }) as const;
 
 /** Why a folder's name can't be used, in words, or "". `self`: the folder being renamed. */
-export function folderNameRefusal(store: ControlStore, name: string, self?: number): string {
+export async function folderNameRefusal(
+  store: ControlStore,
+  name: string,
+  self?: number,
+): Promise<string> {
   const n = name.trim();
   if (!n) return "Give the folder a name.";
   if (n.length > FOLDER_NAME_MAX)
     return `A folder's name is at most ${FOLDER_NAME_MAX} characters.`;
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it refuses
   if (/[\u0000-\u001f\u007f]/.test(n)) return "A folder's name is one line of text.";
-  const taken = store.folders.get(n);
+  const taken = await store.folders.get(n);
   if (taken && taken.id !== self) return `There is a folder named ${taken.name} already.`;
   return "";
 }
@@ -47,7 +52,11 @@ export function folderNameRefusal(store: ControlStore, name: string, self?: numb
  * Why a campaign can't be archived now, in words, or "": a run of it at work, or one control sent a
  * rig to start or resume that the rig has not taken yet.
  */
-export function archiveRefusal(store: ControlStore, vs: RigView[], campaign: string): string {
+export async function archiveRefusal(
+  store: ControlStore,
+  vs: RigView[],
+  campaign: string,
+): Promise<string> {
   const k = campaignViews(vs).find((x) => x.name === campaign);
   const lines = (k?.runs ?? [])
     .filter((x) => x.run.status === "running")
@@ -56,7 +65,7 @@ export function archiveRefusal(store: ControlStore, vs: RigView[], campaign: str
       run: x.run.id,
       words: `${x.run.id} is at work on ${x.rig.id}.`,
     }));
-  for (const p of store.commands.pendingStarts(campaign))
+  for (const p of await store.commands.pendingStarts(campaign))
     if (!lines.some((l) => l.rig === p.rig && l.run === p.run))
       lines.push({ ...p, words: `${p.run} waits to start on ${p.rig}.` });
   if (!lines.length) return "";
@@ -66,8 +75,8 @@ export function archiveRefusal(store: ControlStore, vs: RigView[], campaign: str
 }
 
 /** Whether control knows a campaign by this name: from a rig's report, a saved version, an assignment or the knowledge base. */
-const knows = (store: ControlStore, campaign: string) =>
-  campaignKnown(store, campaign) || store.archive.get(campaign) !== undefined;
+const knows = async (store: ControlStore, campaign: string) =>
+  (await campaignKnown(store, campaign)) || (await store.archive.get(campaign)) !== undefined;
 
 export interface ArchiveAnswer {
   campaign: string;
@@ -82,34 +91,36 @@ export interface ArchiveAnswer {
 }
 
 /** Archives a campaign, or says in words why not. */
-export function archiveCampaign(
+export async function archiveCampaign(
   store: ControlStore,
   vs: RigView[],
   campaign: string,
   by: string,
-): ShelfOutcome<ArchiveAnswer> {
-  if (!knows(store, campaign)) return refused(`Control has no campaign named ${campaign}.`, 404);
-  const folder = store.folders.of(campaign)?.name ?? null;
-  const was = store.archive.get(campaign);
+): Promise<ShelfOutcome<ArchiveAnswer>> {
+  if (!(await knows(store, campaign)))
+    return refused(`Control has no campaign named ${campaign}.`, 404);
+  const folder = (await store.folders.of(campaign))?.name ?? null;
+  const was = await store.archive.get(campaign);
   if (was)
     return { ok: true, answer: { campaign, archived: true, ...was, folder, changed: false } };
-  const why = archiveRefusal(store, vs, campaign);
+  const why = await archiveRefusal(store, vs, campaign);
   if (why) return refused(why, 409);
-  const now = store.archive.add(campaign, by);
-  store.auditLog.add(by, "campaign_archived", { campaign, folder });
+  const now = await store.archive.add(campaign, by);
+  await store.auditLog.add(by, "campaign_archived", { campaign, folder });
   return { ok: true, answer: { campaign, archived: true, ...now, folder, changed: true } };
 }
 
 /** Unarchives a campaign: it comes back to the navigation, in the folder it kept. */
-export function unarchiveCampaign(
+export async function unarchiveCampaign(
   store: ControlStore,
   campaign: string,
   by: string,
-): ShelfOutcome<ArchiveAnswer> {
-  if (!knows(store, campaign)) return refused(`Control has no campaign named ${campaign}.`, 404);
-  const folder = store.folders.of(campaign)?.name ?? null;
-  const changed = store.archive.remove(campaign);
-  if (changed) store.auditLog.add(by, "campaign_unarchived", { campaign, folder });
+): Promise<ShelfOutcome<ArchiveAnswer>> {
+  if (!(await knows(store, campaign)))
+    return refused(`Control has no campaign named ${campaign}.`, 404);
+  const folder = (await store.folders.of(campaign))?.name ?? null;
+  const changed = await store.archive.remove(campaign);
+  if (changed) await store.auditLog.add(by, "campaign_unarchived", { campaign, folder });
   return { ok: true, answer: { campaign, archived: false, at: null, by: null, folder, changed } };
 }
 
@@ -120,7 +131,9 @@ export interface FolderView {
   created_by: string;
 }
 
-const folderView = (f: ReturnType<ControlStore["folders"]["list"]>[number]): FolderView => ({
+const folderView = (
+  f: Awaited<ReturnType<ControlStore["folders"]["list"]>>[number],
+): FolderView => ({
   name: f.name,
   campaigns: f.campaigns,
   created_at: f.created_at,
@@ -131,30 +144,30 @@ const folderView = (f: ReturnType<ControlStore["folders"]["list"]>[number]): Fol
  * The navigation's folders, each with its campaigns (archived ones too: they keep their folder),
  * and the archived campaigns, each with the folder it keeps.
  */
-export function campaignFoldersAnswer(store: ControlStore): {
+export async function campaignFoldersAnswer(store: ControlStore): Promise<{
   folders: FolderView[];
   archived: { campaign: string; at: string; by: string; folder: string | null }[];
-} {
-  const folders = store.folders.list();
+}> {
+  const folders = await store.folders.list();
   const of = (c: string) => folders.find((f) => f.campaigns.includes(c))?.name ?? null;
   return {
     folders: folders.map(folderView),
-    archived: store.archive.list().map((a) => ({ ...a, folder: of(a.campaign) })),
+    archived: (await store.archive.list()).map((a) => ({ ...a, folder: of(a.campaign) })),
   };
 }
 
 /** Makes a folder in the navigation. */
-export function createFolder(
+export async function createFolder(
   store: ControlStore,
   name: string,
   by: string,
-): ShelfOutcome<{ folder: FolderView }> {
+): Promise<ShelfOutcome<{ folder: FolderView }>> {
   const n = name.trim();
-  const why = folderNameRefusal(store, n);
+  const why = await folderNameRefusal(store, n);
   if (why) return refused(why, why.startsWith("There is") ? 409 : 400);
-  store.folders.add(n, by);
-  store.auditLog.add(by, "campaign_folder_created", { folder: n });
-  const f = store.folders.list().find((x) => x.name === n);
+  await store.folders.add(n, by);
+  await store.auditLog.add(by, "campaign_folder_created", { folder: n });
+  const f = (await store.folders.list()).find((x) => x.name === n);
   return {
     ok: true,
     answer: {
@@ -164,23 +177,23 @@ export function createFolder(
 }
 
 /** Renames a folder of the navigation. */
-export function renameFolder(
+export async function renameFolder(
   store: ControlStore,
   folder: string,
   name: string,
   by: string,
-): ShelfOutcome<{ folder: FolderView; was: string; changed: boolean }> {
-  const f = store.folders.get(folder);
+): Promise<ShelfOutcome<{ folder: FolderView; was: string; changed: boolean }>> {
+  const f = await store.folders.get(folder);
   if (!f) return refused(`There is no folder named ${folder}.`, 404);
   const n = name.trim();
-  const why = folderNameRefusal(store, n, f.id);
+  const why = await folderNameRefusal(store, n, f.id);
   if (why) return refused(why, why.startsWith("There is") ? 409 : 400);
   const changed = n !== f.name;
   if (changed) {
-    store.folders.rename(f.id, n);
-    store.auditLog.add(by, "campaign_folder_renamed", { folder: f.name, name: n });
+    await store.folders.rename(f.id, n);
+    await store.auditLog.add(by, "campaign_folder_renamed", { folder: f.name, name: n });
   }
-  const now = store.folders.list().find((x) => x.id === f.id);
+  const now = (await store.folders.list()).find((x) => x.id === f.id);
   return {
     ok: true,
     answer: {
@@ -195,24 +208,26 @@ export function renameFolder(
  * Deletes an empty folder of the navigation; one with campaigns in it is refused in words, and an
  * archived one, which the navigation leaves out, is named as archived.
  */
-export function deleteFolder(
+export async function deleteFolder(
   store: ControlStore,
   folder: string,
   by: string,
-): ShelfOutcome<{ deleted: string }> {
-  const f = store.folders.list().find((x) => x.name.toLowerCase() === folder.toLowerCase());
+): Promise<ShelfOutcome<{ deleted: string }>> {
+  const f = (await store.folders.list()).find((x) => x.name.toLowerCase() === folder.toLowerCase());
   if (!f) return refused(`There is no folder named ${folder}.`, 404);
   const n = f.campaigns.length;
   if (n) {
-    const named = f.campaigns.map((c) => (store.archive.get(c) ? `${c} (archived)` : c));
+    const named = await mapInTurn(f.campaigns, async (c) =>
+      (await store.archive.get(c)) ? `${c} (archived)` : c,
+    );
     const list = named.slice(0, 5).join(", ") + (n > 5 ? ` and ${n - 5} more` : "");
     return refused(
       `${f.name} is not empty. Move its ${n === 1 ? "campaign" : `${n} campaigns`} out first: ${list}.`,
       409,
     );
   }
-  store.folders.delete(f.id);
-  store.auditLog.add(by, "campaign_folder_deleted", { folder: f.name });
+  await store.folders.delete(f.id);
+  await store.auditLog.add(by, "campaign_folder_deleted", { folder: f.name });
   return { ok: true, answer: { deleted: f.name } };
 }
 
@@ -220,20 +235,21 @@ export function deleteFolder(
  * Puts a campaign in a folder of the navigation, or (null or "") in none. An archived campaign
  * may move too: it keeps the new folder, and comes back into it when it is unarchived.
  */
-export function moveCampaign(
+export async function moveCampaign(
   store: ControlStore,
   campaign: string,
   folder: string | null,
   by: string,
-): ShelfOutcome<{ campaign: string; folder: string | null; changed: boolean }> {
-  if (!knows(store, campaign)) return refused(`Control has no campaign named ${campaign}.`, 404);
-  const want = folder?.trim() ? store.folders.get(folder.trim()) : null;
+): Promise<ShelfOutcome<{ campaign: string; folder: string | null; changed: boolean }>> {
+  if (!(await knows(store, campaign)))
+    return refused(`Control has no campaign named ${campaign}.`, 404);
+  const want = folder?.trim() ? await store.folders.get(folder.trim()) : null;
   if (want === undefined) return refused(`There is no folder named ${folder}.`, 404);
-  const was = store.folders.of(campaign) ?? null;
+  const was = (await store.folders.of(campaign)) ?? null;
   if ((was?.id ?? null) === (want?.id ?? null))
     return { ok: true, answer: { campaign, folder: want?.name ?? null, changed: false } };
-  store.folders.place(campaign, want?.id ?? null);
-  store.auditLog.add(by, "campaign_moved", {
+  await store.folders.place(campaign, want?.id ?? null);
+  await store.auditLog.add(by, "campaign_moved", {
     campaign,
     folder: want?.name ?? null,
     from: was?.name ?? null,

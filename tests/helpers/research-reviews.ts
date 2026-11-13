@@ -21,7 +21,7 @@ export const at = (h: number) => new Date(t0 + h * 3_600_000).toISOString();
 export type Ev = { kind: string; subject: string; body: Record<string, unknown>; at?: string };
 
 export async function researchControl() {
-  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN } } });
+  const { store, control: api } = await controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN } } });
   const ui = await signIn(api);
   const { page } = ui;
   const mcp = async (tool: string, args: Record<string, unknown>) => {
@@ -533,8 +533,8 @@ export function researchRunEvents(): Ev[] {
 }
 
 /** The supervisor's Live lines for review 3: a failed try, with a line that holds markup. */
-export function reviewLiveLines(store: ControlStore) {
-  store.liveLines.add(
+export async function reviewLiveLines(store: ControlStore) {
+  await store.liveLines.add(
     "rig-a",
     "sup-log",
     [

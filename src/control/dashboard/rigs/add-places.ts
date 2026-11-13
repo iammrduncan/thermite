@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { RIG_ID } from "../../../core/ids.ts";
 import { type ClusterFacts, clusterLine, cudaFor, quantity } from "../../clusters/index.ts";
 import { factsLine, type MachineFacts } from "../../machines/index.ts";
@@ -76,15 +77,13 @@ function clusterNotReady(k: Cluster): string | undefined {
 }
 
 /** A cluster's slots no rig holds, by its core or its runners, but `rig` itself. */
-function freeSlots(store: ControlStore, k: Cluster, rig?: string) {
+async function freeSlots(store: ControlStore, k: Cluster, rig?: string) {
   const f = k.facts as ClusterFacts;
   const held = new Set([
-    ...store.clusters
-      .rigs(k.name)
+    ...(await store.clusters.rigs(k.name))
       .filter((r) => r.status !== "removed" && r.rig !== rig)
       .map((r) => r.namespace),
-    ...store.rigRunners
-      .onCluster(k.name)
+    ...(await store.rigRunners.onCluster(k.name))
       .filter((r) => r.rig !== rig)
       .map((r) => r.namespace),
   ]);
@@ -128,9 +127,9 @@ interface CorePlace {
 }
 
 /** Every place the rig's core can go, a not-ready one with why. */
-export function corePlaces(store: ControlStore): CorePlace[] {
+export async function corePlaces(store: ControlStore): Promise<CorePlace[]> {
   const out: CorePlace[] = [];
-  for (const m of store.machines.list()) {
+  for (const m of await store.machines.list()) {
     const f = m.facts as MachineFacts | null;
     out.push({
       value: `machine:${m.name}`,
@@ -143,7 +142,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
       gpus: f?.gpus.length ?? 0,
     });
   }
-  for (const k of store.clusters.list()) {
+  for (const k of await store.clusters.list()) {
     const why = clusterNotReady(k);
     const f = k.facts as ClusterFacts | null;
     if (why || !f) {
@@ -173,7 +172,7 @@ export function corePlaces(store: ControlStore): CorePlace[] {
       });
       continue;
     }
-    for (const s of freeSlots(store, k)) {
+    for (const s of await freeSlots(store, k)) {
       const q = s.quota;
       const devices = Object.values(q?.devices ?? {}).reduce((a, b) => a + b, 0) + (q?.gpus ?? 0);
       out.push({
@@ -244,13 +243,15 @@ const shortOf = (product: string) =>
  * Every free GPU control knows, grouped by its machine, node or slot, each with its runner's name;
  * for Edit rig, `rig`'s own slots too, and none of its runners' names (`names`: those it reports).
  */
-export function runnerGroups(
+export async function runnerGroups(
   store: ControlStore,
   rig?: string,
   names: string[] = [],
-): (Omit<RunnerGroup, "gpus"> & {
-  gpus: RunnerGpu[];
-})[] {
+): Promise<
+  (Omit<RunnerGroup, "gpus"> & {
+    gpus: RunnerGpu[];
+  })[]
+> {
   const groups = new Map<string, RunnerGroup>();
   const group = (g: Omit<RunnerGroup, "gpus">) => {
     const had = groups.get(g.key);
@@ -259,19 +260,17 @@ export function runnerGroups(
     groups.set(g.key, made);
     return made;
   };
-  for (const m of store.machines.list()) {
+  for (const m of await store.machines.list()) {
     const f = m.facts as MachineFacts | null;
     if (!f?.gpus.length || machineNotReady(m)) continue;
     const toolkit = Boolean(f.nvidia_ctk && f.cdi);
     const rigs = new Map(
-      store.machines
-        .rigs(m.name)
+      (await store.machines.rigs(m.name))
         .filter((r) => r.status !== "removed")
         .flatMap((r) => r.gpus.map((g) => [g, `rig ${r.rig}`] as const)),
     );
     const runners = new Map(
-      store.rigRunners
-        .onCluster(m.name)
+      (await store.rigRunners.onCluster(m.name))
         .filter((r) => r.placement === "machine" && r.spec.gpuIndex !== undefined)
         .map((r) => [r.spec.gpuIndex as number, `runner ${r.runner} of ${r.rig}`] as const),
     );
@@ -300,12 +299,12 @@ export function runnerGroups(
       });
     }
   }
-  for (const k of store.clusters.list()) {
+  for (const k of await store.clusters.list()) {
     const f = k.facts as ClusterFacts | null;
     if (!f || k.check_error) continue;
     const slots =
       k.placement === "slot"
-        ? freeSlots(store, k, rig)
+        ? await freeSlots(store, k, rig)
         : k.placement === "created" && f.can_create_namespaces
           ? [undefined]
           : [];
@@ -334,14 +333,14 @@ export function runnerGroups(
         ? Object.entries(q.devices ?? {}).filter(([c, n]) => n > 0 && f.device_classes.includes(c))
         : Object.keys(f.gpu_classes ?? {}).map((c) => [c, 1]);
       // Less the devices of each class the slot's runners take already.
-      const inUse = (c: string) =>
+      const inUse = async (c: string) =>
         slot
-          ? store.rigRunners
-              .onCluster(k.name)
-              .filter((r) => r.namespace === slot && r.spec.deviceClass === c).length
+          ? (await store.rigRunners.onCluster(k.name)).filter(
+              (r) => r.namespace === slot && r.spec.deviceClass === c,
+            ).length
           : 0;
       for (const [c, all] of classes) {
-        const n = all - inUse(c);
+        const n = all - (await inUse(c));
         const kind = f.gpu_classes?.[c] ?? {};
         const g = kind.node
           ? nodeGroup(kind.node)
@@ -381,7 +380,7 @@ export function runnerGroups(
   // Each runner's name: its node's or machine's, numbered when it has several; else its GPU's.
   const taken = new Set<string>([
     ...names,
-    ...(rig ? store.rigRunners.of(rig).map((r) => r.runner) : []),
+    ...(rig ? (await store.rigRunners.of(rig)).map((r) => r.runner) : []),
   ]);
   const nameOf = (want: string, short: string) => {
     let name = RIG_ID.test(want) && !taken.has(want) ? want : "";
@@ -408,12 +407,12 @@ export function runnerGroups(
 }
 
 /** A runner's GPU as control last read it, for the check that a rig's runners are of one kind. */
-export function productAt(store: ControlStore, at: Place): string {
+export async function productAt(store: ControlStore, at: Place): Promise<string> {
   if (at.kind === "machine") {
-    const f = store.machines.get(at.machine)?.facts as MachineFacts | null | undefined;
+    const f = (await store.machines.get(at.machine))?.facts as MachineFacts | null | undefined;
     return f?.gpus.find((g) => g.index === at.gpu)?.name ?? "";
   }
-  const f = store.clusters.get(at.cluster)?.facts as ClusterFacts | null | undefined;
+  const f = (await store.clusters.get(at.cluster))?.facts as ClusterFacts | null | undefined;
   if (at.mode?.startsWith("dra:")) return f?.gpu_classes?.[at.mode.slice(4)]?.product ?? "";
   return f?.nodes.find((n) => n.name === at.node)?.gpu_product ?? "";
 }
@@ -454,7 +453,7 @@ export function coreRows(places: CorePlace[], wanted: string | undefined): strin
  * row is in the form. Each row sends `runner_new__<n>` (the runner's name, `=`, its place) and
  * `runner_new_pool__<n>`.
  */
-export function runnerPicker(groups: ReturnType<typeof runnerGroups>): string {
+export function runnerPicker(groups: Awaited<ReturnType<typeof runnerGroups>>): string {
   if (!groups.length)
     return `<div class="card"><div class="empty">No free GPU that control knows. Without runners, the rig measures on its core's CPUs.</div></div>`;
   const opt = (v: string, t: string, more = "") =>
@@ -495,9 +494,8 @@ export function runnerPicker(groups: ReturnType<typeof runnerGroups>): string {
  * rig's **Node**; the page's script shows those of the chosen place's cluster. A slot whose rules
  * take pods only on nodes they name needs one.
  */
-export function coreNodeOptions(store: ControlStore): string {
-  return store.clusters
-    .list()
+export async function coreNodeOptions(store: ControlStore): Promise<string> {
+  return (await store.clusters.list())
     .flatMap((k) =>
       ((k.facts as ClusterFacts | null)?.nodes ?? [])
         .filter((n) => n.ready)
@@ -517,50 +515,52 @@ export function coreNodeOptions(store: ControlStore): string {
  * slot, node and way of asking), one tick each, and a rig on a cluster takes its GPUs from one
  * node and one way, which the page's script keeps.
  */
-export function oneMachineGpus(
+export async function oneMachineGpus(
   store: ControlStore,
   places: CorePlace[],
-  groups: ReturnType<typeof runnerGroups>,
-): string {
+  groups: Awaited<ReturnType<typeof runnerGroups>>,
+): Promise<string> {
   const box = (name: string, value: string, label: string, more: string, used?: string) =>
     `<label class="gpu-pick${used ? " dis" : ""}"><input type="checkbox" name="${name}" value="${esc(value)}"${used ? " disabled" : ""}${more}><span><b>${esc(label)}</b></span><span class="muted small">${esc(used ?? "free")}</span></label>`;
-  return places
-    .filter((p) => !p.why)
-    .map((p) => {
-      let rows = "";
-      if (p.value.startsWith("machine:")) {
-        const m = store.machines.get(p.value.slice(8));
-        const f = m?.facts as MachineFacts | null | undefined;
-        const g = groups.find((x) => x.key === p.value);
-        rows = (f?.gpus ?? [])
-          .map((x) => {
-            const used = g?.gpus.find((y) => y.label.startsWith(`GPU ${x.index} ·`))?.used;
-            return box(
-              "gpus",
-              String(x.index),
-              `GPU ${x.index} · ${x.name}`,
-              "",
-              used ?? (g ? undefined : "used by a rig or a runner"),
-            );
-          })
-          .join("");
-      } else {
-        const [k = "", slot = ""] = p.value.slice(8).split("|");
-        rows = groups
-          .filter((g) => g.key.startsWith(`cluster:${k}|${slot}|`))
-          .flatMap((g) =>
-            g.gpus.map((x) =>
-              box(
-                "one_gpu",
-                x.at,
-                `${x.label}${g.named ? ` · on ${g.name}` : ""}`,
-                ` data-offer="${esc(x.at)}"`,
+  return (
+    await mapInTurn(
+      places.filter((p) => !p.why),
+      async (p) => {
+        let rows = "";
+        if (p.value.startsWith("machine:")) {
+          const m = await store.machines.get(p.value.slice(8));
+          const f = m?.facts as MachineFacts | null | undefined;
+          const g = groups.find((x) => x.key === p.value);
+          rows = (f?.gpus ?? [])
+            .map((x) => {
+              const used = g?.gpus.find((y) => y.label.startsWith(`GPU ${x.index} ·`))?.used;
+              return box(
+                "gpus",
+                String(x.index),
+                `GPU ${x.index} · ${x.name}`,
+                "",
+                used ?? (g ? undefined : "used by a rig or a runner"),
+              );
+            })
+            .join("");
+        } else {
+          const [k = "", slot = ""] = p.value.slice(8).split("|");
+          rows = groups
+            .filter((g) => g.key.startsWith(`cluster:${k}|${slot}|`))
+            .flatMap((g) =>
+              g.gpus.map((x) =>
+                box(
+                  "one_gpu",
+                  x.at,
+                  `${x.label}${g.named ? ` · on ${g.name}` : ""}`,
+                  ` data-offer="${esc(x.at)}"`,
+                ),
               ),
-            ),
-          )
-          .join("");
-      }
-      return `<div data-gpus-for="${esc(p.value)}" hidden>${rows ? `<div class="card flat">${rows}</div>` : `<div class="card"><div class="empty">${esc(p.name)} has no free GPU: the rig measures on its CPUs.</div></div>`}</div>`;
-    })
-    .join("");
+            )
+            .join("");
+        }
+        return `<div data-gpus-for="${esc(p.value)}" hidden>${rows ? `<div class="card flat">${rows}</div>` : `<div class="card"><div class="empty">${esc(p.name)} has no free GPU: the rig measures on its CPUs.</div></div>`}</div>`;
+      },
+    )
+  ).join("");
 }

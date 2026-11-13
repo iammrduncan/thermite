@@ -118,7 +118,7 @@ export async function addRigRunners(
           )
         : await addClusterRunner(parts, { rig, ...rest, ...at, mode: r.mode }, "owner:ui");
     if ("error" in out) {
-      parts.store.rigHistory.add(rig, "runner_added", false, `${r.runner}: ${out.error}`);
+      await parts.store.rigHistory.add(rig, "runner_added", false, `${r.runner}: ${out.error}`);
       first ??= `${r.runner}: ${out.error}`;
     }
   }
@@ -126,9 +126,9 @@ export async function addRigRunners(
 }
 
 /** Where each runner process control set up for a rig is, and its GPU, by its name. */
-function placedRunners(store: ControlStore, rig: string): RunnerPlaces["placed"] {
+async function placedRunners(store: ControlStore, rig: string): Promise<RunnerPlaces["placed"]> {
   const placed: RunnerPlaces["placed"] = {};
-  for (const r of store.rigRunners.of(rig)) {
+  for (const r of await store.rigRunners.of(rig)) {
     if (r.status === "removed") continue;
     const at: Place =
       r.placement === "machine"
@@ -140,7 +140,7 @@ function placedRunners(store: ControlStore, rig: string): RunnerPlaces["placed"]
             node: r.spec.node,
             mode: r.spec.deviceClass ? `dra:${r.spec.deviceClass}` : "device-plugin",
           };
-    const product = r.spec.gpus ? productAt(store, at) : "";
+    const product = r.spec.gpus ? await productAt(store, at) : "";
     const gpu = !r.spec.gpus
       ? "Its CPUs"
       : r.placement === "machine"
@@ -161,9 +161,13 @@ function placedRunners(store: ControlStore, rig: string): RunnerPlaces["placed"]
  * GPU; each free GPU it can add, as the form's value (its runner's name, then its place); and
  * whether the core judges on its runners alone. `names`: the runners the rig reports.
  */
-export function runnerPlaces(store: ControlStore, rig: string, names: string[]): RunnerPlaces {
-  const placed = placedRunners(store, rig);
-  const add = runnerGroups(store, rig, names).flatMap((g) =>
+export async function runnerPlaces(
+  store: ControlStore,
+  rig: string,
+  names: string[],
+): Promise<RunnerPlaces> {
+  const placed = await placedRunners(store, rig);
+  const add = (await runnerGroups(store, rig, names)).flatMap((g) =>
     g.gpus
       .filter((x) => !x.used)
       .map((x) => ({
@@ -173,7 +177,8 @@ export function runnerPlaces(store: ControlStore, rig: string, names: string[]):
       })),
   );
   const judgeOnRunners = Boolean(
-    store.clusters.rig(rig)?.spec.judgeOnRunners ?? store.machines.rig(rig)?.judge_on_runners,
+    (await store.clusters.rig(rig))?.spec.judgeOnRunners ??
+      (await store.machines.rig(rig))?.judge_on_runners,
   );
   return { placed, add, judgeOnRunners };
 }
@@ -223,15 +228,15 @@ export function runnersAdded(f: Record<string, unknown>): ReturnType<typeof addR
  * The rig's page's **The core** and **Runners** blocks (goal 206), as the approved mockup has
  * them, for a rig with runners: nothing for one without.
  */
-export function coreAndRunners(
+export async function coreAndRunners(
   store: ControlStore,
   u: RigView,
   now: number,
   window: UseWindow = "hour",
-): string {
+): Promise<string> {
   if (!u.runners && !u.settings?.runners.length) return "";
-  const m = store.machines.rig(u.id);
-  const k = store.clusters.rig(u.id);
+  const m = await store.machines.rig(u.id);
+  const k = await store.clusters.rig(u.id);
   const h = u.hardware;
   const iso = u.checks.isolation;
   const chips = [
@@ -260,8 +265,7 @@ export function coreAndRunners(
       ? `${laneNames.slice(0, -1).join(", ")}${lanes > 1 ? " and " : ""}${laneNames.at(-1)}'s agent program${lanes === 1 ? "" : "s"}`
       : `${lanes} lanes' agent programs`
   }${mode === "terminal" ? ", in their own terminals" : mode === "headless" ? ", headless" : ""}; the judge's queue and decisions.`;
-  const lines = store.rigHistory
-    .list(u.id)
+  const lines = (await store.rigHistory.list(u.id))
     .filter((x) => x.step.startsWith("runner_") || x.step === "workers_given")
     .map((x) => ({
       at: x.at,
@@ -280,14 +284,14 @@ export function coreAndRunners(
     chips,
     facts,
     keeps,
-  })}${runnersBlock(u, now, { placed: placedRunners(store, u.id), lines, use: useOf(store, u, now, window) })}`;
+  })}${runnersBlock(u, now, { placed: await placedRunners(store, u.id), lines, use: await useOf(store, u, now, window) })}`;
 }
 
 /** How the rig's runners spent the window chosen (goal 231); the last hour when its run has none. */
-function useOf(store: ControlStore, u: RigView, now: number, window: UseWindow) {
+async function useOf(store: ControlStore, u: RigView, now: number, window: UseWindow) {
   const runStarted = newestRunStart(u);
   const view =
-    rigRunnerUse(store, u.id, window, now, runStarted) ??
-    rigRunnerUse(store, u.id, "hour", now, runStarted);
+    (await rigRunnerUse(store, u.id, window, now, runStarted)) ??
+    (await rigRunnerUse(store, u.id, "hour", now, runStarted));
   return view ? { view, runStarted } : undefined;
 }

@@ -9,6 +9,7 @@ import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { usesFor } from "../../../src/core/mcp.ts";
@@ -63,7 +64,7 @@ const CPU = { type: "cpu", class: "generic-cpu" };
  */
 async function stack() {
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-  const { keys, store, control, api } = controlOnly({
+  const { keys, store, control, api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, kits },
   });
@@ -141,7 +142,7 @@ async function stack() {
       { campaign: "rig-check-smoke-cpu-1a2b3c4d", mode: "hill_climb", agents: false },
     ],
   ]);
-  store.kb().grant("matmul-speed", "survey-study", "owner:ui");
+  await store.kb().grant("matmul-speed", "survey-study", "owner:ui");
   // gemv-speed: assigned over the API with a real contract, its project and kit from git.
   const goal = JSON.parse(
     readFileSync(
@@ -161,7 +162,7 @@ async function stack() {
     },
   ];
   // Signed before control saved an assignment's campaign (goal 182): known by the assignment alone.
-  const gs3 = prepareCommand(store, keys.privateKeyPem, {
+  const gs3 = await prepareCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
     payload: {
@@ -179,7 +180,7 @@ async function stack() {
     },
     issuedBy: "owner:api",
   });
-  store.commands.enqueue(gs3);
+  await store.commands.enqueue(gs3);
 
   const rest = (from: string, body: unknown, token?: string) =>
     api("POST", `/v1/campaigns/${from}/copy`, body, token);
@@ -188,8 +189,8 @@ async function stack() {
   /** Every assign_campaign control signed, oldest first. */
   const assigned = () =>
     (
-      store.db
-        .prepare("select signed from command where kind = 'assign_campaign' order by rowid")
+      sqliteBehind(store)
+        .db.prepare("select signed from command where kind = 'assign_campaign' order by rowid")
         .all() as { signed: string }[]
     ).map(
       (x) =>
@@ -211,11 +212,11 @@ const json = async <T>(r: Response) => (await r.json()) as T;
 describe("Copy a campaign over REST (goal 069)", () => {
   test("a saved campaign: its newest version under the new name, an empty folder, no grants, and a run reads only the copy's folder", async () => {
     const s = await stack();
-    const [source] = s.store.campaigns.versions("matmul-speed");
+    const [source] = await s.store.campaigns.versions("matmul-speed");
     assert.ok(source && source.version === 2);
     const r = await s.rest("matmul-speed", { name: "matmul-speed-b" });
     assert.equal(r.status, 201);
-    const [copy] = s.store.campaigns.versions("matmul-speed-b");
+    const [copy] = await s.store.campaigns.versions("matmul-speed-b");
     assert.ok(copy);
     assert.deepEqual(await json(r), {
       campaign: "matmul-speed-b",
@@ -237,12 +238,12 @@ describe("Copy a campaign over REST (goal 069)", () => {
     assert.equal(copy.created_by, "owner:api");
     // Its own folder, empty, reading nothing else; the source still reads survey-study.
     const kb = s.store.kb();
-    const folder = kb.collection("matmul-speed-b");
+    const folder = await kb.collection("matmul-speed-b");
     assert.deepEqual([folder.items, folder.runs, folder.reads, folder.read_by], [0, 0, [], []]);
-    assert.deepEqual(kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
-    assert.deepEqual(kb.reads("matmul-speed"), ["survey-study"]);
+    assert.deepEqual(await kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
+    assert.deepEqual(await kb.reads("matmul-speed"), ["survey-study"]);
     // Who copied it, from what: the audit log, and the copy's page.
-    const audit = s.store.auditLog.list(50).find((a) => a.action === "campaign_copied");
+    const audit = (await s.store.auditLog.list(50)).find((a) => a.action === "campaign_copied");
     assert.equal(audit?.actor, "owner:api");
     assert.deepEqual(audit?.body, {
       campaign: "matmul-speed-b",
@@ -276,15 +277,15 @@ describe("Copy a campaign over REST (goal 069)", () => {
     await s.ingest("rig-a", [
       ["harness", "run_created", "matmul-speed-b-1", { campaign: "matmul-speed-b" }],
     ]);
-    assert.equal(kb.runCampaign("rig-a", "matmul-speed-b-1"), "matmul-speed-b");
-    assert.equal(kb.runCampaign("rig-a", "matmul-speed-1"), "matmul-speed");
-    assert.deepEqual(kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
+    assert.equal(await kb.runCampaign("rig-a", "matmul-speed-b-1"), "matmul-speed-b");
+    assert.equal(await kb.runCampaign("rig-a", "matmul-speed-1"), "matmul-speed");
+    assert.deepEqual(await kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
   });
 
   test("refusals in words; nothing is saved", async () => {
     const s = await stack();
-    s.store.kb().grant("old-name", "matmul-speed", "owner:ui");
-    const before = s.store.campaigns.versions().length;
+    await s.store.kb().grant("old-name", "matmul-speed", "owner:ui");
+    const before = (await s.store.campaigns.versions()).length;
     const refused = async (from: string, body: unknown, status: number, error: string) => {
       const r = await s.rest(from, body);
       assert.deepEqual([r.status, await json(r)], [status, { error }], JSON.stringify(body));
@@ -333,8 +334,8 @@ describe("Copy a campaign over REST (goal 069)", () => {
     // The owner's alone over REST: other tokens get 401.
     for (const token of [TOKENS.operator, TOKENS.agent, TOKENS.read])
       assert.equal((await s.rest("matmul-speed", { name: "matmul-b" }, token)).status, 401);
-    assert.equal(s.store.campaigns.versions().length, before, "nothing was saved");
-    const audit = s.store.auditLog.list(100);
+    assert.equal((await s.store.campaigns.versions()).length, before, "nothing was saved");
+    const audit = await s.store.auditLog.list(100);
     assert.ok(!audit.some((a) => a.action === "campaign_copied"));
     assert.ok(
       audit.some(
@@ -366,7 +367,7 @@ describe("Copy a campaign over MCP (goal 069)", () => {
         }),
       ),
     );
-    const [copy] = s.store.campaigns.versions("gemv-speed-b");
+    const [copy] = await s.store.campaigns.versions("gemv-speed-b");
     assert.ok(copy);
     assert.deepEqual(out, {
       campaign: "gemv-speed-b",
@@ -384,8 +385,8 @@ describe("Copy a campaign over MCP (goal 069)", () => {
       assignment: { seed: { repo: "my-project", commit: C }, imports: s.gemvImports },
     });
     assert.equal(copy.created_by, "owner:operator");
-    assert.deepEqual(s.store.kb().readable("gemv-speed-b"), ["gemv-speed-b"]);
-    const audit = s.store.auditLog.list(100);
+    assert.deepEqual(await s.store.kb().readable("gemv-speed-b"), ["gemv-speed-b"]);
+    const audit = await s.store.auditLog.list(100);
     assert.ok(audit.some((a) => a.action === "mcp:copy_campaign" && a.actor === "owner:operator"));
     assert.ok(audit.some((a) => a.action === "campaign_copied" && a.actor === "owner:operator"));
     const html = await s.page("/ui/campaigns/gemv-speed-b");
@@ -422,14 +423,12 @@ describe("Copy a campaign over MCP (goal 069)", () => {
       error: "There is a campaign named gemv-speed-b already. Choose another name.",
     });
     assert.ok(
-      s.store.auditLog
-        .list(100)
-        .some(
-          (a) =>
-            a.action === "refused" &&
-            a.actor === "owner:mcp" &&
-            (a.body as { tool?: string }).tool === "mcp:copy_campaign",
-        ),
+      (await s.store.auditLog.list(100)).some(
+        (a) =>
+          a.action === "refused" &&
+          a.actor === "owner:mcp" &&
+          (a.body as { tool?: string }).tool === "mcp:copy_campaign",
+      ),
     );
   });
 });
@@ -451,7 +450,10 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
       }),
     });
     for (const name of Object.keys(listed)) {
-      servers.put({ name, url: `https://${name}.example.com/mcp`, auth: "none" }, "owner:test");
+      await servers.put(
+        { name, url: `https://${name}.example.com/mcp`, auth: "none" },
+        "owner:test",
+      );
       assert.equal(await servers.check(name), null);
     }
     const saved = await startCampaign(
@@ -486,14 +488,14 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
 
   test("the copy's contract names the servers given, a run of it gives them to its workers, and [] names none", async () => {
     const s = await research();
-    const [source] = s.store.campaigns.versions("web-survey");
+    const [source] = await s.store.campaigns.versions("web-survey");
     assert.ok(source);
     const uses = [
       { name: "paper-search", agents: ["workers", "advisors"], tools: { workers: ["find"] } },
     ];
     const r = await s.rest("web-survey", { name: "web-survey-b", mcp_servers: uses });
     assert.equal(r.status, 201, await r.clone().text());
-    const [copy] = s.store.campaigns.versions("web-survey-b");
+    const [copy] = await s.store.campaigns.versions("web-survey-b");
     assert.ok(copy);
     assert.deepEqual(await json(r), {
       campaign: "web-survey-b",
@@ -513,7 +515,7 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
     assert.equal(rest.min_verified_claims, 4, "the copy keeps the floor of verified claims");
     const reparsed = parseContract(copy.contract);
     assert.ok(reparsed.ok && reparsed.sha === copy.sha);
-    const audit = s.store.auditLog.list(50).find((a) => a.action === "campaign_copied");
+    const audit = (await s.store.auditLog.list(50)).find((a) => a.action === "campaign_copied");
     assert.deepEqual(audit?.body, {
       campaign: "web-survey-b",
       from: { campaign: "web-survey", version: 1, other_mcp_servers: true },
@@ -531,9 +533,9 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
     const sent = s.assigned().at(-1);
     assert.ok(sent);
     assert.deepEqual(sent.payload.mcp_servers, uses);
-    const given = s.store.commands
-      .assignedMcpServers("rig-a", new Set())
-      .get(String(sent.payload.run));
+    const given = (await s.store.commands.assignedMcpServers("rig-a", new Set())).get(
+      String(sent.payload.run),
+    );
     assert.deepEqual(usesFor(given, "workers"), [{ name: "paper-search", tools: ["find"] }]);
 
     // Over MCP, with an operator's token: [] names none.
@@ -547,7 +549,7 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
       ),
     );
     assert.deepEqual(out.from, { campaign: "web-survey", version: 1, other_mcp_servers: true });
-    const [none] = s.store.campaigns.versions("web-survey-c");
+    const [none] = await s.store.campaigns.versions("web-survey-c");
     assert.ok(none && !("mcp_servers" in (none.contract as object)));
     assert.match(
       await s.page("/ui/campaigns/web-survey-c"),
@@ -566,7 +568,7 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
 
   test("refused in words: a server Settings lacks, a tool it does not list, the planner, a campaign with a kit", async () => {
     const s = await research();
-    const before = s.store.campaigns.versions().length;
+    const before = (await s.store.campaigns.versions()).length;
     const refused = async (from: string, mcpServers: unknown, error: string) => {
       const r = await s.rest(from, { name: `${from}-x`, mcp_servers: mcpServers });
       assert.deepEqual([r.status, await json(r)], [400, { error }], JSON.stringify(mcpServers));
@@ -596,6 +598,6 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
     });
     assert.equal(bad.status, 400);
     assert.match((await json<{ error: string }>(bad)).error, /^bad request: mcp_servers\.0\./);
-    assert.equal(s.store.campaigns.versions().length, before, "nothing was saved");
+    assert.equal((await s.store.campaigns.versions()).length, before, "nothing was saved");
   });
 });

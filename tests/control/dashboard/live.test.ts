@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { runMessages } from "../../../src/control/views/index.ts";
 import { figuresCall } from "../../helpers/control-store.ts";
 import { pushedOf, readPushed } from "../../helpers/sse.ts";
@@ -16,7 +17,7 @@ describe("control dashboard", () => {
     await s.env.service.applyCommand(s.env.assign);
     await s.relay();
     const at = new Date().toISOString();
-    s.store.liveLines.add(
+    await s.store.liveLines.add(
       "rig-a",
       "log-1",
       [
@@ -48,7 +49,7 @@ describe("control dashboard", () => {
       ],
       false,
     );
-    s.store.liveLines.add(
+    await s.store.liveLines.add(
       "rig-b",
       "log-2",
       [{ seq: 1, at, source: "judge", kind: "log", text: "the judge on rig-b is idle" }],
@@ -85,7 +86,7 @@ describe("control dashboard", () => {
     const s = await stack();
     await s.env.service.applyCommand(s.env.assign);
     await s.relay();
-    s.store.liveLines.add(
+    await s.store.liveLines.add(
       "rig-a",
       "log-1",
       [
@@ -145,7 +146,7 @@ describe("control dashboard", () => {
       s.env.service.takeMessages({ id: "t-0123456789abcdef", run: "js-1", lane: "lane-1" }),
       ["try the closed form"],
     );
-    const cmd = s.store.commands.list(5).find((c) => c.kind === "message_agent");
+    const cmd = (await s.store.commands.list(5)).find((c) => c.kind === "message_agent");
     assert.equal(cmd?.issued_by, "owner:ui");
   });
 
@@ -164,14 +165,14 @@ describe("control dashboard", () => {
     });
     assert.equal(sent.status, 303);
     assert.equal(sent.headers.get("location"), "/ui/campaigns/js-sum/runs/js-1/live?w=lane-1");
-    const cmd = s.store.commands.list(5).find((c) => c.kind === "message_agent");
+    const cmd = (await s.store.commands.list(5)).find((c) => c.kind === "message_agent");
     assert.equal(cmd?.issued_by, "owner:ui");
     await s.relay();
     await s.relay();
-    const [id] = [...runMessages(s.store, "rig-a", "js-1").keys()];
+    const [id] = [...(await runMessages(s.store, "rig-a", "js-1")).keys()];
     assert.ok(id, "the rig's signed agent_message event reached control");
     const at = new Date().toISOString();
-    s.store.liveLines.add(
+    await s.store.liveLines.add(
       "rig-a",
       "log-2",
       [
@@ -395,14 +396,17 @@ describe("control dashboard", () => {
       /msgerror=The planner is off on this rig \(Edit rig\), so nothing would read it\./,
     );
     assert.doesNotMatch(refused, /Sent to the rig/);
-    assert.equal(s.store.commands.list(20).filter((c) => c.kind === "message_agent").length, 0);
+    assert.equal(
+      (await s.store.commands.list(20)).filter((c) => c.kind === "message_agent").length,
+      0,
+    );
     // A lane reads its message: that one goes, trimmed.
     assert.equal(
       await where(send("lane-1", "  keep it simple  ")),
       "/ui/campaigns/js-sum/runs/js-1/live",
     );
-    const sent = s.store.db
-      .prepare("select signed from command where kind = 'message_agent'")
+    const sent = sqliteBehind(s.store)
+      .db.prepare("select signed from command where kind = 'message_agent'")
       .all() as { signed: string }[];
     assert.deepEqual(
       sent.map((x) => JSON.parse(x.signed).envelope.payload.text),

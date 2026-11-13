@@ -49,7 +49,7 @@ const draft: CampaignDraft = {
 
 async function stack() {
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-  const { keys, store, control, api } = controlOnly({
+  const { keys, store, control, api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, kits },
   });
@@ -64,8 +64,8 @@ async function stack() {
     },
   );
   assert.ok(saved.ok && saved.version === 1, JSON.stringify(saved));
-  const newest = () =>
-    store.campaigns.versions("matmul-speed")[0]?.contract as Record<string, unknown>;
+  const newest = async () =>
+    (await store.campaigns.versions("matmul-speed"))[0]?.contract as Record<string, unknown>;
   const set = (body: unknown, token?: string) =>
     api("POST", "/v1/campaigns/matmul-speed/additions", body, token);
   return { store, control, newest, set };
@@ -76,8 +76,8 @@ const json = async (r: Response) => (await r.json()) as Record<string, unknown>;
 describe("the owner's additions to a campaign's roles (goal 166)", () => {
   test("New campaign puts them in the first version, trimmed, with an empty one left out", async () => {
     const s = await stack();
-    assert.deepEqual(s.newest().role_additions, { worker: "Keep each change small." });
-    assert.ok(parseContract(s.newest()).ok);
+    assert.deepEqual((await s.newest()).role_additions, { worker: "Keep each change small." });
+    assert.ok(parseContract(await s.newest()).ok);
   });
 
   test("REST and MCP save a new version with them, set anew; the same again changes nothing; refusals in words", async () => {
@@ -92,7 +92,7 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
       "Version 2 of matmul-speed is saved, with additions for planner. Runs started from now take it.",
     );
     // Set anew: the worker's addition of version 1 is gone, and nothing else changed.
-    const v2 = s.newest();
+    const v2 = await s.newest();
     assert.deepEqual(v2.role_additions, { planner: "Give each lane its own direction." });
     assert.equal(v2.version, 2);
     const again = await s.set({ additions: { planner: "Give each lane its own direction." } });
@@ -117,7 +117,7 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
       String(viaMcp.said),
       /^Proposed to the owner: additions to its roles of matmul-speed/,
     );
-    assert.equal(s.newest().version, 2);
+    assert.equal((await s.newest()).version, 2);
     const owner = await signIn(s.control);
     const html = await owner.page("/ui/campaigns/matmul-speed");
     assert.match(html, /<h2>Proposed to you<\/h2>/);
@@ -133,8 +133,8 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
       decodeURIComponent(String(approved.headers.get("location"))),
       /ok=Approved: version 3 of matmul-speed has the additions to its roles owner:operator proposed/,
     );
-    assert.equal(s.newest().version, 3);
-    assert.deepEqual(s.newest().role_additions, { auditor: "Look at the cache." });
+    assert.equal((await s.newest()).version, 3);
+    assert.deepEqual((await s.newest()).role_additions, { auditor: "Look at the cache." });
     assert.doesNotMatch(await owner.page("/ui"), /proposes additions to its roles/);
     // Approved once: a second press finds nothing waiting.
     const twice = await owner.post(
@@ -167,7 +167,7 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
     const none = await s.set({});
     assert.equal(none.status, 201);
     assert.equal((await json(none)).role_additions, null);
-    assert.equal("role_additions" in s.newest(), false);
+    assert.equal("role_additions" in (await s.newest()), false);
     assert.equal((await s.set({ roles: {} })).status, 400);
     const operator = await s.set({}, TOKENS.operator);
     assert.ok(operator.status === 401 || operator.status === 403, "REST takes the owner's token");
@@ -186,18 +186,17 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
     const second = await propose("Another idea.");
     await client2.close();
     assert.deepEqual(
-      s.store.proposals.waiting("matmul-speed").map((p) => p.id),
+      (await s.store.proposals.waiting("matmul-speed")).map((p) => p.id),
       [second.proposal],
     );
-    assert.equal(s.store.proposals.get(first.proposal)?.decision, "replaced");
+    assert.equal((await s.store.proposals.get(first.proposal))?.decision, "replaced");
     const owner2 = await signIn(s.control);
     const csrf = owner2.csrfOf(await owner2.page("/ui/campaigns/matmul-speed"));
     await owner2.post(`/ui/campaigns/matmul-speed/proposals/${second.proposal}/decline`, { csrf });
-    assert.equal(s.store.proposals.get(second.proposal)?.decision, "declined");
-    assert.equal(s.newest().version, 4);
+    assert.equal((await s.store.proposals.get(second.proposal))?.decision, "declined");
+    assert.equal((await s.newest()).version, 4);
     assert.deepEqual(
-      s.store.auditLog
-        .list(50, { action: "campaign_setting_" })
+      (await s.store.auditLog.list(50, { action: "campaign_setting_" }))
         .map((e) => e.action)
         .reverse(),
       [
@@ -209,8 +208,7 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
       ],
     );
     assert.deepEqual(
-      s.store.auditLog
-        .list(50, { action: "campaign_additions_set" })
+      (await s.store.auditLog.list(50, { action: "campaign_additions_set" }))
         .map((e) => [
           (e.body as { version: number }).version,
           (e.body as { roles: string[] }).roles,
@@ -226,8 +224,8 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
 
   test("an assignment from the operator's or an agent's token carries the saved additions and writers; the owner's is not held", async () => {
     const s = await stack();
-    enrollRigs(s.store, ["rig-a"]);
-    const saved = s.newest();
+    await enrollRigs(s.store, ["rig-a"]);
+    const saved = await s.newest();
     const assign = async (token: string, run: string, contract: Record<string, unknown>) => {
       const client = await mcpClient(s.control, token);
       try {
@@ -259,11 +257,11 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
         /Not sent: in which roles write in its collection, this assignment differs from version 1 of/,
       );
     }
-    assert.equal(s.store.commands.pending("rig-a").length, 0);
+    assert.equal((await s.store.commands.pending("rig-a")).length, 0);
     // The saved version's own settings go through, and the owner's token is not held to them.
     assert.ok(!(await assign(TOKENS.operator, "r-saved", saved)).isError);
     assert.ok(!(await assign(ADMIN, "r-owner", added)).isError);
-    assert.equal(s.store.commands.pending("rig-a").length, 2);
+    assert.equal((await s.store.commands.pending("rig-a")).length, 2);
     // A campaign control has no version of: the operator's assignment may set neither.
     const unsaved = { ...saved, campaign: "elsewhere", role_additions: { worker: "x" } };
     assert.match(
@@ -303,7 +301,7 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
       decodeURIComponent(r.headers.get("location") ?? ""),
       /on=additions&ok=Saved as version 2: additions for worker and reviewer\. New runs of matmul-speed take it\.#role-additions/,
     );
-    assert.deepEqual(s.newest().role_additions, {
+    assert.deepEqual((await s.newest()).role_additions, {
       worker: "Keep each change small.",
       reviewer: "Read the criteria twice.",
     });

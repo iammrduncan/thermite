@@ -78,7 +78,7 @@ describe("staging sources by reference", () => {
       { "kit.json": Buffer.from("{}\n"), "run/run.sh": Buffer.from("echo run\n") },
       "written on the page",
     );
-    const { control } = controlOnly({
+    const { control } = await controlOnly({
       tokens: { admin: "owner-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } },
       options: { kits },
     });
@@ -359,7 +359,7 @@ describe("staging sources by reference", () => {
   });
 
   test("a project in a folder of its repository: the rig fetches the repository and starts from the folder", async () => {
-    const s = controlStack({ env: makeJudgeEnv({ folder: "examples/sum" }) });
+    const s = await controlStack({ env: makeJudgeEnv({ folder: "examples/sum" }) });
     const { env, store } = s;
     const payload = (env.assign as unknown as SignedCommand).envelope.payload as Record<
       string,
@@ -402,14 +402,14 @@ describe("staging sources by reference", () => {
       localSources: true,
     };
     s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
-    for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
+    for (let i = 0; i < 200 && (await store.commands.get(id))?.status === "pending"; i++) {
       await s.relay();
       await new Promise((res) => setTimeout(res, 25));
     }
     assert.equal(
-      store.commands.get(id)?.status,
+      (await store.commands.get(id))?.status,
       "delivered",
-      JSON.stringify(store.commands.get(id)),
+      JSON.stringify(await store.commands.get(id)),
     );
     // The supervisor fetched the whole repository's commit, which the harness checked.
     const bundle = join(env.paths.inboxDir, "repos", "folder-project.bundle");
@@ -426,12 +426,12 @@ describe("staging sources by reference", () => {
       "src",
     ]);
     // The rig's answer names where the run starts.
-    const outcome = store.commands.get(id)?.outcome as { result?: { start?: unknown } };
+    const outcome = (await store.commands.get(id))?.outcome as { result?: { start?: unknown } };
     assert.deepEqual(outcome.result?.start, { folder: "examples/sum", commit: start });
   });
 
   test("an assignment that names its project and kit by URL starts a run, with nothing put in the inbox by hand", async () => {
-    const s = controlStack();
+    const s = await controlStack();
     const { env, store } = s;
     const payload = (env.assign as unknown as SignedCommand).envelope.payload as Record<
       string,
@@ -474,14 +474,14 @@ describe("staging sources by reference", () => {
       localSources: true,
     };
     s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
-    for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
+    for (let i = 0; i < 200 && (await store.commands.get(id))?.status === "pending"; i++) {
       await s.relay();
       await new Promise((res) => setTimeout(res, 25));
     }
     assert.equal(
-      store.commands.get(id)?.status,
+      (await store.commands.get(id))?.status,
       "delivered",
-      JSON.stringify(store.commands.get(id)),
+      JSON.stringify(await store.commands.get(id)),
     );
     assert.equal(env.ledger.runs.get("js-1")?.status, "running");
     assert.ok(existsSync(join(env.paths.inboxDir, "repos", "fetched-project.bundle")));

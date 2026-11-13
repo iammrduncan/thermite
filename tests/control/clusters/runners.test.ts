@@ -64,7 +64,7 @@ async function withRig(o: { runnersWatchMs?: number; workersWatchMs?: number } =
     }),
     /"k8s-a" is added and checked/,
   );
-  s.store.enrollments.enroll("core-1", "a".repeat(64), "test");
+  await s.store.enrollments.enroll("core-1", "a".repeat(64), "test");
   const report = (runners: unknown[]) =>
     ingestReport(s.store, {
       rig: "core-1",
@@ -76,9 +76,8 @@ async function withRig(o: { runnersWatchMs?: number; workersWatchMs?: number } =
       summary: { settings: { lanes: 2, promotion: "auto", runners } },
     });
   await report([]);
-  const sent = () =>
-    s.store.commands
-      .pending("core-1")
+  const sent = async () =>
+    (await s.store.commands.pending("core-1"))
       .filter((c) => c.envelope.kind === "rig_settings")
       .map((c) => c.envelope.payload);
   const register = (runner: string, token: string, path = `runners/${runner}/supervisor`) =>
@@ -124,9 +123,10 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     assert.equal(envOf(supervisor).THERMITE_ROLE, "runner");
     assert.equal(envOf(supervisor).THERMITE_RUNNER, "spark-02");
     // Given to the rig once set up: the rig's whole list of runners.
-    for (let i = 0; i < 100 && !sent().length; i++) await new Promise((r) => setTimeout(r, 20));
-    assert.deepEqual(sent(), [{ runners: [{ name: "spark-02", pools: ["judge"] }] }]);
-    assert.equal(s.store.rigRunners.get("core-1", "spark-02")?.status, "running");
+    for (let i = 0; i < 100 && !(await sent()).length; i++)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(await sent(), [{ runners: [{ name: "spark-02", pools: ["judge"] }] }]);
+    assert.equal((await s.store.rigRunners.get("core-1", "spark-02"))?.status, "running");
 
     // Its token registers it on the bus, and does nothing else.
     const token = objs.find((o) => o.kind === "Secret")?.stringData?.["control-rig-token"] ?? "";
@@ -143,12 +143,12 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await report([{ name: "spark-02", pools: ["judge"] }]);
     const removed = await owner.call("remove_runner", { rig: "core-1", runner: "spark-02" });
     assert.equal(removed.error, false, JSON.stringify(removed.body));
-    assert.deepEqual(sent().at(-1), { runners: [] });
+    assert.deepEqual((await sent()).at(-1), { runners: [] });
     assert.ok(
       f.calls.some((c) => c.args.join(" ").startsWith(`delete namespace thermite-${unit}`)),
       "its namespace is deleted",
     );
-    assert.equal(s.store.rigRunners.get("core-1", "spark-02")?.status, "removed");
+    assert.equal((await s.store.rigRunners.get("core-1", "spark-02"))?.status, "removed");
     assert.equal((await register("spark-02", token)).status, 401);
     await owner.close();
   });
@@ -181,10 +181,10 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       }),
       /^\/ui\/rigs\/one-1$/,
     );
-    const r = s.store.clusters.rig("one-1");
+    const r = await s.store.clusters.rig("one-1");
     assert.equal(r?.spec.gpus, 1);
     assert.equal(r?.spec.node, "gpu-node-1", "on the node of its GPUs");
-    assert.equal(s.store.rigRunners.of("one-1").length, 0, "no runner from a skipped step");
+    assert.equal((await s.store.rigRunners.of("one-1")).length, 0, "no runner from a skipped step");
     assert.match(
       await s.post("/ui/rigs/add", { kind: "join", place: "cluster:k8s-a", rig: "one-2" }),
       /Choose where you set the rig up/,
@@ -197,8 +197,8 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await owner.call("add_cluster_rig", { rig: "core-9", cluster: "k8s-a" });
     await owner.close();
     await settle(f, 1);
-    s.store.clusters.setRigStatus("core-9", "failed");
-    s.store.rigHistory.add(
+    await s.store.clusters.setRigStatus("core-9", "failed");
+    await s.store.rigHistory.add(
       "core-9",
       "deploy",
       false,
@@ -217,14 +217,14 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       await s.post("/ui/rigs/core-9/cluster/again", { node: "gpu-node-1" }),
       /Control sets core-9 up again on gpu-node-1/,
     );
-    assert.equal(s.store.clusters.rig("core-9")?.spec.node, "gpu-node-1");
+    assert.equal((await s.store.clusters.rig("core-9"))?.spec.node, "gpu-node-1");
     await settle(f, applies + 1);
     assert.ok(f.calls.filter((c) => c.args[0] === "apply").length > applies, "applied again");
     // It never reported: it holds no result, and "remove core-9" removes it.
     await s.post("/ui/rigs/core-9/cluster/remove", { confirm: "remove core-9" });
-    for (let i = 0; i < 100 && s.store.clusters.rig("core-9")?.status !== "removed"; i++)
+    for (let i = 0; i < 100 && (await s.store.clusters.rig("core-9"))?.status !== "removed"; i++)
       await new Promise((r) => setTimeout(r, 20));
-    assert.equal(s.store.clusters.rig("core-9")?.status, "removed");
+    assert.equal((await s.store.clusters.rig("core-9"))?.status, "removed");
     // A removed rig keeps its name: Add a rig's name step knows it is taken before it sends.
     assert.match(await s.page("/ui/rigs/add"), /data-taken="\[[^"]*&quot;core-9&quot;/);
     assert.match(
@@ -254,7 +254,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       }),
       /"lab" is added and checked/,
     );
-    const facts = s.store.clusters.get("lab")?.facts as
+    const facts = (await s.store.clusters.get("lab"))?.facts as
       | { slots: { namespace: string; used_by?: string }[] }
       | undefined;
     assert.deepEqual(
@@ -284,7 +284,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       /"lab" is added and checked/,
     );
     // The check asked the cluster with a dry run, which creates nothing.
-    const facts = s.store.clusters.get("lab")?.facts as
+    const facts = (await s.store.clusters.get("lab"))?.facts as
       | { slots: { nodes?: string[]; node_rule?: string }[] }
       | undefined;
     const slot = facts?.slots[0];
@@ -310,7 +310,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       }),
       "/ui/rigs/core-n",
     );
-    assert.equal(s.store.clusters.rig("core-n")?.spec.node, "gpu-node-1");
+    assert.equal((await s.store.clusters.rig("core-n"))?.spec.node, "gpu-node-1");
   });
 
   test("two runners set up together are both given to the rig", async () => {
@@ -329,11 +329,11 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
         pool,
       });
       assert.equal(added.error, false, JSON.stringify(added.body));
-      for (let i = 0; i < 100 && sent().length < (runner === "spark-02" ? 1 : 2); i++)
+      for (let i = 0; i < 100 && (await sent()).length < (runner === "spark-02" ? 1 : 2); i++)
         await new Promise((r) => setTimeout(r, 20));
     }
     // The rig has not reported spark-02 yet when spark-03 is given: it keeps it.
-    assert.deepEqual(sent().at(-1), {
+    assert.deepEqual((await sent()).at(-1), {
       runners: [
         { name: "spark-02", pools: ["judge"] },
         { name: "spark-03", pools: ["shared"] },
@@ -359,21 +359,21 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     });
     assert.equal(added.error, false, JSON.stringify(added.body));
     await settle(f, 2);
-    const sent = () =>
-      s.store.commands
-        .pending("core-4")
+    const sent = async () =>
+      (await s.store.commands.pending("core-4"))
         .filter((c) => c.envelope.kind === "rig_settings")
         .map((c) => c.envelope.payload);
     for (
       let i = 0;
-      i < 20 && s.store.rigRunners.get("core-4", "spark-02")?.status !== "running";
+      i < 20 && (await s.store.rigRunners.get("core-4", "spark-02"))?.status !== "running";
       i++
     )
       await new Promise((r) => setTimeout(r, 20));
     await new Promise((r) => setTimeout(r, 100));
-    assert.deepEqual(sent(), [], "nothing goes to a rig that does not report its settings");
-    const given = () => s.store.rigHistory.list("core-4").filter((x) => x.step === "runner_given");
-    assert.deepEqual(given(), [], "and its history shows no failure: the runner waits");
+    assert.deepEqual(await sent(), [], "nothing goes to a rig that does not report its settings");
+    const given = async () =>
+      (await s.store.rigHistory.list("core-4")).filter((x) => x.step === "runner_given");
+    assert.deepEqual(await given(), [], "and its history shows no failure: the runner waits");
     await ingestReport(s.store, {
       rig: "core-4",
       ledger_id: "ledger-core-4",
@@ -383,27 +383,32 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       events: [],
       summary: { settings: { lanes: 1, promotion: "auto", runners: [] } },
     });
-    for (let i = 0; i < 100 && !sent().length; i++) await new Promise((r) => setTimeout(r, 20));
-    assert.deepEqual(sent(), [{ runners: [{ name: "spark-02", pools: ["judge"] }] }]);
+    for (let i = 0; i < 100 && !(await sent()).length; i++)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(await sent(), [{ runners: [{ name: "spark-02", pools: ["judge"] }] }]);
     assert.deepEqual(
-      given().map((x) => x.ok),
+      (await given()).map((x) => x.ok),
       [true],
     );
     // As the owner who added it: the rig takes its runners from the owner alone.
-    const first = s.store.commands.pending("core-4")[0]?.envelope;
-    assert.equal(first?.issued_by, s.store.rigRunners.get("core-4", "spark-02")?.created_by);
+    const first = (await s.store.commands.pending("core-4"))[0]?.envelope;
+    assert.equal(
+      first?.issued_by,
+      (await s.store.rigRunners.get("core-4", "spark-02"))?.created_by,
+    );
     assert.match(String(first?.issued_by), /^owner/);
     // Given once: control's next rounds send nothing more while the rig has it on the way.
     await new Promise((r) => setTimeout(r, 100));
-    assert.equal(sent().length, 1);
+    assert.equal((await sent()).length, 1);
     // A rig that refuses it gets it again, up to three times in all.
     for (let n = 1; n <= 3; n++) {
-      const id = String(s.store.commands.pending("core-4")[0]?.envelope.id);
-      s.store.commands.confirmApplied("core-4", id, "failed", "{}", new Date().toISOString());
-      for (let i = 0; i < 100 && !sent().length; i++) await new Promise((r) => setTimeout(r, 20));
-      assert.equal(sent().length, n < 3 ? 1 : 0, `after refusal ${n}`);
+      const id = String((await s.store.commands.pending("core-4"))[0]?.envelope.id);
+      await s.store.commands.confirmApplied("core-4", id, "failed", "{}", new Date().toISOString());
+      for (let i = 0; i < 100 && !(await sent()).length; i++)
+        await new Promise((r) => setTimeout(r, 20));
+      assert.equal((await sent()).length, n < 3 ? 1 : 0, `after refusal ${n}`);
     }
-    assert.equal(given().length, 3);
+    assert.equal((await given()).length, 3);
     await owner.close();
   });
 
@@ -441,8 +446,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     await report(false, "2026-11-04T19:57:00Z");
     await report(true, null);
     assert.deepEqual(
-      s.store.rigHistory
-        .list("core-1")
+      (await s.store.rigHistory.list("core-1"))
         .filter((x) => x.step.startsWith("runner_"))
         .map((x) => [x.step, x.ok, x.detail]),
       [
@@ -535,7 +539,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       await s.post("/ui/rigs/add", { ...form, runner_new_pool__0: "lane-1" }),
       /Give the judge a runner, its own or a shared one: the core has no GPU to measure on\./,
     );
-    assert.equal(s.store.clusters.rig("core-2"), undefined, "nothing was set up");
+    assert.equal(await s.store.clusters.rig("core-2"), undefined, "nothing was set up");
     assert.equal(await s.post("/ui/rigs/add", form), "/ui/rigs/core-2");
     await settle(f, 2);
     const applies = f.calls
@@ -545,7 +549,11 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-2-harness",
     );
     assert.equal(envOf(core).THERMITE_LOCAL_JUDGE, "0", "the core's judge measures on its runners");
-    assert.equal(s.store.clusters.rig("core-2")?.spec.node, "gpu-node-1", "on the node chosen");
+    assert.equal(
+      (await s.store.clusters.rig("core-2"))?.spec.node,
+      "gpu-node-1",
+      "on the node chosen",
+    );
     // The Rigs list shows it before its first report, as control sets it up.
     assert.match(
       await s.page("/ui/rigs"),
@@ -555,7 +563,7 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       (o) => o.kind === "Deployment" && o.metadata.name === "thermite-core-2-gpu-node-1-harness",
     );
     assert.equal(envOf(runner).THERMITE_ROLE, "runner");
-    assert.equal(s.store.rigRunners.get("core-2", "gpu-node-1")?.spec.pools[0], "judge");
+    assert.equal((await s.store.rigRunners.get("core-2", "gpu-node-1"))?.spec.pools[0], "judge");
     // Over MCP: a core with GPUs judges on itself too, unless told.
     const owner = await mcpWith(s.api, ADMIN);
     await owner.call("add_cluster_rig", {
@@ -585,15 +593,14 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
     };
     assert.equal(await s.post("/ui/rigs/add", form), "/ui/rigs/core-5");
     await settle(f, 2);
-    const lanes = () =>
-      s.store.commands
-        .pending("core-5")
+    const lanes = async () =>
+      (await s.store.commands.pending("core-5"))
         .map((c) => c.envelope)
         .filter((e) => e.kind === "rig_settings" && "lanes" in (e.payload as object));
     await new Promise((r) => setTimeout(r, 100));
-    assert.deepEqual(lanes(), [], "nothing goes to a rig that does not report its settings");
+    assert.deepEqual(await lanes(), [], "nothing goes to a rig that does not report its settings");
     // Kept in control's store, so a restart of control loses nothing while the rig comes up.
-    assert.equal(s.store.rigWorkers.get("core-5")?.lanes, 3);
+    assert.equal((await s.store.rigWorkers.get("core-5"))?.lanes, 3);
     await ingestReport(s.store, {
       rig: "core-5",
       ledger_id: "ledger-core-5",
@@ -603,24 +610,30 @@ describe("a rig's runner processes on a cluster (goal 206)", () => {
       events: [],
       summary: { settings: { lanes: 1, promotion: "auto", runners: [] } },
     });
-    for (let i = 0; i < 100 && !lanes().length; i++) await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 100 && !(await lanes()).length; i++)
+      await new Promise((r) => setTimeout(r, 20));
     assert.deepEqual(
-      lanes().map((e) => e.payload),
+      (await lanes()).map((e) => e.payload),
       [{ lanes: 3 }],
     );
     // As the owner who chose it: the rig takes its settings from the owner alone.
-    assert.equal(lanes()[0]?.issued_by, "owner:ui");
+    assert.equal((await lanes())[0]?.issued_by, "owner:ui");
     // Given once, while it is on its way; then the rig takes it, and nothing more is given.
     await new Promise((r) => setTimeout(r, 100));
-    assert.equal(lanes().length, 1);
-    const id = String(lanes()[0]?.id);
-    s.store.commands.confirmApplied("core-5", id, "delivered", "{}", new Date().toISOString());
-    for (let i = 0; i < 100 && s.store.rigWorkers.get("core-5"); i++)
+    assert.equal((await lanes()).length, 1);
+    const id = String((await lanes())[0]?.id);
+    await s.store.commands.confirmApplied(
+      "core-5",
+      id,
+      "delivered",
+      "{}",
+      new Date().toISOString(),
+    );
+    for (let i = 0; i < 100 && (await s.store.rigWorkers.get("core-5")); i++)
       await new Promise((r) => setTimeout(r, 20));
-    assert.equal(s.store.rigWorkers.get("core-5"), undefined);
+    assert.equal(await s.store.rigWorkers.get("core-5"), undefined);
     assert.deepEqual(
-      s.store.rigHistory
-        .list("core-5")
+      (await s.store.rigHistory.list("core-5"))
         .filter((x) => x.step === "workers_given")
         .map((x) => x.ok),
       [true],

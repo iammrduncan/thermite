@@ -3,8 +3,16 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * Each rig's history (goal 125, T6): the steps of its setup and management.
  */
+export interface RigHistory {
+  /** One step of a rig's setup or management, for its history. */
+  add(rig: string, step: string, ok: boolean, detail?: string): Promise<void>;
+  /** A rig's newest steps of these kinds, newest first, at most `limit`. */
+  latest(rig: string, steps: readonly string[], limit?: number): Promise<RigStep[]>;
+  list(rig: string): Promise<RigStep[]>;
+}
 
-export class RigHistory extends StorePart {
+/** RigHistory on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigHistory extends StorePart {
   /** One step of a rig's setup or management, for its history. */
   add(rig: string, step: string, ok: boolean, detail?: string): void {
     this.db

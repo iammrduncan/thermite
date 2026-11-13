@@ -585,15 +585,15 @@ export async function refreshGpuClouds(
   secrets: SecretBox,
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
-  for (const g of store.gpuClouds.list()) {
-    const sealed = store.gpuClouds.get(g.name)?.key_sealed;
+  for (const g of await store.gpuClouds.list()) {
+    const sealed = (await store.gpuClouds.get(g.name))?.key_sealed;
     if (!sealed) continue;
     try {
-      store.gpuClouds.setFacts(g.name, {
+      await store.gpuClouds.setFacts(g.name, {
         facts: await readRunpod(secrets.open(sealed), fetchImpl),
       });
     } catch (err) {
-      store.gpuClouds.setFacts(g.name, { error: errorText(err) });
+      await store.gpuClouds.setFacts(g.name, { error: errorText(err) });
     }
   }
 }

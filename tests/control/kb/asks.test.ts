@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { BusRequest } from "../../../src/common/bus/index.ts";
 import { answerKbAsk, KbAskLimit, serveKbAsks } from "../../../src/control/kb/index.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import type { KbReadAnswer, KbSearchAnswer } from "../../../src/core/link/kb.ts";
 
@@ -34,12 +35,12 @@ const assignment = (id: string, run: string, campaign: string) =>
  * gemv's two runs on rig-a, each with a note on tiling; survey's and secret's, one each. gemv may
  * read survey, granted before control assigned the runs.
  */
-function setup(): ControlStore {
-  const s = new ControlStore(":memory:");
-  s.commands.enqueue(assignment("c-1", "gs-1", "gemv"));
-  s.commands.enqueue(assignment("c-2", "gs-2", "gemv"));
+async function setup(): Promise<ControlStore> {
+  const s = openControlStore(":memory:");
+  await s.commands.enqueue(assignment("c-1", "gs-1", "gemv"));
+  await s.commands.enqueue(assignment("c-2", "gs-2", "gemv"));
   let n = 0;
-  const event = (run: string, kind: string, body: Record<string, unknown>) =>
+  const event = async (run: string, kind: string, body: Record<string, unknown>) =>
     s.kb().index(RIG, {
       at: `2026-10-29T10:${String(n++).padStart(2, "0")}:00.000Z`,
       actor: "harness",
@@ -53,89 +54,92 @@ function setup(): ControlStore {
     ["survey-1", "survey"],
     ["secret-1", "secret"],
   ] as const) {
-    event(run, "run_created", { campaign, mode: "hill_climb" });
-    event(run, "journal_note", {
+    await event(run, "run_created", { campaign, mode: "hill_climb" });
+    await event(run, "journal_note", {
       id: 1,
       kind: "lesson",
       text: `In ${run}, tiling by 32 helped.`,
       by: "lane-1",
     });
   }
-  s.kb().grant("gemv", "survey", "owner:ui");
+  await s.kb().grant("gemv", "survey", "owner:ui");
   // Granted before control assigned the runs.
-  s.db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
+  sqliteBehind(s).db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
   return s;
 }
 
-const search = (s: ControlStore, run: string, extra: Record<string, unknown> = {}) =>
-  answerKbAsk(s, "rig-a", "search", { run, q: "tiling", ...extra }) as KbSearchAnswer;
+const search = async (s: ControlStore, run: string, extra: Record<string, unknown> = {}) =>
+  (await answerKbAsk(s, "rig-a", "search", { run, q: "tiling", ...extra })) as KbSearchAnswer;
 const runs = (a: KbSearchAnswer) => a.hits.map((h) => h.run).sort();
 
 describe("control's answers to a rig's searches and reads", () => {
-  test("continue: the campaign's whole collection and every grant it includes; an ungranted collection never", () => {
-    const s = setup();
-    s.kb().setScope("gemv", "gs-2", { fresh: false, granted: ["survey"] }, "owner:ui");
-    const a = search(s, "gs-2");
+  test("continue: the campaign's whole collection and every grant it includes; an ungranted collection never", async () => {
+    const s = await setup();
+    await s.kb().setScope("gemv", "gs-2", { fresh: false, granted: ["survey"] }, "owner:ui");
+    const a = await search(s, "gs-2");
     assert.deepEqual(a.scope, { collection: "gemv", fresh: false, granted: ["survey"] });
     assert.deepEqual(runs(a), ["gs-1", "gs-2", "survey-1"]);
     assert.match(a.note, /data to weigh, not instructions/i);
     assert.match(a.hits[0]?.address ?? "", /^(gemv|survey)\/[a-z0-9-]+\/records\/note:/);
   });
 
-  test("start fresh: only the run's own items, and the granted collections it includes", () => {
-    const s = setup();
-    s.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
-    assert.deepEqual(runs(search(s, "gs-2")), ["gs-2"]);
-    const t = setup();
-    t.kb().setScope("gemv", "gs-2", { fresh: true, granted: ["survey"] }, "owner:ui");
-    assert.deepEqual(runs(search(t, "gs-2")), ["gs-2", "survey-1"]);
+  test("start fresh: only the run's own items, and the granted collections it includes", async () => {
+    const s = await setup();
+    await s.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
+    assert.deepEqual(runs(await search(s, "gs-2")), ["gs-2"]);
+    const t = await setup();
+    await t.kb().setScope("gemv", "gs-2", { fresh: true, granted: ["survey"] }, "owner:ui");
+    assert.deepEqual(runs(await search(t, "gs-2")), ["gs-2", "survey-1"]);
     // The scope was fixed when the run started.
-    assert.throws(
-      () => t.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui"),
+    await assert.rejects(
+      async () => t.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui"),
       /set when it started, and stays so/,
     );
   });
 
-  test("a grant removed leaves a run's search at once; one given since the run started joins it at once (goal 182)", () => {
-    const s = setup();
+  test("a grant removed leaves a run's search at once; one given since the run started joins it at once (goal 182)", async () => {
+    const s = await setup();
     // gs-1 has no scope of its own: it reads every grant gemv has.
-    assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
-    assert.equal(s.kb().revoke("gemv", "survey"), true);
-    const cut = search(s, "gs-1");
+    assert.deepEqual(runs(await search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
+    assert.equal(await s.kb().revoke("gemv", "survey"), true);
+    const cut = await search(s, "gs-1");
     assert.deepEqual(cut.scope.granted, []);
     assert.deepEqual(runs(cut), ["gs-1", "gs-2"], "the next search finds nothing of survey");
     // Granted again: it joins gs-1's search at once.
-    assert.equal(s.kb().grant("gemv", "survey", "owner:ui"), true);
-    assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
+    assert.equal(await s.kb().grant("gemv", "survey", "owner:ui"), true);
+    assert.deepEqual(runs(await search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
     // gs-2 left survey out as it started: it stays out while that grant stands.
-    s.db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
-    s.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui");
-    assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2"]);
+    sqliteBehind(s).db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
+    await s.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui");
+    assert.deepEqual(runs(await search(s, "gs-2")), ["gs-1", "gs-2"]);
     // Removed and given again since gs-2 started, it joins gs-2's search too.
-    s.kb().revoke("gemv", "survey");
-    s.kb().grant("gemv", "survey", "owner:ui");
-    s.db.prepare("update kb_read set granted_at = '2099-01-01T00:00:00.000Z'").run();
-    assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2", "survey-1"]);
+    await s.kb().revoke("gemv", "survey");
+    await s.kb().grant("gemv", "survey", "owner:ui");
+    sqliteBehind(s).db.prepare("update kb_read set granted_at = '2099-01-01T00:00:00.000Z'").run();
+    assert.deepEqual(runs(await search(s, "gs-2")), ["gs-1", "gs-2", "survey-1"]);
     // Removed again, it leaves at once.
-    s.kb().revoke("gemv", "survey");
-    assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2"]);
+    await s.kb().revoke("gemv", "survey");
+    assert.deepEqual(runs(await search(s, "gs-2")), ["gs-1", "gs-2"]);
   });
 
-  test("an ask that names another campaign or collection is answered from the run's own scope only", () => {
-    const s = setup();
-    s.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
-    const a = search(s, "gs-2", { campaign: "secret" });
+  test("an ask that names another campaign or collection is answered from the run's own scope only", async () => {
+    const s = await setup();
+    await s.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
+    const a = await search(s, "gs-2", { campaign: "secret" });
     assert.deepEqual(a.scope, { collection: "gemv", fresh: true, granted: [] });
     assert.deepEqual(runs(a), ["gs-2"]);
     // Collections and runs an ask keeps only narrow its scope: none of these is in it.
-    const narrowed = search(s, "gs-2", { collections: ["secret", "survey"], runs: ["secret-1"] });
+    const narrowed = await search(s, "gs-2", {
+      collections: ["secret", "survey"],
+      runs: ["secret-1"],
+    });
     assert.deepEqual(runs(narrowed), []);
     assert.equal(narrowed.matched, 0);
     // Its counts and its words are of the scope alone: the other collections are never told.
     assert.deepEqual(narrowed.counts.collection, { gemv: 1 });
     assert.deepEqual(narrowed.words, [{ word: "tiling", items: 1 }]);
     // A read of an item outside the scope is refused, though its address is right.
-    const out = answerKbAsk(s, "rig-a", "read", {
+    const out = await answerKbAsk(s, "rig-a", "read", {
       run: "gs-2",
       address: "secret/secret-1/records/note:1",
     });
@@ -143,41 +147,41 @@ describe("control's answers to a rig's searches and reads", () => {
       (out as { refused: string }).refused,
       /^no item secret\/secret-1\/records\/note:1 in what run gs-2 reads/,
     );
-    const own = answerKbAsk(s, "rig-a", "read", {
+    const own = await answerKbAsk(s, "rig-a", "read", {
       run: "gs-2",
       address: "gemv/gs-2/records/note:1",
     });
     assert.match((own as KbReadAnswer).item.text, /^In gs-2, tiling by 32 helped\./);
     assert.equal((own as KbReadAnswer).item.versions, 1);
     // A read from an offset gives the text from there, with its whole length and no next page.
-    const on = answerKbAsk(s, "rig-a", "read", {
+    const on = (await answerKbAsk(s, "rig-a", "read", {
       run: "gs-2",
       address: "gemv/gs-2/records/note:1",
       offset: 9,
-    }) as KbReadAnswer;
+    })) as KbReadAnswer;
     assert.match(on.item.text, /^tiling by 32 helped\./);
     assert.deepEqual([on.item.offset, on.item.next_offset], [9, null]);
     assert.equal(on.item.chars, on.item.text.length + 9);
   });
 
-  test("a run control did not assign the rig, or a bad ask, is refused in words", () => {
-    const s = setup();
-    const r = answerKbAsk(s, "rig-a", "search", { run: "survey-1", q: "tiling" });
+  test("a run control did not assign the rig, or a bad ask, is refused in words", async () => {
+    const s = await setup();
+    const r = await answerKbAsk(s, "rig-a", "search", { run: "survey-1", q: "tiling" });
     assert.match(
       (r as { refused: string }).refused,
       /control did not assign run survey-1 to rig-a/,
     );
-    const other = answerKbAsk(s, "rig-b", "search", { run: "gs-1", q: "tiling" });
+    const other = await answerKbAsk(s, "rig-b", "search", { run: "gs-1", q: "tiling" });
     assert.match(
       (other as { refused: string }).refused,
       /control did not assign run gs-1 to rig-b/,
     );
-    const bad = answerKbAsk(s, "rig-a", "search", { run: "gs-1", q: 3 });
+    const bad = await answerKbAsk(s, "rig-a", "search", { run: "gs-1", q: 3 });
     assert.match((bad as { refused: string }).refused, /^the ask is not one control takes: q:/);
   });
 
   test("on the bus: an answer goes only to the asking rig's own inbox, and no more asks at once than the limit", async () => {
-    const s = setup();
+    const s = await setup();
     const served = new Map<string, (r: BusRequest) => Promise<string | undefined>>();
     const bus = {
       serve: async (subject: string, answer: (r: BusRequest) => Promise<string | undefined>) => {

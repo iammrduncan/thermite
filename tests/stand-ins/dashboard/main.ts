@@ -76,7 +76,7 @@ setInterval(
   30_000,
 ).unref();
 
-const app = createControlApi(store, { admin: token }, keys.privateKeyPem, {
+const app = await createControlApi(store, { admin: token }, keys.privateKeyPem, {
   staleAfterMs: 180_000,
   pages: mountDashboard,
   kits: new KitRepos(join(dir, "kits")),

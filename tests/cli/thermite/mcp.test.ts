@@ -21,7 +21,7 @@ const KEY = "Bearer clikeyforthetestsonly";
 describe("thermite mcp", () => {
   test("add reads the secret from a file and reads the tools; list shows the hint; delete forgets it", async () => {
     const fake = await startFakeMcp({ kind: "bearer", token: KEY.slice(7) });
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       tokens: TOKENS,
       options: { secrets: SecretBox.ephemeral() },
     });

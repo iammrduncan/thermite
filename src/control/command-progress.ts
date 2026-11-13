@@ -247,19 +247,23 @@ export const checkWaits = (row: CheckRow): boolean =>
  * command for it. Reads only the checks the rig's fold holds and the commands, so the rows can be
  * followed often without building the rig's whole view.
  */
-export function checkRows(store: ControlStore, rig: string, now: number): Record<string, CheckRow> {
-  return checkRowsOf(store, rig, rigChecks(store, rig), now);
+export async function checkRows(
+  store: ControlStore,
+  rig: string,
+  now: number,
+): Promise<Record<string, CheckRow>> {
+  return checkRowsOf(store, rig, await rigChecks(store, rig), now);
 }
 
 /** The rows from the checks' runs a caller has already (the rig's view has them). */
-export function checkRowsOf(
+export async function checkRowsOf(
   store: ControlStore,
   rig: string,
   runs: Record<string, RigCheckView>,
   now: number,
-): Record<string, CheckRow> {
+): Promise<Record<string, CheckRow>> {
   const newest: Record<string, CommandRow> = {};
-  for (const c of store.commands.latest(rig, "rig_check")) {
+  for (const c of await store.commands.latest(rig, "rig_check")) {
     const k = String(c.payload.check ?? "");
     if (k && !newest[k]) newest[k] = c;
   }
@@ -311,12 +315,16 @@ export const modelFollowUrl = (rig: string): string =>
  * A rig's workers' model as the page follows it (goal 080): taking, until the rig's report names
  * the model control gives it; then its model check, which the rig runs by itself, to its result.
  */
-export function modelProgress(store: ControlStore, rig: string, now: number): Progress {
-  const r = store.reportedRigs.list().find((x) => x.id === rig);
+export async function modelProgress(
+  store: ControlStore,
+  rig: string,
+  now: number,
+): Promise<Progress> {
+  const r = (await store.reportedRigs.list()).find((x) => x.id === rig);
   const m = readModelInfo((r?.summary as { model?: unknown } | null)?.model);
-  if (takingModel(m, store.agentModels.byRig()[rig]))
+  if (takingModel(m, (await store.agentModels.byRig())[rig]))
     return { state: "taking", final: false, said: "", tone: "" };
-  const chk = checkRows(store, rig, now).model;
+  const chk = (await checkRows(store, rig, now)).model;
   return {
     state: `taken:${chk?.state ?? "none"}`,
     final: !chk || !checkWaits(chk),

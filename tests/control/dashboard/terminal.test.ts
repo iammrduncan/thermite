@@ -58,7 +58,7 @@ function fakeTerminal() {
 
 /** Control, rig-a with run js-1 at work and lane-1's trial in its terminal, the owner signed in. */
 async function setup() {
-  const s = controlStack({ tokens: TOKENS });
+  const s = await controlStack({ tokens: TOKENS });
   await s.env.service.applyCommand(s.env.assign);
   new Registry(s.env.ledger).startTrial({
     id: TRIAL,
@@ -72,7 +72,7 @@ async function setup() {
   const term = fakeTerminal();
   s.env.service.consoles.set(TRIAL, new TrialConsole(term));
   await s.relay();
-  s.store.liveLines.add(
+  await s.store.liveLines.add(
     "rig-a",
     "log-t",
     [
@@ -249,7 +249,7 @@ describe("a trial's terminal on Live", () => {
     await s.relay();
     const ledger = JSON.stringify(s.env.ledger.eventsAfter(0, 10_000).events);
     assert.doesNotMatch(ledger, /SCREEN-OF-THE-AGENT/);
-    assert.doesNotMatch(JSON.stringify(s.store.liveLines.tail("rig-a", 1000)), /SCREEN-OF/);
+    assert.doesNotMatch(JSON.stringify(await s.store.liveLines.tail("rig-a", 1000)), /SCREEN-OF/);
   });
 
   test("at most SCREENS_WATCHED_MAX of a rig's terminals are watched at once; one more is told why", async () => {
@@ -296,7 +296,7 @@ describe("a trial's terminal on Live", () => {
     );
     assert.equal(shell.status, 400);
     assert.match(String(((await shell.json()) as { said?: string }).said), /Confirm it first/);
-    const cmds = s.store.commands.latest("rig-a", "terminal_input", 10);
+    const cmds = await s.store.commands.latest("rig-a", "terminal_input", 10);
     assert.deepEqual(cmds.map((c) => [c.issued_by, c.payload.text ?? c.payload.keys]).reverse(), [
       ["owner:ui", "/compact"],
       ["owner:ui", ["down"]],
@@ -321,7 +321,7 @@ describe("a trial's terminal on Live", () => {
       { run: "js-1", lane: "planner", source: "planner" },
       new TrialConsole(planner),
     );
-    s.store.liveLines.add(
+    await s.store.liveLines.add(
       "rig-a",
       "log-t",
       [
@@ -448,7 +448,7 @@ describe("a trial's terminal on Live", () => {
       key: "esc",
       follow_up: "1",
     });
-    const cmds = s.store.commands.latest("rig-a", "terminal_input", 10).reverse();
+    const cmds = (await s.store.commands.latest("rig-a", "terminal_input", 10)).reverse();
     assert.deepEqual(
       cmds.map((c) => [c.payload.text ?? c.payload.keys, c.payload.follow_up ?? null]),
       [
@@ -502,8 +502,8 @@ describe("a trial's terminal on Live", () => {
       body: JSON.stringify({ rig: "rig-a", kind: "terminal_input", payload }),
     });
     assert.equal(rest.status, 201);
-    assert.throws(
-      () =>
+    await assert.rejects(
+      async () =>
         prepareCommand(s.store, s.env.keys.privateKeyPem, {
           kind: "terminal_input",
           payload,
@@ -511,7 +511,9 @@ describe("a trial's terminal on Live", () => {
         }),
       /Only the owner types into an agent's terminal/,
     );
-    const by = s.store.commands.latest("rig-a", "terminal_input", 10).map((c) => c.issued_by);
+    const by = (await s.store.commands.latest("rig-a", "terminal_input", 10)).map(
+      (c) => c.issued_by,
+    );
     assert.deepEqual(by.sort(), ["owner:api", "owner:mcp"]);
   });
 });

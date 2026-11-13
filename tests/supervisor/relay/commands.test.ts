@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import { heldCommands, publishHeld } from "../../../src/control/issue/bus.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { canonicalJson } from "../../../src/core/canonical.ts";
 import { signEnvelope } from "../../../src/core/commands.ts";
 import { commandSubject } from "../../../src/core/link/commands.ts";
@@ -21,7 +22,7 @@ const SUBJECT = commandSubject("rig-a");
  * harness's commands route fail that many times, as when it restarts.
  */
 async function rig() {
-  const s = controlStack({ env: makeHarnessEnv("rig-a") });
+  const s = await controlStack({ env: makeHarnessEnv("rig-a") });
   await s.relay();
   const delivered: string[] = [];
   let failHarness = 0;
@@ -53,7 +54,7 @@ async function rig() {
     failHarness: (n: number) => {
       failHarness = n;
     },
-    status: (id: string) => s.store.commands.get(id)?.status,
+    status: async (id: string) => (await s.store.commands.get(id))?.status,
   };
 }
 
@@ -64,7 +65,7 @@ describe("the supervisor's commands from the message bus", () => {
     // The harness does not answer: the bus keeps the command and hands it again.
     r.failHarness(1);
     assert.deepEqual(await r.take(), { acked: 0, again: 1 });
-    assert.equal(r.status(id), "pending");
+    assert.equal(await r.status(id), "pending");
     assert.equal(r.bus.on(SUBJECT).length, 1);
     // Handed again: the harness applies it, and the bus lets go.
     assert.deepEqual(await r.take(), { acked: 1, again: 0 });
@@ -73,13 +74,15 @@ describe("the supervisor's commands from the message bus", () => {
     assert.equal(r.bus.on(SUBJECT).length, 0);
     assert.equal(r.cfg.held?.size, 0);
     // Its outcome reaches control with the harness's next report, never from the supervisor.
-    assert.equal(r.status(id), "pending");
+    assert.equal(await r.status(id), "pending");
     await r.report();
-    assert.equal(r.status(id), "delivered");
+    assert.equal(await r.status(id), "delivered");
 
     // The bus hands it once more, after its duplicate window: acked, and not delivered again.
     r.bus.forgetIds();
-    const signed = r.store.db.prepare("select signed from command where id = ?").get(id) as {
+    const signed = sqliteBehind(r.store)
+      .db.prepare("select signed from command where id = ?")
+      .get(id) as {
       signed: string;
     };
     await r.bus.publish(SUBJECT, signed.signed, { id });
@@ -95,17 +98,17 @@ describe("the supervisor's commands from the message bus", () => {
     const assign = await r.issue("assign_campaign", r.env.assignPayload());
     const check = await r.issue("pause_run", { run: "smoke-1", reason: "after it" });
     assert.deepEqual(await r.take(), { acked: 1, again: 1 });
-    assert.equal(r.status(assign), "pending");
+    assert.equal(await r.status(assign), "pending");
     assert.ok(r.cfg.staging?.has(assign), "its sources stage");
     assert.ok(r.cfg.held?.has(assign));
     // The next one went on: the harness refused it (no such run yet), and its events say so.
     await r.report();
-    assert.equal(r.status(check), "failed");
+    assert.equal(await r.status(check), "failed");
     assert.equal(COMMAND_AGAIN_MS, 5000);
     ready = true;
     assert.deepEqual(await r.take(), { acked: 1, again: 0 });
     await r.report();
-    assert.equal(r.status(assign), "delivered");
+    assert.equal(await r.status(assign), "delivered");
     assert.equal(r.cfg.staging?.size, 0);
   });
 
@@ -123,14 +126,14 @@ describe("the supervisor's commands from the message bus", () => {
     const [held] = heldCommands(r.store, "rig-a");
     assert.equal(held?.id, pause);
     assert.equal(held?.why, "the rig's queue on the bus holds 100 commands it has not taken");
-    assert.equal(r.status(pause), "pending");
+    assert.equal(await r.status(pause), "pending");
     // The queue has room again: control publishes it again, and it reaches the rig.
     r.bus.publish = publish;
     await publishHeld(r.store);
     assert.deepEqual(heldCommands(r.store, "rig-a"), []);
     assert.deepEqual(await r.take(), { acked: 1, again: 0 });
     await r.report();
-    assert.equal(r.status(pause), "delivered");
+    assert.equal(await r.status(pause), "delivered");
     assert.equal(r.env.service.ledger.runs.get("smoke-1")?.status, "paused");
     assert.deepEqual(r.delivered, [assign, pause]);
   });
@@ -162,15 +165,17 @@ describe("the supervisor's commands from the message bus", () => {
     await r.api("POST", `/v1/commands/${cancelled}/cancel`);
     await settle();
     assert.deepEqual(await r.take(), { acked: 0, again: 0 }, "control took it off the bus");
-    assert.equal(r.status(cancelled), "failed");
+    assert.equal(await r.status(cancelled), "failed");
 
-    const expired = issueCommand(r.store, r.env.keys.privateKeyPem, {
-      rig: "rig-a",
-      kind: "pause_run",
-      payload: { run: "smoke-1", reason: "too late" },
-      ttlMinutes: 0.0001,
-      issuedBy: "owner:test",
-    }).id;
+    const expired = (
+      await issueCommand(r.store, r.env.keys.privateKeyPem, {
+        rig: "rig-a",
+        kind: "pause_run",
+        payload: { run: "smoke-1", reason: "too late" },
+        ttlMinutes: 0.0001,
+        issuedBy: "owner:test",
+      })
+    ).id;
     await settle();
     await new Promise((ok) => setTimeout(ok, 20));
     const now = new Date().toISOString();
@@ -192,6 +197,6 @@ describe("the supervisor's commands from the message bus", () => {
     // The expired one: control holds no newer form of it, and marks it expired as it is asked.
     assert.deepEqual(await r.take(), { acked: 3, again: 0 });
     assert.deepEqual(r.delivered, [], "the harness had none of them");
-    assert.equal(r.status(expired), "expired");
+    assert.equal(await r.status(expired), "expired");
   });
 });

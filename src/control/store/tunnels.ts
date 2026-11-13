@@ -81,7 +81,42 @@ const tunnelRigOf = (r: Row): TunnelRig & TunnelSecrets => {
   };
 };
 
-export class TunnelRigs extends StorePart {
+export interface TunnelRigs {
+  /** A rig minted for a pod about to be launched; its pod comes later (attachTunnelPod). */
+  add(
+    t: Pick<
+      TunnelRig,
+      "rig" | "port" | "box_public" | "code_expires_at" | "config" | "created_by"
+    > & {
+      prefix_sealed: string;
+      box_private_sealed: string;
+      code_sealed: string;
+      leaf_ca?: string | null | undefined;
+    },
+  ): Promise<void>;
+  /** The pod a rig in pull mode runs in, and control's address for it; refused once enrolled. */
+  attachPod(rig: string, pod: string, url: string): Promise<boolean>;
+  get(rig: string): Promise<(TunnelRig & TunnelSecrets) | undefined>;
+  list(): Promise<TunnelRig[]>;
+  /**
+   * Removes a minted rig whose pod was never made (its launch failed): nothing can enroll with
+   * its code any more. Refused once it has a pod.
+   */
+  drop(rig: string, by: string): Promise<boolean>;
+  /** Pins the pod's keys and spends the code; refused once pinned (a second enrollment). */
+  pin(rig: string, sign: string, box: string): Promise<boolean>;
+  /**
+   * The pod's address for the bus, as RunPod gives it while the pod runs (null: it has none now,
+   * as while stopped): kept when it changes, a new address with a step in the rig's history. False
+   * when it is the one kept, or the rig has no leaf.
+   */
+  setLeafAddress(rig: string, address: string | null): Promise<boolean>;
+  /** After each exchange: when it was, what the pod refused since, and the last error. */
+  exchanged(rig: string, r: { refused?: number; error?: string | null }): Promise<void>;
+}
+
+/** TunnelRigs on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteTunnelRigs extends StorePart {
   /** A rig minted for a pod about to be launched; its pod comes later (attachTunnelPod). */
   add(
     t: Pick<

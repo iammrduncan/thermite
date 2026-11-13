@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import { Credential } from "../../../src/control/credential.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { ADMIN, controlOnly, controlStack, signIn } from "../../helpers/control-stack.ts";
 import { stack } from "./stack.ts";
@@ -53,7 +54,7 @@ describe("control dashboard", () => {
   });
 
   test("failed sign-ins are counted for each address apart: one that fails too often waits, and another still signs in", async () => {
-    const { control, store } = controlStack({});
+    const { control, store } = await controlStack({});
     const from = (address: string, token: string) =>
       control.request(
         "/ui/login",
@@ -72,11 +73,11 @@ describe("control dashboard", () => {
     const other = await from("198.51.100.9", ADMIN);
     assert.equal(other.status, 303);
     assert.equal(other.headers.get("location"), "/ui");
-    assert.equal(store.auditLog.list(200, { action: "login_throttled" }).length, 1);
+    assert.equal((await store.auditLog.list(200, { action: "login_throttled" })).length, 1);
   });
 
   test("with only the token's hash, the owner signs in with the token, and the hash signs in no one", async () => {
-    const { control } = controlStack({
+    const { control } = await controlStack({
       tokens: { admin: Credential.ofHash(sha256(ADMIN)), rigs: {} },
     });
     const { login: ok, cookie } = await signIn(control, "admin-token-abcdef");
@@ -88,43 +89,50 @@ describe("control dashboard", () => {
 
   test("a session survives a restart of control, renews in use, and ends with a new token", async () => {
     // Each control is started again over the same store, with the same signing key.
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const keys = generateSigningKeys();
-    const control = (admin: string) => controlOnly({ store, keys, tokens: { admin } }).control;
-    const first = control("admin-token-abcdef");
+    const control = async (admin: string) =>
+      (await controlOnly({ store, keys, tokens: { admin } })).control;
+    const first = await control("admin-token-abcdef");
     const { login, cookie } = await signIn(first, "admin-token-abcdef");
     const set = login.headers.get("set-cookie") ?? "";
     assert.match(set, /Max-Age=2592000/);
     // Only a hash of the session id is stored.
-    const rows = store.db.prepare("select id_hash from ui_session").all() as { id_hash: string }[];
+    const rows = sqliteBehind(store).db.prepare("select id_hash from ui_session").all() as {
+      id_hash: string;
+    }[];
     assert.equal(rows.length, 1);
     assert.ok(!cookie.includes(rows[0]?.id_hash ?? "x"));
     // A new control process over the same store: still signed in, with the same form token.
-    const formToken = async (app: ReturnType<typeof control>) => {
+    const formToken = async (app: Awaited<ReturnType<typeof control>>) => {
       const r = await app.request("/ui", { headers: { cookie } });
       assert.equal(r.status, 200);
       return /name="csrf" value="([0-9a-f]+)"/.exec(await r.text())?.[1];
     };
     const before = await formToken(first);
-    const restarted = control("admin-token-abcdef");
+    const restarted = await control("admin-token-abcdef");
     assert.equal(await formToken(restarted), before);
     // Deployed with only the token's hash, control knows the same session.
-    const hashed = controlOnly({
-      store,
-      keys,
-      tokens: { admin: Credential.ofHash(sha256("admin-token-abcdef")), rigs: {} },
-    }).control;
+    const hashed = (
+      await controlOnly({
+        store,
+        keys,
+        tokens: { admin: Credential.ofHash(sha256("admin-token-abcdef")), rigs: {} },
+      })
+    ).control;
     assert.equal(await formToken(hashed), before);
     // A session older than a day is renewed when used.
-    store.db.prepare("update ui_session set expires_at = ?").run(Date.now() + 3_600_000);
+    sqliteBehind(store)
+      .db.prepare("update ui_session set expires_at = ?")
+      .run(Date.now() + 3_600_000);
     const used = await restarted.request("/ui", { headers: { cookie } });
     assert.match(used.headers.get("set-cookie") ?? "", /Max-Age=2592000/);
-    const row = store.db.prepare("select expires_at from ui_session").get() as {
+    const row = sqliteBehind(store).db.prepare("select expires_at from ui_session").get() as {
       expires_at: number;
     };
     assert.ok(row.expires_at > Date.now() + 29 * 24 * 3_600_000);
     // A new admin token ends every session.
-    const rotated = control("another-admin-token-0123");
+    const rotated = await control("another-admin-token-0123");
     const out = await rotated.request("/ui", { headers: { cookie } });
     assert.equal(out.status, 303);
     // Signing out removes it.

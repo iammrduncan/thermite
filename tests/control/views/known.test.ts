@@ -14,14 +14,14 @@ describe("what control knows, without a view", () => {
     await report(store, "rig-1", "ledger-1", [
       { kind: "run_created", subject: "r-1", body: { campaign: "speed", mode: "hill_climb" } },
     ]);
-    assert.equal(store.reportedRigs.listed("rig-1"), true);
-    assert.equal(store.reportedRigs.listed("rig-2"), false);
+    assert.equal(await store.reportedRigs.listed("rig-1"), true);
+    assert.equal(await store.reportedRigs.listed("rig-2"), false);
     assert.deepEqual(
-      rigViews(store).map((v) => v.id),
+      (await rigViews(store)).map((v) => v.id),
       ["rig-1"],
     );
-    store.retired.add("rig-1", "owner:ui");
-    assert.equal(store.reportedRigs.listed("rig-1"), false);
+    await store.retired.add("rig-1", "owner:ui");
+    assert.equal(await store.reportedRigs.listed("rig-1"), false);
     closeBus(store);
   });
 
@@ -31,14 +31,14 @@ describe("what control knows, without a view", () => {
       { kind: "run_created", subject: "r-1", body: { campaign: "speed", mode: "hill_climb" } },
       { kind: "run_created", subject: "loose-1", body: { mode: "goal" } },
     ]);
-    const listed = campaignModes(store, rigViews(store));
+    const listed = await campaignModes(store, await rigViews(store));
     for (const name of ["speed", "loose-1"]) {
       assert.ok(listed.has(name), name);
-      assert.equal(campaignKnown(store, name), true, name);
+      assert.equal(await campaignKnown(store, name), true, name);
     }
     for (const name of ["other", "r-1"]) {
       assert.ok(!listed.has(name), name);
-      assert.equal(campaignKnown(store, name), false, name);
+      assert.equal(await campaignKnown(store, name), false, name);
     }
     closeBus(store);
   });

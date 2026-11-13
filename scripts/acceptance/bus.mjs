@@ -47,7 +47,7 @@ import { systemFiguresChecks } from "./lib/system-figures.mjs";
 const { natsBus } = await import("../../src/common/bus/index.ts");
 const { tlsOf } = await import("../../src/common/bus/tls.ts");
 const { BusTls, RigConsumers, reloadBus } = await import("../../src/control/bus/index.ts");
-const { ControlStore } = await import("../../src/control/store/index.ts");
+const { openControlStore } = await import("../../src/control/store/index.ts");
 const commands = await import("../../src/core/link/commands.ts");
 const config = await import("../../src/core/link/config.ts");
 const { EVENT_STREAM, EVENT_STREAM_CONFIG } = await import("../../src/core/link/events.ts");
@@ -251,11 +251,12 @@ try {
     { subjects: kb.subjects, max_msgs_per_subject: kb.max_msgs_per_subject },
   );
 
-  const store = new ControlStore(":memory:");
+  const store = openControlStore(":memory:");
   // Two rigs enrolled, as control enrolls every rig: only their tokens' hashes kept.
-  for (const rig of ["rig-a", "rig-b"]) store.enrollments.enroll(rig, "0".repeat(64), "check");
-  store.busKeys.setRigKey("rig-a", keys.a.publicKey);
-  store.busKeys.setRigKey("rig-b", keys.b.publicKey);
+  for (const rig of ["rig-a", "rig-b"])
+    await store.enrollments.enroll(rig, "0".repeat(64), "check");
+  await store.busKeys.setRigKey("rig-a", keys.a.publicKey);
+  await store.busKeys.setRigKey("rig-b", keys.b.publicKey);
   await new RigConsumers({ store, bus }).make();
   /** @type {string[]} */
   const made = [];

@@ -93,10 +93,10 @@ export class ChatGPTLogins {
    * The address of OpenAI's sign-in page for a new sign-in. Signing in again to a provider keeps
    * its issued client ID and host ID, as OpenAI asks.
    */
-  start(name?: string): string {
+  async start(name?: string): Promise<string> {
     const now = Date.now();
     for (const [k, v] of this.pending) if (now - v.at > PENDING_MS) this.pending.delete(k);
-    const old = name ? this.store.modelProviders.get(name) : undefined;
+    const old = name ? await this.store.modelProviders.get(name) : undefined;
     const was = old ? this.login(old) : undefined;
     const verifier = b64url(randomBytes(32));
     const state = b64url(randomBytes(32));
@@ -231,13 +231,13 @@ export class ChatGPTLogins {
         resource: CHATGPT_API,
       });
       const next = this.loginOf(t, login.client_id, login.host_id);
-      this.store.modelProviders.setKey(name, this.seal(next));
+      await this.store.modelProviders.setKey(name, this.seal(next));
       return next.access;
     } catch (err) {
       const why = errorText(err);
       if (err instanceof LoginEnded) {
         const error = `its ChatGPT sign-in ended (${why}): sign in again`;
-        this.store.modelProviders.setModels(name, { error });
+        await this.store.modelProviders.setModels(name, { error });
         return { error };
       }
       // OpenAI unreachable for now: the token keeps working until it ends.

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { controlStack, signIn } from "../../helpers/control-stack.ts";
 import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 
@@ -14,7 +15,7 @@ const C = "9a41c07e0d1f2a3b4c5d6e7f8091a2b3c4d5e6f7";
 async function stack() {
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
   const probes: string[] = [];
-  const { env, store, control, relay } = controlStack({
+  const { env, store, control, relay } = await controlStack({
     env: makeJudgeEnv({ promotion: "auto" }),
     options: {
       kits,
@@ -135,15 +136,15 @@ describe("the new-campaign page", () => {
     assert.equal(res.status, 303);
     assert.equal(res.headers.get("location"), "/ui/campaigns/matmul-speed/runs/matmul-speed-1");
     assert.ok(s.probes.includes("https://git.example.com/team/fastmat.git@main"));
-    const [v] = s.store.campaigns.versions("matmul-speed");
+    const [v] = await s.store.campaigns.versions("matmul-speed");
     const contract = v?.contract as { target: unknown; project: { kit: { commit: string } } };
     assert.deepEqual(contract.target, { type: "cpu", class: "generic-cpu" });
     assert.equal(contract.project.kit.commit, s.kits.head("matmul-speed-kit"));
-    const cmd = s.store.commands.list(10).find((c) => c.kind === "assign_campaign");
+    const cmd = (await s.store.commands.list(10)).find((c) => c.kind === "assign_campaign");
     assert.equal(cmd?.rig, "rig-a");
     assert.equal(cmd?.issued_by, "owner:ui");
     assert.ok(
-      JSON.stringify(s.store.db.prepare("select action from audit").all()).includes(
+      JSON.stringify(sqliteBehind(s.store).db.prepare("select action from audit").all()).includes(
         "campaign_version_created",
       ),
     );
@@ -161,31 +162,38 @@ describe("the new-campaign page", () => {
         promotion: "",
         start_value,
       });
-    const sources = (campaign: string) => s.store.campaigns.versions(campaign)[0]?.sources;
+    const sources = async (campaign: string) =>
+      (await s.store.campaigns.versions(campaign))[0]?.sources;
 
     const onControl = await send("on-control", { to: "control" }, "start");
     assert.equal(onControl.status, 303);
     assert.equal(onControl.headers.get("location"), "/ui/campaigns/on-control/runs/on-control-1");
-    assert.equal(sources("on-control")?.results, undefined);
+    assert.equal((await sources("on-control"))?.results, undefined);
 
     assert.equal(
       (await send("to-project", { to: "project", access: "deploy-rw" }, "save")).status,
       303,
     );
-    assert.deepEqual(sources("to-project")?.results, { to: "project", access: "deploy-rw" });
+    assert.deepEqual((await sources("to-project"))?.results, {
+      to: "project",
+      access: "deploy-rw",
+    });
 
     const elsewhere = { to: "repository", git: "git@git.example.com:team/results.git" };
     assert.equal(
       (await send("to-repository", { ...elsewhere, access: "deploy-rw" }, "save")).status,
       303,
     );
-    assert.deepEqual(sources("to-repository")?.results, { ...elsewhere, access: "deploy-rw" });
+    assert.deepEqual((await sources("to-repository"))?.results, {
+      ...elsewhere,
+      access: "deploy-rw",
+    });
 
     // A destination with no Git access to push with is refused in words, and nothing is saved.
     const refused = await (await send("no-access", { to: "project", access: "" }, "save")).text();
     assert.match(refused, /choose a Git access that can push there, or Only on control/);
     assert.doesNotMatch(refused, /Unrecognized key/);
-    assert.equal(s.store.campaigns.versions("no-access").length, 0);
+    assert.equal((await s.store.campaigns.versions("no-access")).length, 0);
   });
 
   test("every hidden-test field says what the judge checks on a hidden case", async () => {
@@ -241,7 +249,7 @@ describe("the new-campaign page", () => {
       start_value: "save",
     });
     assert.equal(res.status, 303);
-    const [v] = s.store.campaigns.versions("matmul-speed");
+    const [v] = await s.store.campaigns.versions("matmul-speed");
     assert.deepEqual((v?.contract as { lanes?: unknown } | undefined)?.lanes, {
       count: 2,
       trials_per_epoch: 3,
@@ -274,7 +282,7 @@ describe("the new-campaign page", () => {
       start_value: "save",
     });
     assert.match(await bad.text(), /Ideas kept ready is 0 or more/);
-    assert.equal(s.store.campaigns.versions("matmul-bad").length, 0);
+    assert.equal((await s.store.campaigns.versions("matmul-bad")).length, 0);
   });
 
   test("Verified claims before the check (goal 112): beside Run for at least, explained; in the contract only when set; refused below 1", async () => {
@@ -316,15 +324,15 @@ describe("the new-campaign page", () => {
         start_value: "save",
       });
     assert.equal((await research("rl-floor", { min_verified_claims: 12 })).status, 303);
-    const [floor] = s.store.campaigns.versions("rl-floor");
+    const [floor] = await s.store.campaigns.versions("rl-floor");
     assert.ok(floor);
     assert.equal((floor.contract as { min_verified_claims?: unknown }).min_verified_claims, 12);
     assert.equal((await research("rl-none", {})).status, 303);
-    const [none] = s.store.campaigns.versions("rl-none");
+    const [none] = await s.store.campaigns.versions("rl-none");
     assert.ok(none && !("min_verified_claims" in (none.contract as object)), "no floor: not in it");
     const bad = await research("rl-bad", { min_verified_claims: 0 });
     assert.match(await bad.text(), /Verified claims before the check is 1 or more/);
-    assert.equal(s.store.campaigns.versions("rl-bad").length, 0);
+    assert.equal((await s.store.campaigns.versions("rl-bad")).length, 0);
   });
 
   test("past research: the page links to the knowledge base, and a campaign saved without starting offers grants and From past research", async () => {
@@ -352,7 +360,10 @@ describe("the new-campaign page", () => {
       /<a class="btn sm" href="\/ui\/knowledge\/matmul-speed">Open the collection<\/a>/,
     );
     assert.match(campaign, /From past research/);
-    assert.equal(s.store.commands.list(10).filter((c) => c.kind === "assign_campaign").length, 0);
+    assert.equal(
+      (await s.store.commands.list(10)).filter((c) => c.kind === "assign_campaign").length,
+      0,
+    );
   });
 
   test("try the kit first: a no-agents run, a page that waits for it, and a start form for the real run", async () => {
@@ -393,7 +404,7 @@ describe("the new-campaign page", () => {
       String(started.headers.get("location")),
       /\/ui\/campaigns\/matmul-speed\/runs\/matmul-speed-1$/,
     );
-    const kinds = s.store.commands.list(10).map((c) => c.kind);
+    const kinds = (await s.store.commands.list(10)).map((c) => c.kind);
     assert.deepEqual(kinds, ["assign_campaign", "assign_campaign"]);
     const bad = await s.post("/ui/campaigns/matmul-speed/runs", { csrf: s.csrf, rig: "nope" });
     assert.match(
@@ -431,7 +442,7 @@ describe("the new-campaign page", () => {
       start_value: "save",
     });
     assert.equal(saved.status, 303, await saved.text());
-    const [v] = s.store.campaigns.versions("matmul-speed");
+    const [v] = await s.store.campaigns.versions("matmul-speed");
     assert.deepEqual(v?.sources.kit, { control: "kits/matmul-speed-kit" });
     const contract = v?.contract as { project: { kit: { commit: string } }; cells: string[] };
     assert.deepEqual(contract.cells, ["small"]);
@@ -473,8 +484,8 @@ describe("the new-campaign page", () => {
     assert.match(page, /Not started: fix these first/);
     assert.match(page, /\{size\} is not a placeholder here/);
     assert.match(page, /data-draft="\{&quot;mode&quot;:&quot;hill_climb&quot;/);
-    assert.equal(s.store.campaigns.versions().length, 0);
-    assert.equal(s.store.commands.list(10).length, 0);
+    assert.equal((await s.store.campaigns.versions()).length, 0);
+    assert.equal((await s.store.commands.list(10)).length, 0);
     // No rig chosen, or a form without its token, changes nothing either.
     const noRig = await s.post("/ui/campaigns/new", {
       csrf: s.csrf,
@@ -488,7 +499,7 @@ describe("the new-campaign page", () => {
       rig: "rig-a",
     });
     assert.equal(forged.status, 403);
-    assert.equal(s.store.campaigns.versions().length, 0);
+    assert.equal((await s.store.campaigns.versions()).length, 0);
   });
 
   test("a project in a folder of its repository: the page asks for it, the lookup reads that folder, and the contract names it", async () => {
@@ -560,13 +571,13 @@ describe("the new-campaign page", () => {
     });
     assert.equal(res.status, 303);
     assert.ok(s.probes.includes(`${mono}@main in examples/matmul-cpu/project`));
-    const [v] = s.store.campaigns.versions("matmul-speed");
+    const [v] = await s.store.campaigns.versions("matmul-speed");
     assert.equal(
       (v?.contract as { project: { folder?: string } } | undefined)?.project.folder,
       "examples/matmul-cpu/project",
     );
     // The rig is sent the whole repository's commit, and the contract that names the folder.
-    const payload = s.store.commands.latestAssignments().get("matmul-speed")?.payload as {
+    const payload = (await s.store.commands.latestAssignments()).get("matmul-speed")?.payload as {
       contract: { project: { folder?: string } };
       seed: { commit: string };
       imports: { kind: string; commit: string; source?: { git?: string } }[];
@@ -586,25 +597,25 @@ describe("the new-campaign page", () => {
     });
     assert.equal(bad.status, 200);
     assert.match(await bad.text(), /project\.folder: a folder in the repository/);
-    assert.equal(s.store.campaigns.versions("abs-folder").length, 0);
+    assert.equal((await s.store.campaigns.versions("abs-folder")).length, 0);
   });
 
   test("agents never start on a rig with no model: the page gives it one, saves the campaign, and starts once the rig has it", async () => {
     const s = await stack();
     // The rig reports that its agents have no model.
     const model = (m: unknown) =>
-      s.store.db
-        .prepare(
+      sqliteBehind(s.store)
+        .db.prepare(
           "update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-a'",
         )
         .run(JSON.stringify(m));
     model({ source: "none", harness: "pi" });
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "zen",
       type: "opencode",
       base_url: "https://opencode.ai/zen/v1",
     });
-    s.store.modelProviders.setModels("zen", [
+    await s.store.modelProviders.setModels("zen", [
       { id: "glm-5.3-flash-free" },
       { id: "deepseek-v4.1-flash-free" },
     ]);
@@ -669,8 +680,12 @@ describe("the new-campaign page", () => {
       research,
       /glm-5\.3-flash-free is one of OpenCode's free models, which work only inside OpenCode, and rig-a's agents would run in Pi/,
     );
-    assert.equal(s.store.agentModels.byRig()["rig-a"], undefined, "the rig was given nothing");
-    assert.equal(s.store.campaigns.versions("matmul-speed").length, 0, "nothing created");
+    assert.equal(
+      (await s.store.agentModels.byRig())["rig-a"],
+      undefined,
+      "the rig was given nothing",
+    );
+    assert.equal((await s.store.campaigns.versions("matmul-speed")).length, 0, "nothing created");
 
     // A model chosen on the page: the rig gets it, the campaign is saved, no run yet.
     const saved = await send({ agents_model: "zen|glm-5.3-flash-free" });
@@ -680,7 +695,7 @@ describe("the new-campaign page", () => {
       to,
       /^\/ui\/campaigns\/matmul-speed\?ok=Saved\. rig-a takes glm-5\.3-flash-free within a minute/,
     );
-    assert.deepEqual(s.store.agentModels.byRig()["rig-a"], {
+    assert.deepEqual((await s.store.agentModels.byRig())["rig-a"], {
       provider: "zen",
       model: "glm-5.3-flash-free",
       harness: "opencode",
@@ -715,19 +730,19 @@ describe("the new-campaign page", () => {
       })
     ).text();
     assert.match(codexRefused, /Codex runs only with a ChatGPT subscription/);
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "openai",
       type: "openai",
       base_url: "https://api.openai.com/v1",
       key: { sealed: "s1:not-opened-here", hint: "…abcd" },
     });
-    s.store.modelProviders.setModels("openai", [{ id: "gpt-test" }]);
+    await s.store.modelProviders.setModels("openai", [{ id: "gpt-test" }]);
     const inCodex = await send({
       draft: JSON.stringify(draft({ campaign: "matmul-codex" })),
       agents_model: "openai|gpt-test",
       agents_harness: "codex",
     });
     assert.match(decodeURIComponent(String(inCodex.headers.get("location"))), /takes gpt-test/);
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "codex");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "codex");
   });
 });

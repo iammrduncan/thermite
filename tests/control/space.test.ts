@@ -7,7 +7,7 @@ import { folderBytes } from "../../src/common/fs.ts";
 import { spaceBlock } from "../../src/control/dashboard/settings/space.ts";
 import { spaceMetricsText } from "../../src/control/metrics.ts";
 import { SPACE_KINDS, SPACE_LOOK_MS, spaceOf, spaceTotal } from "../../src/control/space.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { openControlStore } from "../../src/control/store/index.ts";
 import { esc } from "../../src/control/ui/components/index.ts";
 import { controlStack, signIn } from "../helpers/control-stack.ts";
 import { report } from "../helpers/view-events.ts";
@@ -31,7 +31,7 @@ describe("the space control's kinds take", () => {
 
   test("each kind on control's disk, read at most once a minute", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-space-"));
-    const store = new ControlStore(join(dir, "control.db"));
+    const store = openControlStore(join(dir, "control.db"));
     put(join(dir, "exports", "rig-a", "20261031T000000Z-0123abcd", "events.jsonl"), 1000);
     put(join(dir, "kits", "speed", "kit.json"), 200);
     put(join(dir, "kb-files", "ab", "abcd"), 30);
@@ -63,20 +63,20 @@ describe("the space control's kinds take", () => {
     put(join(dir, "exports", "rig-a", "later.bin"), 500);
     assert.equal(of(await spaceOf(store, undefined, now + SPACE_LOOK_MS - 1)).exports, 1000);
     assert.equal(of(await spaceOf(store, undefined, now + SPACE_LOOK_MS)).exports, 1500);
-    store.db.close();
+    await store.close();
   });
 
   test("a rig's kinds are the sum of what each rig not retired last said it keeps", async () => {
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const inv = (bytes: number) => ({ bytes, runs: [], items: [] });
     const at = new Date().toISOString();
-    store.retention.takeSpace("rig-a", {
+    await store.retention.takeSpace("rig-a", {
       read_at: at,
       kinds: { builds: inv(100), advisor_records: inv(7) },
     });
-    store.retention.takeSpace("rig-b", { read_at: at, kinds: { builds: inv(50) } });
-    store.retention.takeSpace("rig-c", { read_at: at, kinds: { builds: inv(1000) } });
-    store.retired.add("rig-c", "owner:ui");
+    await store.retention.takeSpace("rig-b", { read_at: at, kinds: { builds: inv(50) } });
+    await store.retention.takeSpace("rig-c", { read_at: at, kinds: { builds: inv(1000) } });
+    await store.retired.add("rig-c", "owner:ui");
     const uses = await spaceOf(store, undefined);
     const of = (kind: string) => uses.find((u) => u.kind === kind);
     assert.deepEqual([of("builds")?.bytes, of("builds")?.rigs], [150, 2]);
@@ -91,7 +91,7 @@ describe("the space control's kinds take", () => {
   });
 
   test("/metrics has one series for each kind, and Settings › Space shows each with its ⓘ", async () => {
-    const { store, control } = controlStack();
+    const { store, control } = await controlStack();
     await report(store, "rig-1", "ledger-1", [
       { kind: "run_created", subject: "r-1", body: { campaign: "speed", mode: "hill_climb" } },
     ]);

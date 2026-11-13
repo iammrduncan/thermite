@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { FolderSchema } from "../../../core/contract.ts";
 import { McpUses } from "../../../core/mcp.ts";
 import { askOwnerFrom, ownModels, startCampaign } from "../../campaigns/index.ts";
@@ -59,12 +60,12 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       "cache-control": "no-cache",
     }),
   );
-  const newCampaignPage = (
+  const newCampaignPage = async (
     c: Ctx,
     extra: { draft?: Record<string, unknown>; errors?: string[] } = {},
-    vs = views(),
-  ) =>
-    page(
+  ) => {
+    const vs = await views();
+    return page(
       c,
       {
         title: "New campaign",
@@ -74,11 +75,10 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       newCampaignBody({
         csrf: csrf(c),
         rigs: vs,
-        access: store.gitAccess.list(),
+        access: await store.gitAccess.list(),
         // The MCP servers in Settings, for the kit's MCP servers block (goal 068).
-        mcp: mcpServers.list(),
-        models: store.modelProviders
-          .list()
+        mcp: await mcpServers.list(),
+        models: (await store.modelProviders.list())
           .filter((p) => p.models.length)
           .map((p) => ({
             group: p.name,
@@ -89,13 +89,16 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
             })),
           })),
         // The Agents' context checks a window against each rig's agents' models (goal 070).
-        agentModels: Object.fromEntries(vs.map((u) => [u.id, ownModels(store, u.id)])),
+        agentModels: Object.fromEntries(
+          await mapInTurn(vs, async (u) => [u.id, await ownModels(store, u.id)] as const),
+        ),
         ...extra,
       }),
       vs,
     );
-  app.get("/ui/campaigns/new", (c) =>
-    opts.kits ? newCampaignPage(c) : c.text("This control keeps no kits.", 404),
+  };
+  app.get("/ui/campaigns/new", async (c) =>
+    opts.kits ? await newCampaignPage(c) : c.text("This control keeps no kits.", 404),
   );
   // The project's head at a ref and its paths (not its contents), for the page's suggestions:
   // a project in a folder of its repository gets that folder's paths. A POST with the form's
@@ -119,7 +122,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
         await (opts.probeRepo ?? probeRepository)(
           url,
           ref,
-          accessFor(one("access") || undefined, url),
+          await accessFor(one("access") || undefined, url),
           folder,
         ),
       );
@@ -136,7 +139,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     try {
       const why = await (opts.pushCheck ?? pushCheck)(
         url,
-        accessFor(one("access") || undefined, url),
+        await accessFor(one("access") || undefined, url),
       );
       return c.json(
         why
@@ -186,7 +189,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       const manifest = (await (opts.readKit ?? readKitManifest)(
         one("url"),
         one("commit"),
-        accessFor(one("access") || undefined, one("url")),
+        await accessFor(one("access") || undefined, one("url")),
       )) as { name?: unknown; mcp_servers?: unknown };
       const uses = McpUses.safeParse(manifest?.mcp_servers ?? []);
       if (!uses.success)
@@ -215,9 +218,11 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     try {
       draft = JSON.parse(String(f.draft ?? "")) as Record<string, unknown>;
     } catch {
-      return newCampaignPage(c, { errors: ["The page sent no answers: is its script blocked?"] });
+      return await newCampaignPage(c, {
+        errors: ["The page sent no answers: is its script blocked?"],
+      });
     }
-    const vs = views();
+    const vs = await views();
     const rig = vs.find((u) => u.id === String(f.rig ?? ""));
     if (!rig) return newCampaignPage(c, { draft, errors: ["Choose a rig for the first run."] });
     const target = rig.hardware?.target;
@@ -238,12 +243,12 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
           await (opts.probeRepo ?? probeRepository)(
             project.url,
             project.ref || "HEAD",
-            accessFor((project as { access?: string }).access, project.url),
+            await accessFor((project as { access?: string }).access, project.url),
             folder.success ? folder.data : undefined,
           )
         ).commit;
       } catch (err) {
-        return newCampaignPage(c, {
+        return await newCampaignPage(c, {
           draft,
           errors: [`The project: ${errorText(err)}`],
         });
@@ -262,15 +267,20 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     // a Claude subscription only in Claude Code, where no research worker runs (goal 190).
     const researchRefused =
       draft.mode === "research" && startValue === "start"
-        ? researchModelRefusal(store, rig, chosen || undefined, String(f.agents_harness ?? ""))
+        ? await researchModelRefusal(
+            store,
+            rig,
+            chosen || undefined,
+            String(f.agents_harness ?? ""),
+          )
         : undefined;
     if (researchRefused) return newCampaignPage(c, { draft, errors: [researchRefused] });
     if (chosen) {
-      const given = giveRigModel(
+      const given = await giveRigModel(
         store,
         rig.id,
         chosen,
-        harnessKept(store, rig.id, chosen, String(f.agents_harness ?? "")),
+        await harnessKept(store, rig.id, chosen, String(f.agents_harness ?? "")),
       );
       if ("error" in given) return newCampaignPage(c, { draft, errors: [given.error] });
       const [, mRaw] = chosen.split("|");
@@ -282,7 +292,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       }
     }
     // Control gave the rig a model it has not taken yet: saved now, started once it has.
-    const pending = store.agentModels.byRig()[rig.id];
+    const pending = (await store.agentModels.byRig())[rig.id];
     if (
       !chosen &&
       startValue === "start" &&
@@ -292,7 +302,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       startValue = "save";
       modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; the rig's page shows it taking the model until then). Then start the run here.`;
     }
-    if (!chosen && startValue === "start" && agentsModelMissing(store, rig))
+    if (!chosen && startValue === "start" && (await agentsModelMissing(store, rig)))
       return newCampaignPage(c, {
         draft,
         errors: [
@@ -325,7 +335,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       r = { ok: false, errors: [errorText(err)] };
     }
     if (!r.ok) return newCampaignPage(c, { draft, errors: r.errors });
-    if (r.run && split !== undefined) sendSplit(store, opts.privateKeyPem, rig.id, split);
+    if (r.run && split !== undefined) await sendSplit(store, opts.privateKeyPem, rig.id, split);
     return c.redirect(
       r.run
         ? `${runHref({ id: r.run, campaign: r.campaign })}${r.woke ? `?ok=${encodeURIComponent(r.woke)}` : ""}`

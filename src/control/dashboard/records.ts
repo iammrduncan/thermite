@@ -26,7 +26,7 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
 
   // The audit log (goals 015 and 181): AUDIT_PAGE entries a page, newest first, filtered by kind,
   // by who and by rig, with the commands' delivery and outcome. MCP calls only when asked for.
-  app.get("/ui/audit", (c) => {
+  app.get("/ui/audit", async (c) => {
     const now = Date.now();
     const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
     const query: AuditQuery = {
@@ -43,24 +43,24 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
       rigs: query.rig,
       words: query.q,
     };
-    const p = store.auditLog.page(
+    const p = await store.auditLog.page(
       AUDIT_PAGE,
       filter,
       query.before !== undefined ? { before: query.before } : { after: query.after },
     );
     const first = p.entries[0]?.id;
-    const vs = views();
+    const vs = await views();
     const rigs = [...new Set([...vs.map((u) => u.id), ...query.rig])].sort();
     return page(
       c,
       { title: "Audit log", summary: "who did what through control", active: "audit" },
-      auditBody({
+      await auditBody({
         entries: p.entries,
         query,
         rigs,
-        command: (id) => store.commands.row(id),
-        from: first === undefined ? 0 : store.auditLog.count(filter, first) + 1,
-        total: store.auditLog.count(filter),
+        command: async (id) => store.commands.row(id),
+        from: first === undefined ? 0 : (await store.auditLog.count(filter, first)) + 1,
+        total: await store.auditLog.count(filter),
         older: p.older,
         newer: p.newer,
         now,
@@ -69,8 +69,8 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
     );
   });
 
-  app.get("/ui/leaderboard", (c) => {
-    const board = leaderboard(store, { staleAfterMs: opts.staleAfterMs });
+  app.get("/ui/leaderboard", async (c) => {
+    const board = await leaderboard(store, { staleAfterMs: opts.staleAfterMs });
     const body = Object.entries(board)
       .map(([campaign, rows]) => {
         const best = Math.max(0.0001, ...rows.map((r) => r.gain));
@@ -100,10 +100,10 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
   // .tar.gz. Owner only, as the whole dashboard is (its session is the owner's). Delete, with the
   // exports ticked (`pick`), shows their confirmation at the top; its form deletes them.
   const files = opts.exportFiles;
-  app.get("/ui/exports", (c) => {
-    const vs = views();
+  app.get("/ui/exports", async (c) => {
+    const vs = await views();
     const now = Date.now();
-    const all = store.exports.all(1000);
+    const all = await store.exports.all(1000);
     const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
     const at = Number(c.req.query("at"));
     const query = {
@@ -116,16 +116,20 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
     const rigs = [
       ...new Set([...all.map((e) => e.rig), ...vs.map((u) => u.id), ...query.rig]),
     ].sort();
-    const campaignOf = (e: (typeof all)[number]) => {
+    // Each export's campaign, read once: the page's filters and rows ask for it many times.
+    const campaigns = new Map<(typeof all)[number], string | undefined>();
+    for (const e of all) {
       const run = exportRun(e);
-      return run ? (store.runRegistry.campaignOf(run, e.rig) ?? undefined) : undefined;
-    };
+      const campaign = run ? await store.runRegistry.campaignOf(run, e.rig) : undefined;
+      campaigns.set(e, campaign ?? undefined);
+    }
+    const campaignOf = (e: (typeof all)[number]) => campaigns.get(e);
     const rig = query.rig.length === 1 ? query.rig[0] : undefined;
     let confirm: Parameters<typeof exportsBody>[0]["confirm"];
     if (c.req.query("delete")) {
       const refs = (c.req.queries("pick") ?? []).flatMap((v) => pickedExport(v) ?? []);
       try {
-        confirm = { ...exportsToDelete({ store, files }, refs, now), refused: undefined };
+        confirm = { ...(await exportsToDelete({ store, files }, refs, now)), refused: undefined };
       } catch (err) {
         if (!(err instanceof Refusal)) throw err;
         confirm = { found: [], gone: [], refused: errorText(err) };
@@ -168,13 +172,13 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
     };
     if (!refs.length) return to("error", "Tick one or more exports, then press Delete.");
     try {
-      return to("sent", deleteExports({ store, files }, refs, "owner:ui").said);
+      return to("sent", (await deleteExports({ store, files }, refs, "owner:ui")).said);
     } catch (err) {
       if (!(err instanceof Refusal)) throw err;
       return to("error", errorText(err));
     }
   });
-  app.get("/ui/exports/:rig/:name/archive", (c) =>
+  app.get("/ui/exports/:rig/:name/archive", async (c) =>
     archiveResponse(
       c,
       { store, files: opts.exportFiles, by: "owner:ui" },
@@ -184,8 +188,8 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
   );
 
   // Reports (goal 181): what each finished run produced, newest first.
-  app.get("/ui/reports", (c) => {
-    const vs = views();
+  app.get("/ui/reports", async (c) => {
+    const vs = await views();
     const query = reportsQuery(
       (k) => c.req.query(k),
       (k) => (c.req.queries(k) ?? []).filter(Boolean),

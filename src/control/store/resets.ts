@@ -4,8 +4,24 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * A rig's full resets (goal 125, T6), one step at a time, each in the audit log.
  */
+export interface FullResets {
+  open(rig: string): Promise<Row | undefined>;
+  list(limit?: number): Promise<Row[]>;
+  create(rig: string, by: string): Promise<number>;
+  update(
+    id: number,
+    fields: {
+      state: string;
+      command?: string;
+      export_name?: string;
+      through_event?: number;
+      detail?: string;
+    },
+  ): Promise<void>;
+}
 
-export class FullResets extends StorePart {
+/** FullResets on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteFullResets extends StorePart {
   open(rig: string): Row | undefined {
     return this.db
       .prepare(

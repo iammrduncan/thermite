@@ -15,7 +15,9 @@ const ATTEMPT = "a-0000000000000001";
 const OTHER = "a-0000000000000002";
 
 async function control() {
-  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": "t-a-abcdef" } } });
+  const { store, control: api } = await controlOnly({
+    tokens: { rigs: { "rig-a": "t-a-abcdef" } },
+  });
   const { page } = await signIn(api);
   let id = 0;
   const ingest = async (

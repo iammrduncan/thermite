@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { EventsApply } from "../../src/control/events/index.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { EVENT_STREAM } from "../../src/core/link/events.ts";
 import { callUsage } from "../../src/core/usage.ts";
 import { assigned } from "../helpers/assignments.ts";
@@ -74,8 +75,8 @@ const call = (trial: string) => ({
 
 /** A command control issued the rig, pending until the harness's outcome comes. */
 function issued(store: ControlStore, rig: string, id: string): void {
-  store.db
-    .prepare(
+  sqliteBehind(store)
+    .db.prepare(
       "insert into command (id, rig, kind, signed, issued_by, issued_at, status) values (?, ?, 'pause_run', '{}', 'owner:ui', ?, 'pending')",
     )
     .run(id, rig, new Date().toISOString());
@@ -97,10 +98,10 @@ const RUN_PAGE: Ev[] = [
 ];
 
 /** Every record the apply writes, as rows: what must match between two stores. */
-function derived(store: ControlStore) {
+async function derived(store: ControlStore) {
   const all = (sql: string) =>
-    store.db
-      .prepare(sql)
+    sqliteBehind(store)
+      .db.prepare(sql)
       .all()
       .map((r) => ({ ...r }));
   return {
@@ -114,18 +115,18 @@ function derived(store: ControlStore) {
     kb: all("select seq, campaign, rig, ledger, run, kind, ref, body from kb_item order by seq"),
     cursor: all("select seq, item_seq from kb_cursor"),
     held: all("select rig, ledger_id, through_event from rig_ledger order by rig, ledger_id"),
-    place: store.busPositions.of(EVENT_STREAM),
+    place: await store.busPositions.of(EVENT_STREAM),
   };
 }
 
 describe("control's records, applied from the events stream", () => {
   test("in the stream's order, with its place in the same transaction", async () => {
     const store = controlStore();
-    assigned(store, "rig-a", "gs-1", "gemv");
+    await assigned(store, "rig-a", "gs-1", "gemv");
     issued(store, "rig-a", "cmd-1");
     await page(store, "rig-a", "l-1", RUN_PAGE);
     await applied(store);
-    const d = derived(store);
+    const d = await derived(store);
     assert.deepEqual(d.registry, [
       {
         run: "gs-1",
@@ -135,8 +136,8 @@ describe("control's records, applied from the events stream", () => {
         created_at: "2026-10-29T05:00:00.001Z",
       },
     ]);
-    assert.equal(store.commands.get("cmd-1")?.status, "delivered");
-    assert.deepEqual(store.commands.get("cmd-1")?.outcome, {
+    assert.equal((await store.commands.get("cmd-1"))?.status, "delivered");
+    assert.deepEqual((await store.commands.get("cmd-1"))?.outcome, {
       source: "harness",
       accepted: true,
       kind: "pause_run",
@@ -144,7 +145,7 @@ describe("control's records, applied from the events stream", () => {
     assert.deepEqual(d.calls, [
       { rig: "rig-a", ledger_id: "l-1", event_id: 3, run: "gs-1", campaign: "gemv", trial: "t-1" },
     ]);
-    assert.ok(store.kb().search("vector", ["gemv"]).length === 1, "the note in the folder");
+    assert.ok((await store.kb().search("vector", ["gemv"])).length === 1, "the note in the folder");
     assert.deepEqual(d.held, [{ rig: "rig-a", ledger_id: "l-1", through_event: 5 }]);
     assert.equal(d.place, 5, "the stream's place of the last event");
 
@@ -153,9 +154,10 @@ describe("control's records, applied from the events stream", () => {
     const { apply } = busOf(store);
     const recordCall = store.usage.recordCall.bind(store.usage);
     let fail = true;
-    store.usage.recordCall = (...a) => {
+    type RecordCall = typeof store.usage.recordCall;
+    (store.usage as { recordCall: RecordCall }).recordCall = async (...a) => {
       if (fail) throw new Error("disk I/O error");
-      recordCall(...a);
+      await recordCall(...a);
     };
     issued(store, "rig-a", "cmd-2");
     const done = page(store, "rig-a", "l-1", [
@@ -165,22 +167,26 @@ describe("control's records, applied from the events stream", () => {
     const end = Date.now() + 2000;
     while (apply.waiting === null && Date.now() < end) await new Promise((r) => setTimeout(r, 2));
     assert.equal(apply.waiting, "disk I/O error");
-    assert.equal(store.busPositions.of(EVENT_STREAM), 5, "its place did not move");
-    assert.equal(store.commands.get("cmd-2")?.status, "pending", "nor the command's outcome");
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 5, "nor the held cursor");
+    assert.equal(await store.busPositions.of(EVENT_STREAM), 5, "its place did not move");
+    assert.equal(
+      (await store.commands.get("cmd-2"))?.status,
+      "pending",
+      "nor the command's outcome",
+    );
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 5, "nor the held cursor");
     fail = false;
     await done;
     assert.equal(apply.waiting, null);
-    assert.equal(store.busPositions.of(EVENT_STREAM), 7);
-    assert.equal(store.commands.get("cmd-2")?.status, "failed");
-    assert.equal(derived(store).calls.length, 2);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 7);
+    assert.equal(await store.busPositions.of(EVENT_STREAM), 7);
+    assert.equal((await store.commands.get("cmd-2"))?.status, "failed");
+    assert.equal((await derived(store)).calls.length, 2);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 7);
   });
 
   test("a control started again goes on from the store's place", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "thermite-apply-")), "control.db");
     const first = controlStore(path);
-    assigned(first, "rig-a", "gs-1", "gemv");
+    await assigned(first, "rig-a", "gs-1", "gemv");
     issued(first, "rig-a", "cmd-1");
     await page(first, "rig-a", "l-1", RUN_PAGE.slice(0, 3));
     await applied(first);
@@ -191,35 +197,35 @@ describe("control's records, applied from the events stream", () => {
     await page(second, "rig-a", "l-1", RUN_PAGE.slice(3));
     await applied(second);
     assert.equal(busOf(second).apply.applied, 2, "only what came after the store's place");
-    assert.equal(second.busPositions.of(EVENT_STREAM), 5);
-    assert.equal(second.commands.get("cmd-1")?.status, "delivered");
-    assert.equal(second.reportedRigs.heldCursor("rig-a", "l-1"), 5);
+    assert.equal(await second.busPositions.of(EVENT_STREAM), 5);
+    assert.equal((await second.commands.get("cmd-1"))?.status, "delivered");
+    assert.equal(await second.reportedRigs.heldCursor("rig-a", "l-1"), 5);
   });
 
   test("a store older than the stream catches up by applying; one past its end is refused", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-apply-"));
     const live = controlStore(join(dir, "control.db"));
-    assigned(live, "rig-a", "gs-1", "gemv");
+    await assigned(live, "rig-a", "gs-1", "gemv");
     issued(live, "rig-a", "cmd-1");
     await page(live, "rig-a", "l-1", RUN_PAGE.slice(0, 2));
     await applied(live);
     // A backup of the store, then more events.
     const backup = join(dir, "backup.db");
-    live.db.exec(`vacuum into '${backup}'`);
+    sqliteBehind(live).db.exec(`vacuum into '${backup}'`);
     await page(live, "rig-a", "l-1", RUN_PAGE.slice(2));
     await page(live, "rig-b", "l-b", [{ id: 1, kind: "journal_note" }]);
     await applied(live);
     const bus = busOf(live).bus;
     closeBus(live);
     // The store restored from the backup, on the stream as it is: it applies what came after.
-    const restored = new ControlStore(backup);
-    assert.equal(restored.busPositions.of(EVENT_STREAM), 2);
+    const restored = openControlStore(backup);
+    assert.equal(await restored.busPositions.of(EVENT_STREAM), 2);
     const apply = new EventsApply({ store: restored, bus, retryMs: 5 });
     await apply.start();
     await apply.nudge();
     assert.equal(apply.stopped, null);
     assert.equal(apply.applied, 4);
-    assert.deepEqual(derived(restored), derived(live));
+    assert.deepEqual(await derived(restored), await derived(live));
 
     // A store past the stream's end (the stream restored from an older backup): refused, with
     // the stream named, and nothing applied.
@@ -229,32 +235,32 @@ describe("control's records, applied from the events stream", () => {
       ahead.stopped,
       "control's store has applied the EVENTS stream to place 6, past its last, 0: the stream is older than the store, as when one of them was restored from an older backup. Restore the stream from a backup at least as new as the store, or the store from one no newer than the stream, then start control again",
     );
-    assert.equal(restored.busPositions.of(EVENT_STREAM), 6);
+    assert.equal(await restored.busPositions.of(EVENT_STREAM), 6);
     assert.equal(ahead.applied, 0);
   });
 
   test("an event applied twice changes nothing the second time", async () => {
     const store = controlStore();
-    assigned(store, "rig-a", "gs-1", "gemv");
+    await assigned(store, "rig-a", "gs-1", "gemv");
     issued(store, "rig-a", "cmd-1");
     await page(store, "rig-a", "l-1", RUN_PAGE);
     await applied(store);
-    const before = derived(store);
+    const before = await derived(store);
     // As if the store lost its place and the stream handed every message again.
-    store.busPositions.set(EVENT_STREAM, 0);
+    await store.busPositions.set(EVENT_STREAM, 0);
     const again = new EventsApply({ store, bus: busOf(store).bus, retryMs: 5 });
     await again.start();
     await again.nudge();
     assert.equal(again.applied, 0, "every event at or below its ledger's held cursor");
-    assert.deepEqual(derived(store), before);
+    assert.deepEqual(await derived(store), before);
     // And with no held cursors either: each record is written the same again.
-    store.busPositions.set(EVENT_STREAM, 0);
-    store.db.exec("update rig_ledger set through_event = 0");
+    await store.busPositions.set(EVENT_STREAM, 0);
+    sqliteBehind(store).db.exec("update rig_ledger set through_event = 0");
     const third = new EventsApply({ store, bus: busOf(store).bus, retryMs: 5 });
     await third.start();
     await third.nudge();
     assert.equal(third.applied, 5);
-    const after = derived(store);
+    const after = await derived(store);
     // The knowledge base keeps an item's seq when nothing in it changed.
     assert.deepEqual(after, before);
   });
@@ -274,18 +280,18 @@ describe("control's records, applied from the events stream", () => {
       { id: 2, kind: "journal_note" },
     ]);
     await applied(store);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 3);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-2"), 2);
-    assert.equal(store.reportedRigs.heldCursor("rig-b", "l-b"), 1);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-9"), 0, "a ledger never applied");
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 3);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-2"), 2);
+    assert.equal(await store.reportedRigs.heldCursor("rig-b", "l-b"), 1);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-9"), 0, "a ledger never applied");
     // Control's place in the rig's events is its current ledger's held cursor.
-    const row = store.reportedRigs.reportRow("rig-a");
+    const row = await store.reportedRigs.reportRow("rig-a");
     assert.deepEqual([row?.ledger_id, row?.cursor], ["l-2", 2]);
   });
 
   test("the knowledge base: each event indexed once, its items in the order of their seqs", async () => {
     const store = controlStore();
-    assigned(store, "rig-a", "gs-1", "gemv");
+    await assigned(store, "rig-a", "gs-1", "gemv");
     const note = (id: number, text: string): Ev => ({
       id,
       kind: "journal_note",
@@ -336,7 +342,7 @@ describe("control's records, applied from the events stream", () => {
   });
 
   test("a page posted over HTTP reaches control's records through the bus", async () => {
-    const s = controlStack();
+    const s = await controlStack();
     const ledger = s.env.service.ledger;
     appendOther(ledger, "harness", "run_created", "gs-9", { campaign: "gemv" });
     appendOther(ledger, "harness", "model_call", "gs-9", call("t-1"));
@@ -344,10 +350,10 @@ describe("control's records, applied from the events stream", () => {
     const kept = busOf(s.store).bus.kept.filter((k) => k.stream === EVENT_STREAM);
     assert.ok(kept.length >= 2, "the events are on the stream");
     const last = Math.max(...kept.map((k) => k.seq));
-    assert.equal(s.store.busPositions.of(EVENT_STREAM), last, "and applied to its end");
-    assert.equal(s.store.runRegistry.createdOn("gs-9", "rig-a")?.campaign, "gemv");
-    const calls = s.store.db
-      .prepare("select run, campaign from model_call")
+    assert.equal(await s.store.busPositions.of(EVENT_STREAM), last, "and applied to its end");
+    assert.equal((await s.store.runRegistry.createdOn("gs-9", "rig-a"))?.campaign, "gemv");
+    const calls = sqliteBehind(s.store)
+      .db.prepare("select run, campaign from model_call")
       .all()
       .map((r) => ({ ...r }));
     assert.deepEqual(calls, [{ run: "gs-9", campaign: "gemv" }]);

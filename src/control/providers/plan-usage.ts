@@ -1,5 +1,6 @@
 import { redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { ControlStore, ModelProvider } from "../store/index.ts";
 
 /**
@@ -165,12 +166,12 @@ export function chatgptWindows(
 }
 
 /** Control's model providers as the `providers` tool gives them (never a key), with their usage. */
-export function providersWithUsage(
+export async function providersWithUsage(
   store: ControlStore,
   usage: ((p: ModelProvider) => Promise<PlanUsage | undefined>) | undefined,
 ) {
   return Promise.all(
-    store.modelProviders.list().map(async (p) => ({
+    (await store.modelProviders.list()).map(async (p) => ({
       name: p.name,
       type: p.type,
       base_url: redact(p.base_url),
@@ -208,10 +209,10 @@ export class PlanUsageReader {
     if (p.type === "claude")
       return claudeUsage(
         p.name,
-        this.store.reportedRigs.list().map((r) => ({
+        await mapInTurn(await this.store.reportedRigs.list(), async (r) => ({
           id: r.id,
           summary: r.summary,
-          supervisor: this.store.reportedRigs.supervisor(r.id),
+          supervisor: await this.store.reportedRigs.supervisor(r.id),
         })),
       );
     if (p.type !== "chatgpt") return undefined;

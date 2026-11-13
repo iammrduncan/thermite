@@ -39,8 +39,8 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
   app.post("/v1/rigs/:rig/model", admin, bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
     const rig = c.req.param("rig");
     const raw: unknown = await c.req.json().catch(() => undefined);
-    const refuse = (error: string) => {
-      store.auditLog.refusal("owner:api", "refused", {
+    const refuse = async (error: string) => {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/rigs/${rig}/model`,
         why: redact(error),
       });
@@ -55,11 +55,11 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
   });
 
   // Each of a rig's agents' models on control: the twin of MCP's rig_models.
-  app.get("/v1/rigs/:rig/model", admin, (c) => {
+  app.get("/v1/rigs/:rig/model", admin, async (c) => {
     const rig = c.req.param("rig");
-    const agents = rigModels(store, rig);
+    const agents = await rigModels(store, rig);
     if ("error" in agents) return c.json({ error: agents.error }, 404);
-    return c.json(rigModelsAnswer(store, rig, agents));
+    return c.json(await rigModelsAnswer(store, rig, agents));
   });
 
   // A rig's own settings (goal 029): the twin of Save changes on Edit rig and of MCP's
@@ -74,7 +74,7 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
       ? await setRigSettings(parts, rig, body.data, "owner:api", true)
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/rigs/${rig}/settings`,
         why: redact(out.error),
       });
@@ -104,7 +104,7 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
           )
         : ({ error: bodyRefusal(body.error), status: 400 } as const);
       if ("error" in out) {
-        store.auditLog.refusal("owner:api", "refused", {
+        await store.auditLog.refusal("owner:api", "refused", {
           path: `/v1/rigs/${rig}/cluster/resources`,
           why: redact(out.error),
         });
@@ -125,7 +125,7 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
       ? await addClusterRunner(parts, clusterRunnerRequest(rig, body.data), "owner:api")
       : { error: bodyRefusal(body.error) };
     if ("error" in out) {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/rigs/${rig}/runners`,
         why: redact(out.error),
       });
@@ -141,7 +141,7 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
     const runner = c.req.param("runner");
     const out = await removeRunner(parts, rig, runner, "owner:api");
     if ("error" in out) {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/rigs/${rig}/runners/${runner}`,
         why: redact(out.error),
       });
@@ -151,9 +151,9 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
   });
 
   // The settings a rig reports, and its GPU split: the twin of MCP's rig_settings.
-  app.get("/v1/rigs/:rig/settings", admin, (c) => {
+  app.get("/v1/rigs/:rig/settings", admin, async (c) => {
     const rig = c.req.param("rig");
-    const read = rigSettingsRead(store, rig);
+    const read = await rigSettingsRead(store, rig);
     return read ? c.json(read) : c.json({ error: `no rig ${rig}` }, 404);
   });
 }

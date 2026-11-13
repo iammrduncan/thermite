@@ -140,7 +140,7 @@ describe("full reset", () => {
     env.service.onWipe = () => {
       wiped = true;
     };
-    const { store, relay } = controlStack({ env });
+    const { store, relay } = await controlStack({ env });
     await relay();
     const restarts: string[] = [];
     const driver: DeploymentDriver = {
@@ -157,40 +157,54 @@ describe("full reset", () => {
         driver,
         staleAfterMs: 180_000,
       });
-    const state = () =>
-      String(store.fullResets.open("rig-a")?.state ?? store.fullResets.list(1)[0]?.state);
-    const id = store.fullResets.create("rig-a", "owner:test");
+    const state = async () =>
+      String(
+        (await store.fullResets.open("rig-a"))?.state ?? (await store.fullResets.list(1))[0]?.state,
+      );
+    const id = await store.fullResets.create("rig-a", "owner:test");
     await step();
-    assert.equal(state(), "quiescing");
+    assert.equal(await state(), "quiescing");
     // Before the rig takes the pause: its queued job counts until control sees the run paused.
     await step();
-    assert.equal(state(), "quiescing", "its queued job counts until control sees the run paused");
+    assert.equal(
+      await state(),
+      "quiescing",
+      "its queued job counts until control sees the run paused",
+    );
     await relay(); // the pause reaches the harness, and its report of it reaches control
     assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
     await step();
-    assert.equal(state(), "exporting");
+    assert.equal(await state(), "exporting");
     assert.equal(env.ledger.jobs.get(queued)?.state, "queued");
     await step();
-    assert.equal(state(), "exporting", "waits for the harness's own record of the export");
+    assert.equal(await state(), "exporting", "waits for the harness's own record of the export");
     await relay(); // the full export, and the harness's signed report that carries it
     await step();
-    assert.equal(state(), "verifying");
-    const name = String(store.fullResets.open("rig-a")?.export_name);
+    assert.equal(await state(), "verifying");
+    const name = String((await store.fullResets.open("rig-a"))?.export_name);
     await step();
-    assert.equal(state(), "verifying", "waits until the supervisor reports the export pushed");
-    store.reportedRigs.setSupervisor("rig-a", {
+    assert.equal(
+      await state(),
+      "verifying",
+      "waits until the supervisor reports the export pushed",
+    );
+    await store.reportedRigs.setSupervisor("rig-a", {
       export: { remote: true, pushed: [name], pushed_commit: "c".repeat(40) },
     });
     await step();
-    assert.equal(state(), "awaiting_owner", "the owner checks the pushed commit and confirms");
-    assert.match(String(store.fullResets.open("rig-a")?.detail), /c{40}/);
-    confirmReset(store, id, "owner:test");
+    assert.equal(
+      await state(),
+      "awaiting_owner",
+      "the owner checks the pushed commit and confirms",
+    );
+    assert.match(String((await store.fullResets.open("rig-a"))?.detail), /c{40}/);
+    await confirmReset(store, id, "owner:test");
     await step();
-    assert.equal(state(), "wiping");
+    assert.equal(await state(), "wiping");
     await relay(); // the wipe, and the harness's record of it
     assert.ok(existsSync(join(env.paths.stateDir, WIPE_MARKER)));
     await step();
-    assert.equal(state(), "done");
+    assert.equal(await state(), "done");
     assert.deepEqual(restarts, ["rig-a:harness,supervisor"]);
     await new Promise((r) => setTimeout(r, 2200));
     assert.ok(wiped, "the controller is told to exit");
@@ -318,7 +332,7 @@ describe("leaderboard and propagation", () => {
         }),
       ],
     });
-    const board = leaderboard(store, { staleAfterMs: 180_000 });
+    const board = await leaderboard(store, { staleAfterMs: 180_000 });
     const a = board.camp?.find((r) => r.rig === "rig-a");
     assert.deepEqual(a?.verified_by, ["rig-b"]);
     assert.ok(Math.abs((a?.gain ?? 0) - 0.2) < 1e-9);
@@ -331,7 +345,7 @@ describe("leaderboard and propagation", () => {
       staleAfterMs: 180_000,
     });
     assert.equal(seq, 2);
-    const cmd = store.commands.pending("rig-b").find((c) => c.envelope.id === id);
+    const cmd = (await store.commands.pending("rig-b")).find((c) => c.envelope.id === id);
     assert.ok(cmd);
     assert.deepEqual((cmd.envelope.payload as { import: unknown }).import, {
       kind: "champion_patch",
@@ -352,8 +366,8 @@ describe("leaderboard and propagation", () => {
     );
     // During the owner's full reset of the receiving rig, an agent's token does not propagate to
     // it; the owner's does.
-    store.fullResets.create("rig-b", "owner:api");
-    const { control } = controlOnly({ store, keys, tokens: { agent: "agent-token-abcdef" } });
+    await store.fullResets.create("rig-b", "owner:api");
+    const { control } = await controlOnly({ store, keys, tokens: { agent: "agent-token-abcdef" } });
     const call = async (token: string) =>
       (await mcpClient(control, token)).callTool({
         name: "propagate_champion",

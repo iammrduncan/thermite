@@ -10,7 +10,8 @@ import { serve } from "@hono/node-server";
 import { RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
@@ -66,7 +67,7 @@ async function report(
 
 describe("thermite assign --queue-from (goal 067)", () => {
   test("copies a past run's untried experiments from control's records, as Start a run does; off unless asked", async () => {
-    const { store, control: api } = controlOnly({ tokens: TOKENS });
+    const { store, control: api } = await controlOnly({ tokens: TOKENS });
     const past = "smoke-cpu-1";
     const add = (id: string, by: string, more: Record<string, unknown> = {}) =>
       [past, "harness", "experiment_added", { id, title: `try ${id}`, by, ...more }] as [
@@ -209,8 +210,8 @@ describe("thermite assign --queue-from (goal 067)", () => {
       // Sent: the signed command carries the same queue.
       const sent = await cli(...base, ...at, "--rig", "rig-a", "--queue-from", past);
       assert.equal(sent.code, 0, sent.stderr);
-      const signed = store.db
-        .prepare("select signed from command where id = ?")
+      const signed = sqliteBehind(store)
+        .db.prepare("select signed from command where id = ?")
         .get(JSON.parse(sent.stdout).id) as {
         signed: string;
       };
@@ -329,9 +330,9 @@ describe("thermite assign --context-window and --compact-at (goal 070)", () => {
 describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () => {
   test("a resume starts the pod first: the answer on standard output, its words on standard error", async () => {
     const keys = generateSigningKeys();
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
-    store.gpuClouds.add({
+    await store.gpuClouds.add({
       name: "runpod",
       kind: "runpod",
       key_sealed: secrets.seal(FAKE_RUNPOD_KEY),
@@ -346,10 +347,10 @@ describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () 
       privateKeyPem: keys.privateKeyPem,
     });
     const v = await rigs.launch("runpod", { gpu: "RTX A4000" }, "owner:api");
-    assert.ok(store.tunnels.pin(v.rig, "sign", "box"));
+    assert.ok(await store.tunnels.pin(v.rig, "sign", "box"));
     // Its harness never reported, so it holds no result: the stop is at once.
     assert.equal((await rigs.stop(v.rig, "owner:api")).status, "EXITED");
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       store,
       keys,
       tokens: TOKENS,
@@ -399,7 +400,7 @@ describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () 
 
 describe("thermite command with a rig's settings (goal 169)", () => {
   test("rig_settings sets how the rig's agent programs run, and a mode it lacks is refused in words", async () => {
-    const { store, control: api } = controlOnly({ tokens: TOKENS });
+    const { store, control: api } = await controlOnly({ tokens: TOKENS });
     await report(store, []);
     const server = serve({ fetch: api.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
@@ -421,7 +422,7 @@ describe("thermite command with a rig's settings (goal 169)", () => {
       assert.equal(r.code, 0, r.stderr);
       const out = JSON.parse(r.stdout) as { id: string; status: string };
       assert.equal(out.status, "pending");
-      const sent = store.commands.pending("rig-a").find((c) => c.envelope.id === out.id);
+      const sent = (await store.commands.pending("rig-a")).find((c) => c.envelope.id === out.id);
       assert.deepEqual(sent?.envelope.payload, { program_mode: "terminal" });
       const bad = await cli("command", ...at, "--payload", '{"program_mode":"tui"}');
       assert.notEqual(bad.code, 0);

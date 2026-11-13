@@ -34,7 +34,7 @@ const camp = (name: string, ...statuses: string[]): CampaignView => ({
   runs: statuses.map((s, i) => ({ rig, run: run(`${name}-${i + 1}`, s, name) })),
 });
 
-test("the Campaigns list hides rig checks and finished campaigns unless asked", () => {
+test("the Campaigns list hides rig checks and finished campaigns unless asked", async () => {
   const camps = [
     camp("speed", "running", "paused"),
     camp("old", "closed"),
@@ -44,7 +44,7 @@ test("the Campaigns list hides rig checks and finished campaigns unless asked", 
   assert.equal(campaignKind(camps[0] as CampaignView), "active");
   assert.equal(campaignKind(camps[1] as CampaignView), "finished");
   assert.equal(campaignKind(camps[2] as CampaignView), "check");
-  const body = (f: string, q = "") =>
+  const body = async (f: string, q = "") =>
     campaignsListBody({
       camps,
       atWork: [],
@@ -55,24 +55,24 @@ test("the Campaigns list hides rig checks and finished campaigns unless asked", 
       best: () => "+1.0% gain",
       about: (k) => (k.name === "speed" ? "Make it faster" : ""),
     });
-  const dflt = body("");
+  const dflt = await body("");
   assert.match(dflt, /<b>speed<\/b>/);
   assert.doesNotMatch(dflt, /<b>old<\/b>/);
   assert.doesNotMatch(dflt, /<b>rig-check-smoke/);
   assert.match(dflt, /Show the 1 rig check/);
   assert.match(dflt, /Make it faster/);
-  assert.match(body("check"), /<b>rig-check-smoke-cpu-1a2b3c4d<\/b>/);
-  assert.match(body("check"), /rig check/);
-  assert.match(body("all"), /<b>old<\/b>/);
+  assert.match(await body("check"), /<b>rig-check-smoke-cpu-1a2b3c4d<\/b>/);
+  assert.match(await body("check"), /rig check/);
+  assert.match(await body("all"), /<b>old<\/b>/);
   // Search matches names, descriptions, runs and rigs.
-  assert.match(body("all", "faster"), /<b>speed<\/b>/);
-  assert.doesNotMatch(body("all", "faster"), /<b>old<\/b>/);
-  assert.match(body("all", "nothing-like-this"), /No campaign matches/);
+  assert.match(await body("all", "faster"), /<b>speed<\/b>/);
+  assert.doesNotMatch(await body("all", "faster"), /<b>old<\/b>/);
+  assert.match(await body("all", "nothing-like-this"), /No campaign matches/);
   // An unknown filter is the default one.
   assert.equal(campaignFilter("bogus"), "default");
 });
 
-test("the Campaigns list hides a campaign whose newest run completed, and counts it apart (goal 099)", () => {
+test("the Campaigns list hides a campaign whose newest run completed, and counts it apart (goal 099)", async () => {
   const camps: CampaignView[] = [
     {
       name: "quality",
@@ -87,7 +87,7 @@ test("the Campaigns list hides a campaign whose newest run completed, and counts
       ],
     },
   ];
-  const body = (f: string) =>
+  const body = async (f: string) =>
     campaignsListBody({
       camps,
       atWork: [],
@@ -98,10 +98,10 @@ test("the Campaigns list hides a campaign whose newest run completed, and counts
       best: () => "2/2 goals met",
       about: () => "",
     });
-  assert.doesNotMatch(body(""), /<b>quality<\/b>/);
-  assert.doesNotMatch(body("paused"), /<b>quality<\/b>/);
+  assert.doesNotMatch(await body(""), /<b>quality<\/b>/);
+  assert.doesNotMatch(await body("paused"), /<b>quality<\/b>/);
   assert.match(
-    body("all"),
+    await body("all"),
     /<span class="kdot pause">1 paused<\/span><span class="kdot ok">1 completed<\/span><span class="kdot done">1 finished<\/span>/,
   );
 });

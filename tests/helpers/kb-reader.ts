@@ -30,11 +30,15 @@ const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /** Fills the store; with `files`, control holds the two active files there. */
 export async function fillReader(store: ControlStore, files?: KbFiles): Promise<void> {
-  fillKnowledge(store);
+  await fillKnowledge(store);
   let n = 0;
   const at = () => new Date(Date.parse("2026-10-30T11:00:00Z") + n++ * 60_000).toISOString();
-  const write = (src: { rig: string; ledger: string }, run: string, b: Partial<KbItemBody>) => {
-    const refused = store.kb().write({ ...src, run, event: 2000 + n, at: at() }, {
+  const write = async (
+    src: { rig: string; ledger: string },
+    run: string,
+    b: Partial<KbItemBody>,
+  ) => {
+    const refused = await store.kb().write({ ...src, run, event: 2000 + n, at: at() }, {
       item: 1,
       version: 1,
       kind: "finding",
@@ -61,7 +65,7 @@ export async function fillReader(store: ControlStore, files?: KbFiles): Promise<
       })),
       summary: {},
     });
-  write(KB_RIG, "gs-1", {
+  await write(KB_RIG, "gs-1", {
     slot: "worker-1",
     version: 2,
     title: "Vector loads double the bandwidth, measured twice",
@@ -72,17 +76,17 @@ export async function fillReader(store: ControlStore, files?: KbFiles): Promise<
     [4, "loads.svg", "image/svg+xml", SVG_IMAGE],
   ] as const) {
     const file = { sha256: sha(text), name, type, bytes: Buffer.byteLength(text) };
-    write(KB_RIG, "gs-1", { slot: "worker-1", item, kind: "reference", title: name, file });
+    await write(KB_RIG, "gs-1", { slot: "worker-1", item, kind: "reference", title: name, file });
     if (!files) continue;
     mkdirSync(dirname(files.path(file.sha256)), { recursive: true });
     writeFileSync(files.path(file.sha256), text);
-    store.kb().files.kept(file.sha256, file.bytes);
+    await store.kb().files.kept(file.sha256, file.bytes);
   }
-  const index = (kind: string, subject: string, body: object, actor = "harness") =>
+  const index = async (kind: string, subject: string, body: object, actor = "harness") =>
     store.kb().index(KB_RIG, { at: at(), actor, kind, subject, body });
-  index("attempt_recorded", "a-2", { run: "gs-1", lane: "lane-2", hypothesis: "tile by 64" });
-  index("verdict", "a-2", { verdict: "invalidated", reasons: WITHDRAWN_WHY }, "judge");
-  store.usage.recordCall(KB_RIG.rig, KB_RIG.ledger, 9000, "gs-1", {
+  await index("attempt_recorded", "a-2", { run: "gs-1", lane: "lane-2", hypothesis: "tile by 64" });
+  await index("verdict", "a-2", { verdict: "invalidated", reasons: WITHDRAWN_WHY }, "judge");
+  await store.usage.recordCall(KB_RIG.rig, KB_RIG.ledger, 9000, "gs-1", {
     trial: "t-1",
     round: null,
     agent: "workers",
@@ -111,11 +115,11 @@ export async function fillReader(store: ControlStore, files?: KbFiles): Promise<
     created("at-1", "attic"),
   ]);
   await report(RIG_B, [created("sv-1", "survey"), created("sv-2", "survey")]);
-  store.kb().grant("survey", "gemv", "owner:ui");
+  await store.kb().grant("survey", "gemv", "owner:ui");
   // Each run's scope as Start a run sets it: sv-1 includes the grant, sv-2 does not.
-  store.kb().setScope("survey", "sv-1", { fresh: false, granted: ["gemv"] }, "owner:ui");
-  store.kb().setScope("survey", "sv-2", { fresh: false, granted: [] }, "owner:ui");
-  write(RIG_B, "sv-1", {
+  await store.kb().setScope("survey", "sv-1", { fresh: false, granted: ["gemv"] }, "owner:ui");
+  await store.kb().setScope("survey", "sv-2", { fresh: false, granted: [] }, "owner:ui");
+  await write(RIG_B, "sv-1", {
     slot: "worker-1",
     title: "The bandwidth gain holds on another device",
     text: "The same loads, measured on another device, doubled the bandwidth too.",

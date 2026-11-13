@@ -34,7 +34,7 @@ async function cli(...args: string[]): Promise<{ code: number; stdout: string; s
 
 describe("thermite campaign additions (goal 166)", () => {
   test("sets the owner's additions to a campaign's roles from files, removes them, and says its refusals", async () => {
-    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
+    const { keys, store, control: api } = await controlOnly({ tokens: TOKENS });
     const goal = JSON.parse(
       readFileSync(
         join(import.meta.dirname, "../../../examples/contracts/goal-example.json"),
@@ -43,8 +43,8 @@ describe("thermite campaign additions (goal 166)", () => {
     ) as Record<string, unknown>;
     const contract = parseContract({ ...goal, campaign: "sort-speed" });
     assert.ok(contract.ok);
-    enrollRigs(store, ["rig-a"]);
-    issueCommand(store, keys.privateKeyPem, {
+    await enrollRigs(store, ["rig-a"]);
+    await issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: {

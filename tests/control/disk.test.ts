@@ -27,7 +27,7 @@ function standIn() {
 
 describe("control's disk floor (goal 173)", () => {
   test("at the floor new runs wait, with the reason, and nothing else does", async () => {
-    const { store, api, control } = controlOnly();
+    const { store, api, control } = await controlOnly();
     const disk = standIn();
     const watch = new ControlDisk({
       store,
@@ -54,7 +54,7 @@ describe("control's disk floor (goal 173)", () => {
     const why =
       "Control's disk is at its floor of 5 GiB: the bus's store has 0.5 GiB left of its 10 GiB. No new run starts until there is room: free space there, or raise the bus's store (THERMITE_NATS_STORE). Reports, commands and the runs under way go on.";
     assert.equal(watch.held, why);
-    assert.equal(store.auditLog.list(5, { action: "disk_" })[0]?.action, "disk_low");
+    assert.equal((await store.auditLog.list(5, { action: "disk_" }))[0]?.action, "disk_low");
 
     // A new run is refused, as a conflict, in those words; a command that starts none goes on.
     const assign = await api("POST", "/v1/commands", {
@@ -98,7 +98,7 @@ describe("control's disk floor (goal 173)", () => {
   });
 
   test("it lets go only with 1 GiB more than the floor, and keeps its state on no reading", async () => {
-    const { store } = controlOnly();
+    const { store } = await controlOnly();
     const disk = standIn();
     const watch = new ControlDisk({ store, stateDir: "/s", floorGib: 5, ...disk });
     disk.at.stateFree = 4 * GIB;
@@ -119,7 +119,7 @@ describe("control's disk floor (goal 173)", () => {
     assert.equal((await watch.check()).low, false);
     assert.equal(watch.held, undefined);
     assert.deepEqual(
-      store.auditLog.list(5, { action: "disk_" }).map((e) => e.action),
+      (await store.auditLog.list(5, { action: "disk_" })).map((e) => e.action),
       ["disk_room", "disk_low"],
     );
     // A floor of 0: none.

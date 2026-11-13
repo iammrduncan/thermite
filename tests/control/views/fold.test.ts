@@ -23,10 +23,10 @@ for (const set of VIEW_SETS) {
     const store = controlStore();
     await set.fill(store);
     await applied(store);
-    for (const u of store.reportedRigs.list()) {
+    for (const u of await store.reportedRigs.list()) {
       const events = await foldedEvents(store, u.id, u.ledger_id ?? "");
-      const inputs = rigInputs(store, u, OPTS);
-      const whole = rigView(store, u.id, OPTS);
+      const inputs = await rigInputs(store, u, OPTS);
+      const whole = await rigView(store, u.id, OPTS);
 
       test(`${u.id}: one event at a time, with a read after each, gives rigView's view`, () => {
         assert.ok(events.length > 0 && whole);
@@ -136,7 +136,7 @@ test("after a reset, a rig's view folds only its new ledger's events", async () 
   const store = controlStore();
   await set.fill(store);
   await applied(store);
-  const v = rigView(store, "rig-a", OPTS);
+  const v = await rigView(store, "rig-a", OPTS);
   assert.equal(v?.ledger_id, "ledger-2");
   assert.deepEqual(
     v?.runs.map((r) => [r.id, r.mode, r.attempts.length]),

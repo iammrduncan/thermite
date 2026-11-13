@@ -16,7 +16,8 @@ import {
 } from "../../../src/control/bus/users.ts";
 import { STEP_WORDS } from "../../../src/control/rigs/setup/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { newSealKey, sealKeyFingerprint } from "../../../src/core/link/config.ts";
 import {
   BUS_ACCOUNT,
@@ -51,16 +52,16 @@ function accountsIn(path: string) {
 }
 
 /** Control with two rigs, the bus's users kept in a file, and a fake server that reloads. */
-function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
+async function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
   const file = usersPath();
   const server = new FakeServer();
   const secrets = o.secrets ?? SecretBox.ephemeral();
   let users: BusUsers | undefined;
-  const s = controlOnly({
+  const s = await controlOnly({
     tokens: { rigs: { "rig-a": RIG_TOKEN, "rig-b": RIG_B_TOKEN } },
     ...(o.store ? { store: o.store } : {}),
-    options: (store) => {
-      users = new BusUsers({ store, secrets, file, reload: server.reload });
+    options: async (store) => {
+      users = await BusUsers.open({ store, secrets, file, reload: server.reload });
       return { busUsers: users };
     },
   });
@@ -88,10 +89,10 @@ function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
       }),
     });
   };
-  const audits = (action: string) => s.store.auditLog.list(50, { action }).map((e) => e.body);
-  const steps = (rig: string) =>
-    s.store.rigHistory
-      .list(rig)
+  const audits = async (action: string) =>
+    (await s.store.auditLog.list(50, { action })).map((e) => e.body);
+  const steps = async (rig: string) =>
+    (await s.store.rigHistory.list(rig))
       .filter((e) => e.step.startsWith("bus") || e.step.startsWith("seal"))
       // The registration's step, and the seal key each registration names but a test gave.
       .filter((e) => e.step !== "bus_registered" && !(e.step === "seal_key" && !given.has(rig)))
@@ -101,17 +102,17 @@ function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
 
 describe("each rig's key on the message bus", () => {
   test("control records a rig's first key, gives it a user, and has the server reload", async () => {
-    const s = setup();
+    const s = await setup();
     await s.users.sync();
     assert.equal(s.server.calls.length, 1, "the users file is written and reloaded at start");
     const key = user();
     const r = await s.figures("rig-a", key);
     assert.equal(r.status, 200, await r.clone().text());
-    assert.equal(s.store.busKeys.rigKey("rig-a"), key);
+    assert.equal(await s.store.busKeys.rigKey("rig-a"), key);
     const fp = userKeyFingerprint(key);
-    assert.deepEqual(s.audits("rig_bus_key_registered"), [{ fingerprint: fp }]);
+    assert.deepEqual(await s.audits("rig_bus_key_registered"), [{ fingerprint: fp }]);
     assert.deepEqual(
-      s.steps("rig-a").map((e) => [e.step, e.ok, e.detail]),
+      (await s.steps("rig-a")).map((e) => [e.step, e.ok, e.detail]),
       [["bus_key", true, `fingerprint ${fp}`]],
     );
     assert.equal(STEP_WORDS.bus_key, "Its key on the message bus registered");
@@ -120,23 +121,23 @@ describe("each rig's key on the message bus", () => {
     const users = accountsIn(s.file)[BUS_ACCOUNT]?.users ?? [];
     assert.deepEqual(users[1], { nkey: key, permissions: rigPermissions("rig-a") });
     // The key is kept apart from the figures, which pages show.
-    assert.equal("bus_key" in (s.store.reportedRigs.supervisor("rig-a") ?? {}), false);
+    assert.equal("bus_key" in ((await s.store.reportedRigs.supervisor("rig-a")) ?? {}), false);
     // The same key again changes nothing, and asks no reload.
     assert.equal((await s.figures("rig-a", key)).status, 200);
     assert.equal(s.server.calls.length, 2);
-    assert.equal(s.audits("rig_bus_key").length, 1);
+    assert.equal((await s.audits("rig_bus_key")).length, 1);
   });
 
   test("a change of key is kept in the rig's history and the audit log, and reloaded", async () => {
-    const s = setup();
+    const s = await setup();
     const [first, second] = [user(), user()];
     await s.figures("rig-a", first);
     const before = s.server.calls.length;
     assert.equal((await s.figures("rig-a", second)).status, 200);
     const [was, now] = [userKeyFingerprint(first), userKeyFingerprint(second)];
-    assert.deepEqual(s.audits("rig_bus_key_changed"), [{ fingerprint: now, previous: was }]);
+    assert.deepEqual(await s.audits("rig_bus_key_changed"), [{ fingerprint: now, previous: was }]);
     assert.deepEqual(
-      s.steps("rig-a").map((e) => [e.step, e.detail]),
+      (await s.steps("rig-a")).map((e) => [e.step, e.detail]),
       [
         ["bus_key", `fingerprint ${was}`],
         ["bus_key_changed", `fingerprint ${was} → ${now}`],
@@ -150,7 +151,7 @@ describe("each rig's key on the message bus", () => {
   });
 
   test("a key that is not a NATS user key is refused, and nothing is recorded", async () => {
-    const s = setup();
+    const s = await setup();
     await s.users.sync();
     const calls = s.server.calls.length;
     const seed = new TextDecoder().decode(createUser().getSeed());
@@ -166,11 +167,11 @@ describe("each rig's key on the message bus", () => {
         assert.ok(!body.error.includes(bad), "the answer does not repeat what was sent");
       }
     }
-    assert.equal(s.store.busKeys.rigKey("rig-a"), undefined);
-    assert.deepEqual(s.audits("rig_bus_key"), []);
-    assert.deepEqual(s.steps("rig-a"), []);
+    assert.equal(await s.store.busKeys.rigKey("rig-a"), undefined);
+    assert.deepEqual(await s.audits("rig_bus_key"), []);
+    assert.deepEqual(await s.steps("rig-a"), []);
     assert.equal(
-      s.store.reportedRigs.supervisor("rig-a"),
+      await s.store.reportedRigs.supervisor("rig-a"),
       null,
       "the figures with it are refused whole",
     );
@@ -179,11 +180,11 @@ describe("each rig's key on the message bus", () => {
     const r = await s.figures("rig-a", undefined);
     assert.equal(r.status, 409);
     assert.match(((await r.json()) as { error: string }).error, /no keys on the message bus/);
-    assert.equal(s.store.reportedRigs.supervisor("rig-a"), null);
+    assert.equal(await s.store.reportedRigs.supervisor("rig-a"), null);
   });
 
   test("a key another rig or control holds is refused in words, and noted once in the rig's history", async () => {
-    const s = setup();
+    const s = await setup();
     await s.users.sync();
     const [a, b] = [user(), user()];
     const [sealA, sealB] = [newSealKey().publicKey, newSealKey().publicKey];
@@ -200,8 +201,12 @@ describe("each rig's key on the message bus", () => {
       assert.equal(r.status, 409);
       assert.deepEqual(await r.json(), { error: words(field) });
     }
-    assert.equal(s.store.busKeys.rigKey("rig-b"), undefined, "nothing of rig-b's is recorded");
-    assert.equal(s.store.reportedRigs.supervisor("rig-b"), null);
+    assert.equal(
+      await s.store.busKeys.rigKey("rig-b"),
+      undefined,
+      "nothing of rig-b's is recorded",
+    );
+    assert.equal(await s.store.reportedRigs.supervisor("rig-b"), null);
     assert.equal(s.server.calls.length, calls, "no reload");
     // Control's own keys too: its user, its system user.
     const [control, system] = s.users.ownKeys();
@@ -209,7 +214,7 @@ describe("each rig's key on the message bus", () => {
     // The rig's page and Needs you read it from its history: each refusal once, with who holds it.
     for (let i = 0; i < 3; i++) await s.figures("rig-b", a);
     assert.deepEqual(
-      s.steps("rig-b").map((e) => [e.step, e.ok, e.detail]),
+      (await s.steps("rig-b")).map((e) => [e.step, e.ok, e.detail]),
       [
         ["bus_key_refused", false, `fingerprint ${userKeyFingerprint(a)}, which rig rig-a holds`],
         [
@@ -235,10 +240,10 @@ describe("each rig's key on the message bus", () => {
       "Its new key on the message bus refused: another rig or control holds it",
     );
     // A retired rig keeps its key: no other rig may take it. A key of rig-b's own is taken.
-    s.store.retired.add("rig-a", "owner:test");
+    await s.store.retired.add("rig-a", "owner:test");
     assert.equal((await s.figures("rig-b", a)).status, 409);
     assert.equal((await s.figures("rig-b", b, sealB)).status, 200);
-    assert.equal(s.store.busKeys.rigKey("rig-b"), b);
+    assert.equal(await s.store.busKeys.rigKey("rig-b"), b);
     // The same key again from its own rig is no refusal.
     assert.equal((await s.figures("rig-b", b, sealB)).status, 200);
   });
@@ -246,8 +251,8 @@ describe("each rig's key on the message bus", () => {
   test("a reload that keeps failing for a minute shows, with its reason, until one works", async () => {
     let now = Date.parse("2026-10-30T04:00:00.000Z");
     const server = new FakeServer();
-    const store = new ControlStore(":memory:");
-    const users = new BusUsers({
+    const store = openControlStore(":memory:");
+    const users = await BusUsers.open({
       store,
       secrets: SecretBox.ephemeral(),
       file: usersPath(),
@@ -275,7 +280,7 @@ describe("each rig's key on the message bus", () => {
   });
 
   test("the users file names control, its system user and each rig with its own permissions", async () => {
-    const s = setup();
+    const s = await setup();
     const keys = { a: user(), b: user() };
     await s.figures("rig-a", keys.a);
     await s.figures("rig-b", keys.b);
@@ -303,7 +308,7 @@ describe("each rig's key on the message bus", () => {
   });
 
   test("a reload that fails is logged without a key, and tried again at the next sync", async (t) => {
-    const s = setup();
+    const s = await setup();
     s.server.failing = true;
     const said: string[] = [];
     t.mock.method(process.stdout, "write", (chunk: string) => said.push(chunk));
@@ -335,8 +340,8 @@ describe("each rig's key on the message bus", () => {
         return wrote;
       },
     };
-    const store = new ControlStore(":memory:");
-    const users = new BusUsers({
+    const store = openControlStore(":memory:");
+    const users = await BusUsers.open({
       store,
       secrets: SecretBox.ephemeral(),
       file,
@@ -354,8 +359,8 @@ describe("each rig's key on the message bus", () => {
     await users.sync();
     assert.equal(server.calls.length, 2);
     // A certificate that can't be written is logged, and the users wait for it.
-    const broken = new BusUsers({
-      store: new ControlStore(":memory:"),
+    const broken = await BusUsers.open({
+      store: openControlStore(":memory:"),
       secrets: SecretBox.ephemeral(),
       file: usersPath(),
       tls: {
@@ -370,14 +375,17 @@ describe("each rig's key on the message bus", () => {
   });
 
   test("the runs control's run registry gives a rig open their live subjects to its user", async () => {
-    const s = setup();
+    const s = await setup();
     const key = user();
     await s.figures("rig-a", key);
     const calls = s.server.calls.length;
     const at = new Date().toISOString();
     const created = { kind: "run_created", subject: "sort-3", body: { campaign: "sort" }, at };
-    s.store.runRegistry.registerRunCreated("rig-a", "ledger-1", created);
-    s.store.runRegistry.registerRunCreated("rig-b", "ledger-2", { ...created, subject: "other-1" });
+    await s.store.runRegistry.registerRunCreated("rig-a", "ledger-1", created);
+    await s.store.runRegistry.registerRunCreated("rig-b", "ledger-2", {
+      ...created,
+      subject: "other-1",
+    });
     // Looked at every few seconds: a new run is written, and the server reloads once.
     assert.equal(BUS_USERS_SYNC_MS, 5000);
     await s.users.sync();
@@ -390,19 +398,19 @@ describe("each rig's key on the message bus", () => {
   });
 
   test("a rig retired loses its user at the next sync; a rig not on the bus has none", async () => {
-    const s = setup();
+    const s = await setup();
     const key = user();
     await s.figures("rig-a", key);
     const calls = s.server.calls.length;
-    s.store.retired.add("rig-a", "owner:test");
+    await s.store.retired.add("rig-a", "owner:test");
     await s.users.sync();
     assert.equal(s.server.calls.length, calls + 1);
     assert.ok(!readFileSync(s.file, "utf8").includes(key));
     assert.equal(accountsIn(s.file)[BUS_ACCOUNT]?.users.length, 1, "control's own alone");
     // Its key stays recorded: brought back and enrolled again (a token control made stays
     // ended), it has its user again.
-    s.store.retired.bringBack("rig-a", "owner:test");
-    enrollRigs(s.store, ["rig-a"]);
+    await s.store.retired.bringBack("rig-a", "owner:test");
+    await enrollRigs(s.store, ["rig-a"]);
     await s.users.sync();
     assert.ok(readFileSync(s.file, "utf8").includes(key));
   });
@@ -410,10 +418,12 @@ describe("each rig's key on the message bus", () => {
   test("control's own keys are made once, kept sealed, and the same after a restart", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "thermite-bus-store-")), "control.db");
     const secrets = SecretBox.ephemeral();
-    const first = setup({ secrets, store: new ControlStore(path) });
+    const first = await setup({ secrets, store: openControlStore(path) });
     await first.users.sync();
     const control = fromSeed(first.users.controlSeed).getPublicKey();
-    const rows = first.store.db.prepare("select * from bus_identity order by name").all();
+    const rows = sqliteBehind(first.store)
+      .db.prepare("select * from bus_identity order by name")
+      .all();
     assert.deepEqual(
       rows.map((r) => r.name),
       ["control", "system"],
@@ -425,15 +435,15 @@ describe("each rig's key on the message bus", () => {
       assert.match(String(r.seed_sealed), /^s1:/);
       assert.ok(!String(r.seed_sealed).includes(seed));
     }
-    first.store.db.close();
-    const again = setup({ secrets, store: new ControlStore(path) });
+    await first.store.close();
+    const again = await setup({ secrets, store: openControlStore(path) });
     assert.equal(fromSeed(again.users.controlSeed).getPublicKey(), control);
-    again.store.db.close();
+    await again.store.close();
     // With another secrets key, the seeds do not open: control says what to look at.
-    const store = new ControlStore(path);
-    assert.throws(
-      () =>
-        new BusUsers({
+    const store = openControlStore(path);
+    await assert.rejects(
+      async () =>
+        BusUsers.open({
           store,
           secrets: SecretBox.ephemeral(),
           file: usersPath(),
@@ -441,16 +451,16 @@ describe("each rig's key on the message bus", () => {
         }),
       /^Error: control's control key on the message bus does not open with its secrets key \(was THERMITE_CONTROL_SECRETS_KEY_FILE replaced\?\)$/,
     );
-    store.db.close();
+    await store.close();
   });
 
   test("the backup's key: made once in its file, 0600, a user that may back up and restore", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-bus-backup-"));
     const seedFile = join(dir, "bus-backup.seed");
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
-    const make = (file = usersPath()) =>
-      new BusUsers({
+    const make = async (file = usersPath()) =>
+      BusUsers.open({
         store,
         secrets,
         file,
@@ -458,7 +468,7 @@ describe("each rig's key on the message bus", () => {
         backupSeedFile: seedFile,
       });
     const file = usersPath();
-    await make(file).sync();
+    await (await make(file)).sync();
     assert.equal(statSync(seedFile).mode & 0o777, 0o600);
     const seed = readFileSync(seedFile, "utf8");
     assert.match(seed, /^SU[A-Z2-7]{56}$/);
@@ -466,14 +476,14 @@ describe("each rig's key on the message bus", () => {
     const users = accountsIn(file)[BUS_ACCOUNT]?.users ?? [];
     assert.deepEqual(users[1], { nkey: backup, permissions: backupPermissions() });
     // Control started again keeps it.
-    await make().sync();
+    await (await make()).sync();
     assert.equal(readFileSync(seedFile, "utf8"), seed);
     // A file that holds no seed stops control, saying what to do.
     const bad = join(dir, "bad.seed");
     writeFileSync(bad, "not a seed\n");
-    assert.throws(
-      () =>
-        new BusUsers({
+    await assert.rejects(
+      async () =>
+        BusUsers.open({
           store,
           secrets,
           file: usersPath(),
@@ -482,15 +492,15 @@ describe("each rig's key on the message bus", () => {
         }),
       /does not hold the seed of a NATS user key: remove it, and control makes the backup's key anew as it starts$/,
     );
-    store.db.close();
+    await store.close();
   });
 
-  test("a key is recorded without the bus too; control needs the server's folder named", () => {
-    const store = new ControlStore(":memory:");
+  test("a key is recorded without the bus too; control needs the server's folder named", async () => {
+    const store = openControlStore(":memory:");
     const key = user();
-    assert.equal(takeRigBusKey(store, "rig-a", key), "new");
-    assert.equal(takeRigBusKey(store, "rig-a", key), "same");
-    assert.equal(takeRigBusKey(store, "rig-a", user()), "changed");
+    assert.equal(await takeRigBusKey(store, "rig-a", key), "new");
+    assert.equal(await takeRigBusKey(store, "rig-a", key), "same");
+    assert.equal(await takeRigBusKey(store, "rig-a", user()), "changed");
     assert.equal(BUS_CONFIG_DIR_SETTING, "THERMITE_NATS_CONFIG_DIR");
     assert.equal(BUS_USERS_FILE, "users.conf");
     assert.equal(busConfigDir({ THERMITE_NATS_CONFIG_DIR: " /nats-config " }), "/nats-config");

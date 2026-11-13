@@ -3,8 +3,21 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * Archived campaigns (goal 077; goal 125, T6).
  */
+export interface CampaignArchive {
+  /** Every archived campaign, the newest first. */
+  list(): Promise<{ campaign: string; at: string; by: string }[]>;
+  /** When and by whom a campaign was archived, or undefined when it is not. */
+  get(campaign: string): Promise<{ at: string; by: string } | undefined>;
+  /**
+   * Archives a campaign. It keeps its folder (the owner, 2026-10-21): the navigation leaves it out
+   * while it is archived, and unarchiving brings it back into the same folder.
+   */
+  add(campaign: string, by: string): Promise<{ at: string; by: string }>;
+  remove(campaign: string): Promise<boolean>;
+}
 
-export class CampaignArchive extends StorePart {
+/** CampaignArchive on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteCampaignArchive extends StorePart {
   /** Every archived campaign, the newest first. */
   list(): { campaign: string; at: string; by: string }[] {
     return (

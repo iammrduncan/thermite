@@ -69,12 +69,12 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
       return c.text("too many failed sign-ins; wait a minute", 429);
     const form = await c.req.parseBody();
     const token = String(form.token ?? "");
-    if (!sessions.start(c, token)) {
+    if (!(await sessions.start(c, token))) {
       if (failures.add(client, now) === SIGN_IN_FAILURES)
-        store.auditLog.add("control", "login_throttled", {});
+        await store.auditLog.add("control", "login_throttled", {});
       return c.redirect("/ui/login", 303);
     }
-    store.auditLog.add("owner:ui", "login", {});
+    await store.auditLog.add("owner:ui", "login", {});
     return c.redirect("/ui", 303);
   });
 
@@ -86,7 +86,7 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
   const forms = bodyLimit({ maxSize: FORM_MAX_BYTES });
   app.use("/ui/*", async (c, next) => {
     if (c.req.path === "/ui/login") return next();
-    const sid = sessionOf(c);
+    const sid = await sessionOf(c);
     if (!sid) return c.redirect("/ui/login", 303);
     if (c.req.method !== "POST") return next();
     let refused: Response | undefined;
@@ -104,12 +104,12 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
     return refused;
   });
   app.get("/ui", async (c, next) => {
-    if (!sessionOf(c)) return c.redirect("/ui/login", 303);
+    if (!(await sessionOf(c))) return c.redirect("/ui/login", 303);
     await next();
   });
 
-  app.post("/ui/logout", (c) => {
-    sessions.end(c);
+  app.post("/ui/logout", async (c) => {
+    await sessions.end(c);
     return c.redirect("/ui/login", 303);
   });
 

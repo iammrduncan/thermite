@@ -8,7 +8,8 @@ import {
   signInFetch,
 } from "../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { assigned } from "../helpers/assignments.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
@@ -28,7 +29,7 @@ async function fakeOf(t: TestContext, auth: FakeAuth) {
 }
 
 function setup() {
-  const store = new ControlStore(":memory:");
+  const store = openControlStore(":memory:");
   const secrets = SecretBox.ephemeral();
   const servers = new McpServers(store, secrets);
   return { store, secrets, servers };
@@ -37,7 +38,9 @@ function setup() {
 /** Everything control keeps or says: its tables, its audit and its log lines, as text. */
 function everything(store: ControlStore): string {
   const tables = ["mcp_server", "mcp_sign_in", "audit"];
-  return tables.map((t) => JSON.stringify(store.db.prepare(`select * from ${t}`).all())).join("\n");
+  return tables
+    .map((t) => JSON.stringify(sqliteBehind(store).db.prepare(`select * from ${t}`).all()))
+    .join("\n");
 }
 
 /** The browser's part of an OAuth sign-in: open the server's page, which sends it back with a code. */
@@ -51,12 +54,12 @@ describe("MCP servers in Settings", () => {
   test("a key in a header: sealed, shown by its last four characters, and its tools read with it", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "X-Brain-Key", value: KEY });
     const { store, servers } = setup();
-    servers.put(
+    await servers.put(
       { name: "gbrain", url: fake.url, auth: "key", header: "X-Brain-Key", secret: KEY },
       "owner:test",
     );
     assert.equal(await servers.check("gbrain"), null);
-    const s = servers.get("gbrain");
+    const s = await servers.get("gbrain");
     assert.equal(s?.status, "ok");
     assert.equal(s?.secret_hint, "…only");
     assert.deepEqual(
@@ -75,26 +78,26 @@ describe("MCP servers in Settings", () => {
     assert.equal(fake.calls.length, 0);
     // Nothing control keeps or says holds the key: it is sealed.
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
-    assert.ok(JSON.stringify(servers.list()).includes("…only"));
-    assert.ok(!JSON.stringify(servers.list()).includes("brainkeyforthetestsonly"));
+    assert.ok(JSON.stringify(await servers.list()).includes("…only"));
+    assert.ok(!JSON.stringify(await servers.list()).includes("brainkeyforthetestsonly"));
   });
 
   test("a wrong key says the server answered 401, without the key", async (t) => {
     const fake = await fakeOf(t, { kind: "bearer", token: "the-right-one-for-tests" });
     const { store, servers } = setup();
-    servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+    await servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
     const why = await servers.check("gbrain");
     assert.match(why ?? "", /401: check the key/);
-    assert.equal(servers.get("gbrain")?.status, "failing");
+    assert.equal((await servers.get("gbrain"))?.status, "failing");
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
   });
 
   test("no sign-in: a public server's tools are read with no header", async (t) => {
     const fake = await fakeOf(t, { kind: "none" });
     const { servers } = setup();
-    servers.put({ name: "docs-search", url: fake.url, auth: "none" }, "owner:test");
+    await servers.put({ name: "docs-search", url: fake.url, auth: "none" }, "owner:test");
     assert.equal(await servers.check("docs-search"), null);
-    assert.equal(servers.get("docs-search")?.tools?.length, 3);
+    assert.equal((await servers.get("docs-search"))?.tools?.length, 3);
     assert.ok(fake.requests.every((r) => !r.headers.authorization));
   });
 
@@ -102,7 +105,7 @@ describe("MCP servers in Settings", () => {
     const fake = await fakeOf(t, { kind: "oauth" });
     fake.clients.set("thermite-control", CLIENT_SECRET);
     const { store, servers } = setup();
-    servers.put(
+    await servers.put(
       {
         name: "arxiv-tools",
         url: fake.url,
@@ -113,14 +116,14 @@ describe("MCP servers in Settings", () => {
       "owner:test",
     );
     assert.equal(await servers.check("arxiv-tools"), null);
-    assert.equal(servers.get("arxiv-tools")?.secret_hint, "…only");
+    assert.equal((await servers.get("arxiv-tools"))?.secret_hint, "…only");
     assert.deepEqual(fake.grants, ["client_credentials"]);
     // The token is kept: a second read asks for none.
     assert.equal(await servers.check("arxiv-tools"), null);
     assert.deepEqual(fake.grants, ["client_credentials"]);
     assert.ok(!everything(store).includes(CLIENT_SECRET));
     // A wrong secret: no token, and the reason, without the secret.
-    servers.put(
+    await servers.put(
       {
         name: "bad-client",
         url: fake.url,
@@ -137,8 +140,8 @@ describe("MCP servers in Settings", () => {
   test("OAuth: the client registers itself, the sign-in uses PKCE, and the sign-in renews itself", async (t) => {
     const fake = await fakeOf(t, { kind: "oauth" });
     const { store, servers } = setup();
-    servers.put({ name: "notion", url: fake.url, auth: "oauth" }, "owner:test");
-    assert.equal(servers.get("notion")?.status, "needs_sign_in");
+    await servers.put({ name: "notion", url: fake.url, auth: "oauth" }, "owner:test");
+    assert.equal((await servers.get("notion"))?.status, "needs_sign_in");
     const redirect = "https://control.example.com/v1/mcp-oauth/callback";
     const { url } = await servers.startSignIn("notion", redirect, "owner:test");
     const page = new URL(url);
@@ -150,7 +153,7 @@ describe("MCP servers in Settings", () => {
     const done = await servers.finishSignIn(state, code);
     assert.equal(done.error, undefined);
     assert.equal(done.tools, 3);
-    const s = servers.get("notion");
+    const s = await servers.get("notion");
     assert.equal(s?.signed_in, true);
     assert.equal(s?.status, "ok");
     // A state is used once.
@@ -170,7 +173,7 @@ describe("MCP servers in Settings", () => {
     fake.refreshTokens.clear();
     const ended = await servers.headers("notion");
     assert.ok("error" in ended && /sign in again/.test(ended.error));
-    assert.equal(servers.get("notion")?.status, "needs_sign_in");
+    assert.equal((await servers.get("notion"))?.status, "needs_sign_in");
     // No token, code or verifier is kept in the clear.
     const kept = everything(store);
     for (const tok of [...fake.accessTokens, code, second.code])
@@ -181,13 +184,13 @@ describe("MCP servers in Settings", () => {
     const fake = await fakeOf(t, { kind: "oauth" });
     fake.dcr = false;
     const { servers } = setup();
-    servers.put({ name: "own-client", url: fake.url, auth: "oauth" }, "owner:test");
+    await servers.put({ name: "own-client", url: fake.url, auth: "oauth" }, "owner:test");
     await assert.rejects(
       servers.startSignIn("own-client", "https://control.example.com/cb", "owner:test"),
       /does not register clients by itself/,
     );
     fake.clients.set("given-client", "");
-    servers.put(
+    await servers.put(
       { name: "own-client", url: fake.url, auth: "oauth", client_id: "given-client" },
       "owner:test",
     );
@@ -201,38 +204,45 @@ describe("MCP servers in Settings", () => {
     assert.equal((await servers.finishSignIn(state, code)).error, undefined);
   });
 
-  test("addresses: https only (http for localhost), no secret in them; another address needs the secret again", () => {
+  test("addresses: https only (http for localhost), no secret in them; another address needs the secret again", async () => {
     const { servers } = setup();
-    const put = (url: string, secret?: string) =>
+    const put = async (url: string, secret?: string) =>
       servers.put({ name: "x", url, auth: "key", secret }, "owner:test");
-    assert.throws(() => put("http://brain.example.com/mcp", KEY), /Use https/);
-    assert.throws(
-      () => put("https://brain.example.com/mcp?token=abc", KEY),
+    await assert.rejects(async () => put("http://brain.example.com/mcp", KEY), /Use https/);
+    await assert.rejects(
+      async () => put("https://brain.example.com/mcp?token=abc", KEY),
       /no secret in the URL/,
     );
-    assert.throws(() => put("https://user:pw@brain.example.com/mcp", KEY), /no user, password/);
-    assert.throws(
-      () => servers.put({ name: "Bad_Name", url: "https://a.example.com", auth: "none" }, "o"),
+    await assert.rejects(
+      async () => put("https://user:pw@brain.example.com/mcp", KEY),
+      /no user, password/,
+    );
+    await assert.rejects(
+      async () =>
+        servers.put({ name: "Bad_Name", url: "https://a.example.com", auth: "none" }, "o"),
       /lowercase/,
     );
-    assert.equal(put("https://brain.example.com/mcp", KEY), "created");
+    assert.equal(await put("https://brain.example.com/mcp", KEY), "created");
     // The same server keeps its sealed key; another server needs it again.
-    assert.equal(put("https://brain.example.com/other"), "changed");
-    assert.equal(servers.get("x")?.secret_hint, "…only");
-    assert.throws(() => put("https://elsewhere.example.com/mcp"), /needs the key again/);
+    assert.equal(await put("https://brain.example.com/other"), "changed");
+    assert.equal((await servers.get("x"))?.secret_hint, "…only");
+    await assert.rejects(
+      async () => put("https://elsewhere.example.com/mcp"),
+      /needs the key again/,
+    );
   });
 
-  test("a server a kit names can't be deleted; one no kit names can", () => {
+  test("a server a kit names can't be deleted; one no kit names can", async () => {
     const { store, servers } = setup();
-    servers.put(
+    await servers.put(
       { name: "gbrain", url: "https://brain.example.com/mcp", auth: "none" },
       "owner:test",
     );
-    servers.put(
+    await servers.put(
       { name: "spare", url: "https://spare.example.com/mcp", auth: "none" },
       "owner:test",
     );
-    store.campaigns.put({
+    await store.campaigns.put({
       campaign: "q4-gemv",
       version: 1,
       contract: {
@@ -244,9 +254,9 @@ describe("MCP servers in Settings", () => {
       sources: { mcp_servers: [{ name: "gbrain", agents: ["workers"] }] },
       by: "owner:test",
     });
-    assert.deepEqual(servers.delete("gbrain", "owner:test"), { named_by: ["q4-gemv-kit"] });
-    assert.equal(servers.delete("spare", "owner:test"), "deleted");
-    assert.equal(servers.get("spare"), undefined);
+    assert.deepEqual(await servers.delete("gbrain", "owner:test"), { named_by: ["q4-gemv-kit"] });
+    assert.equal(await servers.delete("spare", "owner:test"), "deleted");
+    assert.equal(await servers.get("spare"), undefined);
   });
 });
 
@@ -263,7 +273,7 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
     questions: ["q"],
     min_duration: "1h",
   };
-  const assign = (store: ControlStore, payload: Record<string, unknown>) =>
+  const assign = async (store: ControlStore, payload: Record<string, unknown>) =>
     issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
@@ -271,31 +281,36 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
       issuedBy: "owner:test",
     });
 
-  test("refused with the server's name and what to do; started once Settings has it", () => {
+  test("refused with the server's name and what to do; started once Settings has it", async () => {
     const { store, servers } = setup();
-    enrollRigs(store, ["rig-a"]);
-    assert.throws(
-      () =>
+    await enrollRigs(store, ["rig-a"]);
+    await assert.rejects(
+      async () =>
         assign(store, { contract, mcp_servers: [{ name: "paper-search", agents: ["advisors"] }] }),
       /names the MCP server paper-search, and Settings has no server of that name/,
     );
     assert.equal(
-      mcpRefusal(store, [{ name: "paper-search", agents: ["workers"] }]).length > 0,
+      (await mcpRefusal(store, [{ name: "paper-search", agents: ["workers"] }])).length > 0,
       true,
     );
-    servers.put(
+    await servers.put(
       { name: "paper-search", url: "https://papers.example.com/mcp", auth: "none" },
       "owner:test",
     );
     assert.ok(
-      assign(store, { contract, mcp_servers: [{ name: "paper-search", agents: ["advisors"] }] }).id,
+      (
+        await assign(store, {
+          contract,
+          mcp_servers: [{ name: "paper-search", agents: ["advisors"] }],
+        })
+      ).id,
     );
   });
 
-  test("an agent's token may not name MCP servers in an assignment; the owner's may", () => {
+  test("an agent's token may not name MCP servers in an assignment; the owner's may", async () => {
     const { store, servers } = setup();
-    enrollRigs(store, ["rig-a"]);
-    servers.put(
+    await enrollRigs(store, ["rig-a"]);
+    await servers.put(
       { name: "paper-search", url: "https://papers.example.com/mcp", auth: "none" },
       "owner:test",
     );
@@ -305,8 +320,8 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
       // A research contract names them itself.
       { contract: { ...contract, mcp_servers: uses } },
     ])
-      assert.throws(
-        () =>
+      await assert.rejects(
+        async () =>
           issueCommand(store, keys.privateKeyPem, {
             rig: "rig-a",
             kind: "assign_campaign",
@@ -316,14 +331,14 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
           }),
         /An agent's token may not name MCP servers in an assignment/,
       );
-    assert.equal(store.commands.pending("rig-a").length, 0);
-    assert.ok(assign(store, { contract, mcp_servers: uses }).id);
+    assert.equal((await store.commands.pending("rig-a")).length, 0);
+    assert.ok((await assign(store, { contract, mcp_servers: uses })).id);
   });
 
-  test("a research contract's servers go into its assignment, and a different list is refused", () => {
+  test("a research contract's servers go into its assignment, and a different list is refused", async () => {
     const { store, servers } = setup();
-    enrollRigs(store, ["rig-a"]);
-    servers.put(
+    await enrollRigs(store, ["rig-a"]);
+    await servers.put(
       { name: "gbrain", url: "https://brain.example.com/mcp", auth: "none" },
       "owner:test",
     );
@@ -331,16 +346,19 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
       ...contract,
       mcp_servers: [{ name: "gbrain", agents: ["workers", "advisors"] }],
     };
-    const { id } = assign(store, { contract: named });
+    const { id } = await assign(store, { contract: named });
     const signed = JSON.parse(
       String(
-        (store.db.prepare("select signed from command where id = ?").get(id) as { signed: string })
-          .signed,
+        (
+          sqliteBehind(store).db.prepare("select signed from command where id = ?").get(id) as {
+            signed: string;
+          }
+        ).signed,
       ),
     ) as { envelope: { payload: { mcp_servers: unknown } } };
     assert.deepEqual(signed.envelope.payload.mcp_servers, named.mcp_servers);
-    assert.throws(
-      () =>
+    await assert.rejects(
+      async () =>
         assign(store, { contract: named, mcp_servers: [{ name: "gbrain", agents: ["workers"] }] }),
       /Leave mcp_servers out/,
     );
@@ -349,10 +367,10 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
 
 describe("what a rig gets", () => {
   async function api(t: TestContext, fake: FakeMcp) {
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
     const servers = new McpServers(store, secrets);
-    const { control: app } = controlOnly({
+    const { control: app } = await controlOnly({
       store,
       tokens: { rigs: { "rig-a": RIG_TOKEN, "rig-b": "rig-token-bbbbbb" } },
       options: { secrets, mcpServers: servers },
@@ -365,12 +383,12 @@ describe("what a rig gets", () => {
   test("only the servers its runs' kits name, with their sign-in; what it gets is audited without it", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
     const { store, servers } = await api(t, fake);
-    servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
-    servers.put(
+    await servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+    await servers.put(
       { name: "github", url: "https://code.example.com/mcp", auth: "none" },
       "owner:test",
     );
-    assigned(store, "rig-a", "pn-1", "pn", {
+    await assigned(store, "rig-a", "pn-1", "pn", {
       mcp_servers: [
         { name: "gbrain", agents: ["workers", "advisors"] },
         { name: "gone", agents: ["planner"] },
@@ -379,7 +397,7 @@ describe("what a rig gets", () => {
     // What control writes to the rig's config on the bus (bus/config.ts), audited as it writes.
     const ask = async (rig: string) => {
       const given = await servers.forRig(rig);
-      servers.handed(rig, given);
+      await servers.handed(rig, given);
       return given;
     };
     const r = await ask("rig-a");
@@ -396,8 +414,8 @@ describe("what a rig gets", () => {
     assert.deepEqual(b.servers, []);
     // Audited once for what changed, never with the key.
     await ask("rig-a");
-    const audits = store.db
-      .prepare("select body from audit where action = 'mcp_servers_handed'")
+    const audits = sqliteBehind(store)
+      .db.prepare("select body from audit where action = 'mcp_servers_handed'")
       .all() as { body: string }[];
     // rig-a's servers once; rig-b got none, which is what it had: nothing to audit.
     assert.equal(audits.length, 1);
@@ -412,10 +430,10 @@ describe("what a rig gets", () => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
     const store = controlStore();
     const servers = new McpServers(store, SecretBox.ephemeral());
-    servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+    await servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
     const uses = { mcp_servers: [{ name: "gbrain", agents: ["workers"] }] };
     const given = async () => (await servers.forRig("rig-a")).servers.map((x) => x.name);
-    assigned(store, "rig-a", "pn-1", "pn", uses);
+    await assigned(store, "rig-a", "pn-1", "pn", uses);
     assert.deepEqual(await given(), ["gbrain"]);
     // The run closes: its rig no longer gets the server.
     await report(store, "rig-a", "ledger-a", [
@@ -425,9 +443,11 @@ describe("what a rig gets", () => {
     await applied(store);
     assert.deepEqual(await given(), []);
     // An assignment that failed gives nothing either.
-    assigned(store, "rig-a", "pn-2", "pn", uses);
+    await assigned(store, "rig-a", "pn-2", "pn", uses);
     assert.deepEqual(await given(), ["gbrain"]);
-    store.db.prepare("update command set status = 'failed' where id = ?").run("cmd-rig-a-pn-2");
+    sqliteBehind(store)
+      .db.prepare("update command set status = 'failed' where id = ?")
+      .run("cmd-rig-a-pn-2");
     assert.deepEqual(await given(), []);
   });
 
@@ -514,7 +534,7 @@ describe("what a rig gets", () => {
       decodeURIComponent(back.headers.get("location") ?? ""),
       /Signed in to notion.*read 3 tools/,
     );
-    assert.equal(servers.get("notion")?.status, "ok");
+    assert.equal((await servers.get("notion"))?.status, "ok");
     // A made-up state is refused.
     const forged = await app.request(`/v1/mcp-oauth/callback?state=made-up&code=${code}`);
     const to = forged.headers.get("location") ?? "";
@@ -526,10 +546,10 @@ describe("what a rig gets", () => {
 describe("control's log lines", () => {
   test("a failing server, a refused page and a rig's share are logged and audited without a secret", async (t) => {
     const fake = await fakeOf(t, { kind: "bearer", token: "not-the-key-given" });
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
     const servers = new McpServers(store, secrets);
-    const { control: app } = controlOnly({
+    const { control: app } = await controlOnly({
       store,
       tokens: { rigs: { "rig-a": RIG_TOKEN } },
       options: { secrets, mcpServers: servers },
@@ -546,14 +566,16 @@ describe("control's log lines", () => {
       const ui = await signIn(app);
       const csrf = ui.csrfOf(await ui.page("/ui/settings"));
       await ui.post("/ui/settings/mcp/gbrain/check", { csrf });
-      assigned(store, "rig-a", "pn-1", "pn", {
+      await assigned(store, "rig-a", "pn-1", "pn", {
         mcp_servers: [{ name: "gbrain", agents: ["workers"] }],
       });
-      servers.handed("rig-a", await servers.forRig("rig-a"));
+      await servers.handed("rig-a", await servers.forRig("rig-a"));
     }
     // Control logs a refused page with the same words it writes to its audit (api.ts): the
     // reason is there (the server answered 401), the key is not.
-    const refused = store.auditLog.last("owner:ui", "refused") as { why?: string } | undefined;
+    const refused = (await store.auditLog.last("owner:ui", "refused")) as
+      | { why?: string }
+      | undefined;
     assert.match(refused?.why ?? "", /401/);
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
   });
@@ -562,7 +584,7 @@ describe("control's log lines", () => {
 describe("MCP servers over control's own MCP", () => {
   test("the owner adds, lists and deletes one; the audit holds the secret's last four characters only", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
-    const { store, control } = controlOnly({
+    const { store, control } = await controlOnly({
       tokens: { operator: "operator-token-abcdef", rigs: {} },
       options: { secrets: SecretBox.ephemeral() },
     });

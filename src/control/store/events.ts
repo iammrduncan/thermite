@@ -106,7 +106,21 @@ const asStored = (r: Row): StoredEvent => ({
  * The events table of a store from before the stream, as the move reads it: none once store
  * migration 12 dropped it. A store from v0.1.0 has no `run` column until migration 5 adds it.
  */
-export class EventsTable extends StorePart {
+export interface EventsTable {
+  /** Whether the store still holds the table. */
+  exists(): Promise<boolean>;
+  /** The table's rows and its last seq: 0 and 0 when it holds none, or is gone. */
+  size(): Promise<{ rows: number; lastSeq: number }>;
+  /** How many rows the table holds after a seq. */
+  countAfter(seq: number): Promise<number>;
+  /** Every rig's events after a seq, in the table's order, `limit` at most. */
+  inOrder(after: number, limit: number): Promise<StoredEvent[]>;
+  /** The row at a seq, or undefined when the table has none there. */
+  at(seq: number): Promise<StoredEvent | undefined>;
+}
+
+/** EventsTable on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteEventsTable extends StorePart {
   /** Whether the store still holds the table. */
   exists(): boolean {
     return hasTable(this.db);

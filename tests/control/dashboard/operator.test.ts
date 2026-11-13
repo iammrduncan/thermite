@@ -16,7 +16,7 @@ import { seedDemo } from "../../helpers/demo/index.ts";
 async function demo() {
   const store = controlStore();
   await seedDemo(store);
-  const { control } = controlOnly({
+  const { control } = await controlOnly({
     store,
     tokens: { rigs: { "rig-a": "t-a-abcdef", "rig-b": "t-b-abcdef", "rig-c": "t-c-abcdef" } },
   });
@@ -49,9 +49,9 @@ describe("control dashboard for an operator", () => {
       attempt: field(form, "attempt"),
     });
     assert.equal(r.status, 303);
-    const cmd = store.commands
-      .pending(field(form, "rig"))
-      .find((c) => c.envelope.kind === "decline_promotion");
+    const cmd = (await store.commands.pending(field(form, "rig"))).find(
+      (c) => c.envelope.kind === "decline_promotion",
+    );
     assert.equal(cmd?.envelope.issued_by, "owner:ui");
     assert.deepEqual(cmd?.envelope.payload, {
       run: field(form, "run"),

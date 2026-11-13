@@ -46,8 +46,8 @@ interface SupervisorExport {
   champions_waiting?: number;
 }
 
-function exportFigures(store: ControlStore, rig: string) {
-  const sup = store.reportedRigs.supervisor(rig);
+async function exportFigures(store: ControlStore, rig: string) {
+  const sup = await store.reportedRigs.supervisor(rig);
   const ex = (sup?.export ?? null) as SupervisorExport | null;
   const to: ResultsDestination | null =
     ex?.remote === true ? "repository" : ex?.to === "control" ? "control" : null;
@@ -55,8 +55,12 @@ function exportFigures(store: ControlStore, rig: string) {
 }
 
 /** Whether one export (by its name) has left the rig: to the results repository or to control. */
-export function exportLeft(store: ControlStore, rig: string, name: string): ExportLeft {
-  const { ex, to } = exportFigures(store, rig);
+export async function exportLeft(
+  store: ControlStore,
+  rig: string,
+  name: string,
+): Promise<ExportLeft> {
+  const { ex, to } = await exportFigures(store, rig);
   if (!ex)
     return {
       left: false,
@@ -82,7 +86,7 @@ export function exportLeft(store: ControlStore, rig: string, name: string): Expo
   }
   if (to === "control") {
     // Control's own copy is the evidence, not the supervisor's word.
-    const e = store.exports.get(rig, name);
+    const e = await store.exports.get(rig, name);
     if (!e?.complete_at)
       return {
         left: false,
@@ -113,12 +117,12 @@ export function exportLeft(store: ControlStore, rig: string, name: string): Expo
  * export has left too. Pass the export a terminate or reset made just before (export_now): the
  * results recorded after the last export are only in an export made after them.
  */
-export function resultsLeft(
+export async function resultsLeft(
   store: ControlStore,
   rig: string,
   opts: { export?: string | undefined } = {},
-): ResultsLeft {
-  const { sup, ex, to } = exportFigures(store, rig);
+): Promise<ResultsLeft> {
+  const { sup, ex, to } = await exportFigures(store, rig);
   const reported_at = typeof sup?.received_at === "string" ? sup.received_at : null;
   const waiting = typeof ex?.waiting === "number" ? ex.waiting : null;
   const champions = typeof ex?.champions_waiting === "number" ? ex.champions_waiting : null;
@@ -140,7 +144,7 @@ export function resultsLeft(
   if (waiting === null)
     return out(false, "the rig's supervisor does not say what waits to leave (an older version)");
   if (opts.export !== undefined) {
-    const one = exportLeft(store, rig, opts.export);
+    const one = await exportLeft(store, rig, opts.export);
     if (!one.left) return out(false, one.why);
   }
   const where = to === "repository" ? "the results repository" : "control";
@@ -174,13 +178,17 @@ export type RemoveCheck = { refused: string } | { discarded: string | null };
  * rig whose results can't leave, such as one whose supervisor is broken; `discarded` then says
  * what had not left, for the audit log.
  */
-export function removeCheck(store: ControlStore, rig: string, typed: string): RemoveCheck {
+export async function removeCheck(
+  store: ControlStore,
+  rig: string,
+  typed: string,
+): Promise<RemoveCheck> {
   const discard = typed === `discard ${rig}`;
   if (!discard && typed !== `remove ${rig}`)
     return { refused: `Type "remove ${rig}" to remove it.` };
   // A rig that never reported, such as one whose setup failed, holds no result (goal 206).
-  if (!store.reportedRigs.list().some((x) => x.id === rig)) return { discarded: null };
-  const all = resultsLeft(store, rig);
+  if (!(await store.reportedRigs.list()).some((x) => x.id === rig)) return { discarded: null };
+  const all = await resultsLeft(store, rig);
   if (all.left) return { discarded: null };
   if (discard) return { discarded: all.why };
   return {

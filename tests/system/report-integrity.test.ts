@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { issueCommand } from "../../src/control/issue/index.ts";
-import { ControlStore, fingerprint } from "../../src/control/store/index.ts";
+import { fingerprint, openControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { verifyExport } from "../../src/supervisor/git-export.ts";
 import { ADMIN, controlOnly, controlStack } from "../helpers/control-stack.ts";
@@ -15,7 +15,7 @@ import { appendOther } from "../helpers/kinds.ts";
 describe("signed reports at control, from the bus", () => {
   test("stale reports, gaps and reports from a ledger the rig left are refused", async () => {
     const env = makeHarnessEnv("rig-a");
-    const { store } = controlOnly({ keys: env.keys });
+    const { store } = await controlOnly({ keys: env.keys });
     const post = (body: unknown) => foldOnBus(store, "rig-a", body);
     appendOther(env.service.ledger, "t", "one", null, {});
     const old = env.service.snapshot(0, 100) as Record<string, unknown>;
@@ -23,7 +23,7 @@ describe("signed reports at control, from the bus", () => {
     appendOther(env.service.ledger, "t", "two", null, {});
     const fresh = env.service.snapshot(0, 100) as Record<string, unknown>;
     // A cluster rig control marked failed (its wait ended) that reports again is running again.
-    store.clusters.addRig({
+    await store.clusters.addRig({
       rig: "rig-a",
       cluster: "k",
       namespace: "ns",
@@ -36,10 +36,12 @@ describe("signed reports at control, from the bus", () => {
       },
       created_by: "owner:ui",
     });
-    store.clusters.setRigStatus("rig-a", "failed");
+    await store.clusters.setRigStatus("rig-a", "failed");
     assert.ok("folded" in (await post(fresh)));
-    assert.equal(store.clusters.rig("rig-a")?.status, "running");
-    assert.ok(store.rigHistory.list("rig-a").some((x) => x.step === "report_after_images" && x.ok));
+    assert.equal((await store.clusters.rig("rig-a"))?.status, "running");
+    assert.ok(
+      (await store.rigHistory.list("rig-a")).some((x) => x.step === "report_after_images" && x.ok),
+    );
     // An older report (a replay) is refused: the rig cannot be frozen in an old state.
     const replay = await post(old);
     assert.ok(!("folded" in replay), JSON.stringify(replay));
@@ -59,7 +61,7 @@ describe("signed reports at control, from the bus", () => {
       ledger_id: "ledger-new",
       generated_at: new Date().toISOString(),
     });
-    const back = store.reportedRigs.reportCheck("rig-a", {
+    const back = await store.reportedRigs.reportCheck("rig-a", {
       ledgerId: String(fresh.ledger_id),
       cursor: 0,
       generatedAt: new Date(Date.now() + 1000).toISOString(),
@@ -69,20 +71,20 @@ describe("signed reports at control, from the bus", () => {
 
   test("with owner acceptance required, a rig's first key is held, and only the checked one is accepted", async () => {
     const env = makeHarnessEnv("rig-a");
-    const { store, control } = controlOnly({
+    const { store, control } = await controlOnly({
       keys: env.keys,
       options: { requireKeyAcceptance: true },
     });
     const snap = env.service.snapshot(0, 100);
     const post = () => foldOnBus(store, "rig-a", snap, { requireKeyAcceptance: true });
     assert.ok("refused" in (await post()));
-    assert.equal(store.reportedRigs.key("rig-a").pubkey, null);
+    assert.equal((await store.reportedRigs.key("rig-a")).pubkey, null);
     const wrong = await control.request("/v1/rigs/rig-a/key/accept?fingerprint=0000", {
       method: "POST",
       headers: { authorization: `Bearer ${ADMIN}` },
     });
     assert.equal(wrong.status, 404);
-    const fp = fingerprint(String(store.reportedRigs.key("rig-a").pending));
+    const fp = fingerprint(String((await store.reportedRigs.key("rig-a")).pending));
     const ok = await control.request(`/v1/rigs/rig-a/key/accept?fingerprint=${fp}`, {
       method: "POST",
       headers: { authorization: `Bearer ${ADMIN}` },
@@ -94,8 +96,10 @@ describe("signed reports at control, from the bus", () => {
 
 describe("the command queue", () => {
   test("expired commands are not relayed; the owner can cancel one; commands go through when reporting fails", async () => {
-    const { env, store, control, cfg, relay } = controlStack({ env: makeHarnessEnv("rig-a") });
-    const expired = issueCommand(store, env.keys.privateKeyPem, {
+    const { env, store, control, cfg, relay } = await controlStack({
+      env: makeHarnessEnv("rig-a"),
+    });
+    const expired = await issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
       payload: { full: true },
@@ -103,7 +107,7 @@ describe("the command queue", () => {
       issuedBy: "owner:test",
     });
     await new Promise((r) => setTimeout(r, 100));
-    const cancel = issueCommand(store, env.keys.privateKeyPem, {
+    const cancel = await issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
       payload: { full: true },
@@ -114,17 +118,17 @@ describe("the command queue", () => {
       headers: { authorization: `Bearer ${ADMIN}` },
     });
     assert.equal(r.status, 200);
-    const keep = issueCommand(store, env.keys.privateKeyPem, {
+    const keep = await issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
       payload: { full: true },
       issuedBy: "owner:test",
     });
     assert.deepEqual(
-      store.commands.pending("rig-a").map((c) => c.envelope.id),
+      (await store.commands.pending("rig-a")).map((c) => c.envelope.id),
       [keep.id],
     );
-    assert.equal(store.commands.get(expired.id)?.status, "expired");
+    assert.equal((await store.commands.get(expired.id))?.status, "expired");
     // Reporting fails (the bus takes no report), yet the command is relayed and applied.
     const bus = cfg.bus;
     cfg.bus = {
@@ -138,11 +142,11 @@ describe("the command queue", () => {
     assert.equal(env.service.ledger.commands.get(expired.id), undefined, "not relayed");
   });
 
-  test("a command too large to deliver is refused when it is issued", () => {
-    const store = new ControlStore(":memory:");
-    enrollRigs(store, ["rig-a"]);
-    assert.throws(
-      () =>
+  test("a command too large to deliver is refused when it is issued", async () => {
+    const store = openControlStore(":memory:");
+    await enrollRigs(store, ["rig-a"]);
+    await assert.rejects(
+      async () =>
         issueCommand(store, generateSigningKeys().privateKeyPem, {
           rig: "rig-a",
           kind: "pause_run",

@@ -91,7 +91,62 @@ const machineRigOf = (r: Row): MachineRig => ({
   created_by: String(r.created_by),
 });
 
-export class Machines extends StorePart {
+export interface Machines {
+  add(m: {
+    name: string;
+    address: string;
+    port: number;
+    user: string;
+    key_sealed: string;
+    public_key: string;
+    key_fingerprint: string;
+    seen_host_keys: string[];
+    by: string;
+  }): Promise<void>;
+  get(name: string): Promise<(Machine & { key_sealed: string }) | undefined>;
+  list(): Promise<Machine[]>;
+  /** The host keys the machine presents now, kept for the owner to compare. */
+  seeHostKeys(name: string, lines: string[]): Promise<void>;
+  /** The owner trusts the host keys they were shown: from now on only these connect. */
+  trustHostKeys(name: string, lines: string[], by: string): Promise<void>;
+  /** What the last check found, or why it failed (keeping the facts before it). */
+  setFacts(name: string, r: { facts: unknown } | { error: string }): Promise<void>;
+  /** The owner's yes to one install: one recipe's exact script on one machine, used once. */
+  approveInstall(i: {
+    machine: string;
+    recipe: string;
+    script_sha: string;
+    by: string;
+    ttlMs: number;
+  }): Promise<number>;
+  /** Uses an approval: false when it was used already, has expired, or doesn't match. */
+  startInstall(id: number, machine: string, recipe: string, scriptSha: string): Promise<boolean>;
+  finishInstall(id: number, ok: boolean, output: string): Promise<void>;
+  /** A machine's installs, newest first. */
+  installs(machine: string): Promise<
+    {
+      id: number;
+      recipe: string;
+      approved_by: string;
+      approved_at: string;
+      started_at: string | null;
+      finished_at: string | null;
+      ok: boolean | null;
+      output: string | null;
+    }[]
+  >;
+  addRig(r: Omit<MachineRig, "created_at" | "status">): Promise<void>;
+  rig(rig: string): Promise<MachineRig | undefined>;
+  /** The rigs control set up, on one machine or all, removed ones last. */
+  rigs(machine?: string): Promise<MachineRig[]>;
+  setRigStatus(rig: string, status: string): Promise<void>;
+  /** The images a rig control set up on a machine runs now, after an update. */
+  setRigImages(rig: string, images: MachineRig["images"]): Promise<void>;
+  delete(name: string, by: string): Promise<boolean>;
+}
+
+/** Machines on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteMachines extends StorePart {
   add(m: {
     name: string;
     address: string;

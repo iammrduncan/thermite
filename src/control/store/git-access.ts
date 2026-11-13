@@ -82,7 +82,22 @@ export function gitAccessHost(db: DatabaseSync): void {
   }
 }
 
-export class GitAccessStore extends StorePart {
+export interface GitAccessStore {
+  /** Adds Git access; a name is used once (delete it to make another). */
+  add(g: GitAccess & { secret_sealed: string; by: string }): Promise<void>;
+  /** Binds a Git access to the host it is for; false when there is no such access. */
+  setHost(name: string, host: string, by: string): Promise<boolean>;
+  /** Git access by name, with its sealed secret (for control's own use only). */
+  get(name: string): Promise<(GitAccess & { secret_sealed: string }) | undefined>;
+  /** Every Git access, without secrets. */
+  list(): Promise<GitAccess[]>;
+  /** A token replaced in place: same name, so campaigns that name it keep working. */
+  replaceToken(name: string, secretSealed: string, hint: string, by: string): Promise<boolean>;
+  delete(name: string, by: string): Promise<boolean>;
+}
+
+/** GitAccessStore on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteGitAccessStore extends StorePart {
   /** Adds Git access; a name is used once (delete it to make another). */
   add(g: GitAccess & { secret_sealed: string; by: string }): void {
     this.db

@@ -60,7 +60,7 @@ describe("the advisors file, as control reads it from the supervisor", () => {
 
   test("the supervisor's report keeps it; rig_models and GET /v1/rigs/<rig>/model give it", async () => {
     const s = await stack();
-    const report = (advisors: unknown) =>
+    const report = async (advisors: unknown) =>
       figuresCall(s.store, "rig-a", { at: new Date().toISOString(), advisors });
     const read = async () => (await (await s.owner("GET")).json()) as Record<string, unknown>;
     // Not reported yet.
@@ -80,8 +80,11 @@ describe("the advisors file, as control reads it from the supervisor", () => {
     assert.equal(bad.status, 200);
     assert.equal((await read()).advisors_file, null);
     assert.equal(
-      (s.store.reportedRigs.supervisor("rig-a")?.advisors as { audits?: number } | undefined)
-        ?.audits,
+      (
+        (await s.store.reportedRigs.supervisor("rig-a"))?.advisors as
+          | { audits?: number }
+          | undefined
+      )?.audits,
       3,
     );
     // No advisors at all.

@@ -117,25 +117,25 @@ describe("control's readers of the rigs' events read what it keeps already", () 
     store = await seeded();
   });
 
-  test("Live checks a run's message lines against the owner's messages on its rig's current ledger", () => {
+  test("Live checks a run's message lines against the owner's messages on its rig's current ledger", async () => {
     assert.deepEqual(
-      [...runMessages(store, "rig-a", "r-1")],
+      [...(await runMessages(store, "rig-a", "r-1"))],
       [
         [1, { to: "planner", text: "Try tiling first.", keep: true }],
         [2, { to: "lane-1", text: "Mind the tail.", keep: false }],
       ],
     );
     assert.deepEqual(
-      [...runMessages(store, "rig-a", "r-2")],
+      [...(await runMessages(store, "rig-a", "r-2"))],
       [[3, { to: "all", text: "Another run's words.", keep: false }]],
     );
     // A run of the rig's earlier ledger, another rig's run and an unknown rig have none.
-    assert.deepEqual([...runMessages(store, "rig-a", "r-0")], []);
-    assert.deepEqual([...runMessages(store, "rig-b", "r-1")], []);
-    assert.deepEqual([...runMessages(store, "rig-9", "r-1")], []);
+    assert.deepEqual([...(await runMessages(store, "rig-a", "r-0"))], []);
+    assert.deepEqual([...(await runMessages(store, "rig-b", "r-1"))], []);
+    assert.deepEqual([...(await runMessages(store, "rig-9", "r-1"))], []);
   });
 
-  test("a check's row reads each check's newest run on the rig's current ledger", () => {
+  test("a check's row reads each check's newest run on the rig's current ledger", async () => {
     const smoke = {
       check: "smoke",
       started_at: at(16),
@@ -154,10 +154,10 @@ describe("control's readers of the rigs' events read what it keeps already", () 
       note: null,
       id: "chk-2",
     };
-    assert.deepEqual(rigChecks(store, "rig-a"), { smoke, isolation });
-    assert.deepEqual(rigChecks(store, "rig-9"), {});
+    assert.deepEqual(await rigChecks(store, "rig-a"), { smoke, isolation });
+    assert.deepEqual(await rigChecks(store, "rig-9"), {});
     // The earlier ledger's model check is not the rig's now: its row has none.
-    const rows = checkRows(store, "rig-a", Date.parse(at(30)));
+    const rows = await checkRows(store, "rig-a", Date.parse(at(30)));
     assert.deepEqual(Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.state])), {
       model: "none",
       isolation: "running",
@@ -182,7 +182,7 @@ describe("control's readers of the rigs' events read what it keeps already", () 
     assert.equal(await keepChampionPatch(s, "rig-a", "r-0", 2, OLD), "stored");
     const patch = async (run: string, seq: number) => {
       const x = await findRun(s, run);
-      return x && s.championPatches.get(x.rig.id, x.rig.ledger_id, run, seq);
+      return x && (await s.championPatches.get(x.rig.id, x.rig.ledger_id, run, seq));
     };
     assert.deepEqual(await patch("r-1", 2), {
       patch: SECOND,
@@ -191,7 +191,7 @@ describe("control's readers of the rigs' events read what it keeps already", () 
     });
     assert.deepEqual((await patch("r-1", 3))?.patch, THIRD);
     assert.deepEqual((await patch("r-0", 2))?.patch, OLD);
-    assert.equal(s.championPatches.get("rig-a", "ledger-1", "r-1", 2), undefined);
+    assert.equal(await s.championPatches.get("rig-a", "ledger-1", "r-1", 2), undefined);
   });
 
   test("a copied experiment takes its author and its words after every edit from its run", async () => {
@@ -225,17 +225,28 @@ describe("control's readers of the rigs' events read what it keeps already", () 
 
   test("a pod's spend goes to the runs its rig runs on its current ledger, with their campaign", async () => {
     const s = await seeded();
-    s.runpod.addRig({ rig: "rig-a", cloud: "rp", pod: "p-1", state: { spent_usd: 0 }, by: "t" });
-    saveRunpodRig(s, "rig-a", { spent_usd: 0.5 }, true);
+    await s.runpod.addRig({
+      rig: "rig-a",
+      cloud: "rp",
+      pod: "p-1",
+      state: { spent_usd: 0 },
+      by: "t",
+    });
+    await saveRunpodRig(s, "rig-a", { spent_usd: 0.5 }, true);
     assert.deepEqual(
-      s.usage.podSpend({ kind: "system" }, null).map((r) => [r.rig, r.run, r.campaign, r.usd]),
+      (await s.usage.podSpend({ kind: "system" }, null)).map((r) => [
+        r.rig,
+        r.run,
+        r.campaign,
+        r.usd,
+      ]),
       [["rig-a", "r-1", "sort", 0.5]],
     );
   });
 
-  test("a model call's record has the campaign of the run its rig created", () => {
+  test("a model call's record has the campaign of the run its rig created", async () => {
     assert.deepEqual(
-      store.usage.rows({ kind: "system" }, null).map((r) => [r.rig, r.run, r.campaign]),
+      (await store.usage.rows({ kind: "system" }, null)).map((r) => [r.rig, r.run, r.campaign]),
       [["rig-a", "r-1", "sort"]],
     );
   });

@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { MAX_LANES, RIG_ID_SENTENCE } from "../../../core/ids.ts";
 import { inBackground } from "../../background.ts";
 import {
@@ -64,10 +65,9 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
   // Rigs › Add a rig: control enrolls the rig, writes its files and Quadlet units over SSH, and
   // starts it (machines/deploy.ts). Every step is a setup event on the rig's page.
   /** GPUs of a machine that rigs control set up there use, by index. */
-  const gpusInUse = (machine: string) =>
+  const gpusInUse = async (machine: string) =>
     new Map(
-      store.machines
-        .rigs(machine)
+      (await store.machines.rigs(machine))
         .filter((r) => r.status !== "removed")
         .flatMap((r) => r.gpus.map((g) => [g, r.rig] as const)),
     );
@@ -106,14 +106,14 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
         30 * 60_000,
       );
       if (out.code !== 0) throw new Error(tail(out.stderr) || `the deploy exited ${out.code}`);
-      store.rigHistory.add(r.rig, "deployed", true);
-      store.machines.setRigStatus(r.rig, "starting");
+      await store.rigHistory.add(r.rig, "deployed", true);
+      await store.machines.setRigStatus(r.rig, "starting");
     } catch (err) {
-      store.rigHistory.add(r.rig, "deploy", false, errorText(err));
-      store.machines.setRigStatus(r.rig, "failed");
+      await store.rigHistory.add(r.rig, "deploy", false, errorText(err));
+      await store.machines.setRigStatus(r.rig, "failed");
       return;
     }
-    await awaitFirstReport(parts, r.rig, (s) => store.machines.setRigStatus(r.rig, s));
+    await awaitFirstReport(parts, r.rig, async (s) => store.machines.setRigStatus(r.rig, s));
   };
   app.get("/ui/assets/add-rig.js", (c) =>
     c.body(ADD_RIG_JS, 200, {
@@ -121,13 +121,13 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
       "cache-control": "no-cache",
     }),
   );
-  app.get("/ui/rigs/add", (c) => {
+  app.get("/ui/rigs/add", async (c) => {
     const t = csrf(c);
     const error = c.req.query("error");
     // The place to choose first: one from Settings › Machines' Add a rig here (goal 203).
     const wanted = c.req.query("place");
-    const places = corePlaces(store);
-    const groups = runnerGroups(store);
+    const places = await corePlaces(store);
+    const groups = await runnerGroups(store);
     const first = firstPlace(places, wanted);
     // Rigs you run yourself: one command where the rig goes, for places control can't reach.
     const joinCards = `<label class="ch"><input type="radio" name="place" value="join:machine" style="margin:2px 8px 0 0"><span><b>A machine you set it up on yourself</b><br><span class="muted small">For a machine control can't reach over SSH, such as one behind NAT. You run one command there; it fetches the rig's files from control and starts it. Control can't reach the machine afterwards, so you stop and remove it there too.</span></span></label>
@@ -157,7 +157,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
     const tip = (text: string) => `<i class="ii" tabindex="0" data-tip="${esc(text)}">i</i>`;
     const learn = (path: string, text: string) =>
       `<a class="wz-learn" href="${DOCS}${path}" target="_blank" rel="noopener">${esc(text)} ↗</a>`;
-    const runpod = store.gpuClouds.list().length
+    const runpod = (await store.gpuClouds.list()).length
       ? "/ui/rigs/add/runpod"
       : "/ui/settings/machines?add=1#add-machine";
     return page(
@@ -168,7 +168,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
         active: "rigs",
       },
       `${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not created.</b> ${esc(error)}</div>` : ""}${blocked ? `<div class="card warn" style="margin-bottom:16px">${esc(blocked)}</div>` : ""}
-<form id="add-rig" class="wz-form" method="post" action="/ui/rigs/add" autocomplete="off" data-taken="${esc(JSON.stringify(rigNamesTaken(parts)))}" data-img-cpu="${esc(images?.harness ?? "")}" data-img-cuda12="${esc(images?.harnessCuda ?? "")}" data-img-cuda13="${esc(images?.harnessCuda13 ?? "")}"><input type="hidden" name="csrf" value="${t}">
+<form id="add-rig" class="wz-form" method="post" action="/ui/rigs/add" autocomplete="off" data-taken="${esc(JSON.stringify(await rigNamesTaken(parts)))}" data-img-cpu="${esc(images?.harness ?? "")}" data-img-cuda12="${esc(images?.harnessCuda ?? "")}" data-img-cuda13="${esc(images?.harnessCuda13 ?? "")}"><input type="hidden" name="csrf" value="${t}">
 <ol class="wz-steps" id="wz-steps" aria-label="Steps" hidden></ol>
 <section class="wz" data-step="kind"><div class="wz-head"><h2>What kind of rig?</h2><p class="lead">A rig is where Thermite's agents work and its judge measures their changes. ${tip("A rig runs a campaign's lanes, the agents that try changes, and its judge, which measures each change against the champion. Its results go to control.")}</p></div>
 <div class="wz-kinds" role="radiogroup" aria-label="Kind of rig">
@@ -183,7 +183,7 @@ ${learn("/how-to/install/runners/", "Which kind do I need? On the docs site")}</
 <div class="card flat" role="radiogroup" aria-label="Where it runs">${places.length ? coreRows(places, wanted) : `<div class="empty">No machine or cluster yet. Add one under <a href="/ui/settings/machines?add=1#add-machine">Settings › Machines</a>.</div>`}</div>
 <span class="muted small">Not listed? <a href="/ui/settings/machines?add=1#add-machine">Add a machine or a cluster under Settings › Machines</a>.</span>
 <div class="g3" data-core-size${size ? "" : " hidden"}>
-<label class="fd">${infoLabel("Node", "The node it runs on. Any lets Kubernetes choose; a slot whose rules take pods only on nodes they name needs one of those.")}<select name="core_node"><option value="">any node with room</option>${coreNodeOptions(store)}</select></label>
+<label class="fd">${infoLabel("Node", "The node it runs on. Any lets Kubernetes choose; a slot whose rules take pods only on nodes they name needs one of those.")}<select name="core_node"><option value="">any node with room</option>${await coreNodeOptions(store)}</select></label>
 <label class="fd">${infoLabel("CPUs", "Its CPUs: the supervisor gets a quarter of them (at least half a CPU, at most 2) for the advisors' terminals, and the harness the rest, for the planner, the agents' programs and their builds. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.")}<input name="core_cpus" inputmode="decimal" value="${esc(size?.cpus ?? "")}" placeholder="the namespace's defaults"></label>
 <label class="fd">${infoLabel("Memory (GiB)", `Its memory: the supervisor gets ${SUPERVISOR_SHARE.terminal.memoryGi} GiB, since a new rig's agent programs run in their own terminals, and the harness the rest, so at least ${leastRigSize("terminal").memoryGi} GiB. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.`)}<input name="core_mem" inputmode="decimal" value="${esc(size?.memoryGi ?? "")}" placeholder="the namespace's defaults"></label>
 <label class="fd">${infoLabel("Disk (GB)", "Its volume: the run's records, every lane's workspace, builds and the exports it sends.")}<input name="core_disk" inputmode="numeric" value="${esc(size?.diskGb ?? "100")}"></label>
@@ -194,7 +194,7 @@ ${learn("/how-to/install/runners/", "Which kind do I need? On the docs site")}</
 <div class="stack">${joinCards}</div>${joinSections}<div class="nc-does" id="gpu-note" hidden></div>
 ${learn("/how-to/install/join-a-rig/", "Join a rig yourself")}</section>
 <section class="wz" data-step="gpus"><div class="wz-head"><h2>Which GPUs does it use?</h2><p class="lead">Tick the GPUs it uses. ${tip("One GPU is shared: while the judge measures, the agents' own test runs wait, so its timings stay clean. With two or more, some are the judge's and the rest the agents', and neither waits for the other. A rig on a cluster takes its GPUs from one node.")}</p></div>
-${oneMachineGpus(store, places, groups)}
+${await oneMachineGpus(store, places, groups)}
 <label class="fd" data-judge-share hidden style="max-width:240px">${infoLabel("GPUs for the judge", "How many of the ticked GPUs the judge measures on; the rest are the agents' for their own test runs. More for the judge checks more changes at once; more for the agents lets more lanes test at once. Empty: half, rounded up.")}<input name="judge_gpus" inputmode="numeric" maxlength="2" placeholder="half"></label>
 ${learn("/how-to/install/several-gpus/", "Give a rig several GPUs")}</section>
 <section class="wz" data-step="runners"><div class="wz-head"><h2>Which GPUs are its runners? <span class="muted small" id="ar-count">0 chosen</span></h2><p class="lead">Add a runner for each GPU of another machine the rig uses: its machine, its GPU and its pool. ${tip("A runner takes one run at a time, so a measurement never shares its GPU. The judge's pool: only the judge measures there. Shared: the judge and every lane, in turn. A lane's: only that lane tries its changes there.")}</p></div>
@@ -218,7 +218,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
    * set up: a core with no GPU of its own (`coreGpus`) needs a runner for its judge, once it has
    * any, and a rig's runners are of one kind, so its verdicts compare. Refused in words.
    */
-  const runnersPlan = (f: Record<string, unknown>, coreGpus: number) => {
+  const runnersPlan = async (f: Record<string, unknown>, coreGpus: number) => {
     // The rows of + Add a runner, and an older form's list of every GPU with its pool.
     const chosen = [...runnersAdded(f), ...addRigRunnersChosen(f)];
     const raw = String([f.lanes ?? ""].flat()[0] ?? "").trim();
@@ -228,7 +228,9 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
     const judged = chosen.some((r) => r.pool === "judge" || r.pool === "shared");
     if (chosen.length && !judged && !coreGpus)
       return "Give the judge a runner, its own or a shared one: the core has no GPU to measure on.";
-    const kinds = [...new Set(chosen.map((r) => productAt(store, r.at)).filter(Boolean))];
+    const kinds = [
+      ...new Set((await mapInTurn(chosen, async (r) => productAt(store, r.at))).filter(Boolean)),
+    ];
     if (kinds.length > 1)
       return `The runners are of ${kinds.length === 2 ? "two" : kinds.length} kinds, ${kinds.slice(0, -1).join(", ")} and ${kinds.at(-1)}: a rig measures on one kind of target, so its verdicts compare. Use one kind, or make a rig for each.`;
     if (new Set(chosen.map((r) => r.runner)).size !== chosen.length)
@@ -240,7 +242,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
     c: Ctx,
     rig: string,
     placement: "machine" | "cluster",
-    plan: Exclude<ReturnType<typeof runnersPlan>, string>,
+    plan: Exclude<Awaited<ReturnType<typeof runnersPlan>>, string>,
   ) => {
     const refused = await addRigRunners(parts, rig, plan.chosen);
     if (plan.lanes !== undefined)
@@ -275,25 +277,25 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
     const place = String(f.place ?? (f.machine ? `machine:${String(f.machine)}` : ""));
     if (place.startsWith("cluster:")) return addClusterRigFrom(c, f, rig, place.slice(8), fail);
     if (place.startsWith("join:")) return addJoinedRigFrom(c, f, rig, place.slice(5), fail);
-    const m = store.machines.get(place.startsWith("machine:") ? place.slice(8) : "");
+    const m = await store.machines.get(place.startsWith("machine:") ? place.slice(8) : "");
     // The core's own GPUs: none from Add a rig, which makes each GPU a runner; an older form's
     // still count.
     const gpus = [f.gpus ?? []]
       .flat()
       .map((x) => Number(x))
       .sort((a, b) => a - b);
-    const plan = runnersPlan(f, gpus.length);
+    const plan = await runnersPlan(f, gpus.length);
     if (typeof plan === "string") return fail(plan);
     if (!parts.rigImages) return fail("Control has no rig images configured.");
     if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
     if (!parts.rigBus) return fail(NO_RIG_BUS);
     if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
-    if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
+    if (await rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
     if (!m) return fail("Choose a machine.");
     const why = machineNotReady(m);
     if (why) return fail(`${m.name} is not ready: ${why}.`);
     const facts = m.facts as MachineFacts;
-    const used = gpusInUse(m.name);
+    const used = await gpusInUse(m.name);
     for (const g of gpus) {
       if (!facts.gpus.some((x) => x.index === g)) return fail(`${m.name} has no GPU ${g}.`);
       if (used.has(g)) return fail(`GPU ${g} is used by rig ${used.get(g)}.`);
@@ -307,7 +309,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
     const images = machineRigImages(parts, facts, gpus);
     if (typeof images === "string") return fail(images);
     const token = newToken();
-    store.enrollments.enroll(rig, token.sha256, "owner:ui");
+    await store.enrollments.enroll(rig, token.sha256, "owner:ui");
     const placed = {
       rig,
       machine: m.name,
@@ -318,9 +320,9 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
       judge_on_runners: plan.judgeOnRunners,
       created_by: "owner:ui",
     };
-    store.machines.addRig(placed);
-    store.rigHistory.add(rig, "enrolled", true);
-    const r = store.machines.rig(rig) as MachineRig;
+    await store.machines.addRig(placed);
+    await store.rigHistory.add(rig, "enrolled", true);
+    const r = (await store.machines.rig(rig)) as MachineRig;
     void inBackground(store, "machine", rig, "deploy", deployRig(r, m, token.token));
     // Its runners (goal 206), which it takes once it reports.
     return startRunners(c, rig, "machine", plan);
@@ -357,7 +359,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
       (at?.kind === "cluster" ? at.node : undefined) || one("core_node") || one("k_node");
     if (at?.kind === "cluster" && at.node && one("core_node") && one("core_node") !== at.node)
       return fail(`The GPUs ticked are on ${at.node}: choose that node for the rig, or any node.`);
-    const plan = runnersPlan(f, gpus);
+    const plan = await runnersPlan(f, gpus);
     if (typeof plan === "string") return fail(plan);
     const r = await addClusterRig(
       parts,
@@ -386,7 +388,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
   };
   const DRA_CLASS = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
   /** Add a rig you join yourself: checks the choices, then shows its join command once. */
-  const addJoinedRigFrom = (
+  const addJoinedRigFrom = async (
     c: Ctx,
     f: Record<string, unknown>,
     rig: string,
@@ -401,7 +403,7 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
     if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
     if (!parts.rigBus) return fail(NO_RIG_BUS);
     if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
-    if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
+    if (await rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
     if (form !== "machine" && form !== "namespace") return fail("Choose where the rig runs.");
     const cuda = "Control has no CUDA harness image configured (THERMITE_RIG_HARNESS_CUDA_IMAGE).";
     const imagesFor = (gpu: boolean) => ({
@@ -456,8 +458,8 @@ ${learn("/how-to/install/runners/", "Pools, and what each runner does")}</sectio
         storageGi,
       };
     }
-    store.joinedRigs.add({ rig, form: form as JoinForm, spec, by: "owner:ui" });
-    const token = mintJoin(rig);
-    return joinedPage(c, store.joinedRigs.get(rig) as JoinedRig, "", token);
+    await store.joinedRigs.add({ rig, form: form as JoinForm, spec, by: "owner:ui" });
+    const token = await mintJoin(rig);
+    return joinedPage(c, (await store.joinedRigs.get(rig)) as JoinedRig, "", token);
   };
 }

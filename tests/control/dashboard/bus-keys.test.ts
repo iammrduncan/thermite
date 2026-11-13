@@ -23,10 +23,10 @@ async function setup() {
   let now = Date.now();
   let failing = false;
   let users: BusUsers | undefined;
-  const s = controlOnly({
+  const s = await controlOnly({
     tokens: { rigs: TOKENS },
-    options: (store) => {
-      users = new BusUsers({
+    options: async (store) => {
+      users = await BusUsers.open({
         store,
         secrets: SecretBox.ephemeral(),
         file: join(mkdtempSync(join(tmpdir(), "thermite-bus-keys-")), "users.conf"),
@@ -116,7 +116,7 @@ describe("a rig's keys on the message bus on the dashboard", () => {
     assert.equal(r.headers.get("location"), "/ui");
     assert.ok(!(await s.page("/ui")).includes("Key changed"));
     assert.match(await s.page("/ui/rigs/rig-a"), /Its key on the message bus changed: fingerprint/);
-    assert.equal(s.store.auditLog.list(10, { action: "rig_bus_keys_seen" }).length, 1);
+    assert.equal((await s.store.auditLog.list(10, { action: "rig_bus_keys_seen" })).length, 1);
     // A key another rig holds: refused, shown as refused.
     assert.equal((await s.figures("rig-b", second, newSealKey().publicKey)).status, 409);
     const refused = await s.page("/ui");

@@ -19,15 +19,19 @@ import type { RigView } from "../../views/index.ts";
  * the rig's own settings; whether it is taking a new model; and its model check, followed while
  * it runs. The model is changed on Edit rig.
  */
-export function agentsModelBlock(store: ControlStore, u: RigView, now: number): string {
+export async function agentsModelBlock(
+  store: ControlStore,
+  u: RigView,
+  now: number,
+): Promise<string> {
   const m = u.model;
-  const want = store.agentModels.byRig()[u.id];
+  const want = (await store.agentModels.byRig())[u.id];
   // A cap on the model's context window (goal 070), once the rig runs that model.
   const same = want && m?.name === want.provider && m.model === want.model;
   const capped =
     same && want.contextCap
       ? capWords(
-          store.modelProviders.get(want.provider)?.models.find((x) => x.id === want.model)
+          (await store.modelProviders.get(want.provider))?.models.find((x) => x.id === want.model)
             ?.context_window ?? 0,
           want.contextCap,
         )
@@ -51,7 +55,8 @@ export function agentsModelBlock(store: ControlStore, u: RigView, now: number): 
       : ` <span class="chip info">going back to its own settings</span>`;
   // The model check in its state now: sent, running, its result, or why it did not run.
   const chk =
-    checkRowsOf(store, u.id, u.checks, now).model ?? checkRow("model", undefined, undefined, now);
+    (await checkRowsOf(store, u.id, u.checks, now)).model ??
+    checkRow("model", undefined, undefined, now);
   const bad = chk.state === "failed" || chk.state === "refused" || chk.state === "expired";
   // The block follows the rig while it takes the model, then its check (goal 080).
   const follow = taking

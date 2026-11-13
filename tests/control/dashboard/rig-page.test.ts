@@ -70,7 +70,7 @@ describe("control dashboard", () => {
       },
     });
     assert.equal(r.status, 200, await r.clone().text());
-    const sup = s.store.reportedRigs.supervisor("rig-a") as {
+    const sup = (await s.store.reportedRigs.supervisor("rig-a")) as {
       advisors?: { roles?: { auditor?: boolean } };
     };
     assert.equal(sup.advisors?.roles?.auditor, false);
@@ -80,7 +80,7 @@ describe("control dashboard", () => {
     const s = await stack();
     await s.env.service.applyCommand(s.env.assign);
     await s.relay();
-    const post = (body: unknown) => figuresCall(s.store, "rig-a", body);
+    const post = async (body: unknown) => figuresCall(s.store, "rig-a", body);
     const evil = await post({
       at: "now",
       export: {

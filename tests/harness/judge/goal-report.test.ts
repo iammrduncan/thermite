@@ -67,7 +67,7 @@ async function setup(contract: Record<string, unknown> = {}) {
       )
     ).attempt;
   // Control, reached through the supervisor's relay as on a rig.
-  const { control, relay, api } = controlStack({ env });
+  const { control, relay, api } = await controlStack({ env });
   const rest = async (path: string) => (await api("GET", path)).text();
   const { page } = await signIn(control);
   const events = (kind?: string) =>

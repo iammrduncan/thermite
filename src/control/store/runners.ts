@@ -68,7 +68,29 @@ type Row = Omit<RigRunner, "spec"> & { spec: string };
 
 const read = (r: Row): RigRunner => ({ ...r, spec: JSON.parse(r.spec) as RigRunnerSpec });
 
-export class RigRunners extends StorePart {
+export interface RigRunners {
+  /** A rig's runner processes control set up, removed ones too. */
+  of(rig: string): Promise<RigRunner[]>;
+  get(rig: string, runner: string): Promise<RigRunner | undefined>;
+  /** Every runner process on a cluster's namespaces, not removed. */
+  onCluster(cluster: string): Promise<RigRunner[]>;
+  /** A runner process control sets up, with its own token's hash; one removed before is replaced. */
+  add(r: Omit<RigRunner, "status" | "created_at"> & { tokenSha256: string }): Promise<void>;
+  setStatus(rig: string, runner: string, status: string): Promise<void>;
+  /** Set up and running, on any rig. */
+  running(): Promise<RigRunner[]>;
+  /** Its gives to its rig, as they stand now. */
+  setGiven(rig: string, runner: string, given: RigRunnerSpec["given"]): Promise<void>;
+  /** Its images, for an update of the rig's images. */
+  setImages(rig: string, runner: string, images: RigRunnerSpec["images"]): Promise<void>;
+  /** Removed: its token stops working; its row stays, for the rig's history. */
+  remove(rig: string, runner: string, by: string): Promise<void>;
+  /** Whether `token` is this runner process's own, and it is not removed. */
+  tokenMatches(rig: string, runner: string, token: string): Promise<boolean>;
+}
+
+/** RigRunners on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigRunners extends StorePart {
   /** A rig's runner processes control set up, removed ones too. */
   of(rig: string): RigRunner[] {
     return (

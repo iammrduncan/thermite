@@ -41,7 +41,7 @@ function builtApp(): string {
 async function demo(webDir?: string) {
   const store = controlStore();
   await seedDemo(store);
-  const { control } = controlOnly({ store, options: webDir ? { webDir } : {} });
+  const { control } = await controlOnly({ store, options: webDir ? { webDir } : {} });
   const start = async (token = ADMIN) =>
     await control.request(SESSION_START.path, {
       method: "POST",
@@ -119,7 +119,7 @@ describe("the owner's session on /v1", () => {
     assert.equal(without.status, 403);
     assert.deepEqual(await without.json(), { error: "bad session token" });
     assert.equal((await archive({ [SESSION_TOKEN_HEADER]: "0".repeat(64) })).status, 403);
-    assert.equal(store.archive.list().length, 0);
+    assert.equal((await store.archive.list()).length, 0);
     // With it, the route answers as it does for the owner's token: here, its own refusal or yes.
     const withIt = await archive({ [SESSION_TOKEN_HEADER]: token });
     assert.notEqual(withIt.status, 401);

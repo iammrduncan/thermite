@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import type { Folded } from "../../src/control/ingest.ts";
 import { publishCommand } from "../../src/control/issue/bus.ts";
 import { issueCommand } from "../../src/control/issue/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import { fingerprint } from "../../src/control/store/index.ts";
 import { generateSigningKeys, signEnvelope } from "../../src/core/commands.ts";
 import { REPORT_STREAM_CONFIG } from "../../src/core/link/report.ts";
@@ -16,7 +17,7 @@ import { appendOther } from "../helpers/kinds.ts";
 
 describe("supervisor relay between control and harness, on the message bus", () => {
   test("commands flow control -> bus -> supervisor -> harness and events flow back exactly once", async () => {
-    const { env, store, api, relay } = controlStack({ env: makeHarnessEnv("rig-a") });
+    const { env, store, api, relay } = await controlStack({ env: makeHarnessEnv("rig-a") });
 
     const issued = await api("POST", "/v1/commands", {
       rig: "rig-a",
@@ -25,11 +26,11 @@ describe("supervisor relay between control and harness, on the message bus", () 
     });
     assert.equal(issued.status, 201);
     const { id } = (await issued.json()) as { id: string };
-    assert.equal(store.commands.get(id)?.status, "pending");
+    assert.equal((await store.commands.get(id))?.status, "pending");
 
     // The harness's outcome reaches control in its events, with the report after the command.
     await relay();
-    assert.equal(store.commands.get(id)?.status, "delivered");
+    assert.equal((await store.commands.get(id))?.status, "delivered");
     assert.equal(env.service.ledger.runs.get("smoke-1")?.status, "running");
 
     await relay();
@@ -63,22 +64,25 @@ describe("supervisor relay between control and harness, on the message bus", () 
       },
       foreign.privateKeyPem,
     );
-    store.commands.enqueue(forged);
+    await store.commands.enqueue(forged);
     publishCommand(store, forged);
     await relay();
-    const statuses = store.db
-      .prepare("select kind, status from command order by issued_at")
+    const statuses = sqliteBehind(store)
+      .db.prepare("select kind, status from command order by issued_at")
       .all() as { kind: string; status: string }[];
     assert.deepEqual(
       statuses.map((s) => s.status),
       ["delivered", "rejected"],
     );
-    assert.match(JSON.stringify(store.commands.get(forged.envelope.id)?.outcome), /harness/);
+    assert.match(
+      JSON.stringify((await store.commands.get(forged.envelope.id))?.outcome),
+      /harness/,
+    );
     assert.equal(env.service.ledger.runs.get("smoke-1")?.status, "running");
   });
 
   test("a command whose content could not be fetched fails with the reason, and is never applied", async () => {
-    const s = controlStack({ env: makeHarnessEnv("rig-a") });
+    const s = await controlStack({ env: makeHarnessEnv("rig-a") });
     const { env, store } = s;
     let harnessCalls = 0;
     const fetchImpl = s.cfg.fetchImpl as typeof fetch;
@@ -98,12 +102,12 @@ describe("supervisor relay between control and harness, on the message bus", () 
       ++asked === 1 ? ("wait" as const) : { failed: "staging: the repository has no commit" };
     await s.relay();
     assert.equal(
-      store.commands.get(id)?.status,
+      (await store.commands.get(id))?.status,
       "pending",
       "it waits while its content is fetched",
     );
     await s.relay();
-    const cmd = store.commands.get(id) as { status: string; outcome: unknown };
+    const cmd = (await store.commands.get(id)) as { status: string; outcome: unknown };
     assert.equal(cmd.status, "failed");
     assert.match(JSON.stringify(cmd.outcome), /staging: the repository has no commit/);
     assert.match(JSON.stringify(cmd.outcome), /harness/, "from the harness's own record");
@@ -112,7 +116,7 @@ describe("supervisor relay between control and harness, on the message bus", () 
   });
 
   test("a command that waits for its sources stays on the bus until they are staged, then is delivered once", async () => {
-    const s = controlStack({ env: makeHarnessEnv("rig-a") });
+    const s = await controlStack({ env: makeHarnessEnv("rig-a") });
     const { env, store } = s;
     const issued = await s.api("POST", "/v1/commands", {
       rig: "rig-a",
@@ -123,13 +127,13 @@ describe("supervisor relay between control and harness, on the message bus", () 
     let ready = false;
     s.cfg.stage = async () => (ready ? ("ready" as const) : ("wait" as const));
     await s.relay(3);
-    assert.equal(store.commands.get(id)?.status, "pending", "it waits for its sources");
+    assert.equal((await store.commands.get(id))?.status, "pending", "it waits for its sources");
     assert.equal(s.bus.on("thermite.rig.rig-a.cmd").length, 1, "still on the bus");
     assert.ok(s.cfg.staging?.has(id));
     // Its sources arrive: the command it holds is delivered, and leaves what it holds.
     ready = true;
     await s.relay();
-    assert.equal(store.commands.get(id)?.status, "delivered");
+    assert.equal((await store.commands.get(id))?.status, "delivered");
     assert.equal(env.service.ledger.runs.get("smoke-1")?.status, "running");
     assert.equal(s.cfg.held?.size, 0);
     assert.equal(s.bus.on("thermite.rig.rig-a.cmd").length, 0, "acked off the bus");
@@ -138,11 +142,11 @@ describe("supervisor relay between control and harness, on the message bus", () 
   });
 
   test("an assignment whose sources take longer than its life stays alive while they stage (goal 171)", async () => {
-    const s = controlStack({ env: makeHarnessEnv("rig-a") });
+    const s = await controlStack({ env: makeHarnessEnv("rig-a") });
     const { env, store } = s;
     await s.relay();
     // A life of under two seconds stands in for an hour, and a slow model download for longer.
-    const { id } = issueCommand(store, env.keys.privateKeyPem, {
+    const { id } = await issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: env.assignPayload(),
@@ -154,9 +158,13 @@ describe("supervisor relay between control and harness, on the message bus", () 
     await s.relay(2);
     await new Promise((r) => setTimeout(r, 2000));
     await s.relay();
-    assert.equal(store.commands.get(id)?.status, "pending", "alive while its sources stage");
+    assert.equal(
+      (await store.commands.get(id))?.status,
+      "pending",
+      "alive while its sources stage",
+    );
     assert.ok(
-      store.auditLog.list(20).some((a) => a.action === "command_renewed"),
+      (await store.auditLog.list(20)).some((a) => a.action === "command_renewed"),
       "the renewal is in the audit log",
     );
     assert.ok(
@@ -165,13 +173,13 @@ describe("supervisor relay between control and harness, on the message bus", () 
     );
     ready = true;
     await s.relay();
-    assert.equal(store.commands.get(id)?.status, "delivered");
+    assert.equal((await store.commands.get(id))?.status, "delivered");
     assert.equal(env.service.ledger.runs.get("smoke-1")?.status, "running");
   });
 
   test("a reset harness ledger restarts the cursor, and control keeps both ledgers' events", async () => {
     const controlTokens = { admin: "admin-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } };
-    const { store, control } = controlOnly({ tokens: controlTokens });
+    const { store, control } = await controlOnly({ tokens: controlTokens });
     const bus = busOf(store).bus;
     await bus.makeStream(REPORT_STREAM_CONFIG);
     const harnessTokens = { supervisor: "sup-token-abcdef" };
@@ -197,7 +205,7 @@ describe("supervisor relay between control and harness, on the message bus", () 
       return out;
     };
     const accept = async () => {
-      const pending = fingerprint(String(store.reportedRigs.key("rig-a").pending));
+      const pending = fingerprint(String((await store.reportedRigs.key("rig-a")).pending));
       const r = await control.request(`/v1/rigs/rig-a/key/accept?fingerprint=${pending}`, {
         method: "POST",
         headers: { authorization: `Bearer ${controlTokens.admin}` },
@@ -232,7 +240,7 @@ describe("supervisor relay between control and harness, on the message bus", () 
   test("a supervisor cannot forge or alter a harness report", async () => {
     const env = makeHarnessEnv("rig-a");
     const tokens = { admin: "admin-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } };
-    const { store } = controlOnly({ keys: env.keys, tokens });
+    const { store } = await controlOnly({ keys: env.keys, tokens });
     appendOther(env.service.ledger, "t", "real", null, {});
     const snap = env.service.snapshot(0, 100) as Record<string, unknown>;
     assert.ok("folded" in (await foldOnBus(store, "rig-a", snap)));
@@ -265,7 +273,7 @@ describe("supervisor relay between control and harness, on the message bus", () 
       admin: "admin-token-abcdef",
       rigs: { "rig-a": "rig-token-aaaaaa", "rig-b": "rig-token-bbbbbb" },
     };
-    const { store, control } = controlOnly({ tokens });
+    const { store, control } = await controlOnly({ tokens });
     const report = {
       rig: "rig-b",
       ledger_id: "l",

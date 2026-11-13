@@ -27,7 +27,7 @@ async function rigWith(events: [string, string, Record<string, unknown>][]) {
     })),
     summary: {},
   });
-  const u = rigView(store, "rig-a", { staleAfterMs: 600_000 });
+  const u = await rigView(store, "rig-a", { staleAfterMs: 600_000 });
   assert.ok(u);
   const r = u.runs.find((x) => x.id === "r-1");
   assert.ok(r);
@@ -611,7 +611,9 @@ test("a change that became the champion no longer waits: only pending promotions
     })),
     summary: {},
   });
-  const r = rigView(store, "rig-a", { staleAfterMs: 600_000 })?.runs.find((x) => x.id === "r-1");
+  const r = (await rigView(store, "rig-a", { staleAfterMs: 600_000 }))?.runs.find(
+    (x) => x.id === "r-1",
+  );
   assert.ok(r);
   assert.deepEqual(r.pending_promotions, ["a-2"]);
   assert.deepEqual(Object.keys(r.promotion_waits), ["a-2"]);

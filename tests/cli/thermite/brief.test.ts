@@ -123,7 +123,7 @@ describe("a campaign's brief on the command line (goal 078)", () => {
   });
 
   test("campaign copy keeps the brief, or gives the copy its own", async () => {
-    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
+    const { keys, store, control: api } = await controlOnly({ tokens: TOKENS });
     const goal = JSON.parse(readFileSync(join(EXAMPLES, "goal-example.json"), "utf8")) as Record<
       string,
       unknown
@@ -139,8 +139,8 @@ describe("a campaign's brief on the command line (goal 078)", () => {
     });
     assert.ok(contract.ok, contract.ok ? "" : contract.errors.join("; "));
     // The assignment that started sort-speed-1, before the rig reported it.
-    enrollRigs(store, ["rig-a"]);
-    issueCommand(store, keys.privateKeyPem, {
+    await enrollRigs(store, ["rig-a"]);
+    await issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: {
@@ -181,7 +181,10 @@ describe("a campaign's brief on the command line (goal 078)", () => {
       const at = ["--control", control, "--token-file", owner];
       const kept = await cli("campaign", "copy", "sort-speed", "sort-speed-b", ...at);
       assert.equal(kept.code, 0, kept.stderr);
-      const b = store.campaigns.versions("sort-speed-b")[0]?.contract as Record<string, unknown>;
+      const b = (await store.campaigns.versions("sort-speed-b"))[0]?.contract as Record<
+        string,
+        unknown
+      >;
       assert.deepEqual(
         [b.additional_information, b.notes, b.ideas, b.hypotheses],
         ["The old brief.", undefined, ["An old idea."], ["An old hypothesis."]],
@@ -200,7 +203,10 @@ describe("a campaign's brief on the command line (goal 078)", () => {
         ...at,
       );
       assert.equal(own.code, 0, own.stderr);
-      const c = store.campaigns.versions("sort-speed-c")[0]?.contract as Record<string, unknown>;
+      const c = (await store.campaigns.versions("sort-speed-c"))[0]?.contract as Record<
+        string,
+        unknown
+      >;
       assert.deepEqual(
         [c.additional_information, c.ideas, c.hypotheses],
         [INFO, ["An old idea."], ["A new hypothesis.", "Another."]],

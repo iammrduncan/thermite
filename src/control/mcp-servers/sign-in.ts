@@ -41,7 +41,7 @@ export class SignIns {
    * none. An error in words when there is none to give.
    */
   async headers(name: string): Promise<SignIn> {
-    const r = this.table.row(name);
+    const r = await this.table.row(name);
     if (!r) return { error: "Settings has no server of that name" };
     const auth = str(r.auth) as McpAuth;
     if (auth === "none") return { headers: {} };
@@ -62,7 +62,7 @@ export class SignIns {
     if (auth === "oauth" && !login?.refresh_token) {
       if (login && (login.expires_at ?? 0) > Date.now() + 30_000)
         return { headers: { Authorization: `Bearer ${login.access_token}` } };
-      this.table.setState(name, "needs_sign_in", "The sign-in ended. Sign in again.");
+      await this.table.setState(name, "needs_sign_in", "The sign-in ended. Sign in again.");
       return { error: "its sign-in ended: sign in again" };
     }
     const running = this.renewing.get(name);
@@ -96,14 +96,14 @@ export class SignIns {
         ...(info.resourceMetadata ? { resource: new URL(info.resourceMetadata.resource) } : {}),
         fetchFn: this.fetchImpl,
       });
-      this.table.saveLogin(name, {
+      await this.table.saveLogin(name, {
         access_token: tokens.access_token,
         ...(tokens.expires_in ? { expires_at: Date.now() + tokens.expires_in * 1000 } : {}),
       });
       return { headers: { Authorization: `Bearer ${tokens.access_token}` } };
     } catch (err) {
       const why = cleanMcpError(err, [secret]);
-      this.table.setState(
+      await this.table.setState(
         name,
         "failing",
         `Can't get a token with the client ID and secret: ${why}`,
@@ -125,7 +125,7 @@ export class SignIns {
         ...(login.resource ? { resource: new URL(login.resource) } : {}),
         fetchFn: this.fetchImpl,
       });
-      this.table.saveLogin(name, {
+      await this.table.saveLogin(name, {
         ...login,
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token ?? login.refresh_token,
@@ -135,13 +135,13 @@ export class SignIns {
     } catch (err) {
       const why = cleanMcpError(err, secrets);
       if (signInEnded(err)) {
-        this.table.setState(name, "needs_sign_in", "The sign-in ended. Sign in again.");
+        await this.table.setState(name, "needs_sign_in", "The sign-in ended. Sign in again.");
         return { error: "its sign-in ended: sign in again" };
       }
       // The server unreachable for now: the token works until it ends.
       if (login.expires_at && login.expires_at > Date.now() + 30_000)
         return { headers: { Authorization: `Bearer ${login.access_token}` } };
-      this.table.setState(name, "failing", `Can't renew the sign-in: ${why}`);
+      await this.table.setState(name, "failing", `Can't renew the sign-in: ${why}`);
       return { error: `its sign-in could not be renewed: ${why}` };
     }
   }

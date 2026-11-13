@@ -33,17 +33,17 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
     admin,
     bodyLimit({
       maxSize: KIT_ADD.maxBytes,
-      onError: (c) => {
+      onError: async (c) => {
         const error = `the bundle is above the ${KIT_BUNDLE_MAX} bytes (64 MiB) control takes`;
-        store.auditLog.refusal("owner:api", "refused", { path: c.req.path, why: error });
+        await store.auditLog.refusal("owner:api", "refused", { path: c.req.path, why: error });
         return c.json({ error }, 413);
       },
     }),
     async (c) => {
       const name = c.req.param("name");
       const path = `/v1/kits/${name}`;
-      const refuse = (error: string, status: 400 | 404 | 409 | 413) => {
-        store.auditLog.refusal("owner:api", "refused", { path, why: redact(error) });
+      const refuse = async (error: string, status: 400 | 404 | 409 | 413) => {
+        await store.auditLog.refusal("owner:api", "refused", { path, why: redact(error) });
         return c.json({ error }, status);
       };
       if (!kits) return refuse("this control keeps no kits", 404);
@@ -55,7 +55,7 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
         try {
           body = await c.req.json();
         } catch {
-          return refuse("the body is not JSON", 400);
+          return await refuse("the body is not JSON", 400);
         }
         const asked = z.strictObject({ git: KitGitSource }).safeParse(body);
         if (!asked.success)
@@ -66,11 +66,11 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
         if (c.req.query("ref"))
           return refuse("With git, name the branch, tag or commit as git.ref", 400);
         const g = asked.data.git;
-        let access: ReturnType<typeof gitAccessFor>;
+        let access: Awaited<ReturnType<typeof gitAccessFor>>;
         try {
-          access = gitAccessFor(store, api.parts.secrets, kits.dir, g.access, g.url);
+          access = await gitAccessFor(store, api.parts.secrets, kits.dir, g.access, g.url);
         } catch (err) {
-          return refuse(errorText(err), 400);
+          return await refuse(errorText(err), 400);
         }
         const out = await addKitFromGit(
           store,

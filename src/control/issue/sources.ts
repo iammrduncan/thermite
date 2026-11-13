@@ -36,12 +36,12 @@ export function agentAssignRefusal(payload: unknown): string {
  * Why control refuses an assignment's Git access, in words, or "": each import that names one
  * must name an access Settings has, bound to a host, and fetch from that host.
  */
-export function gitAccessRefusal(store: ControlStore, payload: unknown): string {
+export async function gitAccessRefusal(store: ControlStore, payload: unknown): Promise<string> {
   const imports = ((payload ?? {}) as Named).imports;
   for (const i of Array.isArray(imports) ? imports : []) {
     const access = i?.source?.access;
     if (typeof access !== "string") continue;
-    const g = store.gitAccess.get(access);
+    const g = await store.gitAccess.get(access);
     if (!g) return `Settings has no Git access named ${access}.`;
     if (!g.host)
       return `The Git access ${access} is for no host yet: set the host it is for in Settings › Providers.`;

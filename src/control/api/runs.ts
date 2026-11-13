@@ -106,7 +106,7 @@ export function runRoutes(app: Hono, admin: MiddlewareHandler, deps: RunRoutesDe
     const run = c.req.param("run");
     const found = await deps.find(run);
     const p = found
-      ? deps.store.championPatches.get(
+      ? await deps.store.championPatches.get(
           found.rig.id,
           found.rig.ledger_id,
           run,

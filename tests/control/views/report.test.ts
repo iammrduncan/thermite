@@ -28,12 +28,12 @@ test("a rig's program mode as control knows it: the default before its first rep
       summary,
     });
   // A rig being added has not reported: it will run the default way.
-  assert.equal(programModeOf(store, "rig-1"), PROGRAM_MODE_DEFAULT);
+  assert.equal(await programModeOf(store, "rig-1"), PROGRAM_MODE_DEFAULT);
   await report({ settings: { program_mode: "headless" } });
-  assert.equal(programModeOf(store, "rig-1"), "headless");
+  assert.equal(await programModeOf(store, "rig-1"), "headless");
   await report({ settings: { program_mode: "terminal" } });
-  assert.equal(programModeOf(store, "rig-1"), "terminal");
+  assert.equal(await programModeOf(store, "rig-1"), "terminal");
   // A harness that reports no settings is older than the terminal mode.
   await report({});
-  assert.equal(programModeOf(store, "rig-1"), "headless");
+  assert.equal(await programModeOf(store, "rig-1"), "headless");
 });

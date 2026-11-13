@@ -46,7 +46,7 @@ async function withMachine() {
       return { code: 0, stdout: "started", stderr: "" };
     },
   };
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     tokens: { rigs: {} },
     options: {
       secrets: SecretBox.ephemeral(),
@@ -75,7 +75,7 @@ async function withMachine() {
   });
   const seen = /name="seen" value="([^"]+)"/.exec(await page("/ui/settings/machines"))?.[1] ?? "";
   await post("/ui/settings/machines/spark-02/trust", { seen });
-  store.enrollments.enroll("core-1", "a".repeat(64), "test");
+  await store.enrollments.enroll("core-1", "a".repeat(64), "test");
   await ingestReport(store, {
     rig: "core-1",
     ledger_id: "ledger-core-1",
@@ -111,14 +111,13 @@ describe("a rig's runner process on a machine over SSH (goal 206)", () => {
     assert.match(deploy, /Environment=THERMITE_RUNNER=spark-02/);
     assert.match(deploy, /AddDevice=nvidia\.com\/gpu=0/);
     assert.match(deploy, /harness-cuda13:1/, "the GB10, arm64: the CUDA 13 harness");
-    const r = s.store.rigRunners.get("core-1", "spark-02");
+    const r = await s.store.rigRunners.get("core-1", "spark-02");
     assert.equal(r?.placement, "machine");
     assert.equal(r?.spec.gpuIndex, 0);
-    for (let i = 0; i < 100 && !s.store.commands.pending("core-1").length; i++)
+    for (let i = 0; i < 100 && !(await s.store.commands.pending("core-1")).length; i++)
       await new Promise((done) => setTimeout(done, 20));
     assert.deepEqual(
-      s.store.commands
-        .pending("core-1")
+      (await s.store.commands.pending("core-1"))
         .filter((c) => c.envelope.kind === "rig_settings")
         .map((c) => c.envelope.payload),
       [{ runners: [{ name: "spark-02", pools: ["judge"] }] }],

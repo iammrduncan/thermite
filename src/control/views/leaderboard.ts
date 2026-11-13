@@ -23,11 +23,11 @@ export interface LeaderEntry {
  * rig's judge accepted it. A run's campaign is the one control's run registry gives it (its
  * assignment's), never the one its rig's events name; a run the registry does not hold is left out.
  */
-export function leaderboard(
+export async function leaderboard(
   store: ControlStore,
   opts: { staleAfterMs: number },
-): Record<string, LeaderEntry[]> {
-  const views = rigViews(store, opts);
+): Promise<Record<string, LeaderEntry[]>> {
+  const views = await rigViews(store, opts);
   // An acceptance counts only for the tree it accepted: the key includes the tree, which must be
   // the one the source rig itself published (signed) for that seq.
   const verified = new Map<string, Set<string>>();
@@ -45,7 +45,7 @@ export function leaderboard(
     for (const i of v.runs) {
       // Hill climbs: a gain over the baseline is what is compared.
       if (i.mode !== "hill_climb") continue;
-      const campaign = store.runRegistry.createdOn(i.id, v.id)?.campaign;
+      const campaign = (await store.runRegistry.createdOn(i.id, v.id))?.campaign;
       if (!campaign) continue;
       const champ = currentChampion(i);
       const seq = champ?.seq ?? 1;

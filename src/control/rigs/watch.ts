@@ -22,20 +22,17 @@ export async function checkQuietRigs(o: {
   const now = o.now ?? Date.now();
   const offline = Math.max(o.offlineAfterMs ?? OFFLINE_AFTER_MS, o.staleAfterMs);
   const checked: string[] = [];
-  for (const u of o.store.reportedRigs.list()) {
+  for (const u of await o.store.reportedRigs.list()) {
     const seen = Date.parse(u.last_seen);
     if (!(seen > 0) || now - seen <= o.staleAfterMs) continue;
-    if (o.store.refusals.get(u.id)) continue;
-    const m = o.store.machines.rig(u.id);
-    const k = o.store.clusters.rig(u.id);
+    if (await o.store.refusals.get(u.id)) continue;
+    const m = await o.store.machines.rig(u.id);
+    const k = await o.store.clusters.rig(u.id);
     const placed = (m && m.status !== "removed") || (k && k.status !== "removed");
     if (!placed) continue;
     // Once since it turned stale, and once more since it turned offline.
     const since = now - seen > offline ? seen + offline : seen + o.staleAfterMs;
-    const last = o.store.rigHistory
-      .list(u.id)
-      .filter((e) => e.step === "check")
-      .at(-1);
+    const last = (await o.store.rigHistory.list(u.id)).filter((e) => e.step === "check").at(-1);
     if (last && Date.parse(last.at) >= since) continue;
     try {
       if (await o.check(u.id, "control")) checked.push(u.id);

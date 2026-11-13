@@ -16,14 +16,14 @@ import { slotWriter } from "./read.ts";
 /** How many of a slot's refused writes a summary names, the newest: `total` says how many in all. */
 export const KB_REFUSALS_SHOWN = 20;
 
-export function placeSummary(
+export async function placeSummary(
   store: ControlStore,
   vs: readonly RigView[],
   at: KbListAt,
   place: KbFolder,
 ) {
   const kb = store.kb();
-  const t = kb.totals(at);
+  const t = await kb.totals(at);
   const base = {
     records: t.types.record ?? 0,
     blurbs: t.types.blurb ?? 0,
@@ -40,15 +40,15 @@ export function placeSummary(
       level: "collection" as const,
       ...base,
       campaign,
-      mode: campaignModes(store, [...vs]).get(campaign) ?? null,
+      mode: (await campaignModes(store, [...vs])).get(campaign) ?? null,
       archived: place.archived === true,
-      runs: kb.folders(at).length,
+      runs: (await kb.folders(at)).length,
       slots,
-      reads: kb.reads(campaign),
-      read_by: kb.readBy(campaign),
+      reads: await kb.reads(campaign),
+      read_by: await kb.readBy(campaign),
     };
   if (slot === undefined) {
-    const { scope } = kb.scopeWhere(campaign, run);
+    const { scope } = await kb.scopeWhere(campaign, run);
     const view = vs
       .flatMap((u) => u.runs.map((r) => ({ rig: u.id, r })))
       .find((x) => x.r.id === run);
@@ -56,20 +56,20 @@ export function placeSummary(
       level: "run" as const,
       ...base,
       status: view?.r.status ?? null,
-      rig: view?.rig ?? store.runRegistry.rigsOf(run)[0] ?? null,
+      rig: view?.rig ?? (await store.runRegistry.rigsOf(run))[0] ?? null,
       // What its agents search: its own run alone, or its collection, and the grants it includes.
       searches: { collection: campaign, own_run_only: scope.fresh, granted: scope.granted },
       slots,
     };
   }
-  const rig = store.runRegistry.rigsOf(run)[0];
-  const writer = slotWriter(store, { run, slot, ...(rig ? { rig } : {}) });
+  const rig = (await store.runRegistry.rigsOf(run))[0];
+  const writer = await slotWriter(store, { run, slot, ...(rig ? { rig } : {}) });
   // The kinds control's check of a write lets the slot write (events/knowledge.ts).
   const writes =
     slot === KB_RECORDS
       ? null
       : kindsForSlot(
-          (rig ? store.commands.assignedKbWrites(rig, run) : undefined) ?? KB_WRITES_DEFAULT,
+          (rig ? await store.commands.assignedKbWrites(rig, run) : undefined) ?? KB_WRITES_DEFAULT,
           slot,
         );
   return {
@@ -78,7 +78,7 @@ export function placeSummary(
     writer,
     writes,
     kinds: t.kinds,
-    refused: store.auditLog.kbRefusals(run, slot, KB_REFUSALS_SHOWN),
+    refused: await store.auditLog.kbRefusals(run, slot, KB_REFUSALS_SHOWN),
   };
 }
-export type KbSummary = ReturnType<typeof placeSummary>;
+export type KbSummary = Awaited<ReturnType<typeof placeSummary>>;

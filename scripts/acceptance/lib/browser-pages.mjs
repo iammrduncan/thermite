@@ -207,8 +207,8 @@ export async function pageSweep(browser, c, { widths, out, maxPages, minPages, c
   const opened = new Set();
   /** @type {Map<string, number>} pages taken of each kind */
   const taken = new Map();
-  /** @type {{ answers: string[], errors: string[], requests: string[], outside: string[] }} */
-  const found = { answers: [], errors: [], requests: [], outside: [] };
+  /** @type {{ answers: string[], errors: string[], requests: string[], outside: string[], drawn: string[] }} */
+  const found = { answers: [], errors: [], requests: [], outside: [], drawn: [] };
   /** @type {{ path: string, kind: string, shots: Record<string, string> }[]} */
   const pages = [];
   /** Kinds of page opened, and the routes they are pages of. */
@@ -254,6 +254,11 @@ export async function pageSweep(browser, c, { widths, out, maxPages, minPages, c
         await page.waitForTimeout(150);
       }
       const here = await page.evaluate(inspect);
+      // A value the page's code did not wait for, or did not turn into words, drawn as it is.
+      if (index === 0) {
+        const drawn = /\[object (?:Promise|Object)\]/.exec(await page.content());
+        if (drawn) found.drawn.push(`${path}: ${drawn[0]}`);
+      }
       const file = `pages/${slug}@${w.width}.jpg`;
       await page.screenshot({ path: join(out, file), type: "jpeg", quality: 70 });
       if (height > w.height) await page.setViewportSize({ width: w.width, height: w.height });
@@ -302,6 +307,11 @@ export async function pageSweep(browser, c, { widths, out, maxPages, minPages, c
     found.errors,
   );
   check("no request a page makes fails", found.requests.length === 0, found.requests);
+  check(
+    "no page draws a promise or an object in place of its words",
+    found.drawn.length === 0,
+    found.drawn,
+  );
   check("no page loads anything from another site", loads.length === 0, loads);
   for (const { w, layout: l } of at) {
     check(`at ${w.name}, no page is wider than the window`, l.wider.length === 0, l.wider);

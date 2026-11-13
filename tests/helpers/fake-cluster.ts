@@ -253,7 +253,7 @@ export async function control(
 ) {
   const secrets = o.secrets ?? SecretBox.ephemeral();
   const tag = o.tag ?? "1";
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     store: o.store,
     tokens: { operator: OPERATOR, rigs: {} },
     options: {

@@ -13,8 +13,8 @@ const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
 
 test("thermite log-level reads and sets control's level, sends a rig part's, and refuses in words (the guide's question 16)", async () => {
-  const { control: api, store } = controlOnly({ tokens: { admin: ADMIN, rigs: {} } });
-  store.reportedRigs.addUnreported("rig-a", new Date().toISOString());
+  const { control: api, store } = await controlOnly({ tokens: { admin: ADMIN, rigs: {} } });
+  await store.reportedRigs.addUnreported("rig-a", new Date().toISOString());
   const server = serve({ fetch: api.fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((r) => server.once("listening", r));
   const control = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -48,12 +48,12 @@ test("thermite log-level reads and sets control's level, sends a rig part's, and
     assert.equal((await cli("control", "default")).from, "environment");
     const sent = await cli("supervisor", "debug", "--rig", "rig-a", "--ttl", "30");
     assert.equal(sent.status, "pending");
-    const issued = store.commands.get(String(sent.id)) as unknown as {
+    const issued = (await store.commands.get(String(sent.id))) as unknown as {
       kind: string;
       payload: unknown;
     };
     assert.deepEqual(
-      store.auditLog.list(5, { action: "log_level_sent" }).map((e) => e.body),
+      (await store.auditLog.list(5, { action: "log_level_sent" })).map((e) => e.body),
       [{ command: sent.id, rig: "rig-a", part: "supervisor", level: "debug" }],
     );
     assert.ok(issued, "the command is pending on control");

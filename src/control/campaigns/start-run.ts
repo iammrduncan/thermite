@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { BriefingSeed } from "../../core/commands.ts";
 import { AskOwner } from "../../core/commands.ts";
 import { briefingSeedOf, type KbItem, PICKABLE, queueSeedOf } from "../kb/index.ts";
@@ -207,10 +208,14 @@ export function startRunAnswer(
  * Whether control can start a run of a campaign: a saved version it can sign (with the kits it
  * keeps, or an earlier assignment's imports), or an earlier assignment to assign again.
  */
-export function startable(store: ControlStore, campaign: string, kits: unknown): boolean {
-  const v = store.campaigns.versions(campaign)[0];
+export async function startable(
+  store: ControlStore,
+  campaign: string,
+  kits: unknown,
+): Promise<boolean> {
+  const v = (await store.campaigns.versions(campaign))[0];
   if (v && (kits || v.sources.assignment)) return true;
-  return store.commands.latestAssignments().has(campaign);
+  return (await store.commands.latestAssignments()).has(campaign);
 }
 
 /**
@@ -230,9 +235,9 @@ export async function startARun(
     status,
   });
   const { campaign, agents } = req;
-  if (!startable(store, campaign, parts.kits))
+  if (!(await startable(store, campaign, parts.kits)))
     return refuse("Control has no saved version or earlier assignment of this campaign.", 404);
-  const vs = parts.views();
+  const vs = await parts.views();
   const rig = vs.find((u) => u.id === req.rig);
   if (!rig)
     return req.rig
@@ -248,25 +253,26 @@ export async function startARun(
     ? `${encodeURIComponent(req.model.provider)}|${encodeURIComponent(req.model.model)}`
     : "";
   const mode =
-    (store.campaigns.versions(campaign)[0]?.contract as { mode?: string } | undefined)?.mode ??
+    ((await store.campaigns.versions(campaign))[0]?.contract as { mode?: string } | undefined)
+      ?.mode ??
     (
-      store.commands.latestAssignments().get(campaign)?.payload.contract as
+      (await store.commands.latestAssignments()).get(campaign)?.payload.contract as
         | { mode?: string }
         | undefined
     )?.mode;
   // A research run on a model it can't use is refused before it starts (goal 190).
   const researchRefused =
     mode === "research" && agents
-      ? researchModelRefusal(store, rig, chosen || undefined)
+      ? await researchModelRefusal(store, rig, chosen || undefined)
       : undefined;
   if (researchRefused) return refuse(researchRefused);
   if (agents && req.model) {
     // The rig gets the model first; it arrives within a minute, and the run starts after that.
-    const given = giveRigModel(
+    const given = await giveRigModel(
       store,
       rig.id,
       chosen,
-      harnessKept(store, rig.id, chosen, ""),
+      await harnessKept(store, rig.id, chosen, ""),
       undefined,
       by,
     );
@@ -279,12 +285,12 @@ export async function startARun(
       };
   }
   // Control gave the rig a model it has not taken yet: the agents would start with none.
-  const given = store.agentModels.byRig()[rig.id];
+  const given = (await store.agentModels.byRig())[rig.id];
   if (agents && !req.model && given && !sameModel(rig.model?.model, given.model))
     return refuse(
       `${rig.id} has not taken ${given.model} yet (it does within a minute of being given it; its page shows it taking the model until then): start the run after that.`,
     );
-  if (agents && !req.model && agentsModelMissing(store, rig))
+  if (agents && !req.model && (await agentsModelMissing(store, rig)))
     return refuse(
       `${rig.id} has no model for its agents, so they could not work: choose one under "The agents' model", or give it one on its Edit rig page.`,
     );
@@ -293,8 +299,8 @@ export async function startARun(
   // From past research (goal 065): only items of collections this campaign may read, looked up
   // here by id. Experiments join the queue; findings, claims, notes and reports brief the agents.
   const kb = store.kb();
-  const readable = new Set(kb.readable(campaign));
-  const picked = (req.past ?? []).map((x) => kb.item(x));
+  const readable = new Set(await kb.readable(campaign));
+  const picked = await mapInTurn(req.past ?? [], async (x) => kb.item(x));
   if (picked.some((x) => !x || !readable.has(x.campaign) || !PICKABLE[x.kind]))
     return refuse(
       "An item from past research is not one this campaign may read and start from: search again.",
@@ -302,7 +308,7 @@ export async function startARun(
     );
   const past = picked.filter((x): x is KbItem => x !== undefined);
   // What the run's agents search, fixed as it starts (goal 175): only collections granted now.
-  const reads = kb.reads(campaign);
+  const reads = await kb.reads(campaign);
   const granted = req.granted ?? reads;
   const notGranted = granted.filter((c) => !reads.includes(c));
   if (notGranted.length)
@@ -311,10 +317,12 @@ export async function startARun(
       400,
     );
   const scope = { collection: req.collection ?? "continue", granted: [...new Set(granted)] };
-  const pastQueue = past
-    .filter((x) => PICKABLE[x.kind] === "queue")
-    .map((x) => queueSeedOf(x, kb.resultOf(x)))
-    .filter((x): x is QueueSeed => x !== undefined);
+  const pastQueue = (
+    await mapInTurn(
+      past.filter((x) => PICKABLE[x.kind] === "queue"),
+      async (x) => queueSeedOf(x, await kb.resultOf(x)),
+    )
+  ).filter((x): x is QueueSeed => x !== undefined);
   const briefing = past
     .filter((x) => PICKABLE[x.kind] === "briefing")
     .map(briefingSeedOf)
@@ -362,11 +370,16 @@ export async function startARun(
     r = { ok: false, errors: [errorText(err)] };
   }
   if (!r.ok) return refuse(r.errors.join(" "));
-  kb.setScope(campaign, r.run, { fresh: scope.collection === "fresh", granted: scope.granted }, by);
-  if (split !== undefined) sendSplit(store, parts.privateKeyPem, rig.id, split, by);
+  await kb.setScope(
+    campaign,
+    r.run,
+    { fresh: scope.collection === "fresh", granted: scope.granted },
+    by,
+  );
+  if (split !== undefined) await sendSplit(store, parts.privateKeyPem, rig.id, split, by);
   // The campaign's own context settings, and what each agent works with on this rig (goal 070).
   const context = agents
-    ? contextApplies(store, rig.id, campaignContract(store, campaign))
+    ? await contextApplies(store, rig.id, await campaignContract(store, campaign))
     : undefined;
   if (context) notes.push(contextAppliesWords(context, rig.id));
   return {

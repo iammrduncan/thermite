@@ -38,9 +38,9 @@ export function registerRetention(tools: ToolContext): void {
       description: `The owner's retention policies, as Settings › Retention policies shows them: by default there are none and Thermite keeps everything, everywhere. kinds: each kind a policy may remove, where it is kept (control, rigs or supervisors), what it is, its warning and what a policy may always keep of it. policies: each policy with its design, on (off removes nothing), rule_words, where_words, when_words, keep_words, would_remove (count, bytes, words, stays, unreported: rigs that have not said what they keep yet), last (its newest removal) and next_at. No policy removes a rig's ledger, a results repository or an export.`,
       inputSchema: {},
     },
-    audited("retention_policies", () => ({
+    audited("retention_policies", async () => ({
       kinds: retentionKinds(),
-      policies: policyViews(store),
+      policies: await policyViews(store),
     })),
   );
 
@@ -51,7 +51,7 @@ export function registerRetention(tools: ToolContext): void {
       description: `What a policy's design would remove now, saved or not, as the form's If it ran now says: count, bytes, rigs, oldest, newest, words, stays, and unreported (rigs that have not said what they keep: their items are not counted). ${DESIGN}`,
       inputSchema: RetentionSpec.shape,
     },
-    audited("retention_preview", (a: unknown) => previewOf(store, specOf(store, a))),
+    audited("retention_preview", async (a: unknown) => previewOf(store, await specOf(store, a))),
   );
 
   server.registerTool(
@@ -64,8 +64,8 @@ export function registerRetention(tools: ToolContext): void {
         limit: z.number().int().min(1).max(RETENTION_REMOVALS_MAX).default(100),
       },
     },
-    audited("retention_removals", (a: { policy?: number; limit: number }) => ({
-      removals: store.retention.removals(a.limit, a.policy),
+    audited("retention_removals", async (a: { policy?: number; limit: number }) => ({
+      removals: await store.retention.removals(a.limit, a.policy),
     })),
   );
 
@@ -78,9 +78,9 @@ export function registerRetention(tools: ToolContext): void {
       description: `Makes a retention policy, as New policy on Settings does. It is off unless on is true; turned on, it runs at its time from then on. ${DESIGN} Written to the audit log. The owner's token only.`,
       inputSchema: { ...RetentionSpec.shape, on: z.boolean().default(false) },
     },
-    audited("create_retention_policy", (a: { on: boolean } & Record<string, unknown>) => {
+    audited("create_retention_policy", async (a: { on: boolean } & Record<string, unknown>) => {
       const { on, ...spec } = a;
-      return { policy: policyView(store, createPolicy(store, spec, on, actor)) };
+      return { policy: await policyView(store, await createPolicy(store, spec, on, actor)) };
     }),
   );
 
@@ -93,9 +93,9 @@ export function registerRetention(tools: ToolContext): void {
     },
     audited(
       "update_retention_policy",
-      (a: { id: number; on?: boolean } & Record<string, unknown>) => {
+      async (a: { id: number; on?: boolean } & Record<string, unknown>) => {
         const { id, on, ...spec } = a;
-        return { policy: policyView(store, updatePolicy(store, id, spec, on, actor)) };
+        return { policy: await policyView(store, await updatePolicy(store, id, spec, on, actor)) };
       },
     ),
   );
@@ -108,8 +108,8 @@ export function registerRetention(tools: ToolContext): void {
         "Turns a policy on (it runs at its time from now on; a time before does not run it) or off (it removes nothing). Written to the audit log. The owner's token only.",
       inputSchema: { ...idInput, on: z.boolean() },
     },
-    audited("set_retention_policy_on", (a: { id: number; on: boolean }) => ({
-      policy: policyView(store, setPolicyOn(store, a.id, a.on, actor)),
+    audited("set_retention_policy_on", async (a: { id: number; on: boolean }) => ({
+      policy: await policyView(store, await setPolicyOn(store, a.id, a.on, actor)),
     })),
   );
 
@@ -121,8 +121,8 @@ export function registerRetention(tools: ToolContext): void {
         "Deletes a policy; what it removed stays in the history and the audit log. Written to the audit log. The owner's token only.",
       inputSchema: idInput,
     },
-    audited("delete_retention_policy", (a: { id: number }) => ({
-      deleted: deletePolicy(store, a.id, actor).id,
+    audited("delete_retention_policy", async (a: { id: number }) => ({
+      deleted: (await deletePolicy(store, a.id, actor)).id,
     })),
   );
 

@@ -36,7 +36,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
       summary,
     });
   };
-  const live = (id: string, lines: [number, Omit<LiveEntry, "seq" | "at">][]) =>
+  const live = async (id: string, lines: [number, Omit<LiveEntry, "seq" | "at">][]) =>
     store.liveLines.add(
       id,
       `log-${id}`,
@@ -425,7 +425,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
     ],
     { jobs: { leased: 1, queued: 0, done: 1 } },
   );
-  live("rig-b", [
+  await live("rig-b", [
     [65, { source: "planner", kind: "status", text: "planning round 1 (2 lanes)", run: "dec-2" }],
     [
       64,
@@ -699,7 +699,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
     ],
     { jobs: { queued: 0, leased: 0, done: 12 } },
   );
-  store.reportedRigs.setSupervisor("rig-c", {
+  await store.reportedRigs.setSupervisor("rig-c", {
     at: at(1),
     advisors: {
       teacher_runs: 4,
@@ -713,5 +713,5 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
       usd: 2.4,
     },
   });
-  store.reportedRigs.setSupervisor("rig-a", { at: at(1), advisors: null });
+  await store.reportedRigs.setSupervisor("rig-a", { at: at(1), advisors: null });
 }

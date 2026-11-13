@@ -7,7 +7,8 @@ import type { CampaignDraft } from "../../../src/control/campaigns/builder.ts";
 import { startCampaign, startRun } from "../../../src/control/campaigns/new.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, verifyCommand } from "../../../src/core/commands.ts";
 import { enrollRigs } from "../../helpers/control-store.ts";
 
@@ -37,8 +38,8 @@ const draft: CampaignDraft = {
 describe("starting a campaign from the page", () => {
   test("the kit is kept on control, the contract stored, and the first run assigned with both sources", async () => {
     const keys = generateSigningKeys();
-    const store = new ControlStore(":memory:");
-    enrollRigs(store, ["rig-a"]);
+    const store = openControlStore(":memory:");
+    await enrollRigs(store, ["rig-a"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const deps = { store, kits, privateKeyPem: keys.privateKeyPem };
     const target = { type: "cpu", class: "generic-cpu" };
@@ -55,14 +56,14 @@ describe("starting a campaign from the page", () => {
     assert.equal(r.run, "matmul-speed-1");
     const head = kits.head("matmul-speed-kit");
     assert.match(String(head), /^[0-9a-f]{40}$/);
-    const [stored] = store.campaigns.versions("matmul-speed");
+    const [stored] = await store.campaigns.versions("matmul-speed");
     assert.equal(stored?.sha, r.sha);
     const contract = stored?.contract as { target: unknown; project: { kit: { commit: string } } };
     assert.deepEqual(contract.target, target);
     assert.equal(contract.project.kit.commit, head);
     // The assignment is signed by control, and names where each source comes from.
-    const row = store.db
-      .prepare("select signed from command where id = ?")
+    const row = sqliteBehind(store)
+      .db.prepare("select signed from command where id = ?")
       .get(String(r.command)) as {
       signed: string;
     };
@@ -110,8 +111,8 @@ describe("starting a campaign from the page", () => {
 
   test("a try runs the kit with no agents; a later run starts from the saved version and its sources", async () => {
     const keys = generateSigningKeys();
-    const store = new ControlStore(":memory:");
-    enrollRigs(store, ["rig-a", "rig-b"]);
+    const store = openControlStore(":memory:");
+    await enrollRigs(store, ["rig-a", "rig-b"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const deps = { store, kits, privateKeyPem: keys.privateKeyPem };
     const target = { type: "cpu", class: "generic-cpu" };
@@ -119,7 +120,7 @@ describe("starting a campaign from the page", () => {
       (
         JSON.parse(
           (
-            store.db.prepare("select signed from command where id = ?").get(id) as {
+            sqliteBehind(store).db.prepare("select signed from command where id = ?").get(id) as {
               signed: string;
             }
           ).signed,
@@ -165,8 +166,8 @@ describe("starting a campaign from the page", () => {
 
   test("a campaign assigned outside the page starts again from its newest assignment", async () => {
     const keys = generateSigningKeys();
-    const store = new ControlStore(":memory:");
-    enrollRigs(store, ["rig-a", "rig-b"]);
+    const store = openControlStore(":memory:");
+    await enrollRigs(store, ["rig-a", "rig-b"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const deps = { store, kits, privateKeyPem: keys.privateKeyPem };
     // No version on control: nothing to start from yet.
@@ -188,7 +189,7 @@ describe("starting a campaign from the page", () => {
         source: { git: "https://git.example.com/p.git" },
       },
     ];
-    issueCommand(store, keys.privateKeyPem, {
+    await issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: {
@@ -222,7 +223,9 @@ describe("starting a campaign from the page", () => {
     if (!r.ok) return;
     // Numbered across every rig: rig-a's cli-made-1 is taken (goal 170).
     assert.equal(r.run, "cli-made-2");
-    const row = store.db.prepare("select rig, signed from command where id = ?").get(r.command) as {
+    const row = sqliteBehind(store)
+      .db.prepare("select rig, signed from command where id = ?")
+      .get(r.command) as {
       rig: string;
       signed: string;
     };
@@ -263,7 +266,9 @@ describe("starting a campaign from the page", () => {
     const qp = (
       JSON.parse(
         (
-          store.db.prepare("select signed from command where id = ?").get(q.command) as {
+          sqliteBehind(store)
+            .db.prepare("select signed from command where id = ?")
+            .get(q.command) as {
             signed: string;
           }
         ).signed,
@@ -283,7 +288,9 @@ describe("starting a campaign from the page", () => {
     const tp = (
       JSON.parse(
         (
-          store.db.prepare("select signed from command where id = ?").get(t.command) as {
+          sqliteBehind(store)
+            .db.prepare("select signed from command where id = ?")
+            .get(t.command) as {
             signed: string;
           }
         ).signed,
@@ -293,8 +300,8 @@ describe("starting a campaign from the page", () => {
   });
 
   test("a draft with mistakes changes nothing and says why", async () => {
-    const store = new ControlStore(":memory:");
-    enrollRigs(store, ["rig-a"]);
+    const store = openControlStore(":memory:");
+    await enrollRigs(store, ["rig-a"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const r = await startCampaign(
       { store, kits, privateKeyPem: generateSigningKeys().privateKeyPem },
@@ -308,7 +315,7 @@ describe("starting a campaign from the page", () => {
     );
     assert.equal(r.ok, false);
     assert.match(JSON.stringify(!r.ok && r.errors), /\{size\} is not a placeholder/);
-    assert.equal(store.campaigns.versions().length, 0);
+    assert.equal((await store.campaigns.versions()).length, 0);
     assert.equal(kits.head("matmul-speed-kit"), undefined);
   });
 });

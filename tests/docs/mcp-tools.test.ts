@@ -154,7 +154,7 @@ async function serverOffers(): Promise<Offered> {
     agent: "agent-token-abcdef",
     reader: "read-token-abcdef",
   };
-  const { control, store } = controlOnly({
+  const { control, store } = await controlOnly({
     tokens: { operator: tokens.operator, agent: tokens.agent, read: tokens.reader },
     // The kit tools are offered only by a control that keeps kits.
     options: {
@@ -173,7 +173,7 @@ async function serverOffers(): Promise<Offered> {
     );
     await client.close();
   }
-  store.db.close();
+  await store.close();
   return out;
 }
 

@@ -21,7 +21,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/rigs/:rig/key/accept", async (c) => {
     const f = await c.req.parseBody();
     // Only the key whose fingerprint the owner saw: a key swapped in meanwhile is not accepted.
-    store.reportedRigs.acceptPendingKey(
+    await store.reportedRigs.acceptPendingKey(
       c.req.param("rig"),
       "owner:ui",
       String(f.fingerprint ?? ""),
@@ -33,9 +33,9 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/rigs/:rig/bus-keys/seen", async (c) => {
     const rig = c.req.param("rig");
     const f = await c.req.parseBody();
-    if (store.rigHistory.latest(rig, BUS_KEY_CHANGE_STEPS, 1).length) {
-      store.rigHistory.add(rig, BUS_KEYS_SEEN_STEP, true);
-      store.auditLog.add("owner:ui", "rig_bus_keys_seen", { rig });
+    if ((await store.rigHistory.latest(rig, BUS_KEY_CHANGE_STEPS, 1)).length) {
+      await store.rigHistory.add(rig, BUS_KEYS_SEEN_STEP, true);
+      await store.auditLog.add("owner:ui", "rig_bus_keys_seen", { rig });
     }
     return c.redirect(backTo(f, rigHref(rig)), 303);
   });
@@ -43,16 +43,16 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   // ---------------------------------------------------------------- a rig's state (goal 012)
   /** Moves a rig control set up on a machine onto control's images, over SSH; what changed. */
   const updateMachineRig = async (rig: string): Promise<string> => {
-    const r = store.machines.rig(rig);
+    const r = await store.machines.rig(rig);
     if (!r || r.status === "removed") throw new Error(`Control didn't set ${rig} up on a machine.`);
-    const m = store.machines.get(r.machine);
+    const m = await store.machines.get(r.machine);
     if (!m) throw new Error(`The machine ${r.machine} is no longer in Settings › Machines.`);
     const images = machineRigImages(parts, m.facts as MachineFacts | null, r.gpus, r.images);
     if (typeof images === "string") throw new Error(images);
     if (!parts.publicUrl)
       throw new Error("Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL).");
     if (!parts.rigBus) throw new Error(NO_RIG_BUS);
-    store.machines.setRigStatus(rig, "updating");
+    await store.machines.setRigStatus(rig, "updating");
     const out = await ssh.sshScript(
       {
         address: m.address,
@@ -75,12 +75,12 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
       30 * 60_000,
     );
     if (out.code !== 0) {
-      store.machines.setRigStatus(rig, "failed");
+      await store.machines.setRigStatus(rig, "failed");
       throw new Error(tail(out.stderr) || `the update exited ${out.code}`);
     }
-    store.machines.setRigImages(rig, images);
-    store.machines.setRigStatus(rig, "running");
-    store.auditLog.add("owner:ui", "machine_rig_images", { rig, from: r.images, to: images });
+    await store.machines.setRigImages(rig, images);
+    await store.machines.setRigStatus(rig, "running");
+    await store.auditLog.add("owner:ui", "machine_rig_images", { rig, from: r.images, to: images });
     const changed = [
       r.images.harness !== images.harness ? `harness ${r.images.harness} → ${images.harness}` : "",
       r.images.supervisor !== images.supervisor
@@ -93,7 +93,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   };
   /** Moves a rig control set up on a cluster onto control's images; what changed. */
   const updateClusterRig = async (rig: string): Promise<string> => {
-    const k = store.clusters.rig(rig);
+    const k = await store.clusters.rig(rig);
     const want = k ? controlImages(parts, k.spec.gpus, k.spec.cuda) : undefined;
     if (
       k &&
@@ -112,20 +112,25 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
     if ("error" in done) throw new Error(done.error);
     return done.ok;
   };
-  app.get("/ui/rigs/:rig/update.json", (c) => {
+  app.get("/ui/rigs/:rig/update.json", async (c) => {
     const rig = c.req.param("rig");
-    return store.reportedRigs.list().some((x) => x.id === rig)
-      ? c.json(updateProgress(rig))
+    return (await store.reportedRigs.list()).some((x) => x.id === rig)
+      ? c.json(await updateProgress(rig))
       : c.json({ error: "not found" }, 404);
   });
-  app.post("/ui/rigs/:rig/update", (c) => {
+  app.post("/ui/rigs/:rig/update", async (c) => {
     const rig = c.req.param("rig");
     const json = wantsJson(c);
-    const back = (k: "ok" | "error", m: string) =>
+    const back = async (k: "ok" | "error", m: string) =>
       json
         ? c.json(
             k === "ok"
-              ? { ...updateProgress(rig), said: m, tone: "ok", follow: updateFollowUrl(rig) }
+              ? {
+                  ...(await updateProgress(rig)),
+                  said: m,
+                  tone: "ok",
+                  follow: updateFollowUrl(rig),
+                }
               : notSent(m),
             k === "ok" ? 200 : 400,
           )
@@ -134,8 +139,8 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
             303,
           );
     // Another program's words (ssh, kubectl): the page's address names them by a note's ID.
-    const failed = (why: string) => back("error", json ? why : noted(why));
-    const place = placeOf(rig);
+    const failed = async (why: string) => back("error", json ? why : noted(why));
+    const place = await placeOf(rig);
     if (!place.update)
       return back(
         "error",
@@ -143,13 +148,14 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
           `Control didn't set ${rig} up on a machine or a cluster, so it can't move it onto its images. Pull the ${control.version} images where it runs, and start it again with them.`,
       );
     try {
-      void updates.begin(rig, "owner:ui", {
+      // It answers once the update is noted as under way, and the update runs on behind it.
+      await updates.begin(rig, "owner:ui", {
         apply: () => (place.kind === "machine" ? updateMachineRig(rig) : updateClusterRig(rig)),
       });
     } catch (err) {
-      return failed(errorText(err));
+      return await failed(errorText(err));
     }
-    store.auditLog.add("owner:ui", "rig_update", { rig, to: control.version });
+    await store.auditLog.add("owner:ui", "rig_update", { rig, to: control.version });
     return back(
       "ok",
       `The update of ${rig} to ${control.version} began. Its steps show below as they happen.`,

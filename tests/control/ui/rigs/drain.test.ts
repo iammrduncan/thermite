@@ -82,7 +82,7 @@ async function draining(work?: Record<string, unknown>) {
     },
   });
   // lane-1's newest lines in Live: a fetch, and the harness's answer.
-  c.store.liveLines.add(
+  await c.store.liveLines.add(
     "rig-a",
     "log-1",
     [
@@ -119,7 +119,7 @@ describe("a drain on the rig's page (goal 136)", () => {
     // End the drain sends drain_rig with drain false.
     const r = await c.send({ rig: "rig-a", kind: "drain_rig" });
     assert.equal(r.status, 200, JSON.stringify(r.answer));
-    const sent = c.store.commands.latest("rig-a", "drain_rig", 1)[0];
+    const sent = (await c.store.commands.latest("rig-a", "drain_rig", 1))[0];
     assert.deepEqual(sent?.payload, { drain: false, reason: "the owner ended the drain" });
     assert.equal(sent?.issued_by, "owner:ui");
   });
@@ -171,7 +171,7 @@ describe("a drain on the rig's page (goal 136)", () => {
     // Stop the trial sends stop_trial; the row then says how the stop stands, without the button.
     const r = await c.send({ rig: "rig-a", kind: "stop_trial", run: "s-1", trial: "t-1" });
     assert.equal(r.status, 200, JSON.stringify(r.answer));
-    const sent = c.store.commands.latest("rig-a", "stop_trial", 1)[0];
+    const sent = (await c.store.commands.latest("rig-a", "stop_trial", 1))[0];
     assert.deepEqual(sent?.payload, { run: "s-1", trial: "t-1" });
     const after = part(
       await c.page("/ui/rigs/rig-a"),
@@ -180,7 +180,7 @@ describe("a drain on the rig's page (goal 136)", () => {
     );
     assert.match(after, /Stop sent at \d\d:\d\d UTC\. Sent to rig-a/);
     assert.doesNotMatch(after, /Stop this trial…/);
-    answerCommand(c.store, "rig-a", sent?.id ?? "", "delivered", {
+    await answerCommand(c.store, "rig-a", sent?.id ?? "", "delivered", {
       source: "harness",
       status: "applied",
       accepted: true,
@@ -195,16 +195,16 @@ describe("a drain on the rig's page (goal 136)", () => {
   test("a trial stopped during the drain, once it ended; a harness too old to list its trials; no drain", async () => {
     const c = await draining();
     await c.send({ rig: "rig-a", kind: "stop_trial", run: "s-1", trial: "t-1" });
-    const sent = c.store.commands.latest("rig-a", "stop_trial", 1)[0];
-    answerCommand(c.store, "rig-a", sent?.id ?? "", "delivered", {
+    const sent = (await c.store.commands.latest("rig-a", "stop_trial", 1))[0];
+    await answerCommand(c.store, "rig-a", sent?.id ?? "", "delivered", {
       source: "harness",
       status: "applied",
       accepted: true,
       result: { run: "s-1", trial: "t-1", lane: "lane-1", stopping: true },
     });
-    const d = drainOf(c.store.reportedRigs.list()[0] ?? { summary: {} });
+    const d = drainOf((await c.store.reportedRigs.list())[0] ?? { summary: {} });
     assert.ok(d);
-    const card = drainBanner({
+    const card = await drainBanner({
       rig: "rig-a",
       drain: { ...d, trials: 1, open: (d.open ?? []).filter((t) => t.trial !== "t-1") },
       cluster: true,
@@ -234,7 +234,7 @@ describe("a drain on the rig's page (goal 136)", () => {
     );
     assert.doesNotMatch(oldCard, /under <b>At work<\/b>/);
     // The judge builds several changes at once: the sentence gives how many of its jobs run.
-    const two = drainOf(old.store.reportedRigs.list()[0] ?? { summary: {} });
+    const two = drainOf((await old.store.reportedRigs.list())[0] ?? { summary: {} });
     assert.ok(two);
     assert.match(
       drainSaid("rig-a", { ...two, judgeJobs: 2 }),

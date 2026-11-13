@@ -23,7 +23,25 @@ function enrolledOf(r: Row): EnrolledRig {
   };
 }
 
-export class Enrollments extends StorePart {
+export interface Enrollments {
+  /** Rigs that have a token but have not reported yet still accept commands. */
+  knownRig(rig: string): Promise<boolean>;
+  /** An enrolled rig's record, if it is enrolled and not retired. */
+  rig(rig: string): Promise<EnrolledRig | undefined>;
+  /** Every rig enrolled through control, retired ones included. */
+  rigs(): Promise<EnrolledRig[]>;
+  /** Whether a token is this enrolled rig's current one. */
+  tokenMatches(rig: string, token: string): Promise<boolean>;
+  /** Enrolls a rig with a token's SHA-256. A retired rig may be enrolled again. */
+  enroll(rig: string, tokenSha256: string, by: string): Promise<void>;
+  /** Gives an enrolled rig a new token; the old one stops working at once. */
+  rotateToken(rig: string, tokenSha256: string, by: string): Promise<void>;
+  /** Retires an enrolled rig: its token stops working. Its history stays. */
+  retire(rig: string, by: string): Promise<void>;
+}
+
+/** Enrollments on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteEnrollments extends StorePart {
   /** Rigs that have a token but have not reported yet still accept commands. */
   knownRig(rig: string): boolean {
     return this.rig(rig) !== undefined || Boolean(this.store.tunnels.get(rig)?.enrolled_at);

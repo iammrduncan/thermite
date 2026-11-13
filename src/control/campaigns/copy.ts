@@ -143,12 +143,12 @@ export const RUN_FIELDS = new Set([
  * rigs' reports, saved versions, assignments and the knowledge base's collections), none of which a
  * copy may take.
  */
-export function copyCampaign(
+export async function copyCampaign(
   store: ControlStore,
   req: CopyCampaignRequest,
   by: string,
   known: ReadonlyMap<string, unknown> | ReadonlySet<string>,
-): CopyCampaignOutcome {
+): Promise<CopyCampaignOutcome> {
   const refuse = (error: string, status: 400 | 404 | 409 = 409): CopyCampaignOutcome => ({
     state: "refused",
     error,
@@ -157,8 +157,8 @@ export function copyCampaign(
   const { from, name } = req;
   if (isRigCheck(from))
     return refuse(`${from} is a rig check's campaign. A rig check cannot be copied.`, 400);
-  const saved = store.campaigns.versions(from)[0];
-  const assigned = saved ? undefined : store.commands.latestAssignments().get(from);
+  const saved = (await store.campaigns.versions(from))[0];
+  const assigned = saved ? undefined : (await store.commands.latestAssignments()).get(from);
   if (!saved && !assigned)
     return refuse(
       `Control has no saved version or earlier assignment of ${from}. There is nothing to copy.`,
@@ -171,9 +171,9 @@ export function copyCampaign(
       400,
     );
   const kb = store.kb();
-  if (known.has(name) || kb.reads(name).length || kb.readBy(name).length)
+  if (known.has(name) || (await kb.reads(name)).length || (await kb.readBy(name)).length)
     return refuse(`There is a campaign named ${name} already. Choose another name.`, 409);
-  const version = store.campaigns.nextVersion(name);
+  const version = await store.campaigns.nextVersion(name);
   const source = (saved?.contract ?? assigned?.payload.contract) as Record<string, unknown>;
   // The contract names its campaign once: the copy's name, and its first version, there.
   let contract: Record<string, unknown> = { ...source, campaign: name, version };
@@ -185,7 +185,7 @@ export function copyCampaign(
         "This campaign's MCP servers are in its kit's kit.json: change them on the New campaign page.",
         400,
       );
-    const why = researchMcpRefusal(store, uses);
+    const why = await researchMcpRefusal(store, uses);
     if (why) return refuse(why, 400);
     const { mcp_servers: before, ...rest } = contract;
     contract = uses.length ? { ...rest, mcp_servers: uses } : rest;
@@ -236,7 +236,7 @@ export function copyCampaign(
     copiedFrom = { campaign: from, rig: a.rig, run: a.run };
   }
   if (otherMcp) copiedFrom.other_mcp_servers = true;
-  store.campaigns.put({
+  await store.campaigns.put({
     campaign: name,
     version,
     contract: parsed.contract,
@@ -245,7 +245,7 @@ export function copyCampaign(
     copiedFrom,
     by,
   });
-  store.auditLog.add(by, "campaign_copied", {
+  await store.auditLog.add(by, "campaign_copied", {
     campaign: name,
     from: copiedFrom,
     sha: parsed.sha,
@@ -270,8 +270,8 @@ export function copyCampaign(
  * Copies a campaign (goal 069): the Copy panel on its page, REST, MCP's copy_campaign and
  * `thermite campaign copy`, with the campaigns control knows from its rigs' reports too.
  */
-export const copyACampaign = (parts: ControlParts, req: CopyCampaignRequest, by: string) =>
-  copyCampaign(parts.store, req, by, campaignModes(parts.store, parts.views()));
+export const copyACampaign = async (parts: ControlParts, req: CopyCampaignRequest, by: string) =>
+  copyCampaign(parts.store, req, by, await campaignModes(parts.store, await parts.views()));
 
 /** The answer REST and MCP give: the copy, its contract's hash and where it came from. */
 export function copyCampaignAnswer(

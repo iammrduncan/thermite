@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mapInTurn } from "../../common/in-turn.ts";
 import { KB_OUTCOMES, KbKind } from "../../core/kb/index.ts";
 import {
   KB_IS_DATA,
@@ -83,26 +84,26 @@ export type KbSearchQuery = z.infer<typeof KbSearchQuery>;
  * that answers their rig's ask (asks.ts), with the run and its rig. Undefined fields are left out,
  * as an ask leaves them.
  */
-export function searchAsRun(store: ControlStore, run: string, s: Omit<KbSearchQuery, "as">) {
-  const rig = store.runRegistry.assigned(run)?.rig;
+export async function searchAsRun(store: ControlStore, run: string, s: Omit<KbSearchQuery, "as">) {
+  const rig = (await store.runRegistry.assigned(run))?.rig;
   if (!rig) return { error: `control assigned no run ${run}: no agents search as it` } as const;
   const ask = Object.fromEntries(Object.entries({ ...s, run }).filter(([, v]) => v !== undefined));
-  const a = answerKbAsk(store, rig, "search", ask);
+  const a = await answerKbAsk(store, rig, "search", ask);
   if ("refused" in a) return { error: a.refused } as const;
   if (!("hits" in a)) return { error: "the run's search gave no hits" } as const;
   return { as: run, rig, ...a };
 }
 
 /** The owner's search: a page of hits, best first, and what the search says beside them. */
-export function ownerKbSearch(store: ControlStore, query: KbSearchQuery) {
+export async function ownerKbSearch(store: ControlStore, query: KbSearchQuery) {
   const { as, ...s } = query;
   if (as) return searchAsRun(store, as, s);
   const kb = store.kb();
   const collections = s.collections?.length
     ? s.collections
-    : kb.collections().map((c) => c.campaign);
+    : (await kb.collections()).map((c) => c.campaign);
   const { collections: _c, ...rest } = s;
-  const r = kb.find(
+  const r = await kb.find(
     [s.q, ...(s.queries ?? [])],
     collections.map((campaign) => ({ campaign })),
     kbFindOf(rest),
@@ -112,6 +113,10 @@ export function ownerKbSearch(store: ControlStore, query: KbSearchQuery) {
     note: KB_IS_DATA,
     collections,
     ...foundOf(r),
-    hits: r.hits.map((x) => ({ id: x.id, ...hitOf(x, x), result: kb.resultOf(x) })),
+    hits: await mapInTurn(r.hits, async (x) => ({
+      id: x.id,
+      ...hitOf(x, x),
+      result: await kb.resultOf(x),
+    })),
   };
 }

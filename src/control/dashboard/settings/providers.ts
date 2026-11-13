@@ -55,7 +55,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   const listInto = async (p: ModelProvider): Promise<string | null> => {
     if (p.type === "chatgpt") {
       const listed = await chatgpt.models(p);
-      store.modelProviders.setModels(p.name, listed);
+      await store.modelProviders.setModels(p.name, listed);
       return "error" in listed ? listed.error : null;
     }
     let key = "";
@@ -63,11 +63,13 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       // OpenCode's own provider may have no key: its list and free models need none.
       if (p.key_sealed) key = opts.secrets.open(p.key_sealed);
     } catch {
-      store.modelProviders.setModels(p.name, { error: "its key cannot be opened: enter it again" });
+      await store.modelProviders.setModels(p.name, {
+        error: "its key cannot be opened: enter it again",
+      });
       return "its key cannot be opened: enter it again";
     }
     const listed = await listModels(p.type, p.base_url, key, opts.providerFetch);
-    store.modelProviders.setModels(p.name, listed);
+    await store.modelProviders.setModels(p.name, listed);
     return "error" in listed ? listed.error : null;
   };
 
@@ -86,7 +88,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       .filter(Boolean);
     if (!ACCESS_NAME.test(name))
       return fail("A cluster's name is lowercase letters, digits, dots and dashes.");
-    if (store.clusters.get(name)) return fail(`"${name}" exists already.`);
+    if (await store.clusters.get(name)) return fail(`"${name}" exists already.`);
     if (!kubeconfig) return fail("Paste the cluster's kubeconfig.");
     if (!pattern.includes("{rig}") || !NS.test(pattern.replace("{rig}", "rig")))
       return fail("The namespace for each rig must contain {rig} and make a valid namespace name.");
@@ -113,7 +115,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!context) context = contexts.current;
     if (!context || !KUBE_NAME.test(context))
       return fail("The kubeconfig has no current context: name one.");
-    store.clusters.add({
+    await store.clusters.add({
       name,
       kubeconfig_sealed: opts.secrets.seal(kubeconfig),
       context,
@@ -143,19 +145,19 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     const key = String(f.runpod_key ?? "").trim();
     if (!ACCESS_NAME.test(name))
       return fail("A GPU cloud's name is lowercase letters, digits, dots and dashes.");
-    if (store.gpuClouds.get(name)) return fail(`"${name}" exists already.`);
+    if (await store.gpuClouds.get(name)) return fail(`"${name}" exists already.`);
     if (!key) return fail("Paste the RunPod API key.");
     // A key that RunPod refuses is not kept.
     try {
       const facts = await readRunpod(key, opts.cloudFetch);
-      store.gpuClouds.add({
+      await store.gpuClouds.add({
         name,
         kind: "runpod",
         key_sealed: opts.secrets.seal(key),
         key_hint: keyHint(key),
         by: "owner:ui",
       });
-      store.gpuClouds.setFacts(name, { facts });
+      await store.gpuClouds.setFacts(name, { facts });
     } catch (err) {
       return fail(noted(`Not added: ${errorText(err)}.`));
     }
@@ -173,7 +175,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     let privateKey = String(f.private_key ?? "").trim();
     if (!ACCESS_NAME.test(name))
       return fail("A machine's name is lowercase letters, digits, dots and dashes.");
-    if (store.machines.get(name)) return fail(`"${name}" exists already.`);
+    if (await store.machines.get(name)) return fail(`"${name}" exists already.`);
     if (!ADDRESS.test(address)) return fail("The address is a host name or an IP address.");
     if (!Number.isInteger(port) || port < 1 || port > 65535)
       return fail("The port is a number from 1 to 65535.");
@@ -191,7 +193,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       pub = { line: k.publicKey, fingerprint: k.fingerprint };
     }
     const seen = await ssh.scanHostKeys(address, port).catch(() => []);
-    store.machines.add({
+    await store.machines.add({
       name,
       address,
       port,
@@ -218,12 +220,12 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
 
   // ---------------------------------------------------------------- Git access (Settings)
   /** Git access added from the add form (or the older Git access form). */
-  const addGit = (c: Ctx, f: Record<string, unknown>) => {
+  const addGit = async (c: Ctx, f: Record<string, unknown>) => {
     const fail = (m: string) => c.redirect(settingsUrl("error", m), 303);
     const name = newName(f.name);
     if (!ACCESS_NAME.test(name))
       return fail("A Git access name is lowercase letters, digits, dots and dashes.");
-    if (store.gitAccess.get(name)) return fail(`"${name}" exists already: delete it first.`);
+    if (await store.gitAccess.get(name)) return fail(`"${name}" exists already: delete it first.`);
     const host = String(f.host ?? "")
       .trim()
       .toLowerCase();
@@ -233,7 +235,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       if (!token || /\s/.test(token) || token.length > 4096)
         return fail("Paste the token, without spaces.");
       const username = String(f.username ?? "").trim() || null;
-      store.gitAccess.add({
+      await store.gitAccess.add({
         name,
         kind: "token",
         public_key: null,
@@ -250,7 +252,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       );
     }
     const key = makeDeployKey(`thermite ${name}`);
-    store.gitAccess.add({
+    await store.gitAccess.add({
       name,
       kind: "ssh",
       public_key: key.publicKey,
@@ -278,7 +280,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       .toLowerCase();
     if (!GIT_HOST.test(host)) return c.redirect(settingsUrl("error", GIT_HOST_WORDS), 303);
     return c.redirect(
-      store.gitAccess.setHost(name, host, "owner:ui")
+      (await store.gitAccess.setHost(name, host, "owner:ui"))
         ? settingsUrl("ok", `"${name}" is for ${host}: control uses it there, and nowhere else.`)
         : settingsUrl("error", "No such Git access."),
       303,
@@ -288,10 +290,14 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/settings/git/:name/test", async (c) => {
     const name = c.req.param("name");
     const url = String((await c.req.parseBody()).url ?? "").trim();
-    if (!store.gitAccess.get(name))
+    if (!(await store.gitAccess.get(name)))
       return c.redirect(settingsUrl("error", "No such Git access."), 303);
     try {
-      const found = await (opts.probeRepo ?? probeRepository)(url, "HEAD", accessFor(name, url));
+      const found = await (opts.probeRepo ?? probeRepository)(
+        url,
+        "HEAD",
+        await accessFor(name, url),
+      );
       return c.redirect(
         settingsUrl(
           "ok",
@@ -313,22 +319,27 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!token || /\s/.test(token) || token.length > 4096)
       return c.redirect(settingsUrl("error", "Paste the token, without spaces."), 303);
     return c.redirect(
-      store.gitAccess.replaceToken(name, opts.secrets.seal(token), keyHint(token), "owner:ui")
+      (await store.gitAccess.replaceToken(
+        name,
+        opts.secrets.seal(token),
+        keyHint(token),
+        "owner:ui",
+      ))
         ? settingsUrl("ok", `"${name}" has its new token; campaigns that use it keep working.`)
         : settingsUrl("error", "No such token."),
       303,
     );
   });
-  app.post("/ui/settings/git/:name/delete", (c) => {
+  app.post("/ui/settings/git/:name/delete", async (c) => {
     const name = c.req.param("name");
-    const users = store.campaigns.usingGitAccess(name);
+    const users = await store.campaigns.usingGitAccess(name);
     if (users.length)
       return c.redirect(
         settingsUrl("error", `"${name}" is used by ${users.join(", ")}: their runs fetch with it.`),
         303,
       );
     return c.redirect(
-      store.gitAccess.delete(name, "owner:ui")
+      (await store.gitAccess.delete(name, "owner:ui"))
         ? settingsUrl("ok", `"${name}" is deleted. Rigs that ran with it keep nothing of it.`)
         : settingsUrl("error", "No such Git access."),
       303,
@@ -352,7 +363,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
    * A Claude subscription added or its token replaced: the token sealed, the fixed model list, and
    * no call to Anthropic (only Claude Code may use the token).
    */
-  const saveClaude = (c: Ctx, name: string, token: string) => {
+  const saveClaude = async (c: Ctx, name: string, token: string) => {
     const fail = (m: string) => c.redirect(settingsUrl("error", m), 303);
     if (token && (token.length > 4096 || /\s/.test(token)))
       return fail(
@@ -360,17 +371,17 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       );
     if (token && !token.startsWith("sk-ant-"))
       return fail("That is not a token from claude setup-token: it starts with sk-ant-.");
-    const old = store.modelProviders.get(name);
+    const old = await store.modelProviders.get(name);
     if (old && old.type !== "claude")
       return fail(`"${name}" is a provider of another kind: choose another name.`);
-    const r = store.modelProviders.put({
+    const r = await store.modelProviders.put({
       name,
       type: "claude",
       base_url: providerBase("claude", ""),
       key: token ? { sealed: opts.secrets.seal(token), hint: keyHint(token) } : undefined,
     });
     if (r === "needs_key") return fail("Paste the token from claude setup-token.");
-    store.auditLog.add(
+    await store.auditLog.add(
       "owner:ui",
       r === "created" ? "model_provider_added" : "model_provider_changed",
       {
@@ -379,7 +390,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         key: token ? `replaced (${keyHint(token)})` : "kept",
       },
     );
-    store.modelProviders.setModels(
+    await store.modelProviders.setModels(
       name,
       CLAUDE_MODELS.map((m) => ({ id: m.id, context_window: m.context_window })),
     );
@@ -393,9 +404,12 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   };
   // Sign in with ChatGPT: control starts the sign-in (it keeps the PKCE secret) and sends the
   // owner's browser to OpenAI's page. Signing in again to a provider keeps its client and host IDs.
-  app.get("/ui/settings/chatgpt/start", (c) => {
+  app.get("/ui/settings/chatgpt/start", async (c) => {
     const name = newName(c.req.query("name"));
-    return c.redirect(chatgpt.start(name && PROVIDER_NAME.test(name) ? name : undefined), 302);
+    return c.redirect(
+      await chatgpt.start(name && PROVIDER_NAME.test(name) ? name : undefined),
+      302,
+    );
   });
   /**
    * A ChatGPT subscription signed in (or again): the code in the address the owner pasted is
@@ -403,7 +417,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
    */
   const saveChatGPT = async (c: Ctx, name: string, pasted: string, consent: boolean) => {
     const fail = (m: string) => c.redirect(settingsUrl("error", m), 303);
-    const old = store.modelProviders.get(name);
+    const old = await store.modelProviders.get(name);
     if (old && old.type !== "chatgpt")
       return fail(`"${name}" is a provider of another kind: choose another name.`);
     if (!consent)
@@ -413,13 +427,13 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!pasted) return fail("Paste the address the tab went to after the sign-in.");
     const login = await chatgpt.finish(pasted);
     if ("error" in login) return fail(login.error);
-    const r = store.modelProviders.put({
+    const r = await store.modelProviders.put({
       name,
       type: "chatgpt",
       base_url: CHATGPT_API,
       key: { sealed: chatgpt.seal(login), hint: keyHint(login.client_id) },
     });
-    store.auditLog.add(
+    await store.auditLog.add(
       "owner:ui",
       r === "created" ? "model_provider_added" : "model_provider_changed",
       {
@@ -429,9 +443,9 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         unattended_use: "allowed by the owner",
       },
     );
-    const p = store.modelProviders.get(name);
+    const p = await store.modelProviders.get(name);
     const listError = p ? await listInto(p) : "it was not saved";
-    const n = store.modelProviders.get(name)?.models.length ?? 0;
+    const n = (await store.modelProviders.get(name))?.models.length ?? 0;
     return c.redirect(
       listError
         ? settingsUrl("error", `"${name}" is signed in, but ${listError}.`)
@@ -472,7 +486,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       return fail("The base URL is http or https, with no credentials, query or fragment in it.");
     const key = String(f.api_key ?? "").trim();
     if (key.length > 4096 || /\s/.test(key)) return fail("The API key has spaces or is too long.");
-    const r = store.modelProviders.put({
+    const r = await store.modelProviders.put({
       name,
       type,
       base_url: base,
@@ -482,8 +496,8 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     // have none.
     if (r === "needs_key") return fail("An Anthropic provider needs its API key.");
     // The audit names the provider and the key's hint, never the key; "none" for one with no key.
-    const kept = store.modelProviders.get(name)?.key_sealed ? "kept" : "none";
-    store.auditLog.add(
+    const kept = (await store.modelProviders.get(name))?.key_sealed ? "kept" : "none";
+    await store.auditLog.add(
       "owner:ui",
       r === "created" ? "model_provider_added" : "model_provider_changed",
       {
@@ -493,9 +507,9 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         key: key ? `replaced (${keyHint(key)})` : kept,
       },
     );
-    const p = store.modelProviders.get(name);
+    const p = await store.modelProviders.get(name);
     const listError = p ? await listInto(p) : null;
-    const listed = store.modelProviders.get(name)?.models.length ?? 0;
+    const listed = (await store.modelProviders.get(name))?.models.length ?? 0;
     return c.redirect(
       listError
         ? settingsUrl(
@@ -511,10 +525,10 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   };
 
   app.post("/ui/settings/providers/:name/refresh", async (c) => {
-    const p = store.modelProviders.get(c.req.param("name"));
+    const p = await store.modelProviders.get(c.req.param("name"));
     if (!p) return c.redirect(settingsUrl("error", "No such provider."), 303);
     const listError = await listInto(p);
-    const n = store.modelProviders.get(p.name)?.models.length ?? 0;
+    const n = (await store.modelProviders.get(p.name))?.models.length ?? 0;
     return c.redirect(
       listError
         ? settingsUrl("error", `"${p.name}" ${listError}.`)
@@ -526,7 +540,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   // The note that a Claude subscription's usage credits are on, dismissed (goal 169): the chip
   // stays, and the note comes back once Claude Code reports them on again after being off.
   app.post("/ui/settings/providers/:name/credits-note/dismiss", async (c) => {
-    const p = store.modelProviders.get(c.req.param("name"));
+    const p = await store.modelProviders.get(c.req.param("name"));
     if (!p) return c.redirect(settingsUrl("error", "No such provider."), 303);
     const credits = p.type === "claude" ? (await parts.planUsage.of(p))?.credits : undefined;
     if (!credits?.on)
@@ -534,7 +548,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         settingsUrl("error", `Claude Code does not report usage credits on for "${p.name}".`),
         303,
       );
-    dismissCreditsNote(store, p.name, credits, "owner:ui");
+    await dismissCreditsNote(store, p.name, credits, "owner:ui");
     return c.redirect(
       settingsUrl(
         "ok",
@@ -548,15 +562,15 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     const f = await c.req.parseBody();
     const name = c.req.param("name");
     const model = String(f.model ?? "").trim();
-    if (!store.modelProviders.get(name))
+    if (!(await store.modelProviders.get(name)))
       return c.redirect(settingsUrl("error", "No such provider."), 303);
     if (!MODEL_ID.test(model))
       return c.redirect(
         settingsUrl("error", "A model's name is its id at the provider, without spaces."),
         303,
       );
-    store.modelProviders.addModel(name, model);
-    store.auditLog.add("owner:ui", "model_provider_model_added", { name, model });
+    await store.modelProviders.addModel(name, model);
+    await store.auditLog.add("owner:ui", "model_provider_model_added", { name, model });
     return c.redirect(settingsUrl("ok", `${model} added to "${name}".`), 303);
   });
 
@@ -568,7 +582,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     const back = (k: "ok" | "error", m: string) =>
       c.redirect(`/ui/settings/prices?${k}=${encodeURIComponent(m)}#model-prices`, 303);
     const owner = new Map(
-      store.usage.prices().map((x) => [JSON.stringify([x.provider, x.model]), x.price]),
+      (await store.usage.prices()).map((x) => [JSON.stringify([x.provider, x.model]), x.price]),
     );
     const rows = Object.keys(f)
       .map((k) => /^m(\d{1,4})$/.exec(k)?.[1])
@@ -580,7 +594,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       const id = f[`m${i}`];
       const name = f[`p${i}`];
       if (typeof id !== "string" || typeof name !== "string") continue;
-      const p = store.modelProviders.get(name);
+      const p = await store.modelProviders.get(name);
       const m = p?.models.find((x) => x.id === id);
       if (!p || !m || m.price) continue;
       const read = (k: string) => {
@@ -596,7 +610,11 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       const was = owner.get(JSON.stringify([p.name, id]));
       if (input === null && output === null && cached === null) {
         if (!was) continue;
-        const r = setModelPrice(store, { provider: p.name, model: id, clear: true }, "owner:ui");
+        const r = await setModelPrice(
+          store,
+          { provider: p.name, model: id, clear: true },
+          "owner:ui",
+        );
         if (r.ok) changed++;
         else problems.push(r.error);
         continue;
@@ -607,7 +625,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       }
       if (was && was.input === input && was.output === output && was.cached_input === cached)
         continue;
-      const r = setModelPrice(
+      const r = await setModelPrice(
         store,
         {
           provider: p.name,
@@ -632,13 +650,13 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
 
   app.post("/ui/settings/providers/:name/delete", async (c) => {
     const name = c.req.param("name");
-    const was = store.modelProviders.get(name);
-    const r = store.modelProviders.delete(name);
+    const was = await store.modelProviders.get(name);
+    const r = await store.modelProviders.delete(name);
     // A ChatGPT login is ended at OpenAI too (signed out), with the login control had.
     const signedOut =
       r === "deleted" && was?.type === "chatgpt" ? await chatgpt.revoke(was) : undefined;
     if (r === "deleted")
-      store.auditLog.add("owner:ui", "model_provider_deleted", {
+      await store.auditLog.add("owner:ui", "model_provider_deleted", {
         name,
         ...(signedOut === undefined ? {} : { signed_out_at_openai: signedOut }),
       });
@@ -659,24 +677,24 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     const choice = String(f.choice ?? "");
     const harness = harnessOf(f.harness);
     // From the page's script (goal 080): JSON, and the row follows the rig as it takes the model.
-    const answer = (k: "ok" | "error", m: string) =>
+    const answer = async (k: "ok" | "error", m: string) =>
       wantsJson(c)
         ? k === "ok"
           ? c.json({
-              ...modelProgress(store, rig, Date.now()),
+              ...(await modelProgress(store, rig, Date.now())),
               said: m,
               tone: "ok",
               follow: modelFollowUrl(rig),
             })
           : c.json(notSent(m), 400)
         : c.redirect(`/ui/rigs/${encodeURIComponent(rig)}?${k}=${encodeURIComponent(m)}`, 303);
-    if (!store.reportedRigs.list().some((x) => x.id === rig))
+    if (!(await store.reportedRigs.list()).some((x) => x.id === rig))
       return answer("error", "No such rig.");
     if (!choice) {
-      clearRigModel(store, rig);
+      await clearRigModel(store, rig);
       return answer("ok", `${rig} goes back to its own settings within a minute.`);
     }
-    const given = giveRigModel(store, rig, choice, harness);
-    return "error" in given ? answer("error", given.error) : answer("ok", given.ok);
+    const given = await giveRigModel(store, rig, choice, harness);
+    return "error" in given ? await answer("error", given.error) : await answer("ok", given.ok);
   });
 }

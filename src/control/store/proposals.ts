@@ -79,7 +79,26 @@ const proposalOf = (r: Row): CampaignProposal => ({
   decided_at: r.decided_at === null ? null : String(r.decided_at),
 });
 
-export class CampaignProposals extends StorePart {
+export interface CampaignProposals {
+  /**
+   * Keeps a proposal; one of the same setting of the campaign still waiting is replaced by it (a
+   * grant: one of the same collection).
+   */
+  propose(p: {
+    campaign: string;
+    field: ProposedField;
+    value: unknown;
+    by: string;
+  }): Promise<number>;
+  get(id: number): Promise<CampaignProposal | undefined>;
+  /** The proposals waiting for the owner, oldest first; of one campaign when it is given. */
+  waiting(campaign?: string): Promise<CampaignProposal[]>;
+  /** Records the owner's decision; false when it no longer waits. */
+  decide(id: number, decision: "approved" | "declined", by: string): Promise<boolean>;
+}
+
+/** CampaignProposals on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteCampaignProposals extends StorePart {
   /**
    * Keeps a proposal; one of the same setting of the campaign still waiting is replaced by it (a
    * grant: one of the same collection).

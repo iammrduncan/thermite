@@ -14,10 +14,13 @@ import type { PlanCredits } from "./plan-usage.ts";
 export const CREDITS_NOTE_DISMISSED_STEP = "credits_note_dismissed";
 
 /** When the owner last dismissed the note of a provider's usage credits; undefined: never. */
-export function creditsNoteDismissedAt(store: ControlStore, provider: string): string | undefined {
+export async function creditsNoteDismissedAt(
+  store: ControlStore,
+  provider: string,
+): Promise<string | undefined> {
   let at: string | undefined;
-  for (const r of store.reportedRigs.list({ withRetired: true }))
-    for (const s of store.rigHistory.latest(r.id, [CREDITS_NOTE_DISMISSED_STEP], 20))
+  for (const r of await store.reportedRigs.list({ withRetired: true }))
+    for (const s of await store.rigHistory.latest(r.id, [CREDITS_NOTE_DISMISSED_STEP], 20))
       if (s.detail === provider && (!at || s.at > at)) at = s.at;
   return at;
 }
@@ -36,14 +39,14 @@ export function creditsNoteShows(
 }
 
 /** The owner dismisses the note: a step in the reporting rig's history, and the audit log. */
-export function dismissCreditsNote(
+export async function dismissCreditsNote(
   store: ControlStore,
   provider: string,
   c: PlanCredits,
   by: string,
-): void {
-  store.rigHistory.add(c.rig, CREDITS_NOTE_DISMISSED_STEP, true, provider);
-  store.auditLog.add(by, "credits_note_dismissed", {
+): Promise<void> {
+  await store.rigHistory.add(c.rig, CREDITS_NOTE_DISMISSED_STEP, true, provider);
+  await store.auditLog.add(by, "credits_note_dismissed", {
     provider,
     rig: c.rig,
     reported_at: c.at,

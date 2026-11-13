@@ -20,7 +20,7 @@ const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
 
 test("without --yes it prints what it would reach, and withdraws nothing", async () => {
   const { env, a, b, d } = await twoChampions();
-  const stack = controlStack({ env });
+  const stack = await controlStack({ env });
   await stack.relay();
   const server = serve({ fetch: stack.control.fetch, port: 0 });
   await new Promise<void>((resolve) => server.once("listening", () => resolve()));
@@ -69,9 +69,9 @@ test("without --yes it prints what it would reach, and withdraws nothing", async
   assert.doesNotMatch(out.stdout, /Withdrawn: invalidation/);
 
   // Only the preview was sent.
-  const sent = stack.store.commands
-    .latest("rig-a", "invalidate_evidence")
-    .map((c) => c.payload as { preview?: boolean; reach?: string });
+  const sent = (await stack.store.commands.latest("rig-a", "invalidate_evidence")).map(
+    (c) => c.payload as { preview?: boolean; reach?: string },
+  );
   assert.deepEqual(
     sent.map((p) => [p.preview, p.reach]),
     [[true, undefined]],
@@ -86,7 +86,7 @@ test("without --yes it prints what it would reach, and withdraws nothing", async
   assert.equal(ledger.latestEventBody("invalidation", a.attempt), undefined);
   // Nor on control.
   await stack.relay();
-  const run = rigView(stack.store, "rig-a")?.runs.find((r) => r.id === RUN);
+  const run = (await rigView(stack.store, "rig-a"))?.runs.find((r) => r.id === RUN);
   assert.ok(run, "control has the run");
   assert.deepEqual(run.invalidations, []);
 });

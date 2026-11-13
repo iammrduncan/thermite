@@ -11,8 +11,8 @@ import { controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
 
 describe("a runner's key on the bus (goal 206)", () => {
   const RIG_B_TOKEN = "rig-b-token-abcdef";
-  const setup = () => {
-    const s = controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN, "rig-b": RIG_B_TOKEN } } });
+  const setup = async () => {
+    const s = await controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN, "rig-b": RIG_B_TOKEN } } });
     const register = (runner: string, key: string, token = RIG_TOKEN, rig = "rig-a") =>
       s.control.request(`/v1/rigs/${rig}/runners/${runner}/supervisor`, {
         method: "POST",
@@ -23,21 +23,22 @@ describe("a runner's key on the bus (goal 206)", () => {
   };
 
   test("is kept by rig and runner, in the rig's history by its fingerprint, and again changes nothing", async () => {
-    const s = setup();
+    const s = await setup();
     const key = createUser().getPublicKey();
     assert.equal((await s.register("spark-02", key)).status, 200);
-    assert.equal(s.store.busKeys.runnerKey("rig-a", "spark-02"), key);
-    assert.deepEqual(s.store.busKeys.runnerKeys(), [{ rig: "rig-a", runner: "spark-02", key }]);
+    assert.equal(await s.store.busKeys.runnerKey("rig-a", "spark-02"), key);
+    assert.deepEqual(await s.store.busKeys.runnerKeys(), [
+      { rig: "rig-a", runner: "spark-02", key },
+    ]);
     assert.equal((await s.register("spark-02", key)).status, 200);
-    const steps = s.store.rigHistory
-      .list("rig-a")
+    const steps = (await s.store.rigHistory.list("rig-a"))
       .filter((h) => h.step === "runner_bus_key")
       .map((h) => h.detail);
     assert.deepEqual(steps, [`spark-02: ${userKeyFingerprint(key)}`]);
   });
 
   test("a key another holds, a bad key or name, or another rig's token is refused", async () => {
-    const s = setup();
+    const s = await setup();
     const key = createUser().getPublicKey();
     assert.equal((await s.register("spark-02", key)).status, 200);
     // The same key for another runner, or the rig's own key, is held already.
@@ -47,6 +48,6 @@ describe("a runner's key on the bus (goal 206)", () => {
     // Rig b's token is not rig a's.
     const other = await s.register("spark-05", createUser().getPublicKey(), RIG_B_TOKEN);
     assert.equal(other.status, 401);
-    assert.equal(s.store.busKeys.runnerKey("rig-a", "spark-05"), undefined);
+    assert.equal(await s.store.busKeys.runnerKey("rig-a", "spark-05"), undefined);
   });
 });

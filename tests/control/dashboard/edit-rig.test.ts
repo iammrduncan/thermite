@@ -63,22 +63,22 @@ describe("control dashboard", () => {
       decodeURIComponent(String(saved.headers.get("location"))),
       /a model for the planner/,
     );
-    assert.deepEqual(s.store.agentModels.byRole("rig-a").planner, {
+    assert.deepEqual((await s.store.agentModels.byRole("rig-a")).planner, {
       provider: "claude-max",
       model: "opus-5.5",
       effort: "xhigh",
       harness: "claude-code",
     });
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.effort, "medium");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.effort, "medium");
     // A harness set over MCP or REST (goal 073) stays when Edit rig changes only the row's
     // effort, and the row's Runs in says where the agent runs.
-    s.store.agentModels.assignRole("rig-a", "teachers", {
+    await s.store.agentModels.assignRole("rig-a", "teachers", {
       provider: "keyed",
       model: "claude-test",
       harness: "opencode",
     });
     await s.post("/ui/rigs/rig-a/edit", { ...form, effort_teachers: "high" });
-    assert.deepEqual(s.store.agentModels.byRole("rig-a").teachers, {
+    assert.deepEqual((await s.store.agentModels.byRole("rig-a")).teachers, {
       provider: "keyed",
       model: "claude-test",
       effort: "high",
@@ -98,7 +98,7 @@ describe("control dashboard", () => {
       decodeURIComponent(String(noCodex.headers.get("location"))),
       /error=Workers: Codex runs only with a ChatGPT subscription or an OpenAI-compatible provider: choose Pi or OpenCode v2 for this provider\./,
     );
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "pi");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "pi");
     const mr = (await s.rigConfig("model-route")) as unknown as {
       route: { type: string; reasoning: string | null };
       planner: { type: string; harness: string; effort: string; api_key: string };
@@ -125,24 +125,24 @@ describe("control dashboard", () => {
       [["claude-test", "high"]],
     );
     assert.deepEqual(
-      [s.store.agentModels.byRole("rig-a").second_teacher, adv.merged_by, adv.review_panel],
+      [(await s.store.agentModels.byRole("rig-a")).second_teacher, adv.merged_by, adv.review_panel],
       [undefined, null, null],
     );
     // Its empty choice clears the teachers; a form without a line's field keeps that line's model.
     await s.post("/ui/rigs/rig-a/edit", { ...form, role_teachers: "", effort_teachers: "" });
     assert.deepEqual(
       [
-        s.store.agentModels.byRole("rig-a").teachers,
-        s.store.agentModels.byRole("rig-a").second_teacher,
+        (await s.store.agentModels.byRole("rig-a")).teachers,
+        (await s.store.agentModels.byRole("rig-a")).second_teacher,
       ],
       [undefined, undefined],
     );
-    assert.equal(s.store.agentModels.byRole("rig-a").planner?.model, "opus-5.5");
+    assert.equal((await s.store.agentModels.byRole("rig-a")).planner?.model, "opus-5.5");
     // A role set back to "same as the workers" loses its own model.
     await s.post("/ui/rigs/rig-a/edit", { ...form, role_auditor: "", effort_auditor: "" });
-    assert.equal(s.store.agentModels.byRole("rig-a").auditor, undefined);
+    assert.equal((await s.store.agentModels.byRole("rig-a")).auditor, undefined);
     // A provider some role uses can't be deleted, and Providers says which rig uses it.
-    assert.equal(s.store.modelProviders.delete("claude-max"), "in_use");
+    assert.equal(await s.store.modelProviders.delete("claude-max"), "in_use");
     const providersPage = await (await s.get("/ui/settings")).text();
     const claudeRow = providersPage.slice(providersPage.indexOf('data-k="provider-claude-max"'));
     assert.match(claudeRow.slice(0, claudeRow.indexOf("</summary>")), /used by rig-a/);
@@ -188,11 +188,14 @@ describe("control dashboard", () => {
       decodeURIComponent(String(r.headers.get("location"))),
       /Control sent \d settings to rig-a/,
     );
-    const cmd = s.store.commands.list(5).find((c) => c.kind === "rig_settings");
+    const cmd = (await s.store.commands.list(5)).find((c) => c.kind === "rig_settings");
     assert.ok(cmd);
-    assert.equal(s.store.commands.latest("rig-a", "rig_settings", 1)[0]?.payload.quiet_minutes, 30);
     assert.equal(
-      s.store.commands.latest("rig-a", "rig_settings", 1)[0]?.payload.program_mode,
+      (await s.store.commands.latest("rig-a", "rig_settings", 1))[0]?.payload.quiet_minutes,
+      30,
+    );
+    assert.equal(
+      (await s.store.commands.latest("rig-a", "rig_settings", 1))[0]?.payload.program_mode,
       "headless",
     );
     await s.relay();
@@ -233,7 +236,9 @@ describe("control dashboard", () => {
       /with 4 GPUs the judge takes 1 to 3 of them/,
     );
     await s.post("/ui/rigs/rig-a/edit", { ...form, judge_gpus: "3" });
-    const cmd = s.store.commands.pending("rig-a").find((c) => c.envelope.kind === "rig_settings");
+    const cmd = (await s.store.commands.pending("rig-a")).find(
+      (c) => c.envelope.kind === "rig_settings",
+    );
     assert.equal((cmd?.envelope.payload as { judge_gpus?: number } | undefined)?.judge_gpus, 3);
   });
 });

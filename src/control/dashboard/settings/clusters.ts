@@ -10,7 +10,8 @@ export function clusterRoutes(app: Hono, dash: Dashboard): void {
   // ---------------------------------------------------------------- clusters (Providers)
   app.post("/ui/settings/clusters/:name/check", async (c) => {
     const name = c.req.param("name");
-    if (!store.clusters.get(name)) return c.redirect(machineUrl("error", "No such cluster."), 303);
+    if (!(await store.clusters.get(name)))
+      return c.redirect(machineUrl("error", "No such cluster."), 303);
     const why = await checkClusterNow(parts, name);
     return c.redirect(
       why
@@ -36,12 +37,12 @@ export function clusterRoutes(app: Hono, dash: Dashboard): void {
       303,
     );
   });
-  app.post("/ui/settings/clusters/:name/delete", (c) => {
+  app.post("/ui/settings/clusters/:name/delete", async (c) => {
     const name = c.req.param("name");
-    if (store.clusters.rigs(name).some((r) => r.status !== "removed"))
+    if ((await store.clusters.rigs(name)).some((r) => r.status !== "removed"))
       return c.redirect(machineUrl("error", `"${name}" still runs rigs: remove them first.`), 303);
     return c.redirect(
-      store.clusters.delete(name, "owner:ui")
+      (await store.clusters.delete(name, "owner:ui"))
         ? machineUrl("ok", `"${name}" is deleted: control keeps nothing of its kubeconfig.`)
         : machineUrl("error", "No such cluster."),
       303,

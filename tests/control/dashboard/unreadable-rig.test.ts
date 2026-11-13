@@ -11,7 +11,7 @@ import { goalEvents, report } from "../../helpers/view-events.ts";
  */
 test("a rig whose events can't be read shows why on its row and its page; every other page and rig shows as before", async () => {
   const store = controlStore();
-  const { control } = controlOnly({ store, tokens: { rigs: {} } });
+  const { control } = await controlOnly({ store, tokens: { rigs: {} } });
   await report(store, "rig-a", "ledger-a", goalEvents("g-a").slice(0, 4));
   await report(store, "rig-b", "ledger-b", goalEvents("g-b").slice(0, 4));
   await applied(store);

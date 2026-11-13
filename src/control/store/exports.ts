@@ -39,7 +39,36 @@ function rigExportOf(r: Row): RigExport {
   };
 }
 
-export class RigExports extends StorePart {
+export interface RigExports {
+  /**
+   * Starts an export a rig sends (or finds the one it started): "created", "same" when one by
+   * that name has this manifest and these files, "different" when it has others.
+   */
+  begin(
+    rig: string,
+    name: string,
+    e: {
+      manifest: unknown;
+      files: Record<string, { size: number; sha256: string }>;
+      full: boolean;
+      fromEvent: number;
+      throughEvent: number;
+    },
+  ): Promise<"created" | "same" | "different">;
+  /** One export a rig sent to control, with which files arrived. */
+  get(rig: string, name: string): Promise<RigExport | undefined>;
+  /** The exports a rig sent to control, newest first. */
+  ofRig(rig: string, limit?: number): Promise<RigExport[]>;
+  /** The exports every rig sent to control, newest first (the Exports page, goal 103). */
+  all(limit?: number): Promise<RigExport[]>;
+  /** Forgets an export (control/exports.ts deletes its files first): whether there was one. */
+  remove(rig: string, name: string): Promise<boolean>;
+  /** A file of an export arrived with its SHA-256; the export is complete with its last file. */
+  fileDone(rig: string, name: string, path: string): Promise<{ complete: boolean }>;
+}
+
+/** RigExports on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigExports extends StorePart {
   /**
    * Starts an export a rig sends (or finds the one it started): "created", "same" when one by
    * that name has this manifest and these files, "different" when it has others.

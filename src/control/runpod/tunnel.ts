@@ -201,17 +201,17 @@ export class ControlTunnels {
    * settings, given to the pod at enrollment. Refused, in words, when control has no authority for
    * its bus.
    */
-  mint(o: {
+  async mint(o: {
     by: string;
     rig?: string | undefined;
     port?: number | undefined;
     codeTtlMs?: number | undefined;
     config?: PodConfig["env"] | undefined;
-  }): MintedRig {
-    const taken = (r: string) =>
-      Boolean(this.store.tunnels.get(r)) ||
-      this.store.enrollments.knownRig(r) ||
-      this.store.reportedRigs.list({ withRetired: true }).some((u) => u.id === r);
+  }): Promise<MintedRig> {
+    const taken = async (r: string) =>
+      Boolean(await this.store.tunnels.get(r)) ||
+      (await this.store.enrollments.knownRig(r)) ||
+      (await this.store.reportedRigs.list({ withRetired: true })).some((u) => u.id === r);
     if (!this.busCa)
       throw new Error(
         "control has no authority for its message bus, so a pod could not join the bus through its leaf node, and a rig works only on the bus",
@@ -219,10 +219,10 @@ export class ControlTunnels {
     let rig = o.rig;
     if (rig !== undefined) {
       if (!RIG_ID.test(rig)) throw new Error(RIG_ID_WORDS);
-      if (taken(rig)) throw new Error(`rig ${rig} exists already`);
+      if (await taken(rig)) throw new Error(`rig ${rig} exists already`);
     } else {
       do rig = `rp-${randomBytes(4).toString("hex")}`;
-      while (taken(rig));
+      while (await taken(rig));
     }
     const port = o.port ?? TUNNEL_PORT;
     if (!Number.isInteger(port) || port < 1 || port > 65535)
@@ -235,7 +235,7 @@ export class ControlTunnels {
     const until =
       o.codeTtlMs !== undefined ? new Date(this.now() + o.codeTtlMs).toISOString() : null;
     const leaf = mintLeaf(rig, this.busCa, new Date(this.now()));
-    this.store.tunnels.add({
+    await this.store.tunnels.add({
       rig,
       port,
       prefix_sealed: this.secrets.seal(prefix),
@@ -269,13 +269,13 @@ export class ControlTunnels {
    * Names the pod a minted rig runs in, once RunPod made it: control connects to it at `url`
    * (RunPod's proxy address for the pod's port, when none is given). Refused once enrolled.
    */
-  attach(rig: string, pod: string, url?: string): void {
-    const t = this.store.tunnels.get(rig);
+  async attach(rig: string, pod: string, url?: string): Promise<void> {
+    const t = await this.store.tunnels.get(rig);
     if (!t) throw new Error(`no rig ${rig} in pull mode`);
     if (!/^[A-Za-z0-9-]{1,64}$/.test(pod)) throw new Error(`${pod} is not a pod's ID`);
     const at = (url ?? podPortUrl(pod, t.port)).replace(/\/$/, "");
     if (!/^https?:\/\/[^\s/]+$/.test(at)) throw new Error(`${at} is not a pod's address`);
-    if (!this.store.tunnels.attachPod(rig, pod, at))
+    if (!(await this.store.tunnels.attachPod(rig, pod, at)))
       throw new Error(`rig ${rig} is enrolled already: its pod can't change`);
     this.retry.delete(rig);
   }
@@ -318,14 +318,14 @@ export class ControlTunnels {
    * happened, in words; errors are kept on the rig's record and in control's log.
    */
   async step(rig: string, waitMs = 0): Promise<string> {
-    const t = this.store.tunnels.get(rig);
+    const t = await this.store.tunnels.get(rig);
     if (!t) return `no rig ${rig} in pull mode`;
     if (!t.pod || !t.url) return "its pod is not launched yet";
     const at = { rig, pod: t.pod, url: t.url };
     const prefix = this.secrets.open(t.prefix_sealed);
-    const fail = (why: string) => {
+    const fail = async (why: string) => {
       const error = redact(why);
-      this.store.tunnels.exchanged(rig, { error });
+      await this.store.tunnels.exchanged(rig, { error });
       log("control", "pull mode", { rig, error });
       const failures = (this.retry.get(rig)?.failures ?? 0) + 1;
       this.retry.set(rig, {
@@ -337,7 +337,9 @@ export class ControlTunnels {
     try {
       if (!t.enrolled_at) {
         if (t.code_expires_at && Date.parse(t.code_expires_at) < this.now())
-          return fail("its enrollment code expired before the pod enrolled. Launch it again.");
+          return await fail(
+            "its enrollment code expired before the pod enrolled. Launch it again.",
+          );
         const code = this.secrets.open(t.code_sealed);
         const nonce = newNonce();
         const r = await this.post(
@@ -353,7 +355,7 @@ export class ControlTunnels {
           nonce,
         );
         if (r.status !== 200)
-          return fail(
+          return await fail(
             // RunPod's proxy answers an empty 404 when nothing listens on the pod's port, the same
             // answer a pod gives a request it refuses: the first is the likelier one, so it comes first.
             r.status === 404 && r.body.length === 0
@@ -361,16 +363,17 @@ export class ControlTunnels {
               : `the pod did not enroll (answer ${r.status}). A pod refuses a wrong or expired code, a second enrollment, and a clock more than ${TUNNEL_SKEW_MS / 1000} s from control's.`,
           );
         const keys = EnrollAnswer.safeParse(JSON.parse(r.body.toString("utf8")));
-        if (!keys.success) return fail("the pod's enrollment answer is not valid: not enrolled");
+        if (!keys.success)
+          return await fail("the pod's enrollment answer is not valid: not enrolled");
         const { sign, box, proof } = keys.data;
         if (!sameHex(proof, enrollmentProof(code, sign, box)))
-          return fail("the pod's keys are not bound to its launch code: not enrolled");
+          return await fail("the pod's keys are not bound to its launch code: not enrolled");
         if (!verifyAnswer(r.nonce, 200, r.body, r.signature, sign))
-          return fail("the pod's enrollment answer is not signed by its key: not enrolled");
+          return await fail("the pod's enrollment answer is not signed by its key: not enrolled");
         if (createPublicKey(box).asymmetricKeyType !== "x25519")
-          return fail("the pod's sealing key is not an X25519 key: not enrolled");
-        if (!this.store.tunnels.pin(rig, sign, box))
-          return fail("it was enrolled already: a second enrollment is refused");
+          return await fail("the pod's sealing key is not an X25519 key: not enrolled");
+        if (!(await this.store.tunnels.pin(rig, sign, box)))
+          return await fail("it was enrolled already: a second enrollment is refused");
         this.retry.delete(rig);
         return "enrolled";
       }
@@ -405,7 +408,7 @@ export class ControlTunnels {
         !verifyAnswer(r.nonce, 200, r.body, r.signature, t.pod_sign_public as string)
       ) {
         back();
-        return fail(`the pod's answer did not verify (status ${r.status}): dropped`);
+        return await fail(`the pod's answer did not verify (status ${r.status}): dropped`);
       }
       let msg: ExchangeOut;
       try {
@@ -414,7 +417,7 @@ export class ControlTunnels {
         );
       } catch {
         back();
-        return fail("the pod's answer could not be opened or read: dropped");
+        return await fail("the pod's answer could not be opened or read: dropped");
       }
       // Delivered: those calls are answered at the pod and won't come again.
       const taken = this.taken.get(rig) ?? new Set<string>();
@@ -456,11 +459,11 @@ export class ControlTunnels {
         }),
       );
       this.pending.set(rig, [...(this.pending.get(rig) ?? []), ...done.flat()]);
-      this.store.tunnels.exchanged(rig, { refused: msg.refused, error: null });
+      await this.store.tunnels.exchanged(rig, { refused: msg.refused, error: null });
       this.retry.delete(rig);
       return `exchanged: ${answers.length} answer(s) delivered, ${calls.length} call(s) collected`;
     } catch (err) {
-      return fail(errorText(err));
+      return await fail(errorText(err));
     }
   }
 
@@ -471,8 +474,8 @@ export class ControlTunnels {
    */
   async advance(waitMs = 20_000): Promise<void> {
     await Promise.all(
-      this.store.tunnels.list().map(async (t) => {
-        if (!t.pod || this.running.has(t.rig) || this.store.retired.get(t.rig)) return;
+      (await this.store.tunnels.list()).map(async (t) => {
+        if (!t.pod || this.running.has(t.rig) || (await this.store.retired.get(t.rig))) return;
         if ((this.retry.get(t.rig)?.at ?? 0) > this.now()) return;
         this.running.add(t.rig);
         try {

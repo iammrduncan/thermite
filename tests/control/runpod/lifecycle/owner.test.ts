@@ -12,7 +12,7 @@ import { json, setup, TOKENS, text, working } from "./setup.ts";
 
 describe("RunPod rigs' lifecycle: the owner's alone", () => {
   test("REST: any other token gets 401 and changes nothing", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await working(s);
     for (const token of [TOKENS.operator, TOKENS.agent, TOKENS.read])
       for (const [path, body] of [
@@ -24,7 +24,7 @@ describe("RunPod rigs' lifecycle: the owner's alone", () => {
       ] as const)
         assert.equal((await s.call(path, body, token)).status, 401, `${path} ${token}`);
     assert.deepEqual(s.cloud.actions(), []);
-    assert.deepEqual(pendingOf(s.store, rig), []);
+    assert.deepEqual(await pendingOf(s.store, rig), []);
     assert.equal((await s.call("/v1/rigs/nope/runpod/stop", {})).status, 404);
     // The owner reads the rig's history with it.
     const one = await json<{ history: { step: string; words: string }[] }>(
@@ -43,7 +43,7 @@ describe("RunPod rigs' lifecycle: the owner's alone", () => {
   });
 
   test("MCP: runpod_rig for the owner only; rig_setup shows the history", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await working(s);
     for (const token of [TOKENS.operator, TOKENS.read, TOKENS.agent]) {
       const tools = (await (await mcpClient(s.api, token)).listTools()).tools.map((t) => t.name);
@@ -73,7 +73,7 @@ describe("RunPod rigs' lifecycle: the owner's alone", () => {
     );
 
     // A full reset over MCP: started, then confirmed, by the owner.
-    const t = setup();
+    const t = await setup();
     const other = await working(t);
     const o = await mcpClient(t.api, TOKENS.admin);
     const noConfirm = await o.callTool({
@@ -101,6 +101,6 @@ describe("RunPod rigs' lifecycle: the owner's alone", () => {
       ),
     ) as { reset: { state: string } };
     assert.equal(cancelled.reset.state, "cancelled");
-    assert.deepEqual(t.steps(other).at(-1), ["reset_cancelled", true]);
+    assert.deepEqual((await t.steps(other)).at(-1), ["reset_cancelled", true]);
   });
 });

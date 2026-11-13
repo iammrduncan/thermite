@@ -62,7 +62,7 @@ const DEFAULTS = {
  * GPU set, and rig-old, whose older harness reports no settings.
  */
 async function stack() {
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000 },
   });
@@ -92,9 +92,8 @@ async function stack() {
   const owner = call(TOKENS.admin);
   const set = (body: unknown, rig = "rig-a") => owner("POST", body, rig);
   /** The rig_settings commands waiting for a rig, oldest first. */
-  const sent = (rig = "rig-a") =>
-    store.commands
-      .pending(rig)
+  const sent = async (rig = "rig-a") =>
+    (await store.commands.pending(rig))
       .filter((c) => c.envelope.kind === "rig_settings")
       .map((c) => ({ payload: c.envelope.payload, by: c.envelope.issued_by, id: c.envelope.id }));
   return { store, api, call, owner, set, sent, report };
@@ -228,7 +227,7 @@ describe("Edit rig's settings over REST and MCP", () => {
         },
         field,
       );
-      const last = s.sent().at(-1);
+      const last = (await s.sent()).at(-1);
       assert.deepEqual(last?.payload, { [field]: value }, field);
       assert.equal(last?.by, "owner:api");
       assert.equal(last?.id, r.body.id);
@@ -256,7 +255,7 @@ describe("Edit rig's settings over REST and MCP", () => {
 
   test("REST: nothing differing sends nothing", async () => {
     const s = await stack();
-    const before = s.store.commands.list(100).length;
+    const before = (await s.store.commands.list(100)).length;
     for (const body of [
       {},
       { ...DEFAULTS, judge_gpus: 2 },
@@ -272,7 +271,7 @@ describe("Edit rig's settings over REST and MCP", () => {
         said: "Nothing changed.",
       });
     }
-    assert.equal(s.store.commands.list(100).length, before, "no command");
+    assert.equal((await s.store.commands.list(100)).length, before, "no command");
   });
 
   test("REST: every refusal in words, in the audit log, and nothing sent", async () => {
@@ -332,18 +331,18 @@ describe("Edit rig's settings over REST and MCP", () => {
       assert.match(String(r.body.error), /^bad request: /);
     }
     // A rig control refuses for its version gets no command.
-    s.store.refusals.set("rig-b", "Its protocol is older than control's oldest.");
+    await s.store.refusals.set("rig-b", "Its protocol is older than control's oldest.");
     assert.deepEqual(await s.set({ lanes: 2 }, "rig-b"), {
       status: 409,
       body: {
         error: "Control sends no commands to rig-b. Its protocol is older than control's oldest.",
       },
     });
-    assert.deepEqual(s.sent(), [], "a refusal sends nothing");
-    assert.deepEqual(s.sent("rig-b"), []);
-    const refused = s.store.auditLog
-      .page(100, { action: "refused" })
-      .entries.filter((e) => JSON.stringify(e.body).includes("/settings"));
+    assert.deepEqual(await s.sent(), [], "a refusal sends nothing");
+    assert.deepEqual(await s.sent("rig-b"), []);
+    const refused = (await s.store.auditLog.page(100, { action: "refused" })).entries.filter((e) =>
+      JSON.stringify(e.body).includes("/settings"),
+    );
     assert.ok(refused.length >= cases.length + 8);
     assert.ok(refused.every((e) => e.actor === "owner:api"));
     // The owner's token only, as every REST route.
@@ -385,7 +384,11 @@ describe("Edit rig's settings over REST and MCP", () => {
       assert.deepEqual(r.sent, { [field]: value }, field);
       assert.equal(r.restarts, field === "judge_gpus");
       assert.match(String(r.said), /^Control sent 1 setting to rig-a\./);
-      assert.deepEqual(s.sent().at(-1), { payload: { [field]: value }, by: "owner:mcp", id: r.id });
+      assert.deepEqual((await s.sent()).at(-1), {
+        payload: { [field]: value },
+        by: "owner:mcp",
+        id: r.id,
+      });
     }
     assert.deepEqual(text(await call({ lanes: 1, judge_gpus: 2 })), {
       rig: "rig-a",
@@ -410,7 +413,7 @@ describe("Edit rig's settings over REST and MCP", () => {
       ],
       [{ lanes: 17 }, "Not saved: lanes: at most 16: a rig has users for lanes 1 to 16 only"],
     ];
-    const before = s.sent().length;
+    const before = (await s.sent()).length;
     for (const [args, error] of errors) {
       const r = await call(args);
       assert.ok(isError(r), error);
@@ -423,8 +426,8 @@ describe("Edit rig's settings over REST and MCP", () => {
     const wrong = await call({ judge: "yes" });
     assert.ok(isError(wrong));
     assert.match(JSON.stringify(wrong), /Input validation error/);
-    assert.equal(s.sent().length, before, "a refusal sends nothing");
-    const audit = s.store.auditLog.page(200, { mcp: true }).entries;
+    assert.equal((await s.sent()).length, before, "a refusal sends nothing");
+    const audit = (await s.store.auditLog.page(200, { mcp: true })).entries;
     assert.ok(audit.some((e) => e.action === "mcp:set_rig_settings"));
     assert.ok(
       audit.some(
@@ -469,8 +472,8 @@ describe("Edit rig's settings over REST and MCP", () => {
       await call(operator, { planner: false, lanes: 3, trial_minutes: 30, max_turns: 80 }),
     );
     assert.deepEqual(parts.sent, { planner: false, lanes: 3, trial_minutes: 30, max_turns: 80 });
-    assert.equal(s.sent().at(-1)?.by, "owner:operator");
-    const before = s.sent().length;
+    assert.equal((await s.sent()).at(-1)?.by, "owner:operator");
+    const before = (await s.sent()).length;
     // The promotion rule and the GPU split are the owner's.
     for (const [args, error] of [
       [
@@ -494,7 +497,7 @@ describe("Edit rig's settings over REST and MCP", () => {
       assert.ok(isError(r));
       assert.deepEqual(text(r), { error });
     }
-    assert.equal(s.sent().length, before, "nothing sent");
+    assert.equal((await s.sent()).length, before, "nothing sent");
     // The same rule and split as the rig has are no change, so an operator may send them back.
     const same = text(await call(operator, { ...DEFAULTS, judge_gpus: 2, workers: false }));
     assert.deepEqual(same.sent, { workers: false });
@@ -522,7 +525,7 @@ describe("Edit rig's settings over REST and MCP", () => {
   });
 
   test("the rig's harness takes the change: an operator's lanes and the owner's promotion rule, then reports them", async () => {
-    const { env, store, control, relay, api } = controlStack({
+    const { env, store, control, relay, api } = await controlStack({
       env: makeJudgeEnv({ promotion: "owner_approval" }),
       tokens: { operator: TOKENS.operator },
     });
@@ -543,7 +546,7 @@ describe("Edit rig's settings over REST and MCP", () => {
     // Its next trials run their program headless, not in its own terminal (goal 169).
     assert.equal(env.service.settings.get().program_mode, "headless");
     assert.equal(
-      store.commands.list(10).find((c) => c.id === r.id)?.status,
+      (await store.commands.list(10)).find((c) => c.id === r.id)?.status,
       "delivered",
       "applied",
     );

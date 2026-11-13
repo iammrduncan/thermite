@@ -6,7 +6,7 @@ export async function stack(
   promotion: "auto" | "owner_approval" = "owner_approval",
   opts: { providerFetch?: typeof fetch; agents?: false } = {},
 ) {
-  const { env, store, control, relay, live, cfg, rigConfig } = controlStack({
+  const { env, store, control, relay, live, cfg, rigConfig } = await controlStack({
     env: makeJudgeEnv({ promotion, ...(opts.agents === false ? { agents: false } : {}) }),
     options: { providerFetch: opts.providerFetch },
   });

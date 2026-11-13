@@ -192,7 +192,7 @@ export async function purgeEventDays(
       kept.days.drop(p.filter, p.before);
       removed.push(...p.days);
       for (const f of floors)
-        store.retention.raiseFloor(f.rig, f.ledger, f.event.id, p.before, now);
+        await store.retention.raiseFloor(f.rig, f.ledger, f.event.id, p.before, now);
       log("control", "a retention policy purged control's copy of events", {
         filter: p.filter,
         before: p.before,

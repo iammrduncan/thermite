@@ -38,7 +38,7 @@ describe("champion patches reach control", () => {
     const queue = championsIn(join(root, "outbox"), ["e-1", "missing"]);
     assert.deepEqual(queue, [{ run: "r-1", seq: 2, path: "champions/r-1/2.patch" }]);
 
-    const { store, control } = controlStack();
+    const { store, control } = await controlStack();
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = new URL(String(input));
       return control.request(`${url.pathname}${url.search}`, init as RequestInit);
@@ -119,7 +119,7 @@ describe("champion patches reach control", () => {
   test("a project in a folder: the patch applies to that folder of the repository's commit, and says how", async () => {
     const patch = Buffer.from("diff --git a/src/kernel/matmul.c b/src/kernel/matmul.c\n+faster\n");
     const sha256 = createHash("sha256").update(patch).digest("hex");
-    const { store, control } = controlStack();
+    const { store, control } = await controlStack();
     const folder = "examples/matmul-cpu/project";
     const at = new Date().toISOString();
     await ingestReport(store, {

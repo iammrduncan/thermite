@@ -42,7 +42,7 @@ export type ProposeOutcome =
 type Value = Record<string, string> | KbWrites | undefined;
 
 /** Checks or saves a setting through its own function, which refuses what it would refuse. */
-function setField(
+async function setField(
   store: ControlStore,
   campaign: string,
   field: (typeof CONTRACT_FIELDS)[number],
@@ -51,13 +51,18 @@ function setField(
   check: boolean,
 ) {
   return field === "role_additions"
-    ? setCampaignAdditions(
+    ? await setCampaignAdditions(
         store,
         { campaign, additions: value as Record<string, string> | undefined },
         by,
         check,
       )
-    : setCampaignKbWrites(store, { campaign, kb_writes: value as KbWrites | undefined }, by, check);
+    : await setCampaignKbWrites(
+        store,
+        { campaign, kb_writes: value as KbWrites | undefined },
+        by,
+        check,
+      );
 }
 
 /**
@@ -65,16 +70,16 @@ function setField(
  * same words as the owner's change would be, and nothing kept when the newest version says it
  * already. A newer proposal of the same setting replaces one still waiting.
  */
-export function proposeSetting(
+export async function proposeSetting(
   store: ControlStore,
   req:
     | { campaign: string; field: "role_additions" | "kb_writes"; value: Value }
     | { campaign: string; field: "kb_grant"; value: string },
   by: string,
-): ProposeOutcome {
+): Promise<ProposeOutcome> {
   if (req.field === "kb_grant") return proposeGrant(store, req.campaign, req.value, by);
   const { campaign, field } = req;
-  const checked = setField(store, campaign, field, req.value, by, true);
+  const checked = await setField(store, campaign, field, req.value, by, true);
   if (checked.state === "refused") return checked;
   const what = PROPOSED_WORDS[field];
   if (checked.state === "unchanged")
@@ -84,8 +89,8 @@ export function proposeSetting(
       field,
       said: `Version ${checked.version} of ${campaign} has these ${what} already: nothing to propose.`,
     };
-  const id = store.proposals.propose({ campaign, field, value: req.value, by });
-  store.auditLog.add(by, "campaign_setting_proposed", { campaign, field, proposal: id });
+  const id = await store.proposals.propose({ campaign, field, value: req.value, by });
+  await store.auditLog.add(by, "campaign_setting_proposed", { campaign, field, proposal: id });
   return {
     state: "proposed",
     id,
@@ -99,21 +104,21 @@ export function proposeSetting(
  * An operator's grant, kept as a proposal for the owner. The caller checks both campaigns as the
  * owner's grant does; one the campaign has already is nothing to propose.
  */
-function proposeGrant(
+async function proposeGrant(
   store: ControlStore,
   campaign: string,
   reads: string,
   by: string,
-): ProposeOutcome {
-  if (store.kb().reads(campaign).includes(reads))
+): Promise<ProposeOutcome> {
+  if ((await store.kb().reads(campaign)).includes(reads))
     return {
       state: "unchanged",
       campaign,
       field: "kb_grant",
       said: `${campaign} reads ${reads}'s collection already: nothing to propose.`,
     };
-  const id = store.proposals.propose({ campaign, field: "kb_grant", value: reads, by });
-  store.auditLog.add(by, "campaign_setting_proposed", {
+  const id = await store.proposals.propose({ campaign, field: "kb_grant", value: reads, by });
+  await store.auditLog.add(by, "campaign_setting_proposed", {
     campaign,
     field: "kb_grant",
     reads,
@@ -137,20 +142,30 @@ export type DecideOutcome =
  * The owner's decision on a proposal. Approved: saved as the owner's own change would be, a new
  * version of the contract, which the audit log ties to the proposal (a grant: granted, as the
  * owner's); refused in words when it can no longer be saved, and it waits on. Declined: nothing
- * changes.
+ * changes. The proposal is read and decided in one transaction: one the operator replaced between
+ * the read and the decision is not approved.
  */
-export function decideProposal(
+export async function decideProposal(
   store: ControlStore,
   id: number,
   approve: boolean,
   by: string,
-): DecideOutcome {
-  const p = store.proposals.get(id);
+): Promise<DecideOutcome> {
+  return store.tx(() => decideNow(store, id, approve, by));
+}
+
+async function decideNow(
+  store: ControlStore,
+  id: number,
+  approve: boolean,
+  by: string,
+): Promise<DecideOutcome> {
+  const p = await store.proposals.get(id);
   if (!p || p.decision !== null)
     return { state: "refused", error: "That proposal no longer waits for you.", status: 404 };
   if (!approve) {
-    store.proposals.decide(id, "declined", by);
-    store.auditLog.add(by, "campaign_setting_declined", {
+    await store.proposals.decide(id, "declined", by);
+    await store.auditLog.add(by, "campaign_setting_declined", {
       campaign: p.campaign,
       field: p.field,
       proposal: id,
@@ -163,10 +178,10 @@ export function decideProposal(
   }
   if (p.field === "kb_grant") {
     const reads = String(p.value);
-    const granted = store.kb().grant(p.campaign, reads, by);
-    store.proposals.decide(id, "approved", by);
-    if (granted) store.auditLog.add(by, "kb_grant", { campaign: p.campaign, reads });
-    store.auditLog.add(by, "campaign_setting_approved", {
+    const granted = await store.kb().grant(p.campaign, reads, by);
+    await store.proposals.decide(id, "approved", by);
+    if (granted) await store.auditLog.add(by, "kb_grant", { campaign: p.campaign, reads });
+    await store.auditLog.add(by, "campaign_setting_approved", {
       campaign: p.campaign,
       field: p.field,
       proposal: id,
@@ -177,10 +192,17 @@ export function decideProposal(
       said: `Approved: every agent of ${p.campaign} may now search and read ${reads}'s collection, read only, as ${p.proposed_by} proposed. It joins the search of its runs at work at once, and runs started from now may search it.`,
     };
   }
-  const saved = setField(store, p.campaign, p.field, (p.value ?? undefined) as Value, by, false);
+  const saved = await setField(
+    store,
+    p.campaign,
+    p.field,
+    (p.value ?? undefined) as Value,
+    by,
+    false,
+  );
   if (saved.state === "refused") return saved;
-  store.proposals.decide(id, "approved", by);
-  store.auditLog.add(by, "campaign_setting_approved", {
+  await store.proposals.decide(id, "approved", by);
+  await store.auditLog.add(by, "campaign_setting_approved", {
     campaign: p.campaign,
     field: p.field,
     proposal: id,
@@ -194,12 +216,12 @@ export function decideProposal(
 }
 
 /** What a proposal would change, in plain words: the setting now, and as proposed. */
-export function proposalChange(
+export async function proposalChange(
   store: ControlStore,
   p: CampaignProposal,
-): { now: string; proposed: string } {
+): Promise<{ now: string; proposed: string }> {
   if (p.field === "kb_grant") {
-    const reads = store.kb().reads(p.campaign);
+    const reads = await store.kb().reads(p.campaign);
     const words = (r: string[]) =>
       r.length ? `its own and ${r.join(", ")}` : "its own collection only";
     return { now: words(reads), proposed: words([...new Set([...reads, String(p.value)])]) };
@@ -211,7 +233,7 @@ export function proposalChange(
         .map(([role, t]) => `${role}: ${t.trim()}`)
         .join("\n\n") || "none";
     return {
-      now: words(contractAdditions(campaignContract(store, p.campaign))),
+      now: words(contractAdditions(await campaignContract(store, p.campaign))),
       proposed: words((p.value ?? undefined) as Record<string, string> | undefined),
     };
   }
@@ -221,7 +243,7 @@ export function proposalChange(
       .map(([role, kinds]) => `${role}: ${(kinds ?? []).join(", ")}`)
       .join("; ") || "no role writes";
   return {
-    now: words(campaignKbWrites(store, p.campaign)),
+    now: words(await campaignKbWrites(store, p.campaign)),
     proposed: p.value === null ? "the default" : words(p.value as KbWrites),
   };
 }
@@ -233,13 +255,13 @@ export function proposalChange(
  * saved or approved; for a campaign control knows only by an assignment, from those of its last
  * one. With neither, the contract may set neither. The owner's token is not held to it.
  */
-export function savedSettingsRefusal(store: ControlStore, payload: unknown): string {
+export async function savedSettingsRefusal(store: ControlStore, payload: unknown): Promise<string> {
   const contract = (payload as { contract?: { campaign?: unknown; version?: unknown } } | null)
     ?.contract;
   const campaign = typeof contract?.campaign === "string" ? contract.campaign : "";
-  const versions = campaign ? store.campaigns.versions(campaign) : [];
+  const versions = campaign ? await store.campaigns.versions(campaign) : [];
   const saved = versions.find((v) => v.version === contract?.version) ?? versions[0];
-  const known = saved?.contract ?? (campaign ? campaignContract(store, campaign) : undefined);
+  const known = saved?.contract ?? (campaign ? await campaignContract(store, campaign) : undefined);
   const differ = CONTRACT_FIELDS.filter((field) =>
     field === "role_additions"
       ? !sameAdditions(contractAdditions(contract), contractAdditions(known))

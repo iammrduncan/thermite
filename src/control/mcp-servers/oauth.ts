@@ -56,7 +56,7 @@ export class OAuthSignIns {
    * code; finishSignIn exchanges it. The state and the PKCE verifier are kept for 15 minutes.
    */
   async startSignIn(name: string, redirectUri: string, by: string): Promise<{ url: string }> {
-    const r = this.table.row(name);
+    const r = await this.table.row(name);
     if (!r) throw new Error("Settings has no server of that name.");
     if (str(r.auth) !== "oauth") throw new Error(`${name} does not sign in with OAuth.`);
     const info = await discoverOAuthServerInfo(str(r.url), { fetchFn: this.fetchImpl }).catch(
@@ -116,8 +116,8 @@ export class OAuthSignIns {
       },
     );
     const now = Date.now();
-    this.table.rows.dropEndedSignIns(new Date(now).toISOString());
-    this.table.rows.addSignIn({
+    await this.table.rows.dropEndedSignIns(new Date(now).toISOString());
+    await this.table.rows.addSignIn({
       stateHash: sha256Hex(state),
       name,
       verifierSealed: this.table.secrets.seal(
@@ -132,18 +132,18 @@ export class OAuthSignIns {
       expiresAt: new Date(now + SIGN_IN_MS).toISOString(),
       by,
     });
-    this.store.auditLog.add(by, "mcp_server_sign_in_started", { name });
+    await this.store.auditLog.add(by, "mcp_server_sign_in_started", { name });
     return { url: authorizationUrl.href };
   }
 
   /** The browser came back without a code (the owner said no): the sign-in is forgotten. */
-  cancelSignIn(state: string, why: string): string | undefined {
+  async cancelSignIn(state: string, why: string): Promise<string | undefined> {
     const h = sha256Hex(state);
-    const s = this.table.rows.signInName(h);
+    const s = await this.table.rows.signInName(h);
     if (!s) return undefined;
-    this.table.rows.deleteSignIn(h);
-    const r = this.table.row(str(s.name));
-    if (r && !r.login_sealed) this.table.setState(str(s.name), "needs_sign_in", why);
+    await this.table.rows.deleteSignIn(h);
+    const r = await this.table.row(str(s.name));
+    if (r && !r.login_sealed) await this.table.setState(str(s.name), "needs_sign_in", why);
     return str(s.name);
   }
 
@@ -153,13 +153,13 @@ export class OAuthSignIns {
    */
   async finishSignIn(state: string, code: string): Promise<SignInDone> {
     const h = sha256Hex(state);
-    const s = this.table.rows.signIn(h);
+    const s = await this.table.rows.signIn(h);
     if (!s) return { error: "This sign-in is not known, or was used already. Start it again." };
-    this.table.rows.deleteSignIn(h);
+    await this.table.rows.deleteSignIn(h);
     const name = str(s.name);
     if (Date.parse(str(s.expires_at)) < Date.now())
       return { name, error: "This sign-in took more than 15 minutes. Start it again." };
-    const r = this.table.row(name);
+    const r = await this.table.row(name);
     if (!r || str(r.auth) !== "oauth") return { name, error: "The server is gone from Settings." };
     let pending: {
       verifier: string;
@@ -189,7 +189,7 @@ export class OAuthSignIns {
         ...(pending.resource ? { resource: new URL(pending.resource) } : {}),
         fetchFn: this.fetchImpl,
       });
-      this.table.saveLogin(name, {
+      await this.table.saveLogin(name, {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined,
@@ -199,14 +199,14 @@ export class OAuthSignIns {
       });
     } catch (err) {
       const why = cleanMcpError(err, [code]);
-      this.table.setState(name, "needs_sign_in", `The sign-in failed: ${why}`);
+      await this.table.setState(name, "needs_sign_in", `The sign-in failed: ${why}`);
       return { name, error: `The server did not take the sign-in: ${why}` };
     }
-    this.table.setState(name, "unchecked", null);
-    this.store.auditLog.add(str(s.started_by), "mcp_server_signed_in", { name });
+    await this.table.setState(name, "unchecked", null);
+    await this.store.auditLog.add(str(s.started_by), "mcp_server_signed_in", { name });
     const why = await this.servers.check(name);
     return why
       ? { name, error: `Signed in, but ${why}` }
-      : { name, tools: this.servers.get(name)?.tools?.length ?? 0 };
+      : { name, tools: (await this.servers.get(name))?.tools?.length ?? 0 };
   }
 }

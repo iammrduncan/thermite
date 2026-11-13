@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import { RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { rigsListBody } from "../../../src/control/ui/rigs/list.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
@@ -31,7 +32,7 @@ async function rigsStack() {
   const store = controlStore();
   const secrets = SecretBox.ephemeral();
   const keys = generateSigningKeys();
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(FAKE_RUNPOD_KEY),
@@ -51,7 +52,7 @@ async function rigsStack() {
     now,
     privateKeyPem: keys.privateKeyPem,
   });
-  const { control } = controlOnly({
+  const { control } = await controlOnly({
     store,
     keys,
     tokens: { rigs: {} },
@@ -100,14 +101,14 @@ async function rigsStack() {
       { kind: "attempt_recorded", subject: `a-${run}`, body: { run, lifecycle: "measured" } },
     ]);
   const lastSeen = (rig: string, ms: number) =>
-    store.db
-      .prepare("update rig set last_seen = ? where id = ?")
+    sqliteBehind(store)
+      .db.prepare("update rig set last_seen = ? where id = ?")
       .run(new Date(Date.now() - ms).toISOString(), rig);
-  const builds = (rig: string, b: typeof OLD) => {
-    store.builds.setRig(rig, "harness", b);
-    store.builds.setRig(rig, "supervisor", b);
+  const builds = async (rig: string, b: typeof OLD) => {
+    await store.builds.setRig(rig, "harness", b);
+    await store.builds.setRig(rig, "supervisor", b);
   };
-  store.machines.add({
+  await store.machines.add({
     name: "gpu-host-1",
     address: "gpu-host-1.example.com",
     port: 22,
@@ -119,7 +120,7 @@ async function rigsStack() {
     by: "owner:ui",
   });
   for (const rig of ["gpu-1", "gpu-2", "cpu-1", "cpu-2"]) {
-    store.machines.addRig({
+    await store.machines.addRig({
       rig,
       machine: "gpu-host-1",
       gpus: [],
@@ -130,27 +131,27 @@ async function rigsStack() {
       root: false,
       created_by: "owner:ui",
     });
-    store.machines.setRigStatus(rig, "running");
+    await store.machines.setRigStatus(rig, "running");
   }
   // Live, as control.
   await running("gpu-1", "q4-gemv-3");
-  builds("gpu-1", CONTROL);
+  await builds("gpu-1", CONTROL);
   // Live, behind control.
   await running("gpu-2", "dec-2", "goal");
-  builds("gpu-2", OLD);
+  await builds("gpu-2", OLD);
   // Refused for an older version, two days after the last report control took.
   await running("cpu-1", "rl-2", "research");
-  store.refusals.set(
+  await store.refusals.set(
     "cpu-1",
     "Control cannot work with this rig: its harness speaks protocol 0, older than the oldest control works with (1). Update the rig's images.",
   );
   lastSeen("cpu-1", 2 * 24 * 60 * MIN);
   // Stale: no report for 6 minutes.
   await running("cpu-2", "rl-3", "research");
-  builds("cpu-2", CONTROL);
+  await builds("cpu-2", CONTROL);
   lastSeen("cpu-2", 6 * MIN);
   // Offline, on a cluster: no report for 3 h 12 min.
-  store.clusters.add({
+  await store.clusters.add({
     name: "cluster-1",
     kubeconfig_sealed: secrets.seal("apiVersion: v1\nkind: Config\n"),
     context: "c",
@@ -159,7 +160,7 @@ async function rigsStack() {
     slots: [],
     by: "owner:ui",
   });
-  store.clusters.addRig({
+  await store.clusters.addRig({
     rig: "wc-1",
     cluster: "cluster-1",
     namespace: "thermite-wc-1",
@@ -175,13 +176,13 @@ async function rigsStack() {
     },
     created_by: "owner:ui",
   });
-  store.clusters.setRigStatus("wc-1", "running");
+  await store.clusters.setRigStatus("wc-1", "running");
   await running("wc-1", "q4-gemv-2");
-  builds("wc-1", CONTROL);
+  await builds("wc-1", CONTROL);
   lastSeen("wc-1", (3 * 60 + 12) * MIN);
   // Refused because it is newer than control: control needs the update.
   await report("new-1");
-  store.refusals.set(
+  await store.refusals.set(
     "new-1",
     "Control cannot work with this rig: it speaks protocol 9, newer than control's (1). Update control.",
   );
@@ -190,23 +191,23 @@ async function rigsStack() {
   const idle = await pods.launch("runpod", { gpu: "RTX A4000", idle_stop_minutes: 30 }, "owner:ui");
   clock += 30_000;
   await pods.advance();
-  for (const v of [live, idle]) assert.ok(store.tunnels.pin(v.rig, "sign", "box"));
+  for (const v of [live, idle]) assert.ok(await store.tunnels.pin(v.rig, "sign", "box"));
   await running(live.rig, "q4-gemv-4");
   await report(live.rig, [
     { kind: "trial_started", subject: "q4-gemv-4", body: { lane: "lane-1", trial: "t-1" } },
   ]);
-  builds(live.rig, CONTROL);
+  await builds(live.rig, CONTROL);
   await report(idle.rig);
-  builds(idle.rig, CONTROL);
+  await builds(idle.rig, CONTROL);
   clock += 40 * MIN;
   await pods.advance();
-  harnessApplies(store, idle.rig, exportName(1));
-  supervisorReports(store, idle.rig);
-  exportOnControl(store, idle.rig, exportName(1));
+  await harnessApplies(store, idle.rig, exportName(1));
+  await supervisorReports(store, idle.rig);
+  await exportOnControl(store, idle.rig, exportName(1));
   clock += 30_000;
   await pods.advance();
-  assert.equal(pods.view(idle.rig)?.stopped_by, "idle_stop");
-  assert.equal(pods.view(live.rig)?.status, "RUNNING");
+  assert.equal((await pods.view(idle.rig))?.stopped_by, "idle_stop");
+  assert.equal((await pods.view(live.rig))?.status, "RUNNING");
   const fresh = await pods.launch("runpod", { gpu: "RTX A4000" }, "owner:ui");
   return { store, get, live: live.rig, idle: idle.rig, fresh: fresh.rig };
 }
@@ -401,7 +402,7 @@ describe("the Rigs list", () => {
     assert.match(list, /<span class="summary">1 rig · 0 runs at work<\/span>/);
     assert.doesNotMatch(list, /Per hour|Launch on RunPod/);
     assert.match(list, /Set up by you/);
-    const { control: empty } = controlOnly({ tokens: { rigs: {} } });
+    const { control: empty } = await controlOnly({ tokens: { rigs: {} } });
     assert.match(await (await signIn(empty)).page("/ui/rigs"), /No rig has reported yet\./);
   });
 });

@@ -158,7 +158,37 @@ function removalOf(r: Row): RetentionRemovalRow {
   };
 }
 
-export class RetentionPolicies extends StorePart {
+export interface RetentionPolicies {
+  /** Every policy, oldest first. */
+  list(): Promise<RetentionPolicy[]>;
+  get(id: number): Promise<RetentionPolicy | undefined>;
+  /** A new policy, on or off as asked; its id. */
+  add(spec: RetentionSpec, on: boolean, by: string, now?: string): Promise<number>;
+  /** A policy's new design; on or off as asked. Its last run stays. */
+  update(id: number, spec: RetentionSpec, on: boolean, by: string, now?: string): Promise<void>;
+  /** Turns a policy on (from now: a due time before it does not run it) or off. */
+  setOn(id: number, on: boolean, by: string, now?: string): Promise<void>;
+  /** The due time a policy ran for, kept before it runs, so a restart never runs it twice. */
+  setLastDue(id: number, at: string): Promise<void>;
+  remove(id: number): Promise<boolean>;
+  /** A removal, as control or a rig made it; its id. */
+  addRemoval(r: Omit<RetentionRemovalRow, "id">): Promise<number>;
+  /** The newest removals, newest first; of one policy when it is named. */
+  removals(limit: number, policy?: number): Promise<RetentionRemovalRow[]>;
+  /** Raises a rig ledger's floor to an event removed on purpose; it never goes down. */
+  raiseFloor(rig: string, ledger: string, event: number, before: number, at: string): Promise<void>;
+  /** A rig ledger's floor's last event; 0 when no event of it was removed. */
+  floor(rig: string, ledger: string): Promise<number>;
+  /** A rig's floors, by ledger. */
+  floors(rig: string): Promise<EventFloor[]>;
+  /** What a rig last said it keeps of the kinds a policy may remove there. */
+  takeSpace(rig: string, space: RigSpace, now?: string): Promise<void>;
+  /** Each rig's last word on its space, by rig; a row this build can't read is left out. */
+  spaces(): Promise<Map<string, RigSpace & { received_at: string }>>;
+}
+
+/** RetentionPolicies on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRetentionPolicies extends StorePart {
   /** Every policy, oldest first. */
   list(): RetentionPolicy[] {
     return (this.db.prepare("select * from retention_policy order by id").all() as Row[]).map(

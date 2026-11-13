@@ -18,7 +18,7 @@ const READER = "read-token-abcdef";
 async function control() {
   const dir = mkdtempSync(join(tmpdir(), "thermite-kb-files-"));
   let files: KbFiles | undefined;
-  const made = controlOnly({
+  const made = await controlOnly({
     tokens: { read: READER, rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" } },
     options: (store) => {
       files = new KbFiles(dir, store);

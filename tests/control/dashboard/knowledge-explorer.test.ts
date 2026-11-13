@@ -17,13 +17,13 @@ const READER = "read-token-abcdef";
 
 /** Control with the places of kb-places.ts; rig-a reports gs-1 at work. Signed in. */
 async function stack(o: { notes?: number } = {}) {
-  const { store, control, api } = controlOnly({
+  const { store, control, api } = await controlOnly({
     tokens: { operator: OPERATOR, agent: AGENT, read: READER },
     options: { staleAfterMs: 600_000 },
   });
-  fillKnowledge(store);
+  await fillKnowledge(store);
   for (let i = 0; i < (o.notes ?? 0); i++)
-    store.kb().index(KB_RIG, {
+    await store.kb().index(KB_RIG, {
       at: new Date(Date.parse("2026-10-30T12:00:00Z") + i * 1000).toISOString(),
       actor: "harness",
       kind: "journal_note",
@@ -179,7 +179,7 @@ describe("the knowledge explorer", () => {
 
   test("an item whose id holds slashes, such as a lane's document, has its page at its address", async () => {
     const s = await stack();
-    s.store.kb().index(KB_RIG, {
+    await s.store.kb().index(KB_RIG, {
       at: "2026-10-30T13:00:00.000Z",
       actor: "harness",
       kind: "research_doc",

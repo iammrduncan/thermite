@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { PROBE_CMD, PROBE_JS } from "../../../src/control/runpod/probe.ts";
 import { findings, RunpodTests } from "../../../src/control/runpod/tests.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { openControlStore } from "../../../src/control/store/index.ts";
 import { controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 
 const KEY = "rpa_test-key-0123456789abcdef";
@@ -132,10 +132,10 @@ function fakeCloud(o: { refuseStart?: boolean; noCapacity?: boolean } = {}) {
   return { f, calls, pods };
 }
 
-function setup(o: Parameters<typeof fakeCloud>[0] = {}) {
-  const store = new ControlStore(":memory:");
+async function setup(o: Parameters<typeof fakeCloud>[0] = {}) {
+  const store = openControlStore(":memory:");
   const secrets = SecretBox.ephemeral();
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(KEY),
@@ -145,8 +145,8 @@ function setup(o: Parameters<typeof fakeCloud>[0] = {}) {
   const cloud = fakeCloud(o);
   let clock = Date.parse("2026-10-19T05:00:00Z");
   const tests = new RunpodTests(store, secrets, { fetch: cloud.f, image: IMAGE, now: () => clock });
-  const until = async (id: string, done: () => boolean) => {
-    for (let i = 0; i < 20 && !done(); i++) {
+  const until = async (id: string, done: () => boolean | Promise<boolean>) => {
+    for (let i = 0; i < 20 && !(await done()); i++) {
       clock += 60_000;
       await tests.advance();
     }
@@ -157,7 +157,7 @@ function setup(o: Parameters<typeof fakeCloud>[0] = {}) {
 
 describe("RunPod test pods", () => {
   test("the cheapest GPU in stock, the probe's report read twice around a stop and a start, the pod removed, the cost and the findings in words", async () => {
-    const s = setup();
+    const s = await setup();
     const started = await s.tests.start("runpod", {}, "owner:ui");
     assert.equal(started.gpu_name, "RTX A4000", "the cheapest in stock (the cheaper one has none)");
     const create = s.cloud.calls.find((c) => c.method === "POST" && c.at.endsWith("/v2/pods"));
@@ -179,7 +179,7 @@ describe("RunPod test pods", () => {
     assert.equal(started.token, "", "the report's secret path is never shown");
     await assert.rejects(s.tests.start("runpod", {}, "owner:ui"), /still running/);
 
-    const done = await s.until(started.id, () => !s.tests.view(started.id)?.active);
+    const done = await s.until(started.id, async () => !(await s.tests.view(started.id))?.active);
     assert.equal(done?.phase, "done");
     assert.equal(done?.outcome, "passed", JSON.stringify(done?.findings));
     const actions = s.cloud.calls
@@ -206,28 +206,28 @@ describe("RunPod test pods", () => {
       assert.ok(done?.findings.includes(f), `${f}\n${JSON.stringify(done?.findings, null, 1)}`);
     assert.ok((done?.cost_usd ?? 0) > 0, "billed while it ran");
     assert.ok(done?.report_after_restart, "the second report is kept");
-    const audit = s.store.auditLog.list(20).map((a) => a.action);
+    const audit = (await s.store.auditLog.list(20)).map((a) => a.action);
     assert.ok(audit.includes("runpod_test_started") && audit.includes("runpod_test_done"));
   });
 
   test("every other ending removes the pod too: a refused restart, the owner's limit, ending it by hand; no capacity starts nothing", async () => {
-    const refused = setup({ refuseStart: true });
+    const refused = await setup({ refuseStart: true });
     const a = await refused.tests.start("runpod", {}, "operator:mcp");
-    const ra = await refused.until(a.id, () => !refused.tests.view(a.id)?.active);
+    const ra = await refused.until(a.id, async () => !(await refused.tests.view(a.id))?.active);
     assert.match(ra?.notes.join(" ") ?? "", /RunPod would not start the pod again: .*no GPU free/);
     assert.equal(ra?.outcome, "failed");
     assert.equal(refused.cloud.pods.size, 0);
 
-    const limited = setup();
+    const limited = await setup();
     const b = await limited.tests.start("runpod", { stop_after_minutes: 5, restart: false }, "o");
     limited.tick(6 * 60_000);
     await limited.tests.advance();
-    const rb = limited.tests.view(b.id);
+    const rb = await limited.tests.view(b.id);
     assert.equal(rb?.phase, "done");
     assert.match(rb?.notes.join(" ") ?? "", /Ended at the 5-minute limit you set/);
     assert.equal(limited.cloud.pods.size, 0);
 
-    const byHand = setup();
+    const byHand = await setup();
     const c = await byHand.tests.start("runpod", { cloud_type: "COMMUNITY" }, "o");
     assert.equal(c.price_per_hr, 0.17, "Community's price, while the new pod shows none yet");
     const rc = await byHand.tests.end(c.id, "owner:ui");
@@ -235,27 +235,30 @@ describe("RunPod test pods", () => {
     assert.equal(rc.outcome, "ended");
     assert.equal(byHand.cloud.pods.size, 0);
 
-    const full = setup({ noCapacity: true });
+    const full = await setup({ noCapacity: true });
     await assert.rejects(
       full.tests.start("runpod", {}, "o"),
       /RunPod answered 400 for POST \/v2\/pods \(Bad Request: no capacity for that GPU\)/,
     );
-    assert.equal(full.store.runpod.tests().length, 0);
-    await assert.rejects(setup().tests.start("runpod", { gpu: "B200" }, "o"), /no GPU type "B200"/);
+    assert.equal((await full.store.runpod.tests()).length, 0);
+    await assert.rejects(
+      (await setup()).tests.start("runpod", { gpu: "B200" }, "o"),
+      /no GPU type "B200"/,
+    );
   });
 
   test("an operator starts, follows and ends one over MCP; a reader only follows; the dashboard shows it", async () => {
     const cloud = fakeCloud();
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
-    store.gpuClouds.add({
+    await store.gpuClouds.add({
       name: "runpod",
       kind: "runpod",
       key_sealed: secrets.seal(KEY),
       key_hint: "…cdef",
       by: "owner:ui",
     });
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       store,
       tokens: {
         operator: "operator-token-abcdef",

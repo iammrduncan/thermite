@@ -101,7 +101,113 @@ function commandRowOf(r: Row): CommandRow {
   };
 }
 
-export class IssuedCommands extends StorePart {
+export interface IssuedCommands {
+  enqueue(signed: SignedCommand): Promise<void>;
+  /** The rigs with a pending command. */
+  rigsWithPending(): Promise<string[]>;
+  /** A rig's pending commands, oldest first. Expired ones are marked expired, not relayed. */
+  pending(rig: string): Promise<SignedCommand[]>;
+  /**
+   * A harness's own record of a command it applied, from the rig's report: the only outcome
+   * control takes (signed with the rig's key).
+   */
+  confirmApplied(
+    rig: string,
+    id: string,
+    status: "delivered" | "failed",
+    outcome: string,
+    at: string,
+  ): Promise<void>;
+  /**
+   * A command the rig's harness refused (its command_rejected event names it): its signature, its
+   * rig, its time or its payload. Only a command still pending: one the harness recorded an
+   * outcome for keeps it.
+   */
+  confirmRejected(rig: string, id: string, outcome: string, at: string): Promise<void>;
+  /** A pending command signed again with a later expiry, while its sources still stage. */
+  renew(id: string, signed: string): Promise<void>;
+  /** The owner withdraws a command that has not been delivered. */
+  cancel(id: string, actor: string): Promise<boolean>;
+  /**
+   * The Git accesses the rig's live assignments name in an import: the only ones control gives the
+   * rig, and only while they last. Live: pending or delivered, and its run not among the rig's
+   * `closed` runs. Sorted, each once.
+   */
+  gitAccessesOf(rig: string, closed: ReadonlySet<string>): Promise<string[]>;
+  /**
+   * The runs of a campaign that control has sent a rig to start or resume, and that the rig has
+   * not taken yet: its pending assign_campaign commands, and pending resume_run commands of its
+   * runs. Expired ones are left out. An assignment the rig took in the last ten minutes, whose run
+   * it has not reported yet, waits too.
+   */
+  pendingStarts(campaign: string): Promise<{ rig: string; run: string; kind: string }[]>;
+  /**
+   * The newest assignment control signed for each campaign, on any rig: what a new run of a
+   * campaign assigned over the API, MCP or the CLI starts from. Failed and expired ones are left
+   * out.
+   */
+  latestAssignments(): Promise<
+    Map<
+      string,
+      { id: string; rig: string; run: string; payload: Record<string, unknown>; issued_at: string }
+    >
+  >;
+  /**
+   * The newest owner message (message_agent) control sent to one run, and the rig's answer: refused
+   * (with why), or not.
+   */
+  lastMessageToRun(
+    rig: string,
+    run: string,
+    to?: string,
+  ): Promise<{ refused: string | null; issued_at: string } | undefined>;
+  list(limit?: number): Promise<
+    {
+      id: string;
+      rig: string;
+      kind: string;
+      issued_by: string;
+      issued_at: string;
+      status: string;
+      acked_at: string | null;
+      outcome: unknown;
+    }[]
+  >;
+  /**
+   * The owner's decisions sent to rigs (promote, decline, accept a review, conclude), newest
+   * first, with what each rig answered: so a decision shows as sent the moment it is made, not
+   * only once the rig's next report arrives.
+   */
+  decisions(limit?: number): Promise<Decision[]>;
+  get(id: string): Promise<{ status: string; outcome: unknown } | undefined>;
+  /**
+   * Whether the rig never took a command: it refused it, or its signature ran out first. One the
+   * owner withdrew counts as taken: it is not sent again.
+   */
+  notTaken(id: string | undefined): Promise<boolean>;
+  /**
+   * One command as the dashboard follows it (goal 080): its state, the rig's answer, its payload
+   * and when its signature runs out. A pending command past that time is one the rig never took.
+   */
+  row(id: string): Promise<CommandRow | undefined>;
+  /** A rig's newest commands of one kind, newest first (a check's row follows its newest one). */
+  latest(rig: string, kind: string, limit?: number): Promise<CommandRow[]>;
+  /**
+   * The MCP servers each live run control assigned a rig names (its own signed commands, never the
+   * rig's reports), by run. Live: its assignment pending or delivered, and the run not among the
+   * rig's `closed` runs.
+   */
+  assignedMcpServers(rig: string, closed: ReadonlySet<string>): Promise<Map<string, McpUse[]>>;
+  /**
+   * What the campaign lets each role write in the knowledge base for a run control assigned this
+   * rig (goal 175): its newest signed assignment's contract's `kb_writes`, or the default when it
+   * sets none. Undefined for a run control did not assign the rig.
+   */
+  assignedKbWrites(rig: string, run: string): Promise<KbWrites | undefined>;
+}
+
+/** IssuedCommands on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteIssuedCommands extends StorePart {
   enqueue(signed: SignedCommand): void {
     const e = signed.envelope;
     const { run, campaign } = namedIn(e.payload);

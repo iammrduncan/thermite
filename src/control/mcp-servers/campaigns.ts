@@ -11,9 +11,12 @@ import type { ControlStore } from "../store/index.ts";
  * Why an assignment naming these servers can't start, in words, or "" when every server it names
  * is in Settings. A server that fails later never stops a run: only a missing one stops the start.
  */
-export function mcpRefusal(store: ControlStore, uses: readonly McpUse[] | undefined): string {
+export async function mcpRefusal(
+  store: ControlStore,
+  uses: readonly McpUse[] | undefined,
+): Promise<string> {
   if (!uses?.length) return "";
-  const have = store.mcpServers.names();
+  const have = await store.mcpServers.names();
   const missing = uses.map((u) => u.name).filter((n) => !have.has(n));
   if (!missing.length) return "";
   const list = missing.join(", ");
@@ -34,8 +37,11 @@ export const RESEARCH_AGENT_KINDS: readonly AgentKind[] = ["workers", "advisors"
  * lacks, a tool its server does not list (or a server whose tools control has not read yet), or a
  * kind of agent a research run doesn't have. Copy a campaign (goal 069) checks a new list with it.
  */
-export function researchMcpRefusal(store: ControlStore, uses: readonly McpUse[]): string {
-  const servers = store.mcpServers.toolNames();
+export async function researchMcpRefusal(
+  store: ControlStore,
+  uses: readonly McpUse[],
+): Promise<string> {
+  const servers = await store.mcpServers.toolNames();
   for (const u of uses) {
     if (!servers.has(u.name))
       return `Settings has no MCP server named ${u.name}. Add it in Settings › MCP servers, or take it out of mcp_servers.`;
@@ -60,8 +66,11 @@ export function researchMcpRefusal(store: ControlStore, uses: readonly McpUse[])
  * The servers a campaign names, from its newest version saved on control (its kit's list, or a
  * research contract's), else its newest assignment. Undefined: control does not know the campaign.
  */
-export function campaignMcpServers(store: ControlStore, campaign: string): McpUse[] | undefined {
-  const v = store.campaigns.versions(campaign)[0];
+export async function campaignMcpServers(
+  store: ControlStore,
+  campaign: string,
+): Promise<McpUse[] | undefined> {
+  const v = (await store.campaigns.versions(campaign))[0];
   if (v) {
     const contract = v.contract as { mode?: string; mcp_servers?: unknown };
     // A copy of a campaign known only by an assignment keeps that assignment's (goal 069).
@@ -71,22 +80,26 @@ export function campaignMcpServers(store: ControlStore, campaign: string): McpUs
         : (v.sources.mcp_servers ?? v.sources.assignment?.mcp_servers);
     return McpUses.safeParse(raw ?? []).data ?? [];
   }
-  const past = store.commands.latestAssignments().get(campaign);
+  const past = (await store.commands.latestAssignments()).get(campaign);
   if (!past) return undefined;
   return McpUses.safeParse(past.payload.mcp_servers ?? []).data ?? [];
 }
 
 /** What names a server: each campaign whose newest version or assignment names it, with its kit. */
-export function namedBy(store: ControlStore, name: string): { campaign: string; kit: string }[] {
+export async function namedBy(
+  store: ControlStore,
+  name: string,
+): Promise<{ campaign: string; kit: string }[]> {
   const campaigns = new Set([
-    ...store.campaigns.versions().map((v) => v.campaign),
-    ...store.commands.latestAssignments().keys(),
+    ...(await store.campaigns.versions()).map((v) => v.campaign),
+    ...(await store.commands.latestAssignments()).keys(),
   ]);
   const out: { campaign: string; kit: string }[] = [];
   for (const c of [...campaigns].sort()) {
-    if (!campaignMcpServers(store, c)?.some((u) => u.name === name)) continue;
-    const v = store.campaigns.versions(c)[0];
-    const contract = (v?.contract ?? store.commands.latestAssignments().get(c)?.payload.contract) as
+    if (!(await campaignMcpServers(store, c))?.some((u) => u.name === name)) continue;
+    const v = (await store.campaigns.versions(c))[0];
+    const contract = (v?.contract ??
+      (await store.commands.latestAssignments()).get(c)?.payload.contract) as
       | { project?: { kit?: { repo?: string } } }
       | undefined;
     out.push({ campaign: c, kit: contract?.project?.kit?.repo ?? c });

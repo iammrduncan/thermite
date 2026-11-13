@@ -33,7 +33,7 @@ function store() {
     });
   const run = async () => {
     await applied(s);
-    const v = rigView(s, "rig-a", { staleAfterMs: 180_000 });
+    const v = await rigView(s, "rig-a", { staleAfterMs: 180_000 });
     return v?.runs.find((r) => r.id === "s-1");
   };
   return { s, ingest, run };
@@ -105,7 +105,7 @@ describe("a research run's answer cards on control (goal 117)", () => {
         problems: ["the number 9 is not in the claims it cites", "gap 1 has no words"],
       },
     ]);
-    const v = rigView(c.s, "rig-a", { staleAfterMs: 180_000 });
+    const v = await rigView(c.s, "rig-a", { staleAfterMs: 180_000 });
     assert.ok(v);
     const words = (await foldedEvents(c.s, "rig-a", "ledger-a"))
       .map((e) => (v ? sentence(v, e)?.text : undefined))

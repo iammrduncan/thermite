@@ -17,18 +17,18 @@ export function rigWeeklyRoutes(app: Hono, dash: Dashboard): void {
   const back = (rig: string, k: "ok" | "error", m: string) =>
     `${rigHref(rig)}?${k}=${encodeURIComponent(m)}`;
   /** The rig's weekly limit now, or the words that say nothing waits for one. */
-  const limitOf = (rig: string) => {
-    const u = views().find((x) => x.id === rig);
-    return u ? weeklyLimit(store, u) : undefined;
+  const limitOf = async (rig: string) => {
+    const u = (await views()).find((x) => x.id === rig);
+    return u ? await weeklyLimit(store, u) : undefined;
   };
   const NONE = "Its subscription's weekly limit no longer holds its runs: nothing waits for it.";
 
   app.post("/ui/rigs/:rig/weekly-limit/wait", async (c) => {
     const rig = c.req.param("rig");
-    const w = limitOf(rig);
+    const w = await limitOf(rig);
     if (!w) return c.redirect(back(rig, "error", NONE), 303);
-    store.rigHistory.add(rig, WEEKLY_WAIT_STEP, true, w.until);
-    store.auditLog.add("owner:ui", "weekly_limit_wait", { rig, until: w.until });
+    await store.rigHistory.add(rig, WEEKLY_WAIT_STEP, true, w.until);
+    await store.auditLog.add("owner:ui", "weekly_limit_wait", { rig, until: w.until });
     return c.redirect(
       back(
         rig,
@@ -42,7 +42,7 @@ export function rigWeeklyRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/rigs/:rig/weekly-limit/model", async (c) => {
     const rig = c.req.param("rig");
     const f = await c.req.parseBody();
-    const w = limitOf(rig);
+    const w = await limitOf(rig);
     if (!w) return c.redirect(back(rig, "error", NONE), 303);
     const [provider = "", model = ""] = String(f.model ?? "")
       .split("|")
@@ -54,14 +54,14 @@ export function rigWeeklyRoutes(app: Hono, dash: Dashboard): void {
     if ("error" in out) return c.redirect(back(rig, "error", out.error), 303);
     // Its runs stop waiting for the reset: their new trials take the new model.
     for (const r of w.runs)
-      issueCommand(store, opts.privateKeyPem, {
+      await issueCommand(store, opts.privateKeyPem, {
         rig,
         kind: "end_wait",
         payload: { run: r.run },
         issuedBy: "owner:ui",
       });
-    store.rigHistory.add(rig, WEEKLY_MODEL_STEP, true, `${provider} · ${model}`);
-    store.auditLog.add("owner:ui", "weekly_limit_model", {
+    await store.rigHistory.add(rig, WEEKLY_MODEL_STEP, true, `${provider} · ${model}`);
+    await store.auditLog.add("owner:ui", "weekly_limit_model", {
       rig,
       provider,
       model,

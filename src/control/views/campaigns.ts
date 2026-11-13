@@ -55,29 +55,30 @@ export function campaignViews(vs: RigView[]): CampaignView[] {
  * Whether control knows a campaign of this name, as campaignModes would list it, read without any
  * rig's view: a run a rig created under it, a saved version, an assignment or a collection.
  */
-export function campaignKnown(store: ControlStore, name: string): boolean {
+export async function campaignKnown(store: ControlStore, name: string): Promise<boolean> {
   return (
-    store.runRegistry.ofCampaign(name).length > 0 ||
-    store.campaigns.versions().some((v) => v.campaign === name) ||
-    [...store.commands.latestAssignments()].some(([campaign]) => campaign === name) ||
-    store
-      .kb()
-      .collections()
-      .some((f) => f.campaign === name)
+    (await store.runRegistry.ofCampaign(name)).length > 0 ||
+    (await store.campaigns.versions()).some((v) => v.campaign === name) ||
+    [...(await store.commands.latestAssignments())].some(([campaign]) => campaign === name) ||
+    (await store.kb().collections()).some((f) => f.campaign === name)
   );
 }
 
-export function campaignModes(store: ControlStore, vs: RigView[]): Map<string, string | null> {
+export async function campaignModes(
+  store: ControlStore,
+  vs: RigView[],
+): Promise<Map<string, string | null>> {
   const out = new Map<string, string | null>();
   const modeOf = (contract: unknown) => {
     const m = (contract as { mode?: unknown } | undefined)?.mode;
     return typeof m === "string" ? m : null;
   };
   for (const k of campaignViews(vs)) out.set(k.name, k.mode);
-  for (const v of store.campaigns.versions())
+  for (const v of await store.campaigns.versions())
     if (!out.get(v.campaign)) out.set(v.campaign, modeOf(v.contract));
-  for (const [name, a] of store.commands.latestAssignments())
+  for (const [name, a] of await store.commands.latestAssignments())
     if (!out.get(name)) out.set(name, modeOf(a.payload.contract));
-  for (const f of store.kb().collections()) if (!out.has(f.campaign)) out.set(f.campaign, null);
+  for (const f of await store.kb().collections())
+    if (!out.has(f.campaign)) out.set(f.campaign, null);
   return out;
 }

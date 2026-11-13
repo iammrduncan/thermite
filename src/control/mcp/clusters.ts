@@ -252,7 +252,7 @@ export function registerReachableAddresses(tools: ToolContext): void {
         "The owner's list in Settings › Addresses rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.",
       inputSchema: {},
     },
-    audited("reachable_addresses", () => ({ addresses: store.reachable.list() })),
+    audited("reachable_addresses", async () => ({ addresses: await store.reachable.list() })),
   );
   if (role !== "owner") return;
   server.registerTool(
@@ -272,10 +272,10 @@ export function registerReachableAddresses(tools: ToolContext): void {
           .max(REACH_MAX_ENTRIES),
       },
     },
-    audited("set_reachable_addresses", (a: { addresses: unknown[] }) => {
-      const r = setReachableAddresses(opts.parts, a.addresses, actor);
+    audited("set_reachable_addresses", async (a: { addresses: unknown[] }) => {
+      const r = await setReachableAddresses(opts.parts, a.addresses, actor);
       if ("error" in r) throw new Error(r.error);
-      return { addresses: store.reachable.list(), said: r.ok };
+      return { addresses: await store.reachable.list(), said: r.ok };
     }),
   );
 }

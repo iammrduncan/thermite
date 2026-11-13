@@ -22,12 +22,15 @@ const TOKENS = {
 };
 
 async function stack() {
-  const { store, control } = controlOnly({ tokens: TOKENS, options: { staleAfterMs: 600_000 } });
+  const { store, control } = await controlOnly({
+    tokens: TOKENS,
+    options: { staleAfterMs: 600_000 },
+  });
   await fillReader(store);
   // The runs control assigned: sv-1 includes its grant of gemv, sv-2 does not.
-  assigned(store, "rig-a", "gs-1", "gemv");
-  assigned(store, "rig-b", "sv-1", "survey");
-  assigned(store, "rig-b", "sv-2", "survey");
+  await assigned(store, "rig-a", "gs-1", "gemv");
+  await assigned(store, "rig-b", "sv-1", "survey");
+  await assigned(store, "rig-b", "sv-2", "survey");
   const s = await signIn(control);
   const rest = async (path: string, token = TOKENS.admin) => {
     const r = await control.request(path, { headers: { authorization: `Bearer ${token}` } });
@@ -41,12 +44,12 @@ const pageAddresses = (html: string) =>
   [...html.matchAll(/<span class="kx-addr">([^<]+)<\/span>/g)].map((m) => m[1]);
 
 /** The addresses of the hits of the run's own kb_search, as control answers its rig. */
-function askAddresses(
+async function askAddresses(
   store: Parameters<typeof answerKbAsk>[0],
   rig: string,
   ask: Record<string, unknown>,
-): string[] {
-  const a = answerKbAsk(store, rig, "search", { limit: KB_SEARCH_MAX, ...ask });
+): Promise<string[]> {
+  const a = await answerKbAsk(store, rig, "search", { limit: KB_SEARCH_MAX, ...ask });
   assert.ok("hits" in a, JSON.stringify(a));
   return a.hits.map((h) => h.address);
 }
@@ -54,7 +57,7 @@ function askAddresses(
 describe("the Knowledge page's search", () => {
   test("as a run: exactly the run's kb_search, on the page, over REST and over MCP", async () => {
     const s = await stack();
-    const ask = askAddresses(s.store, "rig-b", { run: "sv-1", q: "bandwidth" });
+    const ask = await askAddresses(s.store, "rig-b", { run: "sv-1", q: "bandwidth" });
     // The run reads its grant of gemv: the run's search finds gemv's items and its own.
     assert.ok(ask.some((a) => a.startsWith("gemv/")));
     assert.ok(ask.some((a) => a.startsWith("survey/sv-1/")));
@@ -67,7 +70,7 @@ describe("the Knowledge page's search", () => {
       ),
     );
     // sv-2 leaves the grant out: as sv-2, gemv's items are not found.
-    const two = askAddresses(s.store, "rig-b", { run: "sv-2", q: "bandwidth" });
+    const two = await askAddresses(s.store, "rig-b", { run: "sv-2", q: "bandwidth" });
     const page2 = pageAddresses(await s.html("/ui/knowledge?q=bandwidth&as=sv-2&scope=everything"));
     assert.deepEqual(page2, two);
     assert.ok(!page2.some((a) => a?.startsWith("gemv/")));
@@ -175,7 +178,10 @@ describe("the Knowledge page's search", () => {
     );
     // With no words, the run's search lists the newest items it reads, as its kb_search does.
     const page = await s.html("/ui/knowledge/survey/sv-1?scope=everything&as=sv-1");
-    assert.deepEqual(pageAddresses(page), askAddresses(s.store, "rig-b", { run: "sv-1", q: "" }));
+    assert.deepEqual(
+      pageAddresses(page),
+      await askAddresses(s.store, "rig-b", { run: "sv-1", q: "" }),
+    );
     assert.match(page, /<option value="sv-1" selected>sv-1 \(survey\)<\/option>/);
   });
 });

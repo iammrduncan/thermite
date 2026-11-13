@@ -58,26 +58,31 @@ type McpForRig = { servers: McpConnection[]; unavailable: McpUnavailable[] };
  * entry in the audit log and a step in the rig's history, with the key's fingerprint, in one
  * transaction with the key. What changed: a first key, another key, or nothing.
  */
-export function takeRigSealKey(
+export async function takeRigSealKey(
   store: ControlStore,
   rig: string,
   key: string,
-): "new" | "changed" | "same" {
-  const before = store.busKeys.rigSealKey(rig);
-  if (before === key) return "same";
+): Promise<"new" | "changed" | "same"> {
   const fingerprint = sealKeyFingerprint(key);
-  const previous = before === undefined ? undefined : sealKeyFingerprint(before);
-  store.tx(() => {
-    store.busKeys.setRigSealKey(rig, key);
+  // The key before is read in the transaction that sets the new one: what the audit log and the
+  // history say of the change (a first key, or which key it replaced) is what was there.
+  const was = await store.tx(async () => {
+    const before = await store.busKeys.rigSealKey(rig);
+    if (before === key) return { same: true as const };
+    const previous = before === undefined ? undefined : sealKeyFingerprint(before);
+    await store.busKeys.setRigSealKey(rig, key);
     if (previous === undefined) {
-      store.auditLog.add(`rig:${rig}`, "rig_seal_key_registered", { fingerprint });
-      store.rigHistory.add(rig, "seal_key", true, `fingerprint ${fingerprint}`);
+      await store.auditLog.add(`rig:${rig}`, "rig_seal_key_registered", { fingerprint });
+      await store.rigHistory.add(rig, "seal_key", true, `fingerprint ${fingerprint}`);
     } else {
-      store.auditLog.add(`rig:${rig}`, "rig_seal_key_changed", { fingerprint, previous });
+      await store.auditLog.add(`rig:${rig}`, "rig_seal_key_changed", { fingerprint, previous });
       const detail = `fingerprint ${previous} → ${fingerprint}`;
-      store.rigHistory.add(rig, "seal_key_changed", true, detail);
+      await store.rigHistory.add(rig, "seal_key_changed", true, detail);
     }
+    return { same: false as const, previous };
   });
+  if (was.same) return "same";
+  const { previous } = was;
   const what = { rig, fingerprint, ...(previous ? { previous } : {}) };
   log("control", previous ? "a rig's seal key changed" : "a rig's seal key registered", what);
   return previous === undefined ? "new" : "changed";
@@ -148,7 +153,7 @@ export class ConfigWriter {
     if (!this.ready && this.made) await this.made.catch(() => {});
     if (!this.ready) return;
     const { store } = this.o.parts;
-    for (const r of busRigs(store)) {
+    for (const r of await busRigs(store)) {
       if (!r.sealKey) continue;
       for (const key of CONFIG_KEYS) {
         // A write the bus did not take ends this look: the next reads every key back.
@@ -247,10 +252,10 @@ export class ConfigWriter {
       figures.written[key]++;
       figures.rigs.set(rig, (figures.rigs.get(rig) ?? 0) + 1);
       // What a rig gets of the MCP servers and the Git accesses is audited when it changes.
-      if (key === "mcp-servers") this.o.parts.mcpServers.handed(rig, value as McpForRig);
+      if (key === "mcp-servers") await this.o.parts.mcpServers.handed(rig, value as McpForRig);
       if (key === "git-access") {
         const names = (value as { accesses: GitAccessSecret[] }).accesses.map((a) => a.name);
-        this.o.parts.store.auditLog.add(`rig:${rig}`, "git_access_handed", { names });
+        await this.o.parts.store.auditLog.add(`rig:${rig}`, "git_access_handed", { names });
       }
       log("control", "a rig's config written to the bus", { ...where, revision, seq: ack.seq });
       return true;
@@ -298,11 +303,14 @@ export async function configValueOf(
  * rig's supervisor stages their projects with. An access with no host, gone, or that does not
  * open is left out, in control's log: staging then fails for it, in words.
  */
-function gitAccessesOf(parts: ConfigParts, rig: string): { accesses: GitAccessSecret[] } {
+async function gitAccessesOf(
+  parts: ConfigParts,
+  rig: string,
+): Promise<{ accesses: GitAccessSecret[] }> {
   const { store, secrets } = parts;
   const accesses: GitAccessSecret[] = [];
-  for (const name of store.commands.gitAccessesOf(rig, closedRuns(store, rig))) {
-    const g = store.gitAccess.get(name);
+  for (const name of await store.commands.gitAccessesOf(rig, await closedRuns(store, rig))) {
+    const g = await store.gitAccess.get(name);
     if (!g?.host) continue;
     let secret: string;
     try {
@@ -344,11 +352,11 @@ export interface RigConfig {
 }
 
 /** The config bucket's keys, what control wrote to it, and each rig's counts. */
-export function configState(store: ControlStore, written: ConfigWritten) {
+export async function configState(store: ControlStore, written: ConfigWritten) {
   const rigs: RigConfig[] = [];
-  const onBus = new Map(busRigs(store).map((r) => [r.rig, Boolean(r.sealKey)]));
-  for (const r of store.reportedRigs.list()) {
-    const sup = store.reportedRigs.supervisor(r.id);
+  const onBus = new Map((await busRigs(store)).map((r) => [r.rig, Boolean(r.sealKey)]));
+  for (const r of await store.reportedRigs.list()) {
+    const sup = await store.reportedRigs.supervisor(r.id);
     const config = sup?.config as ConfigFigures | undefined;
     if (!config && !onBus.has(r.id)) continue;
     const at = typeof sup?.received_at === "string" ? sup.received_at : null;

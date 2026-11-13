@@ -29,12 +29,12 @@ test("control's process: its use, Node's memory, the event loop since the first 
   look.close();
 });
 
-test("control.db: its file and log, its pages, each table's bytes and rows, each index's table", () => {
+test("control.db: its file and log, its pages, each table's bytes and rows, each index's table", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "thermite-db-figures-")), "control.db");
   const store = controlStore(path);
-  store.auditLog.add("owner", "test", { a: 1 });
-  store.auditLog.add("owner", "test", { a: 2 });
-  const f = store.size.measure();
+  await store.auditLog.add("owner", "test", { a: 1 });
+  await store.auditLog.add("owner", "test", { a: 2 });
+  const f = await store.size.measure();
   assert.ok(f.file_bytes > 0);
   assert.equal(f.file_bytes % f.page_size, 0);
   assert.ok(f.schema_version && f.schema_version >= 28);

@@ -84,7 +84,7 @@ export interface ToolContext {
     fn: (args: A) => unknown,
   ) => (args: A) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }>;
   /** A rig's view, or an error that names it. */
-  view: (rig: string) => RigView;
+  view: (rig: string) => Promise<RigView>;
   /** A run wherever it ran (goal 170), with its rig's view, or an error that names it. */
   run: (run: string) => Promise<RunOnRig>;
 }
@@ -125,14 +125,14 @@ export function toolContext(
   /** A tool whose call is in the audit log, with its arguments as auditedArgs keeps them. */
   const audited = <A>(tool: string, fn: (args: A) => unknown) => {
     return async (args: A) => {
-      store.auditLog.add(actor, `mcp:${tool}`, auditedArgs(args ?? {}));
+      await store.auditLog.add(actor, `mcp:${tool}`, auditedArgs(args ?? {}));
       try {
         return json(await fn(args));
       } catch (err) {
         // With any secret it names masked: what the caller reads and the audit log keeps.
         const error = redact(errorText(err));
         // A refusal is in the audit log too, as the dashboard's are.
-        store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: error });
+        await store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: error });
         return { ...json({ error }), isError: true };
       }
     };
@@ -142,8 +142,8 @@ export function toolContext(
     offlineAfterMs: opts.offlineAfterMs,
     control: opts.control,
   };
-  const view = (rig: string) => {
-    const v = rigView(store, rig, viewOpts);
+  const view = async (rig: string) => {
+    const v = await rigView(store, rig, viewOpts);
     if (!v) throw new Error(`no rig ${rig}`);
     return v;
   };

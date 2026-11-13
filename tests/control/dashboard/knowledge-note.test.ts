@@ -21,11 +21,14 @@ const TOKENS = {
 const NOTE = "gemv/gs-1/owner/note:1";
 
 async function stack() {
-  const { store, control } = controlOnly({ tokens: TOKENS, options: { staleAfterMs: 600_000 } });
+  const { store, control } = await controlOnly({
+    tokens: TOKENS,
+    options: { staleAfterMs: 600_000 },
+  });
   await fillReader(store);
-  assigned(store, "rig-a", "gs-1", "gemv");
-  assigned(store, "rig-b", "sv-1", "survey");
-  assigned(store, "rig-b", "sv-2", "survey");
+  await assigned(store, "rig-a", "gs-1", "gemv");
+  await assigned(store, "rig-b", "sv-1", "survey");
+  await assigned(store, "rig-b", "sv-2", "survey");
   const s = await signIn(control);
   const rest = async (path: string, body: unknown, token = TOKENS.admin) => {
     const r = await control.request(path, {
@@ -39,8 +42,13 @@ async function stack() {
 }
 
 /** The addresses an agent's kb_search of this run finds for these words. */
-function agentFinds(store: Parameters<typeof answerKbAsk>[0], rig: string, run: string, q: string) {
-  const a = answerKbAsk(store, rig, "search", { run, q });
+async function agentFinds(
+  store: Parameters<typeof answerKbAsk>[0],
+  rig: string,
+  run: string,
+  q: string,
+) {
+  const a = await answerKbAsk(store, rig, "search", { run, q });
   assert.ok("hits" in a, JSON.stringify(a));
   return a.hits.map((h) => h.address);
 }
@@ -83,19 +91,19 @@ describe("the owner's note", () => {
     );
     // Stored in the owner slot, linked to the item, never by an event of a rig.
     const kb = store.kb();
-    const note = kb.at(NOTE);
+    const note = await kb.at(NOTE);
     assert.ok(note);
     assert.equal(note.slot, "owner");
     assert.equal(note.kind, "note");
     assert.equal(note.title, "Check this on the second device before trusting it: zanzibarite.");
     assert.deepEqual(
-      kb.versions(note.id).map((v) => [v.version, v.links, v.event]),
+      (await kb.versions(note.id)).map((v) => [v.version, v.links, v.event]),
       [[1, [{ rel: "follows", to: FINDING }], null]],
     );
     // The run's agents find it, and so do a run's whose scope includes gemv; not one's that leaves it out.
-    assert.deepEqual(agentFinds(store, "rig-a", "gs-1", "zanzibarite"), [NOTE]);
-    assert.deepEqual(agentFinds(store, "rig-b", "sv-1", "zanzibarite"), [NOTE]);
-    assert.deepEqual(agentFinds(store, "rig-b", "sv-2", "zanzibarite"), []);
+    assert.deepEqual(await agentFinds(store, "rig-a", "gs-1", "zanzibarite"), [NOTE]);
+    assert.deepEqual(await agentFinds(store, "rig-b", "sv-1", "zanzibarite"), [NOTE]);
+    assert.deepEqual(await agentFinds(store, "rig-b", "sv-2", "zanzibarite"), []);
     // The reader and the table say you wrote it; the item's links say it is followed by the note.
     const reader = await s.page(`/ui/knowledge/${NOTE}`);
     assert.match(
@@ -116,10 +124,7 @@ describe("the owner's note", () => {
     const empty = await s.post("/ui/kb/note", { csrf, back, address: FINDING, text: " " });
     assert.match(decodeURIComponent(String(empty.headers.get("location"))), /error=Write the note/);
     assert.match(
-      store.auditLog
-        .list(200, { action: "kb_note" })
-        .map((a) => a.actor)
-        .join(),
+      (await store.auditLog.list(200, { action: "kb_note" })).map((a) => a.actor).join(),
       /owner:ui/,
     );
   });
@@ -129,7 +134,7 @@ describe("the owner's note", () => {
     const r = await rest("/v1/kb/notes", { address: FINDING, text: "First.", title: "A title" });
     assert.equal(r.status, 201);
     assert.equal(r.body.address, NOTE);
-    assert.equal(store.kb().at(NOTE)?.title, "A title");
+    assert.equal((await store.kb().at(NOTE))?.title, "A title");
     for (const token of [TOKENS.operator, TOKENS.agent, TOKENS.read])
       assert.notEqual(
         (await rest("/v1/kb/notes", { address: FINDING, text: "x" }, token)).status,
@@ -153,10 +158,7 @@ describe("the owner's note", () => {
     const b = JSON.parse(String(out.content[0]?.text)) as { address: string; follows: string };
     assert.deepEqual([b.address, b.follows], ["gemv/gs-1/owner/note:2", NOTE]);
     assert.match(
-      store.auditLog
-        .list(200, { action: "kb_note" })
-        .map((a) => a.actor)
-        .join(),
+      (await store.auditLog.list(200, { action: "kb_note" })).map((a) => a.actor).join(),
       /owner:operator/,
     );
     const agent = await mcpClient(control, TOKENS.agent);

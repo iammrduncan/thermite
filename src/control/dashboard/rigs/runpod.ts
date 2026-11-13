@@ -44,7 +44,8 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
             `/ui/rigs/${encodeURIComponent(rig)}?${ok ? "ok" : "error"}=${encodeURIComponent(said)}#podlog`,
             303,
           );
-    if (!rigs?.view(rig)) return answer(false, `${rig} is not a rig control launched on RunPod.`);
+    if (!rigs || !(await rigs.view(rig)))
+      return answer(false, `${rig} is not a rig control launched on RunPod.`);
     try {
       const r = await rigs.logs(rig);
       return answer(
@@ -77,7 +78,8 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
     const back = (k: "ok" | "error", m: string, at = "#pod") =>
       c.redirect(`/ui/rigs/${encodeURIComponent(rig)}?${k}=${encodeURIComponent(m)}${at}`, 303);
     const rigs = opts.runpodRigs;
-    if (!rigs?.view(rig)) return back("error", `${rig} is not a rig control launched on RunPod.`);
+    if (!rigs || !(await rigs.view(rig)))
+      return back("error", `${rig} is not a rig control launched on RunPod.`);
     const f = await c.req.parseBody();
     try {
       if (action === "limits") {
@@ -94,7 +96,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
             `An idle stop is a whole number of minutes, ${MIN_IDLE_STOP_MINUTES} or more.`,
           );
         const change: LimitsChange = { spend_limit_usd: lim, idle_stop_minutes: idle };
-        const v = rigs.limits(rig, change, "owner:ui");
+        const v = await rigs.limits(rig, change, "owner:ui");
         return back(
           "ok",
           `Saved. ${v.spend_limit_usd === null ? "No spend limit." : `Control stops the pod at $${v.spend_limit_usd.toFixed(2)}.`} ${v.idle_stop_minutes === null ? "It never stops by itself." : `It stops after ${v.idle_stop_minutes} minutes with no run at work.`}`,
@@ -121,8 +123,8 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
     }),
   );
   /** The launch form, for one RunPod account in Settings › Machines, maybe with what was typed and why not. */
-  const launchPage = (c: Ctx, form: LaunchForm, error?: string) => {
-    const clouds = store.gpuClouds.list().map((g) => ({
+  const launchPage = async (c: Ctx, form: LaunchForm, error?: string) => {
+    const clouds = (await store.gpuClouds.list()).map((g) => ({
       name: g.name,
       key_hint: g.key_hint,
       facts: g.facts as RunpodFacts | null,
@@ -157,7 +159,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
       })}<script src="/ui/assets/runpod-launch.js" defer></script>`,
     );
   };
-  app.get("/ui/rigs/add/runpod", (c) =>
+  app.get("/ui/rigs/add/runpod", async (c) =>
     launchPage(c, { cloud: c.req.query("cloud") }, said(c) || undefined),
   );
   app.post("/ui/rigs/add/runpod", async (c) => {
@@ -185,7 +187,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
       );
     }
     const rigs = opts.runpodRigs;
-    if (!rigs || !store.gpuClouds.get(form.cloud ?? ""))
+    if (!rigs || !(await store.gpuClouds.get(form.cloud ?? "")))
       return launchPage(c, form, "Choose a RunPod account from Settings › Machines.");
     const count = Number(form.gpu_count || "1");
     if (!(Number.isInteger(count) && count >= 1 && count <= 8))
@@ -238,7 +240,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
         303,
       );
     } catch (err) {
-      return launchPage(c, form, errorText(err));
+      return await launchPage(c, form, errorText(err));
     }
   });
 }

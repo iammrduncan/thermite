@@ -72,7 +72,7 @@ export async function addKit(
     if (err instanceof KitRefused) return { ok: false, error: err.message, status: err.status };
     throw err;
   }
-  store.auditLog.add(by, "kit_added", {
+  await store.auditLog.add(by, "kit_added", {
     name: added.name,
     head: added.head,
     previous: added.previous,

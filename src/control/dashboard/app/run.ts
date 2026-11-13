@@ -36,14 +36,14 @@ function questionWords(r: RunView): string[] {
   );
 }
 
-export function runOverviewAnswer(
+export async function runOverviewAnswer(
   store: ControlStore,
   u: RigView,
   r: RunView,
   feed: Need[],
   now: number,
-): RunOverviewAnswer {
-  const row = runRow(store, u, r, now, feed.length);
+): Promise<RunOverviewAnswer> {
+  const row = await runRow(store, u, r, now, feed.length);
   const running = r.status === "running";
   const champ = currentChampion(r);
   const atWork = row.now.filter((l) => l.busy && l.who !== "judge" && l.who !== "writer").length;

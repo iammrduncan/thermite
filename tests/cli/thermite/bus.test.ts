@@ -71,7 +71,7 @@ test("thermite bus prints the message bus as control sees it, or its JSON, with 
     live,
     config: new ConfigWritten(),
   };
-  const s = controlOnly({ store, tokens: { read: READ }, options: { bus: view } });
+  const s = await controlOnly({ store, tokens: { read: READ }, options: { bus: view } });
   const server = serve({ fetch: s.control.fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise((r) => server.once("listening", r));
   try {

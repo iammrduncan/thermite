@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import type { DirectionView } from "../../src/control/views/index.ts";
 import { ADMIN, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { ingestReport } from "../helpers/control-store.ts";
@@ -21,7 +22,7 @@ const CLI = join(import.meta.dirname, "../../src/cli/thermite/main.ts");
 const run = promisify(execFile);
 
 async function stack() {
-  const { env, store, control, relay: rounds, api } = controlStack();
+  const { env, store, control, relay: rounds, api } = await controlStack();
   await env.service.applyCommand(env.assign);
   await rounds();
   /** The commands to the harness, then their events back to control. */
@@ -29,9 +30,11 @@ async function stack() {
     await rounds(2);
   };
   /** The newest signed command's payload and what the rig answered. */
-  const last = () => {
-    const c = store.commands.list(1)[0];
-    const row = store.db.prepare("select signed from command where id = ?").get(c?.id ?? "") as {
+  const last = async () => {
+    const c = (await store.commands.list(1))[0];
+    const row = sqliteBehind(store)
+      .db.prepare("select signed from command where id = ?")
+      .get(c?.id ?? "") as {
       signed: string;
     };
     return {
@@ -67,11 +70,11 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       payload: rule(":shared memory tiling:", "try"),
     });
     assert.equal(named.status, 201, await named.clone().text());
-    assert.deepEqual(s.last().payload.directives, [
+    assert.deepEqual((await s.last()).payload.directives, [
       { kind: "try", direction: "shared-memory-tiling", rationale: "slower twice", citations: [] },
     ]);
     await s.relay();
-    assert.equal(s.last().status, "delivered");
+    assert.equal((await s.last()).status, "delivered");
     // A direction the run doesn't have is taken: the planner designs it at its next round.
     const fresh = await s.api("POST", "/v1/commands", {
       rig: "rig-a",
@@ -80,7 +83,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
     });
     assert.equal(fresh.status, 201);
     await s.relay();
-    assert.deepEqual(s.last().outcome?.result?.new_directions, ["timer-code"]);
+    assert.deepEqual((await s.last()).outcome?.result?.new_directions, ["timer-code"]);
     // Words are no longer a rule, nor is text that can't be a direction's name.
     for (const [payload, why] of [
       [
@@ -165,7 +168,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
     });
     assert.ok(!ok.isError, ok.content[0]?.text);
     assert.equal(
-      (s.last().payload.directives as { direction: string }[])[0]?.direction,
+      ((await s.last()).payload.directives as { direction: string }[])[0]?.direction,
       "vector-loads",
     );
     const words = await call("issue_command", {
@@ -233,7 +236,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       assert.equal(sent.code, 0, sent.stderr);
       assert.match(sent.stdout, /"status":"pending"/);
       assert.equal(
-        (s.last().payload.directives as { direction: string }[])[0]?.direction,
+        ((await s.last()).payload.directives as { direction: string }[])[0]?.direction,
         "loop-tiling",
       );
       const refused = await cli({
@@ -248,7 +251,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
   });
 
   test("control refuses a research run a rule for another direction than its task kinds", async () => {
-    const { store, api } = controlStack({ tokens: { rigs: {} } });
+    const { store, api } = await controlStack({ tokens: { rigs: {} } });
     await ingestReport(store, {
       rig: "rig-r",
       ledger_id: "ledger-r",

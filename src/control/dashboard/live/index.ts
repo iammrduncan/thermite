@@ -59,8 +59,8 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
    * message box that writes to the lane being watched. `chosen`: the run the address names,
    * wherever it ran (an earlier run takes no messages); none, the first run at work.
    */
-  const livePage = (c: Ctx, chosen?: RunOnRig) => {
-    const vs = views();
+  const livePage = async (c: Ctx, chosen?: RunOnRig) => {
+    const vs = await views();
     const now = Date.now();
     const all = vs.flatMap((u) => u.runs.map((r) => ({ u, r })));
     const atWork = all.filter((x) => x.r.status === "running");
@@ -80,7 +80,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       );
     const { u, r } = sel;
     const research = r.mode === "research";
-    const trials = store.liveLines.trials(u.id).filter((t) => t.run === r.id);
+    const trials = (await store.liveLines.trials(u.id)).filter((t) => t.run === r.id);
     const lanes = [
       ...new Set([
         ...Object.keys(r.at_work),
@@ -88,7 +88,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
         ...trials.map((t) => t.lane).filter((l): l is string => !!l),
       ]),
     ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const lines = store.liveLines.runTail(u.id, r.id, 600);
+    const lines = await store.liveLines.runTail(u.id, r.id, 600);
     const after = lines.at(-1)?.id ?? 0;
     const w = c.req.query("w") || "all";
     // The filters: everyone, each lane (working or not), the planner, the judge, the advisors and
@@ -199,12 +199,12 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       : "";
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
-      ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
-          .map(
+      ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${(
+          kept.map(
             (m) =>
               `<div class="krow"><span class="small"><b>To ${esc(m.to === "all" ? "everyone" : m.to)}:</b> ${esc(clip(m.text, 200))}</span>${cmdForm(c, { rig: u.id, kind: "unkeep_message", fields: { run: r.id, message: String(m.id) }, label: "Remove", cls: "sm ghost", back: runLiveHref(r) })}</div>`,
           )
-          .join("")}</div></details>`
+        ).join("")}</div></details>`
       : "";
     // The message box: who it goes to, and when they read it (the placeholder says).
     // When they read it depends on the agents' harness: Pi between steps; OpenCode, Claude Code
@@ -247,7 +247,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
                 : "all";
     // The review panel reads only for a goal it reviews (a goal checked by review) or a research
     // run's questions (goal 112).
-    const reviewed = panelReviews(store, runCampaign(r));
+    const reviewed = await panelReviews(store, runCampaign(r));
     // Who would read nothing: off on the rig, or not set up on its supervisor. Control refuses
     // a message to them with the same words (issue.ts).
     const off = (v: string) => nobodyReads(u, v, r);
@@ -255,7 +255,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       `<option value="${esc(v)}" data-hint="${esc(hint(v))}"${v === to ? " selected" : ""}${off ? ` disabled title="${esc(off)}"` : ""}>${esc(label)}</option>`;
     // A message control refused, or the rig refused (its newest one to this run).
     const refused = c.req.query("msgerror");
-    const rigRefused = store.commands.lastMessageToRun(u.id, r.id)?.refused ?? "";
+    const rigRefused = (await store.commands.lastMessageToRun(u.id, r.id))?.refused ?? "";
     const notice =
       refused || rigRefused
         ? `<div class="lnotice">${icon.warn}<span><b>Not sent.</b> ${esc(refused || `The rig refused your last message: ${rigRefused}`)}</span></div>`
@@ -292,7 +292,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
         ? ""
         : r.status === "running"
           ? pauseMenu(c, u.id, r.id, runLiveHref(r), "sm") +
-            moreMenu(c, u.id, r, runLiveHref(r), "sm")
+            (await moreMenu(c, u.id, r, runLiveHref(r), "sm"))
           : r.status === "paused"
             ? cmdForm(c, {
                 rig: u.id,
@@ -315,9 +315,9 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div>${
         view === "lines"
           ? `<div class="lchips">${tabs}${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
-<div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>`
+<div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, await runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>`
           : panes.length
-            ? terminalGrid(dash, c, panes, {
+            ? await terminalGrid(dash, c, panes, {
                 lead: tabs,
                 tail: `<span data-part="lkept">${keptBox}</span>`,
                 shown: w,
@@ -328,7 +328,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       vs,
     );
   };
-  app.get("/ui/live", (c) => livePage(c));
+  app.get("/ui/live", async (c) => livePage(c));
   app.get(RUN_ROUTES.live, async (c) => {
     const x = await named(c);
     if (x) return livePage(c, x);
@@ -345,9 +345,11 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
    * result also as the part it adds to its call's row.
    */
   const runFeed = (rig: string, run: string): LiveFeed => {
-    const draw = (lines: ReturnType<typeof store.liveLines.ofRun>): PushedLine[] => {
+    const draw = async (
+      lines: Awaited<ReturnType<typeof store.liveLines.ofRun>>,
+    ): Promise<PushedLine[]> => {
       const now = Date.now();
-      const messages = runMessages(store, rig, run);
+      const messages = await runMessages(store, rig, run);
       return lines.map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -358,12 +360,12 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
     };
     return {
       rig,
-      after: (after, limit) => draw(store.liveLines.ofRun(rig, run, after, limit)),
-      newest: (limit) => draw(store.liveLines.runTail(rig, run, limit)),
-      count: (after) => store.liveLines.countOfRun(rig, run, after),
+      after: async (after, limit) => draw(await store.liveLines.ofRun(rig, run, after, limit)),
+      newest: async (limit) => draw(await store.liveLines.runTail(rig, run, limit)),
+      count: async (after) => store.liveLines.countOfRun(rig, run, after),
       // Lines drawn before their event came, drawn again once it has.
-      redraw: (ids) =>
-        draw(store.liveLines.ofRun(rig, run, 0, ids.length, ids))
+      redraw: async (ids) =>
+        (await draw(await store.liveLines.ofRun(rig, run, 0, ids.length, ids)))
           .map((y) => ({ id: y.id, html: y.html }))
           .filter((y) => !y.html.includes('data-recheck="1"')),
     };
@@ -402,7 +404,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
     const json = wantsJson(c);
     let id: string;
     try {
-      ({ id } = issueCommand(store, opts.privateKeyPem, {
+      ({ id } = await issueCommand(store, opts.privateKeyPem, {
         rig: x.rig.id,
         kind: "message_agent",
         payload: {
@@ -417,7 +419,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       const why = errorText(err);
       return json ? c.json(notSent(why), 400) : back(`msgerror=${encodeURIComponent(why)}`);
     }
-    const cmd = json ? store.commands.row(id) : undefined;
+    const cmd = json ? await store.commands.row(id) : undefined;
     if (cmd) return c.json({ ...commandProgress(cmd, Date.now()), follow: commandFollowUrl(id) });
     return back();
   });
@@ -440,8 +442,8 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
           ? `<span class="av c3">SV</span>`
           : `<span class="av c1">WK</span>`;
 
-  app.get("/ui/rigs/:rig/live", (c) => {
-    const vs = views();
+  app.get("/ui/rigs/:rig/live", async (c) => {
+    const vs = await views();
     const now = Date.now();
     const u = vs.find((x) => x.id === c.req.param("rig"));
     if (!u)
@@ -451,15 +453,16 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
         `<div class="card"><div class="empty">No such rig.</div></div>`,
         vs,
       );
-    const sources = store.liveLines.sources(u.id);
+    const sources = await store.liveLines.sources(u.id);
     const intros = new Map(
-      store.liveLines
-        .trials(u.id)
-        .map((x) => [x.source, x.intro.replace(/^(research )?trial on [^:]+: /, "")]),
+      (await store.liveLines.trials(u.id)).map((x) => [
+        x.source,
+        x.intro.replace(/^(research )?trial on [^:]+: /, ""),
+      ]),
     );
     const source = c.req.query("source") || "";
     const sel = sources.find((x) => x.source === source);
-    const lines = store.liveLines.tail(u.id, 400, source || undefined);
+    const lines = await store.liveLines.tail(u.id, 400, source || undefined);
     const after = lines.at(-1)?.id ?? 0;
     // A trial works while the ledger has it at work; its "trial ended" line may never come (a
     // restart cuts it off, and the harness closes it as interrupted when it starts again).
@@ -485,7 +488,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
           : "no model: the agents wait"
       : "not reported by this rig's harness";
     const trial = source.startsWith("trial:")
-      ? store.liveLines.trials(u.id).find((x) => x.source === source)
+      ? (await store.liveLines.trials(u.id)).find((x) => x.source === source)
       : undefined;
     const whenAt = (at: string) =>
       `${esc(at.slice(11, 19))} UTC <span class="muted">(${esc(ago(at, now))} ago)</span>`;
@@ -514,14 +517,14 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
           ? (advisors.find((x) => x.id === asked) ?? advisors[0])
           : undefined;
     const term = trial?.run
-      ? terminalPanel(dash, c, {
+      ? await terminalPanel(dash, c, {
           rig: u.id,
           run: trial.run,
           trial: source.slice(6),
           ended: Boolean(ended.get(source)),
         })
       : inCall
-        ? terminalPanel(dash, c, {
+        ? await terminalPanel(dash, c, {
             rig: u.id,
             run: inCall.run,
             trial: inCall.id,
@@ -565,11 +568,11 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
 
   // The rig's new lines, or one source's, pushed to its Live page: each line as the page shows
   // it; a result also as the part it adds to its call's row.
-  app.get("/ui/rigs/:rig/live/stream", (c) => {
+  app.get("/ui/rigs/:rig/live/stream", async (c) => {
     const rig = c.req.param("rig");
-    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
+    if (!(await store.reportedRigs.listed(rig))) return c.json({ error: "no such rig" }, 404);
     const source = c.req.query("source") || undefined;
-    const draw = (lines: ReturnType<typeof store.liveLines.after>): PushedLine[] => {
+    const draw = (lines: Awaited<ReturnType<typeof store.liveLines.after>>): PushedLine[] => {
       const now = Date.now();
       return lines.map((e) => ({
         id: e.id,
@@ -580,9 +583,9 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
     };
     const feed: LiveFeed = {
       rig,
-      after: (after, limit) => draw(store.liveLines.after(rig, after, limit, source)),
-      newest: (limit) => draw(store.liveLines.tail(rig, limit, source)),
-      count: (after) => store.liveLines.count(rig, after, source),
+      after: async (after, limit) => draw(await store.liveLines.after(rig, after, limit, source)),
+      newest: async (limit) => draw(await store.liveLines.tail(rig, limit, source)),
+      count: async (after) => store.liveLines.count(rig, after, source),
     };
     const after = pushStart(c.req.header("last-event-id"), c.req.query("after"));
     return streamSSE(c, (stream) => pushLive(stream, store, feed, { after, recheck: [] }));

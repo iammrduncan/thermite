@@ -19,7 +19,7 @@ export async function scrubKeptConversations(store: ControlStore, page = PAGE): 
   try {
     for (;;) {
       await new Promise((go) => setImmediate(go));
-      const r = store.kb().scrubKept(after, page);
+      const r = await store.kb().scrubKept(after, page);
       looked += r.looked;
       scrubbed += r.scrubbed;
       if (r.looked < page) break;

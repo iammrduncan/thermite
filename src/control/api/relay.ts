@@ -12,8 +12,8 @@ import { supervisorRoutes } from "./supervisor.ts";
 export function relayRoutes(app: Hono, api: ApiContext): void {
   const { store, opts, parts, admin, rigAuth } = api;
 
-  app.post("/v1/commands/:id/cancel", admin, (c) =>
-    cancelCommand(store, c.req.param("id"), "owner:api")
+  app.post("/v1/commands/:id/cancel", admin, async (c) =>
+    (await cancelCommand(store, c.req.param("id"), "owner:api"))
       ? c.json({ cancelled: true })
       : c.json({ error: "no such pending command" }, 404),
   );

@@ -8,6 +8,7 @@ import { startCampaign } from "../../../src/control/campaigns/new.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { ADMIN, controlOnly, mcpClient } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
@@ -60,7 +61,7 @@ const CPU = { type: "cpu", class: "generic-cpu" };
 async function stack() {
   const secrets = SecretBox.ephemeral();
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-  const { keys, store, control, api } = controlOnly({
+  const { keys, store, control, api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, kits, secrets },
   });
@@ -87,13 +88,13 @@ async function stack() {
       },
     },
   });
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "lab",
     type: "openai",
     base_url: "https://models.example.com/v1",
     key: { sealed: secrets.seal("lab-key-for-tests"), hint: "…ests" },
   });
-  store.modelProviders.setModels("lab", [
+  await store.modelProviders.setModels("lab", [
     { id: "wide-model", context_window: 204_800 },
     { id: "narrow-model", context_window: 131_072 },
   ]);
@@ -110,7 +111,7 @@ async function stack() {
   ) as Record<string, unknown>;
   const gemv = parseContract({ ...goal, campaign: "gemv-speed", version: 3 });
   assert.ok(gemv.ok);
-  issueCommand(store, keys.privateKeyPem, {
+  await issueCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
     payload: {
@@ -129,8 +130,8 @@ async function stack() {
   /** Every assign_campaign control signed, oldest first. */
   const assigned = () =>
     (
-      store.db
-        .prepare("select signed from command where kind = 'assign_campaign' order by rowid")
+      sqliteBehind(store)
+        .db.prepare("select signed from command where kind = 'assign_campaign' order by rowid")
         .all() as { signed: string }[]
     ).map(
       (x) =>
@@ -148,19 +149,19 @@ const text = (r: unknown) =>
 
 const json = async (r: Response) => (await r.json()) as Record<string, unknown>;
 
-const newest = (s: Awaited<ReturnType<typeof stack>>, campaign: string) =>
-  s.store.campaigns.versions(campaign)[0] as NonNullable<
-    ReturnType<typeof s.store.campaigns.versions>[number]
+const newest = async (s: Awaited<ReturnType<typeof stack>>, campaign: string) =>
+  (await s.store.campaigns.versions(campaign))[0] as NonNullable<
+    Awaited<ReturnType<typeof s.store.campaigns.versions>>[number]
   >;
 
 describe("a campaign's own context settings (goal 070)", () => {
   test("REST and MCP save a new version with them; the same again changes nothing; none removes them; refusals in words", async () => {
     const s = await stack();
-    const first = newest(s, "matmul-speed");
+    const first = await newest(s, "matmul-speed");
     const r = await s.setContext("matmul-speed", { context_window: 131_072, compact_at: 70 });
     assert.equal(r.status, 201);
     const out = await json(r);
-    const v2 = newest(s, "matmul-speed");
+    const v2 = await newest(s, "matmul-speed");
     assert.deepEqual(out, {
       campaign: "matmul-speed",
       version: 2,
@@ -185,7 +186,7 @@ describe("a campaign's own context settings (goal 070)", () => {
       String((await json(same)).said),
       /^Version 2 of matmul-speed has these settings already/,
     );
-    assert.equal(newest(s, "matmul-speed").version, 2);
+    assert.equal((await newest(s, "matmul-speed")).version, 2);
 
     // MCP: each call sets them anew, so a point alone drops the window.
     const client = await mcpClient(s.control, TOKENS.operator);
@@ -198,7 +199,7 @@ describe("a campaign's own context settings (goal 070)", () => {
     assert.equal(point.version, 3);
     assert.deepEqual(point.agents_context, { compact_at: 85 });
     assert.deepEqual(
-      (newest(s, "matmul-speed").contract as Record<string, unknown>).agents_context,
+      ((await newest(s, "matmul-speed")).contract as Record<string, unknown>).agents_context,
       {
         compact_at: 85,
       },
@@ -214,7 +215,7 @@ describe("a campaign's own context settings (goal 070)", () => {
       assert.equal(bad.isError, true, JSON.stringify(args));
       assert.match(JSON.stringify(bad), error);
     }
-    assert.equal(newest(s, "matmul-speed").version, 3);
+    assert.equal((await newest(s, "matmul-speed")).version, 3);
     await client.close();
     const reader = await mcpClient(s.control, TOKENS.read);
     assert.ok(!(await reader.listTools()).tools.some((t) => t.name === "set_campaign_context"));
@@ -224,7 +225,7 @@ describe("a campaign's own context settings (goal 070)", () => {
     const none = await s.setContext("matmul-speed", {});
     assert.equal(none.status, 201);
     assert.equal((await json(none)).agents_context, null);
-    const v4 = newest(s, "matmul-speed").contract as Record<string, unknown>;
+    const v4 = (await newest(s, "matmul-speed")).contract as Record<string, unknown>;
     assert.equal(v4.version, 4);
     assert.equal("agents_context" in v4, false);
     for (const [body, status] of [
@@ -239,8 +240,7 @@ describe("a campaign's own context settings (goal 070)", () => {
     const operator = await s.post("/v1/campaigns/matmul-speed/context", {}, TOKENS.operator);
     assert.ok(operator.status === 401 || operator.status === 403, "REST takes the owner's token");
     assert.deepEqual(
-      s.store.auditLog
-        .list(50, { action: "campaign_context_set" })
+      (await s.store.auditLog.list(50, { action: "campaign_context_set" }))
         .map((e) => (e.body as { version: number }).version)
         .reverse(),
       [2, 3, 4],
@@ -251,7 +251,7 @@ describe("a campaign's own context settings (goal 070)", () => {
     const s = await stack();
     const r = await s.setContext("gemv-speed", { context_window: 65_536 });
     assert.equal(r.status, 201);
-    const v = newest(s, "gemv-speed");
+    const v = await newest(s, "gemv-speed");
     // The rig's harness refuses a version that is not newer than one it holds.
     assert.equal(v.version, 4);
     assert.equal((v.contract as { version: number }).version, 4);
@@ -356,7 +356,7 @@ describe("a campaign's own context settings (goal 070)", () => {
       "This campaign sets a context window of 150,000 tokens. narrow-model, the model of the teachers on rig-a, takes at most 131,072 tokens. Set the campaign's window to 131,072 or less, or give that agent another model.",
     );
     // The same over issue_command, with the campaign's contract: nothing signed.
-    const v = newest(s, "matmul-speed");
+    const v = await newest(s, "matmul-speed");
     const client = await mcpClient(s.control, TOKENS.operator);
     const issued = await client.callTool({
       name: "issue_command",
@@ -418,7 +418,7 @@ describe("a campaign's own context settings (goal 070)", () => {
     );
     assert.deepEqual(own.agents_context, { context_window: 65_536 });
     assert.deepEqual(
-      (newest(s, "matmul-speed-c").contract as Record<string, unknown>).agents_context,
+      ((await newest(s, "matmul-speed-c")).contract as Record<string, unknown>).agents_context,
       { context_window: 65_536 },
     );
     const bad = await client.callTool({
@@ -431,7 +431,7 @@ describe("a campaign's own context settings (goal 070)", () => {
     });
     assert.equal(bad.isError, true);
     assert.match(JSON.stringify(bad), /from 50 to 95/);
-    assert.equal(s.store.campaigns.versions("matmul-speed-d").length, 0);
+    assert.equal((await s.store.campaigns.versions("matmul-speed-d")).length, 0);
     await client.close();
     // null: none.
     const none = await s.post("/v1/campaigns/matmul-speed/copy", {
@@ -441,8 +441,11 @@ describe("a campaign's own context settings (goal 070)", () => {
     assert.equal(none.status, 201);
     const body = await json(none);
     assert.equal(body.agents_context, undefined);
-    assert.equal("agents_context" in (newest(s, "matmul-speed-e").contract as object), false);
-    const audit = s.store.auditLog.list(50, { action: "campaign_copied" })[0];
+    assert.equal(
+      "agents_context" in ((await newest(s, "matmul-speed-e")).contract as object),
+      false,
+    );
+    const audit = (await s.store.auditLog.list(50, { action: "campaign_copied" }))[0];
     assert.equal((audit?.body as { agents_context?: unknown } | undefined)?.agents_context, null);
   });
 });

@@ -1,4 +1,5 @@
 import type { Loops } from "../common/health.ts";
+import { mapInTurn } from "../common/in-turn.ts";
 import { LoopAges } from "../core/health.ts";
 import { type BusView, busState } from "./bus/index.ts";
 import { controlDiskOf } from "./disk.ts";
@@ -13,14 +14,19 @@ const label = (v: string) => v.replace(/\\/g, "\\\\").replace(/"/g, '\\"').repla
  * Prometheus text exposition of control's view. Bounded series only: labelled by rig,
  * campaign, run, verdict or job state, never by attempt or experiment id.
  */
-export function metricsText(store: ControlStore, staleAfterMs: number, now = Date.now()): string {
+export async function metricsText(
+  store: ControlStore,
+  staleAfterMs: number,
+  now = Date.now(),
+): Promise<string> {
   const lines: string[] = [];
   const help = (name: string, type: string, text: string) =>
     lines.push(`# HELP ${name} ${text}`, `# TYPE ${name} ${type}`);
-  const views = store.reportedRigs
-    .list()
-    .map((u) => rigView(store, u.id, { staleAfterMs, now }))
-    .filter((v) => v !== undefined);
+  const views = (
+    await mapInTurn(await store.reportedRigs.list(), async (u) =>
+      rigView(store, u.id, { staleAfterMs, now }),
+    )
+  ).filter((v) => v !== undefined);
 
   help("thermite_rig_up", "gauge", "1 when the rig reported within the stale window");
   for (const u of views) lines.push(`thermite_rig_up{rig="${label(u.id)}"} ${u.stale ? 0 : 1}`);
@@ -86,19 +92,20 @@ export function metricsText(store: ControlStore, staleAfterMs: number, now = Dat
  * long a rig has drained, and whether its drain passed its deadline. Bounded: by part, loop, rig
  * and place.
  */
-export function healthMetricsText(
+export async function healthMetricsText(
   store: ControlStore,
   loops: Loops,
   staleAfterMs: number,
   now = Date.now(),
-): string {
+): Promise<string> {
   const lines: string[] = [];
   const help = (name: string, type: string, text: string) =>
     lines.push(`# HELP ${name} ${text}`, `# TYPE ${name} ${type}`);
-  const views = store.reportedRigs
-    .list()
-    .map((u) => rigView(store, u.id, { staleAfterMs, now }))
-    .filter((v): v is RigView => v !== undefined);
+  const views = (
+    await mapInTurn(await store.reportedRigs.list(), async (u) =>
+      rigView(store, u.id, { staleAfterMs, now }),
+    )
+  ).filter((v): v is RigView => v !== undefined);
   const ages: { labels: string; ages: LoopAges }[] = [
     { labels: `part="control"`, ages: loops.health().loops },
   ];

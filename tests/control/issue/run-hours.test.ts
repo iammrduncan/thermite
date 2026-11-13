@@ -20,7 +20,7 @@ const TOKENS = {
 type Ev = [string, string, Record<string, unknown>];
 
 async function stack() {
-  const { store, control } = controlOnly({ tokens: TOKENS });
+  const { store, control } = await controlOnly({ tokens: TOKENS });
   const events: Ev[] = [
     ["run_created", "h-1", { campaign: "gemv", mode: "hill_climb", version: 1, agents: true }],
     ["run_status", "h-1", { status: "paused", reason: HOURS_SPENT }],
@@ -64,7 +64,7 @@ describe("hours added to a run, at control (goal 198)", () => {
       "rig-h adds 24 hours to h-1 within a minute: a run whose hours ran out resumes.",
     );
     assert.deepEqual(
-      store.commands.list(10).map((c) => [c.kind, c.rig, c.issued_by]),
+      (await store.commands.list(10)).map((c) => [c.kind, c.rig, c.issued_by]),
       [["add_run_hours", "rig-h", "owner:api"]],
     );
     const closed = await rest("h-0", { hours: 24 });
@@ -75,7 +75,7 @@ describe("hours added to a run, at control (goal 198)", () => {
     );
     const none = await rest("h-1", { hours: 0 });
     assert.equal(none.status, 400);
-    assert.equal(store.commands.list(10).length, 1, "nothing more was signed");
+    assert.equal((await store.commands.list(10)).length, 1, "nothing more was signed");
   });
 
   test("MCP: the owner's and an operator's tool, never an agent's", async () => {
@@ -86,7 +86,7 @@ describe("hours added to a run, at control (goal 198)", () => {
       arguments: { run: "h-1", hours: 12 },
     });
     assert.ok(!out.isError, JSON.stringify(out));
-    assert.equal(store.commands.list(10)[0]?.issued_by, "owner:operator");
+    assert.equal((await store.commands.list(10))[0]?.issued_by, "owner:operator");
     await operator.close();
     const agent = await mcpClient(control, TOKENS.agent);
     const tools = (await agent.listTools()).tools.map((t) => t.name);

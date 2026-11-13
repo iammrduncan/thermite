@@ -61,7 +61,7 @@ describe("addresses cluster rigs may reach", () => {
       "k_gpus__k8s-a": "0",
     });
     await new Promise((r) => setTimeout(r, 20));
-    s.store.clusters.setRigStatus("k8s-a-1", "running");
+    await s.store.clusters.setRigStatus("k8s-a-1", "running");
     assert.equal(harnessRule(f.calls)?.spec.egress.length, 2, "DNS and the internet only");
     const said = await s.post("/ui/settings/reach", {
       address: MODEL,
@@ -85,8 +85,7 @@ describe("addresses cluster rigs may reach", () => {
     const last = f.calls.filter((c) => c.args[0] === "apply").at(-1)?.stdin ?? "";
     assert.ok(!last.includes('"Deployment"'));
     assert.deepEqual(
-      s.store.rigHistory
-        .list("k8s-a-1")
+      (await s.store.rigHistory.list("k8s-a-1"))
         .filter((e) => e.step === "network")
         .map((e) => [e.ok, e.detail]),
       [[true, "1 address of the list"]],
@@ -105,15 +104,18 @@ describe("addresses cluster rigs may reach", () => {
     // The same address again takes the new ports in place of its own; Remove takes it out.
     await s.post("/ui/settings/reach", { address: MODEL, ports: "8000" });
     assert.deepEqual(
-      s.store.reachable.list().map((e) => [e.address, e.ports, e.note]),
+      (await s.store.reachable.list()).map((e) => [e.address, e.ports, e.note]),
       [[MODEL, [8000], ""]],
     );
     assert.match(
       await s.post("/ui/settings/reach/remove", { address: MODEL }),
       /ok=The list holds no address/,
     );
-    assert.deepEqual(s.store.reachable.list(), []);
-    assert.equal(s.store.auditLog.list(50, { action: "reachable_addresses_set" }).length, 3);
+    assert.deepEqual(await s.store.reachable.list(), []);
+    assert.equal(
+      (await s.store.auditLog.list(50, { action: "reachable_addresses_set" })).length,
+      3,
+    );
   });
 
   test("REST and MCP: the owner sets the list; the operator reads it", async () => {
@@ -166,7 +168,7 @@ describe("addresses cluster rigs may reach", () => {
         content: { text: string }[];
       };
     assert.notEqual((await set([{ address: MODEL, ports: [8000] }])).isError, true);
-    assert.equal(s.store.reachable.list()[0]?.set_by, "owner:mcp");
+    assert.equal((await s.store.reachable.list())[0]?.set_by, "owner:mcp");
     const refused = await set([{ address: "203.0.113.5", ports: [8000] }]);
     assert.equal(refused.isError, true);
     assert.match(refused.content[0]?.text ?? "", /rigs' harnesses reach it already, on every port/);
@@ -208,13 +210,13 @@ describe("addresses cluster rigs may reach", () => {
       /Refused: in the slot thermite-slot-1, the rule "thermite-harness" lets the harness reach private, shared or link-local addresses/,
     );
     // Listed on another port only: still refused, in words.
-    s.store.reachable.set([{ address: MODEL, ports: [9000], note: "" }], "owner:test");
+    await s.store.reachable.set([{ address: MODEL, ports: [9000], note: "" }], "owner:test");
     assert.match(
       await s.post("/ui/rigs/add", rig),
       /opens 100\.64\.0\.7 on more than its listed TCP ports \(9000\)/,
     ); // public-check: allow (a shared address, for the test)
     // Listed with its port: taken, and the rig's page lists the opening.
-    s.store.reachable.set(
+    await s.store.reachable.set(
       [{ address: MODEL, ports: [8000], note: "the model server" }],
       "owner:test",
     );
@@ -224,7 +226,7 @@ describe("addresses cluster rigs may reach", () => {
       /thermite-slot-1: <span class="chip ok">free/,
     );
     assert.equal(await s.post("/ui/rigs/add", rig), "/ui/rigs/k8s-b-1");
-    assert.deepEqual(s.store.clusters.rig("k8s-b-1")?.spec.openings, [
+    assert.deepEqual((await s.store.clusters.rig("k8s-b-1"))?.spec.openings, [
       { address: MODEL, ports: [8000], rule: "thermite-harness" },
     ]);
     await new Promise((r) => setTimeout(r, 20));

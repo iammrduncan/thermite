@@ -64,15 +64,15 @@ function checkChip(row: CheckRow, now: number): string {
  * result's sentence, the line for its state, what the check does, and its button. The button is
  * off while the check waits for the rig ("Sent", "Running…").
  */
-export function checkRowHtml(o: {
+export async function checkRowHtml(o: {
   rig: string;
   check: string;
   name: string;
   what: string;
   row: CheckRow;
   now: number;
-  button: (label: string, disabled: boolean) => string;
-}): string {
+  button: (label: string, disabled: boolean) => string | Promise<string>;
+}): Promise<string> {
   const { row, now } = o;
   const waits = checkWaits(row);
   const r = row.last;
@@ -88,7 +88,7 @@ export function checkRowHtml(o: {
     ? `<span class="ck-sum${l.bad ? " bad" : ""}" data-state="${row.state}">${esc(l.text)}</span>`
     : "";
   const label = row.state === "sent" ? "Sent" : row.state === "running" ? "Running…" : "Run it";
-  return `<div class="ck" data-check="${esc(o.check)}"${waits ? ` data-follow="${esc(checkFollowUrl(o.rig, o.check))}" data-follow-state="${row.state}"` : ""}><span class="ck-res">${checkChip(row, now)}</span><span class="ck-main"><span><b>${esc(o.name)}</b>${when}</span>${sum}${line}<span class="ck-what">${esc(o.what)}</span></span>${o.button(label, waits)}</div>`;
+  return `<div class="ck" data-check="${esc(o.check)}"${waits ? ` data-follow="${esc(checkFollowUrl(o.rig, o.check))}" data-follow-state="${row.state}"` : ""}><span class="ck-res">${checkChip(row, now)}</span><span class="ck-main"><span><b>${esc(o.name)}</b>${when}</span>${sum}${line}<span class="ck-what">${esc(o.what)}</span></span>${await o.button(label, waits)}</div>`;
 }
 
 /**

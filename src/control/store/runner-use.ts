@@ -56,7 +56,15 @@ function sampleOf(summary: unknown, at: string): RunnerUseSample | undefined {
   };
 }
 
-export class RunnerUse extends StorePart {
+export interface RunnerUse {
+  /** A rig's report: its runners' totals, kept unless the rig's newest sample is under a minute. */
+  note(rig: string, summary: unknown, now: string): Promise<void>;
+  /** A rig's samples from `from` on, oldest first, with the newest one before it. */
+  samples(rig: string, from: string): Promise<RunnerUseSample[]>;
+}
+
+/** RunnerUse on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRunnerUse extends StorePart {
   /** A rig's report: its runners' totals, kept unless the rig's newest sample is under a minute. */
   note(rig: string, summary: unknown, now: string): void {
     const s = sampleOf(summary, now);

@@ -3,8 +3,19 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * Retired rigs (goal 125, T6): out of the lists, their reports refused.
  */
+export interface RetiredRigs {
+  /** Retires any rig: it leaves the lists, its reports are refused, a token control made ends. */
+  add(rig: string, by: string): Promise<void>;
+  /** Brings a retired rig back into the lists; a token control made for it stays ended. */
+  bringBack(rig: string, by: string): Promise<boolean>;
+  /** Takes a rig off the list with no entry of its own in the audit log (enrolled again). */
+  remove(rig: string): Promise<void>;
+  get(rig: string): Promise<{ at: string; by: string } | undefined>;
+  list(): Promise<{ rig: string; at: string; by: string }[]>;
+}
 
-export class RetiredRigs extends StorePart {
+/** RetiredRigs on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRetiredRigs extends StorePart {
   /** Retires any rig: it leaves the lists, its reports are refused, a token control made ends. */
   add(rig: string, by: string): void {
     this.db

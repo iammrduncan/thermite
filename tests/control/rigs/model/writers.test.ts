@@ -51,7 +51,7 @@ describe("the synthesizer's and the final writer's models", () => {
     assert.equal(agents.final_writer?.harness, "claude-code");
     assert.equal(agents.teachers && (agents.teachers as { models: unknown[] }).models.length, 0);
     // The audit log names the role.
-    const audit = s.store.auditLog.list(5, { action: "agent_model_given" });
+    const audit = await s.store.auditLog.list(5, { action: "agent_model_given" });
     assert.deepEqual(
       audit.slice(0, 2).map((a) => (a.body as { role?: string }).role),
       ["final_writer", "synthesizer"],
@@ -75,9 +75,9 @@ describe("the synthesizer's and the final writer's models", () => {
       /^Control sent the synthesizer back to the first teacher's model to rig-a\./,
     );
     assert.equal((cleared.body.agents as Record<string, unknown>).synthesizer, null);
-    assert.equal(s.store.agentModels.byRole("rig-a").synthesizer, undefined);
+    assert.equal((await s.store.agentModels.byRole("rig-a")).synthesizer, undefined);
     // The other agents keep theirs.
-    assert.equal(s.store.agentModels.byRole("rig-a").final_writer?.model, "opus-5.5");
+    assert.equal((await s.store.agentModels.byRole("rig-a")).final_writer?.model, "opus-5.5");
   });
 
   test("the advisor routes carry each under its own key, over HTTP and on the bus; none is null", async () => {

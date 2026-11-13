@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { readKnowledgeAgain } from "../../src/control/events/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { rigView } from "../../src/control/views/index.ts";
 import { assigned } from "../helpers/assignments.ts";
@@ -128,14 +129,14 @@ test("each campaign's collection is built from its runs' events; collections are
   const store = controlStore();
   await twoCampaigns(store);
   const kb = store.kb();
-  const collections = kb.collections();
+  const collections = await kb.collections();
   const pn = collections.find((f) => f.campaign === "gemv-speed");
   assert.deepEqual(pn?.counts, { attempt: 1, experiment: 1, note: 1, run: 1 });
   assert.equal(pn?.journal, 1, "the observation is a field note");
   assert.equal(pn?.runs, 1);
   // The experiment carries its result, the attempt its verdict, the note its kind; each the lane
   // and the trial its events name.
-  const [exp] = kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
+  const [exp] = await kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   assert.match(
     String(exp?.body),
     /Why: the guide says twice the bandwidth[\s\S]*Result: attempt a-1 \(submitted\)/,
@@ -148,30 +149,33 @@ test("each campaign's collection is built from its runs' events; collections are
     lane: "lane-1",
     trial: "t-1",
   });
-  assert.equal(exp && kb.resultOf(exp), "tried: attempt a-1 (submitted), win confirmed (+6.10%)");
-  const [att] = kb.search("vector", ["gemv-speed"], { kinds: ["attempt"] });
+  assert.equal(
+    exp && (await kb.resultOf(exp)),
+    "tried: attempt a-1 (submitted), win confirmed (+6.10%)",
+  );
+  const [att] = await kb.search("vector", ["gemv-speed"], { kinds: ["attempt"] });
   assert.match(String(att?.body), /Verdict: win_confirmed \(\+6\.10%\)/);
-  const [note] = kb.search("working set", ["gemv-speed"]);
+  const [note] = await kb.search("working set", ["gemv-speed"]);
   assert.equal(note?.kind, "note");
   assert.equal(note?.sub, "observation");
   assert.equal(note?.by, "lane-1");
   assert.equal(note?.rig, "rig-a");
   assert.equal(note?.run, "gs-3");
   // Search stays inside the collections given; a grant adds another campaign's collection.
-  assert.deepEqual(kb.search("verifier", ["gemv-speed"]), []);
-  assert.equal(kb.search("verifier", ["survey-study"]).length, 2);
-  assert.equal(kb.grant("gemv-speed", "survey-study", "owner:ui"), true);
-  assert.equal(kb.grant("gemv-speed", "survey-study", "owner:ui"), false, "granted already");
-  assert.deepEqual(kb.reads("gemv-speed"), ["survey-study"]);
-  assert.deepEqual(kb.readBy("survey-study"), ["gemv-speed"]);
-  assert.deepEqual(kb.readable("gemv-speed"), ["gemv-speed", "survey-study"]);
-  assert.equal(kb.search("verifier", kb.readable("gemv-speed")).length, 2);
-  assert.equal(kb.revoke("gemv-speed", "survey-study"), true);
-  assert.equal(kb.revoke("gemv-speed", "survey-study"), false);
-  assert.deepEqual(kb.reads("gemv-speed"), []);
+  assert.deepEqual(await kb.search("verifier", ["gemv-speed"]), []);
+  assert.equal((await kb.search("verifier", ["survey-study"])).length, 2);
+  assert.equal(await kb.grant("gemv-speed", "survey-study", "owner:ui"), true);
+  assert.equal(await kb.grant("gemv-speed", "survey-study", "owner:ui"), false, "granted already");
+  assert.deepEqual(await kb.reads("gemv-speed"), ["survey-study"]);
+  assert.deepEqual(await kb.readBy("survey-study"), ["gemv-speed"]);
+  assert.deepEqual(await kb.readable("gemv-speed"), ["gemv-speed", "survey-study"]);
+  assert.equal((await kb.search("verifier", await kb.readable("gemv-speed"))).length, 2);
+  assert.equal(await kb.revoke("gemv-speed", "survey-study"), true);
+  assert.equal(await kb.revoke("gemv-speed", "survey-study"), false);
+  assert.deepEqual(await kb.reads("gemv-speed"), []);
   // A campaign never reads itself as a grant.
-  assert.equal(kb.grant("gemv-speed", "gemv-speed", "owner:ui"), false);
-  assert.deepEqual(kb.reads("gemv-speed"), []);
+  assert.equal(await kb.grant("gemv-speed", "gemv-speed", "owner:ui"), false);
+  assert.deepEqual(await kb.reads("gemv-speed"), []);
   // Later events update the same items, and new ones are added.
   await ingest(
     store,
@@ -186,7 +190,7 @@ test("each campaign's collection is built from its runs' events; collections are
     ],
     6,
   );
-  const [dropped] = store.kb().search("vector", ["gemv-speed"], { kinds: ["experiment"] });
+  const [dropped] = await store.kb().search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   assert.match(String(dropped?.body), /Dropped: a rule avoids it/);
   assert.doesNotMatch(String(dropped?.body), /Result:/);
   assert.ok(Number(dropped?.seq) > Number(exp?.seq), "an update gives the item a new seq");
@@ -196,7 +200,7 @@ test("the knowledge base carries on after a restart of control: its cursor and s
   const path = join(mkdtempSync(join(tmpdir(), "thermite-kb-")), "control.db");
   const first = controlStore(path);
   await twoCampaigns(first);
-  const before = first.kb().collections();
+  const before = await first.kb().collections();
   const top = Math.max(...itemsBySeq(first, ["gemv-speed", "survey-study"]).map((x) => x.seq));
   // Control restarts: a new store on the same file, on the same bus, goes on from the stream's
   // place it applied, and indexes nothing twice.
@@ -205,7 +209,7 @@ test("the knowledge base carries on after a restart of control: its cursor and s
   await applied(second);
   assert.equal(busOf(second).apply.applied, 0);
   const kb = second.kb();
-  assert.deepEqual(kb.collections(), before);
+  assert.deepEqual(await kb.collections(), before);
   await ingest(
     second,
     "rig-a",
@@ -219,7 +223,7 @@ test("the knowledge base carries on after a restart of control: its cursor and s
     ],
     6,
   );
-  const [lesson] = second.kb().search("tiling", ["gemv-speed"]);
+  const [lesson] = await second.kb().search("tiling", ["gemv-speed"]);
   assert.ok(Number(lesson?.seq) > top, "seqs go on from where they were");
 });
 
@@ -244,17 +248,17 @@ test("a rig's new ledger never mixes its runs' items with the old ledger's", asy
     "ledger-rig-a-2",
   );
   const kb = store.kb();
-  const [old] = kb.search("idea", ["old-campaign"]);
-  const [neu] = kb.search("idea", ["new-campaign"]);
+  const [old] = await kb.search("idea", ["old-campaign"]);
+  const [neu] = await kb.search("idea", ["new-campaign"]);
   assert.equal(old?.title, "the old idea");
   assert.equal(neu?.title, "the new idea");
   assert.notEqual(old?.ledger, neu?.ledger);
   // The new ledger's verdict names an attempt the new ledger never recorded: the old one keeps
   // no verdict from it.
-  const [att] = kb.search("old try", ["old-campaign"], { kinds: ["attempt"] });
+  const [att] = await kb.search("old try", ["old-campaign"], { kinds: ["attempt"] });
   assert.doesNotMatch(String(att?.body), /Verdict/);
   // A rig's run is known in its current ledger only.
-  assert.equal(kb.runCampaign("rig-a", "r-1"), "new-campaign");
+  assert.equal(await kb.runCampaign("rig-a", "r-1"), "new-campaign");
 });
 
 test("a source note is a note of its own in the collection and in the run's journal", async () => {
@@ -290,20 +294,22 @@ test("a source note is a note of its own in the collection and in the run's jour
     ["lane-2", "journal_note", "g-1", { id: 2, by: "lane-2", kind: "note", text: "a plain aside" }],
   ]);
   const kb = store.kb();
-  const notes = kb.search("bandwidth", ["gemv-speed"], { kinds: ["note"] });
+  const notes = await kb.search("bandwidth", ["gemv-speed"], { kinds: ["note"] });
   assert.equal(notes.length, 1);
   assert.equal(notes[0]?.ref, "rn-1", "never the field note's id");
   assert.equal(notes[0]?.sub, "source_note");
-  const older = kb.search("prefetch distance", ["gemv-speed"], { kinds: ["note"] });
+  const older = await kb.search("prefetch distance", ["gemv-speed"], { kinds: ["note"] });
   assert.deepEqual(
     older.map((x) => [x.ref, x.sub]),
     [["rn-2", "source_note"]],
   );
-  assert.equal(kb.search("plain aside", ["gemv-speed"])[0]?.sub, "other");
+  assert.equal((await kb.search("plain aside", ["gemv-speed"]))[0]?.sub, "other");
   assert.equal(notes[0]?.url, "https://example.com/guide");
   assert.match(String(notes[0]?.body), /Sources: s-1/);
-  assert.equal(kb.search("memory bound", ["gemv-speed"])[0]?.sub, "observation");
-  const run = rigView(store, "rig-c", { staleAfterMs: 600_000 })?.runs.find((r) => r.id === "g-1");
+  assert.equal((await kb.search("memory bound", ["gemv-speed"]))[0]?.sub, "observation");
+  const run = (await rigView(store, "rig-c", { staleAfterMs: 600_000 }))?.runs.find(
+    (r) => r.id === "g-1",
+  );
   assert.deepEqual(
     run?.journal.map((n) => [n.id, n.kind, n.about?.type ?? null]),
     [
@@ -399,15 +405,15 @@ test("a collection holds everything a run produces: the run, its trials, its doc
     ],
   ]);
   const kb = store.kb();
-  const f = kb.collection("kernel-survey");
+  const f = await kb.collection("kernel-survey");
   assert.deepEqual(f.counts, { doc: 1, hypothesis: 1, run: 1, source: 1, trial: 1 });
-  const one = (kind: "run" | "trial" | "doc" | "source" | "hypothesis") => {
-    const [x] = kb.search("", ["kernel-survey"], { kinds: [kind] });
+  const one = async (kind: "run" | "trial" | "doc" | "source" | "hypothesis") => {
+    const [x] = await kb.search("", ["kernel-survey"], { kinds: [kind] });
     assert.ok(x, kind);
     return x;
   };
   // The run: its campaign and version, mode, seed, note, agents and briefing, then status.
-  const run = one("run");
+  const run = await one("run");
   assert.equal(run.ref, "rs-1");
   assert.equal(run.title, "Run rs-1: research, kernel-survey");
   assert.equal(run.by, "control:owner");
@@ -424,7 +430,7 @@ test("a collection holds everything a run produces: the run, its trials, its doc
     ].join("\n"),
   );
   // The trial: its lane, round, direction and focus, then how it ended; written by its lane.
-  const trial = one("trial");
+  const trial = await one("trial");
   assert.equal(trial.ref, "t-1");
   assert.equal(trial.by, "lane-1");
   assert.equal(trial.title, "lane-1, round 3: read the guide");
@@ -439,11 +445,11 @@ test("a collection holds everything a run produces: the run, its trials, its doc
     ].join("\n"),
   );
   // The source holds the text that was read, after its address.
-  const source = one("source");
+  const source = await one("source");
   assert.equal(source.body, `https://docs.example.com/guide\ndocs.example.com\n\n${text}`);
-  assert.equal(kb.search("weights stream", ["kernel-survey"])[0]?.kind, "source");
+  assert.equal((await kb.search("weights stream", ["kernel-survey"]))[0]?.kind, "source");
   // The document: its path, its text and its lane; then that the lane took it out.
-  const doc = one("doc");
+  const doc = await one("doc");
   assert.equal(doc.ref, "lane-1/synthesis/outline.md");
   assert.equal(doc.title, "synthesis/outline.md");
   assert.equal(doc.by, "lane-1");
@@ -452,7 +458,7 @@ test("a collection holds everything a run produces: the run, its trials, its doc
     "# Outline\nLoads first, then tiling.\nRemoved: lane-1 took it out of its working area in trial t-2.",
   );
   // A hypothesis, with the verified claims for it.
-  const hypothesis = one("hypothesis");
+  const hypothesis = await one("hypothesis");
   assert.equal(hypothesis.ref, "h-1");
   assert.equal(hypothesis.by, "lane-1");
   assert.equal(hypothesis.body, "Loads bound the kernel.\nSupporting claims: c-1");
@@ -464,7 +470,7 @@ test("a collection holds everything a run produces: the run, its trials, its doc
     assert.match(x.at, /^2026-10-20T01:0\d:00\.000Z$/);
   }
   // The pages are built without the text a source's or a document's event carries.
-  const events = rigView(store, "rig-r", { staleAfterMs: 600_000 })?.recent ?? [];
+  const events = (await rigView(store, "rig-r", { staleAfterMs: 600_000 }))?.recent ?? [];
   assert.equal(events.find((e) => e.kind === "source_fetched")?.body.text, undefined);
   assert.equal(events.find((e) => e.kind === "research_doc")?.body.text, undefined);
   assert.equal(
@@ -477,7 +483,7 @@ test("a collection holds everything a run produces: the run, its trials, its doc
 
 test("after an upgrade, the runs indexed before get their run and trial items, once, in their collection", async () => {
   const store = controlStore();
-  assigned(store, "rig-a", "gs-3", "gemv-speed");
+  await assigned(store, "rig-a", "gs-3", "gemv-speed");
   await ingest(store, "rig-a", [
     ["harness", "run_created", "gs-3", { campaign: "gemv-speed", mode: "goal" }],
     [
@@ -491,29 +497,31 @@ test("after an upgrade, the runs indexed before get their run and trial items, o
   ]);
   const kb = store.kb();
   // As an earlier reading left the store: no run or trial items, and no reading's version.
-  store.db.exec("delete from kb_item where kind in ('run', 'trial'); delete from kb_meta;");
-  const note = kb.search("kept", ["gemv-speed"])[0];
+  sqliteBehind(store).db.exec(
+    "delete from kb_item where kind in ('run', 'trial'); delete from kb_meta;",
+  );
+  const note = (await kb.search("kept", ["gemv-speed"]))[0];
   // Control starts again: the knowledge base reads those events again from the events stream.
   await readKnowledgeAgain(store, busOf(store).bus);
-  assert.deepEqual(kb.collection("gemv-speed").counts, { note: 1, run: 1, trial: 1 });
-  const [run] = kb.search("", ["gemv-speed"], { kinds: ["run"] });
+  assert.deepEqual((await kb.collection("gemv-speed")).counts, { note: 1, run: 1, trial: 1 });
+  const [run] = await kb.search("", ["gemv-speed"], { kinds: ["run"] });
   assert.match(String(run?.body), /Status: paused \(a pause\)$/);
   assert.equal(run?.campaign, "gemv-speed");
   assert.equal(
-    kb.search("kept", ["gemv-speed"])[0]?.seq,
+    (await kb.search("kept", ["gemv-speed"]))[0]?.seq,
     note?.seq,
     "an item it had stays as it was",
   );
   // Once only: a later call reads nothing again.
-  store.db.exec("delete from kb_item where kind = 'trial'");
+  sqliteBehind(store).db.exec("delete from kb_item where kind = 'trial'");
   assert.equal(await readKnowledgeAgain(store, busOf(store).bus), 0);
-  assert.equal(kb.collection("gemv-speed").counts.trial, undefined);
+  assert.equal((await kb.collection("gemv-speed")).counts.trial, undefined);
 });
 
 test("a rig files a run's items only under a campaign control gave it", async () => {
   const store = controlStore();
   // Control assigned gemv-speed to rig-a's g-1.
-  assigned(store, "rig-a", "g-1", "gemv-speed");
+  await assigned(store, "rig-a", "g-1", "gemv-speed");
   await ingest(store, "rig-a", [
     ["harness", "run_created", "g-1", { campaign: "gemv-speed", mode: "goal" }],
     ["lane-1", "journal_note", "g-1", { id: 1, by: "lane-1", kind: "lesson", text: "real lesson" }],
@@ -528,14 +536,14 @@ test("a rig files a run's items only under a campaign control gave it", async ()
   ]);
   // Nor under a campaign control saved or a grant names, nor for a run of a name control
   // assigned another rig, whatever campaign it names.
-  store.campaigns.put({
+  await store.campaigns.put({
     campaign: "saved-only",
     version: 1,
     contract: { campaign: "saved-only" },
     sha: "0".repeat(64),
     by: "owner:ui",
   });
-  store.kb().grant("granted-reader", "granted-only", "owner:api");
+  await store.kb().grant("granted-reader", "granted-only", "owner:api");
   await ingest(store, "rig-c", [
     ["harness", "run_created", "s-1", { campaign: "saved-only", mode: "goal" }],
     ["lane-1", "journal_note", "s-1", { id: 1, by: "lane-1", kind: "lesson", text: "into saved" }],
@@ -546,30 +554,34 @@ test("a rig files a run's items only under a campaign control gave it", async ()
   ]);
   const kb = store.kb();
   assert.deepEqual(
-    kb.search("lesson", ["gemv-speed"]).map((x) => x.body),
+    (await kb.search("lesson", ["gemv-speed"])).map((x) => x.body),
     ["real lesson\nAbout: run g-1"],
   );
-  assert.equal(kb.search("planted", ["gemv-speed"]).length, 0);
-  assert.equal(kb.search("local", ["local-try"], { kinds: ["note"] }).length, 1);
-  assert.equal(kb.search("saved", ["saved-only"]).length, 0);
-  assert.equal(kb.search("grant", ["granted-only"]).length, 0);
-  assert.equal(kb.search("copy", ["its-own-name"]).length, 0);
+  assert.equal((await kb.search("planted", ["gemv-speed"])).length, 0);
+  assert.equal((await kb.search("local", ["local-try"], { kinds: ["note"] })).length, 1);
+  assert.equal((await kb.search("saved", ["saved-only"])).length, 0);
+  assert.equal((await kb.search("grant", ["granted-only"])).length, 0);
+  assert.equal((await kb.search("copy", ["its-own-name"])).length, 0);
 });
 
 test("a store built by an earlier reading rebuilds its experiments and attempts once (goal 162)", async () => {
   const store = controlStore();
   await twoCampaigns(store);
   const kb = store.kb();
-  const [exp] = kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
+  const [exp] = await kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   const whole = exp?.body;
   // As reading 2 left an item whose details held "Result: ": cut, and its state in its text.
-  store.db.prepare("update kb_item set body = 'cut', meta = '{}' where kind = 'experiment'").run();
-  store.db.prepare("update kb_meta set value = '2' where key = 'reading'").run();
+  sqliteBehind(store)
+    .db.prepare("update kb_item set body = 'cut', meta = '{}' where kind = 'experiment'")
+    .run();
+  sqliteBehind(store).db.prepare("update kb_meta set value = '2' where key = 'reading'").run();
   await readKnowledgeAgain(store, busOf(store).bus);
-  const [again] = kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
+  const [again] = await kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   assert.equal(again?.body, whole);
   assert.equal(again?.meta.result, "Result: attempt a-1 (submitted)");
-  const reading = store.db.prepare("select value from kb_meta where key = 'reading'").get() as {
+  const reading = sqliteBehind(store)
+    .db.prepare("select value from kb_meta where key = 'reading'")
+    .get() as {
     value: string;
   };
   assert.equal(reading.value, "4");
@@ -581,7 +593,7 @@ test("control reads a run recorded under its names from before 2026-10-15, as th
     ["harness", "instance_created", "old-1", { campaign: "old-speed", mode: "goal" }],
     ["harness", "instance_status", "old-1", { status: "paused", reason: "the owner paused it" }],
   ]);
-  const [run] = store.kb().search("", ["old-speed"], { kinds: ["run"] });
+  const [run] = await store.kb().search("", ["old-speed"], { kinds: ["run"] });
   assert.equal(run?.run, "old-1");
   assert.match(String(run?.body), /Mode: goal[\s\S]*Status: paused \(the owner paused it\)/);
 });

@@ -9,6 +9,7 @@ import { buildInfo } from "../../src/common/build-info.ts";
 import { serveRigAsks } from "../../src/control/bus/index.ts";
 import { answerKbAsk, followKbFiles, KbFiles } from "../../src/control/kb/index.ts";
 import { Screens } from "../../src/control/live/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import type { SignedCommand } from "../../src/core/commands.ts";
 import { KB_OUTBOX_FILES, type KbItemBody } from "../../src/core/kb/index.ts";
 import type { KbSearchAnswer } from "../../src/core/link/kb.ts";
@@ -38,7 +39,7 @@ async function setup() {
   const env = makeHarnessEnv("rig-a");
   const out = await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
   assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-  const { store } = controlOnly({ keys: env.keys });
+  const { store } = await controlOnly({ keys: env.keys });
   const { bus, started } = busOf(store);
   // Control has started on its bus before a rig's report comes.
   await started;
@@ -96,15 +97,14 @@ async function setup() {
     /** Control's follow of the files' stream, one pass. */
     take: () => followKbFiles(bus, files),
     items: () =>
-      store.db
-        .prepare(
+      sqliteBehind(store)
+        .db.prepare(
           "select slot, kind, ref, version, title, body, file_sha256 from kb_item where slot != 'records' order by id",
         )
         .all()
         .map((r) => ({ ...r })),
-    refusals: () =>
-      store.auditLog
-        .list(100)
+    refusals: async () =>
+      (await store.auditLog.list(100))
         .filter((a) => a.action === "kb_item_refused")
         .map((a) => (a.body as { why: string }).why),
   };
@@ -158,29 +158,24 @@ describe("a write to the knowledge base, from the harness to control", () => {
         file_sha256: sha,
       },
     ]);
-    assert.equal(s.store.kb().files.has(sha), false);
+    assert.equal(await s.store.kb().files.has(sha), false);
     // In the run's collection, in its writer's slot; each version kept, with its links.
-    const [finding, reference] = s.store
-      .kb()
-      .search("", [COLLECTION])
+    const [finding, reference] = (await s.store.kb().search("", [COLLECTION]))
       .filter((i) => i.slot === "worker-1")
       .sort((a, b) => a.id - b.id);
     assert.equal(finding?.campaign, COLLECTION);
     assert.deepEqual(
-      s.store
-        .kb()
-        .versions(finding?.id ?? 0)
-        .map((v) => v.body),
+      (await s.store.kb().versions(finding?.id ?? 0)).map((v) => v.body),
       ["Twice the bandwidth", "Twice, on the A100 too"],
     );
-    assert.deepEqual(s.store.kb().versions(reference?.id ?? 0)[0]?.links, [
+    assert.deepEqual((await s.store.kb().versions(reference?.id ?? 0))[0]?.links, [
       { rel: "supports", to: `${COLLECTION}/${RUN}/worker-1/finding:1` },
     ]);
     // Then the file: the supervisor puts it, control keeps it, and the item has it.
     const put = await s.put();
     assert.deepEqual([put.put, put.waiting, put.error], [1, 0, undefined]);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha), true);
+    assert.equal(await s.store.kb().files.has(sha), true);
     assert.ok(existsSync(s.files.path(sha)));
     // The other way round: the file first, then its item.
     s.write({
@@ -199,7 +194,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.equal((await s.put()).put, 1, "the paper was put already: only the new file goes");
     await s.take();
     const againSha = createHash("sha256").update(again).digest("hex");
-    assert.equal(s.store.kb().files.has(againSha), true);
+    assert.equal(await s.store.kb().files.has(againSha), true);
     assert.equal(await s.report(), 200);
     assert.deepEqual(
       s
@@ -232,7 +227,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     // A kind the campaign does not let the role write (the default: the planner writes no finding).
     ledger.appendEvent("planner", "kb_item", RUN, { ...body("planner"), kind: "finding" });
     assert.equal(await s.report(), 200);
-    assert.deepEqual(s.refusals().reverse(), [
+    assert.deepEqual((await s.refusals()).reverse(), [
       "worker-2 writes only in its own slot, worker-2: not in worker-1, another writer's",
       "worker-1 writes only in its own slot, worker-1: not in records, another writer's",
       "not an item: slot: a slot is records, owner, worker-<lane> or one of planner, teachers, merged_by, auditor, review_panel, synthesizer, final_writer",
@@ -247,7 +242,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     );
     // The page went on to its end: control holds every event of it.
     assert.equal(
-      s.store.reportedRigs.heldCursor("rig-a", ledger.ledgerId()),
+      await s.store.reportedRigs.heldCursor("rig-a", ledger.ledgerId()),
       ledger.latestEventId(),
     );
   });
@@ -270,7 +265,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.equal(next.item, 2);
     assert.equal(next.address, `${COLLECTION}/${RUN}/review_panel/decision:2`);
     assert.equal(await s.report(), 200);
-    assert.deepEqual(s.refusals(), []);
+    assert.deepEqual(await s.refusals(), []);
     assert.deepEqual(
       s.items().map((i) => [i.slot, i.kind, i.ref]),
       [
@@ -278,9 +273,9 @@ describe("a write to the knowledge base, from the harness to control", () => {
         ["review_panel", "decision", "2"],
       ],
     );
-    const first = s.store.kb().at(`${COLLECTION}/${RUN}/review-panel/review:1`);
+    const first = await s.store.kb().at(`${COLLECTION}/${RUN}/review-panel/review:1`);
     assert.equal(first?.by, "review_panel");
-    assert.deepEqual(s.store.kb().versions(first?.id ?? 0)[0]?.links, [
+    assert.deepEqual((await s.store.kb().versions(first?.id ?? 0))[0]?.links, [
       { rel: "follows", to: `${COLLECTION}/${RUN}/review_panel/review:9` },
     ]);
   });
@@ -312,12 +307,14 @@ describe("a write to the knowledge base, from the harness to control", () => {
     const once = () => ({
       items: s.items().length,
       versions: Number(
-        s.store.db.prepare("select count(*) as n from kb_version where event is not null").get()?.n,
+        sqliteBehind(s.store)
+          .db.prepare("select count(*) as n from kb_version where event is not null")
+          .get()?.n,
       ),
-      files: Number(s.store.db.prepare("select count(*) as n from kb_file").get()?.n),
+      files: Number(sqliteBehind(s.store).db.prepare("select count(*) as n from kb_file").get()?.n),
     });
     assert.deepEqual(once(), { items: 1, versions: 1, files: 1 });
-    assert.equal(s.store.kb().files.has(sha), true);
+    assert.equal(await s.store.kb().files.has(sha), true);
     // Sent again, the report and the file change nothing.
     assert.equal(await s.report(0), 200);
     assert.equal((await s.put()).put, 0, "the supervisor put it once");
@@ -336,7 +333,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     // Put and kept by control, but its item not reported yet: it stays.
     await s.put();
     await s.take();
-    assert.equal(s.store.kb().files.has(sha), true);
+    assert.equal(await s.store.kb().files.has(sha), true);
     assert.deepEqual(await s.removeHeld(), { asked: 1, held: 0, removed: 0 });
     assert.deepEqual(readdirSync(outbox), [sha]);
     // Its item reported: control holds both, and the file goes.
@@ -358,7 +355,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     await s.take();
     assert.deepEqual(await s.removeHeld(), { asked: 1, held: 1, removed: 1 });
     assert.deepEqual(readdirSync(outbox), []);
-    assert.equal(s.store.kb().files.has(notesSha), true);
+    assert.equal(await s.store.kb().files.has(notesSha), true);
     assert.ok(existsSync(s.files.path(sha)));
   });
 });
@@ -375,7 +372,7 @@ describe("an agent's item, written over its tools, found by an agent of another 
     assert.equal(kept.isError, undefined, kept.text);
     assert.equal(await s.report(), 200);
     // Another run of the same campaign, which control assigned the rig.
-    s.store.commands.enqueue({
+    await s.store.commands.enqueue({
       envelope: {
         v: 1,
         id: "c-other",
@@ -388,19 +385,19 @@ describe("an agent's item, written over its tools, found by an agent of another 
       },
       signature: "not checked by the store",
     } as unknown as SignedCommand);
-    const found = answerKbAsk(s.store, "rig-a", "search", {
+    const found = (await answerKbAsk(s.store, "rig-a", "search", {
       run: "smoke-2",
       q: "which approaches failed to improve speed",
-    }) as KbSearchAnswer;
+    })) as KbSearchAnswer;
     const hit = found.hits.find((h) => h.slot === "worker-1");
     assert.equal(hit?.address, `${COLLECTION}/${RUN}/worker-1/finding:1`);
     assert.match(hit?.excerpt ?? "", /\*\*failed\*\* to \*\*improve\*\* \*\*speed\*\*/);
     // Started fresh, that run would read only its own items: none of these.
-    s.store.kb().setScope(COLLECTION, "smoke-2", { fresh: true, granted: [] }, "owner:api");
-    const fresh = answerKbAsk(s.store, "rig-a", "search", {
+    await s.store.kb().setScope(COLLECTION, "smoke-2", { fresh: true, granted: [] }, "owner:api");
+    const fresh = (await answerKbAsk(s.store, "rig-a", "search", {
       run: "smoke-2",
       q: "speed",
-    }) as KbSearchAnswer;
+    })) as KbSearchAnswer;
     assert.deepEqual(fresh.hits, []);
   });
 });

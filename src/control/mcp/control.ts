@@ -24,7 +24,7 @@ export function registerControl(tools: ToolContext): void {
       description: `Control's own log level, as set_control_log_level sets it: ${levelAnswer}. A rig's harness and supervisor each have their own: issue_command's log_level {part: harness|supervisor, level} changes one.`,
       inputSchema: {},
     },
-    audited("control_log_level", () => controlLogLevelOf(store)),
+    audited("control_log_level", async () => controlLogLevelOf(store)),
   );
   if (role === "owner")
     server.registerTool(
@@ -34,8 +34,8 @@ export function registerControl(tools: ToolContext): void {
         description: `Sets control's own log level. ${CONTROL_LOG_LEVEL_WORDS} Audited as control_log_level_set. Returns ${levelAnswer}, and said, the level in words. The owner's token only.`,
         inputSchema: { level: z.enum(LOG_LEVELS).nullable().describe(CONTROL_LOG_LEVEL_WORDS) },
       },
-      audited("set_control_log_level", (a: { level: string | null }) => {
-        const o = setControlLogLevel(store, a, actor);
+      audited("set_control_log_level", async (a: { level: string | null }) => {
+        const o = await setControlLogLevel(store, a, actor);
         if (!o.ok) throw new Error(o.error);
         return { ...o.level, said: o.said };
       }),
@@ -74,7 +74,7 @@ export function registerControl(tools: ToolContext): void {
     },
     audited(
       "control_log",
-      (a: {
+      async (a: {
         limit: number;
         action?: string;
         include_mcp: boolean;
@@ -103,15 +103,15 @@ export function registerControl(tools: ToolContext): void {
     audited("providers", async () => ({
       model_providers: await providersWithUsage(store, (p) => opts.parts.planUsage.of(p)),
       // The prices model usage costs calls at: the providers' listed ones and the owner's.
-      model_prices: modelPrices(store),
-      git_access: store.gitAccess.list().map((g) => ({
+      model_prices: await modelPrices(store),
+      git_access: (await store.gitAccess.list()).map((g) => ({
         name: g.name,
         kind: g.kind,
         fingerprint: g.fingerprint,
         username: g.username,
         host: g.host,
       })),
-      machines: store.machines.list().map((m) => ({
+      machines: (await store.machines.list()).map((m) => ({
         name: m.name,
         address: m.address,
         port: m.port,
@@ -121,7 +121,7 @@ export function registerControl(tools: ToolContext): void {
         checked_at: m.checked_at,
         check_error: m.check_error,
       })),
-      clusters: store.clusters.list().map((k) => ({
+      clusters: (await store.clusters.list()).map((k) => ({
         name: k.name,
         context: k.context,
         placement: k.placement,
@@ -131,7 +131,7 @@ export function registerControl(tools: ToolContext): void {
         checked_at: k.checked_at,
         check_error: k.check_error,
       })),
-      gpu_clouds: store.gpuClouds.list().map((g) => ({
+      gpu_clouds: (await store.gpuClouds.list()).map((g) => ({
         name: g.name,
         kind: g.kind,
         facts: g.facts,
@@ -174,8 +174,8 @@ export function registerModelPrice(tools: ToolContext): void {
           clear: z.literal(true).optional(),
         },
       },
-      audited("set_model_price", (a: Record<string, unknown>) => {
-        const out = setModelPrice(store, a, actor);
+      audited("set_model_price", async (a: Record<string, unknown>) => {
+        const out = await setModelPrice(store, a, actor);
         if (!out.ok) throw new Error(out.error);
         return out.answer;
       }),

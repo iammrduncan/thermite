@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../../../common/in-turn.ts";
 import { RESEARCH_REVIEW } from "../../../../core/research-check.ts";
 import { sumUsage } from "../../../../core/usage.ts";
 import type { PromptItem } from "../../../prompts.ts";
@@ -85,12 +86,12 @@ export function runHelpers(dash: Dashboard) {
    * RunPod rig's price an hour. The teachers' lines say "teacher 1" or "teacher 2" where the
    * rig's settings tell which. None: a run with no agents (a try of a kit) and nothing spent.
    */
-  const runUsage = (u: RigView, i: RunView, now: number): RunUsage | undefined => {
-    const d = usageData(store, { run: i.id });
+  const runUsage = async (u: RigView, i: RunView, now: number): Promise<RunUsage | undefined> => {
+    const d = await usageData(store, { run: i.id });
     if (!i.has_agents && !d.report.total.records && d.report.total.cost.pod_usd === null)
       return undefined;
-    const roles = store.agentModels.byRole(u.id);
-    const launched = store.runpod.rig(u.id);
+    const roles = await store.agentModels.byRole(u.id);
+    const launched = await store.runpod.rig(u.id);
     const perHour = (launched?.state as { price_per_hr?: unknown } | null)?.price_per_hr;
     // The run's time: from its start to now, or to its last event once it is finished.
     const start = Date.parse(i.created_at ?? "");
@@ -123,10 +124,10 @@ export function runHelpers(dash: Dashboard) {
    * model use, from the review panel's records (round "review N"), priced as Metrics prices them,
    * and the supervisor's lines for it in the run's Live view.
    */
-  const reviewSources = (u: RigView, i: RunView): ReviewSources => {
-    const rows = store.usage.reviewRows(u.id, i.id);
-    const price = pricingOf(store);
-    const lines = store.liveLines.reviewLines(u.id, i.id);
+  const reviewSources = async (u: RigView, i: RunView): Promise<ReviewSources> => {
+    const rows = await store.usage.reviewRows(u.id, i.id);
+    const price = await pricingOf(store);
+    const lines = await store.liveLines.reviewLines(u.id, i.id);
     return {
       usage: (n) => {
         const rs = rows.get(n);
@@ -153,7 +154,7 @@ export function runHelpers(dash: Dashboard) {
    * nothing of it waits for the owner, and its champion goes to no other rig. Its prompts, for
    * the Prompts view, are read from the message bus before (runPrompts).
    */
-  const runSection = (
+  const runSection = async (
     c: Ctx,
     x: RunOnRig,
     vs: RigView[],
@@ -167,11 +168,11 @@ export function runHelpers(dash: Dashboard) {
     const others = earlier ? [] : vs.filter((o) => o.id !== u.id);
     // A research run's page has its Reviews and Hypotheses tabs (goals 116 and 117).
     const researchRun = i.mode === "research";
-    const usage = runUsage(u, i, now);
-    const decisions = earlier ? [] : needs(c, [u], now, back).filter((n) => n.run === i.id);
+    const usage = await runUsage(u, i, now);
+    const decisions = earlier ? [] : (await needs(c, [u], now, back)).filter((n) => n.run === i.id);
     // How each goal is really checked (goal 082): as this run's rig reported its kit, else as
     // control can read the campaign's kit or contract.
-    const how = i.mode === "goal" ? goalChecksFor(runCampaign(i), vs, u.id, i) : undefined;
+    const how = i.mode === "goal" ? await goalChecksFor(runCampaign(i), vs, u.id, i) : undefined;
     const howFor = (goal: string) =>
       howCheckedDetails(
         how?.checks.goals.find((x) => x.goal === goal),
@@ -206,7 +207,7 @@ export function runHelpers(dash: Dashboard) {
       : "";
     const now_ =
       i.status === "running"
-        ? runBrief(store, u, i, now, { detail: true })
+        ? await runBrief(store, u, i, now, { detail: true })
         : `<div class="card"><div class="small">This run is <b>${esc(runStatusText(i))}</b>. ${i.status === "paused" ? `Nothing new starts until it is resumed.` : `It is finished.${leftWords}`}</div></div>`;
     const recent = timeline(
       i.timeline.map((e) => ({ u, e })),
@@ -357,7 +358,7 @@ export function runHelpers(dash: Dashboard) {
       ? `applies to the folder ${esc(i.seed_folder.folder)} at ${esc(i.seed_folder.commit.slice(0, 8))}: git apply --directory=${esc(i.seed_folder.folder)}`
       : `applies to ${esc(i.published?.base_commit.slice(0, 8) ?? "")}`;
     const patch =
-      i.published && store.championPatches.get(u.id, u.ledger_id, i.id, i.published.seq)
+      i.published && (await store.championPatches.get(u.id, u.ledger_id, i.id, i.published.seq))
         ? `<a href="${championPatchHref(i, i.published.seq)}">download champion #${i.published.seq} as a patch</a> <span class="muted small">(${appliesTo})</span>`
         : "";
     // The champions, newest first: what each one changed and what it gained, and its commit in git.
@@ -367,16 +368,19 @@ export function runHelpers(dash: Dashboard) {
     const metrics = i.mode === "hill_climb" ? metricsBlock(i) : "";
     const ladder =
       i.mode === "hill_climb"
-        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat">${git.gitLine(x, now)}${metrics ? "" : `<div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}`}${i.champion
-            .filter((x) => !x.reopened)
-            .slice()
-            .reverse()
-            .slice(0, 12)
-            .map((x) => {
-              const a = x.attempt ? i.attempts.find((y) => y.id === x.attempt) : undefined;
-              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span>${championGuardLine(i, x.seq)}${git.championGit(onRig, x.seq, store.championPatches.get(u.id, u.ledger_id, i.id, x.seq) ? `<a class="mi" href="${championPatchHref(i, x.seq)}">Download as a patch<span class="muted small">against the run's starting commit</span></a>` : "")}</div>`;
-            })
-            .join("")}</div></div>`
+        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat">${await git.gitLine(x, now)}${metrics ? "" : `<div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}`}${(
+            await mapInTurn(
+              i.champion
+                .filter((x) => !x.reopened)
+                .slice()
+                .reverse()
+                .slice(0, 12),
+              async (x) => {
+                const a = x.attempt ? i.attempts.find((y) => y.id === x.attempt) : undefined;
+                return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span>${championGuardLine(i, x.seq)}${await git.championGit(onRig, x.seq, (await store.championPatches.get(u.id, u.ledger_id, i.id, x.seq)) ? `<a class="mi" href="${championPatchHref(i, x.seq)}">Download as a patch<span class="muted small">against the run's starting commit</span></a>` : "")}</div>`;
+              },
+            )
+          ).join("")}</div></div>`
         : "";
     // Hands-off by default (goal 079): what the run asks you about, if anything.
     const asks = [
@@ -467,8 +471,8 @@ export function runHelpers(dash: Dashboard) {
                     csrf: t,
                     back,
                     cmd: (f) => cmdForm(c, f),
-                    model: (() => {
-                      const own = store.agentModels.byRole(u.id).planner;
+                    model: await (async () => {
+                      const own = (await store.agentModels.byRole(u.id)).planner;
                       if (own) return `${own.model}, its own model (from ${own.provider})`;
                       return u.model
                         ? u.model.source === "none"
@@ -479,26 +483,30 @@ export function runHelpers(dash: Dashboard) {
                     figures: diagnostics,
                     propagate,
                     // No model for the planner: an old rule in words waits to be converted (goal 066).
-                    noModel: !store.agentModels.byRole(u.id).planner && u.model?.source === "none",
+                    noModel:
+                      !(await store.agentModels.byRole(u.id)).planner && u.model?.source === "none",
                     // A message to the planner that control or the rig refused.
                     refused:
                       c.req.query("msgerror") ||
-                      (() => {
-                        const why = store.commands.lastMessageToRun(u.id, i.id, "planner")?.refused;
+                      (await (async () => {
+                        const why = (await store.commands.lastMessageToRun(u.id, i.id, "planner"))
+                          ?.refused;
                         return why
                           ? `The rig refused your last message to the planner: ${why}`
                           : "";
-                      })(),
+                      })()),
                   })
                 : view === "journal"
                   ? journalTab({
                       r: i,
                       now,
                       field: u.ledger_id
-                        ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, JOURNAL_SHOWN)
+                        ? await store.kb().fieldNotes(u.id, u.ledger_id, i.id, JOURNAL_SHOWN)
                         : { total: 0, items: [] },
-                      counts: u.ledger_id ? store.kb().runCounts(u.id, u.ledger_id, i.id) : {},
-                      reads: i.campaign ? store.kb().reads(i.campaign) : [],
+                      counts: u.ledger_id
+                        ? await store.kb().runCounts(u.id, u.ledger_id, i.id)
+                        : {},
+                      reads: i.campaign ? await store.kb().reads(i.campaign) : [],
                     })
                   : view === "experiments"
                     ? experimentsTab({
@@ -517,7 +525,7 @@ export function runHelpers(dash: Dashboard) {
                         ].filter(Boolean),
                       })
                     : view === "reviews" && researchRun
-                      ? reviewsTab({ u, r: i, now, ...reviewSources(u, i) })
+                      ? reviewsTab({ u, r: i, now, ...(await reviewSources(u, i)) })
                       : view === "hypotheses" && researchRun
                         ? hypothesesTab({ u, r: i, now, cmd: (f) => cmdForm(c, f), back })
                         : view === "stats"
@@ -525,7 +533,7 @@ export function runHelpers(dash: Dashboard) {
                               usage
                                 ? runStatsTab(usage)
                                 : `<div class="card"><div class="empty">No model use: this run has no agents.</div></div>`
-                            }${runnersSince(store, u, i, now)}`
+                            }${await runnersSince(store, u, i, now)}`
                           : `<p class="run-said" data-part="run-said">${said}</p>
 <div data-part="run-needs">${waiting ? `<div class="block" id="needs"><div class="head"><h2>Needs you</h2><span class="n">${waiting}</span></div><div class="dqs">${decisions.map((n) => n.html).join("")}</div></div>` : ""}</div>
 ${metrics}<div class="cols run-cols"><div>
@@ -536,7 +544,7 @@ ${goals}${championHeldOutBlock(i, now)}${research}${judgeQueue}
 <div class="block" data-part="recent"><div class="head"><h2>Recent</h2><span class="right"><a href="${runHref(i, "history")}">Full history</a></span></div>${recent}</div>
 </div></div>`;
     return `${usage ? runUsageTop(usage) : ""}<section class="block" id="run-${esc(i.id)}">
-<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${fmtInt(n)} note${n === 1 ? "" : "s"}`)(u.ledger_id ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, 0).total : 0)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}${sub("info", "Info")}</nav>
+<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${fmtInt(n)} note${n === 1 ? "" : "s"}`)(u.ledger_id ? (await store.kb().fieldNotes(u.id, u.ledger_id, i.id, 0)).total : 0)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}${sub("info", "Info")}</nav>
 ${body}
 </section>`;
   };
@@ -547,8 +555,13 @@ ${body}
  * The run's Stats: how the rig's runners spent the run's time (goal 231), as the rig's Runners
  * block shows it; nothing on a rig with no runners' times.
  */
-function runnersSince(store: Dashboard["store"], u: RigView, r: RunView, now: number): string {
-  const v = r.created_at ? rigRunnerUse(store, u.id, "run", now, r.created_at) : undefined;
+async function runnersSince(
+  store: Dashboard["store"],
+  u: RigView,
+  r: RunView,
+  now: number,
+): Promise<string> {
+  const v = r.created_at ? await rigRunnerUse(store, u.id, "run", now, r.created_at) : undefined;
   if (!v?.runners.length) return "";
   return `<div class="block" id="runners"><div class="head"><h2>The rig's runners</h2><span class="right"><a href="/ui/rigs/${encodeURIComponent(u.id)}#runners">${esc(u.id)}'s Runners</a></span></div>${useBlock(u.id, v, r.created_at ?? undefined, "this run")}</div>`;
 }

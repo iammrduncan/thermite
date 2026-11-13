@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { saveRunpodRig } from "../../../src/control/runpod/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { PRICE_CORE_JS } from "../../../src/control/ui/providers/client.ts";
 import { bars, dayEdges, PRICE_WORDS } from "../../../src/control/ui/usage.ts";
@@ -85,7 +86,7 @@ async function ingest(
  */
 async function stack() {
   const secrets = SecretBox.ephemeral();
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, secrets },
   });
@@ -94,13 +95,13 @@ async function stack() {
     ["zen", "opencode"],
     ["sub", "claude"],
   ] as const)
-    store.modelProviders.put({
+    await store.modelProviders.put({
       name,
       type,
       base_url: type === "openai" ? "https://models.example.com/v1" : "",
       key: { sealed: secrets.seal("key-for-tests"), hint: "…ests" },
     });
-  store.modelProviders.setModels("lab", [
+  await store.modelProviders.setModels("lab", [
     {
       id: "wide-model",
       context_window: 131_072,
@@ -108,12 +109,15 @@ async function stack() {
     },
     { id: "small-model" },
   ]);
-  store.modelProviders.setModels("zen", [
+  await store.modelProviders.setModels("zen", [
     { id: "free-model", price: { input: 0, cached_input: null, output: 0 } },
   ]);
-  store.modelProviders.setModels("sub", [{ id: "opus-5.5" }]);
-  store.agentModels.assignRole("rig-a", "teachers", { provider: "lab", model: "wide-model" });
-  store.agentModels.assignRole("rig-a", "second_teacher", { provider: "sub", model: "opus-5.5" });
+  await store.modelProviders.setModels("sub", [{ id: "opus-5.5" }]);
+  await store.agentModels.assignRole("rig-a", "teachers", { provider: "lab", model: "wide-model" });
+  await store.agentModels.assignRole("rig-a", "second_teacher", {
+    provider: "sub",
+    model: "opus-5.5",
+  });
   await ingest(store, "rig-a", [
     [
       "run_created",
@@ -358,14 +362,14 @@ describe("model use on the screens (goal 075)", () => {
 
   test("a RunPod rig's run: its pod's spend is a line of its own, with its time at the pod's price", async () => {
     const s = await stack();
-    s.store.runpod.addRig({
+    await s.store.runpod.addRig({
       rig: "rig-a",
       cloud: "rp",
       pod: "p-1",
       state: { spent_usd: 0, price_per_hr: 1.65 },
       by: "t",
     });
-    saveRunpodRig(s.store, "rig-a", { spent_usd: 1.65, price_per_hr: 1.65 }, true);
+    await saveRunpodRig(s.store, "rig-a", { spent_usd: 1.65, price_per_hr: 1.65 }, true);
     const html = await s.page("/ui/campaigns/matmul/runs/r-1/stats");
     const gpu = rowWith(html, "<b>GPU time on RunPod</b>");
     assert.match(gpu, /1 h 0 m at \$1\.65\/h/);
@@ -598,11 +602,12 @@ describe("model use on the screens (goal 075)", () => {
     assert.equal(r.status, 303);
     assert.equal(r.to, "/ui/settings/prices?ok=saved#model-prices");
     assert.deepEqual(
-      s.store.usage.prices().map((x) => [x.provider, x.model, x.price]),
+      (await s.store.usage.prices()).map((x) => [x.provider, x.model, x.price]),
       [["lab", "small-model", { input: 0.6, cached_input: 0.1, cache_write: null, output: 2.5 }]],
     );
     assert.equal(
-      s.store.modelProviders.get("lab")?.models.find((m) => m.id === "wide-model")?.price?.input,
+      (await s.store.modelProviders.get("lab"))?.models.find((m) => m.id === "wide-model")?.price
+        ?.input,
       3,
     );
     html = await s.page("/ui/settings/prices?ok=saved");
@@ -629,7 +634,7 @@ describe("model use on the screens (goal 075)", () => {
     );
     r = await s.post("/ui/settings/prices", { ...form, out0: "" });
     assert.match(r.to, /\?error=small-model of lab: set In and Out, or leave all three empty\./);
-    assert.equal(s.store.usage.prices()[0]?.price.output, 2.5);
+    assert.equal((await s.store.usage.prices())[0]?.price.output, 2.5);
     // A subscription's model, posted anyway, is refused in words.
     r = await s.post("/ui/settings/prices", {
       p0: "sub",
@@ -649,10 +654,10 @@ describe("model use on the screens (goal 075)", () => {
     // All three empty: no price again.
     r = await s.post("/ui/settings/prices", { ...form, in0: "", cached0: "", out0: "" });
     assert.match(r.to, /ok=saved/);
-    assert.deepEqual(s.store.usage.prices(), []);
+    assert.deepEqual(await s.store.usage.prices(), []);
     // Each change is in the audit log, as the owner's on the dashboard.
-    const audit = s.store.db
-      .prepare("select actor, action from audit where action like 'model_price%' order by id")
+    const audit = sqliteBehind(s.store)
+      .db.prepare("select actor, action from audit where action like 'model_price%' order by id")
       .all() as { actor: string; action: string }[];
     assert.deepEqual(
       audit.map((a) => [a.actor, a.action]),
@@ -662,7 +667,7 @@ describe("model use on the screens (goal 075)", () => {
       ],
     );
     // A cache write's price, set elsewhere, stays when the page saves the rest of the price.
-    s.store.usage.setPrice(
+    await s.store.usage.setPrice(
       "lab",
       "small-model",
       { input: 0.6, cached_input: 0.1, cache_write: 0.5, output: 2.5 },
@@ -670,7 +675,7 @@ describe("model use on the screens (goal 075)", () => {
     );
     r = await s.post("/ui/settings/prices", { ...form, in0: "0.70" });
     assert.equal(r.to, "/ui/settings/prices?ok=saved#model-prices");
-    assert.deepEqual(s.store.usage.prices()[0]?.price, {
+    assert.deepEqual((await s.store.usage.prices())[0]?.price, {
       input: 0.7,
       cached_input: 0.1,
       cache_write: 0.5,
@@ -717,7 +722,7 @@ describe("model use on the screens (goal 075)", () => {
       ).to,
       /ok=saved/,
     );
-    assert.deepEqual(s.store.usage.prices()[0]?.price, {
+    assert.deepEqual((await s.store.usage.prices())[0]?.price, {
       input: 0.000001,
       cached_input: null,
       cache_write: null,

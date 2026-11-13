@@ -36,8 +36,8 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
     restart: z.boolean().optional(),
     stop_after_minutes: z.number().positive().optional(),
   });
-  app.get("/v1/gpu-clouds/:name/tests", admin, (c) =>
-    c.json(runpodTests.list(c.req.param("name"))),
+  app.get("/v1/gpu-clouds/:name/tests", admin, async (c) =>
+    c.json(await runpodTests.list(c.req.param("name"))),
   );
   app.post("/v1/gpu-clouds/:name/tests", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
     const body: TestRequest = TestBody.parse(await jsonBody(c.req));
@@ -49,7 +49,7 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
   });
   // Rigs on a GPU cloud: launched by the owner alone (this token; MCP's owner tools; never an
   // operator's or an agent's), billed by the hour. Limits apply only when the owner sets them.
-  app.get(CLOUD_RIGS.path, admin, (c) => c.json(runpodRigs.list(c.req.param("name"))));
+  app.get(CLOUD_RIGS.path, admin, async (c) => c.json(await runpodRigs.list(c.req.param("name"))));
   app.post(CLOUD_LAUNCH.path, admin, bodyLimit({ maxSize: CLOUD_LAUNCH.maxBytes }), async (c) => {
     const body: LaunchRequest = CLOUD_LAUNCH.body.parse(await jsonBody(c.req));
     try {
@@ -58,18 +58,18 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
       return c.json({ error: errorText(err) }, 409);
     }
   });
-  app.get(RUNPOD_RIG.path, admin, (c) => {
+  app.get(RUNPOD_RIG.path, admin, async (c) => {
     const rig = c.req.param("rig");
-    const v = runpodRigs.view(rig);
+    const v = await runpodRigs.view(rig);
     return v
-      ? c.json({ ...v, history: runpodRigs.history(rig) })
+      ? c.json({ ...v, history: await runpodRigs.history(rig) })
       : c.json({ error: "not found" }, 404);
   });
   // A rig's pod log, read from RunPod with the cloud's key: the owner's, as the rig's other reads
   // here. It spends nothing; each line is redacted before it leaves control.
   app.get("/v1/rigs/:rig/runpod/logs", admin, async (c) => {
     const rig = c.req.param("rig");
-    if (!runpodRigs.view(rig)) return c.json({ error: "not found" }, 404);
+    if (!(await runpodRigs.view(rig))) return c.json({ error: "not found" }, 404);
     const q = podLogQuery(c.req.query("tail"), c.req.query("source"));
     if ("error" in q) return c.json({ error: q.error }, 400);
     try {
@@ -120,15 +120,15 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
   app.post(RUNPOD_LIMITS.path, admin, bodyLimit({ maxSize: RUNPOD_LIMITS.maxBytes }), async (c) => {
     const body: LimitsChange = RUNPOD_LIMITS.body.parse(await jsonBody(c.req));
     try {
-      return c.json(runpodRigs.limits(c.req.param("rig"), body, "owner:api"));
+      return c.json(await runpodRigs.limits(c.req.param("rig"), body, "owner:api"));
     } catch (err) {
       const error = errorText(err);
       return c.json({ error }, /^no rig /.test(error) ? 404 : 400);
     }
   });
 
-  app.get("/v1/gpu-cloud-tests/:id", admin, (c) => {
-    const t = runpodTests.view(c.req.param("id"));
+  app.get("/v1/gpu-cloud-tests/:id", admin, async (c) => {
+    const t = await runpodTests.view(c.req.param("id"));
     return t ? c.json(t) : c.json({ error: "not found" }, 404);
   });
   app.post("/v1/gpu-cloud-tests/:id/end", admin, async (c) => {

@@ -217,7 +217,7 @@ try {
     { staleAfterMs: 180_000, control: buildInfo() },
   );
   followed = followControlBus(onBus, parts);
-  createControlApi(
+  await createControlApi(
     store,
     /** @type {import("../../src/control/api/context.ts").ControlTokens} */ ({
       admin: "an-admin-token-for-the-test",
@@ -234,7 +234,7 @@ try {
     },
   );
   const rig = "rig-image-check";
-  const minted = tunnels.mint({
+  const minted = await tunnels.mint({
     by: "owner:test",
     rig,
     config: { THERMITE_TARGET_CLASS: "rig-image-check" },
@@ -295,15 +295,15 @@ try {
   const port = /** @type {string} */ (sh(["port", name, "8790/tcp"]).trim().split("\n")[0])
     .split(":")
     .at(-1);
-  tunnels.attach(rig, "pod-test", `http://127.0.0.1:${port}`);
-  store.tunnels.setLeafAddress(rig, `${addressOn(onBus.net, name)}:${LEAF_PORT}`);
+  await tunnels.attach(rig, "pod-test", `http://127.0.0.1:${port}`);
+  await store.tunnels.setLeafAddress(rig, `${addressOn(onBus.net, name)}:${LEAF_PORT}`);
   pump = setInterval(() => {
     tunnels.advance(1000).catch((err) => console.error(`pull: ${String(err)}`));
   }, 500);
   await waitFor("enrolled: the harness starts with control's key from enrollment", 120_000);
   check(
     "control enrolled the pod and pinned its keys",
-    Boolean(store.tunnels.get(rig)?.enrolled_at),
+    Boolean((await store.tunnels.get(rig))?.enrolled_at),
   );
   await waitFor("judge ready");
   // The state snapshot: root's folder, closed to the parts and the roles, taken after enrollment.
@@ -385,12 +385,12 @@ try {
   // The rig's reports reach control on the bus, through the pod's leaf node.
   let reported = false;
   for (let i = 0; i < 60 && !reported; i++) {
-    reported = store.reportedRigs.list().some((r) => r.id === rig);
+    reported = (await store.reportedRigs.list()).some((r) => r.id === rig);
     if (!reported) await sleep(2000);
   }
   check(
     "the supervisor registered its keys through control's connection, and its reports reach control on the bus",
-    reported && Boolean(store.busKeys.rigKey(rig)),
+    reported && Boolean(await store.busKeys.rigKey(rig)),
   );
 
   if (foreign) {

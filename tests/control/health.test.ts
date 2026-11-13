@@ -22,7 +22,7 @@ describe("control's health and the rigs' (goal 173)", () => {
   test("control answers its loops' ages, and 503 when one is late", async () => {
     let now = 0;
     const loops = new Loops(() => now);
-    const { api } = controlOnly({ options: { loops } });
+    const { api } = await controlOnly({ options: { loops } });
     loops.add("resets", 10_000);
     let res = await api("GET", "/v1/health");
     assert.equal(res.status, 200);
@@ -42,7 +42,7 @@ describe("control's health and the rigs' (goal 173)", () => {
   test("a probe with no token learns only whether control is well, its bus and its disk", async () => {
     let now = 0;
     const loops = new Loops(() => now);
-    const { store, control } = controlOnly({
+    const { store, control } = await controlOnly({
       options: { loops },
       tokens: { read: "read-token-abcdef" },
     });
@@ -84,7 +84,7 @@ describe("control's health and the rigs' (goal 173)", () => {
   });
 
   test("/metrics gives each part's loops, a rig's free disk and its drain", async () => {
-    const { store, api } = controlOnly();
+    const { store, api } = await controlOnly();
     await ingestReport(store, {
       rig: "rig-a",
       ledger_id: "l-1",
@@ -102,7 +102,7 @@ describe("control's health and the rigs' (goal 173)", () => {
         },
       },
     });
-    const fig = figuresCall(store, "rig-a", {
+    const fig = await figuresCall(store, "rig-a", {
       at: new Date().toISOString(),
       loops: { report: { age_seconds: 4500, limit_seconds: 1800, late: true } },
     });
@@ -121,7 +121,7 @@ describe("control's health and the rigs' (goal 173)", () => {
   });
 
   test("a rig at its disk floor says so on its page and under Needs you, with its free disk", async () => {
-    const { store, control } = controlOnly();
+    const { store, control } = await controlOnly();
     await ingestReport(store, {
       rig: "rig-a",
       ledger_id: "l-1",

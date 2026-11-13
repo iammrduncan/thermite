@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { controlOnly, RIG_TOKEN, signIn } from "../helpers/control-stack.ts";
 
 /** Every entry, one page at a time, following one cursor until it ends. */
-function walk(
+async function walk(
   store: ControlStore,
   way: "older" | "newer",
   start: { before?: number; after?: number },
   filter: { action?: string; mcp?: boolean } = {},
-): string[] {
+): Promise<string[]> {
   const seen: string[] = [];
   let cursor: { before?: number; after?: number } = start;
   for (let pages = 0; pages < 100; pages++) {
-    const p = store.auditLog.page(3, filter, cursor);
+    const p = await store.auditLog.page(3, filter, cursor);
     seen.push(...p.entries.map((e) => e.action));
     const next = p[way];
     if (next === null) return seen;
@@ -23,15 +23,15 @@ function walk(
 }
 
 describe("paging through control's audit log (goal 015)", () => {
-  test("pages go older and newer through every entry once, newest first, with the filters kept", () => {
-    const store = new ControlStore(":memory:");
-    assert.deepEqual(store.auditLog.page(3), { entries: [], older: null, newer: null });
+  test("pages go older and newer through every entry once, newest first, with the filters kept", async () => {
+    const store = openControlStore(":memory:");
+    assert.deepEqual(await store.auditLog.page(3), { entries: [], older: null, newer: null });
     for (let i = 1; i <= 10; i++) {
-      store.auditLog.add("owner:ui", `step_${i}`, { i });
-      if (i % 4 === 0) store.auditLog.add("owner:mcp", "mcp:control_log", {});
+      await store.auditLog.add("owner:ui", `step_${i}`, { i });
+      if (i % 4 === 0) await store.auditLog.add("owner:mcp", "mcp:control_log", {});
     }
     const steps = Array.from({ length: 10 }, (_, i) => `step_${10 - i}`);
-    const newest = store.auditLog.page(3, { mcp: false });
+    const newest = await store.auditLog.page(3, { mcp: false });
     assert.deepEqual(
       newest.entries.map((e) => e.action),
       ["step_10", "step_9", "step_8"],
@@ -39,15 +39,15 @@ describe("paging through control's audit log (goal 015)", () => {
     assert.equal(newest.newer, null, "nothing is newer than the newest page");
     assert.equal(newest.older, newest.entries.at(-1)?.id);
     // Older, page by page, to the first entry; then newer, back up to the newest.
-    assert.deepEqual(walk(store, "older", {}, { mcp: false }), steps);
-    const oldest = store.auditLog.page(3, { mcp: false }, { after: 0 });
+    assert.deepEqual(await walk(store, "older", {}, { mcp: false }), steps);
+    const oldest = await store.auditLog.page(3, { mcp: false }, { after: 0 });
     assert.deepEqual(
       oldest.entries.map((e) => e.action),
       ["step_3", "step_2", "step_1"],
       "the page just after the cursor, newest first",
     );
     assert.equal(oldest.older, null);
-    assert.deepEqual(walk(store, "newer", { after: 0 }, { mcp: false }), [
+    assert.deepEqual(await walk(store, "newer", { after: 0 }, { mcp: false }), [
       "step_3",
       "step_2",
       "step_1",
@@ -60,28 +60,32 @@ describe("paging through control's audit log (goal 015)", () => {
       "step_10",
     ]);
     // MCP calls are entries too, unless left out; an action filter pages through its own matches.
-    assert.equal(walk(store, "older", {}).length, 12);
-    assert.deepEqual(walk(store, "older", {}, { action: "step_1" }), ["step_10", "step_1"]);
+    assert.equal((await walk(store, "older", {})).length, 12);
+    assert.deepEqual(await walk(store, "older", {}, { action: "step_1" }), ["step_10", "step_1"]);
     // An empty page past either end still points back at the entries.
     const top = newest.entries[0]?.id ?? 0;
-    const past = store.auditLog.page(3, {}, { after: top + 50 });
+    const past = await store.auditLog.page(3, {}, { after: top + 50 });
     assert.deepEqual(past, { entries: [], older: top + 51, newer: null });
     assert.deepEqual(
-      store.auditLog.page(3, {}, { before: past.older ?? 0 }).entries.map((e) => e.action),
+      (await store.auditLog.page(3, {}, { before: past.older ?? 0 })).entries.map((e) => e.action),
       ["step_10", "step_9", "mcp:control_log"],
     );
-    const below = store.auditLog.page(3, {}, { before: 1 });
+    const below = await store.auditLog.page(3, {}, { before: 1 });
     assert.deepEqual(below, { entries: [], older: null, newer: 0 });
-    assert.deepEqual(store.auditLog.page(3, {}, { before: 0 }), below, "never a cursor below 0");
+    assert.deepEqual(
+      await store.auditLog.page(3, {}, { before: 0 }),
+      below,
+      "never a cursor below 0",
+    );
     assert.equal(
-      store.auditLog.page(3, {}, { after: below.newer ?? 0 }).entries.at(-1)?.action,
+      (await store.auditLog.page(3, {}, { after: below.newer ?? 0 })).entries.at(-1)?.action,
       "step_1",
     );
   });
 
   test("REST pages with before and after, and refuses a cursor that is not a number", async () => {
-    const { store, api } = controlOnly({ tokens: { rigs: {} } });
-    for (let i = 1; i <= 5; i++) store.auditLog.add("owner:api", `step_${i}`, { i });
+    const { store, api } = await controlOnly({ tokens: { rigs: {} } });
+    for (let i = 1; i <= 5; i++) await store.auditLog.add("owner:api", `step_${i}`, { i });
     const get = async (query: string) => {
       const r = await api("GET", `/v1/audit?${query}`);
       return { status: r.status, body: (await r.json()) as Record<string, unknown> };
@@ -113,8 +117,8 @@ describe("paging through control's audit log (goal 015)", () => {
   });
 
   test("the Audit log page shows 50 entries at a time, with Newest, Newer and Older links", async () => {
-    const { store, control } = controlOnly({ tokens: { rigs: {} } });
-    for (let i = 1; i <= 650; i++) store.auditLog.add("owner:api", `step_${i}`, { i });
+    const { store, control } = await controlOnly({ tokens: { rigs: {} } });
+    for (let i = 1; i <= 650; i++) await store.auditLog.add("owner:api", `step_${i}`, { i });
     const { page } = await signIn(control);
     const shown = (html: string) =>
       [...html.matchAll(/<span class="muted xs">(step_\d+)<\/span>/g)].map((m) => m[1]);
@@ -151,15 +155,15 @@ describe("paging through control's audit log (goal 015)", () => {
   });
 
   test("the Audit log page filters by kind, who and words, and leaves MCP calls out unless asked", async () => {
-    const { store, control } = controlOnly({ tokens: { rigs: {} } });
-    store.auditLog.add("owner:ui", "command_issued", {
+    const { store, control } = await controlOnly({ tokens: { rigs: {} } });
+    await store.auditLog.add("owner:ui", "command_issued", {
       id: "c-1",
       rig: "rig-a",
       kind: "pause_run",
     });
-    store.auditLog.add("owner:mcp", "mcp:list_rigs", {});
-    store.auditLog.add("rig:rig-b", "join_throttled", { rig: "rig-b" });
-    store.auditLog.add("control", "export_deleted", { rig: "rig-a", name: "x" });
+    await store.auditLog.add("owner:mcp", "mcp:list_rigs", {});
+    await store.auditLog.add("rig:rig-b", "join_throttled", { rig: "rig-b" });
+    await store.auditLog.add("control", "export_deleted", { rig: "rig-a", name: "x" });
     const { page, get } = await signIn(control);
     const actions = (html: string) =>
       [...html.matchAll(/<span class="muted xs">([a-z_:]+)<\/span>/g)].map((m) => m[1]);
@@ -182,19 +186,22 @@ describe("paging through control's audit log (goal 015)", () => {
   });
 
   test("a refusal that repeats is one entry, with its count and its first and last time; the rest stay", async () => {
-    const { store, api, control } = controlOnly();
+    const { store, api, control } = await controlOnly();
     const refused = { tool: "mcp:start_run", why: "no campaign speed" };
-    store.auditLog.refusal("owner:operator", "refused", refused);
-    store.auditLog.refusal("owner:operator", "refused", refused);
+    await store.auditLog.refusal("owner:operator", "refused", refused);
+    await store.auditLog.refusal("owner:operator", "refused", refused);
     // Another caller, another reason or another action is an entry of its own.
-    store.auditLog.refusal("agent:mcp", "refused", refused);
-    store.auditLog.refusal("owner:operator", "refused", { ...refused, why: "no campaign size" });
-    store.auditLog.refusal("owner:operator", "refused_again", refused);
-    store.auditLog.refusal("owner:operator", "refused", refused);
+    await store.auditLog.refusal("agent:mcp", "refused", refused);
+    await store.auditLog.refusal("owner:operator", "refused", {
+      ...refused,
+      why: "no campaign size",
+    });
+    await store.auditLog.refusal("owner:operator", "refused_again", refused);
+    await store.auditLog.refusal("owner:operator", "refused", refused);
     // Every other entry is kept as it comes, the same twice too.
-    store.auditLog.add("owner:ui", "rig_retired", { rig: "rig-b" });
-    store.auditLog.add("owner:ui", "rig_retired", { rig: "rig-b" });
-    const entries = store.auditLog.list(20);
+    await store.auditLog.add("owner:ui", "rig_retired", { rig: "rig-b" });
+    await store.auditLog.add("owner:ui", "rig_retired", { rig: "rig-b" });
+    const entries = await store.auditLog.list(20);
     const said = entries.map((e) => [e.actor, e.action, e.count]);
     assert.deepEqual(said, [
       ["owner:ui", "rig_retired", 1],
@@ -230,7 +237,7 @@ describe("paging through control's audit log (goal 015)", () => {
     assert.match(await html("/ui/audit"), /<div class="xs">3 times, the last \d+s ago<\/div>/);
   });
   test("a request with no token, or one its route doesn't take, is one entry for each route, by control", async () => {
-    const { store, control } = controlOnly({ tokens: { read: "read-token-abcdef" } });
+    const { store, control } = await controlOnly({ tokens: { read: "read-token-abcdef" } });
     const call = (path: string, token?: string, method = "GET") =>
       control.request(path, {
         method,
@@ -241,9 +248,11 @@ describe("paging through control's audit log (goal 015)", () => {
     assert.equal((await call("/v1/commands")).status, 401);
     assert.equal((await call("/v1/commands", "read-token-abcdef")).status, 401);
     assert.equal((await call("/mcp", "wrong", "POST")).status, 401);
-    const seen = store.auditLog
-      .list(10, { action: "unauthorized" })
-      .map((e) => [e.actor, e.body, e.count]);
+    const seen = (await store.auditLog.list(10, { action: "unauthorized" })).map((e) => [
+      e.actor,
+      e.body,
+      e.count,
+    ]);
     assert.deepEqual(seen, [
       ["control", { method: "POST", route: "/mcp", token: "refused" }, 1],
       ["control", { method: "GET", route: "/v1/commands", token: "refused" }, 1],

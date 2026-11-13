@@ -2,6 +2,7 @@ import type { Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { errorText, Refusal } from "../../common/errors.ts";
+import { mapInTurn } from "../../common/in-turn.ts";
 import { LOCAL_HTTP_HOSTS } from "../../common/mcp-client.ts";
 import type { PageNotes } from "../notes.ts";
 import type { ControlStore } from "../store/index.ts";
@@ -46,9 +47,9 @@ export const ServerBody = z.strictObject({
 });
 
 /** A server as the API, MCP and the CLI show it: with the kits that name it, never a secret. */
-export const serverJson = (store: ControlStore, s: McpServer) => ({
+export const serverJson = async (store: ControlStore, s: McpServer) => ({
   ...s,
-  named_by: namedBy(store, s.name).map((n) => n.kit),
+  named_by: (await namedBy(store, s.name)).map((n) => n.kit),
 });
 
 export function mountMcpServerRoutes(
@@ -63,25 +64,25 @@ export function mountMcpServerRoutes(
   },
 ): void {
   const { notes, store, servers } = o;
-  const one = (name: string) => {
-    const s = servers.get(name);
-    return s ? serverJson(store, s) : undefined;
+  const one = async (name: string) => {
+    const s = await servers.get(name);
+    return s ? await serverJson(store, s) : undefined;
   };
 
-  app.get("/v1/mcp-servers", o.admin, (c) =>
-    c.json({ servers: servers.list().map((s) => serverJson(store, s)) }),
+  app.get("/v1/mcp-servers", o.admin, async (c) =>
+    c.json({ servers: await mapInTurn(await servers.list(), async (s) => serverJson(store, s)) }),
   );
 
   // Added: an OAuth server answers with its sign-in page's address; another is read at once.
   app.post("/v1/mcp-servers", o.admin, bodyLimit({ maxSize: 64 * 1024 }), async (c) => {
     const b = ServerBody.parse(await c.req.json());
-    if (servers.get(b.name.trim()))
+    if (await servers.get(b.name.trim()))
       return c.json(
         { error: `There is a server named ${b.name} already: change it instead.` },
         409,
       );
     try {
-      servers.put({ ...b, auth: b.auth as McpServer["auth"] }, "owner:api");
+      await servers.put({ ...b, auth: b.auth as McpServer["auth"] }, "owner:api");
     } catch (err) {
       return c.json({ error: errorText(err) }, 400);
     }
@@ -93,22 +94,22 @@ export function mountMcpServerRoutes(
           redirectUriOf(o.publicUrl, c.req.url),
           "owner:api",
         );
-        return c.json({ server: one(name), sign_in_url: url }, 201);
+        return c.json({ server: await one(name), sign_in_url: url }, 201);
       } catch (err) {
-        return c.json({ server: one(name), error: errorText(err) }, 201);
+        return c.json({ server: await one(name), error: errorText(err) }, 201);
       }
     }
     const why = await servers.check(name);
-    return c.json({ server: one(name), ...(why ? { check_error: why } : {}) }, 201);
+    return c.json({ server: await one(name), ...(why ? { check_error: why } : {}) }, 201);
   });
 
   app.put("/v1/mcp-servers/:name", o.admin, bodyLimit({ maxSize: 64 * 1024 }), async (c) => {
     const name = c.req.param("name");
-    const old = servers.get(name);
+    const old = await servers.get(name);
     if (!old) return c.json({ error: "Settings has no server of that name." }, 404);
     const b = ServerBody.partial({ name: true, url: true, auth: true }).parse(await c.req.json());
     try {
-      servers.put(
+      await servers.put(
         {
           ...b,
           name,
@@ -123,23 +124,25 @@ export function mountMcpServerRoutes(
     } catch (err) {
       return c.json({ error: errorText(err) }, 400);
     }
-    const now = servers.get(name);
+    const now = await servers.get(name);
     if (now?.auth === "oauth" && !now.signed_in)
-      return c.json({ server: one(name), sign_in: "needed" });
+      return c.json({ server: await one(name), sign_in: "needed" });
     const why = await servers.check(name);
-    return c.json({ server: one(name), ...(why ? { check_error: why } : {}) });
+    return c.json({ server: await one(name), ...(why ? { check_error: why } : {}) });
   });
 
   app.post("/v1/mcp-servers/:name/check", o.admin, async (c) => {
     const name = c.req.param("name");
-    if (!servers.get(name)) return c.json({ error: "Settings has no server of that name." }, 404);
+    if (!(await servers.get(name)))
+      return c.json({ error: "Settings has no server of that name." }, 404);
     const why = await servers.check(name);
-    return c.json({ server: one(name), ...(why ? { check_error: why } : {}) });
+    return c.json({ server: await one(name), ...(why ? { check_error: why } : {}) });
   });
 
   app.post("/v1/mcp-servers/:name/sign-in", o.admin, async (c) => {
     const name = c.req.param("name");
-    if (!servers.get(name)) return c.json({ error: "Settings has no server of that name." }, 404);
+    if (!(await servers.get(name)))
+      return c.json({ error: "Settings has no server of that name." }, 404);
     try {
       return c.json(
         await servers.startSignIn(name, redirectUriOf(o.publicUrl, c.req.url), "owner:api"),
@@ -149,8 +152,8 @@ export function mountMcpServerRoutes(
     }
   });
 
-  app.delete("/v1/mcp-servers/:name", o.admin, (c) => {
-    const r = servers.delete(c.req.param("name"), "owner:api");
+  app.delete("/v1/mcp-servers/:name", o.admin, async (c) => {
+    const r = await servers.delete(c.req.param("name"), "owner:api");
     if (r === "missing") return c.json({ error: "Settings has no server of that name." }, 404);
     if (r !== "deleted")
       return c.json(
@@ -179,7 +182,7 @@ export function mountMcpServerRoutes(
       const said = (c.req.query("error_description") ?? c.req.query("error") ?? "")
         .replace(/[^\w .,:;'()-]/g, "")
         .slice(0, 200);
-      const name = servers.cancelSignIn(
+      const name = await servers.cancelSignIn(
         state,
         `The server did not sign Thermite in${said ? `: ${said}` : ""}.`,
       );

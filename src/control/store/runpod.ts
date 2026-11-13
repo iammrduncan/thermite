@@ -47,7 +47,30 @@ const runpodTestOf = (r: Row): StoredRunpodTest => ({
   created_by: String(r.created_by),
 });
 
-export class RunpodStore extends StorePart {
+export interface RunpodStore {
+  addRig(t: { rig: string; cloud: string; pod: string; state: unknown; by: string }): Promise<void>;
+  /**
+   * Saves a rig's state on its GPU cloud. What its pod cost since control last counted it goes to
+   * the runs its rig runs now, `running` (control/runpod's saveRunpodRig gives them).
+   */
+  saveRig(rig: string, state: unknown, active: boolean, running: RunningRun[]): Promise<void>;
+  rig(rig: string): Promise<StoredRunpodRig | undefined>;
+  /** RunPod rigs, newest first: on one cloud, or only those control still follows. */
+  rigs(f?: { cloud?: string | undefined; active?: boolean }): Promise<StoredRunpodRig[]>;
+  addTest(t: { id: string; cloud: string; state: unknown; by: string }): Promise<void>;
+  /** Saves a test's state; `active` is false once its pod is gone. */
+  saveTest(id: string, state: unknown, active: boolean): Promise<void>;
+  test(id: string): Promise<StoredRunpodTest | undefined>;
+  /** Newest first; only those whose pod may still exist with `active`. */
+  tests(f?: {
+    cloud?: string | undefined;
+    active?: boolean;
+    limit?: number;
+  }): Promise<StoredRunpodTest[]>;
+}
+
+/** RunpodStore on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRunpodStore extends StorePart {
   addRig(t: { rig: string; cloud: string; pod: string; state: unknown; by: string }): void {
     this.db
       .prepare(

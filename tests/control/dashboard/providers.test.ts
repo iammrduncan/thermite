@@ -3,6 +3,7 @@ import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { ModelSource } from "../../../src/harness/agents/model/source.ts";
 import { handModelRoute } from "../../../src/supervisor/model-route.ts";
 import { heldEvents } from "../../helpers/control-store.ts";
@@ -72,23 +73,23 @@ describe("control dashboard", () => {
       base_url: "",
     });
     assert.match(where(keyless), /An Anthropic provider needs its API key\./);
-    assert.equal(s.store.modelProviders.get("other"), undefined);
+    assert.equal(await s.store.modelProviders.get("other"), undefined);
     await s.post("/ui/settings/providers", {
       csrf,
       name: "opencode",
       type: "openai",
       base_url: "https://models.example/v1",
     });
-    assert.equal(s.store.modelProviders.get("opencode")?.version, 2);
-    assert.equal(s.store.modelProviders.get("opencode")?.models.length, 2);
+    assert.equal((await s.store.modelProviders.get("opencode"))?.version, 2);
+    assert.equal((await s.store.modelProviders.get("opencode"))?.models.length, 2);
     page = await (await s.get("/ui/settings")).text();
     assert.match(page, /key …0001/);
     assert.match(page, /deepseek-v4\.1-flash-free <span class="muted">· 262k<\/span>/);
     // The key is in no page, row or audit entry: only sealed, and as its last four characters.
     const everything = JSON.stringify([
       page,
-      s.store.db.prepare("select * from model_provider").all(),
-      s.store.db.prepare("select * from audit").all(),
+      sqliteBehind(s.store).db.prepare("select * from model_provider").all(),
+      sqliteBehind(s.store).db.prepare("select * from audit").all(),
     ]);
     assert.ok(!everything.includes(key));
     // Only the rig given one of its models receives the key, in its config on the bus.
@@ -113,9 +114,9 @@ describe("control dashboard", () => {
     // A model the provider does not list can be added by its name.
     await s.post("/ui/settings/providers/opencode/models", { csrf, model: "custom-model" });
     assert.ok(
-      s.store.modelProviders
-        .get("opencode")
-        ?.models.some((m) => m.id === "custom-model" && m.added),
+      (await s.store.modelProviders.get("opencode"))?.models.some(
+        (m) => m.id === "custom-model" && m.added,
+      ),
     );
     // The supervisor hands it to its harness once; its agents use it from then on.
     const sync = s.cfg;
@@ -135,7 +136,7 @@ describe("control dashboard", () => {
     // Nothing the rig reports or records carries the key: its row, its events on control's bus.
     assert.ok(
       !JSON.stringify([
-        s.store.db.prepare("select * from rig").all(),
+        sqliteBehind(s.store).db.prepare("select * from rig").all(),
         await heldEvents(s.store, "rig-a"),
         s.env.service.ledger.db.prepare("select * from event").all(),
       ]).includes(key),
@@ -149,7 +150,10 @@ describe("control dashboard", () => {
       api_key: "sk-ant-x",
     });
     assert.match(where(ant), /lists 1 model/);
-    assert.equal(s.store.modelProviders.get("anthropic")?.base_url, "https://api.anthropic.com");
+    assert.equal(
+      (await s.store.modelProviders.get("anthropic"))?.base_url,
+      "https://api.anthropic.com",
+    );
     await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "anthropic|claude-test" });
     assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.current()?.api, "anthropic");
@@ -162,7 +166,7 @@ describe("control dashboard", () => {
       base_url: "",
     });
     assert.match(where(oc), /lists 2 models/);
-    assert.equal(s.store.modelProviders.get("zen")?.key_sealed, "");
+    assert.equal((await s.store.modelProviders.get("zen"))?.key_sealed, "");
     const underPi = await s.post("/ui/settings/rigs", {
       csrf,
       rig: "rig-a",
@@ -185,14 +189,14 @@ describe("control dashboard", () => {
     page = await (await s.get("/ui/rigs/rig-a")).text();
     assert.match(page, /Its agents run under OpenCode v2 with free-model-free from zen\./);
     // A planner given OpenCode's own models runs through OpenCode too; cleared, it follows the workers.
-    s.store.agentModels.assignRole("rig-a", "planner", {
+    await s.store.agentModels.assignRole("rig-a", "planner", {
       provider: "zen",
       model: "free-model-free",
     });
     assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.planner()?.api, "opencode");
     assert.equal(s.env.service.models.planner()?.harness, "opencode");
-    s.store.agentModels.assignRole("rig-a", "planner", null);
+    await s.store.agentModels.assignRole("rig-a", "planner", null);
     assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.planner(), undefined);
     // A provider added as OpenAI-compatible at OpenCode's own endpoint, with its key, is OpenCode's
@@ -206,7 +210,10 @@ describe("control dashboard", () => {
       base_url: "https://opencode.ai/zen/v1/models",
       api_key: "test-oc-key-0002",
     });
-    assert.equal(s.store.modelProviders.get("oc-key")?.base_url, "https://opencode.ai/zen/v1");
+    assert.equal(
+      (await s.store.modelProviders.get("oc-key"))?.base_url,
+      "https://opencode.ai/zen/v1",
+    );
     const freeUnderPi = await s.post("/ui/settings/rigs", {
       csrf,
       rig: "rig-a",
@@ -309,7 +316,7 @@ describe("control dashboard", () => {
     );
     assert.equal(s.env.service.models.current(), undefined);
     await s.post("/ui/settings/providers/anthropic/delete", { csrf });
-    assert.equal(s.store.modelProviders.get("anthropic"), undefined);
+    assert.equal(await s.store.modelProviders.get("anthropic"), undefined);
   });
 
   test("an OpenAI-compatible server that takes no key is saved with none, listed with none, and its route carries none", async () => {
@@ -339,7 +346,7 @@ describe("control dashboard", () => {
     });
     assert.match(where(added), /ok="local-llama" is saved and lists 1 model\./);
     assert.deepEqual(listedWith, [null]);
-    const saved = s.store.modelProviders.get("local-llama");
+    const saved = await s.store.modelProviders.get("local-llama");
     assert.equal(saved?.key_sealed, "");
     assert.equal(saved?.key_hint, "");
     // Its row says it has no key, not that it has OpenCode's free models; its form keeps none.
@@ -353,11 +360,10 @@ describe("control dashboard", () => {
       type: "openai",
       base_url: "https://llama.example/v1",
     });
-    assert.equal(s.store.modelProviders.get("local-llama")?.version, 2);
+    assert.equal((await s.store.modelProviders.get("local-llama"))?.version, 2);
     assert.deepEqual(listedWith, [null, null]);
     // Its audit entries say it has no key, not that one was kept.
-    const keys = s.store.auditLog
-      .list(50)
+    const keys = (await s.store.auditLog.list(50))
       .filter((e) => e.action.startsWith("model_provider_"))
       .map((e) => e.body as { name?: string; key?: string })
       .filter((b) => b.name === "local-llama")
@@ -372,8 +378,8 @@ describe("control dashboard", () => {
       base_url: "",
     });
     assert.match(where(toAnthropic), /error=An Anthropic provider needs its API key\./);
-    assert.equal(s.store.modelProviders.get("local-llama")?.type, "openai");
-    assert.equal(s.store.modelProviders.get("local-llama")?.version, 2);
+    assert.equal((await s.store.modelProviders.get("local-llama"))?.type, "openai");
+    assert.equal((await s.store.modelProviders.get("local-llama"))?.version, 2);
     // The rig's route names the server and carries an empty key: the harness's proxy sends none.
     await s.post("/ui/settings/rigs", {
       csrf,

@@ -63,7 +63,76 @@ const registered = (r: Record<string, unknown>): RegisteredRun => ({
   created_at: r.created_at === null ? null : String(r.created_at),
 });
 
-export class RunRegistry extends StorePart {
+export interface RunRegistry {
+  /**
+   * The run a rig created by this name. A name used on more than one rig before goal 170, or
+   * again after a full reset, stands for the run control assigned, else the newest of that name.
+   */
+  created(run: string): Promise<RegisteredRun | undefined>;
+  /** The run a rig created by this name, on that rig: in its newest ledger that has one. */
+  createdOn(run: string, rig: string): Promise<RegisteredRun | undefined>;
+  /**
+   * The campaign of the run a rig created by this name; undefined while the rig has not reported
+   * creating it, or for a run created without one.
+   */
+  campaignOf(run: string, rig: string): Promise<string | undefined>;
+  /**
+   * Every run of a campaign that a rig created, newest first, one for each name (its newest), on
+   * every rig and every ledger: retired rigs and runs from before a full reset too.
+   */
+  ofCampaign(campaign: string): Promise<RegisteredRun[]>;
+  /**
+   * The newest assignment control signed for a run's name, whatever became of it: the rig, the
+   * campaign and the command. What a run's page shows until the rig reports the run.
+   */
+  assigned(
+    run: string,
+  ): Promise<{ rig: string; campaign: string | null; command: string } | undefined>;
+  /** The ledger a rig created a run in; undefined while the rig has not reported the run. */
+  ledgerOf(run: string, rig: string): Promise<string | undefined>;
+  /** The rigs a run's name is used on (created, or assigned and not refused), newest first. */
+  rigsOf(run: string): Promise<string[]>;
+  /** A command control signed: an assignment's run on its rig, for its campaign; others are not. */
+  registerAssignment(e: {
+    id: string;
+    rig: string;
+    kind: string;
+    issued_at: string;
+    payload: unknown;
+  }): Promise<void>;
+  /**
+   * An event a rig reported: a run it created goes in the registry, with the rig's ledger, when
+   * control assigned that rig the run, or when no assignment uses its name (a rig check, a run
+   * started on the rig itself). An assigned run's campaign is its assignment's. A run control did
+   * not assign keeps the campaign its event names only when control knows no campaign of that
+   * name (none saved, none assigned); otherwise it is its own. A run whose name control assigned
+   * another rig is "refused", and the registry keeps nothing of it.
+   */
+  registerRunCreated(
+    rig: string,
+    ledgerId: string,
+    e: { kind: string; subject: string | null; body: unknown; at: string },
+  ): Promise<"taken" | "refused" | "none">;
+  /**
+   * Each rig's runs, newest first, `max` at most for each rig: those it created, and those control
+   * assigned it that were not refused. What the rig's user on the message bus may publish the
+   * live lines of.
+   */
+  runsByRig(max: number): Promise<Map<string, string[]>>;
+  /** The run names used so far that start with `prefix`. */
+  usedNames(prefix?: string): Promise<Set<string>>;
+  /** The rig a run's name was used on, or undefined while it is free. */
+  rigOfName(run: string): Promise<string | undefined>;
+  /**
+   * The campaigns control itself assigned to a rig, by run: its signed assignments that did not
+   * fail, expire or get refused. What a rig may read and be given is decided from these, never
+   * from what the rig's own events claim.
+   */
+  assignedCampaigns(rig: string): Promise<Map<string, string>>;
+}
+
+/** RunRegistry on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRunRegistry extends StorePart {
   /**
    * The run a rig created by this name. A name used on more than one rig before goal 170, or
    * again after a full reset, stands for the run control assigned, else the newest of that name.

@@ -120,7 +120,7 @@ export class ServerTable {
   }
 
   /** A server's row, by its name. */
-  row(name: string): Row | undefined {
+  async row(name: string): Promise<Row | undefined> {
     return this.rows.row(name);
   }
 
@@ -131,13 +131,13 @@ export class ServerTable {
   }
 
   /** A server's state and its last error. */
-  setState(name: string, status: McpStatus, error: string | null): void {
-    this.rows.setState(name, status, error);
+  async setState(name: string, status: McpStatus, error: string | null): Promise<void> {
+    await this.rows.setState(name, status, error);
   }
 
   /** A server's sign-in, sealed. */
-  saveLogin(name: string, login: Login): void {
-    this.rows.setLogin(name, this.secrets.seal(JSON.stringify(login)));
+  async saveLogin(name: string, login: Login): Promise<void> {
+    await this.rows.setLogin(name, this.secrets.seal(JSON.stringify(login)));
   }
 
   /** A row's sign-in, opened; undefined when it has none, or it can't be opened. */

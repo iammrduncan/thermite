@@ -33,7 +33,7 @@ export function registerSystem(tools: ToolContext): void {
       if (!parts) throw new Error("control's parts are not given to MCP");
       const out: Record<string, unknown> = {};
       for (const p of a.part?.length ? a.part : SYSTEM_PARTS)
-        out[p] = await parts.system.part(p, () => parts.views());
+        out[p] = await parts.system.part(p, async () => parts.views());
       return out;
     }),
   );

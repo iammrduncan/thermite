@@ -44,7 +44,7 @@ function runEvents(run: string, attempt: string, hypothesis: string, status: str
 }
 
 async function earlierRuns() {
-  const { store, control, api } = controlOnly({ tokens: { rigs: TOKENS } });
+  const { store, control, api } = await controlOnly({ tokens: { rigs: TOKENS } });
   const at = Date.now() - 3_600_000;
   const report = async (rig: string, ledger: string, events: Ev[], hour: number) => {
     await ingestReport(store, {
@@ -81,7 +81,7 @@ async function earlierRuns() {
     runEvents("sort-3", "a-3", "merge runs in place", "running"),
     2,
   );
-  store.retired.add("rig-b", "owner:ui");
+  await store.retired.add("rig-b", "owner:ui");
   const ui = await signIn(control);
   return { store, control, api, ui };
 }
@@ -227,10 +227,7 @@ test("REST and MCP read an earlier run and its attempts by name; a command to it
   assert.equal(viaRest.status, 201);
   // Each signed for the rig the run is on.
   assert.deepEqual(
-    store.commands
-      .list(5)
-      .filter((c) => c.kind === "pause_run")
-      .map((c) => c.rig),
+    (await store.commands.list(5)).filter((c) => c.kind === "pause_run").map((c) => c.rig),
     ["rig-a", "rig-a"],
   );
   await client.close();

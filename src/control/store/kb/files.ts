@@ -68,7 +68,38 @@ create table if not exists kb_setting (
 /** The media types control reads text from, as SQL's list. */
 const TEXT_TYPES_SQL = KB_TEXT_TYPES.map((t) => `'${t}'`).join(", ");
 
-export class KbFileRows {
+export interface KbFileRows {
+  /** Whether control holds the file with this SHA-256. */
+  has(sha256: string): Promise<boolean>;
+  /** Whether a version of an item control stored names the file with this SHA-256. */
+  named(sha256: string): Promise<boolean>;
+  /** A file control now holds, once: every item that names its SHA-256 has it from now on. */
+  kept(sha256: string, bytes: number, at?: string): Promise<void>;
+  /**
+   * The files kept before `before` that no version of any item names, the newest one included:
+   * a file whose item never arrived, or was refused, or whose versions that named it a retention
+   * policy removed (store/kb/older.ts). Oldest first, at most `limit`. An item's newest version
+   * is never removed, so a file it names is never among them.
+   */
+  orphans(before: string, limit: number): Promise<KbFileRow[]>;
+  /**
+   * Forgets a file control removed from its state, and its text; an item that names it later
+   * waits for it again.
+   */
+  removed(sha256: string): Promise<void>;
+  /**
+   * The files whose text waits: held, named by a version of a type control reads, with no text
+   * yet. Oldest kept first, at most `limit`, each with the type its newest naming version gives.
+   */
+  textWaiting(limit: number): Promise<KbTextDue[]>;
+  /** What became of a file's text, without the text; undefined: not extracted yet. */
+  textState(sha256: string): Promise<KbFileText | undefined>;
+  /** A file's text as the words index holds it; "" when it has none (kept whole, or not yet). */
+  text(sha256: string): Promise<string>;
+}
+
+/** KbFileRows on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteKbFileRows {
   private readonly db: DatabaseSync;
 
   constructor(db: DatabaseSync) {
@@ -215,7 +246,17 @@ export interface KbSettingRow {
   set_at: string;
 }
 
-export class KbSettingRows {
+export interface KbSettingRows {
+  /** The owner's value of a setting; undefined: its default. */
+  get(key: KbSettingKey): Promise<KbSettingRow | undefined>;
+  /** A setting set to a value, or back to its default (null). */
+  set(key: KbSettingKey, value: number | null, by: string, at?: string): Promise<void>;
+  /** The largest file the knowledge base takes, in bytes; 0: no limit, the default. */
+  maxFileBytes(): Promise<number>;
+}
+
+/** KbSettingRows on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteKbSettingRows {
   private readonly db: DatabaseSync;
 
   constructor(db: DatabaseSync) {

@@ -24,7 +24,15 @@ export function ownSettingsTable(db: DatabaseSync): void {
 )`);
 }
 
-export class OwnSettings extends StorePart {
+export interface OwnSettings {
+  /** A setting, if the owner set it. */
+  get(key: string): Promise<OwnSetting | undefined>;
+  /** A setting from now on; null takes its row out, so it takes its default again. */
+  set(key: string, value: string | null, by: string): Promise<void>;
+}
+
+/** OwnSettings on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteOwnSettings extends StorePart {
   /** A setting, if the owner set it. */
   get(key: string): OwnSetting | undefined {
     const r = this.db

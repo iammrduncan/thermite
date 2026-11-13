@@ -22,7 +22,7 @@ export async function chooseWorkers(
   lanes: number,
   by: string,
 ): Promise<void> {
-  parts.store.rigWorkers.choose(rig, lanes, by);
+  await parts.store.rigWorkers.choose(rig, lanes, by);
   await giveWorkers(parts, rig);
 }
 
@@ -33,15 +33,15 @@ export async function chooseWorkers(
  */
 async function giveWorkers(parts: ControlParts, rig: string): Promise<void> {
   const { store } = parts;
-  const w = store.rigWorkers.get(rig);
-  if (!w || !rigSettingsOf(store, rig)?.settings) return;
+  const w = await store.rigWorkers.get(rig);
+  if (!w || !(await rigSettingsOf(store, rig))?.settings) return;
   const tries = (w.given?.tries ?? 0) + 1;
-  store.rigWorkers.setGiven(rig, { at: new Date().toISOString(), tries });
+  await store.rigWorkers.setGiven(rig, { at: new Date().toISOString(), tries });
   const out = await setRigSettings(parts, rig, { lanes: w.lanes }, w.chosen_by, true);
   if (out.state === "sent")
-    store.rigWorkers.setGiven(rig, { at: new Date().toISOString(), tries, command: out.id });
-  else store.rigWorkers.done(rig);
-  store.rigHistory.add(
+    await store.rigWorkers.setGiven(rig, { at: new Date().toISOString(), tries, command: out.id });
+  else await store.rigWorkers.done(rig);
+  await store.rigHistory.add(
     rig,
     "workers_given",
     out.state !== "refused",
@@ -58,11 +58,11 @@ async function giveWorkers(parts: ControlParts, rig: string): Promise<void> {
 export function watchWorkers(parts: ControlParts, everyMs = WORKERS_WATCH_MS): void {
   const { store } = parts;
   every(parts.loops, "control", "workers", everyMs, async () => {
-    for (const w of store.rigWorkers.waiting()) {
+    for (const w of await store.rigWorkers.waiting()) {
       const id = w.given?.command;
-      if (id && store.commands.get(id)?.status === "pending") continue;
-      if ((id && !store.commands.notTaken(id)) || (w.given?.tries ?? 0) >= GIVE_TRIES)
-        store.rigWorkers.done(w.rig);
+      if (id && (await store.commands.get(id))?.status === "pending") continue;
+      if ((id && !(await store.commands.notTaken(id))) || (w.given?.tries ?? 0) >= GIVE_TRIES)
+        await store.rigWorkers.done(w.rig);
       else await giveWorkers(parts, w.rig);
     }
   });

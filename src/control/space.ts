@@ -2,6 +2,7 @@ import { dirname, join } from "node:path";
 import { copiesOf } from "../common/db-copy.ts";
 import { errorText } from "../common/errors.ts";
 import { folderBytes } from "../common/fs.ts";
+import { filterInTurn } from "../common/in-turn.ts";
 import { CONTROL_STATE } from "../core/backup.ts";
 import { EVENT_STREAM } from "../core/link/events.ts";
 import { kindOf, type RetentionKind } from "../core/retention/index.ts";
@@ -172,15 +173,19 @@ export async function spaceOf(
     use("kits", () => at(CONTROL_STATE.kits)),
   ]);
   // Inside control's store: the bytes of the rows a policy may remove.
-  const sum = (kind: RetentionKind) => controlItems(store, kind).reduce((n, x) => n + x.bytes, 0);
+  const sum = async (kind: RetentionKind) =>
+    (await controlItems(store, kind)).reduce((n, x) => n + x.bytes, 0);
   uses.splice(
     3,
     0,
-    await use("kb_versions", () => sum("kb_versions")),
-    await use("audit", () => sum("audit")),
+    await use("kb_versions", async () => sum("kb_versions")),
+    await use("audit", async () => sum("audit")),
   );
   // A rig's kinds: the sum of what each rig not retired last said it keeps.
-  const spaces = [...store.retention.spaces()].filter(([rig]) => !store.retired.get(rig));
+  const spaces = await filterInTurn(
+    [...(await store.retention.spaces())],
+    async ([rig]) => !(await store.retired.get(rig)),
+  );
   for (const kind of ["builds", "trial_logs", "advisor_records"] as const) {
     const said = spaces.flatMap(([, s]) => (s.kinds[kind] ? [s.kinds[kind]] : []));
     uses.push({ kind, bytes: said.reduce((n, inv) => n + inv.bytes, 0), rigs: said.length });

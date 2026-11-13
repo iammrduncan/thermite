@@ -17,13 +17,13 @@ export type HarnessRefusal =
  * The supervisor relays the harness's lines but cannot forge them. Undefined when it is; else the
  * status and words of the refusal.
  */
-export function harnessRefusal(
+export async function harnessRefusal(
   store: ControlStore,
   rig: string,
   b: LiveBatchRead,
-): [403 | 409, HarnessRefusal] | undefined {
+): Promise<[403 | 409, HarnessRefusal] | undefined> {
   if (b.rig !== rig) return [403, "rig mismatch"];
-  const pinned = store.reportedRigs.key(rig).pubkey;
+  const pinned = (await store.reportedRigs.key(rig)).pubkey;
   if (!pinned) return [409, "the rig's report key is not accepted yet"];
   if (!b.signature || !b.rig_pubkey || b.rig_pubkey.trim() !== pinned.trim())
     return [409, "live lines must be signed with the rig's pinned key"];

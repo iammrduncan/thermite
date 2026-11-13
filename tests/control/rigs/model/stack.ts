@@ -27,7 +27,7 @@ export async function stack() {
     store,
     control: api,
     rigConfig,
-  } = controlOnly({
+  } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, secrets },
   });
@@ -40,13 +40,13 @@ export async function stack() {
     events: [],
     summary: {},
   });
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "lab",
     type: "openai",
     base_url: "https://models.example.com/v1",
     key: { sealed: secrets.seal("lab-key-for-tests"), hint: "…ests" },
   });
-  store.modelProviders.setModels("lab", [
+  await store.modelProviders.setModels("lab", [
     { id: "wide-model", context_window: 204_800 },
     { id: "strong-model", context_window: 400_000 },
   ]);
@@ -59,26 +59,26 @@ export async function stack() {
     client_id: "client-for-tests",
     host_id: "host-for-tests",
   };
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "sub",
     type: "chatgpt",
     base_url: "",
     key: { sealed: secrets.seal(JSON.stringify(login)), hint: "ChatGPT" },
   });
-  store.modelProviders.setModels("sub", [{ id: "gpt-sol", context_window: 272_000 }]);
-  store.modelProviders.put({
+  await store.modelProviders.setModels("sub", [{ id: "gpt-sol", context_window: 272_000 }]);
+  await store.modelProviders.put({
     name: "zen",
     type: "opencode",
     base_url: "https://opencode.ai/zen/v1",
   });
-  store.modelProviders.setModels("zen", [{ id: "big-pickle" }]);
-  store.modelProviders.put({
+  await store.modelProviders.setModels("zen", [{ id: "big-pickle" }]);
+  await store.modelProviders.put({
     name: "claude-sub",
     type: "claude",
     base_url: "",
     key: { sealed: secrets.seal("claude-subscription-for-tests"), hint: "…ests" },
   });
-  store.modelProviders.setModels("claude-sub", [{ id: "opus-5.5", context_window: 200_000 }]);
+  await store.modelProviders.setModels("claude-sub", [{ id: "opus-5.5", context_window: 200_000 }]);
   const as =
     (token: string) =>
     (method: "GET" | "POST", body?: Record<string, unknown>, rig = "rig-a") =>

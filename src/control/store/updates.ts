@@ -5,8 +5,21 @@ import { StorePart } from "./part.ts";
  * the runs it paused, so that a control restarted in the middle of one ends it and resumes those
  * runs (rigs/update.ts).
  */
+export interface RigUpdates {
+  /** The update under way on a rig; undefined when none is. */
+  get(rig: string): Promise<{ phase: string; paused: string; requested_by: string } | undefined>;
+  /** Every update under way, with the runs each paused (as JSON). */
+  list(): Promise<{ rig: string; phase: string; paused: string; requested_by: string }[]>;
+  /** An update begins, pausing first. */
+  begin(rig: string, by: string, at: string): Promise<void>;
+  /** An update's next step, with the runs it paused once it paused them. */
+  setPhase(rig: string, phase: string, paused: string | null, at: string): Promise<void>;
+  /** An update ended, however it ended. */
+  end(rig: string): Promise<void>;
+}
 
-export class RigUpdates extends StorePart {
+/** RigUpdates on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigUpdates extends StorePart {
   /** The update under way on a rig; undefined when none is. */
   get(rig: string): { phase: string; paused: string; requested_by: string } | undefined {
     return this.db.prepare("select * from rig_update where rig = ?").get(rig) as

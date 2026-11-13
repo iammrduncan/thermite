@@ -45,16 +45,16 @@ export interface KbDownload {
  * The file one version of an item holds (its newest unless told), or why there is none to send:
  * 404 when there is no such item, version or file; 409 when control does not hold its bytes yet.
  */
-export function kbFileOf(
+export async function kbFileOf(
   store: ControlStore,
   files: KbFiles | undefined,
   address: string,
   version?: number,
-): KbDownload | { error: string; status: 404 | 409 } {
+): Promise<KbDownload | { error: string; status: 404 | 409 }> {
   const kb = store.kb();
-  const x = kb.at(address);
+  const x = await kb.at(address);
   if (!x) return { error: `the knowledge base has no item ${address}`, status: 404 };
-  const versions = kb.versions(x.id);
+  const versions = await kb.versions(x.id);
   const v = version === undefined ? versions.at(-1) : versions.find((o) => o.version === version);
   if (!v)
     return {
@@ -63,7 +63,7 @@ export function kbFileOf(
     };
   if (!v.file) return { error: `${address} holds no file: it is a text`, status: 404 };
   const path = files?.path(v.file.sha256);
-  if (!path || !kb.files.has(v.file.sha256) || !existsSync(path))
+  if (!path || !(await kb.files.has(v.file.sha256)) || !existsSync(path))
     return {
       error: `control does not hold ${v.file.name} yet: it comes when the rig's supervisor sends it`,
       status: 409,

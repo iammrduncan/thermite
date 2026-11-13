@@ -62,7 +62,7 @@ export async function prepareResize(
   o: { wait?: boolean | undefined; owner: boolean; drainMinutes?: number | undefined },
 ): Promise<Resize | { go: () => Promise<Resize> }> {
   const { store } = parts;
-  const r = store.clusters.rig(rig);
+  const r = await store.clusters.rig(rig);
   if (!r || r.status === "removed")
     return { error: `Control didn't set ${rig} up on a cluster.`, status: 404 };
   if (r.status === "deploying") return { error: `${rig} is still being set up.`, status: 409 };
@@ -74,7 +74,7 @@ export async function prepareResize(
       status: 409,
     };
   if (!parts.rigBus) return { error: NO_RIG_BUS, status: 409 };
-  const k = store.clusters.get(r.cluster);
+  const k = await store.clusters.get(r.cluster);
   if (!k)
     return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.`, status: 409 };
   if (r.status === "updating" || r.status === "starting")
@@ -106,7 +106,7 @@ export async function prepareResize(
     owner: o.owner,
     facts: k.facts as ClusterFacts | null,
     quota: await slotQuotaNow(parts, r, k),
-    mode: programModeOf(store, rig),
+    mode: await programModeOf(store, rig),
   });
   if ("error" in plan) return plan;
   if ("same" in plan)
@@ -114,42 +114,57 @@ export async function prepareResize(
   const next: ClusterRigResize = { ...plan.size, by };
   return {
     go: async () => {
-      const now = store.clusters.rig(rig);
-      if (!now || now.status === "removed")
-        return { error: `Control didn't set ${rig} up on a cluster.`, status: 404 };
-      const work = rigWork(parts, rig);
-      if (
-        o.wait === false ||
-        now.status === "stopped" ||
-        (now.status !== "draining" && !(work && (work.trials > 0 || work.judge_jobs > 0)))
-      )
-        return applyResize(parts, rig, next, by);
-      // Drain first (goal 079): the rig starts nothing new, and the drain watch (drain.ts)
-      // applies the change once nothing runs. A drain under way takes the new size instead.
-      store.clusters.setRigPending(rig, next);
-      const lead = shareMoveWords(sizeOf(now), next);
-      if (now.status === "draining" || !work) {
-        store.rigHistory.add(rig, "drain", true, `now for ${sizeChangeWords(sizeOf(now), next)}`);
+      // The rig's status is read, and its pending size and its drain set, in one transaction: a
+      // report or the drain watch that moves the status between them would leave a drain with no
+      // pending size, or a pending size on a rig that no longer drains.
+      const drained = await store.tx(async (): Promise<Resize | "now"> => {
+        const now = await store.clusters.rig(rig);
+        if (!now || now.status === "removed")
+          return { error: `Control didn't set ${rig} up on a cluster.`, status: 404 };
+        const work = await rigWork(parts, rig);
+        if (
+          o.wait === false ||
+          now.status === "stopped" ||
+          (now.status !== "draining" && !(work && (work.trials > 0 || work.judge_jobs > 0)))
+        )
+          return "now" as const;
+        // Drain first (goal 079): the rig starts nothing new, and the drain watch (drain.ts)
+        // applies the change once nothing runs. A drain under way takes the new size instead.
+        await store.clusters.setRigPending(rig, next);
+        const lead = shareMoveWords(sizeOf(now), next);
+        if (now.status === "draining" || !work) {
+          await store.rigHistory.add(
+            rig,
+            "drain",
+            true,
+            `now for ${sizeChangeWords(sizeOf(now), next)}`,
+          );
+          return {
+            ok: `${lead}${rig} is draining: its pods restart with ${sizeWords(next)} once its trials and the judge's job end. Change now skips the wait.`,
+          };
+        }
+        await issueCommand(store, parts.privateKeyPem, {
+          rig,
+          kind: "drain_rig",
+          payload: {
+            drain: true,
+            reason: RESIZE_REASON,
+            ...(o.drainMinutes ? { deadline_minutes: o.drainMinutes } : {}),
+          },
+          issuedBy: by,
+        });
+        await store.clusters.setRigStatus(rig, "draining");
+        await store.rigHistory.add(rig, "drain", true, `waiting for ${workWords(work)} to finish`);
+        await store.auditLog.add(by, "cluster_rig_drain", {
+          rig,
+          to: sizeChangeWords(sizeOf(now), next),
+        });
         return {
-          ok: `${lead}${rig} is draining: its pods restart with ${sizeWords(next)} once its trials and the judge's job end. Change now skips the wait.`,
+          ok: `${lead}${rig} drains first: it starts nothing new, and its pods restart with ${sizeWords(next)} once ${workWords(work)} ${work.trials + work.judge_jobs === 1 ? "finishes" : "finish"}. Change now, on its page or with set_cluster_rig_resources and wait false, skips the wait.`,
         };
-      }
-      issueCommand(store, parts.privateKeyPem, {
-        rig,
-        kind: "drain_rig",
-        payload: {
-          drain: true,
-          reason: RESIZE_REASON,
-          ...(o.drainMinutes ? { deadline_minutes: o.drainMinutes } : {}),
-        },
-        issuedBy: by,
       });
-      store.clusters.setRigStatus(rig, "draining");
-      store.rigHistory.add(rig, "drain", true, `waiting for ${workWords(work)} to finish`);
-      store.auditLog.add(by, "cluster_rig_drain", { rig, to: sizeChangeWords(sizeOf(now), next) });
-      return {
-        ok: `${lead}${rig} drains first: it starts nothing new, and its pods restart with ${sizeWords(next)} once ${workWords(work)} ${work.trials + work.judge_jobs === 1 ? "finishes" : "finish"}. Change now, on its page or with set_cluster_rig_resources and wait false, skips the wait.`,
-      };
+      // The change itself waits for the cluster: after the transaction.
+      return drained === "now" ? applyResize(parts, rig, next, by) : drained;
     },
   };
 }
@@ -167,10 +182,10 @@ export async function applyResize(
   by: string,
 ): Promise<Resize> {
   const { store } = parts;
-  const r = store.clusters.rig(rig);
+  const r = await store.clusters.rig(rig);
   if (!r || r.status === "removed")
     return { error: `Control didn't set ${rig} up on a cluster.`, status: 404 };
-  const k = store.clusters.get(r.cluster);
+  const k = await store.clusters.get(r.cluster);
   if (!k)
     return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.`, status: 409 };
   const from = sizeOf(r);
@@ -183,12 +198,12 @@ export async function applyResize(
   const stopped = r.status === "stopped";
   const draining = r.status === "draining";
   const target = clusterTarget(parts, k);
-  const failed = (why: string): ResizeRefusal => {
-    store.rigHistory.add(rig, "resources", false, why);
+  const failed = async (why: string): Promise<ResizeRefusal> => {
+    await store.rigHistory.add(rig, "resources", false, why);
     // A rig that drained for it goes back to work: the change did not happen.
     if (draining) {
-      undrain(parts, rig, by);
-      store.clusters.setRigStatus(rig, "failed");
+      await undrain(parts, rig, by);
+      await store.clusters.setRigStatus(rig, "failed");
     }
     return { error: why, status: 409 };
   };
@@ -197,12 +212,17 @@ export async function applyResize(
   try {
     objects = asList(
       clusterRigResized(
-        clusterPlan(parts, { ...r, spec: { ...r.spec, ...to } }, r.spec.images, to.programMode),
+        await clusterPlan(
+          parts,
+          { ...r, spec: { ...r.spec, ...to } },
+          r.spec.images,
+          to.programMode,
+        ),
         stopped,
       ),
     );
   } catch (err) {
-    return failed(errorText(err));
+    return await failed(errorText(err));
   }
   if (newClaim) {
     const del = await parts.kube.kubectl(
@@ -228,9 +248,10 @@ export async function applyResize(
         target,
         ["apply", "-f", "-"],
         asList(
-          clusterRigResized(clusterPlan(parts, r, r.spec.images, from.programMode), stopped).filter(
-            (x) => x.kind === "ResourceClaimTemplate",
-          ),
+          clusterRigResized(
+            await clusterPlan(parts, r, r.spec.images, from.programMode),
+            stopped,
+          ).filter((x) => x.kind === "ResourceClaimTemplate"),
         ),
         60_000,
       );
@@ -241,11 +262,11 @@ export async function applyResize(
     }
     return failed(kubeError(out));
   }
-  store.clusters.setRigSize(rig, to, controlAddress(parts));
+  await store.clusters.setRigSize(rig, to, controlAddress(parts));
   let words = sizeChangeWords(from, to);
   // The judge's share a rig keeps from Edit rig comes before its deployment's, so it follows the
   // new size. Its harness takes it only from an owner: issuer: the one who asked.
-  const kept = rigSettingsOf(store, rig)?.settings?.judge_gpus;
+  const kept = (await rigSettingsOf(store, rig))?.settings?.judge_gpus;
   if (
     to.gpus >= 2 &&
     to.gpus !== from.gpus &&
@@ -254,7 +275,7 @@ export async function applyResize(
     kept !== to.judgeGpus
   ) {
     try {
-      issueCommand(store, parts.privateKeyPem, {
+      await issueCommand(store, parts.privateKeyPem, {
         rig,
         kind: "rig_settings",
         payload: { judge_gpus: to.judgeGpus },
@@ -265,11 +286,16 @@ export async function applyResize(
       words += `; the judge's share it keeps, ${kept}, did not change: ${errorText(err)}`;
     }
   }
-  store.rigHistory.add(rig, "resources", true, stopped ? `${words}; at its next start` : words);
-  store.auditLog.add(by, "cluster_rig_resources", { rig, from, to });
+  await store.rigHistory.add(
+    rig,
+    "resources",
+    true,
+    stopped ? `${words}; at its next start` : words,
+  );
+  await store.auditLog.add(by, "cluster_rig_resources", { rig, from, to });
   const lead = shareMoveWords(from, to);
   if (stopped) return { ok: `${lead}${rig} has ${sizeWords(to)} when it starts again.` };
-  store.clusters.setRigStatus(rig, "updating");
+  await store.clusters.setRigStatus(rig, "updating");
   void inBackground(
     store,
     "cluster",
@@ -296,7 +322,7 @@ export async function prepareModeChange(
   by: string,
   o: { owner: boolean },
 ): Promise<ResizeRefusal | { go: () => Promise<Resize> } | undefined> {
-  const r = parts.store.clusters.rig(rig);
+  const r = await parts.store.clusters.rig(rig);
   if (!r || r.status === "removed" || !r.spec.resources) return undefined;
   const p = await prepareResize(parts, rig, { programMode }, by, { owner: o.owner });
   return "ok" in p ? undefined : p;

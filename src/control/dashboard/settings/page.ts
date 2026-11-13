@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { filterInTurn, mapInTurn } from "../../../common/in-turn.ts";
 import { KEY_PROVIDER_TYPES } from "../../../core/agents.ts";
 import { isFree } from "../../../core/usage.ts";
 import { busState } from "../../bus/index.ts";
@@ -119,25 +120,24 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     const area = (named ?? (at && at in AREA_TITLES ? at : "providers")) as SettingsArea;
     if (!(area in AREA_TITLES)) return c.notFound();
     const now = Date.now();
-    const vs = views();
+    const vs = await views();
     const t = csrf(c);
-    const providers = store.modelProviders.list();
+    const providers = await store.modelProviders.list();
     const usage = new Map(
       await Promise.all(
         providers.map(async (p) => [p.name, await opts.parts.planUsage.of(p)] as const),
       ),
     );
-    const gitCount = store.gitAccess.list().length;
-    const given = store.agentModels.byRig();
+    const gitCount = (await store.gitAccess.list()).length;
+    const given = await store.agentModels.byRig();
     /** The rigs whose workers or other agents use one of the provider's models. */
-    const usersOf = (name: string) =>
-      vs
-        .map((u) => u.id)
-        .filter(
-          (rig) =>
-            given[rig]?.provider === name ||
-            Object.values(store.agentModels.byRole(rig)).some((r) => r?.provider === name),
-        );
+    const usersOf = async (name: string) =>
+      filterInTurn(
+        vs.map((u) => u.id),
+        async (rig) =>
+          given[rig]?.provider === name ||
+          Object.values(await store.agentModels.byRole(rig)).some((r) => r?.provider === name),
+      );
     // What a form did is said on its area's page: at the top of Providers and of Machines,
     // and in its own block on the others, which read it themselves.
     const atPrices = area === "prices";
@@ -146,7 +146,7 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     // Model prices (goal 075): one table under the providers, for every model not on a plan.
     const prices = modelPricesBlock({
       providers,
-      owner: store.usage.prices(),
+      owner: await store.usage.prices(),
       csrf: t,
       flash: !atPrices
         ? undefined
@@ -167,12 +167,12 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
         ? `<div class="card" style="margin-bottom:16px"><b class="ok">${esc(ok)}</b></div>`
         : "";
     /** A Claude subscription: its token's hint, its models, what its rigs report of its usage. */
-    const claudeRow = (p: (typeof providers)[number], rigs: string[]) => {
+    const claudeRow = async (p: (typeof providers)[number], rigs: string[]) => {
       const pName = encodeURIComponent(p.name);
       const windows = usageBlock("claude", usage.get(p.name), now);
       // Its usage credits, while Claude Code reports them on (goal 169): a chip, and a note the
       // owner may dismiss.
-      const dismissed = creditsNoteDismissedAt(store, p.name);
+      const dismissed = await creditsNoteDismissedAt(store, p.name);
       return `<details class="dq" data-k="provider-${esc(p.name)}"><summary>
 <span class="dq-kind"><span class="kind m">Subscription</span></span>
 <span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· Claude subscription</span></span><span class="dq-why">${p.models.length} models · runs only in Claude Code, Anthropic's own program</span><span class="dq-sub"><span class="chip">token ${esc(p.key_hint)}</span>${usageChips(usage.get(p.name))}${creditsChip(usage.get(p.name), dismissed)}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
@@ -209,9 +209,9 @@ ${
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Sign out and delete</button></form>`
 }</div></details>`;
     };
-    const providerRows = providers
-      .map((p) => {
-        const rigs = usersOf(p.name);
+    const providerRows = (
+      await mapInTurn(providers, async (p) => {
+        const rigs = await usersOf(p.name);
         if (p.type === "claude") return claudeRow(p, rigs);
         if (p.type === "chatgpt") return chatgptRow(p, rigs);
         const status = p.models_error
@@ -243,7 +243,7 @@ ${
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this provider</button></form>`
 }</div></details>`;
       })
-      .join("");
+    ).join("");
     const models = "openai anthropic opencode";
     const addFormOf = (
       typeField: string,
@@ -290,40 +290,44 @@ ${typeField}
     // Settings › Machines (goal 203): where rigs run, each kind in its own block.
     const placeBlock = (title: string, rows: string, n: number, none: string) =>
       `<div class="block"><div class="head"><h2>${title}</h2><span class="n">${n}</span></div>${n ? `<div class="dqs">${rows}</div>` : `<div class="card"><div class="empty">${none}</div></div>`}</div>`;
-    const machinesBody = () =>
+    const machinesBody = async () =>
       `<div class="head" style="margin-bottom:6px"><p class="run-said" style="margin:0;flex:1">Machines are where rigs run: computers control reaches over SSH, Kubernetes clusters, and GPU clouds. Add each one here once, then add rigs on it from <a href="/ui/rigs/add">Rigs › Add a rig</a>. Logins to model providers and Git are under <a href="/ui/settings">Providers</a>.</p></div>${note}
 <details class="block" id="add-machine"${c.req.query("add") ? " open" : ""}><summary class="btn primary" style="display:inline-flex">Add a machine</summary><div class="card" style="margin-top:10px">${machineForm}</div></details>
-${placeBlock("Kubernetes clusters", clusterRows(t), store.clusters.list().length, "No cluster yet.")}
-${placeBlock("Computers over SSH", machineRows(t), store.machines.list().length, "No computer yet.")}
-${placeBlock("GPU clouds", cloudRows(t), store.gpuClouds.list().length, "No GPU cloud yet.")}`;
+${placeBlock("Kubernetes clusters", await clusterRows(t), (await store.clusters.list()).length, "No cluster yet.")}
+${placeBlock("Computers over SSH", await machineRows(t), (await store.machines.list()).length, "No computer yet.")}
+${placeBlock("GPU clouds", await cloudRows(t), (await store.gpuClouds.list()).length, "No GPU cloud yet.")}`;
     const query = (k: string) => (k === "error" ? said(c) : c.req.query(k));
     const body =
       area === "providers"
         ? `${intro}${note}
-<div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
+<div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${await gitRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
 <div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>`
         : area === "machines"
-          ? machinesBody()
+          ? await machinesBody()
           : area === "prices"
             ? prices
             : area === "mcp"
-              ? mcpSettingsBlocks(store, mcpServers, t, now, query)
+              ? await mcpSettingsBlocks(store, mcpServers, t, now, query)
               : area === "reach"
-                ? reachBlock(store, t, now, (k) => c.req.query(k))
+                ? await reachBlock(store, t, now, (k) => c.req.query(k))
                 : area === "kb"
-                  ? kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) =>
-                      c.req.query(k),
+                  ? await kbSettingsBlock(
+                      store,
+                      opts.kbFiles?.orphanHoursDefault ?? 0,
+                      t,
+                      now,
+                      (k) => c.req.query(k),
                     )
                   : area === "space"
-                    ? spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())
+                    ? spaceBlock(await spaceOf(store, opts.parts.bus), await store.retention.list())
                     : area === "bus"
-                      ? busSettingsBlock({
+                      ? await busSettingsBlock({
                           state: await busState(store, opts.parts.bus),
                           store,
                           views: vs,
                           now,
                         })
-                      : retentionBlocks(
+                      : await retentionBlocks(
                           store,
                           t,
                           (k) => c.req.query(k),
@@ -345,11 +349,10 @@ ${placeBlock("GPU clouds", cloudRows(t), store.gpuClouds.list().length, "No GPU 
   app.get("/ui/settings/:area{[a-z]+}", settingsPage);
 
   // ---------------------------------------------------------------- Git access (Settings)
-  const gitRows = (t: string) =>
-    store.gitAccess
-      .list()
-      .map((g) => {
-        const users = store.campaigns.usingGitAccess(g.name);
+  const gitRows = async (t: string) =>
+    (
+      await mapInTurn(await store.gitAccess.list(), async (g) => {
+        const users = await store.campaigns.usingGitAccess(g.name);
         const gName = encodeURIComponent(g.name);
         const ssh = g.kind === "ssh";
         return `<details class="dq" data-k="git-${esc(g.name)}"><summary>
@@ -376,16 +379,16 @@ ${
     : `<form class="inline" method="post" action="/ui/settings/git/${gName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this Git access</button></form>`
 }</div></details>`;
       })
-      .join("");
+    ).join("");
   // ---------------------------------------------------------------- machines (Settings › Machines)
   // A machine control sets rigs up on, over SSH. Its host key is trusted once by the owner;
   // its facts come from a read-only check (machines/facts.ts).
   const kib = (n: number) => `${Math.round(n / 1024 / 1024)} GB`;
-  const machineFacts = (m: Machine, t: string) => {
+  const machineFacts = async (m: Machine, t: string) => {
     const f = m.facts as MachineFacts | null;
     if (!f) return "";
     const need = missing(f);
-    const installs = store.machines.installs(m.name);
+    const installs = await store.machines.installs(m.name);
     const running = installs.find((i) => i.started_at && !i.finished_at);
     const last = installs.find((i) => i.finished_at);
     const mName = encodeURIComponent(m.name);
@@ -422,10 +425,9 @@ ${
 <dt>Reaches control</dt><dd>${control}</dd>
 </dl>${need.length ? `<div class="muted" style="margin-top:10px"><b>Missing for a rig:</b> ${need.map((x) => esc(RECIPES[x].title)).join("; ")}.</div>` : ""}${asks}${lastRun}`;
   };
-  const machineRows = (t: string) =>
-    store.machines
-      .list()
-      .map((m) => {
+  const machineRows = async (t: string) =>
+    (
+      await mapInTurn(await store.machines.list(), async (m) => {
         const mName = encodeURIComponent(m.name);
         const trusted = m.host_keys.length > 0;
         const f = m.facts as MachineFacts | null;
@@ -467,22 +469,21 @@ ${
 <span class="dq-kind"><span class="kind r">Machine</span></span>
 <span class="dq-main"><span class="dq-head">${esc(m.name)} <span class="muted" style="font-weight:400">· SSH</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(m.user)}@${esc(m.address)}${m.port === 22 ? "" : `:${m.port}`}</span><span class="chip">key ${esc(m.key_fingerprint.slice(-6))}</span>${trusted ? `<span class="dq-where">host key ${esc(fingerprintOf(m.host_keys[0]?.split(/\s+/)[2] ?? "").slice(0, 19))}…</span>` : ""}</span></span>
 <span class="dq-side"><span class="dq-btns">${trusted && f ? `<a class="btn sm primary" href="/ui/rigs/add?place=machine:${mName}">Add a rig here</a>` : ""}${trusted ? form("check", "Check again") : ""}</span></span>
-</summary><div class="dq-body">${hostKey}${machineFacts(m, t)}
+</summary><div class="dq-body">${hostKey}${await machineFacts(m, t)}
 <div class="muted small" style="margin:10px 0 4px">Control logs in as ${esc(m.user)} with this key. Put this line in that user's <code>~/.ssh/authorized_keys</code> on the machine: <code>restrict</code> turns off forwarding and terminals, which control does not use.</div><pre class="json" style="white-space:pre-wrap;word-break:break-all">restrict ${esc(m.public_key)}</pre>
 ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm danger"')}</div></details>`;
       })
-      .join("");
+    ).join("");
 
   // ---------------------------------------------------------------- clusters (Settings › Machines)
   // A Kubernetes cluster control sets rigs up on, with its kubeconfig sealed. Its facts come from
   // a read-only check (clusters/facts.ts).
-  const clusterRows = (t: string) =>
-    store.clusters
-      .list()
-      .map((k) => {
+  const clusterRows = async (t: string) =>
+    (
+      await mapInTurn(await store.clusters.list(), async (k) => {
         const f = k.facts as ClusterFacts | null;
         const kName = encodeURIComponent(k.name);
-        const rigsHere = store.clusters.rigs(k.name).filter((r) => r.status !== "removed");
+        const rigsHere = (await store.clusters.rigs(k.name)).filter((r) => r.status !== "removed");
         const unchecked = k.unchecked
           ? ` <span class="chip warn" title="${esc(k.unchecked.what.join("; "))}">connection not checked: you accepted it ${esc(ago(k.unchecked.at, Date.now()))} ago</span>`
           : "";
@@ -537,7 +538,7 @@ ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm 
             : `<div style="margin-top:10px">${form("delete", "Delete this cluster", "sm danger")}</div>`
         }</div></details>`;
       })
-      .join("");
+    ).join("");
 
   // ---------------------------------------------------------------- GPU clouds (Settings › Machines)
   // RunPod, read with the owner's key (runpod.ts): GPU types, prices and stock, data centers,
@@ -573,15 +574,14 @@ ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm 
 <div class="muted small">${esc(x.phase_words)} · cost ${x.active ? "so far " : ""}${usd(x.cost_usd)} · started ${esc(ago(x.started_at, Date.now()))} ago by ${esc(x.created_by)}${x.datacenter ? ` · ${esc(x.datacenter)}` : ""} · pod ${esc(x.pod_id)}</div>
 ${x.error ? `<div class="dq-why bad">${esc(x.error)}</div>` : ""}${x.findings.length ? `<ul class="small" style="margin:6px 0 0 18px">${x.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}${x.notes.length ? `<div class="muted small">${x.notes.map(esc).join(" ")}</div>` : ""}
 <div class="small" style="margin-top:6px"><a href="/ui/settings/clouds/${gName}/tests/${encodeURIComponent(x.id)}.json">The whole report (JSON)</a>${x.active ? ` <form class="inline" method="post" action="/ui/settings/clouds/${gName}/tests/${encodeURIComponent(x.id)}/end"><input type="hidden" name="csrf" value="${t}"><button class="sm danger">End it now: remove the pod</button></form>` : ""}</div></div>`;
-  const testSection = (gName: string, cloud: string, f: RunpodFacts | null, t: string) => {
-    const tests = opts.runpodTests?.list(cloud, 5) ?? [];
+  const testSection = async (gName: string, cloud: string, f: RunpodFacts | null, t: string) => {
+    const tests = (await opts.runpodTests?.list(cloud, 5)) ?? [];
     const busy = tests.some((x) => x.active);
     return `<h4 style="margin:14px 0 4px">Test pods</h4><div class="muted small">A test pod checks that a rig can run on RunPod. One at a time.</div>${tests.map((x) => testCard(x, gName, t)).join("")}${busy ? "" : testPodForm(gName, f, t)}`;
   };
-  const cloudRows = (t: string) =>
-    store.gpuClouds
-      .list()
-      .map((g) => {
+  const cloudRows = async (t: string) =>
+    (
+      await mapInTurn(await store.gpuClouds.list(), async (g) => {
         const f = g.facts as RunpodFacts | null;
         const gName = encodeURIComponent(g.name);
         const status = g.check_error
@@ -601,7 +601,7 @@ ${x.error ? `<div class="dq-why bad">${esc(x.error)}</div>` : ""}${x.findings.le
               .join("")}</tbody></table></div>`
           : "";
         const sp = f?.spend;
-        const tests = opts.runpodTests?.list(g.name, 200) ?? [];
+        const tests = (await opts.runpodTests?.list(g.name, 200)) ?? [];
         const testCost = tests.reduce((t, x) => t + (x.cost_usd ?? 0), 0);
         const spendFacts = sp
           ? `<dt>${infoLabel("Spend", "What this RunPod account spent, from RunPod's billing: pods, storage and the rest, in US dollars. Read with the rest of the account, every 15 minutes and on Read again.")}</dt><dd>${
@@ -629,11 +629,11 @@ ${x.error ? `<div class="dq-why bad">${esc(x.error)}</div>` : ""}${x.findings.le
           : "";
         return `<details class="dq${g.check_error ? " dq-bad" : ""}" data-k="cloud-${esc(g.name)}"><summary>
 <span class="dq-kind"><span class="kind r">GPU cloud</span></span>
-<span class="dq-main"><span class="dq-head">${esc(g.name)} <span class="muted" style="font-weight:400">· RunPod</span></span>${status}<span class="dq-sub"><span class="chip">key ${esc(g.key_hint)}</span><span class="chip info">control starts only the pods you ask for</span>${opts.runpodTests?.list(g.name, 1).some((x) => x.active) ? `<span class="chip warn">a test pod is running</span>` : ""}${running.length ? `<span class="chip warn">${running.length} pod${running.length === 1 ? "" : "s"} running: billed while they run</span>` : ""}</span></span>
+<span class="dq-main"><span class="dq-head">${esc(g.name)} <span class="muted" style="font-weight:400">· RunPod</span></span>${status}<span class="dq-sub"><span class="chip">key ${esc(g.key_hint)}</span><span class="chip info">control starts only the pods you ask for</span>${(await opts.runpodTests?.list(g.name, 1))?.some((x) => x.active) ? `<span class="chip warn">a test pod is running</span>` : ""}${running.length ? `<span class="chip warn">${running.length} pod${running.length === 1 ? "" : "s"} running: billed while they run</span>` : ""}</span></span>
 <span class="dq-side"><span class="dq-btns">${form("check", "Read again")}<a class="btn sm" href="/ui/rigs/add/runpod?cloud=${gName}">Launch a rig</a></span></span>
-</summary><div class="dq-body">${facts}${testSection(gName, g.name, f, t)}
+</summary><div class="dq-body">${facts}${await testSection(gName, g.name, f, t)}
 <form method="post" action="/ui/settings/clouds/${gName}/key" class="form-grid" autocomplete="off" style="margin-top:10px"><input type="hidden" name="csrf" value="${t}"><label>${infoLabel("New API key", "Control seals the new key, reads the account with it, and forgets the old one.")}<input name="runpod_key" type="password" autocomplete="new-password" maxlength="4096" placeholder="empty keeps the key ending ${esc(g.key_hint)}"></label><div class="form-end"><button>Replace the key</button></div></form>
 <div style="margin-top:10px">${form("delete", "Delete this GPU cloud", "sm danger")} <span class="muted small">Control forgets the key. Nothing at RunPod changes.</span></div></div></details>`;
       })
-      .join("");
+    ).join("");
 }

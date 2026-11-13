@@ -61,17 +61,21 @@ export interface RigInputs {
 }
 
 /** What a rig's view reads besides its events, from the store, the clock and control's build. */
-export function rigInputs(store: ControlStore, row: RigRow, opts: ViewOptions): RigInputs {
+export async function rigInputs(
+  store: ControlStore,
+  row: RigRow,
+  opts: ViewOptions,
+): Promise<RigInputs> {
   const now = opts.now ?? Date.now();
-  const launched = store.runpod.rig(row.id);
+  const launched = await store.runpod.rig(row.id);
   return {
     row,
     now,
     staleAfterMs: opts.staleAfterMs,
     offlineAfterMs: opts.offlineAfterMs,
-    version: rigVersions(store, row.id, opts.control ?? buildInfo()),
-    supervisor: store.reportedRigs.supervisor(row.id),
-    runpod: launched ? runpodRigView(launched, store.tunnels.get(row.id), now) : undefined,
+    version: await rigVersions(store, row.id, opts.control ?? buildInfo()),
+    supervisor: await store.reportedRigs.supervisor(row.id),
+    runpod: launched ? runpodRigView(launched, await store.tunnels.get(row.id), now) : undefined,
   };
 }
 

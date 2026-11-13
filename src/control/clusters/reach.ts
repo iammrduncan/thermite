@@ -39,26 +39,26 @@ export function reachListOf(raw: unknown): { list: ReachEntry[] } | { error: str
 }
 
 /** The rigs whose network rules control writes and changes: those in namespaces it created. */
-const rigsToChange = (parts: ControlParts): ClusterRig[] =>
-  parts.store.clusters
-    .rigs()
-    .filter((r) => r.placement === "created" && !["removed", "deploying"].includes(r.status));
+const rigsToChange = async (parts: ControlParts): Promise<ClusterRig[]> =>
+  (await parts.store.clusters.rigs()).filter(
+    (r) => r.placement === "created" && !["removed", "deploying"].includes(r.status),
+  );
 
 /**
  * Keeps the list, in place of the one before, and applies the network rules of each rig in a
  * namespace control created, in the background: each apply is a step in the rig's history.
  * Says what it did, or why not, in words.
  */
-export function setReachableAddresses(
+export async function setReachableAddresses(
   parts: ControlParts,
   raw: unknown,
   by: string,
-): { ok: string; list: ReachEntry[] } | { error: string } {
+): Promise<{ ok: string; list: ReachEntry[] } | { error: string }> {
   const checked = reachListOf(raw);
   if ("error" in checked) return checked;
   const { list } = checked;
-  parts.store.reachable.set(list, by);
-  const rigs = rigsToChange(parts);
+  await parts.store.reachable.set(list, by);
+  const rigs = await rigsToChange(parts);
   for (const r of rigs)
     void inBackground(parts.store, "cluster", r.rig, "network", applyNetwork(parts, r, list));
   const n = list.length;
@@ -71,9 +71,9 @@ export function setReachableAddresses(
 
 /** Applies a rig's two network rules again, with the list as it is now. */
 async function applyNetwork(parts: ControlParts, r: ClusterRig, list: ReachEntry[]): Promise<void> {
-  const k = parts.store.clusters.get(r.cluster);
+  const k = await parts.store.clusters.get(r.cluster);
   if (!k) throw new Error(`the cluster ${r.cluster} is no longer in Settings › Machines`);
-  const objects = clusterRigNetwork({ ...clusterPlan(parts, r), reach: list });
+  const objects = clusterRigNetwork({ ...(await clusterPlan(parts, r)), reach: list });
   const out = await parts.kube.kubectl(
     clusterTarget(parts, k),
     ["apply", "-f", "-"],
@@ -82,7 +82,7 @@ async function applyNetwork(parts: ControlParts, r: ClusterRig, list: ReachEntry
   );
   if (out.code !== 0) throw new Error(kubeError(out));
   const n = list.length;
-  parts.store.rigHistory.add(
+  await parts.store.rigHistory.add(
     r.rig,
     "network",
     true,

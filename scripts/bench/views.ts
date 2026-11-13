@@ -188,7 +188,7 @@ try {
     `${(seeded / 1000).toFixed(1)} s, ${Math.round(total / (seeded / 1000))} events/s`,
   );
   closeBus(seeding);
-  seeding.db.close();
+  await seeding.close();
   const heapBefore = heapMiB();
 
   // A control started on the same store and stream: its folds are at 0.
@@ -198,10 +198,10 @@ try {
   const folds = busOf(store).apply.folds;
   if (folds.through !== total) throw new Error(`the folds reached ${folds.through} of ${total}`);
 
-  rigViews(store);
-  const [all, nothingNew] = await time(() => rigViews(store));
+  await rigViews(store);
+  const [all, nothingNew] = await time(async () => rigViews(store));
   say("every rig's view, nothing new", `${nothingNew.toFixed(2)} ms (${all.length} rigs)`);
-  const [, one] = await time(() => rigView(store, "rig-1"));
+  const [, one] = await time(async () => rigView(store, "rig-1"));
   say("one rig's view, nothing new", `${one.toFixed(2)} ms`);
 
   const extra = [...ledgerEvents("rig-1-more", 100)];
@@ -209,7 +209,7 @@ try {
     send(store, "rig-1", "ledger-1", extra, last.get("rig-1") ?? 0),
   );
   say("a report of 100 new events, applied", `${report.toFixed(1)} ms`);
-  const [, after] = await time(() => rigViews(store));
+  const [, after] = await time(async () => rigViews(store));
   say("every rig's view after it", `${after.toFixed(2)} ms`);
 
   const [found, earlierMs] = await time(() => findRunOn(store, "rig-0", "rig-0-old-r0"));
@@ -228,7 +228,7 @@ try {
     `${heapAfter.toFixed(1)} MiB (+${(heapAfter - heapBefore).toFixed(1)})`,
   );
   closeBus(store);
-  store.db.close();
+  await store.close();
   console.log(
     `\n| What | ${EVENTS.toLocaleString("en-US")} events |\n| --- | --- |\n${rows.map(([w, v]) => `| ${w} | ${v} |`).join("\n")}`,
   );

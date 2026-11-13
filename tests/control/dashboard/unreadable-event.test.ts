@@ -10,7 +10,7 @@ import { goalEvents, report } from "../../helpers/view-events.ts";
  */
 test("an event control can't read shows in the rig's history with why; every page shows as before", async () => {
   const store = controlStore();
-  const { control } = controlOnly({ store, tokens: { rigs: {} } });
+  const { control } = await controlOnly({ store, tokens: { rigs: {} } });
   await report(store, "rig-a", "ledger-a", [
     ...goalEvents("g-a").slice(0, 4),
     {

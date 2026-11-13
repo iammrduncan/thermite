@@ -61,7 +61,7 @@ describe("a slot's ingress rules on the rig's page", () => {
     await s.post("/ui/settings/clusters/k8s-b/check", {});
     page = await s.page("/ui/rigs/k8s-b-1");
     assert.ok(!page.includes("Other pods can connect"), "the warning is gone");
-    assert.deepEqual(s.store.clusters.rig("k8s-b-1")?.spec.ingress, {
+    assert.deepEqual((await s.store.clusters.rig("k8s-b-1"))?.spec.ingress, {
       ok: true,
       why: "only the rig's supervisor may connect to the harness",
     });

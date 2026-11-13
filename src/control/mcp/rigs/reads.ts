@@ -39,7 +39,7 @@ export function registerRigReads(
         steps: z.number().int().min(1).max(500).default(SETUP_STEPS),
       },
     },
-    audited("rig_setup", (a: { rig: string; steps: number }) =>
+    audited("rig_setup", async (a: { rig: string; steps: number }) =>
       rigSetupView(store, runpodRigs, a.rig, a.steps, details),
     ),
   );
@@ -50,6 +50,6 @@ export function registerRigReads(
       description: TRIAL_SESSION_WORDS,
       inputSchema: TRIAL_SESSION_INPUT,
     },
-    audited("trial_session", (a: TrialSessionArgs) => trialSession(store, a)),
+    audited("trial_session", async (a: TrialSessionArgs) => trialSession(store, a)),
   );
 }

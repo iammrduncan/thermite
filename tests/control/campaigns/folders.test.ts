@@ -30,7 +30,7 @@ const C = "9a41c07e0d1f2a3b4c5d6e7f8091a2b3c4d5e6f7";
  * to rig-a and the rig has not taken it yet.
  */
 async function stack() {
-  const { keys, store, control, api } = controlOnly({
+  const { keys, store, control, api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000 },
   });
@@ -72,7 +72,7 @@ async function stack() {
       "utf8",
     ),
   ) as Record<string, unknown>;
-  const assign = (campaign: string, run: string) => {
+  const assign = async (campaign: string, run: string) => {
     const parsed = parseContract({ ...goal, campaign, version: 1 });
     assert.ok(parsed.ok);
     return issueCommand(store, keys.privateKeyPem, {
@@ -88,14 +88,14 @@ async function stack() {
       issuedBy: "owner:api",
     });
   };
-  const resume = (run: string) =>
+  const resume = async (run: string) =>
     issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "resume_run",
       payload: { run },
       issuedBy: "owner:api",
     });
-  assign("gemv-speed", "gemv-speed-1");
+  await assign("gemv-speed", "gemv-speed-1");
   const session = await signIn(control);
   const { get, csrfOf } = session;
   const page = async (path: string) => {
@@ -110,8 +110,8 @@ async function stack() {
       { csrf: await csrf(), ...fields },
       json ? { accept: "application/json" } : {},
     );
-  const audit = (action: string) =>
-    store.auditLog.list(500).filter((a) => a.action === action) as {
+  const audit = async (action: string) =>
+    (await store.auditLog.list(500)).filter((a) => a.action === action) as {
       actor: string;
       body: Record<string, unknown>;
     }[];
@@ -139,15 +139,15 @@ describe("Archive a campaign over REST (goal 077)", () => {
       error: "Pause or close its runs first. gemv-speed-1 waits to start on rig-a.",
     });
     // A resume sent for a paused run waits too, until the rig takes it.
-    const resumed = s.resume("wide-gemm-1");
+    const resumed = await s.resume("wide-gemm-1");
     const r1 = await s.rest("POST", "/v1/campaigns/wide-gemm/archive");
     assert.equal(r1.status, 409);
     assert.match(
       (await json<{ error: string }>(r1)).error,
       /wide-gemm-1 waits to start on rig-a\./,
     );
-    assert.ok(s.store.commands.cancel(resumed.id, "owner:ui"));
-    const refusals = s.audit("refused").map((a) => a.body.path);
+    assert.ok(await s.store.commands.cancel(resumed.id, "owner:ui"));
+    const refusals = (await s.audit("refused")).map((a) => a.body.path);
     assert.ok(refusals.includes("/v1/campaigns/fast-sort/archive"));
     assert.ok(refusals.includes("/v1/campaigns/gemv-speed/archive"));
 
@@ -164,16 +164,16 @@ describe("Archive a campaign over REST (goal 077)", () => {
       false,
     );
     assert.deepEqual(
-      s.audit("campaign_archived").map((x) => [x.actor, x.body.campaign]),
+      (await s.audit("campaign_archived")).map((x) => [x.actor, x.body.campaign]),
       [["owner:api", "wide-gemm"]],
     );
     // An archived campaign starts and resumes no run, on any path that signs one.
-    assert.throws(
-      () => s.resume("wide-gemm-1"),
+    await assert.rejects(
+      async () => s.resume("wide-gemm-1"),
       /^Error: wide-gemm is archived\. Unarchive it first\.$/,
     );
-    assert.throws(
-      () => s.assign("wide-gemm", "wide-gemm-2"),
+    await assert.rejects(
+      async () => s.assign("wide-gemm", "wide-gemm-2"),
       /wide-gemm is archived\. Unarchive it first\./,
     );
     const listed = await json<{ archived: { campaign: string; by: string }[] }>(
@@ -194,8 +194,8 @@ describe("Archive a campaign over REST (goal 077)", () => {
       folder: null,
       changed: true,
     });
-    assert.equal(s.audit("campaign_unarchived").length, 1);
-    assert.ok(s.resume("wide-gemm-1").id);
+    assert.equal((await s.audit("campaign_unarchived")).length, 1);
+    assert.ok((await s.resume("wide-gemm-1")).id);
 
     const none = await s.rest("POST", "/v1/campaigns/no-such/archive");
     assert.equal(none.status, 404);
@@ -294,7 +294,7 @@ describe("Folders for campaigns over REST (goal 077)", () => {
       await s.rest("POST", "/v1/campaigns/old-sweep/unarchive"),
     );
     assert.deepEqual([back.archived, back.folder, back.changed], [false, "Research", true]);
-    assert.deepEqual(s.audit("campaign_unarchived")[0]?.body, {
+    assert.deepEqual((await s.audit("campaign_unarchived"))[0]?.body, {
       campaign: "old-sweep",
       folder: "Research",
     });
@@ -315,10 +315,11 @@ describe("Folders for campaigns over REST (goal 077)", () => {
       "campaign_moved",
     ])
       assert.ok(
-        s.audit(action).every((a) => a.actor === "owner:api") && s.audit(action).length,
+        (await s.audit(action)).every((a) => a.actor === "owner:api") &&
+          (await s.audit(action)).length,
         action,
       );
-    assert.deepEqual(s.audit("campaign_archived")[0]?.body, {
+    assert.deepEqual((await s.audit("campaign_archived"))[0]?.body, {
       campaign: "old-sweep",
       folder: "Research",
     });
@@ -364,9 +365,9 @@ describe("Archive and folders over MCP (goal 077)", () => {
       [true, "owner:operator", true],
     );
     assert.ok(
-      s
-        .audit("campaign_archived")
-        .some((a) => a.actor === "owner:operator" && a.body.campaign === "old-sweep"),
+      (await s.audit("campaign_archived")).some(
+        (a) => a.actor === "owner:operator" && a.body.campaign === "old-sweep",
+      ),
     );
     JSON.parse(text(await call("create_campaign_folder", { name: "Kernels" })));
     const moved = JSON.parse(
@@ -394,7 +395,7 @@ describe("Archive and folders over MCP (goal 077)", () => {
     );
     const back = JSON.parse(text(await call("unarchive_campaign", { campaign: "old-sweep" })));
     assert.equal(back.changed, true);
-    assert.ok(s.audit("mcp:archive_campaign").length >= 2);
+    assert.ok((await s.audit("mcp:archive_campaign")).length >= 2);
   });
 });
 
@@ -452,7 +453,7 @@ describe("The navigation and archive on the dashboard (goal 077)", () => {
       await s.page(loc),
       /<b class="bad">No folder made\.<\/b> There is a folder named Kernels already\./,
     );
-    const id = String(s.store.folders.get("Kernels")?.id);
+    const id = String((await s.store.folders.get("Kernels"))?.id);
 
     // Dropped on a folder: the navigation's script asks for JSON.
     const drop = await s.post("/ui/campaigns/fast-sort/folder", { folder: id }, true);
@@ -498,8 +499,10 @@ describe("The navigation and archive on the dashboard (goal 077)", () => {
       await s.post(`/ui/campaigns/${k}/folder`, { folder: "" }, true);
     const deleted = await s.post(`/ui/campaign-folders/${id}/delete`, { back: "/ui" });
     assert.equal(deleted.headers.get("location"), "/ui?sent=Deleted%20the%20folder%20Sorts.");
-    assert.deepEqual(s.store.folders.list(), []);
-    assert.ok(s.audit("refused").some((a) => a.body.path === `/ui/campaign-folders/${id}/delete`));
+    assert.deepEqual(await s.store.folders.list(), []);
+    assert.ok(
+      (await s.audit("refused")).some((a) => a.body.path === `/ui/campaign-folders/${id}/delete`),
+    );
   });
 
   test("Archive is refused in words while a run is at work; an archived campaign leaves the navigation, Needs you and the Overview, and Campaigns › Archived unarchives it", async () => {
@@ -569,7 +572,7 @@ describe("The navigation and archive on the dashboard (goal 077)", () => {
     );
     assert.match(sidebar(await s.page("/ui")), /data-campaign="wide-gemm"/);
     assert.deepEqual(
-      s.audit("campaign_archived").map((a) => a.actor),
+      (await s.audit("campaign_archived")).map((a) => a.actor),
       ["owner:ui"],
     );
   });
@@ -577,7 +580,7 @@ describe("The navigation and archive on the dashboard (goal 077)", () => {
   test("an archived campaign keeps its folder: the folder's count leaves it out, the folder is not deleted, and Unarchive brings it back into it", async () => {
     const s = await stack();
     await s.post("/ui/campaign-folders", { name: "Old" });
-    const id = String(s.store.folders.get("Old")?.id);
+    const id = String((await s.store.folders.get("Old"))?.id);
     for (const k of ["old-sweep", "wide-gemm"])
       await s.post(`/ui/campaigns/${k}/folder`, { folder: id }, true);
     const fold = (html: string) =>

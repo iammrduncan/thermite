@@ -52,7 +52,7 @@ async function drainingRig() {
     "k_slot__k8s-c": "thermite-slot-1",
   });
   await new Promise((r) => setTimeout(r, 20));
-  before.store.clusters.setRigStatus("cpu-1", "running");
+  await before.store.clusters.setRigStatus("cpu-1", "running");
   const report = async (work: Record<string, unknown>, rig = "cpu-1") =>
     await ingestReport(before.store, {
       rig,
@@ -70,12 +70,14 @@ async function drainingRig() {
     tag: "2",
     drainWatchMs: 20,
   });
-  const until = async (ok: () => boolean) => {
-    for (let i = 0; i < 100 && !ok(); i++) await new Promise((r) => setTimeout(r, 20));
+  const until = async (ok: () => boolean | Promise<boolean>) => {
+    for (let i = 0; i < 100 && !(await ok()); i++) await new Promise((r) => setTimeout(r, 20));
   };
-  const steps = (rig = "cpu-1") => s.store.rigHistory.list(rig).map((x) => x.step);
-  const drains = (rig = "cpu-1") =>
-    s.store.commands.latest(rig, "drain_rig").map((c) => c.payload as Record<string, unknown>);
+  const steps = async (rig = "cpu-1") => (await s.store.rigHistory.list(rig)).map((x) => x.step);
+  const drains = async (rig = "cpu-1") =>
+    (await s.store.commands.latest(rig, "drain_rig")).map(
+      (c) => c.payload as Record<string, unknown>,
+    );
   const applied = () => f.calls.some((c) => c.args[0] === "apply");
   return { f, s, report, until, steps, drains, applied };
 }
@@ -87,7 +89,7 @@ describe("a drain that ends (goal 173)", () => {
     const r = await op.call("update_rig_images", { rig: "cpu-1", drain_minutes: 30 });
     await op.close();
     assert.equal(r.error, false, JSON.stringify(r.body));
-    assert.deepEqual(drains()[0], {
+    assert.deepEqual((await drains())[0], {
       drain: true,
       reason: "its images are about to change",
       deadline_minutes: 30,
@@ -112,7 +114,7 @@ describe("a drain that ends (goal 173)", () => {
     });
     await until(applied);
     assert.ok(applied(), "restarted once nothing ran");
-    assert.ok(!steps().includes(DEADLINE_STEP));
+    assert.ok(!(await steps()).includes(DEADLINE_STEP));
     assert.doesNotMatch(await s.page("/ui"), /passed its deadline/);
   });
 
@@ -121,16 +123,16 @@ describe("a drain that ends (goal 173)", () => {
     await s.post("/ui/rigs/cpu-1/cluster/images", {});
     f.calls.length = 0;
     await report(overdue());
-    await until(() => steps().includes(DEADLINE_STEP));
+    await until(async () => (await steps()).includes(DEADLINE_STEP));
     await new Promise((r) => setTimeout(r, 100));
-    assert.equal(steps().filter((x) => x === DEADLINE_STEP).length, 1, "once");
+    assert.equal((await steps()).filter((x) => x === DEADLINE_STEP).length, 1, "once");
     assert.match(
-      s.store.rigHistory.list("cpu-1").find((x) => x.step === DEADLINE_STEP)?.detail ?? "",
+      (await s.store.rigHistory.list("cpu-1")).find((x) => x.step === DEADLINE_STEP)?.detail ?? "",
       /its deadline passed after 60 min, with 1 trial and the judge's job still at work/,
     );
     // Nothing is chosen for the owner.
     assert.ok(!applied());
-    assert.equal(s.store.clusters.rig("cpu-1")?.status, "draining");
+    assert.equal((await s.store.clusters.rig("cpu-1"))?.status, "draining");
     const needs = await s.page("/ui");
     assert.match(needs, /cpu-1&#39;s drain passed its deadline|cpu-1's drain passed its deadline/);
     assert.match(needs, /action="\/ui\/rigs\/cpu-1\/drain\/apply"/);
@@ -152,8 +154,8 @@ describe("a drain that ends (goal 173)", () => {
     );
     await until(applied);
     assert.ok(applied());
-    assert.equal(s.store.clusters.rig("cpu-1")?.status, "updating");
-    assert.ok(steps().includes("images"));
+    assert.equal((await s.store.clusters.rig("cpu-1"))?.status, "updating");
+    assert.ok((await steps()).includes("images"));
   });
 
   test("the owner's choice: end the drain, and the update waits", async () => {
@@ -165,28 +167,28 @@ describe("a drain that ends (goal 173)", () => {
       await s.post("/ui/rigs/cpu-1/drain/end", {}),
       /ok=cpu-1 goes back to work on its images/,
     );
-    assert.ok(drains().some((d) => d.drain === false));
-    assert.equal(s.store.clusters.rig("cpu-1")?.status, "running");
+    assert.ok((await drains()).some((d) => d.drain === false));
+    assert.equal((await s.store.clusters.rig("cpu-1"))?.status, "running");
     assert.ok(!applied());
   });
 
   test("on a rig whose change is not control's: stop what still runs, or end the drain", async () => {
     const { s, report, until, steps } = await drainingRig();
     await report(overdue(), "local-1");
-    await until(() => steps("local-1").includes(DEADLINE_STEP));
+    await until(async () => (await steps("local-1")).includes(DEADLINE_STEP));
     assert.match(await s.page("/ui"), /Stop what still runs/);
     assert.match(
       await s.post("/ui/rigs/local-1/drain/apply", {}),
       /ok=1 trial of local-1 stops now, each with its task back in its run's queue/,
     );
-    const stop = s.store.commands.latest("local-1", "stop_trial")[0];
+    const stop = (await s.store.commands.latest("local-1", "stop_trial"))[0];
     assert.deepEqual(stop?.payload, {
       run: "r-1",
       trial: "t-7",
       reason: "the drain reached its deadline",
     });
     assert.match(await s.post("/ui/rigs/local-1/drain/end", {}), /ok=local-1 goes back to work/);
-    assert.deepEqual(s.store.commands.latest("local-1", "drain_rig")[0]?.payload, {
+    assert.deepEqual((await s.store.commands.latest("local-1", "drain_rig"))[0]?.payload, {
       drain: false,
       reason: "the owner ended the drain at its deadline",
     });

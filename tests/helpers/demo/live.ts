@@ -11,10 +11,10 @@ type Line = {
 };
 
 /** The live sessions' lines, on gpu-1 and on cpu-1. */
-export function liveSessions(store: ControlStore): void {
-  const lines = (rig: string, items: Line[], minutesAgo: number) => {
+export async function liveSessions(store: ControlStore): Promise<void> {
+  const lines = async (rig: string, items: Line[], minutesAgo: number) => {
     let seq = 0;
-    store.liveLines.add(
+    await store.liveLines.add(
       rig,
       "demo-log",
       items.map((l, n) => ({
@@ -27,7 +27,7 @@ export function liveSessions(store: ControlStore): void {
   };
   const T1 = "trial:t-4f1c9a2e7b3d5c01";
   const T2 = "trial:t-9b2e6d4a1c8f3e77";
-  lines(
+  await lines(
     "gpu-1",
     [
       {
@@ -181,7 +181,7 @@ export function liveSessions(store: ControlStore): void {
   );
   // The supervisor's lines for the research run's reviews (goal 116): each reviewer's answer, and a
   // third review whose tries failed on the provider, which the Reviews tab shows from Live.
-  store.liveLines.add(
+  await store.liveLines.add(
     "cpu-1",
     "demo-supervisor",
     [

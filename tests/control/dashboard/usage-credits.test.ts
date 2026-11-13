@@ -77,10 +77,10 @@ test("Providers marks a Claude subscription whose usage credits are on; Dismiss 
     /You dismissed the note on \d{4}-\d\d-\d\d \d\d:\d\d UTC; it comes back if credits are reported on again after being off\./,
   );
   assert.equal(
-    s.store.rigHistory.latest("rig-a", [CREDITS_NOTE_DISMISSED_STEP], 1)[0]?.detail,
+    (await s.store.rigHistory.latest("rig-a", [CREDITS_NOTE_DISMISSED_STEP], 1))[0]?.detail,
     "lab-claude",
   );
-  assert.ok(s.store.auditLog.list(50).some((a) => a.action === "credits_note_dismissed"));
+  assert.ok((await s.store.auditLog.list(50)).some((a) => a.action === "credits_note_dismissed"));
   // Reported on again, with no change between: still dismissed.
   page = await report({ on: true, since: null });
   assert.doesNotMatch(page, note);

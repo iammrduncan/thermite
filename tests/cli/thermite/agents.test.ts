@@ -33,7 +33,7 @@ async function cli(...args: string[]): Promise<{ code: number; stdout: string; s
 }
 
 test("thermite agents list and show: the roles, and the prompt a run's role was sent (goal 166)", async () => {
-  const { store, control: api } = controlOnly({ tokens: { admin: OWNER, rigs: {} } });
+  const { store, control: api } = await controlOnly({ tokens: { admin: OWNER, rigs: {} } });
   // The auditor's prompt for an audit of r-1, as its rig's event gives it to control.
   const sent = renderAuditor(
     { pkg: { diff: "the diff to audit" } },

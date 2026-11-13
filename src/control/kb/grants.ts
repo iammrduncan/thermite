@@ -23,22 +23,22 @@ export type GrantOutcome =
     }
   | { ok: false; error: string; status: 400 | 404 };
 
-const after = (store: ControlStore, campaign: string, changed: boolean, said: string) => ({
+const after = async (store: ControlStore, campaign: string, changed: boolean, said: string) => ({
   ok: true as const,
   changed,
   campaign,
-  reads: store.kb().reads(campaign),
-  read_by: store.kb().readBy(campaign),
+  reads: await store.kb().reads(campaign),
+  read_by: await store.kb().readBy(campaign),
   said,
 });
 
 /** Why a grant can't be given, in words; undefined when it can (an operator proposes it then). */
-export function grantProblem(
+export async function grantProblem(
   store: ControlStore,
   vs: readonly RigView[],
   g: { campaign: string; reads: string },
-): { error: string; status: 400 | 404 } | undefined {
-  const known = campaignModes(store, [...vs]);
+): Promise<{ error: string; status: 400 | 404 } | undefined> {
+  const known = await campaignModes(store, [...vs]);
   const reads = g.reads.trim();
   if (!known.has(g.campaign))
     return { error: `Control has no campaign named ${g.campaign}.`, status: 404 };
@@ -53,18 +53,18 @@ export function grantProblem(
 }
 
 /** Lets `campaign`'s agents read `reads`'s collection, read only. */
-export function grantCollection(
+export async function grantCollection(
   store: ControlStore,
   vs: readonly RigView[],
   g: { campaign: string; reads: string },
   by: string,
-): GrantOutcome {
-  const problem = grantProblem(store, vs, g);
+): Promise<GrantOutcome> {
+  const problem = await grantProblem(store, vs, g);
   if (problem) return { ok: false, ...problem };
   const reads = g.reads.trim();
-  if (!store.kb().grant(g.campaign, reads, by))
+  if (!(await store.kb().grant(g.campaign, reads, by)))
     return after(store, g.campaign, false, `${g.campaign} reads ${reads} already.`);
-  store.auditLog.add(by, "kb_grant", { campaign: g.campaign, reads });
+  await store.auditLog.add(by, "kb_grant", { campaign: g.campaign, reads });
   return after(
     store,
     g.campaign,
@@ -74,14 +74,14 @@ export function grantCollection(
 }
 
 /** Ends a grant: `campaign`'s agents no longer read `reads`'s collection, at once. */
-export function revokeCollection(
+export async function revokeCollection(
   store: ControlStore,
   g: { campaign: string; reads: string },
   by: string,
-): GrantOutcome {
-  if (!store.kb().revoke(g.campaign, g.reads))
+): Promise<GrantOutcome> {
+  if (!(await store.kb().revoke(g.campaign, g.reads)))
     return { ok: false, error: `${g.campaign} does not read ${g.reads}.`, status: 404 };
-  store.auditLog.add(by, "kb_revoke", { campaign: g.campaign, reads: g.reads });
+  await store.auditLog.add(by, "kb_revoke", { campaign: g.campaign, reads: g.reads });
   return after(
     store,
     g.campaign,

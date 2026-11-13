@@ -150,17 +150,16 @@ export class McpServers {
     this.signIns = new SignIns(this.table, fetchImpl);
     this.oauth = new OAuthSignIns(this.table, store, fetchImpl, this);
     this.connect = o.connect ?? mcpConnect(o.fetch, "thermite-control");
-    store.mcpServers.ensureTables();
   }
 
   // ------------------------------------------------------------------ reading
 
-  list(): McpServer[] {
-    return this.store.mcpServers.list().map(viewOf);
+  async list(): Promise<McpServer[]> {
+    return (await this.store.mcpServers.list()).map(viewOf);
   }
 
-  get(name: string): McpServer | undefined {
-    const r = this.table.row(name);
+  async get(name: string): Promise<McpServer | undefined> {
+    const r = await this.table.row(name);
     return r ? viewOf(r) : undefined;
   }
 
@@ -172,7 +171,7 @@ export class McpServers {
    * not given for): those need it again. An OAuth server's sign-in ends when its address changes.
    * The audit names the secret's last four characters, never the secret.
    */
-  put(p: McpServerInput, by: string): "created" | "changed" {
+  async put(p: McpServerInput, by: string): Promise<"created" | "changed"> {
     const name = p.name.trim();
     if (!MCP_SERVER_NAME.test(name))
       throw new Error("A server's name is lowercase letters, digits and dashes, such as github.");
@@ -180,7 +179,7 @@ export class McpServers {
     const url = p.url.trim();
     const bad = mcpUrlProblem(url);
     if (bad) throw new Error(bad);
-    const old = this.table.row(name);
+    const old = await this.table.row(name);
     const sameOrigin = old ? new URL(str(old.url)).origin === new URL(url).origin : false;
     const sameAuth = old ? str(old.auth) === p.auth : false;
     const keep = Boolean(old && sameOrigin && sameAuth);
@@ -216,7 +215,7 @@ export class McpServers {
         ? orNull(old?.login_sealed)
         : null;
     const status: McpStatus = p.auth === "oauth" && !loginKept ? "needs_sign_in" : "unchecked";
-    this.store.mcpServers.put({
+    await this.store.mcpServers.put({
       name,
       url,
       auth: p.auth,
@@ -231,7 +230,7 @@ export class McpServers {
       by,
     });
     const r = old ? "changed" : "created";
-    this.store.auditLog.add(by, r === "created" ? "mcp_server_added" : "mcp_server_changed", {
+    await this.store.auditLog.add(by, r === "created" ? "mcp_server_added" : "mcp_server_changed", {
       name,
       url,
       auth: p.auth,
@@ -244,12 +243,12 @@ export class McpServers {
   }
 
   /** Forgets a server: its secrets and its sign-in. Refused while a campaign's kit names it. */
-  delete(name: string, by: string): "deleted" | "missing" | { named_by: string[] } {
-    if (!this.table.row(name)) return "missing";
-    const named = namedBy(this.store, name);
+  async delete(name: string, by: string): Promise<"deleted" | "missing" | { named_by: string[] }> {
+    if (!(await this.table.row(name))) return "missing";
+    const named = await namedBy(this.store, name);
     if (named.length) return { named_by: named.map((n) => n.kit) };
-    this.store.mcpServers.delete(name);
-    this.store.auditLog.add(by, "mcp_server_deleted", { name });
+    await this.store.mcpServers.delete(name);
+    await this.store.auditLog.add(by, "mcp_server_deleted", { name });
     return "deleted";
   }
 
@@ -268,7 +267,7 @@ export class McpServers {
   }
 
   /** The browser came back without a code (the owner said no): the sign-in is forgotten. */
-  cancelSignIn(state: string, why: string): string | undefined {
+  async cancelSignIn(state: string, why: string): Promise<string | undefined> {
     return this.oauth.cancelSignIn(state, why);
   }
 
@@ -284,14 +283,15 @@ export class McpServers {
    * they only read. Null when it worked, else what went wrong, in words. It calls no tool.
    */
   async check(name: string): Promise<string | null> {
-    const r = this.table.row(name);
+    const r = await this.table.row(name);
     if (!r) return "Settings has no server of that name";
     const signIn = await this.headers(name);
     if ("error" in signIn) {
-      const now = this.table.row(name);
+      const now = await this.table.row(name);
       // A sign-in that ended keeps its own state; anything else is a failing server.
-      if (str(now?.status) !== "needs_sign_in") this.table.setState(name, "failing", signIn.error);
-      this.store.mcpServers.setCheckedAt(name, new Date().toISOString());
+      if (str(now?.status) !== "needs_sign_in")
+        await this.table.setState(name, "failing", signIn.error);
+      await this.store.mcpServers.setCheckedAt(name, new Date().toISOString());
       return signIn.error;
     }
     const h = signIn.headers;
@@ -308,14 +308,14 @@ export class McpServers {
         reads: t.annotations?.readOnlyHint === true,
       }));
       const now = new Date().toISOString();
-      this.store.mcpServers.setTools(name, JSON.stringify(tools), now);
+      await this.store.mcpServers.setTools(name, JSON.stringify(tools), now);
       return null;
     } catch (err) {
       const why = cleanMcpError(err, headerSecrets(h));
       const words = /\b401\b|unauthori[sz]ed/i.test(why)
         ? `the server answered 401: check the ${str(r.auth) === "client" ? "client secret" : str(r.auth) === "oauth" ? "sign-in" : "key"}`
         : `can't read its tools: ${why}`;
-      this.store.mcpServers.setCheckFailed(
+      await this.store.mcpServers.setCheckFailed(
         name,
         str(r.auth) === "oauth" && /\b401\b/.test(why) ? "needs_sign_in" : "failing",
         words,
@@ -338,7 +338,10 @@ export class McpServers {
    */
   async forRig(rig: string): Promise<{ servers: McpConnection[]; unavailable: McpUnavailable[] }> {
     const agents = new Map<string, Set<AgentKind>>();
-    const assigned = this.store.commands.assignedMcpServers(rig, closedRuns(this.store, rig));
+    const assigned = await this.store.commands.assignedMcpServers(
+      rig,
+      await closedRuns(this.store, rig),
+    );
     for (const uses of assigned.values())
       for (const u of uses) {
         const set = agents.get(u.name) ?? new Set<AgentKind>();
@@ -348,7 +351,7 @@ export class McpServers {
     const servers: McpConnection[] = [];
     const unavailable: McpUnavailable[] = [];
     for (const [name, kinds] of [...agents].sort(([a], [b]) => (a < b ? -1 : 1))) {
-      const r = this.table.row(name);
+      const r = await this.table.row(name);
       if (!r) {
         unavailable.push({ name, why: "Settings has no MCP server of that name now" });
         continue;
@@ -375,20 +378,26 @@ export class McpServers {
    * `mcp_servers_handed` when the servers it gets change, by name. A restart of control reads the
    * last entry back, so it writes none of its own.
    */
-  handed(rig: string, r: { servers: McpConnection[]; unavailable: McpUnavailable[] }): void {
+  async handed(
+    rig: string,
+    r: { servers: McpConnection[]; unavailable: McpUnavailable[] },
+  ): Promise<void> {
     const what = JSON.stringify([r.servers.map((s) => s.name), r.unavailable.map((u) => u.name)]);
     if (!this.handedTo.has(rig)) {
-      const last = this.store.auditLog.last(`rig:${rig}`, "mcp_servers_handed") as
+      const last = (await this.store.auditLog.last(`rig:${rig}`, "mcp_servers_handed")) as
         | { servers?: unknown; unavailable?: unknown }
         | undefined;
-      this.handedTo.set(
-        rig,
-        JSON.stringify(last ? [last.servers ?? [], last.unavailable ?? []] : [[], []]),
-      );
+      // Another call for this rig may have noted what it was handed while this one waited for
+      // the audit log: its note stands, and nothing is audited twice.
+      if (!this.handedTo.has(rig))
+        this.handedTo.set(
+          rig,
+          JSON.stringify(last ? [last.servers ?? [], last.unavailable ?? []] : [[], []]),
+        );
     }
     if (this.handedTo.get(rig) === what) return;
     this.handedTo.set(rig, what);
-    this.store.auditLog.add(`rig:${rig}`, "mcp_servers_handed", {
+    await this.store.auditLog.add(`rig:${rig}`, "mcp_servers_handed", {
       servers: r.servers.map((s) => s.name),
       unavailable: r.unavailable.map((u) => u.name),
     });

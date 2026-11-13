@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { compactAtRefusal, compactAtWords } from "../../../core/compaction.ts";
 import { listText } from "../../../core/words.ts";
 import { cappedWindow, capWords, contextCapRefusal, isOpencodeOwn } from "../../providers/index.ts";
@@ -32,24 +33,24 @@ import {
  * research workers would run in Pi: a research run there could not work. From the model and
  * harness chosen now, else control's record, else the rig's report.
  */
-const opencodeOnlyModel = (
+const opencodeOnlyModel = async (
   store: ControlStore,
   u: RigView,
   chosen?: string,
   picked = "",
-): string | undefined => {
-  let provider: ReturnType<typeof store.modelProviders.get>;
+): Promise<string | undefined> => {
+  let provider: Awaited<ReturnType<typeof store.modelProviders.get>>;
   let model: string | undefined;
   let harness: Harness | undefined;
   if (chosen) {
     const [pRaw, mRaw] = chosen.split("|");
-    provider = store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
+    provider = await store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
     model = decodeURIComponent(mRaw ?? "");
-    harness = harnessKept(store, u.id, chosen, picked);
+    harness = await harnessKept(store, u.id, chosen, picked);
   } else {
-    const given = store.agentModels.byRig()[u.id];
+    const given = (await store.agentModels.byRig())[u.id];
     if (given) {
-      provider = store.modelProviders.get(given.provider);
+      provider = await store.modelProviders.get(given.provider);
       model = given.model;
       harness = given.harness;
     } else if (u.model?.model) {
@@ -70,19 +71,21 @@ const opencodeOnlyModel = (
  * the model chosen now, else control's record, else the rig's report (a subscription's agents run
  * in Claude Code).
  */
-const subscriptionModel = (
+const subscriptionModel = async (
   store: ControlStore,
   u: RigView,
   chosen?: string,
-): string | undefined => {
+): Promise<string | undefined> => {
   if (chosen) {
     const [pRaw, mRaw] = chosen.split("|");
-    const p = store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
+    const p = await store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
     return p?.type === "claude" ? decodeURIComponent(mRaw ?? "") : undefined;
   }
-  const given = store.agentModels.byRig()[u.id];
+  const given = (await store.agentModels.byRig())[u.id];
   if (given)
-    return store.modelProviders.get(given.provider)?.type === "claude" ? given.model : undefined;
+    return (await store.modelProviders.get(given.provider))?.type === "claude"
+      ? given.model
+      : undefined;
   return u.model?.harness === "claude-code" ? (u.model.model ?? "its model") : undefined;
 };
 
@@ -90,15 +93,15 @@ const subscriptionModel = (
  * Why a research run with agents could not work on a rig's model, in words, before it starts;
  * undefined when it can: OpenCode's free models outside OpenCode, or a Claude subscription.
  */
-export const researchModelRefusal = (
+export const researchModelRefusal = async (
   store: ControlStore,
   u: RigView,
   chosen?: string,
   picked = "",
-): string | undefined => {
-  const free = opencodeOnlyModel(store, u, chosen, picked);
+): Promise<string | undefined> => {
+  const free = await opencodeOnlyModel(store, u, chosen, picked);
   if (free) return researchNeedsOpencode(u.id, free);
-  const sub = subscriptionModel(store, u, chosen);
+  const sub = await subscriptionModel(store, u, chosen);
   return sub
     ? `${sub} is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on ${u.id} could not work. Give ${u.id}'s agents another provider's model for research, on its Edit rig page or here.`
     : undefined;
@@ -107,17 +110,21 @@ export const researchModelRefusal = (
 const researchNeedsOpencode = (rig: string, model: string) =>
   `${model} is one of OpenCode's free models, which work only inside OpenCode, and ${rig}'s agents would run in Pi: a research run there could not work. Set the agents' harness to OpenCode, or give the rig a model Pi can use.`;
 /** A rig whose agents have no model: none from control, and the rig reports none. */
-export const agentsModelMissing = (store: ControlStore, u: RigView) =>
-  !store.agentModels.byRig()[u.id] && u.model?.source === "none";
+export const agentsModelMissing = async (store: ControlStore, u: RigView) =>
+  !(await store.agentModels.byRig())[u.id] && u.model?.source === "none";
 /**
  * The harness a model needs when the owner leaves it to control: Claude Code for a Claude
  * subscription, OpenCode for OpenCode's free models, else Pi (a ChatGPT sign-in too, unless the
  * owner picks Codex).
  */
-export const harnessFor = (store: ControlStore, choice: string, picked: string): Harness => {
+export const harnessFor = async (
+  store: ControlStore,
+  choice: string,
+  picked: string,
+): Promise<Harness> => {
   if (picked === "opencode" || picked === "pi" || picked === "codex") return picked;
   const [pRaw, mRaw] = choice.split("|");
-  const p = store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
+  const p = await store.modelProviders.get(decodeURIComponent(pRaw ?? ""));
   return p ? neededHarness(p, decodeURIComponent(mRaw ?? "")) : "pi";
 };
 /**
@@ -125,20 +132,20 @@ export const harnessFor = (store: ControlStore, choice: string, picked: string):
  * run): the rig's own when control gave it this model already, so a rig on Codex or OpenCode
  * stays there; else what the model needs (harnessFor).
  */
-export const harnessKept = (
+export const harnessKept = async (
   store: ControlStore,
   rig: string,
   choice: string,
   picked: string,
-): Harness => {
+): Promise<Harness> => {
   if (picked) return harnessFor(store, choice, picked);
   const [pRaw, mRaw] = choice.split("|");
-  const had = store.agentModels.byRig()[rig];
+  const had = (await store.agentModels.byRig())[rig];
   return had &&
     had.provider === decodeURIComponent(pRaw ?? "") &&
     had.model === decodeURIComponent(mRaw ?? "")
     ? had.harness
-    : harnessFor(store, choice, "");
+    : await harnessFor(store, choice, "");
 };
 
 /**
@@ -147,7 +154,7 @@ export const harnessKept = (
  * which has no field for it, or a form without Edit rig's Context fields), a cap the rig has
  * stays while it keeps the same model.
  */
-export const giveRigModel = (
+export const giveRigModel = async (
   store: ControlStore,
   rig: string,
   choice: string,
@@ -156,7 +163,9 @@ export const giveRigModel = (
   by = "owner:ui",
   cap?: number | null,
   at?: number | null,
-): { ok: string; contextWindow: number; compactAt: number | undefined } | { error: string } => {
+): Promise<
+  { ok: string; contextWindow: number; compactAt: number | undefined } | { error: string }
+> => {
   let harness = picked;
   const [pRaw, mRaw] = choice.split("|");
   let provider = "";
@@ -167,7 +176,7 @@ export const giveRigModel = (
   } catch {
     // A malformed choice lists no model.
   }
-  const p = store.modelProviders.get(provider);
+  const p = await store.modelProviders.get(provider);
   if (!p?.models.some((m) => m.id === model))
     return { error: "That provider does not list that model." };
   // A Claude subscription runs only in Claude Code, and Claude Code only on one.
@@ -191,7 +200,7 @@ export const giveRigModel = (
         "OpenCode's free models run only in the OpenCode harness: choose OpenCode v2 for this rig.",
     };
   const listed = p.models.find((m) => m.id === model)?.context_window ?? 0;
-  const had = store.agentModels.byRig()[rig];
+  const had = (await store.agentModels.byRig())[rig];
   const contextCap =
     cap === undefined
       ? had?.provider === provider && had.model === model
@@ -213,8 +222,15 @@ export const giveRigModel = (
     const refused = compactAtRefusal(at);
     if (refused) return { error: refused };
   }
-  store.agentModels.assignRig(rig, { provider, model, harness, effort, contextCap, compactAt });
-  store.auditLog.add(by, "rig_model_given", {
+  await store.agentModels.assignRig(rig, {
+    provider,
+    model,
+    harness,
+    effort,
+    contextCap,
+    compactAt,
+  });
+  await store.auditLog.add(by, "rig_model_given", {
     rig,
     provider,
     model,
@@ -231,9 +247,9 @@ export const giveRigModel = (
   };
 };
 /** Returns a rig's workers to the rig's own settings, as Providers and Edit rig both do. */
-export const clearRigModel = (store: ControlStore, rig: string, by = "owner:ui") => {
-  store.agentModels.assignRig(rig, null);
-  store.auditLog.add(by, "rig_model_given", { rig, provider: null, model: null });
+export const clearRigModel = async (store: ControlStore, rig: string, by = "owner:ui") => {
+  await store.agentModels.assignRig(rig, null);
+  await store.auditLog.add(by, "rig_model_given", { rig, provider: null, model: null });
 };
 /**
  * Checks a model for one of a rig's other agents (or one of the teachers' models), as its row on
@@ -258,7 +274,7 @@ export type AgentModelPlan =
       compactAt: number | undefined;
       listed: number;
     };
-export const checkAgentModel = (
+export const checkAgentModel = async (
   store: ControlStore,
   rig: string,
   role: AgentRole,
@@ -267,7 +283,7 @@ export const checkAgentModel = (
   picked?: Harness | undefined,
   cap?: number | null,
   at?: number | null,
-): AgentModelPlan | { error: string } => {
+): Promise<AgentModelPlan | { error: string }> => {
   if (!choice) return { role, clear: true };
   const [pRaw, mRaw] = choice.split("|");
   let provider = "";
@@ -278,10 +294,10 @@ export const checkAgentModel = (
   } catch {
     // A malformed choice lists no model.
   }
-  const p = store.modelProviders.get(provider);
+  const p = await store.modelProviders.get(provider);
   if (!p?.models.some((m) => m.id === model))
     return { error: `That provider does not list that model (${ROLE_WORDS[role].label}).` };
-  const had = store.agentModels.byRole(rig)[role];
+  const had = (await store.agentModels.byRole(rig))[role];
   const same = had?.provider === provider && had.model === model;
   const harness = picked ?? (had?.harness && same ? had.harness : neededHarness(p, model));
   const refusedHarness = harnessRefusal(p, model, harness, ROLE_WORDS[role].who);
@@ -314,21 +330,21 @@ export const checkAgentModel = (
  * Saves what checkAgentModel allowed, with its record in the audit log. `ok` is Edit rig's words
  * for the change; `words` say the window and point in sentences, of `whose` model ("Its").
  */
-export const applyAgentModel = (
+export const applyAgentModel = async (
   store: ControlStore,
   rig: string,
   plan: AgentModelPlan,
   by = "owner:ui",
   whose = "Its",
-): { ok: string; contextWindow: number; compactAt: number | undefined; words: string } => {
+): Promise<{ ok: string; contextWindow: number; compactAt: number | undefined; words: string }> => {
   const role = plan.role;
   if (plan.clear) {
-    store.agentModels.assignRole(rig, role, null);
-    store.auditLog.add(by, "agent_model_given", { rig, role, provider: null, model: null });
+    await store.agentModels.assignRole(rig, role, null);
+    await store.auditLog.add(by, "agent_model_given", { rig, role, provider: null, model: null });
     return { ok: ROLE_WORDS[role].cleared, contextWindow: 0, compactAt: undefined, words: "" };
   }
   const { provider, model, effort, harness, contextCap, compactAt, listed } = plan;
-  store.agentModels.assignRole(rig, role, {
+  await store.agentModels.assignRole(rig, role, {
     provider,
     model,
     effort,
@@ -336,7 +352,7 @@ export const applyAgentModel = (
     contextCap,
     compactAt,
   });
-  store.auditLog.add(by, "agent_model_given", {
+  await store.auditLog.add(by, "agent_model_given", {
     rig,
     role,
     provider,
@@ -367,7 +383,8 @@ export async function setRigModel(
   r: RigModelRequest,
   by: string,
 ): Promise<RigModelOutcome | { error: string }> {
-  if (!store.reportedRigs.list().some((u) => u.id === rig)) return { error: `no rig ${rig}` };
+  if (!(await store.reportedRigs.list()).some((u) => u.id === rig))
+    return { error: `no rig ${rig}` };
   const shape = rigModelShapeRefusal(r);
   if (shape) return { error: shape };
   const agent = r.agent ?? "workers";
@@ -376,27 +393,27 @@ export async function setRigModel(
     : `${encodeURIComponent(r.provider ?? "")}|${encodeURIComponent(r.model ?? "")}`;
   if (agent === "workers") {
     if (!choice) {
-      clearRigModel(store, rig, by);
+      await clearRigModel(store, rig, by);
       return {
         ok: `${rig} goes back to its own settings within a minute.`,
         contextWindow: null,
-        agents: agentModelsOf(store, rig),
+        agents: await agentModelsOf(store, rig),
       };
     }
     // A harness named is refused in words when it cannot run the model (goal 073); none,
     // what the model needs.
-    const wp = store.modelProviders.get(r.provider ?? "");
+    const wp = await store.modelProviders.get(r.provider ?? "");
     if (wp && r.harness) {
       const refused = harnessRefusal(wp, r.model ?? "", r.harness, "the workers");
       if (refused) return { error: refused };
     }
     // MCP and REST set what they are asked: no context_window removes a cap, and no
     // compact_at a compaction point (the default applies).
-    const given = giveRigModel(
+    const given = await giveRigModel(
       store,
       rig,
       choice,
-      r.harness ?? harnessFor(store, choice, ""),
+      r.harness ?? (await harnessFor(store, choice, "")),
       r.effort,
       by,
       r.contextWindow ?? null,
@@ -407,7 +424,7 @@ export async function setRigModel(
       ok: given.ok,
       contextWindow: given.contextWindow || null,
       compactAt: given.compactAt ?? null,
-      agents: agentModelsOf(store, rig),
+      agents: await agentModelsOf(store, rig),
     };
   }
   // The other agents (goal 074): each place the request changes, the teachers' second and
@@ -418,9 +435,9 @@ export async function setRigModel(
   for (const change of rigModelChanges(r)) {
     if (change.role === "workers") continue;
     const c = change.choice;
-    const cp = c ? store.modelProviders.get(c.provider) : undefined;
+    const cp = c ? await store.modelProviders.get(c.provider) : undefined;
     const plan = c
-      ? checkAgentModel(
+      ? await checkAgentModel(
           store,
           rig,
           change.role,
@@ -430,7 +447,7 @@ export async function setRigModel(
           c.contextWindow ?? null,
           c.compactAt ?? null,
         )
-      : checkAgentModel(store, rig, change.role, "", undefined);
+      : await checkAgentModel(store, rig, change.role, "", undefined);
     if ("error" in plan) return plan;
     plans.push(plan);
   }
@@ -438,7 +455,7 @@ export async function setRigModel(
   if (
     plans.some((p) => p.role === "second_teacher" && !p.clear) &&
     !plans.some((p) => p.role === "teachers" && !p.clear) &&
-    !store.agentModels.byRole(rig).teachers
+    !(await store.agentModels.byRole(rig)).teachers
   )
     return {
       error:
@@ -446,7 +463,7 @@ export async function setRigModel(
     };
   // Several models in one call: the words say whose window and point each one is.
   const several = plans.filter((p) => !p.clear).length > 1;
-  const given = plans.map((p) =>
+  const given = await mapInTurn(plans, async (p) =>
     applyAgentModel(store, rig, p, by, several ? ROLE_WORDS[p.role].whose : "Its"),
   );
   // The model the call gave the agent itself (the first teacher's, for the teachers).
@@ -457,12 +474,15 @@ export async function setRigModel(
     ok: `Control sent ${listText(said)} to ${rig}. The rig takes the change in less than one minute.${given.map((g) => g.words).join("")}`,
     contextWindow: own?.contextWindow || null,
     compactAt: own?.compactAt ?? null,
-    agents: agentModelsOf(store, rig),
+    agents: await agentModelsOf(store, rig),
   };
 }
 
 /** Each of a rig's agents' models on control: MCP's rig_models, REST's GET of the same route. */
-export const rigModels = (store: ControlStore, rig: string): AgentModels | { error: string } =>
-  store.reportedRigs.list().some((u) => u.id === rig)
-    ? agentModelsOf(store, rig)
+export const rigModels = async (
+  store: ControlStore,
+  rig: string,
+): Promise<AgentModels | { error: string }> =>
+  (await store.reportedRigs.list()).some((u) => u.id === rig)
+    ? await agentModelsOf(store, rig)
     : { error: `no rig ${rig}` };

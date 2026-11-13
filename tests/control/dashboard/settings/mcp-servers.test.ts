@@ -8,6 +8,7 @@ import { mcpUrlProblem } from "../../../../src/common/mcp-client.ts";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../../src/control/store/behind.ts";
 import {
   KIT_MCP_CORE_JS,
   NEW_CAMPAIGN_JS,
@@ -29,7 +30,7 @@ async function stack(t: TestContext, o: { kitJson?: unknown } = {}) {
   const secrets = SecretBox.ephemeral();
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
   let servers: McpServers | undefined;
-  const { env, store, control, relay } = controlStack({
+  const { env, store, control, relay } = await controlStack({
     env: makeJudgeEnv({ promotion: "auto" }),
     // Control's own MCP servers, which the tests also hold.
     options: (store) => {
@@ -128,7 +129,7 @@ describe("Settings › MCP servers", () => {
     s.fake.down = true;
     const again = await s.post("/ui/settings/mcp/gbrain/check", {});
     assert.match(await s.page(again.headers.get("location") ?? ""), /can't read its tools/);
-    s.store.campaigns.put({
+    await s.store.campaigns.put({
       campaign: "q4-gemv",
       version: 1,
       contract: {
@@ -213,7 +214,10 @@ describe("Settings › MCP servers", () => {
 describe("New campaign › MCP servers for the agents", () => {
   test("each server of Settings, its agents, and an Advanced part with a tick per tool and kind", async (t) => {
     const s = await stack(t);
-    s.servers.put({ name: "gbrain", url: s.fake.url, auth: "key", secret: KEY }, "owner:test");
+    await s.servers.put(
+      { name: "gbrain", url: s.fake.url, auth: "key", secret: KEY },
+      "owner:test",
+    );
     assert.equal(await s.servers.check("gbrain"), null);
     const html = await s.page("/ui/campaigns/new");
     for (const prefix of ["k", "r"]) {
@@ -247,7 +251,10 @@ describe("New campaign › MCP servers for the agents", () => {
 
   test("a kit described here gets them in kit.json, narrowed tools only where narrowed; the run names them", async (t) => {
     const s = await stack(t);
-    s.servers.put({ name: "gbrain", url: s.fake.url, auth: "key", secret: KEY }, "owner:test");
+    await s.servers.put(
+      { name: "gbrain", url: s.fake.url, auth: "key", secret: KEY },
+      "owner:test",
+    );
     const uses = [
       { name: "gbrain", agents: ["workers", "planner"], tools: { planner: ["search"] } },
     ];
@@ -263,9 +270,12 @@ describe("New campaign › MCP servers for the agents", () => {
       }),
     ) as { mcp_servers: unknown };
     assert.deepEqual(kitJson.mcp_servers, uses);
-    assert.deepEqual(s.store.campaigns.versions("matmul-speed")[0]?.sources.mcp_servers, uses);
-    const cmd = s.store.db
-      .prepare("select signed from command where kind = 'assign_campaign'")
+    assert.deepEqual(
+      (await s.store.campaigns.versions("matmul-speed"))[0]?.sources.mcp_servers,
+      uses,
+    );
+    const cmd = sqliteBehind(s.store)
+      .db.prepare("select signed from command where kind = 'assign_campaign'")
       .get() as { signed: string };
     assert.deepEqual(JSON.parse(cmd.signed).envelope.payload.mcp_servers, uses);
   });

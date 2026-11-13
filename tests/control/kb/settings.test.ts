@@ -36,10 +36,10 @@ const MIB = 1024 ** 2;
 const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
 /** Control whose environment keeps orphans 48 hours, with gs-1 of gemv reported by rig-a. */
-function stack() {
+async function stack() {
   const dir = mkdtempSync(join(tmpdir(), "thermite-kb-settings-"));
   let files: KbFiles | undefined;
-  const { store, control } = controlOnly({
+  const { store, control } = await controlOnly({
     tokens: TOKENS,
     options: (s) => {
       files = new KbFiles(dir, s, { orphanHours: 48 });
@@ -47,8 +47,11 @@ function stack() {
     },
   });
   const run = { kind: "run_created", subject: "gs-1", body: { campaign: "gemv" } };
-  store.runRegistry.registerRunCreated(RIG.rig, RIG.ledger, { ...run, at: "2026-10-30T10:00:00Z" });
-  store.kb().index(RIG, { ...run, at: "2026-10-30T10:00:00.000Z", actor: "harness" });
+  await store.runRegistry.registerRunCreated(RIG.rig, RIG.ledger, {
+    ...run,
+    at: "2026-10-30T10:00:00Z",
+  });
+  await store.kb().index(RIG, { ...run, at: "2026-10-30T10:00:00.000Z", actor: "harness" });
   const rest = async (method: string, path: string, body?: unknown, token = ADMIN) => {
     const r = await control.request(path, {
       method,
@@ -61,8 +64,8 @@ function stack() {
 }
 
 /** worker-1's `kb_item` event for a file of `bytes` bytes, as the apply of the events stream takes it. */
-function writeFile(store: ControlStore, item: number, bytes: number) {
-  takeKbItem(store, RIG, {
+async function writeFile(store: ControlStore, item: number, bytes: number) {
+  await takeKbItem(store, RIG, {
     id: 10 + item,
     at: "2026-10-30T10:05:00.000Z",
     actor: "worker-1",
@@ -86,7 +89,7 @@ function writeFile(store: ControlStore, item: number, bytes: number) {
 
 describe("the knowledge base's settings", () => {
   test("no limit and the environment's hours by default; REST, MCP and the page read and set them alike", async () => {
-    const s = stack();
+    const s = await stack();
     const got = await s.rest("GET", "/v1/kb/settings");
     assert.equal(got.status, 200);
     assert.deepEqual(got.body, {
@@ -140,7 +143,10 @@ describe("the knowledge base's settings", () => {
       "The knowledge base takes files of any size; a file no item names is removed after 48 hours (THERMITE_CONTROL_KB_ORPHAN_HOURS).",
     );
     assert.deepEqual(
-      s.store.auditLog.list(20, { action: "kb_settings_set" }).map((e) => [e.actor, e.body]),
+      (await s.store.auditLog.list(20, { action: "kb_settings_set" })).map((e) => [
+        e.actor,
+        e.body,
+      ]),
       [
         ["owner:mcp", { max_file_mib: null, orphan_hours: null }],
         ["owner:api", { max_file_mib: 10, orphan_hours: 0 }],
@@ -149,7 +155,7 @@ describe("the knowledge base's settings", () => {
   });
 
   test("Settings › Knowledge base: each label has its ⓘ, and Save says what it kept, or why not", async () => {
-    const s = stack();
+    const s = await stack();
     const ui = await signIn(s.control);
     const page = await ui.page("/ui/settings/kb");
     assert.match(page, /<div class="block" id="kb"><div class="head"><h2>Knowledge base<\/h2>/);
@@ -164,7 +170,7 @@ describe("the knowledge base's settings", () => {
       String(saved.headers.get("location")),
       /ok=The%20knowledge%20base%20takes%20files%20up%20to%202\.5%20MiB.*at=kb#kb$/,
     );
-    assert.equal(kbSettingsOf(s.store, 48).max_file_mib, 2.5);
+    assert.equal((await kbSettingsOf(s.store, 48)).max_file_mib, 2.5);
     const after = await ui.page(String(saved.headers.get("location")));
     assert.match(after, /<b class="ok">The knowledge base takes files up to 2\.5 MiB;/);
     assert.match(after, /name="max_file_mib" inputmode="decimal" maxlength="20" value="2\.5"/);
@@ -175,22 +181,22 @@ describe("the knowledge base's settings", () => {
     );
     // Empty is no limit.
     await ui.post("/ui/settings/kb", { csrf, max_file_mib: "", orphan_hours: "" });
-    assert.equal(kbSettingsOf(s.store, 48).max_file_mib, 0);
+    assert.equal((await kbSettingsOf(s.store, 48)).max_file_mib, 0);
   });
 
   test("a file over the limit is refused in words, as a refused write; 0 is no limit", async () => {
-    const s = stack();
-    writeFile(s.store, 1, 3 * MIB);
+    const s = await stack();
+    await writeFile(s.store, 1, 3 * MIB);
     assert.equal(
-      s.store.kb().at("gemv/gs-1/worker-1/reference:1")?.file?.bytes,
+      (await s.store.kb().at("gemv/gs-1/worker-1/reference:1"))?.file?.bytes,
       3 * MIB,
       "no limit",
     );
-    setKbSettings(s.store, { max_file_mib: 2 }, 48, "owner:api");
-    writeFile(s.store, 2, 3 * MIB);
-    writeFile(s.store, 3, 2 * MIB);
-    assert.equal(s.store.kb().at("gemv/gs-1/worker-1/reference:2"), undefined, "refused");
-    assert.ok(s.store.kb().at("gemv/gs-1/worker-1/reference:3"), "at the limit: taken");
+    await setKbSettings(s.store, { max_file_mib: 2 }, 48, "owner:api");
+    await writeFile(s.store, 2, 3 * MIB);
+    await writeFile(s.store, 3, 2 * MIB);
+    assert.equal(await s.store.kb().at("gemv/gs-1/worker-1/reference:2"), undefined, "refused");
+    assert.ok(await s.store.kb().at("gemv/gs-1/worker-1/reference:3"), "at the limit: taken");
     const why =
       "the file p2.pdf has 3,145,728 bytes: over the knowledge base's limit of 2 MiB (2,097,152 bytes), set on control";
     const stored = await kbStored(s.store, undefined);
@@ -199,13 +205,13 @@ describe("the knowledge base's settings", () => {
       [["gs-1", "worker-1", why]],
       "What's stored shows it",
     );
-    setKbSettings(s.store, { max_file_mib: 0 }, 48, "owner:api");
-    writeFile(s.store, 4, 50 * MIB);
-    assert.ok(s.store.kb().at("gemv/gs-1/worker-1/reference:4"), "0: no limit again");
+    await setKbSettings(s.store, { max_file_mib: 0 }, 48, "owner:api");
+    await writeFile(s.store, 4, 50 * MIB);
+    assert.ok(await s.store.kb().at("gemv/gs-1/worker-1/reference:4"), "0: no limit again");
   });
 
   test("a file's chunks over the limit are not kept, unless an item control stored names the file", async () => {
-    const s = stack();
+    const s = await stack();
     const bus = new FakeBus();
     await bus.makeStream(KB_FILES_STREAM_CONFIG);
     const putAll = async (bytes: Buffer) => {
@@ -223,19 +229,19 @@ describe("the knowledge base's settings", () => {
       }
       await followKbFiles(bus, s.files);
     };
-    setKbSettings(s.store, { max_file_mib: 1 }, 48, "owner:api");
+    await setKbSettings(s.store, { max_file_mib: 1 }, 48, "owner:api");
     const large = randomBytes(2 * KB_FILE_CHUNK_BYTES + 5);
     await putAll(large);
-    assert.equal(s.store.kb().files.has(sha(large)), false);
+    assert.equal(await s.store.kb().files.has(sha(large)), false);
     assert.equal(existsSync(s.files.path(sha(large))), false);
-    const refused = s.store.auditLog.list(20, { action: "kb_file_refused" });
+    const refused = await s.store.auditLog.list(20, { action: "kb_file_refused" });
     assert.equal(refused.length, 1, "one entry for the file");
     assert.equal(refused[0]?.count, 3, "with how many of its chunks came");
     assert.match(JSON.stringify(refused[0]?.body), /over the knowledge base's limit of 1 MiB/);
     // An item stored before the limit names this one: its file is kept.
     const named = randomBytes(KB_FILE_CHUNK_BYTES + 9);
-    setKbSettings(s.store, { max_file_mib: 0 }, 48, "owner:api");
-    s.store.kb().write(
+    await setKbSettings(s.store, { max_file_mib: 0 }, 48, "owner:api");
+    await s.store.kb().write(
       { ...RIG, run: "gs-1", event: 99, at: "2026-10-30T10:06:00.000Z" },
       {
         slot: "worker-1",
@@ -247,31 +253,31 @@ describe("the knowledge base's settings", () => {
         file: { sha256: sha(named), name: "n.pdf", type: "application/pdf", bytes: named.length },
       },
     );
-    setKbSettings(s.store, { max_file_mib: 1 }, 48, "owner:api");
+    await setKbSettings(s.store, { max_file_mib: 1 }, 48, "owner:api");
     await putAll(named);
-    assert.equal(s.store.kb().files.has(sha(named)), true);
+    assert.equal(await s.store.kb().files.has(sha(named)), true);
   });
 
-  test("orphan files go after the set hours, stay at 0, and follow the environment when unset", () => {
-    const s = stack();
+  test("orphan files go after the set hours, stay at 0, and follow the environment when unset", async () => {
+    const s = await stack();
     const kb = s.store.kb();
     const orphan = randomBytes(64);
-    kb.files.kept(sha(orphan), 64, "2026-10-28T00:00:00.000Z");
+    await kb.files.kept(sha(orphan), 64, "2026-10-28T00:00:00.000Z");
     const path = s.files.path(sha(orphan));
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, orphan);
     const now = Date.parse("2026-10-30T00:00:00.000Z");
     // 48 hours from the environment: kept 48 hours ago to the millisecond, not yet older.
-    assert.equal(s.files.orphanHours(), 48);
-    assert.equal(s.files.removeOrphans(undefined, now), 0);
-    setKbSettings(s.store, { orphan_hours: 0 }, 48, "owner:api");
-    assert.equal(s.files.removeOrphans(undefined, now), 0, "0 keeps every file");
-    assert.equal(kb.files.has(sha(orphan)), true);
-    setKbSettings(s.store, { orphan_hours: 24 }, 48, "owner:api");
-    assert.equal(s.files.removeOrphans(undefined, now), 1, "the owner's 24 hours");
-    assert.equal(kb.files.has(sha(orphan)), false);
+    assert.equal(await s.files.orphanHours(), 48);
+    assert.equal(await s.files.removeOrphans(undefined, now), 0);
+    await setKbSettings(s.store, { orphan_hours: 0 }, 48, "owner:api");
+    assert.equal(await s.files.removeOrphans(undefined, now), 0, "0 keeps every file");
+    assert.equal(await kb.files.has(sha(orphan)), true);
+    await setKbSettings(s.store, { orphan_hours: 24 }, 48, "owner:api");
+    assert.equal(await s.files.removeOrphans(undefined, now), 1, "the owner's 24 hours");
+    assert.equal(await kb.files.has(sha(orphan)), false);
     assert.equal(existsSync(path), false);
-    setKbSettings(s.store, { orphan_hours: null }, 48, "owner:api");
-    assert.equal(s.files.orphanHours(), 48, "back to THERMITE_CONTROL_KB_ORPHAN_HOURS");
+    await setKbSettings(s.store, { orphan_hours: null }, 48, "owner:api");
+    assert.equal(await s.files.orphanHours(), 48, "back to THERMITE_CONTROL_KB_ORPHAN_HOURS");
   });
 });

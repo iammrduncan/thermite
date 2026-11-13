@@ -1,5 +1,6 @@
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
+import { everyInTurn, mapInTurn } from "../../common/in-turn.ts";
 import type { BuildInfo } from "../../core/version.ts";
 import { issueCommand } from "../issue/index.ts";
 import type { ControlStore } from "../store/index.ts";
@@ -96,19 +97,19 @@ export class RigUpdates {
   }
 
   /** What the update under way on this rig waits for, in words; null when none is under way. */
-  waiting(rig: string): string | null {
-    const p = this.row(rig)?.phase as Phase | undefined;
+  async waiting(rig: string): Promise<string | null> {
+    const p = (await this.row(rig))?.phase as Phase | undefined;
     return p ? PHASE_WORDS[p] : null;
   }
 
   // The update under way on each rig is kept in the store, with the runs it paused (goal 165).
-  private row(rig: string) {
+  private async row(rig: string) {
     return this.o.store.rigUpdates.get(rig);
   }
 
-  private setPhase(rig: string, phase: Phase, paused?: string[]): void {
+  private async setPhase(rig: string, phase: Phase, paused?: string[]): Promise<void> {
     const at = new Date().toISOString();
-    this.o.store.rigUpdates.setPhase(rig, phase, paused ? JSON.stringify(paused) : null, at);
+    await this.o.store.rigUpdates.setPhase(rig, phase, paused ? JSON.stringify(paused) : null, at);
   }
 
   /**
@@ -116,19 +117,19 @@ export class RigUpdates {
    * resume, with why in the rig's history (goal 165). Its target can't be asked again, so the
    * update is the owner's to ask again from the rig's page.
    */
-  endUnfinished(): void {
-    const left = this.o.store.rigUpdates.list();
+  async endUnfinished(): Promise<void> {
+    const left = await this.o.store.rigUpdates.list();
     for (const u of left) {
-      void this.resume(u.rig, JSON.parse(u.paused) as string[], u.requested_by).then(() => {
+      void this.resume(u.rig, JSON.parse(u.paused) as string[], u.requested_by).then(async () => {
         const why = `control restarted while it was ${PHASE_WORDS[u.phase as Phase]?.toLowerCase().replace(/\.$/, "") ?? u.phase}: update the rig again from its page`;
         log("control", "rig update ended by a restart", { rig: u.rig, phase: u.phase });
-        this.step(u.rig, "update_failed", false, why);
-        this.o.store.rigUpdates.end(u.rig);
+        await this.step(u.rig, "update_failed", false, why);
+        await this.o.store.rigUpdates.end(u.rig);
       });
     }
   }
 
-  private view(rig: string): RigView | undefined {
+  private async view(rig: string): Promise<RigView | undefined> {
     return rigView(this.o.store, rig, {
       staleAfterMs: this.o.staleAfterMs,
       offlineAfterMs: this.o.offlineAfterMs,
@@ -136,75 +137,83 @@ export class RigUpdates {
     });
   }
 
-  private step(rig: string, step: string, ok: boolean, detail: string): void {
-    this.o.store.rigHistory.add(rig, step, ok, detail);
+  private async step(rig: string, step: string, ok: boolean, detail: string): Promise<void> {
+    await this.o.store.rigHistory.add(rig, step, ok, detail);
   }
 
-  private issue(
+  private async issue(
     rig: string,
     kind: "pause_run" | "resume_run" | "rig_check",
     payload: unknown,
     by: string,
     ttlMinutes = 60,
-  ): string {
-    return issueCommand(this.o.store, this.o.privateKeyPem, {
-      rig,
-      kind,
-      payload,
-      ttlMinutes,
-      issuedBy: by,
-    }).id;
+  ): Promise<string> {
+    return (
+      await issueCommand(this.o.store, this.o.privateKeyPem, {
+        rig,
+        kind,
+        payload,
+        ttlMinutes,
+        issuedBy: by,
+      })
+    ).id;
   }
 
   /** Waits until `done` says so, or `ms` passed; true when it did. */
-  private async until(ms: number, done: () => boolean): Promise<boolean> {
+  private async until(ms: number, done: () => boolean | Promise<boolean>): Promise<boolean> {
     const end = Date.now() + ms;
     for (;;) {
-      if (done()) return true;
+      if (await done()) return true;
       if (Date.now() >= end) return false;
       await this.o.sleep(Math.min(this.o.pollMs, Math.max(1, end - Date.now())));
     }
   }
 
   /**
-   * Begins the update of a rig; throws, in words, when one is under way already. The update runs
-   * on in the background: the promise it returns ends with it (the tests wait for it).
+   * Begins the update of a rig; fails, in words, when one is under way already. It answers once
+   * the update is noted as under way, the check and the note in one transaction. The update then
+   * runs on in the background, and `ended` ends with it.
    */
-  begin(rig: string, by: string, target: UpdateTarget): Promise<void> {
-    if (this.row(rig))
-      throw new Error(`An update of ${rig} is under way: wait until its steps end.`);
-    const at = new Date().toISOString();
-    this.o.store.rigUpdates.begin(rig, by, at);
-    return this.run(rig, by, target)
-      .catch((err) => {
+  async begin(rig: string, by: string, target: UpdateTarget): Promise<{ ended: Promise<void> }> {
+    const { store } = this.o;
+    await store.tx(async () => {
+      if (await this.row(rig))
+        throw new Error(`An update of ${rig} is under way: wait until its steps end.`);
+      await store.rigUpdates.begin(rig, by, new Date().toISOString());
+    });
+    const ended = this.run(rig, by, target)
+      .catch(async (err) => {
         const why = redact(errorText(err));
         log("control", "rig update failed", { rig, error: why }, "error");
-        this.step(rig, "update_failed", false, why);
+        await this.step(rig, "update_failed", false, why);
       })
-      .finally(() => this.o.store.rigUpdates.end(rig));
+      .finally(async () => {
+        await store.rigUpdates.end(rig);
+      });
+    return { ended };
   }
 
   private async run(rig: string, by: string, target: UpdateTarget): Promise<void> {
     const to = this.o.control.version;
-    const before = this.view(rig);
-    this.step(
+    const before = await this.view(rig);
+    await this.step(
       rig,
       "update_started",
       true,
       `from ${before ? rigVersionWords(before.version) : "no version"} to ${to}, asked by ${by}`,
     );
     // 1. Pause the running runs, when the rig can take a command.
-    const refused = this.o.store.refusals.get(rig);
+    const refused = await this.o.store.refusals.get(rig);
     let paused: string[] = [];
     if (refused)
-      this.step(
+      await this.step(
         rig,
         "update_paused",
         true,
         "not paused: control sends no command to a refused rig, so its runs go on from what the rig kept",
       );
     else if (before?.state !== "reporting")
-      this.step(
+      await this.step(
         rig,
         "update_paused",
         true,
@@ -212,15 +221,15 @@ export class RigUpdates {
       );
     else {
       const running = before.runs.filter((r) => r.status === "running").map((r) => r.id);
-      const ids = running.map((run) =>
+      const ids = await mapInTurn(running, async (run) =>
         this.issue(rig, "pause_run", { run, reason: `control updates the rig to ${to}` }, by),
       );
       paused = running;
-      this.setPhase(rig, "pausing", paused);
-      const took = await this.until(this.o.waits.pause, () =>
-        ids.every((id) => this.o.store.commands.get(id)?.status !== "pending"),
+      await this.setPhase(rig, "pausing", paused);
+      const took = await this.until(this.o.waits.pause, async () =>
+        everyInTurn(ids, async (id) => (await this.o.store.commands.get(id))?.status !== "pending"),
       );
-      this.step(
+      await this.step(
         rig,
         "update_paused",
         took,
@@ -232,22 +241,27 @@ export class RigUpdates {
       );
     }
     // 2. Move its containers onto control's images.
-    this.setPhase(rig, "applying");
+    await this.setPhase(rig, "applying");
     const appliedAt = Date.now();
     try {
-      this.step(rig, "update_images", true, await target.apply());
+      await this.step(rig, "update_images", true, await target.apply());
     } catch (err) {
       const why = redact(errorText(err));
-      this.step(rig, "update_images", false, `${why}. The rig keeps the images it had`);
+      await this.step(rig, "update_images", false, `${why}. The rig keeps the images it had`);
       await this.resume(rig, paused, by);
-      this.step(rig, "update_failed", false, "its containers could not move onto control's images");
+      await this.step(
+        rig,
+        "update_failed",
+        false,
+        "its containers could not move onto control's images",
+      );
       return;
     }
     // 3. A report from control's version.
-    this.setPhase(rig, "reporting");
+    await this.setPhase(rig, "reporting");
     let seen: RigView | undefined;
-    const current = await this.until(this.o.waits.report, () => {
-      seen = this.view(rig);
+    const current = await this.until(this.o.waits.report, async () => {
+      seen = await this.view(rig);
       return Boolean(
         seen &&
           Date.parse(seen.last_seen) >= appliedAt &&
@@ -257,7 +271,7 @@ export class RigUpdates {
     });
     if (!current) {
       const after = seen && Date.parse(seen.last_seen) >= appliedAt;
-      this.step(
+      await this.step(
         rig,
         "update_reported",
         false,
@@ -266,35 +280,35 @@ export class RigUpdates {
           : `no report from ${to} within ${Math.round(this.o.waits.report / 60_000)} minutes: it may not have started`,
       );
       await this.resume(rig, paused, by);
-      this.step(rig, "update_failed", false, `no report from Thermite ${to}`);
+      await this.step(rig, "update_failed", false, `no report from Thermite ${to}`);
       return;
     }
-    this.step(rig, "update_reported", true, `it runs Thermite ${to}`);
+    await this.step(rig, "update_reported", true, `it runs Thermite ${to}`);
     // 4. Its isolation check, on the new images.
-    this.setPhase(rig, "isolation");
+    await this.setPhase(rig, "isolation");
     // The check before this one, if any: the result wanted is a newer one (the rig's own clock
     // stamps it, so it is told apart by its start, not compared with control's time).
-    const earlier = this.view(rig)?.checks.isolation?.started_at ?? null;
+    const earlier = (await this.view(rig))?.checks.isolation?.started_at ?? null;
     try {
-      const id = this.issue(rig, "rig_check", { check: "isolation" }, by);
+      const id = await this.issue(rig, "rig_check", { check: "isolation" }, by);
       let summary = "";
       let passed: boolean | null = null;
       // The rig may refuse the check (a busy rig, say): its command then fails, with why.
       let refused: string | null = null;
-      const ended = await this.until(this.o.waits.isolation, () => {
-        const cmd = this.o.store.commands.get(id);
+      const ended = await this.until(this.o.waits.isolation, async () => {
+        const cmd = await this.o.store.commands.get(id);
         if (cmd && cmd.status !== "pending" && cmd.status !== "delivered") {
           const why = (cmd.outcome as { error?: unknown } | null)?.error;
           refused = typeof why === "string" && why ? why : `its command ${cmd.status}`;
           return true;
         }
-        const c = this.view(rig)?.checks.isolation;
+        const c = (await this.view(rig))?.checks.isolation;
         if (!c?.finished_at || c.started_at === earlier) return false;
         passed = c.ok === true;
         summary = c.summary ?? "";
         return true;
       });
-      this.step(
+      await this.step(
         rig,
         "update_isolation",
         ended && !refused && passed === true,
@@ -305,7 +319,7 @@ export class RigUpdates {
             : `${passed ? "passed" : "failed"}${summary ? `: ${summary}` : ""}`,
       );
     } catch (err) {
-      this.step(rig, "update_isolation", false, `not asked: ${redact(errorText(err))}`);
+      await this.step(rig, "update_isolation", false, `not asked: ${redact(errorText(err))}`);
     }
     // 5. The runs it paused go on.
     await this.resume(rig, paused, by);
@@ -314,19 +328,19 @@ export class RigUpdates {
   /** Resumes the runs the update paused; a step only when it paused some. */
   private async resume(rig: string, runs: string[], by: string): Promise<void> {
     if (!runs.length) return;
-    this.setPhase(rig, "resuming");
+    await this.setPhase(rig, "resuming");
     const done: string[] = [];
     const failed: string[] = [];
     for (const run of runs) {
       try {
         // A day to deliver: a rig that restarts takes it once it reports again.
-        this.issue(rig, "resume_run", { run }, by, 24 * 60);
+        await this.issue(rig, "resume_run", { run }, by, 24 * 60);
         done.push(run);
       } catch (err) {
         failed.push(`${run} (${errorText(err)})`);
       }
     }
-    this.step(
+    await this.step(
       rig,
       "update_resumed",
       failed.length === 0,

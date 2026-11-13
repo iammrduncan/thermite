@@ -70,8 +70,8 @@ export class KbFiles {
   }
 
   /** How many hours an orphan file stays now: the owner's setting, or its default. */
-  orphanHours(): number {
-    return kbSettingsOf(this.store, this.orphanHoursDefault).orphan_hours;
+  async orphanHours(): Promise<number> {
+    return (await kbSettingsOf(this.store, this.orphanHoursDefault)).orphan_hours;
   }
 
   /** Where a file control holds is. */
@@ -85,13 +85,14 @@ export class KbFiles {
     try {
       c = readKbFileChunk(m);
     } catch (err) {
-      this.refuse({ subject: m.subject.slice(0, 200) }, errorText(err));
+      await this.refuse({ subject: m.subject.slice(0, 200) }, errorText(err));
       return undefined;
     }
     const kb = this.store.kb();
-    if (kb.files.has(c.sha256)) return undefined;
-    const limit = kb.settings.maxFileBytes();
-    if (limit > 0 && c.bytes > limit && !kb.files.named(c.sha256)) return this.tooLarge(c, limit);
+    if (await kb.files.has(c.sha256)) return undefined;
+    const limit = await kb.settings.maxFileBytes();
+    if (limit > 0 && c.bytes > limit && !(await kb.files.named(c.sha256)))
+      return this.tooLarge(c, limit);
     const floor = controlDiskOf(this.store)?.held;
     if (floor) {
       if (!this.held)
@@ -103,7 +104,7 @@ export class KbFiles {
     const final = this.path(c.sha256);
     // Named only once checked: a control stopped before it recorded the file records it now.
     if (existsSync(final)) {
-      kb.files.kept(c.sha256, statSync(final).size);
+      await kb.files.kept(c.sha256, statSync(final).size);
       return undefined;
     }
     const part = join(this.dir, ".partial", `${c.rig}.${c.sha256}`);
@@ -131,7 +132,7 @@ export class KbFiles {
     }
     mkdirSync(dirname(final), { recursive: true });
     renameSync(part, final);
-    kb.files.kept(c.sha256, c.bytes);
+    await kb.files.kept(c.sha256, c.bytes);
     this.kept++;
     log("control", "a file for the knowledge base kept", {
       rig: c.rig,
@@ -147,32 +148,37 @@ export class KbFiles {
    * its store, with a line in its log and `kb_file_removed` in its audit log. An item that names
    * one later waits for its file, as an item that comes before its file does. Says how many went.
    */
-  removeOrphans(hours = this.orphanHours(), now = Date.now()): number {
+  async removeOrphans(given?: number, now = Date.now()): Promise<number> {
+    const hours = given ?? (await this.orphanHours());
     if (!(hours > 0)) return 0;
     const files = this.store.kb().files;
     const before = new Date(now - hours * 3_600_000).toISOString();
     let removed = 0;
-    for (const f of files.orphans(before, KB_ORPHANS_PER_LOOK)) {
-      const what = { sha256: f.sha256, bytes: f.bytes, stored_at: f.stored_at, hours };
-      try {
-        rmSync(this.path(f.sha256), { force: true });
-      } catch (err) {
-        log(
-          "control",
-          "an orphan file not removed; trying again at the next look",
-          {
-            ...what,
-            error: errorText(err),
-          },
-          "warn",
-        );
-        continue;
+    // The orphans are listed and removed in one transaction: an item that names one of them
+    // can't be stored between the look and the removal.
+    await this.store.tx(async () => {
+      for (const f of await files.orphans(before, KB_ORPHANS_PER_LOOK)) {
+        const what = { sha256: f.sha256, bytes: f.bytes, stored_at: f.stored_at, hours };
+        try {
+          rmSync(this.path(f.sha256), { force: true });
+        } catch (err) {
+          log(
+            "control",
+            "an orphan file not removed; trying again at the next look",
+            {
+              ...what,
+              error: errorText(err),
+            },
+            "warn",
+          );
+          continue;
+        }
+        await files.removed(f.sha256);
+        removed++;
+        log("control", "a file for the knowledge base removed: no item names it", what);
+        await this.store.auditLog.add("control", "kb_file_removed", what);
       }
-      files.removed(f.sha256);
-      removed++;
-      log("control", "a file for the knowledge base removed: no item names it", what);
-      this.store.auditLog.add("control", "kb_file_removed", what);
-    }
+    });
     return removed;
   }
 
@@ -190,19 +196,22 @@ export class KbFiles {
    * A chunk of a file over the largest the knowledge base takes: dropped, and refused in control's
    * audit log once for the file, with how many of its chunks came; its log says so at its first.
    */
-  private tooLarge(c: KbFileChunk, limit: number): Handled {
+  private async tooLarge(c: KbFileChunk, limit: number): Promise<Handled> {
     this.refused++;
     const said = { rig: c.rig, sha256: c.sha256, bytes: c.bytes, why: overLimitWords(c, limit) };
     if (c.chunk === 0) log("control", "a file for the knowledge base refused", said, "warn");
-    this.store.auditLog.refusal("control", "kb_file_refused", said);
+    await this.store.auditLog.refusal("control", "kb_file_refused", said);
     return undefined;
   }
 
-  private refuse(what: Partial<KbFileChunk> & { subject?: string }, why: string): Handled {
+  private async refuse(
+    what: Partial<KbFileChunk> & { subject?: string },
+    why: string,
+  ): Promise<Handled> {
     this.refused++;
     const said = { ...what, why };
     log("control", "a chunk of a file for the knowledge base refused", said, "warn");
-    this.store.auditLog.add("control", "kb_file_refused", said);
+    await this.store.auditLog.add("control", "kb_file_refused", said);
     return undefined;
   }
 }

@@ -57,7 +57,7 @@ test("Settings › Message bus: control's connection, each rig on the bus or off
     busStore: async () => ({ used: 0.6 * GIB, limit: 40 * GIB }),
   });
   await disk.check();
-  const s = controlOnly({
+  const s = await controlOnly({
     store,
     options: { bus: view },
     tokens: { rigs: { "rig-a": "rig-a-token-abcdef", "rig-b": "rig-b-token-abcdef" } },
@@ -72,7 +72,7 @@ test("Settings › Message bus: control's connection, each rig on the bus or off
       summary: {},
       generated_at: new Date().toISOString(),
     });
-  noteOffBusCall(store, "rig-b");
+  await noteOffBusCall(store, "rig-b");
   const ui = await signIn(s.control);
   const page = await ui.page("/ui/settings/bus");
 
@@ -140,7 +140,7 @@ test("Settings › Message bus: control's connection, each rig on the bus or off
 });
 
 test("Settings › Message bus without control's bus, as only a test makes it: it says so", async () => {
-  const s = controlOnly();
+  const s = await controlOnly();
   const ui = await signIn(s.control);
   const page = await ui.page("/ui/settings/bus");
   assert.match(page, /Control runs without its message bus: only a test makes it so\./);

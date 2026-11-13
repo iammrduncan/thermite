@@ -26,7 +26,23 @@ const gpuCloudOf = (r: Row): GpuCloud => ({
   created_at: String(r.created_at),
 });
 
-export class GpuClouds extends StorePart {
+export interface GpuClouds {
+  add(g: {
+    name: string;
+    kind: GpuCloud["kind"];
+    key_sealed: string;
+    key_hint: string;
+    by: string;
+  }): Promise<void>;
+  get(name: string): Promise<(GpuCloud & { key_sealed: string }) | undefined>;
+  list(): Promise<GpuCloud[]>;
+  setFacts(name: string, r: { facts: unknown } | { error: string }): Promise<void>;
+  replaceKey(name: string, key_sealed: string, key_hint: string, by: string): Promise<void>;
+  delete(name: string, by: string): Promise<boolean>;
+}
+
+/** GpuClouds on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteGpuClouds extends StorePart {
   add(g: {
     name: string;
     kind: GpuCloud["kind"];

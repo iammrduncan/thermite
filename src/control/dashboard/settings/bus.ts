@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { COMMAND_STREAM, commandConsumerName } from "../../../core/link/commands.ts";
 import { CONFIG_STREAM, configConsumerName } from "../../../core/link/config.ts";
 import { REPORT_STREAM, reportSubject } from "../../../core/link/report.ts";
@@ -69,36 +70,38 @@ function connectionRows(state: Extract<BusState, { on: true }>, store: ControlSt
 }
 
 /** Each rig with what waits for it on the bus. */
-function rigRows(
+async function rigRows(
   state: Extract<BusState, { on: true }>,
   store: ControlStore,
   views: RigView[],
   now: number,
-): string {
+): Promise<string> {
   const stream = (name: string) => state.streams.find((x) => x.name === name);
   const consumer = (s: string, name: string) => stream(s)?.consumers.find((k) => k.name === name);
   const reports = stream(REPORT_STREAM)?.counts ?? {};
-  return [...views]
-    .sort((x, y) => x.id.localeCompare(y.id))
-    .map((u) => {
-      const reach = busReach(store, u.id, {
-        lastSeen: u.last_seen,
-        now,
-        podStopped: podStopped(u),
-      });
-      const link =
-        reach.state === "on"
-          ? `<span class="dot ok"></span> On the bus${reach.since ? `, since ${esc(utc(reach.since))}` : ""}`
-          : `<span class="dot bad"></span> <b>Off the bus</b> since ${esc(utc(reach.since))}: broken until it comes back`;
-      const cmds = consumer(COMMAND_STREAM, commandConsumerName(u.id));
-      const config = consumer(CONFIG_STREAM, configConsumerName(u.id));
-      const waiting =
-        (cmds?.pending ?? 0) + (cmds?.ack_pending ?? 0) + heldCommands(store, u.id).length;
-      const again = (cmds?.redelivered ?? 0) + (config?.redelivered ?? 0);
-      const last = Date.parse(u.last_seen) > 0 ? `${esc(ago(u.last_seen, now))} ago` : "never";
-      return `<tr data-rig="${esc(u.id)}" data-bus="${reach.state}"><td><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></td><td>${link}</td><td class="num">${count(reports[reportSubject(u.id)] ?? 0)}</td><td class="num">${count(waiting)}</td><td class="num">${count(again)}</td><td>${last}</td></tr>`;
-    })
-    .join("");
+  return (
+    await mapInTurn(
+      [...views].sort((x, y) => x.id.localeCompare(y.id)),
+      async (u) => {
+        const reach = await busReach(store, u.id, {
+          lastSeen: u.last_seen,
+          now,
+          podStopped: podStopped(u),
+        });
+        const link =
+          reach.state === "on"
+            ? `<span class="dot ok"></span> On the bus${reach.since ? `, since ${esc(utc(reach.since))}` : ""}`
+            : `<span class="dot bad"></span> <b>Off the bus</b> since ${esc(utc(reach.since))}: broken until it comes back`;
+        const cmds = consumer(COMMAND_STREAM, commandConsumerName(u.id));
+        const config = consumer(CONFIG_STREAM, configConsumerName(u.id));
+        const waiting =
+          (cmds?.pending ?? 0) + (cmds?.ack_pending ?? 0) + heldCommands(store, u.id).length;
+        const again = (cmds?.redelivered ?? 0) + (config?.redelivered ?? 0);
+        const last = Date.parse(u.last_seen) > 0 ? `${esc(ago(u.last_seen, now))} ago` : "never";
+        return `<tr data-rig="${esc(u.id)}" data-bus="${reach.state}"><td><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></td><td>${link}</td><td class="num">${count(reports[reportSubject(u.id)] ?? 0)}</td><td class="num">${count(waiting)}</td><td class="num">${count(again)}</td><td>${last}</td></tr>`;
+      },
+    )
+  ).join("");
 }
 
 /** The streams the server has, with what each carries, holds and keeps. */
@@ -112,18 +115,18 @@ function streamRows(state: Extract<BusState, { on: true }>): string {
 }
 
 /** Settings › Message bus: control's connection, the rigs on the bus, and its streams. */
-export function busSettingsBlock(o: {
+export async function busSettingsBlock(o: {
   state: BusState;
   store: ControlStore;
   views: RigView[];
   now: number;
-}): string {
+}): Promise<string> {
   const head = (h: string, n: string, right: string) =>
     `<div class="head"><h2>${h}</h2>${n}<span class="right">${right}</span></div>`;
   if (!o.state.on)
     return `<div class="block" id="bus">${head("Message bus", "", "every rig reaches control only on the bus")}<div class="card"><div class="empty">Control runs without its message bus: only a test makes it so.</div></div></div>`;
   const state = o.state;
-  const rigs = rigRows(state, o.store, o.views, o.now);
+  const rigs = await rigRows(state, o.store, o.views, o.now);
   return `<div class="block" id="bus">${head("Message bus", "", "every rig reaches control only on the bus")}<div class="card"><h3 class="small" style="margin-top:0">Control's connection</h3>${connectionRows(state, o.store)}</div></div>
 <div class="block" id="bus-rigs">${head("Rigs on the bus", `<span class="n">${o.views.length}</span>`, "each rig's own user, and what waits for it")}<div class="card">${
     rigs

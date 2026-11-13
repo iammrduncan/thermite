@@ -33,11 +33,11 @@ interface WeeklyLimit {
 }
 
 /** The rig's weekly limit, while one of its running runs waits for one; undefined otherwise. */
-export function weeklyLimit(
+export async function weeklyLimit(
   store: ControlStore,
   u: RigView,
   now = Date.now(),
-): WeeklyLimit | undefined {
+): Promise<WeeklyLimit | undefined> {
   const waiting = u.runs.flatMap((r) => {
     const w = r.agents_wait;
     return r.status === "running" && w?.weekly && Date.parse(w.until) > now ? [{ r, w }] : [];
@@ -46,7 +46,7 @@ export function weeklyLimit(
   if (!first) return undefined;
   const until = waiting.reduce((a, x) => (x.w.until > a ? x.w.until : a), first.w.until);
   const since = waiting.reduce((a, x) => (x.w.since < a ? x.w.since : a), first.w.since);
-  const step = store.rigHistory.latest(u.id, [WEEKLY_WAIT_STEP, WEEKLY_MODEL_STEP], 1)[0];
+  const step = (await store.rigHistory.latest(u.id, [WEEKLY_WAIT_STEP, WEEKLY_MODEL_STEP], 1))[0];
   const chose =
     step && step.at >= since ? (step.step === WEEKLY_MODEL_STEP ? "model" : "wait") : null;
   return {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { BUS_READ_MAX } from "../../../src/common/bus/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { RigFold } from "../../../src/control/views/fold/index.ts";
 import {
@@ -84,7 +85,7 @@ describe("a kept fold, with events ingested between reads, gives a fresh fold's 
     test(set.name, async () => {
       const source = controlStore();
       await set.fill(source);
-      const summaries = new Map(source.reportedRigs.list().map((u) => [u.id, u.summary]));
+      const summaries = new Map((await source.reportedRigs.list()).map((u) => [u.id, u.summary]));
       const events = await sent(source);
       for (const seed of [1, 2]) {
         const store = controlStore();
@@ -115,14 +116,18 @@ describe("a kept fold, with events ingested between reads, gives a fresh fold's 
           at += n;
           await applied(store);
           const made = await freshFolds(store);
-          for (const v of folds.views(OPTS))
-            assert.deepStrictEqual(v, made.view(v.id, OPTS), `seed ${seed}, ${v.id} at ${at}`);
+          for (const v of await folds.views(OPTS))
+            assert.deepStrictEqual(
+              v,
+              await made.view(v.id, OPTS),
+              `seed ${seed}, ${v.id} at ${at}`,
+            );
         }
         // The same views as the set's own store gives, from the folds of the same events.
         await applied(source);
-        for (const u of source.reportedRigs.list()) {
-          const kept = rigView(store, u.id, OPTS);
-          const theirs = rigView(source, u.id, OPTS);
+        for (const u of await source.reportedRigs.list()) {
+          const kept = await rigView(store, u.id, OPTS);
+          const theirs = await rigView(source, u.id, OPTS);
           for (const part of ["ledger_id", "runs", "judge", "checks", "recent"] as const)
             assert.deepStrictEqual(kept?.[part], theirs?.[part], `${u.id} ${part}`);
         }
@@ -131,7 +136,7 @@ describe("a kept fold, with events ingested between reads, gives a fresh fold's 
             .held()
             .map((h) => [h.rig, h.ledger])
             .sort(),
-          source.reportedRigs.list().map((u) => [u.id, u.ledger_id]),
+          (await source.reportedRigs.list()).map((u) => [u.id, u.ledger_id]),
         );
       }
     });
@@ -143,11 +148,11 @@ test("a rig's new ledger starts a new fold, and a retired rig loses its fold", a
   assert.equal(keepFolds(store), folds, "one set of folds for a store");
   await report(store, "rig-a", "ledger-1", hillClimbEvents("r-1"));
   await reported(store, "rig-b", "ledger-b", goalEvents("g-1"));
-  assert.equal(rigView(store, "rig-a", OPTS)?.runs.length, 2);
-  assert.equal(folds.views(OPTS).length, 2);
+  assert.equal((await rigView(store, "rig-a", OPTS))?.runs.length, 2);
+  assert.equal((await folds.views(OPTS)).length, 2);
   // A full reset: the rig reports a new ledger, which starts again at event 1.
   await reported(store, "rig-a", "ledger-2", goalEvents("r-1").slice(0, 5));
-  const v = rigView(store, "rig-a", OPTS);
+  const v = await rigView(store, "rig-a", OPTS);
   assert.deepEqual(
     v?.runs.map((r) => [r.id, r.mode, r.attempts.length]),
     [["r-1", "goal", 0]],
@@ -161,17 +166,17 @@ test("a rig's new ledger starts a new fold, and a retired rig loses its fold", a
     ],
   );
   // The other rig's fold is its own: unchanged by rig-a's events.
-  assert.deepStrictEqual(rigView(store, "rig-b", OPTS), await fresh(store, "rig-b"));
-  store.retired.add("rig-b", "owner:ui");
-  assert.equal(rigView(store, "rig-b", OPTS), undefined);
+  assert.deepStrictEqual(await rigView(store, "rig-b", OPTS), await fresh(store, "rig-b"));
+  await store.retired.add("rig-b", "owner:ui");
+  assert.equal(await rigView(store, "rig-b", OPTS), undefined);
   assert.deepEqual(
     folds.held().map((h) => h.rig),
     ["rig-a"],
   );
   // Brought back, its fold is its own again, as of its events.
   await folds.restore("rig-b");
-  store.retired.bringBack("rig-b", "owner:ui");
-  assert.deepStrictEqual(rigView(store, "rig-b", OPTS), await fresh(store, "rig-b"));
+  await store.retired.bringBack("rig-b", "owner:ui");
+  assert.deepStrictEqual(await rigView(store, "rig-b", OPTS), await fresh(store, "rig-b"));
 });
 
 test("a rig's new ledger whose events are still on their way has an empty view, filled as they come", async () => {
@@ -185,21 +190,24 @@ test("a rig's new ledger whose events are still on their way has an empty view, 
   });
   const taking = report(store, "rig-a", "ledger-2", goalEvents("r-1").slice(0, 5));
   const end = Date.now() + 2000;
-  while (store.reportedRigs.reportRow("rig-a")?.ledger_id !== "ledger-2" && Date.now() < end)
+  while (
+    (await store.reportedRigs.reportRow("rig-a"))?.ledger_id !== "ledger-2" &&
+    Date.now() < end
+  )
     await new Promise((r) => setTimeout(r, 2));
-  assert.deepEqual(rigView(store, "rig-a", OPTS)?.runs, []);
+  assert.deepEqual((await rigView(store, "rig-a", OPTS))?.runs, []);
   release();
   bus.hold = undefined;
   await taking;
   assert.deepEqual(
-    rigView(store, "rig-a", OPTS)?.runs.map((r) => r.id),
+    (await rigView(store, "rig-a", OPTS))?.runs.map((r) => r.id),
     ["r-1"],
   );
-  assert.deepStrictEqual(rigView(store, "rig-a", OPTS), await fresh(store, "rig-a"));
+  assert.deepStrictEqual(await rigView(store, "rig-a", OPTS), await fresh(store, "rig-a"));
 });
 
 test("control reads every rig's view through the folds it keeps for its store", async () => {
-  const { store, api } = controlOnly();
+  const { store, api } = await controlOnly();
   await reported(store, "rig-a", "ledger-a", hillClimbEvents("r-1").slice(0, 30));
   const first = (await (await api("GET", "/v1/rigs/rig-a/view")).json()) as { runs: unknown[] };
   assert.equal(first.runs.length, 2);
@@ -224,26 +232,26 @@ test("a read of a view folds nothing more and asks the store for no event", asyn
   const folds = keepFolds(store);
   await reported(store, "rig-h", "ledger-h", hillClimbEvents());
   const before = structuredClone(folds.held());
-  const runs = rigView(store, "rig-h", OPTS)?.runs.length;
+  const runs = (await rigView(store, "rig-h", OPTS))?.runs.length;
   assert.ok(runs);
   // The fold's apply and the store's events would throw: a read touches neither.
   const fold = RigFold.prototype.apply;
-  const prepare = store.db.prepare.bind(store.db);
+  const prepare = sqliteBehind(store).db.prepare.bind(sqliteBehind(store).db);
   RigFold.prototype.apply = () => {
     throw new Error("a read folded an event");
   };
-  store.db.prepare = (sql: string) => {
+  sqliteBehind(store).db.prepare = (sql: string) => {
     if (/rig_event/.test(sql)) throw new Error(`a read asked the store for events: ${sql}`);
     return prepare(sql);
   };
   try {
     for (let i = 0; i < 3; i++) {
-      assert.equal(rigView(store, "rig-h", OPTS)?.runs.length, runs);
-      assert.equal(folds.views(OPTS).length, 1);
+      assert.equal((await rigView(store, "rig-h", OPTS))?.runs.length, runs);
+      assert.equal((await folds.views(OPTS)).length, 1);
     }
   } finally {
     RigFold.prototype.apply = fold;
-    store.db.prepare = prepare;
+    sqliteBehind(store).db.prepare = prepare;
   }
   assert.deepEqual(folds.held(), before);
 });
@@ -260,9 +268,9 @@ test("a tail longer than a page of events is folded whole", async () => {
   await reported(store, "rig-a", "l", [
     { kind: "run_created", subject: "r-1", body: { campaign: "c", mode: "goal" } },
   ]);
-  assert.equal(rigView(store, "rig-a", OPTS)?.runs[0]?.journal.length, 0);
+  assert.equal((await rigView(store, "rig-a", OPTS))?.runs[0]?.journal.length, 0);
   await reported(store, "rig-a", "l", notes(1, 12_000), {}, 1);
-  const v = rigView(store, "rig-a", OPTS);
+  const v = await rigView(store, "rig-a", OPTS);
   assert.equal(v?.runs[0]?.journal.length, 12_000);
   assert.deepStrictEqual(v, await fresh(store, "rig-a"));
 });
@@ -272,7 +280,7 @@ test("a read of the stream that fails changes no fold: the apply reads it again,
   const { bus, apply } = busOf(store);
   const events = hillClimbEvents();
   await reported(store, "rig-h", "ledger-h", events.slice(0, 40));
-  rigView(store, "rig-h", OPTS);
+  await rigView(store, "rig-h", OPTS);
   // The server fails the apply's next read once.
   const read = bus.read.bind(bus);
   let failed = 0;
@@ -284,7 +292,7 @@ test("a read of the stream that fails changes no fold: the apply reads it again,
   bus.read = read;
   assert.ok(failed > 1, "the apply read again after the failure");
   assert.equal(apply.waiting, null);
-  assert.deepStrictEqual(rigView(store, "rig-h", OPTS), await fresh(store, "rig-h"));
+  assert.deepStrictEqual(await rigView(store, "rig-h", OPTS), await fresh(store, "rig-h"));
 });
 
 test("a fold that fails on an event is dropped, its rig's views say why, every other rig is read as before, and its next ledger starts again", async () => {
@@ -309,8 +317,8 @@ test("a fold that fails on an event is dropped, its rig's views say why, every o
   } finally {
     RigFold.prototype.apply = fold;
   }
-  assert.throws(
-    () => rigView(store, "rig-a", OPTS),
+  await assert.rejects(
+    async () => rigView(store, "rig-a", OPTS),
     /rig rig-a's view failed on its event 5 \(run_status\): a handler's mistake/,
   );
   assert.deepEqual(
@@ -318,13 +326,13 @@ test("a fold that fails on an event is dropped, its rig's views say why, every o
     ["rig-b"],
   );
   // Every rig's views: rig-b as it is, rig-a with why and none of its events.
-  const all = folds.views(OPTS);
+  const all = await folds.views(OPTS);
   const a = all.find((v) => v.id === "rig-a");
   const b = all.find((v) => v.id === "rig-b");
   assert.match(String(a?.unreadable), /rig rig-a's view failed on its event 5 \(run_status\)/);
   assert.deepEqual(a?.runs, []);
   assert.equal(b?.unreadable, undefined);
-  assert.deepEqual(b, rigView(store, "rig-b", OPTS));
+  assert.deepEqual(b, await rigView(store, "rig-b", OPTS));
   assert.deepEqual(
     b?.runs.map((r) => r.id),
     ["g-b"],
@@ -332,7 +340,7 @@ test("a fold that fails on an event is dropped, its rig's views say why, every o
   // A full reset: the new ledger's fold starts again.
   await reported(store, "rig-a", "ledger-2", goalEvents("g-2").slice(0, 3));
   assert.deepEqual(
-    rigView(store, "rig-a", OPTS)?.runs.map((r) => r.id),
+    (await rigView(store, "rig-a", OPTS))?.runs.map((r) => r.id),
     ["g-2"],
   );
 });
@@ -350,9 +358,9 @@ describe("a view is its caller's own", () => {
 
   test("what a caller changes in its view changes neither the fold nor another caller's view", async () => {
     const store = await filled();
-    const other = rigView(store, "rig-h", OPTS);
+    const other = await rigView(store, "rig-h", OPTS);
     const before = structuredClone(other);
-    const mine = rigView(store, "rig-h", OPTS);
+    const mine = await rigView(store, "rig-h", OPTS);
     assert.ok(mine);
     const run = mine.runs.find((r) => r.id === "h-1");
     assert.ok(run);
@@ -393,13 +401,13 @@ describe("a view is its caller's own", () => {
     }, TypeError);
     // The other caller's view, the next read and a fresh fold's view are as they were.
     assert.deepStrictEqual(other, before);
-    assert.deepStrictEqual(rigView(store, "rig-h", OPTS), before);
+    assert.deepStrictEqual(await rigView(store, "rig-h", OPTS), before);
     assert.deepStrictEqual(await fresh(store, "rig-h"), before);
   });
 
   test("a view a caller holds does not change when the fold takes new events", async () => {
     const store = await filled();
-    const held = rigView(store, "rig-h", OPTS);
+    const held = await rigView(store, "rig-h", OPTS);
     const before = structuredClone(held);
     await report(
       store,
@@ -417,7 +425,7 @@ describe("a view is its caller's own", () => {
       hillClimbEvents().length,
     );
     await applied(store);
-    const after = rigView(store, "rig-h", OPTS);
+    const after = await rigView(store, "rig-h", OPTS);
     assert.deepStrictEqual(held, before);
     assert.notDeepStrictEqual(after, before);
     assert.deepStrictEqual(after, await fresh(store, "rig-h"));
@@ -442,7 +450,7 @@ describe("a run is read wherever it ran (goal 170)", () => {
     const now = await findRun(store, "r-1", OPTS);
     assert.ok(now);
     assert.deepEqual([now.rig.id, now.rig.ledger_id, now.earlier], ["rig-a", "ledger-1", null]);
-    const before = rigView(store, "rig-a", OPTS)?.runs.find((r) => r.id === "r-1");
+    const before = (await rigView(store, "rig-a", OPTS))?.runs.find((r) => r.id === "r-1");
     assert.deepStrictEqual(now.run, before);
     assert.equal(await findRun(store, "nope", OPTS), undefined);
 
@@ -450,7 +458,7 @@ describe("a run is read wherever it ran (goal 170)", () => {
     // old run is read from a fold of its own ledger, as it stood.
     await reported(store, "rig-a", "ledger-2", later(goalEvents("g-2"), 1));
     assert.deepEqual(
-      rigView(store, "rig-a", OPTS)?.runs.map((r) => r.id),
+      (await rigView(store, "rig-a", OPTS))?.runs.map((r) => r.id),
       ["g-2"],
     );
     const reset = await findRun(store, "r-1", OPTS);
@@ -474,8 +482,8 @@ describe("a run is read wherever it ran (goal 170)", () => {
 
     // A retired rig: its runs stay readable, as they stood.
     const g1 = await findRun(store, "g-1", OPTS);
-    store.retired.add("rig-b", "owner:ui");
-    assert.equal(rigView(store, "rig-b", OPTS), undefined);
+    await store.retired.add("rig-b", "owner:ui");
+    assert.equal(await rigView(store, "rig-b", OPTS), undefined);
     const retired = await findRun(store, "g-1", OPTS);
     assert.ok(retired && g1);
     assert.deepEqual([retired.rig.id, retired.earlier], ["rig-b", "retired"]);

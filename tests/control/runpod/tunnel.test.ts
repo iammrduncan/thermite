@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { ControlTunnels, tunnelRouteAllowed } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { ControlStore, RIG_ID } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore, RIG_ID } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, type KeyPairPem } from "../../../src/core/commands.ts";
 import {
   controlCodeProof,
@@ -111,13 +112,13 @@ async function setup(
     busCa: TEST_BUS_CA,
     ...(o.now ? { now: o.now } : {}),
   });
-  const { control: api } = controlOnly({
+  const { control: api } = await controlOnly({
     store,
     keys: control,
     tokens: { rigs: {} },
     options: { secrets, tunnels },
   });
-  const minted = tunnels.mint({
+  const minted = await tunnels.mint({
     by: "owner:ui",
     ...(o.rig ? { rig: o.rig } : {}),
     ...(o.codeTtlMs ? { codeTtlMs: o.codeTtlMs } : {}),
@@ -141,7 +142,7 @@ async function setup(
   const ports = pod.tunnel.ports();
   pod.url = `http://127.0.0.1:${ports.public_port}`;
   pod.local = `http://127.0.0.1:${ports.local_port}`;
-  tunnels.attach(rig, "pod1", pod.url);
+  await tunnels.attach(rig, "pod1", pod.url);
   /** The supervisor's own call to control, through its local port. */
   const call = (path: string, init: RequestInit = {}, token = opts.localToken) =>
     fetch(`${pod.local}${path}`, {
@@ -312,23 +313,38 @@ describe("pull mode: control connects to a rig through a proxy", () => {
         !JSON.stringify(s.minted.env).includes("PRIVATE"),
         "no private key in RunPod's settings",
       );
-      assert.equal(s.store.tunnels.get(s.rig)?.code_expires_at, null);
+      assert.equal((await s.store.tunnels.get(s.rig))?.code_expires_at, null);
       // Control's database holds the code, the path and its own box key only sealed.
-      const dump = JSON.stringify(s.store.db.prepare("select * from tunnel_rig").all());
+      const dump = JSON.stringify(
+        sqliteBehind(s.store).db.prepare("select * from tunnel_rig").all(),
+      );
       assert.ok(!dump.includes(s.minted.env.THERMITE_TUNNEL_ENROLL_CODE));
       assert.ok(!dump.includes(s.minted.env.THERMITE_TUNNEL_PREFIX));
       assert.ok(!dump.includes("PRIVATE"));
       assert.ok(!dump.includes(snapshotKey), "the snapshot key is not kept, sealed or not");
-      const timed = s.tunnels.mint({ by: "owner:ui", rig: "rp-timed", codeTtlMs: 30 * 60_000 });
+      const timed = await s.tunnels.mint({
+        by: "owner:ui",
+        rig: "rp-timed",
+        codeTtlMs: 30 * 60_000,
+      });
       assert.notEqual(timed.env.THERMITE_STATE_SNAPSHOT_KEY, snapshotKey, "a new key each launch");
       assert.ok(Date.parse(timed.env.THERMITE_TUNNEL_ENROLL_UNTIL ?? "") > Date.now());
-      assert.throws(() => s.tunnels.mint({ by: "owner:ui", rig: s.rig }), /exists already/);
-      assert.throws(() => s.tunnels.mint({ by: "owner:ui", rig: "Bad_Name" }), /a rig's name/);
-      assert.throws(() => s.tunnels.attach("rp-none", "pod2"), /no rig rp-none/);
+      await assert.rejects(
+        async () => s.tunnels.mint({ by: "owner:ui", rig: s.rig }),
+        /exists already/,
+      );
+      await assert.rejects(
+        async () => s.tunnels.mint({ by: "owner:ui", rig: "Bad_Name" }),
+        /a rig's name/,
+      );
+      await assert.rejects(async () => s.tunnels.attach("rp-none", "pod2"), /no rig rp-none/);
       // A rig minted for a pod not launched yet waits, and says so.
       assert.equal(await s.tunnels.step("rp-timed"), "its pod is not launched yet");
-      s.tunnels.attach("rp-timed", "abc123");
-      assert.equal(s.store.tunnels.get("rp-timed")?.url, "https://abc123-8790.proxy.runpod.net");
+      await s.tunnels.attach("rp-timed", "abc123");
+      assert.equal(
+        (await s.store.tunnels.get("rp-timed"))?.url,
+        "https://abc123-8790.proxy.runpod.net",
+      );
     } finally {
       await s.stop();
     }
@@ -342,11 +358,11 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       const [xp, xi] = s.signed("exchange", Buffer.from("{}"));
       await isEmpty404(await raw(`${s.pod.url}${xp}`, xi), "an exchange before enrollment");
       assert.equal(await s.tunnels.step(s.rig), "enrolled");
-      const t = s.store.tunnels.get(s.rig);
+      const t = await s.store.tunnels.get(s.rig);
       assert.equal(t?.pod_sign_public, s.pod.tunnel.publicKeys().sign);
       assert.equal(t?.pod_box_public, s.pod.tunnel.publicKeys().box);
-      assert.equal(s.store.tunnels.get(s.rig)?.code_sealed, "", "spent at control");
-      assert.equal(s.store.tunnels.pin(s.rig, "x", "y"), false, "a second pin");
+      assert.equal((await s.store.tunnels.get(s.rig))?.code_sealed, "", "spent at control");
+      assert.equal(await s.store.tunnels.pin(s.rig, "x", "y"), false, "a second pin");
       assert.ok(!existsSync(enrolled), "nothing for the harness before control's first exchange");
       // An enrollment answer lost on the way may be asked for again until the first exchange.
       const n1 = newNonce();
@@ -390,7 +406,7 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       const [p3, i3] = s.signed("enroll", s.enrollBody(n3), { nonce: n3 });
       await isEmpty404(await raw(`${s.pod.url}${p3}`, i3), "a second enrollment after a restart");
       assert.match(await s.tunnels.step(s.rig), /^exchanged/);
-      assert.throws(() => s.tunnels.attach(s.rig, "pod2"), /enrolled already/);
+      await assert.rejects(async () => s.tunnels.attach(s.rig, "pod2"), /enrolled already/);
     } finally {
       await s.stop();
     }
@@ -403,11 +419,11 @@ describe("pull mode: control connects to a rig through a proxy", () => {
         await s.tunnels.step(s.rig),
         /did not enroll \(an empty 404\)\. Most often nothing listens on the pod.s port yet/,
       );
-      assert.equal(s.store.tunnels.get(s.rig)?.enrolled_at, null);
-      assert.equal(s.store.tunnels.get(s.rig)?.pod_sign_public, null);
+      assert.equal((await s.store.tunnels.get(s.rig))?.enrolled_at, null);
+      assert.equal((await s.store.tunnels.get(s.rig))?.pod_sign_public, null);
       assert.ok(!s.pod.tunnel.enrolled());
       assert.deepEqual(s.podState(), ["", ""], "the pod recorded nothing");
-      assert.match(s.store.tunnels.get(s.rig)?.error ?? "", /wrong or expired code/);
+      assert.match((await s.store.tunnels.get(s.rig))?.error ?? "", /wrong or expired code/);
       // The rig's page says so, before the rig ever reported.
       const page = await s.rigPage();
       assert.match(page, /Control connects to rp-[0-9a-f]{8} through RunPod's proxy/);
@@ -426,7 +442,7 @@ describe("pull mode: control connects to a rig through a proxy", () => {
     try {
       now += 31 * 60_000;
       assert.match(await timed.tunnels.step(timed.rig), /enrollment code expired/);
-      assert.equal(timed.store.tunnels.get(timed.rig)?.enrolled_at, null);
+      assert.equal((await timed.store.tunnels.get(timed.rig))?.enrolled_at, null);
       // The pod refuses it too, whoever asks.
       const n = newNonce();
       const [p, i] = timed.signed("enroll", timed.enrollBody(n), { nonce: n });
@@ -503,8 +519,8 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       assert.equal(readFileSync(join(s.opts.enrolledDir, "rig.json"), "utf8"), files);
       // The next exchange reports the refusals; control keeps the count and logs it.
       assert.match(await s.tunnels.step(s.rig), /^exchanged/);
-      assert.ok((s.store.tunnels.get(s.rig)?.refused_total ?? 0) >= tries.length + 3);
-      assert.ok(s.store.auditLog.list(20).some((a) => a.action === "tunnel_refusals"));
+      assert.ok(((await s.store.tunnels.get(s.rig))?.refused_total ?? 0) >= tries.length + 3);
+      assert.ok((await s.store.auditLog.list(20)).some((a) => a.action === "tunnel_refusals"));
       const page = await s.rigPage();
       assert.match(page, /Refused requests<\/dt><dd>[1-9]/);
       assert.match(page, /Enrolled .* ago/);
@@ -579,8 +595,12 @@ describe("pull mode: control connects to a rig through a proxy", () => {
         }),
       );
       assert.equal(res.status, 200, await res.clone().text());
-      assert.equal(s.store.busKeys.rigKey(s.rig), key.publicKey, "control holds the rig's key");
-      assert.equal(s.store.busKeys.rigSealKey(s.rig), key.seal.publicKey);
+      assert.equal(
+        await s.store.busKeys.rigKey(s.rig),
+        key.publicKey,
+        "control holds the rig's key",
+      );
+      assert.equal(await s.store.busKeys.rigSealKey(s.rig), key.seal.publicKey);
       // What crossed the proxy: no marker, no code, no token, no plain JSON.
       const all = Buffer.concat(s.wire).toString("latin1");
       for (const secret of [
@@ -624,11 +644,11 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       });
     });
     const control = generateSigningKeys();
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const tunnels = new ControlTunnels(store, SecretBox.ephemeral(), control.privateKeyPem, {
       busCa: TEST_BUS_CA,
     });
-    const minted = tunnels.mint({ by: "owner:ui" });
+    const minted = await tunnels.mint({ by: "owner:ui" });
     const home = mkdtempSync(join(tmpdir(), "thermite-pull-"));
     const env: NodeJS.ProcessEnv = {
       ...minted.env,

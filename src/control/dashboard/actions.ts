@@ -19,35 +19,35 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
   // ---------------------------------------------------------------- following an action (goal 080)
   // The page's script sends an action's form with fetch, asking for JSON, then follows it on these
   // routes until its outcome: a Progress (command-progress.ts) each time.
-  app.get("/ui/commands/:file{.+\\.json}", (c) => {
-    const cmd = store.commands.row(c.req.param("file").replace(/\.json$/, ""));
+  app.get("/ui/commands/:file{.+\\.json}", async (c) => {
+    const cmd = await store.commands.row(c.req.param("file").replace(/\.json$/, ""));
     return cmd ? c.json(commandProgress(cmd, Date.now())) : c.json({ error: "not found" }, 404);
   });
-  app.get("/ui/rigs/:rig/checks/:file{.+\\.json}", (c) => {
+  app.get("/ui/rigs/:rig/checks/:file{.+\\.json}", async (c) => {
     const rig = c.req.param("rig");
     const check = c.req.param("file").replace(/\.json$/, "");
-    const known = store.reportedRigs.list().find((x) => x.id === rig);
+    const known = (await store.reportedRigs.list()).find((x) => x.id === rig);
     if (!known) return c.json({ error: "not found" }, 404);
-    const row = checkRows(store, rig, Date.now())[check];
+    const row = (await checkRows(store, rig, Date.now()))[check];
     return row
       ? c.json(checkProgress(row, known.last_cursor))
       : c.json({ error: "not found" }, 404);
   });
-  app.get("/ui/rigs/:rig/model.json", (c) => {
+  app.get("/ui/rigs/:rig/model.json", async (c) => {
     const rig = c.req.param("rig");
-    return store.reportedRigs.list().some((x) => x.id === rig)
-      ? c.json(modelProgress(store, rig, Date.now()))
+    return (await store.reportedRigs.list()).some((x) => x.id === rig)
+      ? c.json(await modelProgress(store, rig, Date.now()))
       : c.json({ error: "not found" }, 404);
   });
 
   // A reset's Confirm and Cancel, from its rig's page or Needs you: back to the rig's page.
-  const resetRig = (id: number) => {
-    const r = store.fullResets.list(200).find((x) => Number(x.id) === id);
+  const resetRig = async (id: number) => {
+    const r = (await store.fullResets.list(200)).find((x) => Number(x.id) === id);
     return r ? `/ui/rigs/${encodeURIComponent(String(r.rig))}` : "/ui";
   };
   app.post("/ui/resets/:id/confirm", async (c) => {
     try {
-      confirmReset(store, Number(c.req.param("id")), "owner:ui");
+      await confirmReset(store, Number(c.req.param("id")), "owner:ui");
       await advanceResets({
         store,
         privateKeyPem: opts.privateKeyPem,
@@ -57,7 +57,7 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
     } catch (err) {
       return c.text(`refused: ${errorText(err)}`, 400);
     }
-    return c.redirect(resetRig(Number(c.req.param("id"))), 303);
+    return c.redirect(await resetRig(Number(c.req.param("id"))), 303);
   });
 
   // The owner's choice at a drain's deadline, on any rig (goal 173): the change now, stopping what
@@ -77,13 +77,13 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
     );
   });
 
-  app.post("/ui/resets/:id/cancel", (c) => {
+  app.post("/ui/resets/:id/cancel", async (c) => {
     try {
-      cancelReset(store, Number(c.req.param("id")), "owner:ui");
+      await cancelReset(store, Number(c.req.param("id")), "owner:ui");
     } catch (err) {
       return c.text(`refused: ${errorText(err)}`, 400);
     }
-    return c.redirect(resetRig(Number(c.req.param("id"))), 303);
+    return c.redirect(await resetRig(Number(c.req.param("id"))), 303);
   });
 
   // A stuck trial the owner leaves running (goal 143): its card stays away until it is stuck again.
@@ -104,8 +104,8 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
         : (kind === "quiet" || kind === "repeating") && !Number.isNaN(Date.parse(since)))
     )
       return c.text("refused: that is not a stuck trial's card", 400);
-    store.liveLines.leaveTrial({ rig, trial, kind, since, by: "owner:ui" });
-    store.auditLog.add("owner:ui", "trial_left", {
+    await store.liveLines.leaveTrial({ rig, trial, kind, since, by: "owner:ui" });
+    await store.auditLog.add("owner:ui", "trial_left", {
       rig,
       run: x.run.id,
       trial,
@@ -136,19 +136,20 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/rigs/:rig/restart", async (c) => {
     const rig = c.req.param("rig");
     // A rig on RunPod: RunPod's own driver, whatever THERMITE_LIFECYCLE says.
-    if (opts.runpodDriver?.serves(rig)) {
-      store.auditLog.add("owner:ui", "restart", { rig });
+    const runpod = opts.runpodDriver;
+    if (runpod && (await runpod.serves(rig))) {
+      await store.auditLog.add("owner:ui", "restart", { rig });
       const to = (k: "ok" | "error", m: string) =>
         c.redirect(`/ui/rigs/${encodeURIComponent(rig)}?${k}=${encodeURIComponent(m)}#pod`, 303);
       try {
-        await opts.runpodDriver.restart(rig, ["harness", "supervisor"], "owner:ui");
+        await runpod.restart(rig, ["harness", "supervisor"], "owner:ui");
       } catch (err) {
         return to("error", noted(errorText(err)));
       }
       return to("ok", "Restarting: the pod stops, then starts again.");
     }
     if (!opts.driver) return c.text("no deployment driver is configured", 409);
-    store.auditLog.add("owner:ui", "restart", { rig });
+    await store.auditLog.add("owner:ui", "restart", { rig });
     try {
       await opts.driver.restart(rig, ["harness", "supervisor"]);
     } catch (err) {
@@ -163,14 +164,14 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
     if (String(f.confirm ?? "") !== `reset ${rig}`)
       return c.text(`type "reset ${rig}" to confirm a full reset`, 400);
     // A rig on RunPod: its pod must run, with no stop, start or terminate under way.
-    const onRunpod = runpodResetRefusal(store, rig);
+    const onRunpod = await runpodResetRefusal(store, rig);
     if (onRunpod)
       return c.redirect(
         `/ui/rigs/${encodeURIComponent(rig)}?error=${encodeURIComponent(onRunpod)}#pod`,
         303,
       );
     try {
-      store.fullResets.create(rig, "owner:ui");
+      await store.fullResets.create(rig, "owner:ui");
       await advanceResets({
         store,
         privateKeyPem: opts.privateKeyPem,

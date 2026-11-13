@@ -222,7 +222,7 @@ try {
   const secrets = SecretBox.ephemeral();
   onBus = await startControlBus({ name: prefix, port: busPort, secrets });
   const { store } = onBus;
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(FAKE_RUNPOD_KEY),
@@ -255,7 +255,7 @@ try {
     { staleAfterMs: 180_000, control: buildInfo() },
   );
   followed = followControlBus(onBus, parts);
-  const app = createControlApi(
+  const app = await createControlApi(
     store,
     /** @type {import("../../src/control/api/context.ts").ControlTokens} */ ({
       admin: OWNER,
@@ -347,22 +347,27 @@ try {
   );
 
   // Enroll, then report.
-  const enrolled = await until("enrollment", () => store.tunnels.get(rig)?.enrolled_at);
+  const enrolled = await until(
+    "enrollment",
+    async () => (await store.tunnels.get(rig))?.enrolled_at,
+  );
   check("control enrolled the pod through the proxy and pinned its keys", Boolean(enrolled));
-  const keysBefore = store.tunnels.get(rig)?.pod_sign_public;
-  await until("report", () =>
-    store.reportedRigs.list().find((u) => u.id === rig && Date.parse(u.last_seen) > 0),
+  const keysBefore = (await store.tunnels.get(rig))?.pod_sign_public;
+  await until("report", async () =>
+    (await store.reportedRigs.list()).find((u) => u.id === rig && Date.parse(u.last_seen) > 0),
   );
   check(
     "the supervisor registered its keys through the proxy, and its reports reach control on the bus, through the pod's leaf node",
-    Boolean(store.busKeys.rigKey(rig)) && Boolean(store.tunnels.get(rig)?.leaf_address),
-    store.tunnels.get(rig)?.leaf_address ?? "no leaf address",
+    Boolean(await store.busKeys.rigKey(rig)) &&
+      Boolean((await store.tunnels.get(rig))?.leaf_address),
+    (await store.tunnels.get(rig))?.leaf_address ?? "no leaf address",
   );
   await until(
     "the supervisor's export figures",
-    () =>
-      /** @type {{ to?: string } | undefined} */ (store.reportedRigs.supervisor(rig)?.export)
-        ?.to === "control",
+    async () =>
+      /** @type {{ to?: string } | undefined} */ (
+        (await store.reportedRigs.supervisor(rig))?.export
+      )?.to === "control",
   );
   check("the supervisor sends its exports to control", true);
 
@@ -373,8 +378,8 @@ try {
     stopAsked.status === 200 && stopAsked.body.op?.kind === "stop",
     stopAsked.body.op_words ?? JSON.stringify(stopAsked.body),
   );
-  const stopped = await until("the stop", () => {
-    const v = rigs.view(rig);
+  const stopped = await until("the stop", async () => {
+    const v = await rigs.view(rig);
     return v?.status === "EXITED" && !v.op ? v : undefined;
   });
   // A stop exports each run that is not closed (goal 180); this pod runs none, so it asks for
@@ -382,7 +387,7 @@ try {
   check(
     "with no run open, the stop asked for no export, and the pod stopped once nothing waited",
     stopped.last_export === null && stopped.last_export_left === true,
-    `${stopped.last_export}: ${JSON.stringify(store.rigHistory.list(rig).at(-1)?.detail)}`,
+    `${stopped.last_export}: ${JSON.stringify((await store.rigHistory.list(rig)).at(-1)?.detail)}`,
   );
   check(
     "the pod's container stopped cleanly",
@@ -466,13 +471,15 @@ try {
     started.status === 200,
     started.body.op_words ?? started.body.status,
   );
-  await until("a report after the start", () =>
-    store.reportedRigs.list().find((u) => u.id === rig && Date.parse(u.last_seen) > startedAt),
+  await until("a report after the start", async () =>
+    (await store.reportedRigs.list()).find(
+      (u) => u.id === rig && Date.parse(u.last_seen) > startedAt,
+    ),
   );
   check(
     "the pod reports again with the keys and the enrollment on its volume",
-    store.tunnels.get(rig)?.enrolled_at === enrolled &&
-      store.tunnels.get(rig)?.pod_sign_public === keysBefore,
+    (await store.tunnels.get(rig))?.enrolled_at === enrolled &&
+      (await store.tunnels.get(rig))?.pod_sign_public === keysBefore,
   );
   // On its fresh disk, root restored the state from the snapshot: the ledger, the supervisor's
   // keys and enrollment, and the token between the two parts, which is not made again.
@@ -503,27 +510,29 @@ try {
     resetAsked.status === 201,
     resetAsked.body.error,
   );
-  const resetOf = () =>
-    store.fullResets.list(50).find((r) => Number(r.id) === resetAsked.body.reset);
+  const resetOf = async () =>
+    (await store.fullResets.list(50)).find((r) => Number(r.id) === resetAsked.body.reset);
   /** @param {...string} states */
-  const resetIn = (...states) => (states.includes(String(resetOf()?.state)) ? true : undefined);
-  await until("the reset's export", () => resetIn("awaiting_owner", "failed", "cancelled"));
+  const resetIn = async (...states) =>
+    states.includes(String((await resetOf())?.state)) ? true : undefined;
+  await until("the reset's export", async () => resetIn("awaiting_owner", "failed", "cancelled"));
   check(
     "the reset's export reached control, and the reset waits for the owner",
-    resetIn("awaiting_owner"),
-    String(resetOf()?.detail),
+    await resetIn("awaiting_owner"),
+    String((await resetOf())?.detail),
   );
-  const ledgerBefore = store.reportedRigs.list().find((u) => u.id === rig)?.ledger_id;
+  const ledgerBefore = (await store.reportedRigs.list()).find((u) => u.id === rig)?.ledger_id;
   await api(`/v1/resets/${resetAsked.body.reset}/confirm`, {});
-  await until("the wipe", () => resetIn("done", "failed"));
+  await until("the wipe", async () => resetIn("done", "failed"));
   const wipedAt = Date.now();
-  check("the rig wiped its state", resetIn("done"), String(resetOf()?.detail));
-  await until("a report from the wiped harness", () =>
-    store.reportedRigs.list().find((u) => u.id === rig && u.ledger_id !== ledgerBefore),
+  check("the rig wiped its state", await resetIn("done"), String((await resetOf())?.detail));
+  await until("a report from the wiped harness", async () =>
+    (await store.reportedRigs.list()).find((u) => u.id === rig && u.ledger_id !== ledgerBefore),
   );
-  await until("a report from the supervisor after the wipe", () =>
+  await until("a report from the supervisor after the wipe", async () =>
     Date.parse(
-      /** @type {string | undefined} */ (store.reportedRigs.supervisor(rig)?.received_at) ?? "",
+      /** @type {string | undefined} */ ((await store.reportedRigs.supervisor(rig))?.received_at) ??
+        "",
     ) > wipedAt
       ? true
       : undefined,
@@ -538,12 +547,12 @@ try {
     termAsked.status === 200 && termAsked.body.op?.kind === "terminate",
     termAsked.body.op_words ?? JSON.stringify(termAsked.body),
   );
-  const gone = await until("the terminate", () => {
-    const v = rigs.view(rig);
+  const gone = await until("the terminate", async () => {
+    const v = await rigs.view(rig);
     return v && !v.active ? v : undefined;
   });
   // The terminate's own export: full, made after it was asked, every file on control.
-  const exports = store.exports.ofRig(rig);
+  const exports = await store.exports.ofRig(rig);
   const lastFull = exports.find((e) => e.full && e.complete_at && e.created_at >= termAt);
   check(
     "a full export reached control before the pod was removed",
@@ -554,9 +563,14 @@ try {
     "the pod and its volume are gone",
     !has("container", container(pod)) && !has("volume", volume(pod)),
   );
-  check("the rig is retired: control no longer connects to it", Boolean(store.retired.get(rig)));
+  check(
+    "the rig is retired: control no longer connects to it",
+    Boolean(await store.retired.get(rig)),
+  );
 
-  const history = store.rigHistory.list(rig).map((e) => `${e.step}${e.ok ? "" : " (not ok)"}`);
+  const history = (await store.rigHistory.list(rig)).map(
+    (e) => `${e.step}${e.ok ? "" : " (not ok)"}`,
+  );
   const want = [
     "runpod_launched",
     "runpod_stopping",

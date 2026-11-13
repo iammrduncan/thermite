@@ -1,3 +1,4 @@
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { ingestReport } from "../control-store.ts";
 import { iso, Rig } from "./shared.ts";
@@ -80,13 +81,15 @@ export async function reportRigs(
   );
   await report(c1, { done: 0 }, hardware([], 8, 16_384));
   await report(g4, {}, hardware([card("judge", 5), card("dev", 6)], 16, 65_536));
-  store.db.prepare("update rig set last_seen = ? where id = ?").run(iso(2.3), "gpu-4");
+  sqliteBehind(store)
+    .db.prepare("update rig set last_seen = ? where id = ?")
+    .run(iso(2.3), "gpu-4");
   for (const [u, usd] of [
     ["gpu-1", 4.2],
     ["gpu-2", 3.1],
     ["gpu-3", 6.8],
   ] as const) {
-    store.reportedRigs.setSupervisor(u, {
+    await store.reportedRigs.setSupervisor(u, {
       export: { exports: 31, remote: true, last_push_at: iso(0.4) },
       advisors: {
         teacher_runs: 28,
@@ -121,7 +124,7 @@ export async function reportRigs(
       },
     });
   }
-  store.reportedRigs.setSupervisor("cpu-1", { export: { exports: 10, remote: false } });
+  await store.reportedRigs.setSupervisor("cpu-1", { export: { exports: 10, remote: false } });
 }
 
 /** A run of decode-speed on gpu-2 before the rig's full reset: two attempts, one a champion. */

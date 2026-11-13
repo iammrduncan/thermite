@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { transaction } from "../../common/sqlite.ts";
-import type { ControlStore } from "./index.ts";
+import type { SqliteStore } from "./sqlite.ts";
 
 /**
  * What every sub-store of control's store shares (goal 125, T6): each owns its tables and their
@@ -11,10 +11,10 @@ import type { ControlStore } from "./index.ts";
 export type Row = Record<string, SQLInputValue>;
 
 export abstract class StorePart {
-  protected readonly store: ControlStore;
+  protected readonly store: SqliteStore;
   protected readonly db: DatabaseSync;
 
-  constructor(store: ControlStore, db: DatabaseSync) {
+  constructor(store: SqliteStore, db: DatabaseSync) {
     this.store = store;
     this.db = db;
   }

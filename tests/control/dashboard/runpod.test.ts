@@ -9,6 +9,7 @@ import type { RunpodRigView } from "../../../src/control/runpod/rig-view.ts";
 import { DEFAULT_IDLE_STOP_MINUTES, RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { assigned } from "../../helpers/assignments.ts";
 import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
@@ -30,7 +31,7 @@ const IMAGE = "ghcr.io/example/thermite-rig:test-cuda";
 async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
   const store = controlStore();
   const secrets = SecretBox.ephemeral();
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(FAKE_RUNPOD_KEY),
@@ -64,7 +65,7 @@ async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
     now,
     privateKeyPem: keys.privateKeyPem,
   });
-  const { control: api } = controlOnly({
+  const { control: api } = await controlOnly({
     store,
     keys,
     tokens: { rigs: {} },
@@ -115,7 +116,7 @@ async function working(s: Awaited<ReturnType<typeof setup>>, form: Partial<typeo
     /^\/ui\/rigs\/rp-test-1\?ok=Launched/,
   );
   await s.advance();
-  assert.ok(s.store.tunnels.pin("rp-test-1", "sign", "box"));
+  assert.ok(await s.store.tunnels.pin("rp-test-1", "sign", "box"));
   await ingestReport(s.store, {
     rig: "rp-test-1",
     ledger_id: "l1",
@@ -133,7 +134,7 @@ async function working(s: Awaited<ReturnType<typeof setup>>, form: Partial<typeo
       },
     ],
   });
-  supervisorReports(s.store, "rp-test-1");
+  await supervisorReports(s.store, "rp-test-1");
 }
 
 describe("Launch on RunPod", () => {
@@ -248,8 +249,8 @@ describe("Launch on RunPod", () => {
     assert.equal(body.gpu.count, 2);
     assert.equal(body.cloud, "SECURE");
     assert.equal(body.mounts.persistent.size, 60);
-    assert.equal(s.store.tunnels.get("rp-test-1")?.config.env.THERMITE_JUDGE_GPUS, "1");
-    const v = s.rigs.view("rp-test-1");
+    assert.equal((await s.store.tunnels.get("rp-test-1"))?.config.env.THERMITE_JUDGE_GPUS, "1");
+    const v = await s.rigs.view("rp-test-1");
     assert.equal(v?.spend_limit_usd, 20);
     assert.equal(v?.idle_stop_minutes, null, "cleared: none");
     // Before its first report, its page shows the way there, the pod and its history.
@@ -299,7 +300,7 @@ describe("Launch on RunPod", () => {
       refused,
       /Not launched\.<\/b> RunPod has no 2 × .+ free on Secure cloud now: RunPod answered 400 .*No pod was started and nothing is billed\. Choose another GPU, or try again in a few minutes\./,
     );
-    assert.equal(full.rigs.view("rp-test-1"), undefined);
+    assert.equal(await full.rigs.view("rp-test-1"), undefined);
   });
 });
 
@@ -320,8 +321,8 @@ describe("a RunPod rig's page", () => {
       }),
       /ok=Saved\. No spend limit\. It stops after 30 minutes with no run at work\./,
     );
-    assert.equal(s.rigs.view("rp-test-1")?.idle_stop_minutes, 30);
-    assert.equal(s.rigs.view("rp-test-1")?.spend_limit_usd, null);
+    assert.equal((await s.rigs.view("rp-test-1"))?.idle_stop_minutes, 30);
+    assert.equal((await s.rigs.view("rp-test-1"))?.spend_limit_usd, null);
     assert.match(
       await s.post("/ui/rigs/rp-test-1/runpod/limits", {
         spend_limit_usd: "x",
@@ -360,15 +361,15 @@ describe("a RunPod rig's page", () => {
       page,
       /action="\/ui\/rigs\/rp-test-1\/runpod\/terminate">(?:(?!<\/form>).)*<button class="danger" disabled>Terminate<\/button>/s,
     );
-    harnessApplies(s.store, "rp-test-1", exportName(1));
-    exportOnControl(s.store, "rp-test-1", exportName(1));
-    supervisorReports(s.store, "rp-test-1");
+    await harnessApplies(s.store, "rp-test-1", exportName(1));
+    await exportOnControl(s.store, "rp-test-1", exportName(1));
+    await supervisorReports(s.store, "rp-test-1");
     await s.advance();
     await s.advance();
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
     // Stopped is not offline, whenever it last reported.
-    s.store.db
-      .prepare("update rig set last_seen = ? where id = ?")
+    sqliteBehind(s.store)
+      .db.prepare("update rig set last_seen = ? where id = ?")
       .run(new Date(Date.now() - 3_600_000).toISOString(), "rp-test-1");
     page = await s.page("/ui/rigs/rp-test-1");
     assert.match(page, /data-pod-state>Stopped</);
@@ -408,7 +409,7 @@ describe("a RunPod rig's page", () => {
       await s.post("/ui/rigs/rp-test-1/runpod/terminate", { confirm: "terminate rp-test-1" }),
       /ok=Terminating: its runs are paused, and the pod is removed only once every result has left it\./,
     );
-    assert.equal(s.rigs.view("rp-test-1")?.op?.kind, "terminate");
+    assert.equal((await s.rigs.view("rp-test-1"))?.op?.kind, "terminate");
     assert.match(
       await s.page(await s.post("/ui/rigs/rp-test-1/runpod/start")),
       /a terminate of rp-test-1 is under way: wait until it ends/,
@@ -424,9 +425,9 @@ describe("a RunPod rig's page", () => {
     const s = await setup();
     await working(s);
     await s.post("/ui/rigs/rp-test-1/runpod/terminate", { confirm: "terminate rp-test-1" });
-    harnessApplies(s.store, "rp-test-1", exportName(1));
+    await harnessApplies(s.store, "rp-test-1", exportName(1));
     await s.advance();
-    harnessRefusesExport(s.store, "rp-test-1");
+    await harnessRefusesExport(s.store, "rp-test-1");
     await s.advance();
     const rest = async () =>
       (await (
@@ -459,17 +460,17 @@ describe("a RunPod rig's page", () => {
     const s = await setup();
     await working(s);
     await s.post("/ui/rigs/rp-test-1/runpod/terminate", { confirm: "terminate rp-test-1" });
-    harnessApplies(s.store, "rp-test-1", exportName(1));
+    await harnessApplies(s.store, "rp-test-1", exportName(1));
     await s.advance();
-    harnessRefusesExport(s.store, "rp-test-1");
+    await harnessRefusesExport(s.store, "rp-test-1");
     await s.advance();
     await s.advance();
-    assert.match(String(s.rigs.view("rp-test-1")?.refusal), /^Not terminated/);
+    assert.match(String((await s.rigs.view("rp-test-1"))?.refusal), /^Not terminated/);
     // The step a full reset records when it starts (lifecycle.ts).
-    s.store.rigHistory.add("rp-test-1", "reset_requested", true, "asked by owner:ui");
+    await s.store.rigHistory.add("rp-test-1", "reset_requested", true, "asked by owner:ui");
     await s.advance();
-    assert.equal(s.rigs.view("rp-test-1")?.refusal, null);
-    assert.equal(s.rigs.view("rp-test-1")?.error, null);
+    assert.equal((await s.rigs.view("rp-test-1"))?.refusal, null);
+    assert.equal((await s.rigs.view("rp-test-1"))?.error, null);
     assert.doesNotMatch(
       await s.page("/ui/rigs/rp-test-1"),
       /<div class="flash bad" style="margin-top:12px">Not terminated/,
@@ -519,7 +520,7 @@ describe("a RunPod rig's page", () => {
     for (let i = 0; i < 80; i++) await s.advance();
     assert.equal(await idleLine(), "a run is at work", "40 minutes into the trial");
     assert.deepEqual(s.cloud.stops(), [], "never stopped with a run at work");
-    assert.equal(s.rigs.view("rp-test-1")?.op, null);
+    assert.equal((await s.rigs.view("rp-test-1"))?.op, null);
     // The run finishes: the idle time counts from then, as the idle stop counts it.
     await report(
       ["trial_finished", { lane: "lane-1", trial: "t-1", stopped: "done" }],
@@ -530,7 +531,7 @@ describe("a RunPod rig's page", () => {
     assert.match(String(await idleLine()), /^no run at work for \d+ s of 30 min$/);
     assert.ok((await rest()).idle_since);
     for (let i = 0; i < 60; i++) await s.advance();
-    assert.equal(s.rigs.view("rp-test-1")?.op?.why, "idle_stop");
+    assert.equal((await s.rigs.view("rp-test-1"))?.op?.why, "idle_stop");
   });
 
   test("restart from the page goes to RunPod, and its words say what it does to the runs", async () => {
@@ -551,9 +552,9 @@ describe("a RunPod rig's page", () => {
       /ok=Restarting: the pod stops, then starts again\./,
     );
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
-    assert.equal(s.rigs.view("rp-test-1")?.op?.kind, "restart");
+    assert.equal((await s.rigs.view("rp-test-1"))?.op?.kind, "restart");
     assert.deepEqual(
-      pendingOf(s.store, "rp-test-1").map((c) => c.kind),
+      (await pendingOf(s.store, "rp-test-1")).map((c) => c.kind),
       [],
       "a restart sends no pause_run and no export",
     );
@@ -574,9 +575,9 @@ describe("a stopped RunPod pod elsewhere on the dashboard", () => {
   async function stopped() {
     const s = await setup();
     await working(s);
-    assigned(s.store, "rp-test-1", "run-1", "camp");
+    await assigned(s.store, "rp-test-1", "run-1", "camp");
     await s.post("/ui/rigs/rp-test-1/runpod/stop");
-    harnessApplies(s.store, "rp-test-1", exportName(1));
+    await harnessApplies(s.store, "rp-test-1", exportName(1));
     // The harness reports the run the stop paused.
     await ingestReport(s.store, {
       rig: "rp-test-1",
@@ -595,13 +596,13 @@ describe("a stopped RunPod pod elsewhere on the dashboard", () => {
         },
       ],
     });
-    exportOnControl(s.store, "rp-test-1", exportName(1));
-    supervisorReports(s.store, "rp-test-1");
+    await exportOnControl(s.store, "rp-test-1", exportName(1));
+    await supervisorReports(s.store, "rp-test-1");
     await s.advance();
     await s.advance();
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
-    s.store.db
-      .prepare("update rig set last_seen = ? where id = ?")
+    sqliteBehind(s.store)
+      .db.prepare("update rig set last_seen = ? where id = ?")
       .run(new Date(Date.now() - 3_600_000).toISOString(), "rp-test-1");
     return s;
   }

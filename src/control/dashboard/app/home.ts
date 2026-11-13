@@ -1,3 +1,4 @@
+import { flatMapInTurn, mapInTurn } from "../../../common/in-turn.ts";
 import type {
   EventRow,
   HomeAnswer,
@@ -86,10 +87,15 @@ const introText = (s: string) => s.replace(/^(research )?trial on [^:]+: /, "");
  * What each agent of a run does now, one line each: every lane, the final writer, the planner
  * when it waits, and the judge. The pages' run brief says the same (ui/operator/brief.ts).
  */
-function nowLines(store: ControlStore, u: RigView, r: RunView, now: number): NowLine[] {
+async function nowLines(
+  store: ControlStore,
+  u: RigView,
+  r: RunView,
+  now: number,
+): Promise<NowLine[]> {
   const out: NowLine[] = [];
   const running = r.status === "running";
-  const trials = store.liveLines.trials(u.id).filter((t) => t.run === r.id);
+  const trials = (await store.liveLines.trials(u.id)).filter((t) => t.run === r.id);
   const lanes = [
     ...new Set([
       ...Object.keys(r.at_work),
@@ -152,8 +158,7 @@ function nowLines(store: ControlStore, u: RigView, r: RunView, now: number): Now
       tone: "working",
     });
   // The planner, only when it waits for something.
-  const planner = store.liveLines
-    .tail(u.id, 40, "planner")
+  const planner = (await store.liveLines.tail(u.id, 40, "planner"))
     .filter((l) => !l.run || l.run === r.id)
     .at(-1);
   if (running && planner && planner.kind === "status" && (!r.epoch || planner.at > r.epoch.at))
@@ -182,13 +187,13 @@ function nowLines(store: ControlStore, u: RigView, r: RunView, now: number): Now
 }
 
 /** A run as a row: its state, its result so far, and what each of its agents does now. */
-export function runRow(
+export async function runRow(
   store: ControlStore,
   u: RigView,
   r: RunView,
   now: number,
   waiting: number,
-): RunRow {
+): Promise<RunRow> {
   return {
     campaign: runCampaign(r),
     run: r.id,
@@ -218,7 +223,7 @@ export function runRow(
     },
     champion: currentChampion(r)?.seq ?? null,
     started_at: r.created_at,
-    now: nowLines(store, u, r, now),
+    now: await nowLines(store, u, r, now),
     needs: waiting,
   };
 }
@@ -259,12 +264,12 @@ export function eventRows(items: { u: RigView; e: StoredEvent }[], limit: number
 }
 
 /** The navigation's campaigns, with each one's state and folder; archived ones are left out. */
-function navCampaigns(
+async function navCampaigns(
   store: ControlStore,
   vs: RigView[],
   archived: ReadonlySet<string>,
-): { campaigns: NavCampaign[]; folders: string[] } {
-  const folders = store.folders.list();
+): Promise<{ campaigns: NavCampaign[]; folders: string[] }> {
+  const folders = await store.folders.list();
   const folderOf = new Map(folders.flatMap((f) => f.campaigns.map((c) => [c, f.name] as const)));
   const campaigns = campaignViews(vs)
     .filter((k) => !archived.has(k.name))
@@ -280,20 +285,20 @@ function navCampaigns(
 }
 
 /** Home, from the rigs' views and what waits for the owner (the caller leaves out the archived). */
-export function homeAnswer(
+export async function homeAnswer(
   store: ControlStore,
   vs: RigView[],
   feed: Need[],
   archived: ReadonlySet<string>,
   now: number,
-): HomeAnswer {
+): Promise<HomeAnswer> {
   const shown = (r: RunView) => !archived.has(runCampaign(r));
-  const atWork = vs.flatMap((u) =>
-    u.runs
-      .filter((r) => r.status === "running" && shown(r))
-      .map((r) =>
+  const atWork = await flatMapInTurn(vs, async (u) =>
+    mapInTurn(
+      u.runs.filter((r) => r.status === "running" && shown(r)),
+      async (r) =>
         runRow(store, u, r, now, feed.filter((n) => n.rig === u.id && n.run === r.id).length),
-      ),
+    ),
   );
   const happened = eventRows(
     vs.flatMap((u) =>
@@ -323,6 +328,6 @@ export function homeAnswer(
     needs: feed.map((n, i) => needRow(vs, n, i)),
     at_work: atWork,
     happened,
-    nav: navCampaigns(store, vs, archived),
+    nav: await navCampaigns(store, vs, archived),
   };
 }

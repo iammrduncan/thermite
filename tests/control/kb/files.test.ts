@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { ControlDisk } from "../../../src/control/disk.ts";
 import { followKbFiles, KbFiles } from "../../../src/control/kb/index.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore } from "../../../src/control/store/index.ts";
 import {
   KB_FILE_CHUNK_BYTES,
   KB_FILE_HEADERS,
@@ -32,7 +33,7 @@ import { FakeBus } from "../../helpers/fake-bus.ts";
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 
 async function setup() {
-  const store = new ControlStore(":memory:");
+  const store = openControlStore(":memory:");
   const bus = new FakeBus();
   await bus.makeStream(KB_FILES_STREAM_CONFIG);
   const files = new KbFiles(mkdtempSync(join(tmpdir(), "thermite-kb-files-")), store);
@@ -57,8 +58,8 @@ async function setup() {
     for (let i = 0; i < kbFileChunks(bytes.length); i++) await put(rig, bytes, i);
   };
   const take = () => followKbFiles(bus, files);
-  const refused = () =>
-    store.auditLog.list(100).filter((a) => a.action === "kb_file_refused").length;
+  const refused = async () =>
+    (await store.auditLog.list(100)).filter((a) => a.action === "kb_file_refused").length;
   return { store, bus, files, put, putAll, take, refused };
 }
 
@@ -69,7 +70,7 @@ describe("control's files of the knowledge base", () => {
     await s.putAll("rig-a", bytes);
     await s.take();
     assert.deepEqual(readFileSync(s.files.path(sha(bytes))), bytes);
-    assert.equal(s.store.kb().files.has(sha(bytes)), true);
+    assert.equal(await s.store.kb().files.has(sha(bytes)), true);
     assert.equal(s.bus.kept.length, 0, "every chunk taken");
     assert.deepEqual(readdirSync(join(s.files.dir, ".partial")), []);
   });
@@ -82,7 +83,7 @@ describe("control's files of the knowledge base", () => {
     await s.putAll("rig-a", bytes);
     await s.take();
     assert.equal(s.files.kept, 1);
-    const rows = s.store.db.prepare("select sha256, bytes from kb_file").all();
+    const rows = sqliteBehind(s.store).db.prepare("select sha256, bytes from kb_file").all();
     assert.deepEqual(
       rows.map((r) => ({ ...r })),
       [{ sha256: sha(bytes), bytes: bytes.length }],
@@ -92,7 +93,7 @@ describe("control's files of the knowledge base", () => {
     const empty = Buffer.alloc(0);
     await s.putAll("rig-a", empty);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(empty)), true);
+    assert.equal(await s.store.kb().files.has(sha(empty)), true);
   });
 
   test("a chunk again is passed over; a gap drops the file until it is put again whole", async () => {
@@ -101,20 +102,20 @@ describe("control's files of the knowledge base", () => {
     await s.put("rig-a", bytes, 0);
     await s.put("rig-a", bytes, 0);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(bytes)), false, "half a file is not kept");
+    assert.equal(await s.store.kb().files.has(sha(bytes)), false, "half a file is not kept");
     // A chunk handed again (its ack lost) changes nothing; then the last one completes it.
     await s.put("rig-a", bytes, 1);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(bytes)), true);
+    assert.equal(await s.store.kb().files.has(sha(bytes)), true);
     // A file whose first chunk never came: refused, and nothing kept.
     const other = randomBytes(KB_FILE_CHUNK_BYTES + 3);
     await s.put("rig-a", other, 1);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(other)), false);
-    assert.equal(s.refused(), 1);
+    assert.equal(await s.store.kb().files.has(sha(other)), false);
+    assert.equal(await s.refused(), 1);
     await s.putAll("rig-a", other);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(other)), true);
+    assert.equal(await s.store.kb().files.has(sha(other)), true);
   });
 
   test("bytes that are not their name are refused, said in the audit log, and kept nowhere", async () => {
@@ -123,10 +124,10 @@ describe("control's files of the knowledge base", () => {
     const name = "f".repeat(64);
     await s.put("rig-a", bytes, 0, name);
     await s.take();
-    assert.equal(s.store.kb().files.has(name), false);
+    assert.equal(await s.store.kb().files.has(name), false);
     assert.ok(!existsSync(s.files.path(name)));
-    assert.equal(s.refused(), 1);
-    const said = s.store.auditLog.list(10).find((a) => a.action === "kb_file_refused");
+    assert.equal(await s.refused(), 1);
+    const said = (await s.store.auditLog.list(10)).find((a) => a.action === "kb_file_refused");
     assert.match(JSON.stringify(said), /have the SHA-256 [0-9a-f]{64}, not its name/);
   });
 
@@ -135,10 +136,10 @@ describe("control's files of the knowledge base", () => {
     const bytes = Buffer.from("kept, then control stopped");
     await s.putAll("rig-a", bytes);
     await s.take();
-    s.store.db.prepare("delete from kb_file").run();
+    sqliteBehind(s.store).db.prepare("delete from kb_file").run();
     await s.putAll("rig-a", bytes);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(bytes)), true);
+    assert.equal(await s.store.kb().files.has(sha(bytes)), true);
     assert.equal(s.files.kept, 1, "not written again");
   });
 
@@ -169,13 +170,13 @@ describe("control's files of the knowledge base", () => {
     const bytes = Buffer.from("written once there is room");
     await s.putAll("rig-a", bytes);
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(bytes)), false);
+    assert.equal(await s.store.kb().files.has(sha(bytes)), false);
     assert.equal(s.bus.kept.length, 1, "the chunk waits on the stream");
     assert.ok(!existsSync(join(s.files.dir, ".partial")), "nothing written");
     free = 50;
     await disk.check();
     await s.take();
-    assert.equal(s.store.kb().files.has(sha(bytes)), true);
+    assert.equal(await s.store.kb().files.has(sha(bytes)), true);
     assert.equal(s.bus.kept.length, 0);
   });
 
@@ -184,15 +185,15 @@ describe("control's files of the knowledge base", () => {
     const kb = s.store.kb();
     const [named, older, orphan, young] = [0, 1, 2, 3].map(() => randomBytes(100));
     const day = "2026-10-28T00:00:00.000Z";
-    for (const f of [named, older, orphan]) kb.files.kept(sha(f as Buffer), 100, day);
-    kb.files.kept(sha(young as Buffer), 100, "2026-10-30T00:00:00.000Z");
+    for (const f of [named, older, orphan]) await kb.files.kept(sha(f as Buffer), 100, day);
+    await kb.files.kept(sha(young as Buffer), 100, "2026-10-30T00:00:00.000Z");
     for (const f of [named, older, orphan, young]) {
       const path = s.files.path(sha(f as Buffer));
       mkdirSync(join(path, ".."), { recursive: true });
       writeFileSync(path, f as Buffer);
     }
     // An item names `named` now, and named `older` in its first version only.
-    kb.index(
+    await kb.index(
       { rig: "rig-a", ledger: "ledger-a" },
       {
         at: "2026-10-28T00:00:00.000Z",
@@ -208,7 +209,7 @@ describe("control's files of the knowledge base", () => {
       type: "application/pdf",
       bytes: 100,
     });
-    const write = (version: number, b: Buffer) =>
+    const write = async (version: number, b: Buffer) =>
       kb.write(
         { rig: "rig-a", ledger: "ledger-a", run: "gs-1", event: 10 + version, at: day },
         {
@@ -221,27 +222,27 @@ describe("control's files of the knowledge base", () => {
           file: file(b),
         },
       );
-    assert.equal(write(1, older as Buffer), undefined);
-    assert.equal(write(2, named as Buffer), undefined);
+    assert.equal(await write(1, older as Buffer), undefined);
+    assert.equal(await write(2, named as Buffer), undefined);
     const now = Date.parse("2026-10-30T12:00:00.000Z");
     // 0, the default: every file is kept.
-    assert.equal(s.files.removeOrphans(0, now), 0);
-    assert.equal(kb.files.has(sha(orphan as Buffer)), true);
+    assert.equal(await s.files.removeOrphans(0, now), 0);
+    assert.equal(await kb.files.has(sha(orphan as Buffer)), true);
     // 24 hours: the file kept two days ago that no version names goes, with its bytes.
-    assert.equal(s.files.removeOrphans(24, now), 1);
-    assert.equal(kb.files.has(sha(orphan as Buffer)), false);
+    assert.equal(await s.files.removeOrphans(24, now), 1);
+    assert.equal(await kb.files.has(sha(orphan as Buffer)), false);
     assert.equal(existsSync(s.files.path(sha(orphan as Buffer))), false);
     for (const f of [named, older, young]) {
-      assert.equal(kb.files.has(sha(f as Buffer)), true);
+      assert.equal(await kb.files.has(sha(f as Buffer)), true);
       assert.equal(existsSync(s.files.path(sha(f as Buffer))), true);
     }
     assert.deepEqual(
-      s.store.auditLog.list(10, { action: "kb_file_removed" }).map((e) => e.body),
+      (await s.store.auditLog.list(10, { action: "kb_file_removed" })).map((e) => e.body),
       [{ sha256: sha(orphan as Buffer), bytes: 100, stored_at: day, hours: 24 }],
     );
     // Looked at again, nothing more goes; the young one goes once it is old enough.
-    assert.equal(s.files.removeOrphans(24, now), 0);
-    assert.equal(s.files.removeOrphans(24, now + 24 * 3_600_000), 1);
-    assert.equal(kb.files.has(sha(young as Buffer)), false);
+    assert.equal(await s.files.removeOrphans(24, now), 0);
+    assert.equal(await s.files.removeOrphans(24, now + 24 * 3_600_000), 1);
+    assert.equal(await kb.files.has(sha(young as Buffer)), false);
   });
 });

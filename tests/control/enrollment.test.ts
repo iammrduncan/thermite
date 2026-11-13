@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { notReadWords } from "../../src/control/settings.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import { fingerprint } from "../../src/control/store/index.ts";
 import { ADMIN, controlOnly } from "../helpers/control-stack.ts";
 
 const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };
 
-function setup() {
-  const { keys, store, control } = controlOnly({ tokens: { rigs: {} } });
+async function setup() {
+  const { keys, store, control } = await controlOnly({ tokens: { rigs: {} } });
   const enroll = (rig: string, headers: Record<string, string> = owner) =>
     control.request("/v1/rigs", { method: "POST", headers, body: JSON.stringify({ rig }) });
   // A rig's call with its token: a kit control does not keep, so 404 once the token works.
@@ -21,7 +22,7 @@ function setup() {
 
 describe("rig enrollment through control", () => {
   test("control makes a rig's token, shows it once, and keeps only its hash", async () => {
-    const { keys, store, control, enroll, asRig } = setup();
+    const { keys, store, control, enroll, asRig } = await setup();
     // Before enrollment the rig is unknown.
     assert.equal((await asRig("gpu-host-1-0", "anything")).status, 401);
     const res = await enroll("gpu-host-1-0");
@@ -39,9 +40,9 @@ describe("rig enrollment through control", () => {
     // The new token works at once: no restart, no file.
     assert.equal((await asRig("gpu-host-1-0", out.token)).status, 404);
     assert.equal((await asRig("gpu-host-1-0", "wrong-token")).status, 401);
-    assert.ok(store.enrollments.knownRig("gpu-host-1-0"));
+    assert.ok(await store.enrollments.knownRig("gpu-host-1-0"));
     // Control's database holds the hash, never the token.
-    const dump = JSON.stringify(store.db.prepare("select * from rig_token").all());
+    const dump = JSON.stringify(sqliteBehind(store).db.prepare("select * from rig_token").all());
     assert.ok(!dump.includes(out.token));
     // The rigs list shows it.
     const list = (await (await control.request("/v1/rigs", { headers: owner })).json()) as {
@@ -56,7 +57,7 @@ describe("rig enrollment through control", () => {
   });
 
   test("names are checked, and a rig is enrolled once", async () => {
-    const { enroll } = setup();
+    const { enroll } = await setup();
     for (const bad of ["A", "x", "-a", "a-", "has space", "a".repeat(41), "a_b"])
       assert.equal((await enroll(bad)).status, 400, bad);
     assert.equal((await enroll("ok-1")).status, 201);
@@ -77,7 +78,7 @@ describe("rig enrollment through control", () => {
   });
 
   test("a new token replaces the old one at once; a retired rig is shut out", async () => {
-    const { enroll, asRig, post, store } = setup();
+    const { enroll, asRig, post, store } = await setup();
     const first = ((await (await enroll("cpu-1")).json()) as { token: string }).token;
     const rotated = await post("/v1/rigs/cpu-1/token");
     assert.equal(rotated.status, 200);
@@ -87,7 +88,7 @@ describe("rig enrollment through control", () => {
     assert.equal((await asRig("cpu-1", second)).status, 404);
     assert.equal((await post("/v1/rigs/cpu-1/retire")).status, 200);
     assert.equal((await asRig("cpu-1", second)).status, 401);
-    assert.equal(store.enrollments.knownRig("cpu-1"), false);
+    assert.equal(await store.enrollments.knownRig("cpu-1"), false);
     assert.equal((await post("/v1/rigs/cpu-1/retire")).status, 404);
     assert.equal((await post("/v1/rigs/cpu-1/token")).status, 404);
     // Enrolled again, it gets a fresh token; the old ones stay dead.
@@ -95,7 +96,7 @@ describe("rig enrollment through control", () => {
     assert.equal((await asRig("cpu-1", second)).status, 401);
     assert.equal((await asRig("cpu-1", third)).status, 404);
     // Every change is audited.
-    const audit = JSON.stringify(store.db.prepare("select action from audit").all());
+    const audit = JSON.stringify(sqliteBehind(store).db.prepare("select action from audit").all());
     for (const a of ["rig_enrolled", "rig_token_rotated", "rig_retired"])
       assert.ok(audit.includes(a), a);
   });

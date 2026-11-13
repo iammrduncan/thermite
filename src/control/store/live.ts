@@ -37,7 +37,140 @@ const entryOf = (r: Row): LiveEntry & { id: number; signed: boolean } => ({
 
 const OF_RUN = "(run = ? or (run is null and source in ('judge', 'supervisor')))";
 
-export class LiveLines extends StorePart {
+export interface LiveLines {
+  /** Tells `fn` each time a rig has new lines, until the function it returns is called. */
+  watch(fn: (rig: string) => void): () => void;
+  /**
+   * Stores live-log lines (duplicates by log id and sequence are ignored) and keeps only the
+   * newest `keep` lines of the rig, and each open trial's newest OPEN_TRIAL_LINES: a trial that
+   * writes many lines can't push out another's (goal 143). The open trials are those the rig's
+   * last report lists. Then tells the watchers, when it stored any.
+   */
+  add(
+    rig: string,
+    logId: string,
+    entries: LiveEntry[],
+    signed: boolean,
+    keep?: number,
+  ): Promise<number>;
+  /**
+   * The owner leaves a stuck trial running (goal 143): its card stays away while it is stuck
+   * since the same time. Keeps the newest TRIALS_LEFT_MAX of them.
+   */
+  leaveTrial(o: {
+    rig: string;
+    trial: string;
+    kind: string;
+    since: string;
+    by: string;
+  }): Promise<void>;
+  /** Since when the trial was stuck when the owner left it running; null: never left. */
+  trialLeft(rig: string, trial: string, kind: string): Promise<string | null>;
+  /**
+   * Live lines of a rig after `after` (control's own ids), oldest first; one source if given, and
+   * of one run if given too (an advisor's source holds every run's lines, goal 218).
+   */
+  after(
+    rig: string,
+    after: number,
+    limit: number,
+    source?: string,
+    run?: string,
+  ): Promise<(LiveEntry & { id: number; signed: boolean })[]>;
+  /**
+   * Every rig's live lines after `after` (control's own ids, one count for every rig), oldest
+   * first, each with its rig: Live's Everything (goal 188).
+   */
+  everywhere(
+    after: number,
+    limit: number,
+  ): Promise<(LiveEntry & { id: number; signed: boolean; rig: string })[]>;
+  /** Every rig's newest live lines, newest last, each with its rig. */
+  everywhereTail(
+    limit: number,
+  ): Promise<(LiveEntry & { id: number; signed: boolean; rig: string })[]>;
+  /** How many lines of every rig there are after `after`. */
+  everywhereCount(after: number): Promise<number>;
+  /**
+   * One run's live lines after `after`, oldest first: its trials', planner's and judge's lines,
+   * plus the judge's and the supervisor's lines that name no run.
+   */
+  ofRun(
+    rig: string,
+    run: string,
+    after: number,
+    limit: number,
+    ids?: number[],
+  ): Promise<(LiveEntry & { id: number; signed: boolean })[]>;
+  /**
+   * The supervisor's Live lines about a run's reviews (goal 116), oldest first: each line that
+   * starts "review N", such as each reviewer's answer, a failed try's error and the outcome. They
+   * are unsigned, and kept only while the rig's live log keeps them (its newest 20,000 lines).
+   */
+  reviewLines(rig: string, run: string): Promise<{ review: number; at: string; text: string }[]>;
+  /**
+   * Each advisor's newest Live line in a run that says its call had no answer (goal 193), by its
+   * source (`advisor:teacher-2`): "teacher-2 has no answer after 6 min: …". Kept only while the
+   * rig's live log keeps it.
+   */
+  noAnswers(rig: string, run: string, sources: readonly string[]): Promise<Map<string, LiveSaid>>;
+  /** One run's newest live lines, newest last (for the Live page's first view). */
+  runTail(
+    rig: string,
+    run: string,
+    limit: number,
+  ): Promise<(LiveEntry & { id: number; signed: boolean })[]>;
+  /** How many of one run's lines there are after `after`, as ofRun reads them. */
+  countOfRun(rig: string, run: string, after: number): Promise<number>;
+  /** How many lines of a rig there are after `after`; of one source if given, as after() reads. */
+  count(rig: string, after: number, source?: string): Promise<number>;
+  /** The newest live lines of a rig, newest last (for a page's first view). */
+  tail(
+    rig: string,
+    limit: number,
+    source?: string,
+  ): Promise<(LiveEntry & { id: number; signed: boolean })[]>;
+  /** Each live source of a rig with its newest line (sessions to pick from). */
+  sources(rig: string): Promise<
+    {
+      source: string;
+      lane: string | null;
+      run: string | null;
+      last_at: string;
+      lines: number;
+      ended: boolean;
+    }[]
+  >;
+  /**
+   * Each advisor with lines in one run of a rig's live log (goal 218): its source, its first and
+   * newest line's time, how many lines, and its newest line. Newest first.
+   */
+  advisors(
+    rig: string,
+    run: string,
+  ): Promise<{ source: string; first_at: string; last_at: string; lines: number; last: string }[]>;
+  /**
+   * Each worker trial's session in a rig's live log: when it started and what it was asked to do
+   * (its first status line: "trial on lane-1: direction, focus"), what it did last (its newest tool
+   * call), and how it ended. Newest first.
+   */
+  trials(rig: string): Promise<
+    {
+      source: string;
+      lane: string | null;
+      run: string | null;
+      started_at: string;
+      last_at: string;
+      intro: string;
+      last_tool: string | null;
+      last_tool_at: string | null;
+      ended: string | null;
+    }[]
+  >;
+}
+
+/** LiveLines on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteLiveLines extends StorePart {
   /** Told of each rig that has new lines, once they are stored: the Live pages' pushes. */
   private readonly watchers = new Set<(rig: string) => void>();
 

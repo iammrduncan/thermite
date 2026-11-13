@@ -7,7 +7,8 @@ import { describe, test } from "node:test";
 import type { Outgoing } from "../../src/common/bus/index.ts";
 import { copiesOf } from "../../src/common/db-copy.ts";
 import { MOVE_CHECK_SAMPLE } from "../../src/control/events/index.ts";
-import { ControlStore, STORE_VERSION } from "../../src/control/store/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { openControlStore, STORE_VERSION } from "../../src/control/store/index.ts";
 import { sentence } from "../../src/control/ui/words/index.ts";
 import { keepFolds } from "../../src/control/views/index.ts";
 import { canonicalJson } from "../../src/core/canonical.ts";
@@ -61,11 +62,11 @@ const keptCopies = (path: string) =>
   readdirSync(join(path, "..")).filter((f) => f.startsWith("control.db.") && f.endsWith(".kept"));
 
 /** A store from before step 4's publish, at version 11, with these rows in its events table. */
-function oldStore(rows: OldRow[], path = fresh()): string {
-  const s = new ControlStore(path);
-  withEventsTable(s.db);
-  keepOldRows(s.db, rows);
-  s.db.close();
+async function oldStore(rows: OldRow[], path = fresh()): Promise<string> {
+  const s = openControlStore(path);
+  withEventsTable(sqliteBehind(s).db);
+  keepOldRows(sqliteBehind(s).db, rows);
+  await s.close();
   return path;
 }
 
@@ -143,7 +144,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       { rig: "rig-a", ledger: "la-2", id: 1, kind: "rig_check_started" },
       { rig: "rig-a", ledger: "la-2", id: 2, kind: "trial_started", subject: "t-3", run: "sort-1" },
     ];
-    const path = oldStore(rows);
+    const path = await oldStore(rows);
     const store = controlStore(path);
     await applied(store);
     const { bus, move } = busOf(store);
@@ -164,9 +165,11 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(move.published, 8);
     assert.equal(move.stopped, null);
     // The table and the rig's last cursor went, in store migration 12.
-    assert.equal(hasTable(store.db), false);
-    assert.equal(version(store.db), STORE_VERSION);
-    const rigCols = store.db.prepare("pragma table_info(rig)").all() as { name: string }[];
+    assert.equal(hasTable(sqliteBehind(store).db), false);
+    assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
+    const rigCols = sqliteBehind(store).db.prepare("pragma table_info(rig)").all() as {
+      name: string;
+    }[];
     assert.ok(!rigCols.some((c) => c.name === "last_cursor"));
     // The copy before it is kept outside the rotation, and holds the table.
     assert.ok(move.copy?.endsWith(".kept"), move.copy);
@@ -177,10 +180,10 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(dropWaits(copy), true);
     copy.close();
     // Control's records came from the stream: each ledger's held cursor, the registry.
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "la-1"), 4);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "la-2"), 2);
-    assert.equal(store.reportedRigs.heldCursor("rig-b", "lb-1"), 2);
-    assert.deepEqual(store.reportedRigs.reportRow("rig-a"), {
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "la-1"), 4);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "la-2"), 2);
+    assert.equal(await store.reportedRigs.heldCursor("rig-b", "lb-1"), 2);
+    assert.deepEqual(await store.reportedRigs.reportRow("rig-a"), {
       ledger_id: "la-2",
       cursor: 2,
       report_at: "2026-10-29T07:00:00.000Z",
@@ -208,7 +211,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       held.map((e) => e.seq),
       [1, 2, 3, 6, 7, 8, 9],
     );
-    const recent = keepFolds(store).view("rig-a", { staleAfterMs: 600_000 })?.recent ?? [];
+    const recent = (await keepFolds(store).view("rig-a", { staleAfterMs: 600_000 }))?.recent ?? [];
     assert.deepEqual(
       recent.map((e) => e.seq),
       [9, 8, 7],
@@ -216,7 +219,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
     );
     // Started again: nothing to move, nothing published, no copy made.
     closeBus(store);
-    store.db.close();
+    await store.close();
     const again = controlStore(path, bus);
     await applied(again);
     assert.equal(busOf(again).move.published, 0);
@@ -258,8 +261,8 @@ describe("a store's events table, moved to the events stream once, and dropped",
     );
     assert.equal(keptCopies(path).length, 1);
     assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v37\..*\.kept$/);
-    assert.equal(hasTable(store.db), false);
-    assert.equal(version(store.db), STORE_VERSION);
+    assert.equal(hasTable(sqliteBehind(store).db), false);
+    assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
     const kept = onStream(busOf(store).bus);
     assert.deepEqual(
       kept.map((k) => [k.headers[EVENT_HEADERS.seq], k.subject]),
@@ -274,15 +277,17 @@ describe("a store's events table, moved to the events stream once, and dropped",
     );
     // The migrations that read the table ran on it before it went: the registry has both runs,
     // the one named before the rename too.
-    assert.equal(store.runRegistry.createdOn("gemv-1", "rig-a")?.campaign, "gemv");
-    assert.equal(store.runRegistry.createdOn("gemv-0", "rig-a")?.campaign, "gemv");
-    const folder = store.db.prepare("select name from campaign_folder").get() as { name: string };
+    assert.equal((await store.runRegistry.createdOn("gemv-1", "rig-a"))?.campaign, "gemv");
+    assert.equal((await store.runRegistry.createdOn("gemv-0", "rig-a"))?.campaign, "gemv");
+    const folder = sqliteBehind(store).db.prepare("select name from campaign_folder").get() as {
+      name: string;
+    };
     assert.equal(folder.name, "speed", "and keeps what v0.1.0 kept");
   });
 
   test("stopped part way, then started again: every row once, in order", async () => {
     const rows = notes("rig-a", "l-1", 1, 2500);
-    const path = oldStore(rows);
+    const path = await oldStore(rows);
     const bus = new FakeBus();
     // The server goes away after the first two batches.
     bus.failAfter = 2;
@@ -291,9 +296,9 @@ describe("a store's events table, moved to the events stream once, and dropped",
     await until(() => move.waiting !== null, "the move waits");
     assert.equal(onStream(bus).length, 2000);
     assert.match(String(move.waiting), /no ack/);
-    assert.equal(hasTable(first.db), true, "the table stays");
+    assert.equal(hasTable(sqliteBehind(first).db), true, "the table stays");
     closeBus(first);
-    first.db.close();
+    await first.close();
     // Control starts again, and the server is back: it goes on after the stream's last row.
     bus.failing = false;
     bus.failAfter = undefined;
@@ -301,14 +306,14 @@ describe("a store's events table, moved to the events stream once, and dropped",
     await applied(again);
     assert.equal(busOf(again).move.published, 500);
     assertMoved(bus, numbered(rows));
-    assert.equal(hasTable(again.db), false);
+    assert.equal(hasTable(sqliteBehind(again).db), false);
   });
 
   test("a lost ack, and a batch the server stores late: no row moved twice", async () => {
     const lost = new FakeBus();
     lost.loseAck = true;
     const rows = notes("rig-a", "l-1", 1, 1500);
-    const a = controlStore(oldStore(rows), lost);
+    const a = controlStore(await oldStore(rows), lost);
     await applied(a);
     assertMoved(lost, numbered(rows));
     assert.equal(busOf(a).move.published, 500, "the lost ack's batch counts as not published");
@@ -327,11 +332,11 @@ describe("a store's events table, moved to the events stream once, and dropped",
       if (calls === 2) await publish(held);
       return publish(batch);
     };
-    const b = controlStore(oldStore(rows), late);
+    const b = controlStore(await oldStore(rows), late);
     await applied(b);
     assertMoved(late, numbered(rows));
     assert.equal(calls, 3, "the failed one, the refused one, then the rest after the late batch");
-    assert.equal(hasTable(b.db), false);
+    assert.equal(hasTable(sqliteBehind(b).db), false);
   });
 
   test("the knowledge base's cursors: across the table's gaps, nothing indexed twice or skipped", async () => {
@@ -345,10 +350,10 @@ describe("a store's events table, moved to the events stream once, and dropped",
       body: { id, by: "lane-1", kind: "lesson", text },
     });
     const path = fresh();
-    const s = new ControlStore(path);
-    assigned(s, "rig-a", "gs-1", "gemv");
-    withEventsTable(s.db);
-    keepOldRows(s.db, [
+    const s = openControlStore(path);
+    await assigned(s, "rig-a", "gs-1", "gemv");
+    withEventsTable(sqliteBehind(s).db);
+    keepOldRows(sqliteBehind(s).db, [
       {
         rig: "rig-a",
         ledger: "l-1",
@@ -361,8 +366,8 @@ describe("a store's events table, moved to the events stream once, and dropped",
       note(2, "first lesson"),
     ]);
     // The table's seq jumps: its rows' places in the stream are not their seqs after this.
-    s.db.exec("update sqlite_sequence set seq = seq + 10 where name = 'rig_event'");
-    keepOldRows(s.db, [note(3, "second lesson"), note(4, "third lesson")]);
+    sqliteBehind(s).db.exec("update sqlite_sequence set seq = seq + 10 where name = 'rig_event'");
+    keepOldRows(sqliteBehind(s).db, [note(3, "second lesson"), note(4, "third lesson")]);
     // As the old control left it: its knowledge base indexed from the table up to seq 13 (the
     // second lesson), its cursor there.
     const kbOld = s.kb();
@@ -371,18 +376,18 @@ describe("a store's events table, moved to the events stream once, and dropped",
       { kind: "journal_note", body: note(2, "first lesson").body },
       { kind: "journal_note", body: note(3, "second lesson").body },
     ])
-      kbOld.index(
+      await kbOld.index(
         { rig: "rig-a", ledger: "l-1" },
         { at: "2026-10-29T07:00:00.000Z", actor: "harness", subject: "gs-1", ...e },
       );
-    s.db.exec("update kb_cursor set seq = 13");
+    sqliteBehind(s).db.exec("update kb_cursor set seq = 13");
     const before = itemsBySeq(s, ["gemv"]).map((x) => [x.seq, x.ref]);
     assert.deepEqual(before, [
       [1, "gs-1"],
       [2, "2"],
       [3, "3"],
     ]);
-    s.db.close();
+    await s.close();
     const store = controlStore(path);
     await applied(store);
     const kept = onStream(busOf(store).bus);
@@ -400,7 +405,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       [...before, [4, "4"]],
       "the third lesson alone is new",
     );
-    assert.equal(store.kb().indexedFromTable(), 13, "the table's cursor does not move");
+    assert.equal(await store.kb().indexedFromTable(), 13, "the table's cursor does not move");
     // The views' seq is each event's place in the stream, across the gap: 1 to 4, not 13 and 14.
     const held = await heldEvents(store, "rig-a");
     assert.deepEqual(
@@ -433,14 +438,14 @@ describe("a store's events table, moved to the events stream once, and dropped",
           [EVENT_HEADERS.seq]: String(seq),
         },
       });
-    const a = controlStore(oldStore(rows), ahead);
+    const a = controlStore(await oldStore(rows), ahead);
     await busOf(a).started;
     assert.equal(
       busOf(a).move.stopped?.error,
       "the stream holds rows to seq 5, past the table's last, 3: control's store is older than the stream",
     );
-    assert.equal(hasTable(a.db), true);
-    assert.equal(dropWaits(a.db), true);
+    assert.equal(hasTable(sqliteBehind(a).db), true);
+    assert.equal(dropWaits(sqliteBehind(a).db), true);
     // The stream holds one moved row, then an event published first: the table's other rows
     // can't go before it.
     const first = new FakeBus();
@@ -457,23 +462,23 @@ describe("a store's events table, moved to the events stream once, and dropped",
       id: "rig-a:l-9:9",
       headers: { [EVENT_HEADERS.rig]: "rig-a", [EVENT_HEADERS.ledger]: "l-9" },
     });
-    const b = controlStore(oldStore(rows), first);
+    const b = controlStore(await oldStore(rows), first);
     await busOf(b).started;
     assert.equal(
       busOf(b).move.stopped?.error,
       "the stream holds events published first after place 1, where the table's rows after seq 1 would go: control's store is older than the stream",
     );
-    assert.equal(hasTable(b.db), true);
+    assert.equal(hasTable(sqliteBehind(b).db), true);
   });
 
   test("a stream that lacks rows of the table does not drop it, and says so in words", async () => {
     const rows = notes("rig-a", "l-1", 1, 200);
-    const path = oldStore(rows);
+    const path = await oldStore(rows);
     // A stream that holds the table's last row, but not every row before it: restored in part.
     const partial = new FakeBus();
     await partial.makeStream(EVENT_STREAM_CONFIG);
-    const s = new ControlStore(path);
-    for (const r of s.eventsTable.inOrder(0, 1000).filter((x) => x.seq !== 50))
+    const s = openControlStore(path);
+    for (const r of (await s.eventsTable.inOrder(0, 1000)).filter((x) => x.seq !== 50))
       await partial.publish(
         `thermite.rig.rig-a.ev.journal_note`,
         canonicalJson({ ...r.event, run: r.run, body: JSON.parse(r.body) }),
@@ -486,23 +491,23 @@ describe("a store's events table, moved to the events stream once, and dropped",
           },
         },
       );
-    s.db.close();
+    await s.close();
     const store = controlStore(path, partial);
     await busOf(store).started;
     assert.equal(
       busOf(store).move.stopped?.error,
       "the events stream lacks rows of control's events table: it holds 199 of the table's 200 rows, the last at seq 200, where the table's last is 200",
     );
-    assert.equal(hasTable(store.db), true, "the table stays");
-    assert.equal(dropWaits(store.db), true);
+    assert.equal(hasTable(sqliteBehind(store).db), true, "the table stays");
+    assert.equal(dropWaits(sqliteBehind(store).db), true);
     assert.deepEqual(keptCopies(path), [], "no copy made: nothing dropped");
     closeBus(store);
-    store.db.close();
+    await store.close();
     // As many rows, one of them not the table's at its place: its body changed.
     const changed = new FakeBus();
     await changed.makeStream(EVENT_STREAM_CONFIG);
-    const t = new ControlStore(path);
-    for (const r of t.eventsTable.inOrder(0, 1000))
+    const t = openControlStore(path);
+    for (const r of await t.eventsTable.inOrder(0, 1000))
       await changed.publish(
         `thermite.rig.rig-a.ev.journal_note`,
         canonicalJson({
@@ -519,20 +524,20 @@ describe("a store's events table, moved to the events stream once, and dropped",
           },
         },
       );
-    t.db.close();
+    await t.close();
     const other = controlStore(path, changed);
     await busOf(other).started;
     assert.equal(
       busOf(other).move.stopped?.error,
       "the events stream lacks rows of control's events table: its place 1 does not hold the row it should, in the table's order",
     );
-    assert.equal(hasTable(other.db), true);
+    assert.equal(hasTable(sqliteBehind(other).db), true);
     assert.ok(MOVE_CHECK_SAMPLE < rows.length, "a sample of the rows is compared");
   });
 
   test("a row whose kind a subject can't hold, or too large for a message, goes on under legacy; the upgrade goes on", async () => {
     const odd = "Trial Started!";
-    const path = oldStore([
+    const path = await oldStore([
       {
         rig: "rig-a",
         ledger: "l-1",
@@ -575,14 +580,14 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.deepEqual([read[2]?.seq, big.kind, big.body], [3, "journal_note", undefined]);
     assert.ok(big.bytes > EVENT_MAX_BYTES, String(big.bytes));
     // Checked and dropped; the copy kept at the upgrade holds the rows as they were.
-    assert.equal(hasTable(store.db), false);
+    assert.equal(hasTable(sqliteBehind(store).db), false);
     const copy = new DatabaseSync(move.copy ?? "", { readOnly: true });
     const kept = copy.prepare("select kind, length(body) as n from rig_event order by seq").all();
     copy.close();
     assert.equal(kept[1]?.kind, odd);
     assert.ok(Number(kept[2]?.n) > EVENT_MAX_BYTES);
     // The move said so: in the audit log, once a row.
-    const said = store.auditLog.list(10, { action: "event_moved_as_legacy" });
+    const said = await store.auditLog.list(10, { action: "event_moved_as_legacy" });
     assert.deepEqual(
       said
         .map((a) => a.body as { seq: number; kind: string; with_body: boolean; why: string })
@@ -594,7 +599,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       ],
     );
     // The views show each as such: the run's timeline and the rig's newest events, newest first.
-    const view = keepFolds(store).view("rig-a", { staleAfterMs: 600_000 });
+    const view = await keepFolds(store).view("rig-a", { staleAfterMs: 600_000 });
     assert.ok(view);
     const run = view.runs.find((r) => r.id === "sort-1");
     assert.deepEqual(
@@ -612,7 +617,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
   });
 
   test("a row whose ledger a header can't name stops the move there; the table stays", async () => {
-    const path = oldStore([
+    const path = await oldStore([
       { rig: "rig-a", ledger: "l-1", id: 1, kind: "journal_note" },
       { rig: "rig-a", ledger: "l 1", id: 1, kind: "journal_note" },
       { rig: "rig-a", ledger: "l-1", id: 2, kind: "journal_note" },
@@ -625,6 +630,6 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.ok(stopped);
     assert.deepEqual([stopped.rig, stopped.ledger, stopped.seq], ["rig-a", "l 1", 2]);
     assert.match(stopped.error, /not a ledger's id for an event message/);
-    assert.equal(hasTable(store.db), true);
+    assert.equal(hasTable(sqliteBehind(store).db), true);
   });
 });

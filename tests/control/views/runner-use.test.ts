@@ -131,33 +131,33 @@ describe("how a rig's runners spent their time, on control (goal 231)", () => {
     assert.deepEqual(v.waited, { judge: { count: 2, ms: m(4) } });
   });
 
-  test("control keeps a sample a minute, for 8 days, and gives the one before a window with it", () => {
+  test("control keeps a sample a minute, for 8 days, and gives the one before a window with it", async () => {
     const store = controlStore();
     const summary = reportOf(30);
-    store.runnerUse.note("rig-a", summary, at(0));
-    store.runnerUse.note("rig-a", summary, at(0.5));
-    store.runnerUse.note("rig-a", summary, at(1));
-    store.runnerUse.note("rig-a", { runners: { processes: [] } }, at(2));
+    await store.runnerUse.note("rig-a", summary, at(0));
+    await store.runnerUse.note("rig-a", summary, at(0.5));
+    await store.runnerUse.note("rig-a", summary, at(1));
+    await store.runnerUse.note("rig-a", { runners: { processes: [] } }, at(2));
     assert.deepEqual(
-      store.runnerUse.samples("rig-a", at(-60)).map((s) => s.at),
+      (await store.runnerUse.samples("rig-a", at(-60))).map((s) => s.at),
       [at(0), at(1)],
       "one a minute; a report with no totals keeps none",
     );
     assert.deepEqual(
-      store.runnerUse.samples("rig-a", at(0.5)).map((s) => s.at),
+      (await store.runnerUse.samples("rig-a", at(0.5))).map((s) => s.at),
       [at(0), at(1)],
       "with the newest one before the window",
     );
     // Eight days later, the old ones go.
-    store.runnerUse.note("rig-a", summary, at(8 * 24 * 60 + 2));
+    await store.runnerUse.note("rig-a", summary, at(8 * 24 * 60 + 2));
     assert.deepEqual(
-      store.runnerUse.samples("rig-a", at(-60)).map((s) => s.at),
+      (await store.runnerUse.samples("rig-a", at(-60))).map((s) => s.at),
       [at(8 * 24 * 60 + 2)],
     );
   });
 
   test("the Runners block, runner_use and REST show the shares and who waited", async () => {
-    const { store, control, api } = controlOnly();
+    const { store, control, api } = await controlOnly();
     const { page } = await signIn(control);
     await ingestReport(store, {
       rig: "rig-a",

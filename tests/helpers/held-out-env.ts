@@ -57,7 +57,7 @@ export async function setup(opts: Parameters<typeof makeJudgeEnv>[0]) {
       )
     ).attempt;
   // Control, reached through the supervisor's relay on the bus, as on a rig.
-  const { control, api, relay } = controlStack({
+  const { control, api, relay } = await controlStack({
     env,
     tokens: { agent: AGENT_TOKEN, read: READ_TOKEN },
   });

@@ -112,26 +112,26 @@ export function rigBusOf(parts: Pick<ControlParts, "rigBus">): RigBus {
 }
 
 /** Whether a new rig can't take this name: a rig has it already, or it is a page's ("add"). */
-export const rigTaken = (parts: ControlParts, rig: string) =>
+export const rigTaken = async (parts: ControlParts, rig: string) =>
   rig === "add" ||
-  parts.store.enrollments.knownRig(rig) ||
-  Boolean(parts.store.machines.rig(rig)) ||
-  Boolean(parts.store.clusters.rig(rig)) ||
-  Boolean(parts.store.joinedRigs.get(rig)) ||
-  parts.views().some((u) => u.id === rig);
+  (await parts.store.enrollments.knownRig(rig)) ||
+  Boolean(await parts.store.machines.rig(rig)) ||
+  Boolean(await parts.store.clusters.rig(rig)) ||
+  Boolean(await parts.store.joinedRigs.get(rig)) ||
+  (await parts.views()).some((u) => u.id === rig);
 
 /**
  * Every rig's name control knows, removed and retired ones too, which no new rig may take: Add a
  * rig's name step says so before it sends (goal 206).
  */
-export const rigNamesTaken = (parts: ControlParts): string[] =>
+export const rigNamesTaken = async (parts: ControlParts): Promise<string[]> =>
   [
     ...new Set([
       "add",
-      ...parts.store.enrollments.rigs().map((r) => r.rig),
-      ...parts.store.machines.rigs().map((r) => r.rig),
-      ...parts.store.clusters.rigs().map((r) => r.rig),
-      ...parts.views().map((u) => u.id),
+      ...(await parts.store.enrollments.rigs()).map((r) => r.rig),
+      ...(await parts.store.machines.rigs()).map((r) => r.rig),
+      ...(await parts.store.clusters.rigs()).map((r) => r.rig),
+      ...(await parts.views()).map((u) => u.id),
     ]),
   ].sort();
 
@@ -172,36 +172,36 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms).unref(
 export async function awaitFirstReport(
   parts: ControlParts,
   rig: string,
-  setStatus: (s: string) => void,
+  setStatus: (s: string) => void | Promise<void>,
   minutes = 10,
   after?: number,
-  o: { step?: string; still?: () => boolean } = {},
+  o: { step?: string; still?: () => boolean | Promise<boolean> } = {},
 ) {
   const { store } = parts;
   const step = o.step ?? (after === undefined ? "first_report" : "report_after_images");
   const deadline = Date.now() + minutes * 60_000;
   while (Date.now() < deadline) {
     // Stopped or removed meanwhile: the wait ends with nothing to say.
-    if (o.still && !o.still()) return;
+    if (o.still && !(await o.still())) return;
     if (
-      parts
-        .views()
-        .some((u) => u.id === rig && (after === undefined || Date.parse(u.last_seen) > after))
+      (await parts.views()).some(
+        (u) => u.id === rig && (after === undefined || Date.parse(u.last_seen) > after),
+      )
     ) {
-      store.rigHistory.add(rig, step, true);
-      setStatus("running");
+      await store.rigHistory.add(rig, step, true);
+      await setStatus("running");
       return;
     }
     await sleep(5000);
   }
-  if (o.still && !o.still()) return;
-  store.rigHistory.add(
+  if (o.still && !(await o.still())) return;
+  await store.rigHistory.add(
     rig,
     step,
     false,
     `no report after ${minutes} minutes: it may not have started`,
   );
-  setStatus("failed");
+  await setStatus("failed");
 }
 
 export { rigSetupView, SETUP_STEPS } from "./view.ts";

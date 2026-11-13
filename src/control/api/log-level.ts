@@ -11,14 +11,14 @@ import type { ApiContext } from "./context.ts";
  */
 export function logLevelRoutes(app: Hono, api: ApiContext): void {
   const { store, admin } = api;
-  app.get(CONTROL_LOG_LEVEL.path, admin, (c) => c.json(controlLogLevelOf(store)));
+  app.get(CONTROL_LOG_LEVEL.path, admin, async (c) => c.json(await controlLogLevelOf(store)));
   app.put(
     SET_CONTROL_LOG_LEVEL.path,
     admin,
     bodyLimit({ maxSize: SET_CONTROL_LOG_LEVEL.maxBytes }),
     async (c) => {
       const body = await c.req.json().catch(() => undefined);
-      const o = setControlLogLevel(store, body, "owner:api");
+      const o = await setControlLogLevel(store, body, "owner:api");
       return o.ok
         ? c.json({ ...o.level, said: o.said })
         : c.json({ error: `bad request: ${o.error}` }, 400);

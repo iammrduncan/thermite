@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueCommand } from "../../../src/control/issue/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
@@ -39,10 +40,13 @@ async function stack() {
     read: "read-token-abcdef",
     rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" },
   };
-  const { keys, store, control } = controlOnly({ tokens, options: { staleAfterMs: 600_000 } });
+  const { keys, store, control } = await controlOnly({
+    tokens,
+    options: { staleAfterMs: 600_000 },
+  });
   // The assignment that started gs-3, before the rig reported it.
-  enrollRigs(store, ["rig-a"]);
-  issueCommand(store, keys.privateKeyPem, {
+  await enrollRigs(store, ["rig-a"]);
+  await issueCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
     payload: {
@@ -220,7 +224,7 @@ test("grants: given and ended on the collection's pane in the explorer, said fir
   // Without the form token: refused.
   const forged = await s.post("/ui/kb/grant", { campaign: "gemv-speed", reads: "survey-study" });
   assert.equal(forged.status, 403);
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), []);
+  assert.deepEqual(await s.store.kb().reads("gemv-speed"), []);
   // Itself, or a campaign control does not know: refused, said on the pane.
   const back = "/ui/knowledge/gemv-speed";
   const self = await s.post("/ui/kb/grant", {
@@ -268,17 +272,15 @@ test("grants: given and ended on the collection's pane in the explorer, said fir
     s.where(ok),
     /\?ok=gemv-speed's agents may now read survey-study's collection\. It joins the search of its runs at work at once/,
   );
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
+  assert.deepEqual(await s.store.kb().reads("gemv-speed"), ["survey-study"]);
   assert.ok(
-    s.store.auditLog
-      .list(50)
-      .some(
-        (a) =>
-          a.actor === "owner:ui" &&
-          a.action === "kb_grant" &&
-          JSON.stringify(a.body) ===
-            JSON.stringify({ campaign: "gemv-speed", reads: "survey-study" }),
-      ),
+    (await s.store.auditLog.list(50)).some(
+      (a) =>
+        a.actor === "owner:ui" &&
+        a.action === "kb_grant" &&
+        JSON.stringify(a.body) ===
+          JSON.stringify({ campaign: "gemv-speed", reads: "survey-study" }),
+    ),
   );
   p = await pane(ok.headers.get("location") ?? "");
   assert.match(p, /<div class="kx-note ok">gemv-speed(&#39;|')s agents may now read/);
@@ -325,9 +327,11 @@ test("grants: given and ended on the collection's pane in the explorer, said fir
     s.where(rm),
     /no longer read survey-study's collection: it left every run's search at once/,
   );
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), []);
+  assert.deepEqual(await s.store.kb().reads("gemv-speed"), []);
   assert.ok(
-    s.store.auditLog.list(50).some((a) => a.action === "kb_revoke" && a.actor === "owner:ui"),
+    (await s.store.auditLog.list(50)).some(
+      (a) => a.action === "kb_revoke" && a.actor === "owner:ui",
+    ),
   );
   assert.match(
     s.where(
@@ -376,7 +380,7 @@ test("Start a run from past research: the search reads only granted collections;
     r.items[0]?.line ?? "",
     /^gs-3 · tried: attempt a-1 \(submitted\), win confirmed \(\+6\.10%\) · by teachers$/,
   );
-  s.store.kb().grant("gemv-speed", "survey-study", "owner:ui");
+  await s.store.kb().grant("gemv-speed", "survey-study", "owner:ui");
   r = await search("gemv-speed", "verifier");
   assert.deepEqual(r.collections, ["gemv-speed", "survey-study"]);
   assert.deepEqual(r.items.map((x) => x.kind).sort(), ["claim", "finding"]);
@@ -400,11 +404,11 @@ test("Start a run from past research: the search reads only granted collections;
   assert.match(page, /name="judge_gpus"/);
   // Start with a past experiment and a finding ticked.
   const kb = s.store.kb();
-  const exp = kb.search("vector loads", ["gemv-speed"], { kinds: ["experiment"] })[0];
-  const finding = kb.search("verifier", ["survey-study"], { kinds: ["finding"] })[0];
-  const attempt = kb.search("vector", ["gemv-speed"], { kinds: ["attempt"] })[0];
+  const exp = (await kb.search("vector loads", ["gemv-speed"], { kinds: ["experiment"] }))[0];
+  const finding = (await kb.search("verifier", ["survey-study"], { kinds: ["finding"] }))[0];
+  const attempt = (await kb.search("vector", ["gemv-speed"], { kinds: ["attempt"] }))[0];
   assert.ok(exp && finding && attempt);
-  const before = s.store.commands.list(50).length;
+  const before = (await s.store.commands.list(50)).length;
   const started = await s.post("/ui/campaigns/gemv-speed/runs", [
     ["csrf", s.csrf],
     ["rig", "rig-a"],
@@ -415,7 +419,9 @@ test("Start a run from past research: the search reads only granted collections;
   assert.equal(started.status, 303, s.where(started));
   assert.match(s.where(started), /\/ui\/campaigns\/gemv-speed\/runs\/gemv-speed-1$/);
   const payload = (
-    s.store.db.prepare("select signed from command where kind = 'assign_campaign'").all() as {
+    sqliteBehind(s.store)
+      .db.prepare("select signed from command where kind = 'assign_campaign'")
+      .all() as {
       signed: string;
     }[]
   )
@@ -445,7 +451,7 @@ test("Start a run from past research: the search reads only granted collections;
     },
   ]);
   // An item of a collection not granted, or a kind a run does not start from: refused, nothing sent.
-  kb.revoke("gemv-speed", "survey-study");
+  await kb.revoke("gemv-speed", "survey-study");
   for (const id of [finding.id, attempt.id, 999_999]) {
     const bad = await s.post("/ui/campaigns/gemv-speed/runs", [
       ["csrf", s.csrf],
@@ -455,7 +461,7 @@ test("Start a run from past research: the search reads only granted collections;
     ]);
     assert.match(s.where(bad), /not one this campaign may read and start from/);
   }
-  assert.equal(s.store.commands.list(50).length, before + 1);
+  assert.equal((await s.store.commands.list(50)).length, before + 1);
   // A try (agents off): the copy box it hides is ignored, and nothing is said left out; past
   // research the owner ticked where the form showed it (no script) is said left out.
   const tried = await s.post("/ui/campaigns/gemv-speed/runs", [
@@ -545,15 +551,19 @@ test("MCP: the owner and an operator read and search the collections; the owner 
     first.said,
     "Proposed to the owner: the grant of survey-study's collection to gemv-speed. A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Nothing changes until the owner approves it on the campaign's page.",
   );
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), [], "nothing granted before the owner says");
+  assert.deepEqual(
+    await s.store.kb().reads("gemv-speed"),
+    [],
+    "nothing granted before the owner says",
+  );
   assert.ok(
-    !s.store.auditLog.list(50).some((a) => a.action === "kb_grant"),
+    !(await s.store.auditLog.list(50)).some((a) => a.action === "kb_grant"),
     "the operator granted nothing",
   );
   // The same again replaces the one waiting: one card, the newest.
   const second = await propose();
   assert.deepEqual(
-    s.store.proposals.waiting("gemv-speed").map((p) => p.id),
+    (await s.store.proposals.waiting("gemv-speed")).map((p) => p.id),
     [second.proposal],
   );
   const page = await (await s.get("/ui/campaigns/gemv-speed")).text();
@@ -569,9 +579,11 @@ test("MCP: the owner and an operator read and search the collections; the owner 
     s.where(approved),
     /Approved: every agent of gemv-speed may now search and read survey-study's collection/,
   );
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
+  assert.deepEqual(await s.store.kb().reads("gemv-speed"), ["survey-study"]);
   assert.ok(
-    s.store.auditLog.list(50).some((a) => a.action === "kb_grant" && a.actor === "owner:ui"),
+    (await s.store.auditLog.list(50)).some(
+      (a) => a.action === "kb_grant" && a.actor === "owner:ui",
+    ),
   );
   // One it reads already is nothing to propose.
   assert.equal((await propose()).state, "unchanged");
@@ -593,7 +605,7 @@ test("MCP: the owner and an operator read and search the collections; the owner 
       () => true,
     );
   assert.ok(operatorRevokes);
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
+  assert.deepEqual(await s.store.kb().reads("gemv-speed"), ["survey-study"]);
   const owner = await mcpClient(s.control, s.tokens.admin);
   const v = text(
     await owner.callTool({
@@ -608,7 +620,9 @@ test("MCP: the owner and an operator read and search the collections; the owner 
     said: "gemv-speed's agents no longer read survey-study's collection: it left every run's search at once. Nothing is deleted.",
   });
   assert.ok(
-    s.store.auditLog.list(50).some((a) => a.action === "kb_revoke" && a.actor === "owner:mcp"),
+    (await s.store.auditLog.list(50)).some(
+      (a) => a.action === "kb_revoke" && a.actor === "owner:mcp",
+    ),
   );
   // An agent's token cannot call them even by name.
   const agent = await mcpClient(s.control, s.tokens.agent);
@@ -619,7 +633,7 @@ test("MCP: the owner and an operator read and search the collections; the owner 
       () => true,
     );
   assert.ok(refused);
-  assert.deepEqual(s.store.kb().reads("gemv-speed"), []);
+  assert.deepEqual(await s.store.kb().reads("gemv-speed"), []);
 });
 
 test("MCP: a briefing takes the knowledge base's own words; an item not found or not readable is left out", async () => {
@@ -650,7 +664,7 @@ test("MCP: a briefing takes the knowledge base's own words; an item not found or
     return (
       JSON.parse(
         (
-          s.store.db.prepare("select signed from command where id = ?").get(r.id) as {
+          sqliteBehind(s.store).db.prepare("select signed from command where id = ?").get(r.id) as {
             signed: string;
           }
         ).signed,
@@ -669,7 +683,7 @@ test("MCP: a briefing takes the knowledge base's own words; an item not found or
   const noteFrom = { ...note, rig: "rig-a" };
   assert.deepEqual(p.briefing, [{ text: "The GPU has 4 MB of L2.\nSources: s-1", from: noteFrom }]);
   // Granted: the finding comes too, in its own words, never the caller's.
-  s.store.kb().grant("gemv-speed", "survey-study", "owner:ui");
+  await s.store.kb().grant("gemv-speed", "survey-study", "owner:ui");
   p = await assign(asked);
   assert.deepEqual(p.briefing, [
     {
@@ -716,7 +730,7 @@ test("MCP: a copied experiment takes control's record only from a folder the run
     return (
       JSON.parse(
         (
-          s.store.db.prepare("select signed from command where id = ?").get(r.id) as {
+          sqliteBehind(s.store).db.prepare("select signed from command where id = ?").get(r.id) as {
             signed: string;
           }
         ).signed,
@@ -730,7 +744,7 @@ test("MCP: a copied experiment takes control's record only from a folder the run
     state: "queued",
     from: { run: "gs-3", id: "x-1" },
   });
-  s.store.kb().grant("survey-study", "gemv-speed", "owner:ui");
+  await s.store.kb().grant("survey-study", "gemv-speed", "owner:ui");
   const granted = await copy();
   assert.notEqual(granted?.title, "the caller's words");
   assert.notEqual(granted?.by, "copied");

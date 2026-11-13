@@ -19,14 +19,14 @@ const kbUrl = (k: "ok" | "error", m: string) =>
 const shown = (n: number | null) => (n === null ? "" : String(n));
 
 /** The block, with what its form did when the page came back to it. */
-export function kbSettingsBlock(
+export async function kbSettingsBlock(
   store: ControlStore,
   orphanHoursDefault: number,
   t: string,
   now: number,
   q: (k: string) => string | undefined,
-): string {
-  const s = kbSettingsOf(store, orphanHoursDefault);
+): Promise<string> {
+  const s = await kbSettingsOf(store, orphanHoursDefault);
   const said = q("at") === "kb" ? (q("error") ?? q("ok")) : undefined;
   const note = said
     ? q("error")
@@ -60,7 +60,7 @@ export function kbSettingsRoutes(app: Hono, dash: Dashboard): void {
     const hours = fieldOf(f.orphan_hours, "Orphan files kept");
     const bad = [max, hours].find((v) => typeof v === "string");
     if (typeof bad === "string") return c.redirect(kbUrl("error", bad), 303);
-    const o = setKbSettings(
+    const o = await setKbSettings(
       store,
       { max_file_mib: max, orphan_hours: hours },
       opts.kbFiles?.orphanHoursDefault ?? 0,

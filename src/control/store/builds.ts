@@ -15,7 +15,25 @@ export interface StoredBuild extends ReportedBuild {
   since: string;
 }
 
-export class Builds extends StorePart {
+export interface Builds {
+  /** The build a part of the rig last reported, and since when; undefined when it reported none. */
+  ofRig(rig: string, component: RigComponent): Promise<StoredBuild | undefined>;
+  /**
+   * Records the build a part of the rig reports (null: it reports none). Written only when it
+   * changes, so `since` is when control first saw it. True when it changed.
+   */
+  setRig(rig: string, component: RigComponent, b: ReportedBuild | null): Promise<boolean>;
+  /**
+   * Notes the build control runs now, and returns since when control runs it: a build is kept from
+   * the first time control ran it, so a restart on the same build keeps its time.
+   */
+  noteControl(b: { version: string; commit: string | null }): Promise<string>;
+  /** Since when control runs the build it noted last (noteControlBuild); undefined: none noted. */
+  controlSince(): Promise<string | undefined>;
+}
+
+/** Builds on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteBuilds extends StorePart {
   /** The build a part of the rig last reported, and since when; undefined when it reported none. */
   ofRig(rig: string, component: RigComponent): StoredBuild | undefined {
     const r = this.db

@@ -64,14 +64,16 @@ export const sameAdditions = (a: RoleAdditions | undefined, b: RoleAdditions | u
  * the campaign's mode never runs, an unknown role and a text that is too long are refused in
  * words, by the contract's own check. With `check`, nothing is saved (proposals.ts).
  */
-export function setCampaignAdditions(
+export async function setCampaignAdditions(
   store: ControlStore,
   req: { campaign: string; additions?: Record<string, string> | undefined },
   by: string,
   check = false,
-): CampaignAdditionsOutcome {
+): Promise<CampaignAdditionsOutcome> {
   const want = requestedAdditions(req.additions);
-  const mode = String((campaignContract(store, req.campaign) as { mode?: unknown })?.mode ?? "");
+  const mode = String(
+    ((await campaignContract(store, req.campaign)) as { mode?: unknown })?.mode ?? "",
+  );
   const roles = additionRolesOf(mode);
   const unknown = Object.keys(want ?? {}).filter((r) => !(roles as readonly string[]).includes(r));
   if (mode && unknown.length)
@@ -80,7 +82,7 @@ export function setCampaignAdditions(
       error: `${req.campaign} is a ${mode.replace("_", " ")} campaign: it runs no ${unknown.join(", ")}. Its roles are ${roles.join(", ")}.`,
       status: 400,
     };
-  const out = saveWithField(store, {
+  const out = await saveWithField(store, {
     campaign: req.campaign,
     field: "role_additions",
     value: want,

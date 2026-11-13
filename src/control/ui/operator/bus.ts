@@ -28,8 +28,16 @@ const open = (u: RigView, does: string) => ({
 });
 
 /** A rig off the bus: it doesn't work until it reaches the bus (bus/reach.ts). */
-export function offBusNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
-  const off = offBus(store, u.id, { lastSeen: u.last_seen, now: c.now, podStopped: podStopped(u) });
+export async function offBusNeeds(
+  c: NeedsContext,
+  store: ControlStore,
+  u: RigView,
+): Promise<Need[]> {
+  const off = await offBus(store, u.id, {
+    lastSeen: u.last_seen,
+    now: c.now,
+    podStopped: podStopped(u),
+  });
   if (!off) return [];
   return [
     {
@@ -48,7 +56,7 @@ export function offBusNeeds(c: NeedsContext, store: ControlStore, u: RigView): N
         since: off.since,
         now: c.now,
         facts: `<dt>What</dt><dd>${esc(off.words)}</dd>
-<dt>Do</dt><dd>${esc(offBusFix(store, u.id, off))}</dd>`,
+<dt>Do</dt><dd>${esc(await offBusFix(store, u.id, off))}</dd>`,
         choices: [open(u, "Where it runs, its history and its actions.")],
       }),
     },
@@ -87,8 +95,16 @@ export function heldCommandNeeds(c: NeedsContext, store: ControlStore, u: RigVie
 }
 
 /** A rig's keys on the bus that changed, or were refused, since the owner pressed Seen. */
-export function busKeyNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
-  const steps = store.rigHistory.latest(u.id, [...BUS_KEY_CHANGE_STEPS, BUS_KEYS_SEEN_STEP], 10);
+export async function busKeyNeeds(
+  c: NeedsContext,
+  store: ControlStore,
+  u: RigView,
+): Promise<Need[]> {
+  const steps = await store.rigHistory.latest(
+    u.id,
+    [...BUS_KEY_CHANGE_STEPS, BUS_KEYS_SEEN_STEP],
+    10,
+  );
   const seen = steps.findIndex((s) => s.step === BUS_KEYS_SEEN_STEP);
   const changes = (seen < 0 ? steps : steps.slice(0, seen)).reverse();
   const last = changes.at(-1);

@@ -18,7 +18,7 @@ import { seedDemo } from "../../helpers/demo/index.ts";
  */
 
 async function control(kits?: KitRepos) {
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     tokens: { rigs: { "rig-a": "t-a-abcdef" } },
     options: kits ? { kits } : {},
   });
@@ -260,7 +260,7 @@ describe("each goal's real check on control (goal 082)", () => {
       );
       const c = await control(kits);
       const { contract, sha } = goalContract(commit);
-      c.store.campaigns.put({
+      await c.store.campaigns.put({
         campaign: "sum-goals",
         version: 1,
         contract,
@@ -278,7 +278,7 @@ describe("each goal's real check on control (goal 082)", () => {
       );
       assert.ok(!saved.includes("HIDDEN-INPUT"));
       // With a run control assigned, on the campaign's own page.
-      assigned(c.store, "rig-a", "sum-1", "sum-goals");
+      await assigned(c.store, "rig-a", "sum-1", "sum-goals");
       await c.ingest([goalRun]);
       const withRun = await c.page("/ui/campaigns/sum-goals");
       assert.match(withRun, /<summary>How each goal is checked<\/summary>/);
@@ -287,7 +287,7 @@ describe("each goal's real check on control (goal 082)", () => {
       // A kit only in its repository: what the contract says, and why no more.
       const other = await control();
       const plain = goalContract("c".repeat(40));
-      other.store.campaigns.put({
+      await other.store.campaigns.put({
         campaign: "sum-goals",
         version: 1,
         contract: plain.contract,

@@ -13,7 +13,8 @@ import {
   runPolicy,
   setPolicyOn,
 } from "../../src/control/retention/index.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { copiesPolicyOn } from "../../src/control/store/retention.ts";
 import { packItems, type RetentionItem } from "../../src/core/retention/index.ts";
 import { controlOnly, mcpClient } from "../helpers/control-stack.ts";
@@ -45,19 +46,19 @@ type Answer = any;
 /** A REST answer's JSON. */
 const read = async (r: Response): Promise<Answer> => r.json();
 
-const audits = (store: ControlStore, action: string) =>
-  store.auditLog.list(500).filter((a) => a.action === action);
+const audits = async (store: ControlStore, action: string) =>
+  (await store.auditLog.list(500)).filter((a) => a.action === action);
 
 /** An audit entry `days` old. */
 function oldEntry(store: ControlStore, action: string, days: number) {
-  store.db
-    .prepare("insert into audit (at, actor, action, body) values (?, 'owner:api', ?, '{}')")
+  sqliteBehind(store)
+    .db.prepare("insert into audit (at, actor, action, body) values (?, 'owner:api', ?, '{}')")
     .run(new Date(Date.now() - days * DAY).toISOString(), action);
 }
 
 /** What rig-a says it keeps of its builds. */
-function rigSays(store: ControlStore, rig: string, items: RetentionItem[]) {
-  const out = answerRigAsk(
+async function rigSays(store: ControlStore, rig: string, items: RetentionItem[]) {
+  const out = await answerRigAsk(
     { store, control: buildInfo(), privateKeyPem: "", screens: new Screens() },
     rig,
     "space",
@@ -78,7 +79,7 @@ const build = (id: string, days: number, o: Partial<RetentionItem> = {}): Retent
 
 describe("retention policies on control", () => {
   test("none by default; the owner makes, changes, turns on and off and deletes one over REST, each in the audit log", async () => {
-    const { api, store } = controlOnly({
+    const { api, store } = await controlOnly({
       tokens: { admin: OWNER, operator: OPERATOR, rigs: { "rig-a": RIG_A } },
     });
     const list = await read(await api("GET", "/v1/retention"));
@@ -126,20 +127,20 @@ describe("retention policies on control", () => {
     );
     assert.equal(on.policy.on, true);
     assert.equal(on.said, "“Old entries” is on: it runs every day at 03:00 UTC.");
-    assert.ok(store.retention.get(policy.id)?.on_since, "on from now");
+    assert.ok((await store.retention.get(policy.id))?.on_since, "on from now");
     const gone = await read(await api("DELETE", `/v1/retention/policies/${policy.id}`));
     assert.equal(gone.said, "Deleted “Old entries”. What it removed stays in the history.");
-    assert.equal(store.retention.get(policy.id), undefined);
+    assert.equal(await store.retention.get(policy.id), undefined);
     for (const action of ["created", "changed", "on", "deleted"])
-      assert.equal(audits(store, `retention_policy_${action}`).length, 1, action);
+      assert.equal((await audits(store, `retention_policy_${action}`)).length, 1, action);
     assert.match(
-      JSON.stringify(audits(store, "retention_policy_changed")[0]?.body),
+      JSON.stringify((await audits(store, "retention_policy_changed"))[0]?.body),
       /"was":\{.*"policy":"Audit log, control: removes older than 30 days, every day at 03:00 UTC"/,
     );
   });
 
   test("the audit log: a preview first, then Run now removes what it covers; a removal's own entry stays", async () => {
-    const { api, store } = controlOnly({ tokens: { admin: OWNER } });
+    const { api, store } = await controlOnly({ tokens: { admin: OWNER } });
     oldEntry(store, "old_thing", 40);
     oldEntry(store, "old_thing", 50);
     oldEntry(store, "retention_removed", 60);
@@ -150,15 +151,15 @@ describe("retention policies on control", () => {
       preview.words,
       /^It would remove 2 entries, \d+ B, from \d{4}-\d\d-\d\d to \d{4}-\d\d-\d\d\.$/,
     );
-    assert.equal(audits(store, "old_thing").length, 2, "a preview removes nothing");
+    assert.equal((await audits(store, "old_thing")).length, 2, "a preview removes nothing");
 
     const { policy } = await read(await api("POST", "/v1/retention/policies", design()));
     const run = await read(await api("POST", `/v1/retention/policies/${policy.id}/run`));
     assert.match(run.said, /^“Old audit” removed 2 entries, \d+ B, from .* from control\.$/);
-    assert.equal(audits(store, "old_thing").length, 0);
-    assert.equal(audits(store, "new_thing").length, 1);
+    assert.equal((await audits(store, "old_thing")).length, 0);
+    assert.equal((await audits(store, "new_thing")).length, 1);
     assert.equal(
-      audits(store, "retention_removed").length,
+      (await audits(store, "retention_removed")).length,
       2,
       "the old one stays, and this run's is added",
     );
@@ -182,9 +183,9 @@ describe("retention policies on control", () => {
   });
 
   test("older versions of the knowledge base's items: the newest always stays", async () => {
-    const store = new ControlStore(":memory:");
+    const store = openControlStore(":memory:");
     const rig = { rig: "rig-a", ledger: "ledger-a" };
-    store.kb().index(rig, {
+    await store.kb().index(rig, {
       at: "2026-10-01T10:00:00.000Z",
       actor: "harness",
       kind: "run_created",
@@ -192,7 +193,7 @@ describe("retention policies on control", () => {
       body: { campaign: "speed", mode: "goal" },
     });
     for (let v = 1; v <= 3; v++)
-      store.kb().write(
+      await store.kb().write(
         {
           ...rig,
           run: "r-1",
@@ -209,26 +210,25 @@ describe("retention policies on control", () => {
           links: [],
         },
       );
-    const p = createPolicy(
+    const p = await createPolicy(
       store,
       design({ name: "Old versions", kind: "kb_versions", rule: "newest", newest_n: 0 + 1 }),
       false,
       "owner:ui",
     );
     // Keep the newest 1 of the older versions: version 1 goes; 2 stays as the newest older one.
-    assert.equal(previewOf(store, p).count, 1);
+    assert.equal((await previewOf(store, p)).count, 1);
     await runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
     const id = (
-      store.db.prepare("select id from kb_item where slot = 'worker-1'").get() as { id: number }
+      sqliteBehind(store).db.prepare("select id from kb_item where slot = 'worker-1'").get() as {
+        id: number;
+      }
     ).id;
     assert.deepEqual(
-      store
-        .kb()
-        .versions(id)
-        .map((v) => v.version),
+      (await store.kb().versions(id)).map((v) => v.version),
       [2, 3],
     );
-    const all = createPolicy(
+    const all = await createPolicy(
       store,
       design({ name: "All old", kind: "kb_versions", rule: "older", older_n: 1 }),
       false,
@@ -236,15 +236,12 @@ describe("retention policies on control", () => {
     );
     await runPolicy({ store, privateKeyPem: "" }, all.id, "hand", "owner:ui");
     assert.deepEqual(
-      store
-        .kb()
-        .versions(id)
-        .map((v) => v.version),
+      (await store.kb().versions(id)).map((v) => v.version),
       [3],
       "the newest stays",
     );
     assert.throws(
-      () => store.db.prepare("delete from kb_version").run(),
+      () => sqliteBehind(store).db.prepare("delete from kb_version").run(),
       /newest version of an item is never removed/,
     );
   });
@@ -252,7 +249,7 @@ describe("retention policies on control", () => {
   test("copies of control's store: removed beside it, the newest kept", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-retention-copies-"));
     const path = join(dir, "control.db");
-    const store = new ControlStore(path);
+    const store = openControlStore(path);
     const copy = (stamp: string) => {
       const p = `${path}.v20.${stamp}.copy`;
       writeFileSync(p, Buffer.alloc(500));
@@ -260,7 +257,7 @@ describe("retention policies on control", () => {
     };
     const old = copy("2026-09-01T00-00-00-000Z");
     const newest = copy("2026-09-02T00-00-00-000Z");
-    const p = createPolicy(
+    const p = await createPolicy(
       store,
       design({ name: "Copies", kind: "store_copies", rule: "older", older_n: 1 }),
       false,
@@ -270,33 +267,37 @@ describe("retention policies on control", () => {
     assert.equal(r.removed?.count, 1);
     assert.equal(existsSync(old), false);
     assert.ok(existsSync(newest), "the newest copy is kept");
-    store.db.close();
+    await store.close();
   });
 
   test("store copies: control keeps the two newest itself until a policy of them is on", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-retention-default-"));
-    const store = new ControlStore(join(dir, "control.db"));
-    assert.equal(copiesPolicyOn(store.db), false);
-    const p = createPolicy(
+    const store = openControlStore(join(dir, "control.db"));
+    assert.equal(copiesPolicyOn(sqliteBehind(store).db), false);
+    const p = await createPolicy(
       store,
       design({ name: "Copies", kind: "store_copies", rule: "newest", newest_n: 5 }),
       false,
       "owner:ui",
     );
-    assert.equal(copiesPolicyOn(store.db), false, "an off policy does not stop control's own rule");
-    setPolicyOn(store, p.id, true, "owner:ui");
-    assert.equal(copiesPolicyOn(store.db), true, "an on policy decides instead");
-    store.db.close();
+    assert.equal(
+      copiesPolicyOn(sqliteBehind(store).db),
+      false,
+      "an off policy does not stop control's own rule",
+    );
+    await setPolicyOn(store, p.id, true, "owner:ui");
+    assert.equal(copiesPolicyOn(sqliteBehind(store).db), true, "an on policy decides instead");
+    await store.close();
   });
 
   test("the schedule: once for each due time, kept across a restart; off or by hand never runs", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-retention-schedule-"));
     const path = join(dir, "control.db");
-    const store = new ControlStore(path);
+    const store = openControlStore(path);
     const deps = { store, privateKeyPem: "" };
-    const p = createPolicy(store, design({ time: "03:00" }), false, "owner:ui");
+    const p = await createPolicy(store, design({ time: "03:00" }), false, "owner:ui");
     // On, but only by hand: never run by the schedule.
-    createPolicy(store, design({ name: "By hand", when: "hand" }), true, "owner:ui");
+    await createPolicy(store, design({ name: "By hand", when: "hand" }), true, "owner:ui");
     oldEntry(store, "old_thing", 40);
     const at = (iso: string) => new Date(iso);
     assert.equal(
@@ -304,8 +305,8 @@ describe("retention policies on control", () => {
       0,
       "off: it removes nothing",
     );
-    store.db
-      .prepare("update retention_policy set enabled = 1, on_since = ? where id = ?")
+    sqliteBehind(store)
+      .db.prepare("update retention_policy set enabled = 1, on_since = ? where id = ?")
       .run("2030-01-01T00:00:00Z", p.id);
     assert.equal(
       await retentionTick(deps, at("2030-01-02T02:59:00Z")),
@@ -314,10 +315,10 @@ describe("retention policies on control", () => {
     );
     assert.equal(await retentionTick(deps, at("2030-01-02T02:59:30Z")), 0, "once for that time");
     assert.equal(await retentionTick(deps, at("2030-01-02T03:00:00Z")), 1, "today's time");
-    assert.equal(store.retention.get(p.id)?.last_due, "2030-01-02T03:00:00.000Z");
-    store.db.close();
+    assert.equal((await store.retention.get(p.id))?.last_due, "2030-01-02T03:00:00.000Z");
+    await store.close();
     // Control starts again: the due time it ran for is kept, so it does not run again.
-    const again = new ControlStore(path);
+    const again = openControlStore(path);
     assert.equal(
       await retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-02T09:00:00Z")),
       0,
@@ -326,18 +327,18 @@ describe("retention policies on control", () => {
       await retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-03T03:00:00Z")),
       1,
     );
-    assert.equal(again.retention.removals(10).filter((r) => r.by === "schedule").length, 3);
-    setPolicyOn(again, p.id, false, "owner:ui");
+    assert.equal((await again.retention.removals(10)).filter((r) => r.by === "schedule").length, 3);
+    await setPolicyOn(again, p.id, false, "owner:ui");
     assert.equal(
       await retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-04T03:00:00Z")),
       0,
     );
-    again.db.close();
+    await again.close();
   });
 
   test("a rig's kind: the preview from what the rig said, Run now sends it the signed command, and what it removed reaches the history", async () => {
     const store = controlStore();
-    const { api } = controlOnly({
+    const { api } = await controlOnly({
       store,
       tokens: { admin: OWNER, rigs: { "rig-a": RIG_A, "rig-b": "rig-b-token-abcdef" } },
     });
@@ -347,7 +348,7 @@ describe("retention policies on control", () => {
     await report(store, "rig-b", "ledger-b", [
       { kind: "run_created", subject: "r-2", body: { campaign: "other", mode: "hill_climb" } },
     ]);
-    rigSays(store, "rig-a", [
+    await rigSays(store, "rig-a", [
       build("x", 40),
       build("y", 40, { champion: true }),
       build("z", 2),
@@ -374,7 +375,7 @@ describe("retention policies on control", () => {
       run.said,
       /^Sent “Old builds” to rig-a: on each, it removes what the policy covers there/,
     );
-    const [sent] = store.commands.pending("rig-a");
+    const [sent] = await store.commands.pending("rig-a");
     assert.equal(sent?.envelope.kind, "retention_run");
     assert.equal(sent?.envelope.issued_by, "owner:api");
     assert.deepEqual(sent?.envelope.payload, {
@@ -393,7 +394,7 @@ describe("retention policies on control", () => {
       by: "hand",
     });
     assert.equal(
-      store.commands.pending("rig-b").length,
+      (await store.commands.pending("rig-b")).length,
       0,
       "a rig the policy does not cover gets nothing",
     );
@@ -424,16 +425,16 @@ describe("retention policies on control", () => {
       1,
     );
     await applied(store);
-    const [r] = store.retention.removals(5);
+    const [r] = await store.retention.removals(5);
     assert.deepEqual(
       [r?.rig, r?.kind, r?.count, r?.bytes, r?.by],
       ["rig-a", "builds", 1, 1000, "Run now"],
     );
-    assert.equal(audits(store, "retention_removed")[0]?.actor, "rig:rig-a");
+    assert.equal((await audits(store, "retention_removed"))[0]?.actor, "rig:rig-a");
   });
 
   test("over MCP: the owner and an operator read and preview; only the owner changes or runs one", async () => {
-    const { control, store } = controlOnly({ tokens: { admin: OWNER, operator: OPERATOR } });
+    const { control, store } = await controlOnly({ tokens: { admin: OWNER, operator: OPERATOR } });
     const owner = await mcpClient(control, OWNER);
     const operator = await mcpClient(control, OPERATOR);
     const names = async (c: typeof owner) => (await c.listTools()).tools.map((t) => t.name);
@@ -464,7 +465,7 @@ describe("retention policies on control", () => {
       arguments: { id: made.policy.id },
     });
     assert.equal(refused.isError, true);
-    assert.ok(store.retention.get(made.policy.id), "an operator deletes nothing");
+    assert.ok(await store.retention.get(made.policy.id), "an operator deletes nothing");
     const on = text(
       await owner.callTool({
         name: "set_retention_policy_on",
@@ -472,6 +473,6 @@ describe("retention policies on control", () => {
       }),
     );
     assert.equal(on.policy.on, true);
-    assert.equal(audits(store, "retention_policy_on")[0]?.actor, "owner:mcp");
+    assert.equal((await audits(store, "retention_policy_on"))[0]?.actor, "owner:mcp");
   });
 });

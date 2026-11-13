@@ -20,7 +20,7 @@ export function splitFor(rig: RigView, raw: string): number | string | undefined
 }
 
 /** Sends the rig its new GPU split, signed for the owner; the rig restarts its harness to apply it. */
-export const sendSplit = (
+export const sendSplit = async (
   store: ControlStore,
   privateKeyPem: string,
   rig: string,

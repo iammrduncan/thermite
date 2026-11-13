@@ -22,10 +22,10 @@ import { makeHarnessEnv } from "../../helpers/harness-env.ts";
 
 /** Control, a rig whose report key control pinned and whose run smoke-1 it knows, and a bus. */
 async function rig() {
-  const s = controlStack({ env: makeHarnessEnv("rig-a") });
+  const s = await controlStack({ env: makeHarnessEnv("rig-a") });
   await s.relay();
   const at = new Date().toISOString();
-  s.store.runRegistry.registerRunCreated("rig-a", "ledger-1", {
+  await s.store.runRegistry.registerRunCreated("rig-a", "ledger-1", {
     kind: "run_created",
     subject: "smoke-1",
     body: {},
@@ -50,7 +50,11 @@ async function rig() {
   const live = s.env.service.live;
   const taken = new LiveTaken();
   /** Control folds every message the bus kept, as its consumer does. */
-  const fold = () => bus.kept.map((m) => foldLive({ store: s.store, taken }, asMessage(m)));
+  const fold = async () => {
+    const folded = [];
+    for (const m of bus.kept) folded.push(await foldLive({ store: s.store, taken }, asMessage(m)));
+    return folded;
+  };
   return { ...s, bus, own, counts, cfg, live, taken, fold };
 }
 
@@ -80,7 +84,7 @@ describe("the supervisor's live lines on the message bus", () => {
       ],
     );
     assert.deepEqual(
-      s.fold().map((f) => ("refused" in f ? f.refused : f.added)),
+      (await s.fold()).map((f) => ("refused" in f ? f.refused : f.added)),
       [1, 1],
       "control takes an advisor's unsigned lines",
     );
@@ -88,7 +92,9 @@ describe("the supervisor's live lines on the message bus", () => {
     const forged = { ...s.bus.kept[0], subject: "thermite.run.smoke-1.live.planner" };
     s.bus.kept.push(forged as (typeof s.bus.kept)[number]);
     assert.ok(
-      JSON.stringify(s.fold().at(-1)).includes("unsigned lines must be the supervisor's own"),
+      JSON.stringify((await s.fold()).at(-1)).includes(
+        "unsigned lines must be the supervisor's own",
+      ),
     );
   });
 
@@ -170,11 +176,11 @@ describe("the supervisor's live lines on the message bus", () => {
     });
     // Control folds them into the rig's live view: the harness's signed, the supervisor's not.
     assert.deepEqual(
-      s.fold().map((f) => ("added" in f ? f.added : f.refused)),
+      (await s.fold()).map((f) => ("added" in f ? f.added : f.refused)),
       [2, 1, 1, 1, 1],
     );
     assert.deepEqual(
-      s.store.liveLines.ofRun("rig-a", "smoke-1", 0, 10).map((e) => [e.text, e.signed]),
+      (await s.store.liveLines.ofRun("rig-a", "smoke-1", 0, 10)).map((e) => [e.text, e.signed]),
       [
         ["planning round 1", true],
         ["planned round 1", true],
@@ -200,9 +206,9 @@ describe("the supervisor's live lines on the message bus", () => {
       ["thermite.rig.rig-a.live.planner"],
     );
     // Control takes a run's lines on the rig's subject: they show on the run's Live.
-    s.fold();
+    await s.fold();
     assert.deepEqual(
-      s.store.liveLines.ofRun("rig-a", "smoke-1", 0, 10).map((e) => e.text),
+      (await s.store.liveLines.ofRun("rig-a", "smoke-1", 0, 10)).map((e) => e.text),
       ["planning"],
     );
     // Refused everywhere (a retired rig's user): dropped, counted, and the place moves on.

@@ -5,7 +5,11 @@ import { answerRigAsk } from "../../src/control/bus/index.ts";
 import { EventsApply, EventsMove, EventsWriter } from "../../src/control/events/index.ts";
 import { type Folded, foldReport, keepReport } from "../../src/control/ingest.ts";
 import { Screens } from "../../src/control/live/index.ts";
-import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";
+import {
+  type ControlStore,
+  type IngestReport,
+  openControlStore,
+} from "../../src/control/store/index.ts";
 import {
   FoldCache,
   keepFolds,
@@ -45,7 +49,7 @@ const onBus = new WeakMap<ControlStore, OnBus>();
  * the apply, the writer and the move started as control's main starts them.
  */
 export function controlStore(path = ":memory:", bus = new FakeBus()): ControlStore {
-  return storeOnBus(new ControlStore(path), bus);
+  return storeOnBus(openControlStore(path), bus);
 }
 
 /**
@@ -54,7 +58,8 @@ export function controlStore(path = ":memory:", bus = new FakeBus()): ControlSto
  */
 export function storeOnBus(store: ControlStore, bus: FakeBus): ControlStore {
   const apply = new EventsApply({ store, bus, retryMs: 5 });
-  const writer = new EventsWriter({ store, bus, apply, applyWaitMs: 2_000 });
+  // Long enough for a store whose every call takes a turn of the event loop (--store-waits turn).
+  const writer = new EventsWriter({ store, bus, apply, applyWaitMs: 20_000 });
   const move = new EventsMove({ store, bus, retryMs: 5, published: () => void apply.nudge() });
   const started = bus
     .makeStream(EVENT_STREAM_CONFIG)
@@ -69,12 +74,16 @@ export function storeOnBus(store: ControlStore, bus: FakeBus): ControlStore {
  * each rig, with the token it reports with, or gives only names (a random token each). A rig
  * enrolled already keeps its token.
  */
-export function enrollRigs(store: ControlStore, rigs: readonly string[] | Record<string, string>) {
+export async function enrollRigs(
+  store: ControlStore,
+  rigs: readonly string[] | Record<string, string>,
+) {
   const named = Array.isArray(rigs)
     ? rigs.map((rig) => [rig, newToken().token] as const)
     : Object.entries(rigs);
   for (const [rig, token] of named)
-    if (!store.enrollments.rig(rig)) store.enrollments.enroll(rig, sha256Hex(token), "test");
+    if (!(await store.enrollments.rig(rig)))
+      await store.enrollments.enroll(rig, sha256Hex(token), "test");
 }
 
 /** The store's bus, its writer, its move and its apply, for a test that looks at them. */
@@ -135,18 +144,18 @@ export async function foldOnBus(
  * applied (`delivered`), not applied (`failed`) or refused (`rejected`), with the outcome the
  * harness recorded. Whether the command was pending.
  */
-export function answerCommand(
+export async function answerCommand(
   store: ControlStore,
   rig: string,
   id: string,
   status: "delivered" | "failed" | "rejected",
   outcome: unknown,
-): boolean {
-  const pending = store.commands.get(id)?.status === "pending";
+): Promise<boolean> {
+  const pending = (await store.commands.get(id))?.status === "pending";
   const at = new Date().toISOString();
   const kept = canonicalJson(outcome ?? {});
-  if (status === "rejected") store.commands.confirmRejected(rig, id, kept, at);
-  else store.commands.confirmApplied(rig, id, status, kept, at);
+  if (status === "rejected") await store.commands.confirmRejected(rig, id, kept, at);
+  else await store.commands.confirmApplied(rig, id, status, kept, at);
   return pending;
 }
 
@@ -155,7 +164,11 @@ export function answerCommand(
  * (control/bus/asks.ts): control's answer, which names its place in the rig's reports, or its
  * refusal in words.
  */
-export function figuresOnBus(store: ControlStore, rig: string, figures: unknown): object {
+export async function figuresOnBus(
+  store: ControlStore,
+  rig: string,
+  figures: unknown,
+): Promise<object> {
   const deps = { store, control: buildInfo(), privateKeyPem: "", screens: new Screens() };
   return answerRigAsk(deps, rig, "figures", figures);
 }
@@ -164,8 +177,12 @@ export function figuresOnBus(store: ControlStore, rig: string, figures: unknown)
  * The same as figuresOnBus, as a response a test reads as it read control's answer over HTTP:
  * 200 with control's answer, or 400 with its refusal in `error`.
  */
-export function figuresCall(store: ControlStore, rig: string, figures: unknown): Response {
-  const answer = figuresOnBus(store, rig, figures) as { refused?: string };
+export async function figuresCall(
+  store: ControlStore,
+  rig: string,
+  figures: unknown,
+): Promise<Response> {
+  const answer = (await figuresOnBus(store, rig, figures)) as { refused?: string };
   return answer.refused === undefined
     ? Response.json(answer)
     : Response.json({ error: answer.refused }, { status: 400 });
@@ -210,7 +227,7 @@ export async function freshFolds(store: ControlStore): Promise<FoldCache> {
   for (let from = 1; ; ) {
     const read = await bus.read(EVENT_STREAM, { from, limit: BUS_READ_MAX });
     if (read.next <= from) return folds;
-    folds.take(
+    await folds.take(
       read.messages.flatMap((m) => streamEvent(m) ?? []),
       read.next - 1,
     );

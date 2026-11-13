@@ -21,9 +21,9 @@ import { makeHarnessEnv } from "../../helpers/harness-env.ts";
  * the rig's own subject, answered at its own inbox alone, a refusal in words.
  */
 
-function setup() {
+async function setup() {
   const env = makeHarnessEnv("rig-a");
-  const c = controlOnly({ keys: env.keys });
+  const c = await controlOnly({ keys: env.keys });
   const screens = new Screens();
   const deps = {
     store: c.store,
@@ -36,7 +36,7 @@ function setup() {
     env,
     screens,
     deps,
-    ask: (kind: (typeof RIG_ASK_KINDS)[number], body: unknown) =>
+    ask: async (kind: (typeof RIG_ASK_KINDS)[number], body: unknown) =>
       answerRigAsk(deps, "rig-a", kind, body),
   };
 }
@@ -60,73 +60,82 @@ describe("a rig's asks of control on the bus", () => {
   });
 
   test("figures are kept and answered with control's place; a field control knows keeps its check", async () => {
-    const s = setup();
-    assert.deepEqual(s.ask("figures", { at: new Date().toISOString(), relay: { cursor: 4 } }), {
-      ok: true,
-      reports: { ledger_id: null, cursor: 0 },
-    });
-    assert.deepEqual(s.store.reportedRigs.supervisor("rig-a")?.relay, { cursor: 4 });
-    const bad = s.ask("figures", { at: "now", relay: { cursor: "four" } }) as { refused: string };
+    const s = await setup();
+    assert.deepEqual(
+      await s.ask("figures", { at: new Date().toISOString(), relay: { cursor: 4 } }),
+      {
+        ok: true,
+        reports: { ledger_id: null, cursor: 0 },
+      },
+    );
+    assert.deepEqual((await s.store.reportedRigs.supervisor("rig-a"))?.relay, { cursor: 4 });
+    const bad = (await s.ask("figures", { at: "now", relay: { cursor: "four" } })) as {
+      refused: string;
+    };
     assert.match(bad.refused, /^the figures is not one control takes: relay\.cursor/);
     // Its keys are not taken here: the registration over HTTPS takes them.
-    s.ask("figures", { at: "now", bus_key: "U".repeat(56) });
-    assert.equal(s.store.busKeys.rigKey("rig-a"), undefined);
+    await s.ask("figures", { at: "now", bus_key: "U".repeat(56) });
+    assert.equal(await s.store.busKeys.rigKey("rig-a"), undefined);
   });
 
   test("a refused rig's figures are not kept, but answered with control's place; its other asks are refused", async () => {
-    const s = setup();
+    const s = await setup();
     const newer = { version: "9.0.0", commit: null, protocol: 99, oldest_protocol: 99 };
-    s.store.builds.setRig("rig-a", "supervisor", newer);
-    const answer = s.ask("figures", { at: "now", relay: { cursor: 1 } });
+    await s.store.builds.setRig("rig-a", "supervisor", newer);
+    const answer = await s.ask("figures", { at: "now", relay: { cursor: 1 } });
     assert.deepEqual(answer, { reports: { ledger_id: null, cursor: 0 } });
-    assert.equal(s.store.reportedRigs.supervisor("rig-a"), null);
-    const daily = s.ask("daily", { kind: "daily", body: "# A day" }) as { refused: string };
+    assert.equal(await s.store.reportedRigs.supervisor("rig-a"), null);
+    const daily = (await s.ask("daily", { kind: "daily", body: "# A day" })) as { refused: string };
     assert.match(daily.refused, /^Control cannot work with this rig/);
-    assert.equal(s.store.refusals.get("rig-a")?.calls, 2);
+    assert.equal((await s.store.refusals.get("rig-a"))?.calls, 2);
   });
 
-  test("screens: kept only for a trial a page watches, and the trials watched now", () => {
-    const s = setup();
+  test("screens: kept only for a trial a page watches, and the trials watched now", async () => {
+    const s = await setup();
     const frame = { trial: "t-1", state: "running", cols: 1, rows: 1, data: "x", at: "now" };
-    assert.deepEqual(s.ask("screens", { frames: [frame] }), { watch: [] });
+    assert.deepEqual(await s.ask("screens", { frames: [frame] }), { watch: [] });
     assert.equal(s.screens.frame("rig-a", "t-1"), undefined);
     const stop = s.screens.watch("rig-a", "t-1");
-    assert.deepEqual(s.ask("screens", { frames: [] }), { watch: ["t-1"] });
-    s.ask("screens", { frames: [frame] });
+    assert.deepEqual(await s.ask("screens", { frames: [] }), { watch: ["t-1"] });
+    await s.ask("screens", { frames: [frame] });
     assert.equal(s.screens.frame("rig-a", "t-1")?.data, "x");
     stop?.();
   });
 
-  test("the daily report is kept, and answered with its id", () => {
-    const s = setup();
-    const r = s.ask("daily", { kind: "daily", body: "# The day" }) as { id: number };
-    assert.equal(s.store.rigReports.list(5, "rig-a")[0]?.id, r.id);
+  test("the daily report is kept, and answered with its id", async () => {
+    const s = await setup();
+    const r = (await s.ask("daily", { kind: "daily", body: "# The day" })) as { id: number };
+    assert.equal((await s.store.rigReports.list(5, "rig-a"))[0]?.id, r.id);
   });
 
   test("a command's newest form: renewed near its expiry, as control holds it otherwise, none once it is not pending", async () => {
-    const s = setup();
-    const { id } = issueCommand(s.store, s.env.keys.privateKeyPem, {
+    const s = await setup();
+    const { id } = await issueCommand(s.store, s.env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "pause_run",
       payload: { run: "r-1", reason: "x" },
       ttlMinutes: 5,
       issuedBy: "owner:test",
     });
-    const renewed = s.ask("renew", { id }) as { command: { envelope: { expires_at: string } } };
+    const renewed = (await s.ask("renew", { id })) as {
+      command: { envelope: { expires_at: string } };
+    };
     assert.ok(Date.parse(renewed.command.envelope.expires_at) > Date.now() + 50 * 60_000);
-    assert.ok(s.store.auditLog.list(5).some((a) => a.action === "command_renewed"));
+    assert.ok((await s.store.auditLog.list(5)).some((a) => a.action === "command_renewed"));
     // Not due again: the form control holds now.
-    const again = s.ask("renew", { id }) as { command: { envelope: { expires_at: string } } };
+    const again = (await s.ask("renew", { id })) as {
+      command: { envelope: { expires_at: string } };
+    };
     assert.equal(again.command.envelope.expires_at, renewed.command.envelope.expires_at);
-    s.store.commands.cancel(id, "owner:test");
+    await s.store.commands.cancel(id, "owner:test");
     assert.match(
-      (s.ask("renew", { id }) as { refused: string }).refused,
+      ((await s.ask("renew", { id })) as { refused: string }).refused,
       /holds no pending command/,
     );
   });
 
   test("served on the bus: answered at the asking rig's own inbox alone", async () => {
-    const s = setup();
+    const s = await setup();
     let answer: ((r: BusRequest) => Promise<string | undefined>) | undefined;
     await serveRigAsks(
       {
@@ -153,7 +162,7 @@ describe("a rig's asks of control on the bus", () => {
   });
 
   test("a rig on a leaf node is answered at the reply its service import made; a rig on control's server is not", async () => {
-    const s = setup();
+    const s = await setup();
     let answer: ((r: BusRequest) => Promise<string | undefined>) | undefined;
     await serveRigAsks(
       {
@@ -172,7 +181,7 @@ describe("a rig's asks of control on the bus", () => {
     // On control's own server, a reply outside the rig's inbox is refused.
     assert.equal(await ask("_R_.abc.def"), undefined);
     // Launched with a leaf node, the rig's asks come through its account's service import.
-    s.deps.store.tunnels.add({
+    await s.deps.store.tunnels.add({
       rig: "rig-a",
       port: 8790,
       prefix_sealed: "x",
@@ -185,7 +194,7 @@ describe("a rig's asks of control on the bus", () => {
       leaf_ca: "the pod's authority",
     });
     assert.match(String(await ask("_R_.abc.def")), /"reports"/);
-    assert.equal(answerStaysWithRig(s.deps.store, "rig-a", "_INBOX.rig.rig-b.x"), false);
-    assert.equal(answerStaysWithRig(s.deps.store, "rig-b", "_R_.abc.def"), false);
+    assert.equal(await answerStaysWithRig(s.deps.store, "rig-a", "_INBOX.rig.rig-b.x"), false);
+    assert.equal(await answerStaysWithRig(s.deps.store, "rig-b", "_R_.abc.def"), false);
   });
 });

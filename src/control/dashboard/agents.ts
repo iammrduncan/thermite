@@ -11,7 +11,7 @@ import type { Dashboard } from "./context.ts";
  */
 export function agentRoutes(app: Hono, dash: Dashboard): void {
   const { page, runOf, store } = dash;
-  app.get(agentsHref, (c) =>
+  app.get(agentsHref, async (c) =>
     page(
       c,
       {
@@ -22,7 +22,7 @@ export function agentRoutes(app: Hono, dash: Dashboard): void {
       rolesPage(roles()),
     ),
   );
-  app.get(`${agentsHref}/:role`, (c) => {
+  app.get(`${agentsHref}/:role`, async (c) => {
     const r = role(c.req.param("role"));
     const crumbs = [{ href: agentsHref, text: "Agents" }];
     if (!r) {

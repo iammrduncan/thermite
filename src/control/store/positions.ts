@@ -23,7 +23,15 @@ export function appliedPlacesTables(db: DatabaseSync): void {
     db.exec("alter table rig_ledger add column through_event integer not null default 0");
 }
 
-export class BusPositions extends StorePart {
+export interface BusPositions {
+  /** The place in the stream control's store applied through: 0 before its first message. */
+  of(stream: string): Promise<number>;
+  /** The place control's store applied through now, in the transaction of what it applied. */
+  set(stream: string, seq: number): Promise<void>;
+}
+
+/** BusPositions on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteBusPositions extends StorePart {
   /** The place in the stream control's store applied through: 0 before its first message. */
   of(stream: string): number {
     const r = this.db.prepare("select seq from bus_position where stream = ?").get(stream) as

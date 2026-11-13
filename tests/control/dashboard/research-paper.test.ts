@@ -14,7 +14,9 @@ import { ingestReport } from "../../helpers/control-store.ts";
 const PAGE = "/ui/campaigns/survey/runs/s-1";
 
 async function control() {
-  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": "t-a-abcdef" } } });
+  const { store, control: api } = await controlOnly({
+    tokens: { rigs: { "rig-a": "t-a-abcdef" } },
+  });
   const { get, page } = await signIn(api);
   let id = 0;
   const t0 = Date.now() - 3600_000;
@@ -224,13 +226,13 @@ describe("a research run's paper on control (goal 112)", () => {
       },
     });
     const kb = c.store.kb();
-    const items = kb.search("", ["survey"], { kinds: ["experiment"] });
+    const items = await kb.search("", ["survey"], { kinds: ["experiment"] });
     assert.equal(items.length, 1);
     const x = items[0];
     assert.ok(x);
     assert.equal(x.by, "writer:teacher-1");
     assert.equal(x.run, "s-1");
-    const seed = queueSeedOf(x, kb.resultOf(x));
+    const seed = queueSeedOf(x, await kb.resultOf(x));
     assert.deepEqual(seed, {
       title: "Count the pages on a second site",
       details:

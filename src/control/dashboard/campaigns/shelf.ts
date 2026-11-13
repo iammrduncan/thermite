@@ -23,7 +23,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
    * Where Archive or a folder's form returns: its page, with what control did (sent) or what it
    * refused (error, on=shelf), in words. The navigation's script asks for JSON instead.
    */
-  const shelfAnswer = <T>(
+  const shelfAnswer = async <T>(
     c: Ctx,
     f: Record<string, unknown>,
     out: ShelfOutcome<T>,
@@ -34,7 +34,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     if (c.req.header("accept")?.includes("application/json")) {
       if (out.ok) return c.json({ ...out.answer, said: done(out.answer) });
       // A redirect's refusal is audited from its address; this answer says it itself.
-      store.auditLog.refusal("owner:ui", "refused", {
+      await store.auditLog.refusal("owner:ui", "refused", {
         path: new URL(c.req.url).pathname,
         why: out.error,
       });
@@ -48,7 +48,8 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return c.redirect(`${path}${path.includes("?") ? "&" : "?"}${q}${hash ? `#${hash}` : ""}`, 303);
   };
   /** A folder of the navigation by the id its forms carry. */
-  const folderById = (id: string) => store.folders.list().find((x) => String(x.id) === id);
+  const folderById = async (id: string) =>
+    (await store.folders.list()).find((x) => String(x.id) === id);
   const goneFolder = {
     ok: false,
     error: "That folder is not there any more.",
@@ -59,7 +60,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       await c.req.parseBody(),
-      archiveCampaign(store, views(), name, "owner:ui"),
+      await archiveCampaign(store, await views(), name, "owner:ui"),
       (a) =>
         a.changed
           ? `Archived ${name}. It left the navigation, Needs you and the Overview.`
@@ -73,7 +74,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       await c.req.parseBody(),
-      unarchiveCampaign(store, name, "owner:ui"),
+      await unarchiveCampaign(store, name, "owner:ui"),
       (a) =>
         a.changed
           ? `Unarchived ${name}. It is back in the navigation, ${a.folder ? `in ${a.folder}` : "in no folder"}.`
@@ -86,11 +87,11 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     const name = c.req.param("campaign");
     const f = await c.req.parseBody();
     const id = String(f.folder ?? "");
-    const to = id ? folderById(id) : undefined;
+    const to = id ? await folderById(id) : undefined;
     return shelfAnswer(
       c,
       f,
-      id && !to ? goneFolder : moveCampaign(store, name, to?.name ?? null, "owner:ui"),
+      id && !to ? goneFolder : await moveCampaign(store, name, to?.name ?? null, "owner:ui"),
       (a) =>
         !a.changed
           ? a.folder
@@ -108,7 +109,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       f,
-      createFolder(store, String(f.name ?? ""), "owner:ui"),
+      await createFolder(store, String(f.name ?? ""), "owner:ui"),
       (a) =>
         `Made the folder ${a.folder.name}. Drag a campaign onto it, or use Move to folder on a campaign's page.`,
       "No folder made.",
@@ -117,11 +118,13 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
   });
   app.post("/ui/campaign-folders/:id/rename", async (c) => {
     const f = await c.req.parseBody();
-    const folder = folderById(c.req.param("id"));
+    const folder = await folderById(c.req.param("id"));
     return shelfAnswer(
       c,
       f,
-      folder ? renameFolder(store, folder.name, String(f.name ?? ""), "owner:ui") : goneFolder,
+      folder
+        ? await renameFolder(store, folder.name, String(f.name ?? ""), "owner:ui")
+        : goneFolder,
       (a) => (a.changed ? `Renamed ${a.was} to ${a.folder.name}.` : "Nothing to rename."),
       "Not renamed.",
       "/ui/campaigns",
@@ -129,11 +132,11 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
   });
   app.post("/ui/campaign-folders/:id/delete", async (c) => {
     const f = await c.req.parseBody();
-    const folder = folderById(c.req.param("id"));
+    const folder = await folderById(c.req.param("id"));
     return shelfAnswer(
       c,
       f,
-      folder ? deleteFolder(store, folder.name, "owner:ui") : goneFolder,
+      folder ? await deleteFolder(store, folder.name, "owner:ui") : goneFolder,
       (a) => `Deleted the folder ${a.deleted}.`,
       "Not deleted.",
       "/ui/campaigns",

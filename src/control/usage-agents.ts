@@ -54,12 +54,16 @@ const isHarness = (h: string): h is UsageHarness =>
  * on Edit rig, its newest "has no answer" line on Live, else what it waits for. None for a closed
  * run, whose rig may have other agents now, or for a run without agents.
  */
-export function configuredAgents(store: ControlStore, rig: string, run: string): ConfiguredAgent[] {
-  const view = rigView(store, rig);
+export async function configuredAgents(
+  store: ControlStore,
+  rig: string,
+  run: string,
+): Promise<ConfiguredAgent[]> {
+  const view = await rigView(store, rig);
   const r = view?.runs.find((x) => x.id === run);
   if (!r || r.status === "closed" || r.has_agents === false) return [];
-  const control = agentModelsOf(store, rig);
-  const file = advisorsFileOf(store.reportedRigs.supervisor(rig));
+  const control = await agentModelsOf(store, rig);
+  const file = advisorsFileOf(await store.reportedRigs.supervisor(rig));
   const reported = view?.model;
   const workers: Given | null = control.workers
     ? { agent: "workers", ...control.workers }
@@ -117,9 +121,9 @@ export function configuredAgents(store: ControlStore, rig: string, run: string):
     research ? one("synthesizer", control.synthesizer, ["synthesizer"], teachers[0]) : null,
     research ? one("final_writer", control.final_writer, ["final-writer"], teachers[0]) : null,
   ];
-  const settings = rigSettingsOf(store, rig)?.settings ?? null;
+  const settings = (await rigSettingsOf(store, rig))?.settings ?? null;
   const sources = given.flatMap((g) => (g?.live ?? []).map(advisorLiveSource));
-  const said = store.liveLines.noAnswers(rig, run, sources);
+  const said = await store.liveLines.noAnswers(rig, run, sources);
   const seen = new Set<string>();
   return given.flatMap((g) => {
     if (!g?.model || !isHarness(g.harness)) return [];

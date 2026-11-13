@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { runStartBody, runStartSaid } from "../../src/cli/run.ts";
 import { issueCommand } from "../../src/control/issue/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { controlOnly } from "../helpers/control-stack.ts";
 import { enrollRigs, ingestReport } from "../helpers/control-store.ts";
@@ -61,10 +62,10 @@ async function report(
 
 describe("thermite run start (goal 029)", () => {
   test("starts a run as the campaign page's Start a run does, and says its refusals", async () => {
-    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
-    enrollRigs(store, ["rig-a"]);
+    const { keys, store, control: api } = await controlOnly({ tokens: TOKENS });
+    await enrollRigs(store, ["rig-a"]);
     // sort-speed was assigned over the API before: Start a run assigns it again.
-    issueCommand(store, keys.privateKeyPem, {
+    await issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: {
@@ -92,12 +93,12 @@ describe("thermite run start (goal 029)", () => {
         model: { source: "none", harness: "pi" },
       },
     );
-    store.modelProviders.put({
+    await store.modelProviders.put({
       name: "zen",
       type: "opencode",
       base_url: "https://opencode.ai/zen/v1",
     });
-    store.modelProviders.setModels("zen", [{ id: "glm-5.3-flash-free" }]);
+    await store.modelProviders.setModels("zen", [{ id: "glm-5.3-flash-free" }]);
     const server = serve({ fetch: api.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
     const control = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -129,8 +130,8 @@ describe("thermite run start (goal 029)", () => {
         started.stderr,
         "sort-speed-1 is at work on rig-a, and pauses when this run starts (a rig runs one run at a time).\n",
       );
-      const signed = store.db
-        .prepare("select issued_by, signed from command where id = ?")
+      const signed = sqliteBehind(store)
+        .db.prepare("select issued_by, signed from command where id = ?")
         .get(String(out.command)) as { issued_by: string; signed: string };
       assert.equal(signed.issued_by, "owner:api");
       const payload = (
@@ -201,7 +202,10 @@ describe("thermite run start (goal 029)", () => {
       assert.equal(usage.code, 2);
       assert.match(usage.stderr, /^usage: thermite/);
       // Nothing more was signed than the one run.
-      assert.equal(store.commands.list(50).filter((c) => c.kind === "assign_campaign").length, 2);
+      assert.equal(
+        (await store.commands.list(50)).filter((c) => c.kind === "assign_campaign").length,
+        2,
+      );
     } finally {
       server.close();
     }

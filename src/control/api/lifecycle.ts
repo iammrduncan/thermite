@@ -22,11 +22,11 @@ export function lifecycleRoutes(app: Hono, api: ApiContext): void {
 
   app.post(RESTART.path, admin, bodyLimit({ maxSize: RESTART.maxBytes }), async (c) => {
     const rig = c.req.param("rig");
-    const onRunpod = runpodDriver.serves(rig);
+    const onRunpod = await runpodDriver.serves(rig);
     const driver = onRunpod ? runpodDriver : opts.driver;
     if (!driver) return c.json({ error: "no deployment driver is configured" }, 409);
     const body = RESTART.body.parse(await c.req.json().catch(() => ({})));
-    store.auditLog.add("owner:api", "restart", { rig, components: body.components });
+    await store.auditLog.add("owner:api", "restart", { rig, components: body.components });
     if (!onRunpod) return c.json({ restarted: await driver.restart(rig, body.components) });
     try {
       return c.json({ restarted: await driver.restart(rig, body.components, "owner:api") });
@@ -41,9 +41,9 @@ export function lifecycleRoutes(app: Hono, api: ApiContext): void {
     if (body.confirm !== `reset ${rig}`)
       return c.json({ error: `confirm with "reset ${rig}"` }, 400);
     // A rig on RunPod: its pod must run, with no stop, start or terminate under way.
-    const refused = runpodResetRefusal(store, rig);
+    const refused = await runpodResetRefusal(store, rig);
     if (refused) return c.json({ error: refused }, 409);
-    const id = store.fullResets.create(rig, "owner:api");
+    const id = await store.fullResets.create(rig, "owner:api");
     await advanceResets({
       store,
       privateKeyPem,
@@ -53,10 +53,10 @@ export function lifecycleRoutes(app: Hono, api: ApiContext): void {
     return c.json({ reset: id }, 201);
   });
 
-  app.get(RESETS.path, admin, (c) => c.json({ resets: store.fullResets.list() }));
+  app.get(RESETS.path, admin, async (c) => c.json({ resets: await store.fullResets.list() }));
 
   app.post(RESET_CONFIRM.path, admin, async (c) => {
-    confirmReset(store, Number(c.req.param("id")), "owner:api");
+    await confirmReset(store, Number(c.req.param("id")), "owner:api");
     await advanceResets({
       store,
       privateKeyPem,
@@ -66,8 +66,8 @@ export function lifecycleRoutes(app: Hono, api: ApiContext): void {
     return c.json({ ok: true });
   });
 
-  app.post(RESET_CANCEL.path, admin, (c) => {
-    cancelReset(store, Number(c.req.param("id")), "owner:api");
+  app.post(RESET_CANCEL.path, admin, async (c) => {
+    await cancelReset(store, Number(c.req.param("id")), "owner:api");
     return c.json({ ok: true });
   });
 }

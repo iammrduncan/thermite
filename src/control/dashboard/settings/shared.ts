@@ -41,26 +41,26 @@ export function settingsHelpers(dash: Dashboard) {
    * Git access for control's own lookup of `url`: the secret unsealed, host keys pinned per
    * access. Refused, in words, for a URL on a host other than the one the access is for.
    */
-  const accessFor = (name: string | undefined, url: string) =>
+  const accessFor = async (name: string | undefined, url: string) =>
     gitAccessFor(store, opts.secrets, opts.kits?.dir, name, url);
 
   /** Reads a GPU cloud's account now with its key, and keeps what it found or why it could not. */
   const checkCloudNow = async (name: string): Promise<string | null> => {
-    const g = store.gpuClouds.get(name);
+    const g = await store.gpuClouds.get(name);
     if (!g) return "no such GPU cloud";
     let key: string;
     try {
       key = opts.secrets.open(g.key_sealed);
     } catch {
-      store.gpuClouds.setFacts(name, { error: "its key cannot be opened: enter it again" });
+      await store.gpuClouds.setFacts(name, { error: "its key cannot be opened: enter it again" });
       return "its key cannot be opened: enter it again";
     }
     try {
-      store.gpuClouds.setFacts(name, { facts: await readRunpod(key, opts.cloudFetch) });
+      await store.gpuClouds.setFacts(name, { facts: await readRunpod(key, opts.cloudFetch) });
       return null;
     } catch (err) {
       const why = errorText(err);
-      store.gpuClouds.setFacts(name, { error: why });
+      await store.gpuClouds.setFacts(name, { error: why });
       return why;
     }
   };

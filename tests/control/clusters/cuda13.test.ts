@@ -50,7 +50,7 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
     assert.deepEqual(added, { error: false, body: { rig: "spark-1", status: "deploying" } });
     await settle(f, 1);
     assert.equal(harnessApplied(f), "registry.example.com/harness-cuda13:1");
-    assert.equal(s.store.clusters.rig("spark-1")?.spec.cuda, "13");
+    assert.equal((await s.store.clusters.rig("spark-1"))?.spec.cuda, "13");
     // A rig with GPUs and no choice runs the CUDA 12 harness, as before.
     await mcp.call("add_cluster_rig", {
       rig: "older-gpu-1",
@@ -60,11 +60,11 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
     });
     await settle(f, 2);
     assert.equal(harnessApplied(f), "registry.example.com/harness-cuda:1");
-    assert.equal(s.store.clusters.rig("older-gpu-1")?.spec.cuda, undefined);
+    assert.equal((await s.store.clusters.rig("older-gpu-1"))?.spec.cuda, undefined);
     await mcp.close();
 
     // Control on newer images: the CUDA 13 rig moves onto the newer CUDA 13 harness.
-    s.store.clusters.setRigStatus("spark-1", "running");
+    await s.store.clusters.setRigStatus("spark-1", "running");
     const later = await control(f.k, { store: s.store, secrets: s.secrets, tag: "2" });
     const owner = await mcpWith(later.api, OPERATOR);
     f.calls.length = 0;
@@ -97,7 +97,7 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
       refused.body.error,
       "Control has no CUDA 13 harness image configured (THERMITE_RIG_HARNESS_CUDA13_IMAGE).",
     );
-    assert.equal(none.s.store.clusters.rig("spark-2"), undefined, "nothing was added");
+    assert.equal(await none.s.store.clusters.rig("spark-2"), undefined, "nothing was added");
     await none.mcp.close();
   });
 
@@ -153,7 +153,9 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
       }),
       /"k8s-a" is added and checked/,
     );
-    const facts = s.store.clusters.get("k8s-a")?.facts as { gpu_classes?: unknown } | undefined;
+    const facts = (await s.store.clusters.get("k8s-a"))?.facts as
+      | { gpu_classes?: unknown }
+      | undefined;
     assert.deepEqual(facts?.gpu_classes, {
       "spark-gpus": { product: "NVIDIA GB10", cc: "12.1.0", arch: "arm64", node: "gpu-node-1" },
       "other-gpus": { product: "Tesla P100-PCIE-16GB" },
@@ -175,7 +177,7 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
       gpu_mode: "dra:spark-gpus",
     });
     assert.equal(added.error, false, JSON.stringify(added.body));
-    assert.equal(s.store.clusters.rig("spark-1")?.spec.cuda, "13");
+    assert.equal((await s.store.clusters.rig("spark-1"))?.spec.cuda, "13");
     // The form's choice of 12 stays 12, whatever the GPU.
     assert.equal(
       await s.post("/ui/rigs/add", {
@@ -189,7 +191,7 @@ describe("a cluster rig on the CUDA 13 harness (goal 132)", () => {
       }),
       "/ui/rigs/spark-2",
     );
-    assert.equal(s.store.clusters.rig("spark-2")?.spec.cuda, undefined);
+    assert.equal((await s.store.clusters.rig("spark-2"))?.spec.cuda, undefined);
     await mcp.close();
   });
 

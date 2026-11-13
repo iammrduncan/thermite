@@ -92,11 +92,15 @@ export function diskNeeds(c: NeedsContext, u: RigView): Need[] {
 }
 
 /** A rig whose drain passed its deadline: it starts nothing new, and waits for the owner's choice. */
-export function drainNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
+export async function drainNeeds(
+  c: NeedsContext,
+  store: ControlStore,
+  u: RigView,
+): Promise<Need[]> {
   const w = workOf(u.summary);
   const d = w?.draining;
   if (!w || !d?.deadline_reached) return [];
-  const choices = drainChoices(store, u.id);
+  const choices = await drainChoices(store, u.id);
   const form = (choice: "apply" | "end", label: string, cls: string) =>
     `<form class="inline" method="post" action="/ui/rigs/${encodeURIComponent(u.id)}/drain/${choice}"><input type="hidden" name="csrf" value="${c.f.csrf}"><input type="hidden" name="back" value="${esc(c.back)}"><button class="${cls}">${esc(label)}</button></form>`;
   const jobs = w.judge_jobs === 1 ? "the judge's job" : `the judge's ${w.judge_jobs} jobs`;

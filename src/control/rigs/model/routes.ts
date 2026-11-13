@@ -173,8 +173,8 @@ async function routeOf(
  * agent's own cap on its window and its compaction point (goal 070), as the workers' route has.
  */
 async function roleRouteOf(parts: RouteParts, rig: string, role: AgentRole) {
-  const a = parts.store.agentModels.byRole(rig)[role];
-  const p = a ? parts.store.modelProviders.get(a.provider) : undefined;
+  const a = (await parts.store.agentModels.byRole(rig))[role];
+  const p = a ? await parts.store.modelProviders.get(a.provider) : undefined;
   if (!a || !p) return null;
   // The harness the owner chose for the agent (goal 073), else what its model needs: Claude
   // Code for a subscription, OpenCode for OpenCode's own models, else Pi.
@@ -193,7 +193,7 @@ export async function modelRoutesOf(
   parts: RouteParts,
   rig: string,
 ): Promise<ModelRoutes | { error: string }> {
-  const r = parts.store.agentModels.forRig(rig);
+  const r = await parts.store.agentModels.forRig(rig);
   const planner = await roleRouteOf(parts, rig, "planner");
   if (!r) return { route: null, planner };
   const route = await routeOf(

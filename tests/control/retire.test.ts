@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import { ADMIN, controlOnly, signIn } from "../helpers/control-stack.ts";
 
 const RIG_TOKEN = "rig-token-in-the-file-0001";
 
 describe("retiring a rig that is gone", () => {
   test("any rig, even one from the tokens file: out of the lists and Needs you, its reports refused, back on request", async () => {
-    const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN } } });
+    const { store, control: api } = await controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN } } });
     // A rig that reported once, long ago: it shows as not reporting.
-    store.db
-      .prepare(
+    sqliteBehind(store)
+      .db.prepare(
         "insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at) values (?, ?, ?, null, '{}', ?)",
       )
       .run("rig-a", "2026-10-01T00:00:00Z", "2026-10-01T00:00:00Z", "2026-10-01T00:00:00Z");
@@ -20,8 +21,8 @@ describe("retiring a rig that is gone", () => {
     assert.match(await page("/ui"), /rig-a stopped reporting/);
     assert.match(await page("/ui/rigs/rig-a"), /Retire it/);
     // A rig that never reported has no last report: "not yet", not days since 1970.
-    store.db
-      .prepare(
+    sqliteBehind(store)
+      .db.prepare(
         "insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at) values (?, ?, ?, null, '{}', ?)",
       )
       .run("rig-new", "2026-10-19T00:00:00Z", new Date(0).toISOString(), new Date(0).toISOString());
@@ -46,7 +47,7 @@ describe("retiring a rig that is gone", () => {
       headers: { authorization: `Bearer ${RIG_TOKEN}` },
     });
     assert.equal(refused.status, 401);
-    assert.ok(store.auditLog.list(20).some((a) => a.action === "rig_retired"));
+    assert.ok((await store.auditLog.list(20)).some((a) => a.action === "rig_retired"));
 
     assert.match(await post("/ui/rigs/rig-a/bring-back", {}), /rig-a is back/);
     assert.match(await page("/ui"), /rig-a stopped reporting/);

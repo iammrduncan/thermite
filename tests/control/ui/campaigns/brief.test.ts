@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
+import { sqliteBehind } from "../../../../src/control/store/behind.ts";
 import {
   BRIEF_CORE_JS,
   briefPane,
@@ -39,7 +40,7 @@ const core = new Function(
 
 /** Control with kits, a CPU rig that reported its hardware, and the owner signed in. */
 async function stack() {
-  const { store, control, api } = controlOnly({
+  const { store, control, api } = await controlOnly({
     tokens: { rigs: {} },
     options: {
       staleAfterMs: 600_000,
@@ -80,8 +81,8 @@ async function stack() {
       start_value: start,
     });
   const rest = (from: string, body: unknown) => api("POST", `/v1/campaigns/${from}/copy`, body);
-  const contract = (campaign: string) =>
-    store.campaigns.versions(campaign)[0]?.contract as Record<string, unknown> | undefined;
+  const contract = async (campaign: string) =>
+    (await store.campaigns.versions(campaign))[0]?.contract as Record<string, unknown> | undefined;
   return { store, control, get, submit, rest, contract };
 }
 
@@ -289,7 +290,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     const s = await stack();
     const hc = await s.submit(codeDraft("hill_climb"), "start");
     assert.equal(hc.status, 303, await hc.text());
-    const c = s.contract("fastmat-speed");
+    const c = await s.contract("fastmat-speed");
     // No length limit: the whole text, and only the entries with words, trimmed.
     assert.equal(c?.additional_information, NOTES.trimEnd());
     assert.ok(String(c?.additional_information).length > 50_000);
@@ -303,8 +304,8 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       "https://docs.example.com/fastmat/design",
     ]);
     // The signed assignment carries the same contract to the rig.
-    const signed = s.store.db
-      .prepare("select signed from command where kind = 'assign_campaign'")
+    const signed = sqliteBehind(s.store)
+      .db.prepare("select signed from command where kind = 'assign_campaign'")
       .get() as { signed: string };
     const payload = (
       JSON.parse(signed.signed) as { envelope: { payload: { contract: Record<string, unknown> } } }
@@ -313,7 +314,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     assert.equal(payload.contract.additional_information, c?.additional_information);
     const goal = await s.submit(codeDraft("goal"));
     assert.equal(goal.status, 303, await goal.text());
-    assert.deepEqual(s.contract("fastmat-goals")?.ideas, c?.ideas);
+    assert.deepEqual((await s.contract("fastmat-goals"))?.ideas, c?.ideas);
     // An empty brief adds nothing to the contract.
     const bare = await s.submit(
       codeDraft("hill_climb", {
@@ -325,7 +326,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       }),
     );
     assert.equal(bare.status, 303);
-    const b = s.contract("bare") ?? {};
+    const b = (await s.contract("bare")) ?? {};
     assert.ok(
       !("additional_information" in b) &&
         !("ideas" in b) &&
@@ -363,7 +364,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     assert.ok(!("ideas" in draft), "the page sends no ideas for research");
     const res = await s.submit(draft);
     assert.equal(res.status, 303, await res.text());
-    const c = s.contract("agent-survey");
+    const c = await s.contract("agent-survey");
     assert.deepEqual(c?.questions, [question.trim(), "What fails, and why?"]);
     assert.deepEqual(c?.hypotheses, ["It is memory bound at batch size 1."]);
     assert.equal(c?.additional_information, NOTES.trimEnd());
@@ -421,11 +422,11 @@ describe("a campaign's brief on the screens (goal 078)", () => {
   test("Copy keeps the brief; a copy over REST or MCP may give its own, each part in place of the source's", async () => {
     const s = await stack();
     await s.submit(codeDraft("hill_climb"));
-    const source = s.contract("fastmat-speed");
+    const source = await s.contract("fastmat-speed");
     // Kept as it is.
     const kept = await s.rest("fastmat-speed", { name: "fastmat-speed-b" });
     assert.equal(kept.status, 201, await kept.text());
-    const b = s.contract("fastmat-speed-b");
+    const b = await s.contract("fastmat-speed-b");
     for (const k of ["additional_information", "links", "ideas", "hypotheses"])
       assert.deepEqual(b?.[k], source?.[k], k);
     // The key the additional information had before v0.1.1 is refused, with its new name.
@@ -439,13 +440,15 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       ideas: [],
     });
     assert.equal(own.status, 201, await own.text());
-    const c = s.contract("fastmat-speed-c");
+    const c = await s.contract("fastmat-speed-c");
     assert.equal(c?.additional_information, "## Only this\nA shorter brief.");
     assert.ok(!("ideas" in (c ?? {})));
     assert.deepEqual(c?.hypotheses, source?.hypotheses);
     // Control's audit log names the parts the copy has of its own; their text is in its contract.
     const audits = (
-      s.store.db.prepare("select body from audit where action = 'campaign_copied'").all() as {
+      sqliteBehind(s.store)
+        .db.prepare("select body from audit where action = 'campaign_copied'")
+        .all() as {
         body: string;
       }[]
     ).map((r) => JSON.parse(r.body) as { campaign: string; own_brief?: string[] });
@@ -467,8 +470,8 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       },
     });
     assert.notEqual(out.isError, true, JSON.stringify(out));
-    assert.deepEqual(s.contract("fastmat-speed-d")?.hypotheses, ["It is compute bound."]);
-    assert.deepEqual(s.contract("fastmat-speed-d")?.ideas, source?.ideas);
+    assert.deepEqual((await s.contract("fastmat-speed-d"))?.hypotheses, ["It is compute bound."]);
+    assert.deepEqual((await s.contract("fastmat-speed-d"))?.ideas, source?.ideas);
     await s.submit({
       mode: "research",
       campaign: "survey",
@@ -480,7 +483,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     // A research copy's links are its seeds.
     const seeded = await s.rest("survey", { name: "survey-s", links: ["https://a.example.com/x"] });
     assert.equal(seeded.status, 201, await seeded.text());
-    assert.deepEqual(s.contract("survey-s")?.seeds, ["https://a.example.com/x"]);
+    assert.deepEqual((await s.contract("survey-s"))?.seeds, ["https://a.example.com/x"]);
     const refused = await s.rest("survey", { name: "survey-b", ideas: ["x"] });
     assert.equal(refused.status, 400);
     assert.match(

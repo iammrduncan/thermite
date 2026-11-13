@@ -74,7 +74,91 @@ export function synthesizerAndWriterSlots(db: DatabaseSync): void {
   db.exec("alter table rig_role_model_166 rename to rig_role_model");
 }
 
-export class ModelAssignments extends StorePart {
+export interface ModelAssignments {
+  /**
+   * Gives a rig's agents a harness and a provider's model, or (null) returns them to the rig's own
+   * settings. `contextCap`: a cap on the model's context window in tokens (goal 070); none when
+   * left out, so a model given again without one loses it. `compactAt`: the compaction point, in
+   * percent of the window (goal 070); left out, the harness's default.
+   */
+  assignRig(
+    rig: string,
+    choice: {
+      provider: string;
+      model: string;
+      harness?: Harness | undefined;
+      effort?: Effort | undefined;
+      contextCap?: number | undefined;
+      compactAt?: number | undefined;
+    } | null,
+  ): Promise<void>;
+  /**
+   * Gives one of a rig's other agents a model, or (null) has it follow the workers again.
+   * `harness`: the harness it runs in (goal 073); left out, what its model needs. `contextCap` and
+   * `compactAt`: the agent's own cap on its model's window and its compaction point (goal 070), as
+   * for the workers' model; none when left out.
+   */
+  assignRole(
+    rig: string,
+    role: AgentRole,
+    choice: {
+      provider: string;
+      model: string;
+      effort?: Effort | undefined;
+      harness?: Harness | undefined;
+      contextCap?: number | undefined;
+      compactAt?: number | undefined;
+    } | null,
+  ): Promise<void>;
+  /**
+   * A rig's other agents' models, by role (roles with none are absent). `harness`: the one the
+   * owner chose (goal 073); null, what the model needs. Each with its own cap and compaction
+   * point (goal 070), when set.
+   */
+  byRole(rig: string): Promise<
+    Partial<
+      Record<
+        AgentRole,
+        {
+          provider: string;
+          model: string;
+          effort: Effort | null;
+          harness: Harness | null;
+          contextCap?: number | undefined;
+          compactAt?: number | undefined;
+        }
+      >
+    >
+  >;
+  /** Each rig's provider, model, harness, effort, context window cap and compaction point (goal 070). */
+  byRig(): Promise<
+    Record<
+      string,
+      {
+        provider: string;
+        model: string;
+        harness: Harness;
+        effort?: Effort | undefined;
+        contextCap?: number | undefined;
+        compactAt?: number | undefined;
+      }
+    >
+  >;
+  forRig(rig: string): Promise<
+    | {
+        provider: ModelProvider;
+        model: string;
+        harness: Harness;
+        effort?: Effort | undefined;
+        contextCap?: number | undefined;
+        compactAt?: number | undefined;
+      }
+    | undefined
+  >;
+}
+
+/** ModelAssignments on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteModelAssignments extends StorePart {
   /**
    * Gives a rig's agents a harness and a provider's model, or (null) returns them to the rig's own
    * settings. `contextCap`: a cap on the model's context window in tokens (goal 070); none when

@@ -48,7 +48,7 @@ async function setUp() {
     config: new ConfigWritten(),
   };
   const server = new FakeServer(serverAnswers({ inMsgs: 10, lastSeq: 2, liveBytes: 1024 }));
-  const s = controlOnly({
+  const s = await controlOnly({
     store,
     options: { bus: view, serverLook: server, busOwnKeys: () => ["UCONTROL"] },
     tokens: { read: READ },

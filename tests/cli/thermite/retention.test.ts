@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
 
 /**
@@ -21,9 +22,9 @@ const OWNER = "owner-token-abcdef";
 describe("thermite retention", () => {
   test("create, list, preview, update, on, run, removals and delete, with the owner's token", async () => {
     const root = mkdtempSync(join(tmpdir(), "thermite-cli-retention-"));
-    const { control: api, store } = controlOnly({ tokens: { admin: OWNER } });
-    store.db
-      .prepare(
+    const { control: api, store } = await controlOnly({ tokens: { admin: OWNER } });
+    sqliteBehind(store)
+      .db.prepare(
         "insert into audit (at, actor, action, body) values (?, 'owner:api', 'old_thing', '{}')",
       )
       .run(new Date(Date.now() - 100 * 86_400_000).toISOString());
@@ -70,8 +71,8 @@ describe("thermite retention", () => {
         "monday",
       );
       assert.match(changed.stdout, /removes older than 60 days/);
-      assert.equal(store.retention.get(1)?.day, "monday");
-      assert.equal(store.retention.get(1)?.name, "Old audit", "what was not given stays");
+      assert.equal((await store.retention.get(1))?.day, "monday");
+      assert.equal((await store.retention.get(1))?.name, "Old audit", "what was not given stays");
       assert.match((await cli("on", "1")).stdout, /is on: it runs every Monday at 03:00 UTC/);
       assert.match((await cli("run", "1")).stdout, /^“Old audit” removed 1 entry, /);
       assert.match(
@@ -79,7 +80,7 @@ describe("thermite retention", () => {
         /Old audit {2}control {2}1 removed, .* {2}by Run now/,
       );
       assert.match((await cli("delete", "1")).stdout, /^Deleted “Old audit”/);
-      assert.equal(store.retention.list().length, 0);
+      assert.equal((await store.retention.list()).length, 0);
 
       // Another token: refused, and nothing is made.
       const other = join(root, "other-token");
@@ -88,7 +89,7 @@ describe("thermite retention", () => {
         as(other, "create", ...design),
         (err: { code?: number; stderr?: string }) => err.code === 2 && /401/.test(err.stderr ?? ""),
       );
-      assert.equal(store.retention.list().length, 0);
+      assert.equal((await store.retention.list()).length, 0);
       // Without a policy's id: the usage, exit code 2.
       await assert.rejects(cli("run"), (err: { code?: number }) => err.code === 2);
     } finally {

@@ -114,7 +114,7 @@ describe("Live's message box", () => {
       { run: "js-1", to: "advisors", text: "Be strict." },
     ]);
     await s.sync();
-    const cmds = s.store.commands.list(50).filter((c) => c.kind === "message_agent");
+    const cmds = (await s.store.commands.list(50)).filter((c) => c.kind === "message_agent");
     assert.deepEqual(
       cmds.map((c) => c.status),
       Array(6).fill("delivered"),
@@ -147,7 +147,9 @@ describe("Live's message box", () => {
     // The readers, as the rig's harness gives them the text: each lane's Pi worker at its next
     // step, the planner at its next plan, and the advisors in their round or package (the
     // supervisor reports what each read and answered).
-    const ids = new Map([...runMessages(s.store, "rig-a", "js-1")].map(([id, m]) => [m.text, id]));
+    const ids = new Map(
+      [...(await runMessages(s.store, "rig-a", "js-1"))].map(([id, m]) => [m.text, id]),
+    );
     const id = (text: string) => ids.get(text) ?? 0;
     const step = (t: typeof t1) => {
       const inbox = env.service.trialInbox(t);

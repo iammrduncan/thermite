@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mapInTurn } from "../../common/in-turn.ts";
 import { redirectUriOf, ServerBody, serverJson } from "../mcp-servers/index.ts";
 import type { ToolContext } from "./context.ts";
 
@@ -16,7 +17,9 @@ export function registerMcpServers(tools: ToolContext): void {
           "The MCP servers in Settings › MCP servers: each one's address, how it signs in, its state, its last error, its tools (with whether each only reads) and the kits that name it. Never a key, a client secret or a sign-in: only a secret's last four characters.",
         inputSchema: {},
       },
-      audited("mcp_servers", () => ({ servers: mcp.list().map((s) => serverJson(store, s)) })),
+      audited("mcp_servers", async () => ({
+        servers: await mapInTurn(await mcp.list(), async (s) => serverJson(store, s)),
+      })),
     );
   }
   if (mcp && role === "owner") {
@@ -30,8 +33,9 @@ export function registerMcpServers(tools: ToolContext): void {
         inputSchema: ServerBody.shape,
       },
       audited("mcp_server_add", async (a: z.infer<typeof ServerBody>) => {
-        if (mcp.get(a.name.trim())) throw new Error(`There is a server named ${a.name} already.`);
-        mcp.put({ ...a, auth: auth.parse(a.auth) }, actor);
+        if (await mcp.get(a.name.trim()))
+          throw new Error(`There is a server named ${a.name} already.`);
+        await mcp.put({ ...a, auth: auth.parse(a.auth) }, actor);
         const name = a.name.trim();
         if (a.auth === "oauth") {
           const { url } = await mcp.startSignIn(
@@ -40,13 +44,19 @@ export function registerMcpServers(tools: ToolContext): void {
             actor,
           );
           return {
-            server: serverJson(store, mcp.get(name) as NonNullable<ReturnType<typeof mcp.get>>),
+            server: await serverJson(
+              store,
+              (await mcp.get(name)) as NonNullable<Awaited<ReturnType<typeof mcp.get>>>,
+            ),
             sign_in_url: url,
           };
         }
         const why = await mcp.check(name);
         return {
-          server: serverJson(store, mcp.get(name) as NonNullable<ReturnType<typeof mcp.get>>),
+          server: await serverJson(
+            store,
+            (await mcp.get(name)) as NonNullable<Awaited<ReturnType<typeof mcp.get>>>,
+          ),
           ...(why ? { check_error: why } : {}),
         };
       }),
@@ -62,9 +72,9 @@ export function registerMcpServers(tools: ToolContext): void {
       audited(
         "mcp_server_change",
         async (a: Partial<z.infer<typeof ServerBody>> & { name: string }) => {
-          const old = mcp.get(a.name);
+          const old = await mcp.get(a.name);
           if (!old) throw new Error(`Settings has no server named ${a.name}.`);
-          mcp.put(
+          await mcp.put(
             {
               ...a,
               url: a.url ?? old.url,
@@ -75,12 +85,18 @@ export function registerMcpServers(tools: ToolContext): void {
             },
             actor,
           );
-          const now = mcp.get(a.name);
+          const now = await mcp.get(a.name);
           if (now?.auth === "oauth" && !now.signed_in)
-            return { server: serverJson(store, now), sign_in: "needed: call mcp_server_sign_in" };
+            return {
+              server: await serverJson(store, now),
+              sign_in: "needed: call mcp_server_sign_in",
+            };
           const why = await mcp.check(a.name);
           return {
-            server: serverJson(store, mcp.get(a.name) as NonNullable<ReturnType<typeof mcp.get>>),
+            server: await serverJson(
+              store,
+              (await mcp.get(a.name)) as NonNullable<Awaited<ReturnType<typeof mcp.get>>>,
+            ),
             ...(why ? { check_error: why } : {}),
           };
         },
@@ -95,10 +111,13 @@ export function registerMcpServers(tools: ToolContext): void {
         inputSchema: { name: z.string().min(1) },
       },
       audited("mcp_server_check", async (a: { name: string }) => {
-        if (!mcp.get(a.name)) throw new Error(`Settings has no server named ${a.name}.`);
+        if (!(await mcp.get(a.name))) throw new Error(`Settings has no server named ${a.name}.`);
         const why = await mcp.check(a.name);
         return {
-          server: serverJson(store, mcp.get(a.name) as NonNullable<ReturnType<typeof mcp.get>>),
+          server: await serverJson(
+            store,
+            (await mcp.get(a.name)) as NonNullable<Awaited<ReturnType<typeof mcp.get>>>,
+          ),
           ...(why ? { check_error: why } : {}),
         };
       }),
@@ -127,8 +146,8 @@ export function registerMcpServers(tools: ToolContext): void {
           "Control forgets the server and its secrets. Nothing changes on the server. Refused while a kit names it: take it out of those kits first. The owner's token only.",
         inputSchema: { name: z.string().min(1) },
       },
-      audited("mcp_server_delete", (a: { name: string }) => {
-        const r = mcp.delete(a.name, actor);
+      audited("mcp_server_delete", async (a: { name: string }) => {
+        const r = await mcp.delete(a.name, actor);
         if (r === "missing") throw new Error(`Settings has no server named ${a.name}.`);
         if (r !== "deleted")
           throw new Error(`${r.named_by.join(" and ")} name it. Take it out of those kits first.`);

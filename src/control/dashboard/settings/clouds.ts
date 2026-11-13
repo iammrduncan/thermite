@@ -13,7 +13,7 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
   // ---------------------------------------------------------------- GPU clouds (Providers)
   app.post("/ui/settings/clouds/:name/check", async (c) => {
     const name = c.req.param("name");
-    if (!store.gpuClouds.get(name))
+    if (!(await store.gpuClouds.get(name)))
       return c.redirect(machineUrl("error", "No such GPU cloud."), 303);
     const why = await checkCloudNow(name);
     return c.redirect(
@@ -26,13 +26,13 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/settings/clouds/:name/key", async (c) => {
     const name = c.req.param("name");
     const key = String((await c.req.parseBody()).runpod_key ?? "").trim();
-    if (!store.gpuClouds.get(name))
+    if (!(await store.gpuClouds.get(name)))
       return c.redirect(machineUrl("error", "No such GPU cloud."), 303);
     if (!key) return c.redirect(machineUrl("error", "Paste the new key."), 303);
     try {
       const facts = await readRunpod(key, opts.cloudFetch);
-      store.gpuClouds.replaceKey(name, opts.secrets.seal(key), keyHint(key), "owner:ui");
-      store.gpuClouds.setFacts(name, { facts });
+      await store.gpuClouds.replaceKey(name, opts.secrets.seal(key), keyHint(key), "owner:ui");
+      await store.gpuClouds.setFacts(name, { facts });
     } catch (err) {
       return c.redirect(machineUrl("error", noted(`Kept the old key: ${errorText(err)}.`)), 303);
     }
@@ -84,19 +84,19 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
       return c.redirect(machineUrl("error", noted(errorText(err))), 303);
     }
   });
-  app.get("/ui/settings/clouds/:name/tests/:id{.+\\.json}", (c) => {
-    const x = opts.runpodTests?.view(c.req.param("id").replace(/\.json$/, ""));
+  app.get("/ui/settings/clouds/:name/tests/:id{.+\\.json}", async (c) => {
+    const x = await opts.runpodTests?.view(c.req.param("id").replace(/\.json$/, ""));
     return x && x.cloud === c.req.param("name") ? c.json(x) : c.json({ error: "not found" }, 404);
   });
-  app.post("/ui/settings/clouds/:name/delete", (c) => {
+  app.post("/ui/settings/clouds/:name/delete", async (c) => {
     const name = c.req.param("name");
-    if (opts.runpodTests?.list(name, 1).some((x) => x.active))
+    if ((await opts.runpodTests?.list(name, 1))?.some((x) => x.active))
       return c.redirect(
         machineUrl("error", "A test pod is running there: end it first, so its pod is removed."),
         303,
       );
     return c.redirect(
-      store.gpuClouds.delete(name, "owner:ui")
+      (await store.gpuClouds.delete(name, "owner:ui"))
         ? machineUrl("ok", `"${name}" is deleted: control keeps nothing of its key.`)
         : machineUrl("error", "No such GPU cloud."),
       303,

@@ -56,26 +56,40 @@ export function supervisorRoutes(
       ...figures
     } = SupervisorFigures.parse(await jsonBody(c.req));
     if (busKey === undefined || sealKey === undefined) {
-      noteOffBusCall(store, rig);
+      await noteOffBusCall(store, rig);
       throw new Refusal(NO_KEYS);
     }
     if (!isUserKey(busKey)) throw new BadInput(`bus_key is not ${USER_KEY_WORDS}`);
     if (!isSealKey(sealKey)) throw new BadInput(`bus_seal_key is not ${SEAL_KEY_WORDS}`);
     const own = deps.busUsers?.ownKeys() ?? [];
-    for (const [field, key] of [
-      ["bus_key", busKey],
-      ["bus_seal_key", sealKey],
-    ] as const) {
-      const holder = busKeyHolder(store, rig, key, own);
-      if (!holder) continue;
-      noteKeyRefused(store, rig, field, key, holder);
+    // No table keeps a key to one holder: the look for another holder does. So the look and the
+    // take are one transaction, and two rigs that register one key at once do not both hold it.
+    const taken = await store.tx(async () => {
+      for (const [field, key] of [
+        ["bus_key", busKey],
+        ["bus_seal_key", sealKey],
+      ] as const) {
+        const holder = await busKeyHolder(store, rig, key, own);
+        if (holder) return { refused: { field, key, holder }, bus: undefined, seal: undefined };
+      }
+      await takeFigures(store, rig, figures);
+      await noteRegistered(store, rig);
+      const bus = await takeRigBusKey(store, rig, busKey);
+      // The seal key with it when the bus's key is as it was: nothing then waits between the
+      // look and its take. After a new bus key, it is taken once the bus has the key, below.
+      const seal = bus === "same" ? await takeRigSealKey(store, rig, sealKey) : undefined;
+      return { bus, seal, refused: undefined };
+    });
+    if (taken.refused) {
+      // Noted outside the transaction, which a refusal's throw would drop.
+      const { field, key, holder } = taken.refused;
+      await noteKeyRefused(store, rig, field, key, holder);
       throw new Refusal(keyHeldWords(field));
     }
-    takeFigures(store, rig, figures);
-    noteRegistered(store, rig);
-    if (takeRigBusKey(store, rig, busKey) !== "same") await deps.busUsers?.sync();
-    if (takeRigSealKey(store, rig, sealKey) !== "same") void deps.busConfig?.write();
-    return c.json({ ok: true, reports: reportPlace(store, rig) });
+    if (taken.bus !== "same") await deps.busUsers?.sync();
+    const seal = taken.seal ?? (await takeRigSealKey(store, rig, sealKey));
+    if (seal !== "same") void deps.busConfig?.write();
+    return c.json({ ok: true, reports: await reportPlace(store, rig) });
   });
 
   // A runner process of the rig (goal 206): its key gets the runner's user on the bus, which takes
@@ -90,14 +104,27 @@ export function supervisorRoutes(
       if (!RIG_ID.test(runner)) throw new BadInput(`a runner's name is ${RIG_NAME_RULE}`);
       const { bus_key: key } = RUNNER_REGISTER.body.parse(await jsonBody(c.req));
       if (!isUserKey(key)) throw new BadInput(`bus_key is not ${USER_KEY_WORDS}`);
-      if (store.busKeys.runnerKey(rig, runner) === key) return c.json({ ok: true });
-      const holder = busKeyHolder(store, rig, key, deps.busUsers?.ownKeys() ?? []);
-      if (holder || store.busKeys.rigKey(rig) === key) {
-        noteKeyRefused(store, rig, "bus_key", key, holder ?? `rig ${rig}`);
+      const own = deps.busUsers?.ownKeys() ?? [];
+      // The look for another holder and the take in one transaction, as for a rig's key.
+      const taken = await store.tx(async () => {
+        if ((await store.busKeys.runnerKey(rig, runner)) === key) return "same" as const;
+        const holder = await busKeyHolder(store, rig, key, own);
+        if (holder || (await store.busKeys.rigKey(rig)) === key)
+          return { holder: holder ?? `rig ${rig}` };
+        await store.busKeys.setRunnerKey(rig, runner, key);
+        await store.rigHistory.add(
+          rig,
+          "runner_bus_key",
+          true,
+          `${runner}: ${userKeyFingerprint(key)}`,
+        );
+        return "taken" as const;
+      });
+      if (taken === "same") return c.json({ ok: true });
+      if (taken !== "taken") {
+        await noteKeyRefused(store, rig, "bus_key", key, taken.holder);
         throw new Refusal(keyHeldWords("bus_key"));
       }
-      store.busKeys.setRunnerKey(rig, runner, key);
-      store.rigHistory.add(rig, "runner_bus_key", true, `${runner}: ${userKeyFingerprint(key)}`);
       await deps.busUsers?.sync();
       return c.json({ ok: true });
     },

@@ -176,7 +176,7 @@ export class KbText {
     const failed = new Set<string>();
     let n = 0;
     for (;;) {
-      const due = kb.files.textWaiting(BATCH).filter((f) => !failed.has(f.sha256));
+      const due = (await kb.files.textWaiting(BATCH)).filter((f) => !failed.has(f.sha256));
       if (!due.length) return n;
       for (const f of due) {
         const reader = kbTextReader(f.type);
@@ -188,7 +188,7 @@ export class KbText {
         let r: KbTextResult;
         try {
           r = await extractText(this.path(f.sha256), reader, this.limits);
-          kb.keepFileText(f.sha256, r);
+          await kb.keepFileText(f.sha256, r);
         } catch (err) {
           // Tried again at the next look.
           failed.add(f.sha256);

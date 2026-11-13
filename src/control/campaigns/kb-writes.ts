@@ -65,8 +65,8 @@ export type CampaignKbWritesOutcome =
   | { state: "refused"; error: string; status: 400 | 404 | 409 };
 
 /** What a campaign lets each role write now: its newest contract's, or the default. */
-export function campaignKbWrites(store: ControlStore, campaign: string): KbWrites {
-  return kbWritesOf(campaignContract(store, campaign));
+export async function campaignKbWrites(store: ControlStore, campaign: string): Promise<KbWrites> {
+  return kbWritesOf(await campaignContract(store, campaign));
 }
 
 /**
@@ -74,14 +74,14 @@ export function campaignKbWrites(store: ControlStore, campaign: string): KbWrite
  * the campaign's contract, unless its newest says the same already. With `check`, nothing is
  * saved (proposals.ts).
  */
-export function setCampaignKbWrites(
+export async function setCampaignKbWrites(
   store: ControlStore,
   req: { campaign: string; kb_writes?: KbWrites | undefined },
   by: string,
   check = false,
-): CampaignKbWritesOutcome {
+): Promise<CampaignKbWritesOutcome> {
   const want = req.kb_writes;
-  const out = saveWithField(store, {
+  const out = await saveWithField(store, {
     campaign: req.campaign,
     field: "kb_writes",
     value: want,

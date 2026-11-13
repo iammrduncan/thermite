@@ -14,7 +14,7 @@ import {
 import { startCampaign } from "../../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
 import { SecretBox } from "../../../../src/control/secrets.ts";
-import { ControlStore } from "../../../../src/control/store/index.ts";
+import { openControlStore } from "../../../../src/control/store/index.ts";
 import {
   CAMPAIGN_CONTEXT_JS,
   CC_CORE_JS,
@@ -75,7 +75,7 @@ const hardware = (type: string) => ({
 async function stack() {
   const secrets = SecretBox.ephemeral();
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-  const { keys, store, control } = controlOnly({
+  const { keys, store, control } = await controlOnly({
     tokens: { rigs: {} },
     options: { staleAfterMs: 600_000, kits, secrets },
   });
@@ -96,20 +96,28 @@ async function stack() {
         hardware: hardware(type),
       },
     });
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "lab",
     type: "openai",
     base_url: "https://models.example.com/v1",
     key: { sealed: secrets.seal("lab-key-for-tests"), hint: "…ests" },
   });
-  store.modelProviders.setModels("lab", [
+  await store.modelProviders.setModels("lab", [
     { id: "wide-model", context_window: 204_800 },
     { id: "narrow-model", context_window: 131_072 },
     { id: "tiny-model", context_window: 100_000 },
   ]);
-  store.agentModels.assignRig("rig-a", { provider: "lab", model: "wide-model", harness: "pi" });
-  store.agentModels.assignRig("rig-b", { provider: "lab", model: "narrow-model", harness: "pi" });
-  store.agentModels.assignRole("rig-b", "auditor", { provider: "lab", model: "tiny-model" });
+  await store.agentModels.assignRig("rig-a", {
+    provider: "lab",
+    model: "wide-model",
+    harness: "pi",
+  });
+  await store.agentModels.assignRig("rig-b", {
+    provider: "lab",
+    model: "narrow-model",
+    harness: "pi",
+  });
+  await store.agentModels.assignRole("rig-b", "auditor", { provider: "lab", model: "tiny-model" });
   const saved = await startCampaign(
     { store, kits, privateKeyPem: keys.privateKeyPem },
     { draft, rig: "rig-a", target: CPU, start: false, by: "owner:ui" },
@@ -123,8 +131,8 @@ async function stack() {
     const r = await session.post(path, { csrf, ...form });
     return { status: r.status, to: decodeURIComponent(r.headers.get("location") ?? ""), r };
   };
-  const contract = (campaign: string) =>
-    store.campaigns.versions(campaign)[0]?.contract as
+  const contract = async (campaign: string) =>
+    (await store.campaigns.versions(campaign))[0]?.contract as
       | { version: number; agents_context?: Record<string, number> }
       | undefined;
   return { store, page, post, contract };
@@ -210,7 +218,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       r.to,
       /\?on=context&ok=Saved as version 2: 131,072 tokens at 70%\. New runs of matmul-speed take it\.#agents-context$/,
     );
-    assert.deepEqual(s.contract("matmul-speed")?.agents_context, {
+    assert.deepEqual((await s.contract("matmul-speed"))?.agents_context, {
       context_window: 131_072,
       compact_at: 70,
     });
@@ -250,7 +258,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
         compact_at: ca,
       });
       assert.match(r.to, words);
-      assert.equal(s.contract("matmul-speed")?.version, 2);
+      assert.equal((await s.contract("matmul-speed"))?.version, 2);
     }
     html = await s.page(
       `/ui/campaigns/matmul-speed${r.to.slice(r.to.indexOf("?")).replace(/#.*$/, "")}`,
@@ -265,7 +273,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       compact_at: "",
     });
     assert.match(r.to, /ok=Saved as version 3: the rig's, for each agent\./);
-    assert.equal(s.contract("matmul-speed")?.agents_context, undefined);
+    assert.equal((await s.contract("matmul-speed"))?.agents_context, undefined);
     // The page's script is valid JavaScript.
     assert.doesNotThrow(() => new Function(CAMPAIGN_CONTEXT_JS));
   });
@@ -326,7 +334,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
     // As the source's: the copy's contract has the same.
     let r = await s.post("/ui/campaigns/matmul-speed/copy", { ...form, name: "same-copy" });
     assert.match(r.to, /ok=Copied matmul-speed version 2 as same-copy\.$/);
-    assert.deepEqual(s.contract("same-copy")?.agents_context, {
+    assert.deepEqual((await s.contract("same-copy"))?.agents_context, {
       context_window: 131_072,
       compact_at: 70,
     });
@@ -338,7 +346,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       compact_at: "",
     });
     assert.match(r.to, /Agents' context: 65,536 tokens\.$/);
-    assert.deepEqual(s.contract("own-copy")?.agents_context, { context_window: 65_536 });
+    assert.deepEqual((await s.contract("own-copy"))?.agents_context, { context_window: 65_536 });
     // None: each agent keeps the rig's.
     r = await s.post("/ui/campaigns/matmul-speed/copy", {
       ...form,
@@ -346,7 +354,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       context_window: "",
       compact_at: "",
     });
-    assert.equal(s.contract("no-context")?.agents_context, undefined);
+    assert.equal((await s.contract("no-context"))?.agents_context, undefined);
     // Refused in words: the panel again, with what was typed.
     r = await s.post("/ui/campaigns/matmul-speed/copy", {
       ...form,
@@ -359,7 +367,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       /<b class="bad">Not copied\.<\/b> The compaction point is a whole percent of the context window, from 50 to 95\./,
     );
     assert.match(again, /name="compact_at" data-cc-ca value="40"/);
-    assert.equal(s.contract("bad-copy"), undefined);
+    assert.equal(await s.contract("bad-copy"), undefined);
   });
 
   test("New campaign: the two fields in step 4, the rigs' agents for the script, the numbers in the contract or refused in words", async () => {
@@ -397,7 +405,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       });
     let r = await send({ context_window: 131_072, compact_at: 70 }, "with-context");
     assert.equal(r.status, 303);
-    assert.deepEqual(s.contract("with-context")?.agents_context, {
+    assert.deepEqual((await s.contract("with-context"))?.agents_context, {
       context_window: 131_072,
       compact_at: 70,
     });
@@ -406,10 +414,10 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
       await r.r.text(),
       /The agents' context: The compaction point is a whole percent of the context window, from 50 to 95\./,
     );
-    assert.equal(s.contract("bad-context"), undefined);
+    assert.equal(await s.contract("bad-context"), undefined);
   });
 
-  test("the page's script checks as control does: the fields' words, what applies and the refusal", () => {
+  test("the page's script checks as control does: the fields' words, what applies and the refusal", async () => {
     const core = new Function(`${CC_CORE_JS}; return { ccRead, ccApply, ccShort };`)() as {
       ccRead: (w: string, p: string) => { cw: number | null; at: number | null; errs: string[] };
       ccApply: (own: OwnModel[], c: { cw: number | null; at: number | null }) => unknown;
@@ -441,27 +449,27 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
     assert.match(core.ccRead("big", "").errs.join(""), /in digits/);
     assert.equal(core.ccShort({ cw: 131_072, at: 70 }), "131,072 tokens at 70%");
     // What applies, and the refusal, as rigContext says it, and as control decides it.
-    const s = new ControlStore(":memory:");
-    s.modelProviders.put({
+    const s = openControlStore(":memory:");
+    await s.modelProviders.put({
       name: "lab",
       type: "openai",
       base_url: "https://models.example.com/v1",
       key: { sealed: SecretBox.ephemeral().seal("lab-key-for-tests"), hint: "…ests" },
     });
-    s.modelProviders.setModels("lab", [
+    await s.modelProviders.setModels("lab", [
       { id: "wide-model", context_window: 204_800 },
       { id: "tiny-model", context_window: 100_000 },
       { id: "open-model" },
     ]);
-    s.agentModels.assignRig("rig-a", {
+    await s.agentModels.assignRig("rig-a", {
       provider: "lab",
       model: "wide-model",
       harness: "pi",
       contextCap: 65_536,
       compactAt: 75,
     });
-    s.agentModels.assignRig("rig-b", { provider: "lab", model: "open-model", harness: "pi" });
-    s.agentModels.assignRole("rig-b", "auditor", { provider: "lab", model: "tiny-model" });
+    await s.agentModels.assignRig("rig-b", { provider: "lab", model: "open-model", harness: "pi" });
+    await s.agentModels.assignRole("rig-b", "auditor", { provider: "lab", model: "tiny-model" });
     for (const rig of ["rig-a", "rig-b", "rig-c"])
       for (const c of [
         {},
@@ -470,7 +478,7 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
         { context_window: 50_000, compact_at: 90 },
       ]) {
         const contract = { mode: "hill_climb", agents_context: c };
-        const own = ownModels(s, rig, "hill_climb");
+        const own = await ownModels(s, rig, "hill_climb");
         const want = rigContext(own, Object.keys(c).length ? c : undefined);
         assert.deepEqual(
           core.ccApply(own, { cw: c.context_window ?? null, at: c.compact_at ?? null }),
@@ -478,10 +486,13 @@ describe("a campaign's Agents' context on the screens (goal 070)", () => {
           `${rig} with ${JSON.stringify(c)}`,
         );
         // Control's own answers: Start a run's workers, and its refusal.
-        const applies = contextApplies(s, rig, contract);
+        const applies = await contextApplies(s, rig, contract);
         if (applies?.agents.workers?.model)
           assert.equal(want.window, applies.agents.workers.context_window);
-        assert.equal(Boolean(want.refused), campaignContextRefusal(s, rig, contract) !== "");
+        assert.equal(
+          Boolean(want.refused),
+          (await campaignContextRefusal(s, rig, contract)) !== "",
+        );
       }
   });
 });

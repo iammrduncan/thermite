@@ -8,8 +8,8 @@ import { stack } from "./stack.ts";
 describe("each agent's model over REST and MCP", () => {
   test("REST: the teachers take one or two models and a merged by model, all checked first", async () => {
     const s = await stack();
-    const teachers = () =>
-      agentModelsOf(s.store, "rig-a").teachers as {
+    const teachers = async () =>
+      (await agentModelsOf(s.store, "rig-a")).teachers as {
         models: { provider: string; model: string; harness: string; context_cap: number | null }[];
         merged_by: { model: string; compact_at: number | null } | null;
       };
@@ -30,13 +30,13 @@ describe("each agent's model over REST and MCP", () => {
       "Control sent a model for the teachers, a model for a second teacher and a merged by model for the teachers to rig-a. The rig takes the change in less than one minute. The second teacher's context window: 65,536 tokens (capped; the provider allows 272,000). The merged by model's conversations are compacted at 70% of the window.",
     );
     assert.deepEqual(
-      teachers().models.map((m) => [m.provider, m.model, m.harness, m.context_cap]),
+      (await teachers()).models.map((m) => [m.provider, m.model, m.harness, m.context_cap]),
       [
         ["claude-sub", "opus-5.5", "claude-code", null],
         ["sub", "gpt-sol", "codex", 65_536],
       ],
     );
-    assert.equal(teachers().merged_by?.compact_at, 70);
+    assert.equal((await teachers()).merged_by?.compact_at, 70);
     const adv = (await s.asRig("/v1/rigs/rig-a/advisor-routes")) as Record<string, unknown>;
     assert.deepEqual(
       (adv.teacher_models as { type: string; harness: string }[]).map((t) => [t.type, t.harness]),
@@ -59,7 +59,7 @@ describe("each agent's model over REST and MCP", () => {
       refused.body.error,
       "OpenCode's free models run only in OpenCode: choose OpenCode v2 for the teachers' merged by model, or another model.",
     );
-    assert.equal(teachers().models[0]?.model, "opus-5.5", "the first teacher kept");
+    assert.equal((await teachers()).models[0]?.model, "opus-5.5", "the first teacher kept");
     const badSecond = await s.give({
       agent: "teachers",
       second_model: { provider: "lab", model: "no-such" },
@@ -75,10 +75,10 @@ describe("each agent's model over REST and MCP", () => {
       /^Control sent the teachers back to one teacher to rig-a\./,
     );
     assert.deepEqual(
-      teachers().models.map((m) => m.model),
+      (await teachers()).models.map((m) => m.model),
       ["opus-5.5"],
     );
-    assert.equal(teachers().merged_by?.model, "strong-model");
+    assert.equal((await teachers()).merged_by?.model, "strong-model");
     const oneRoute = (await s.asRig("/v1/rigs/rig-a/advisor-routes")) as Record<string, unknown>;
     assert.equal((oneRoute.teacher_models as unknown[]).length, 1);
 
@@ -88,7 +88,7 @@ describe("each agent's model over REST and MCP", () => {
       cleared.body.said,
       "Control sent the teachers back to the rig's advisors file to rig-a. The rig takes the change in less than one minute.",
     );
-    assert.deepEqual(teachers(), { models: [], merged_by: null });
+    assert.deepEqual(await teachers(), { models: [], merged_by: null });
     const noFirst = await s.give({
       agent: "teachers",
       second_model: { provider: "lab", model: "wide-model" },

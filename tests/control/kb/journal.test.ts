@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readKnowledgeAgain } from "../../../src/control/events/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { fieldNote, journalTab } from "../../../src/control/ui/knowledge/index.ts";
 import { rigView } from "../../../src/control/views/index.ts";
@@ -37,7 +38,7 @@ async function ingest(store: ControlStore, rig: string, events: Ev[]) {
 /** A goal run with a trial, two field notes (one in a trial), a source note and a hypothesis. */
 async function aRun() {
   const store = controlStore();
-  assigned(store, "rig-a", "gs-3", "gemv-speed");
+  await assigned(store, "rig-a", "gs-3", "gemv-speed");
   await ingest(store, "rig-a", [
     ["harness", "run_created", "gs-3", { campaign: "gemv-speed", mode: "goal" }],
     ["scheduler", "trial_started", "gs-3", { trial: "t-1", lane: "lane-1", direction: "loads" }],
@@ -72,7 +73,9 @@ const meta = (store: ControlStore, kind: string, ref: string) =>
   JSON.parse(
     String(
       (
-        store.db.prepare("select meta from kb_item where kind = ? and ref = ?").get(kind, ref) as {
+        sqliteBehind(store)
+          .db.prepare("select meta from kb_item where kind = ? and ref = ?")
+          .get(kind, ref) as {
           meta: string;
         }
       ).meta,
@@ -99,19 +102,25 @@ test("a store from an earlier reading gives the items it kept their lane and tri
   const store = await aRun();
   const kb = store.kb();
   const row = (kind: string, ref: string) =>
-    store.db
-      .prepare("select seq, version, body, updated_at from kb_item where kind = ? and ref = ?")
+    sqliteBehind(store)
+      .db.prepare("select seq, version, body, updated_at from kb_item where kind = ? and ref = ?")
       .get(kind, ref) as Record<string, unknown>;
   // As reading 3 left the store: no lane, trial or what a note is about in any item's fields.
-  store.db.exec(
+  sqliteBehind(store).db.exec(
     "update kb_item set meta = json_remove(meta, '$.lane', '$.trial', '$.about_type', '$.about_id')",
   );
-  store.db.exec("update kb_meta set value = '3' where key = 'reading'");
+  sqliteBehind(store).db.exec("update kb_meta set value = '3' where key = 'reading'");
   const before = { note: row("note", "1"), hypothesis: row("hypothesis", "h-1") };
   const versions = () =>
-    Number((store.db.prepare("select count(*) as n from kb_version").get() as { n: number }).n);
+    Number(
+      (
+        sqliteBehind(store).db.prepare("select count(*) as n from kb_version").get() as {
+          n: number;
+        }
+      ).n,
+    );
   const kept = versions();
-  const kinds = kb.kindsToReadAgain();
+  const kinds = await kb.kindsToReadAgain();
   for (const k of ["journal_note", "source_note", "trial_started", "hypothesis_added"])
     assert.ok(kinds.includes(k), k);
   assert.ok(!kinds.includes("run_created") && !kinds.includes("hypothesis_status"));
@@ -130,13 +139,13 @@ test("a store from an earlier reading gives the items it kept their lane and tri
   assert.deepEqual(row("note", "1"), before.note);
   assert.deepEqual(row("hypothesis", "h-1"), before.hypothesis);
   assert.equal(meta(store, "hypothesis", "h-1").lane, "lane-2");
-  assert.deepEqual(kb.kindsToReadAgain(), []);
+  assert.deepEqual(await kb.kindsToReadAgain(), []);
   assert.equal(await readKnowledgeAgain(store, busOf(store).bus), 0, "once only");
 });
 
 test("the Journal tab reads its field notes from the knowledge base, with each note's trial", async () => {
   const store = await aRun();
-  const field = store.kb().fieldNotes("rig-a", "ledger-rig-a", "gs-3", 500);
+  const field = await store.kb().fieldNotes("rig-a", "ledger-rig-a", "gs-3", 500);
   // Field notes only, newest first: the source note is not one.
   assert.equal(field.total, 2);
   assert.deepEqual(
@@ -154,7 +163,7 @@ test("the Journal tab reads its field notes from the knowledge base, with each n
     trial: "t-1",
     at: "2026-10-20T01:02:00.000Z",
   });
-  const r = rigView(store, "rig-a")?.runs.find((x) => x.id === "gs-3");
+  const r = (await rigView(store, "rig-a"))?.runs.find((x) => x.id === "gs-3");
   assert.ok(r);
   const html = journalTab({
     r,
@@ -172,7 +181,7 @@ test("the Journal tab reads its field notes from the knowledge base, with each n
   const one = journalTab({
     r,
     now: Date.parse("2026-10-21T00:00:00Z"),
-    field: store.kb().fieldNotes("rig-a", "ledger-rig-a", "gs-3", 1),
+    field: await store.kb().fieldNotes("rig-a", "ledger-rig-a", "gs-3", 1),
     counts: {},
     reads: [],
   });

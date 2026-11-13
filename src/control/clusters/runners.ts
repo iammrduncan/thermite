@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import { every } from "../../common/health.ts";
+import { filterInTurn } from "../../common/in-turn.ts";
 import { RIG_NAME_RULE } from "../../core/ids.ts";
 import { RunnerSetting } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
@@ -140,7 +141,7 @@ export const clusterRunnerRequest = (rig: string, b: ClusterRunnerBody): Cluster
 });
 
 /** What a runner process control set up on a cluster is deployed with. */
-const runnerPlan = (parts: ControlParts, r: RigRunner): ClusterRigPlan => ({
+const runnerPlan = async (parts: ControlParts, r: RigRunner): Promise<ClusterRigPlan> => ({
   rig: r.rig,
   runner: r.runner,
   // A runner on a machine has no plan for a cluster: never asked for one.
@@ -159,17 +160,17 @@ const runnerPlan = (parts: ControlParts, r: RigRunner): ClusterRigPlan => ({
   programMode: "headless",
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
-  reach: parts.store.reachable.list(),
+  reach: await parts.store.reachable.list(),
 });
 
 /**
  * The rig's runner processes as its settings have them now, or why they can't change. A rig
  * control is setting up, which has not reported yet, has none (Add a rig with its runners).
  */
-function runnersNow(parts: ControlParts, rig: string) {
-  const now = rigSettingsOf(parts.store, rig);
+async function runnersNow(parts: ControlParts, rig: string) {
+  const now = await rigSettingsOf(parts.store, rig);
   const { store } = parts;
-  const settingUp = store.clusters.rig(rig) ?? store.machines.rig(rig);
+  const settingUp = (await store.clusters.rig(rig)) ?? (await store.machines.rig(rig));
   if (!now && settingUp && settingUp.status !== "removed") return [];
   if (!now) return `There is no rig ${rig}.`;
   if (!now.settings)
@@ -192,18 +193,18 @@ export async function addClusterRunner(
   if (!parts.rigImages) return fail("Control has no rig images configured.");
   if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
   if (!parts.rigBus) return fail(NO_RIG_BUS);
-  const runners = runnersNow(parts, rig);
+  const runners = await runnersNow(parts, rig);
   if (typeof runners === "string") return fail(runners);
   if (!RIG_ID.test(runner)) return fail(`A runner's name is ${RIG_NAME_RULE}.`);
   if (
     runners.some((r) => r.name === runner) ||
-    store.rigRunners.get(rig, runner)?.status === "deploying"
+    (await store.rigRunners.get(rig, runner))?.status === "deploying"
   )
     return fail(`${rig} has a runner named ${runner} already.`);
   const setting = RunnerSetting.safeParse({ name: runner, pools: [i.pool] });
   if (!setting.success)
     return fail("A runner's pool is judge, shared, lanes or lane-1 to lane-16.");
-  const k = store.clusters.get(i.cluster);
+  const k = await store.clusters.get(i.cluster);
   if (!k) return fail("Choose a cluster.");
   const facts = k.facts as ClusterFacts | null;
   if (!facts || k.check_error)
@@ -239,11 +240,12 @@ export async function addClusterRunner(
     if (!slot) return fail("Choose a slot control may deploy to.");
     // A slot holds one rig: this one's core and runners may share it, another rig's may not.
     const other =
-      store.clusters
-        .rigs(k.name)
-        .find((r) => r.namespace === namespace && r.status !== "removed" && r.rig !== rig)?.rig ??
-      store.rigRunners.onCluster(k.name).find((r) => r.namespace === namespace && r.rig !== rig)
-        ?.rig;
+      (await store.clusters.rigs(k.name)).find(
+        (r) => r.namespace === namespace && r.status !== "removed" && r.rig !== rig,
+      )?.rig ??
+      (await store.rigRunners.onCluster(k.name)).find(
+        (r) => r.namespace === namespace && r.rig !== rig,
+      )?.rig;
     if (other) return fail(`The slot ${namespace} holds the rig ${other}.`);
     // A slot whose rules take pods only on nodes they name: one of those, its GPU's if known.
     const placed = nodeInSlot(
@@ -259,7 +261,7 @@ export async function addClusterRunner(
       clusterTarget(parts, k),
       namespace,
       { ...HARNESS_LABELS, "app.kubernetes.io/instance": unit },
-      store.reachable.list(),
+      await store.reachable.list(),
     );
     if (!net.ok)
       return fail(
@@ -286,7 +288,7 @@ export async function addClusterRunner(
   const images = controlImages(parts, gpus, cuda);
   if (typeof images === "string") return fail(images);
   const token = newToken();
-  store.rigRunners.add({
+  await store.rigRunners.add({
     rig,
     runner,
     tokenSha256: token.sha256,
@@ -307,8 +309,8 @@ export async function addClusterRunner(
     },
     created_by: by,
   });
-  store.rigHistory.add(rig, "runner_added", true, `${runner} on ${k.name}`);
-  const r = store.rigRunners.get(rig, runner) as RigRunner;
+  await store.rigHistory.add(rig, "runner_added", true, `${runner} on ${k.name}`);
+  const r = (await store.rigRunners.get(rig, runner)) as RigRunner;
   void inBackground(
     store,
     "cluster",
@@ -326,10 +328,10 @@ export async function addClusterRunner(
 /** Applies a runner process's objects, then gives it to its rig. */
 async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by: string) {
   const { store } = parts;
-  const k = store.clusters.get(r.cluster);
+  const k = await store.clusters.get(r.cluster);
   try {
     if (!k) throw new Error(`the cluster ${r.cluster} is no longer in Settings › Machines`);
-    const objects = clusterRigObjects(runnerPlan(parts, r), {
+    const objects = clusterRigObjects(await runnerPlan(parts, r), {
       controlToken: token,
       harnessSupervisorToken: newToken().token,
     });
@@ -340,21 +342,25 @@ async function deployRunner(parts: ControlParts, r: RigRunner, token: string, by
       120_000,
     );
     if (out.code !== 0) throw new Error(kubeError(out));
-    store.rigRunners.setStatus(r.rig, r.runner, "running");
-    store.rigHistory.add(r.rig, "runner_applied", true, `${r.runner}: namespace ${r.namespace}`);
+    await store.rigRunners.setStatus(r.rig, r.runner, "running");
+    await store.rigHistory.add(
+      r.rig,
+      "runner_applied",
+      true,
+      `${r.runner}: namespace ${r.namespace}`,
+    );
   } catch (err) {
-    store.rigRunners.setStatus(r.rig, r.runner, "failed");
-    store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
+    await store.rigRunners.setStatus(r.rig, r.runner, "failed");
+    await store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
     return;
   }
   await giveRunner(parts, r, by, true);
 }
 
 /** The rig's runners in the change of its settings control asked for last, while it waits. */
-function askedRunners(store: ControlParts["store"], rig: string) {
+async function askedRunners(store: ControlParts["store"], rig: string) {
   return (
-    store.commands
-      .pending(rig)
+    (await store.commands.pending(rig))
       .map((c) => c.envelope)
       .filter((e) => e.kind === "rig_settings" && "runners" in (e.payload as object))
       .at(-1)?.payload as { runners: { name: string; pools: string[] }[] } | undefined
@@ -364,27 +370,33 @@ function askedRunners(store: ControlParts["store"], rig: string) {
 /**
  * Gives a runner process control set up to its rig, if the rig reports its settings. One whose
  * rig has not reported yet waits: control's round of runners gives it once the rig does
- * (watchRunners). `first`: its setup just ended, and a rig that cannot take it says why.
+ * (watchRunners). `first`: its setup just ended, and a rig that cannot take it says why. The
+ * rig's runners are read and the whole list sent in one transaction: two runners given at once
+ * each keep the other, as neither's list is sent between the other's read and its command.
  */
 async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first = false) {
+  await parts.store.tx(() => giveRunnerNow(parts, r, by, first));
+}
+
+async function giveRunnerNow(parts: ControlParts, r: RigRunner, by: string, first: boolean) {
   const { store } = parts;
-  const now = runnersNow(parts, r.rig);
+  const now = await runnersNow(parts, r.rig);
   if (typeof now === "string") {
-    if (first) store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${now}`);
+    if (first) await store.rigHistory.add(r.rig, "runner_given", false, `${r.runner}: ${now}`);
     return;
   }
-  if (!rigSettingsOf(store, r.rig)?.settings) return;
+  if (!(await rigSettingsOf(store, r.rig))?.settings) return;
   const tries = (r.spec.given?.tries ?? 0) + 1;
-  store.rigRunners.setGiven(r.rig, r.runner, { at: new Date().toISOString(), tries });
+  await store.rigRunners.setGiven(r.rig, r.runner, { at: new Date().toISOString(), tries });
   // The rig's runners as control last asked for them, while that command waits for the rig,
   // else as the rig reported them; less those control took away. Then those control set up for
   // it that neither names yet: two set up together, as Add a rig does, each keep the other.
-  const base = (askedRunners(store, r.rig) ?? now).filter(
-    (x) => store.rigRunners.get(r.rig, x.name)?.status !== "removed",
+  const base = await filterInTurn(
+    (await askedRunners(store, r.rig)) ?? now,
+    async (x) => (await store.rigRunners.get(r.rig, x.name))?.status !== "removed",
   );
   const listed = new Set(base.map((x) => x.name));
-  const placed = store.rigRunners
-    .of(r.rig)
+  const placed = (await store.rigRunners.of(r.rig))
     .filter((x) => x.status === "running" && x.runner !== r.runner && !listed.has(x.runner))
     .map((x) => ({ name: x.runner, pools: x.spec.pools }));
   const out = await setRigSettings(
@@ -401,12 +413,12 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first =
     true,
   );
   if (out.state === "sent")
-    store.rigRunners.setGiven(r.rig, r.runner, {
+    await store.rigRunners.setGiven(r.rig, r.runner, {
       at: new Date().toISOString(),
       tries,
       command: out.id,
     });
-  store.rigHistory.add(
+  await store.rigHistory.add(
     r.rig,
     "runner_given",
     out.state !== "refused",
@@ -426,17 +438,20 @@ async function giveRunner(parts: ControlParts, r: RigRunner, by: string, first =
 export function watchRunners(parts: ControlParts, everyMs = RUNNERS_WATCH_MS): void {
   const { store } = parts;
   every(parts.loops, "control", "runners", everyMs, async () => {
-    for (const r of store.rigRunners.running()) {
-      const settings = rigSettingsOf(store, r.rig)?.settings;
+    for (const r of await store.rigRunners.running()) {
+      const settings = (await rigSettingsOf(store, r.rig))?.settings;
       if (!settings) continue;
-      const named = [...settings.runners, ...(askedRunners(store, r.rig) ?? [])];
+      const named = [...settings.runners, ...((await askedRunners(store, r.rig)) ?? [])];
       const g = r.spec.given;
       if (named.some((x) => x.name === r.runner)) {
         if (!g)
-          store.rigRunners.setGiven(r.rig, r.runner, { at: new Date().toISOString(), tries: 0 });
+          await store.rigRunners.setGiven(r.rig, r.runner, {
+            at: new Date().toISOString(),
+            tries: 0,
+          });
         continue;
       }
-      if (!g || (g.tries < GIVE_TRIES && store.commands.notTaken(g.command)))
+      if (!g || (g.tries < GIVE_TRIES && (await store.commands.notTaken(g.command))))
         await giveRunner(parts, r, r.created_by);
     }
   });
@@ -445,7 +460,7 @@ export function watchRunners(parts: ControlParts, everyMs = RUNNERS_WATCH_MS): v
 /** Deletes what control set up for a runner process on its cluster; why not, in words. */
 async function deleteRunnerObjects(parts: ControlParts, r: RigRunner): Promise<string | undefined> {
   if (r.placement === "machine") {
-    const m = parts.store.machines.get(r.cluster);
+    const m = await parts.store.machines.get(r.cluster);
     if (!m) return undefined;
     const out = await parts.machineSsh.sshScript(
       machineTarget(parts, m),
@@ -455,7 +470,7 @@ async function deleteRunnerObjects(parts: ControlParts, r: RigRunner): Promise<s
     );
     return out.code === 0 ? undefined : `on ${m.name}: ${tail(out.stderr) || `exit ${out.code}`}`;
   }
-  const k = parts.store.clusters.get(r.cluster);
+  const k = await parts.store.clusters.get(r.cluster);
   if (!k) return undefined;
   const sel = [
     "-n",
@@ -488,7 +503,7 @@ async function deleteRunnerObjects(parts: ControlParts, r: RigRunner): Promise<s
  * rig's retirement already ended their tokens.
  */
 export async function dropRunners(parts: ControlParts, rig: string, by: string): Promise<void> {
-  for (const r of parts.store.rigRunners.of(rig)) await dropRunner(parts, rig, r.runner, by);
+  for (const r of await parts.store.rigRunners.of(rig)) await dropRunner(parts, rig, r.runner, by);
 }
 
 /**
@@ -501,13 +516,14 @@ export async function dropRunner(
   runner: string,
   by: string,
 ): Promise<void> {
-  const r = parts.store.rigRunners.get(rig, runner);
+  const r = await parts.store.rigRunners.get(rig, runner);
   if (!r || r.status === "removed") return;
   const failed = await deleteRunnerObjects(parts, r);
-  if (failed) parts.store.rigHistory.add(rig, "runner_removed", false, `${runner}: ${failed}`);
+  if (failed)
+    await parts.store.rigHistory.add(rig, "runner_removed", false, `${runner}: ${failed}`);
   else {
-    parts.store.rigRunners.remove(rig, runner, by);
-    parts.store.rigHistory.add(rig, "runner_removed", true, runner);
+    await parts.store.rigRunners.remove(rig, runner, by);
+    await parts.store.rigHistory.add(rig, "runner_removed", true, runner);
   }
 }
 
@@ -523,8 +539,8 @@ export async function removeRunner(
   by: string,
 ): Promise<{ ok: string } | { error: string }> {
   const { store } = parts;
-  const runners = runnersNow(parts, rig);
-  const placed = store.rigRunners.get(rig, runner);
+  const runners = await runnersNow(parts, rig);
+  const placed = await store.rigRunners.get(rig, runner);
   const listed = typeof runners !== "string" && runners.some((r) => r.name === runner);
   if (!listed && (!placed || placed.status === "removed"))
     return { error: `${rig} has no runner ${runner}.` };
@@ -541,12 +557,12 @@ export async function removeRunner(
   if (placed && placed.status !== "removed") {
     const failed = await deleteRunnerObjects(parts, placed);
     if (failed) {
-      store.rigHistory.add(rig, "runner_removed", false, `${runner}: ${failed}`);
+      await store.rigHistory.add(rig, "runner_removed", false, `${runner}: ${failed}`);
       return { error: `${runner} left ${rig}, but its objects stay: ${failed}` };
     }
-    store.rigRunners.remove(rig, runner, by);
+    await store.rigRunners.remove(rig, runner, by);
   }
-  store.rigHistory.add(rig, "runner_removed", true, runner);
+  await store.rigHistory.add(rig, "runner_removed", true, runner);
   return {
     ok: `${runner} left ${rig}: its run under way, if any, is tried again${placed ? ", and control removed what it set up" : ""}.`,
   };
@@ -560,23 +576,23 @@ export async function removeRunner(
  */
 export async function updateRunnerImages(parts: ControlParts, rig: string): Promise<void> {
   const { store } = parts;
-  for (const r of store.rigRunners.of(rig)) {
+  for (const r of await store.rigRunners.of(rig)) {
     if (r.status === "removed") continue;
     if (r.placement === "machine") {
       await updateMachineRunner(parts, r);
       continue;
     }
     const images = controlImages(parts, r.spec.gpus, r.spec.cuda);
-    const k = store.clusters.get(r.cluster);
+    const k = await store.clusters.get(r.cluster);
     if (typeof images === "string" || !k) {
       const why = typeof images === "string" ? images : `the cluster ${r.cluster} is gone`;
-      store.rigHistory.add(rig, "runner_images", false, `${r.runner}: ${why}`);
+      await store.rigHistory.add(rig, "runner_images", false, `${r.runner}: ${why}`);
       continue;
     }
     if (images.harness === r.spec.images.harness && images.supervisor === r.spec.images.supervisor)
       continue;
     const deployments = clusterRigObjects(
-      { ...runnerPlan(parts, r), images },
+      { ...(await runnerPlan(parts, r)), images },
       { controlToken: "", harnessSupervisorToken: "" },
     ).filter((o) => o.kind === "Deployment");
     const out = await parts.kube.kubectl(
@@ -586,11 +602,16 @@ export async function updateRunnerImages(parts: ControlParts, rig: string): Prom
       120_000,
     );
     if (out.code !== 0) {
-      store.rigHistory.add(rig, "runner_images", false, `${r.runner}: ${kubeError(out)}`);
+      await store.rigHistory.add(rig, "runner_images", false, `${r.runner}: ${kubeError(out)}`);
       continue;
     }
-    store.rigRunners.setImages(rig, r.runner, images);
-    store.rigHistory.add(rig, "runner_images", true, `${r.runner}: harness ${images.harness}`);
+    await store.rigRunners.setImages(rig, r.runner, images);
+    await store.rigHistory.add(
+      rig,
+      "runner_images",
+      true,
+      `${r.runner}: harness ${images.harness}`,
+    );
   }
 }
 
@@ -640,17 +661,17 @@ export async function addMachineRunner(
   if (!parts.rigImages) return fail("Control has no rig images configured.");
   if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
   if (!parts.rigBus) return fail(NO_RIG_BUS);
-  const runners = runnersNow(parts, rig);
+  const runners = await runnersNow(parts, rig);
   if (typeof runners === "string") return fail(runners);
   if (!RIG_ID.test(runner)) return fail(`A runner's name is ${RIG_NAME_RULE}.`);
   if (
     runners.some((r) => r.name === runner) ||
-    store.rigRunners.get(rig, runner)?.status === "deploying"
+    (await store.rigRunners.get(rig, runner))?.status === "deploying"
   )
     return fail(`${rig} has a runner named ${runner} already.`);
   if (!RunnerSetting.safeParse({ name: runner, pools: [i.pool] }).success)
     return fail("A runner's pool is judge, shared, lanes or lane-1 to lane-16.");
-  const m = store.machines.get(i.machine);
+  const m = await store.machines.get(i.machine);
   if (!m) return fail("Choose a machine.");
   const facts = m.facts as MachineFacts | null;
   if (!m.host_keys.length || !facts || m.check_error)
@@ -660,12 +681,12 @@ export async function addMachineRunner(
   const g = i.gpu === undefined ? undefined : facts.gpus.find((x) => x.index === i.gpu);
   if (i.gpu !== undefined && !g) return fail(`${m.name} has no GPU ${i.gpu}.`);
   if (i.gpu !== undefined) {
-    const rigUsing = store.machines
-      .rigs(m.name)
-      .find((r) => r.status !== "removed" && r.gpus.includes(i.gpu as number))?.rig;
-    const runnerUsing = store.rigRunners
-      .onCluster(m.name)
-      .find((r) => r.placement === "machine" && r.spec.gpuIndex === i.gpu);
+    const rigUsing = (await store.machines.rigs(m.name)).find(
+      (r) => r.status !== "removed" && r.gpus.includes(i.gpu as number),
+    )?.rig;
+    const runnerUsing = (await store.rigRunners.onCluster(m.name)).find(
+      (r) => r.placement === "machine" && r.spec.gpuIndex === i.gpu,
+    );
     if (rigUsing ?? runnerUsing)
       return fail(
         `GPU ${i.gpu} of ${m.name} is used by ${rigUsing ? `rig ${rigUsing}` : `runner ${runnerUsing?.runner} of ${runnerUsing?.rig}`}.`,
@@ -677,7 +698,7 @@ export async function addMachineRunner(
   const images = controlImages(parts, g ? 1 : 0, cuda);
   if (typeof images === "string") return fail(images);
   const token = newToken();
-  store.rigRunners.add({
+  await store.rigRunners.add({
     rig,
     runner,
     tokenSha256: token.sha256,
@@ -696,8 +717,8 @@ export async function addMachineRunner(
     },
     created_by: by,
   });
-  store.rigHistory.add(rig, "runner_added", true, `${runner} on ${m.name}`);
-  const r = store.rigRunners.get(rig, runner) as RigRunner;
+  await store.rigHistory.add(rig, "runner_added", true, `${runner} on ${m.name}`);
+  const r = (await store.rigRunners.get(rig, runner)) as RigRunner;
   void inBackground(
     store,
     "machine",
@@ -715,7 +736,7 @@ export async function addMachineRunner(
 /** Writes a runner process's files and units on its machine and starts them, then gives it. */
 async function deployMachineRunner(parts: ControlParts, r: RigRunner, token: string, by: string) {
   const { store } = parts;
-  const m = store.machines.get(r.cluster);
+  const m = await store.machines.get(r.cluster);
   try {
     if (!m) throw new Error(`the machine ${r.cluster} is no longer in Settings › Machines`);
     const out = await parts.machineSsh.sshScript(
@@ -732,11 +753,11 @@ async function deployMachineRunner(parts: ControlParts, r: RigRunner, token: str
       30 * 60_000,
     );
     if (out.code !== 0) throw new Error(tail(out.stderr) || `the deploy exited ${out.code}`);
-    store.rigRunners.setStatus(r.rig, r.runner, "running");
-    store.rigHistory.add(r.rig, "runner_applied", true, `${r.runner}: units on ${m.name}`);
+    await store.rigRunners.setStatus(r.rig, r.runner, "running");
+    await store.rigHistory.add(r.rig, "runner_applied", true, `${r.runner}: units on ${m.name}`);
   } catch (err) {
-    store.rigRunners.setStatus(r.rig, r.runner, "failed");
-    store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
+    await store.rigRunners.setStatus(r.rig, r.runner, "failed");
+    await store.rigHistory.add(r.rig, "runner_applied", false, `${r.runner}: ${errorText(err)}`);
     return;
   }
   await giveRunner(parts, r, by, true);
@@ -746,10 +767,10 @@ async function deployMachineRunner(parts: ControlParts, r: RigRunner, token: str
 async function updateMachineRunner(parts: ControlParts, r: RigRunner): Promise<void> {
   const { store } = parts;
   const images = controlImages(parts, r.spec.gpus, r.spec.cuda);
-  const m = store.machines.get(r.cluster);
+  const m = await store.machines.get(r.cluster);
   if (typeof images === "string" || !m) {
     const why = typeof images === "string" ? images : `the machine ${r.cluster} is gone`;
-    store.rigHistory.add(r.rig, "runner_images", false, `${r.runner}: ${why}`);
+    await store.rigHistory.add(r.rig, "runner_images", false, `${r.runner}: ${why}`);
     return;
   }
   if (images.harness === r.spec.images.harness && images.supervisor === r.spec.images.supervisor)
@@ -761,7 +782,7 @@ async function updateMachineRunner(parts: ControlParts, r: RigRunner): Promise<v
     30 * 60_000,
   );
   if (out.code !== 0) {
-    store.rigHistory.add(
+    await store.rigHistory.add(
       r.rig,
       "runner_images",
       false,
@@ -769,6 +790,11 @@ async function updateMachineRunner(parts: ControlParts, r: RigRunner): Promise<v
     );
     return;
   }
-  store.rigRunners.setImages(r.rig, r.runner, images);
-  store.rigHistory.add(r.rig, "runner_images", true, `${r.runner}: harness ${images.harness}`);
+  await store.rigRunners.setImages(r.rig, r.runner, images);
+  await store.rigHistory.add(
+    r.rig,
+    "runner_images",
+    true,
+    `${r.runner}: harness ${images.harness}`,
+  );
 }

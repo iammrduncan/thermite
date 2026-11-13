@@ -13,7 +13,9 @@ import { ingestReport } from "../../helpers/control-store.ts";
 const PAGE = "/ui/campaigns/survey/runs/s-1";
 
 async function control() {
-  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": "t-a-abcdef" } } });
+  const { store, control: api } = await controlOnly({
+    tokens: { rigs: { "rig-a": "t-a-abcdef" } },
+  });
   const { page } = await signIn(api);
   let id = 0;
   const t0 = Date.now() - 3600_000;
@@ -91,12 +93,12 @@ describe("a research run's answer check on control (goal 112)", () => {
       "The review panel checks whether every question is answered (review 1).",
     );
     // A rig whose supervisor has no review panel: the check waits for one.
-    c.store.reportedRigs.setSupervisor("rig-a", { advisors: null });
+    await c.store.reportedRigs.setSupervisor("rig-a", { advisors: null });
     assert.equal(
       await c.line(),
       "The check waits for a review panel: this rig's supervisor has no review panel set up. The run keeps researching.",
     );
-    c.store.reportedRigs.setSupervisor("rig-a", { advisors: { roles: { review_panel: 3 } } });
+    await c.store.reportedRigs.setSupervisor("rig-a", { advisors: { roles: { review_panel: 3 } } });
     await c.ingest({
       kind: "review_panel",
       subject: "s-1",

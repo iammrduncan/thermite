@@ -16,15 +16,15 @@ export interface GitAccessUse {
  * kits. Refused, in words, for an access control lacks, one bound to no host yet, and a URL on a
  * host other than the one the access is for. No name: none.
  */
-export function gitAccessFor(
+export async function gitAccessFor(
   store: ControlStore,
   secrets: SecretBox,
   kitsDir: string | undefined,
   name: string | undefined,
   url: string,
-): GitAccessUse | undefined {
+): Promise<GitAccessUse | undefined> {
   if (!name) return undefined;
-  const g = store.gitAccess.get(name);
+  const g = await store.gitAccess.get(name);
   if (!g) throw new Error(`no Git access named ${name}`);
   if (!g.host)
     throw new Error(

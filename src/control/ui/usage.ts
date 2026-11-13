@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../common/in-turn.ts";
 import { PLAN_PROVIDER_TYPES } from "../../core/agents.ts";
 import {
   isFree,
@@ -503,12 +504,12 @@ export interface MetricsInput {
   /** The rigs whose pods spent in the period. */
   podRigs: string[];
   /** A campaign's mode, for its mark; null: not known. */
-  mode: (campaign: string) => string | null;
+  mode: (campaign: string) => string | null | Promise<string | null>;
   now: number;
 }
 
 /** The Metrics page's body: the period, the six numbers, by model and by campaign. */
-export function metricsBody(m: MetricsInput): string {
+export async function metricsBody(m: MetricsInput): Promise<string> {
   const r = m.report;
   const t = r.total;
   const tz = r.tz;
@@ -555,13 +556,13 @@ export function metricsBody(m: MetricsInput): string {
     s.add(JSON.stringify([x.rig, x.run]));
     runsOf.set(k, s);
   }
-  const byCamp = (r.by_campaign ?? [])
-    .map((c) => {
+  const byCamp = (
+    await mapInTurn(r.by_campaign ?? [], async (c) => {
       const name = c.campaign;
       const runs = runsOf.get(String(name))?.size ?? 0;
-      return `<tr><td>${name === null ? `<span class="muted">no campaign</span>` : `<a class="kname" href="${campaignHref(name)}">${modeAvatar(m.mode(name))}<b>${esc(name)}</b></a>`}</td><td class="num u-opt">${runs || ""}</td><td class="num u-opt">${callsCell(c)}</td><td class="num">${tok(c.tokens_in)}</td><td class="num">${tok(c.tokens_out)}</td><td class="num">${cachedShareCell(c, unrepBy)}</td><td class="num">${speedCell(c)}</td><td class="num">${costCell(c.cost, guessBy)}</td><td class="num u-opt">${shareCell(all > 0 ? tokensOf(c) / all : 0)}</td></tr>`;
+      return `<tr><td>${name === null ? `<span class="muted">no campaign</span>` : `<a class="kname" href="${campaignHref(name)}">${modeAvatar(await m.mode(name))}<b>${esc(name)}</b></a>`}</td><td class="num u-opt">${runs || ""}</td><td class="num u-opt">${callsCell(c)}</td><td class="num">${tok(c.tokens_in)}</td><td class="num">${tok(c.tokens_out)}</td><td class="num">${cachedShareCell(c, unrepBy)}</td><td class="num">${speedCell(c)}</td><td class="num">${costCell(c.cost, guessBy)}</td><td class="num u-opt">${shareCell(all > 0 ? tokensOf(c) / all : 0)}</td></tr>`;
     })
-    .join("");
+  ).join("");
   // The bars: each hour of today, or each day (each week, past 62 days), in the viewer's zone.
   const hour = 3_600_000;
   let edges: number[] = [];

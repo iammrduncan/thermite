@@ -8,7 +8,7 @@ import {
   writtenRef,
 } from "../../../core/kb/index.ts";
 import { JOURNAL_KINDS, type KbCollection, type KbFound, type KbItem } from "../../kb/index.ts";
-import { KbFileRows, KbSettingRows, keepFileText, knowledgeFiles } from "./files.ts";
+import { keepFileText, knowledgeFiles, SqliteKbFileRows, SqliteKbSettingRows } from "./files.ts";
 import {
   itemOf,
   itemText,
@@ -46,7 +46,8 @@ export type {
   KbSettingRow,
   KbTextDue,
 } from "./files.ts";
-export { knowledgeFiles } from "./files.ts";
+export { knowledgeFiles, SqliteKbFileRows, SqliteKbSettingRows } from "./files.ts";
+export type { KnowledgeBase } from "./interface.ts";
 export type { KbVersion } from "./items.ts";
 export type {
   KbFolderRow,
@@ -66,6 +67,8 @@ export type { KbStoredCollection, KbStoredFigures, KbStoredFile, KbTextState } f
 export { KB_STORED_FILES } from "./stored.ts";
 export { knowledgeSearch } from "./words.ts";
 /** A search's answer: its page of hits, each a found item, and what search.ts says beside them. */
+// The items as the knowledge base's callers know them (control/kb), for this folder's files.
+export type { KbCollection, KbFound, KbItem };
 export type KbFindAnswer = Omit<KbFindResult, "found"> & { hits: KbFound[] };
 
 /**
@@ -79,20 +82,21 @@ export type KbFindAnswer = Omit<KbFindResult, "found"> & { hits: KbFound[] };
 
 type Row = Record<string, unknown>;
 
-export class KnowledgeBase {
+/** KnowledgeBase on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteKnowledgeBase {
   private readonly db: DatabaseSync;
   /** The files it holds, each once by its SHA-256 (files.ts; control/kb/files.ts keeps them). */
-  readonly files: KbFileRows;
+  readonly files: SqliteKbFileRows;
   /** Its settings on control: the largest file, and how long an orphan file stays (files.ts). */
-  readonly settings: KbSettingRows;
+  readonly settings: SqliteKbSettingRows;
 
   /** Thermite's reading of the rigs' events into the records slots (reading.ts). */
   private readonly reader: KbReading;
 
   constructor(db: DatabaseSync) {
     this.db = db;
-    this.files = new KbFileRows(db);
-    this.settings = new KbSettingRows(db);
+    this.files = new SqliteKbFileRows(db);
+    this.settings = new SqliteKbSettingRows(db);
     this.reader = new KbReading(db, {
       nextSeq: () => this.nextSeq(),
       makeCollection: (campaign) => this.makeCollection(campaign),

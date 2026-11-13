@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { type AgentsContext, compactAtRefusal } from "../../../core/compaction.ts";
 import { type McpUse, sameUses } from "../../../core/mcp.ts";
 import { queueTarget, queueTargetNote } from "../../../core/queue-target.ts";
@@ -83,9 +84,9 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   const { reviewSources } = runHelpers(dash);
 
   /** A campaign's model use and cost over all its runs on every rig (goal 075), for its sidebar. */
-  const campaignUsage = (k: CampaignView) =>
+  const campaignUsage = async (k: CampaignView) =>
     campaignUsageBlock({
-      report: usageData(store, { campaign: k.name }).report,
+      report: (await usageData(store, { campaign: k.name })).report,
       run: (rig, run) => {
         const x = k.runs.find((y) => y.rig.id === rig && y.run.id === run);
         return x
@@ -105,7 +106,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   // The Copy panel's form: the copy's page, or the panel again with control's words.
   app.post("/ui/campaigns/:campaign/copy", async (c) => {
     const from = c.req.param("campaign");
-    const src = copySource(from);
+    const src = await copySource(from);
     const f = await c.req.parseBody({ all: true });
     const one = (k: string) => {
       const v = [f[k] ?? []].flat()[0];
@@ -118,7 +119,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     // A research copy's servers, as ticked: sent to control only when they are not the source's.
     if (src?.research && one("mcp") === "1") {
       const tools = new Map(
-        mcpServers.list().map((s) => [s.name, s.tools ? s.tools.map((t) => t.name) : null]),
+        (await mcpServers.list()).map((s) => [s.name, s.tools ? s.tools.map((t) => t.name) : null]),
       );
       const p = postedUses(f, tools, src.servers);
       picked = p.uses;
@@ -135,7 +136,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
       else if (Number.isNaN(at))
         problems.push(compactAtRefusal(0) ?? "The compaction point is not valid.");
       else {
-        const source = contractContext(campaignContract(store, from));
+        const source = contractContext(await campaignContract(store, from));
         if (cw !== source?.context_window || at !== source?.compact_at)
           agentsContext =
             cw || at
@@ -145,7 +146,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     }
     const out: CopyCampaignOutcome = problems.length
       ? { state: "refused", error: problems.join(" "), status: 400 }
-      : copyACampaign(
+      : await copyACampaign(
           parts,
           { from, name, mcp_servers: mcp, agents_context: agentsContext },
           "owner:ui",
@@ -205,7 +206,9 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
       true,
     );
     if (out.state === "refused")
-      return out.status === 404 && !startFrom(campaign) ? c.text(out.error, 404) : back(out.error);
+      return out.status === 404 && !(await startFrom(campaign))
+        ? c.text(out.error, 404)
+        : back(out.error);
     if (out.state === "model_given")
       return c.redirect(`${campaignHref(campaign)}?ok=${encodeURIComponent(out.said)}`, 303);
     // A try takes no queue and no briefing: say so when the owner ticked past research it showed
@@ -224,34 +227,39 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
 
   // ---------------------------------------------------------------- the knowledge base (goal 065)
   /** A campaign's Knowledge section: a summary of its collection, and its grants both ways. */
-  const knowledgeSection = (name: string) =>
-    campaignKnowledge({ campaign: name, collection: store.kb().collection(name), now: Date.now() });
+  const knowledgeSection = async (name: string) =>
+    campaignKnowledge({
+      campaign: name,
+      collection: await store.kb().collection(name),
+      now: Date.now(),
+    });
 
   // ---------------------------------------------------------------- a campaign's agents' context
   // Goal 070: a campaign's own context window and compaction point for all its runs' agents, kept
   // in its contract (campaigns/context.ts). Its page shows the two fields and what applies on each
   // rig that can run it; Save makes a new version, as set_campaign_context does.
   /** The rigs that can run a campaign, each with its agents' own models and what applies there. */
-  const contextRigs = (
+  const contextRigs = async (
     name: string,
     vs: RigView[],
     ctx: AgentsContext | undefined,
     mode: unknown,
-  ): ContextRig[] =>
-    startRigs(name, vs)
-      .filter((r) => !r.off)
-      .map((r) => {
-        const own = ownModels(store, r.id, mode);
+  ): Promise<ContextRig[]> =>
+    mapInTurn(
+      (await startRigs(name, vs)).filter((r) => !r.off),
+      async (r) => {
+        const own = await ownModels(store, r.id, mode);
         return { id: r.id, own, now: rigContext(own, ctx) };
-      });
+      },
+    );
   /**
    * The campaign's Experiment queue block (goal 081): its target queue depth, the ideas kept
    * ready, from its newest contract. None for a rig check, a research campaign (its research
    * plan fills its queue) or a campaign with no contract.
    */
-  const queueTargetSection = (name: string) => {
+  const queueTargetSection = async (name: string) => {
     if (isRigCheck(name)) return "";
-    const contract = campaignContract(store, name) as
+    const contract = (await campaignContract(store, name)) as
       | { mode?: unknown; lanes?: { count?: unknown; queue_target?: unknown } }
       | undefined;
     if (!contract || contract.mode === "research") return "";
@@ -266,9 +274,9 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
 <div class="muted small">Set it in New campaign, or as <code>lanes.queue_target</code> in the campaign's contract. A run's Live view says when its queue falls below it, and the teachers are then asked for ideas at once.</div></div></div>`;
   };
   /** The campaign's Agents' context block; none for a rig check, or a campaign with no contract. */
-  const contextSection = (c: Ctx, name: string, vs: RigView[], said: boolean) => {
+  const contextSection = async (c: Ctx, name: string, vs: RigView[], said: boolean) => {
     if (isRigCheck(name)) return "";
-    const contract = campaignContract(store, name) as { mode?: unknown } | undefined;
+    const contract = (await campaignContract(store, name)) as { mode?: unknown } | undefined;
     if (!contract) return "";
     const ctx = contractContext(contract);
     const error = said ? c.req.query("error") : undefined;
@@ -278,7 +286,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
       context: ctx,
       // After a refusal, the fields show what was typed: control checks it again on Save.
       typed: error ? { cw: c.req.query("cw") ?? "", at: c.req.query("ca") ?? "" } : undefined,
-      rigs: contextRigs(name, vs, ctx, contract.mode),
+      rigs: await contextRigs(name, vs, ctx, contract.mode),
       error,
       ok: said ? c.req.query("ok") : undefined,
     });
@@ -287,9 +295,9 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
    * The campaign's block of the owner's additions to its roles (goal 166); none for a rig check,
    * or a campaign with no contract.
    */
-  const additionsSection = (c: Ctx, name: string) => {
+  const additionsSection = async (c: Ctx, name: string) => {
     if (isRigCheck(name)) return "";
-    const contract = campaignContract(store, name) as { mode?: unknown } | undefined;
+    const contract = (await campaignContract(store, name)) as { mode?: unknown } | undefined;
     if (!contract) return "";
     const said = c.req.query("on") === "additions";
     return additionsBlock({
@@ -302,15 +310,15 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     });
   };
   /** Which kinds each role writes in the campaign's collection (goal 175); none for a rig check. */
-  const kbWritesSection = (c: Ctx, name: string) => {
+  const kbWritesSection = async (c: Ctx, name: string) => {
     if (isRigCheck(name)) return "";
-    const contract = campaignContract(store, name) as { kb_writes?: unknown } | undefined;
+    const contract = (await campaignContract(store, name)) as { kb_writes?: unknown } | undefined;
     if (!contract) return "";
     const said = c.req.query("on") === "kb-writes";
     return kbWritesBlock({
       campaign: name,
       csrf: csrf(c),
-      writes: campaignKbWrites(store, name),
+      writes: await campaignKbWrites(store, name),
       byDefault: contract.kb_writes === undefined,
       error: said ? c.req.query("error") : undefined,
       ok: said ? c.req.query("ok") : undefined,
@@ -324,7 +332,11 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
         `${campaignHref(campaign)}?on=kb-writes&${k}=${encodeURIComponent(m)}#kb-writes`,
         303,
       );
-    const out = setCampaignKbWrites(store, { campaign, kb_writes: postedKbWrites(f) }, "owner:ui");
+    const out = await setCampaignKbWrites(
+      store,
+      { campaign, kb_writes: postedKbWrites(f) },
+      "owner:ui",
+    );
     if (out.state === "refused")
       return out.status === 404 ? c.text(out.error, 404) : back("error", out.error);
     if (out.state === "unchanged")
@@ -339,7 +351,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
         `${campaignHref(campaign)}?on=additions&${k}=${encodeURIComponent(m)}#role-additions`,
         303,
       );
-    const out = setCampaignAdditions(
+    const out = await setCampaignAdditions(
       store,
       { campaign, additions: postedAdditions(f) },
       "owner:ui",
@@ -395,12 +407,12 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
       return back("error", "Write the number of tokens in digits, such as 131072.");
     if (Number.isNaN(compactAt))
       return back("error", compactAtRefusal(0) ?? "The compaction point is not valid.");
-    const out = setCampaignContext(store, { campaign, contextWindow, compactAt }, "owner:ui");
+    const out = await setCampaignContext(store, { campaign, contextWindow, compactAt }, "owner:ui");
     if (out.state === "refused")
       return out.status === 404 ? c.text(out.error, 404) : back("error", out.error);
     if (out.state === "unchanged")
       return back("ok", `Nothing changed: version ${out.version} has these numbers already.`);
-    const atWork = (campaignViews(views()).find((k) => k.name === campaign)?.runs ?? [])
+    const atWork = (campaignViews(await views()).find((k) => k.name === campaign)?.runs ?? [])
       .filter((x) => x.run.status === "running")
       .map((x) => x.run.id);
     return back(
@@ -415,7 +427,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
    */
   const campaignPage = async (c: Ctx, tried?: CopyTry) => {
     const now = Date.now();
-    const vs = views();
+    const vs = await views();
     // Its own route's, or the Copy panel's form's (/ui/campaigns/:campaign/copy).
     const name = String(c.req.param("campaign") ?? "");
     // Its runs from control's run registry (goal 170), wherever they ran: a retired rig's and
@@ -430,23 +442,24 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     // Archive and Move to folder (on=shelf) say what they refused at the top of every page.
     const failed = onContext || c.req.query("on") === "shelf" ? undefined : c.req.query("error");
     const okNote = onContext ? undefined : c.req.query("ok");
-    const context = () => contextSection(c, name, vs, c.req.query("on") === "context");
+    const context = async () => contextSection(c, name, vs, c.req.query("on") === "context");
     // The campaign's brief from its contract (goal 078): what its agents know.
-    const brief = () => (isRigCheck(name) ? "" : campaignBriefBlock(campaignContract(store, name)));
+    const brief = async () =>
+      isRigCheck(name) ? "" : campaignBriefBlock(await campaignContract(store, name));
     const note = `${
       failed
         ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not started.</b> ${esc(failed)}</div>`
         : okNote
           ? `<div class="card" style="margin-bottom:16px"><b class="ok">${esc(okNote)}</b></div>`
           : ""
-    }${archivedLine(c, name)}`;
-    const canStart = Boolean(startFrom(name)) && !store.archive.get(name);
-    const buttons = campaignActions(c, name);
-    const drawer = `${startPanel(c, name, vs, c.req.query("start") === "1", runs)}${copyPanel(c, name, vs, tried)}`;
+    }${await archivedLine(c, name)}`;
+    const canStart = Boolean(await startFrom(name)) && !(await store.archive.get(name));
+    const buttons = await campaignActions(c, name);
+    const drawer = `${await startPanel(c, name, vs, c.req.query("start") === "1", runs)}${await copyPanel(c, name, vs, tried)}`;
     if (!k) {
       // Saved on control, with no run reported yet: what was asked for, and a way to start one.
-      const saved = store.campaigns.versions(name);
-      if (!saved.length && !startFrom(name) && !store.archive.get(name))
+      const saved = await store.campaigns.versions(name);
+      if (!saved.length && !(await startFrom(name)) && !(await store.archive.get(name)))
         return page(
           c,
           {
@@ -458,7 +471,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
           vs,
         );
       // A goal campaign's goals, each with how it is checked (goal 082), before any run.
-      const how = goalChecksFor(name, vs);
+      const how = await goalChecksFor(name, vs);
       const savedGoals = how?.checks.goals.length
         ? `<div class="block"><div class="head"><h2>Goals</h2><span class="n">${how.checks.goals.length}</span></div><div class="card flat">${how.checks.goals
             .map(
@@ -472,16 +485,16 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
         {
           title: name,
           crumbs: [{ href: "/ui/campaigns", text: "Campaigns" }],
-          summary: esc(aboutOf(name)),
+          summary: esc(await aboutOf(name)),
           active: "campaigns",
           actions: buttons,
         },
-        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(name)}${kbWritesSection(c, name)}${drawer}`,
+        `${note}${await copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${await brief()}${await context()}${await proposalsBlock(dash, c, name)}${await additionsSection(c, name)}${await queueTargetSection(name)}${await knowledgeSection(name)}${await kbWritesSection(c, name)}${drawer}`,
         vs,
       );
     }
     const h = headline(k);
-    const feed = needs(c, vs, now, campaignHref(name));
+    const feed = await needs(c, vs, now, campaignHref(name));
     const waitingFor = (u: RigView, r: RunView) =>
       feed.filter((n) => n.rig === u.id && n.run === r.id).length;
 
@@ -497,7 +510,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     const bestRun = h.best;
     // How each goal is really checked (goal 082): from the kit control keeps, else from the
     // newest run whose rig reported it, else what the contract says.
-    const how = k.mode === "goal" ? goalChecksFor(name, vs) : undefined;
+    const how = k.mode === "goal" ? await goalChecksFor(name, vs) : undefined;
     const goals =
       (k.mode === "goal" && bestRun?.goals.length
         ? `<div class="kgoals">${bestRun.goals
@@ -515,7 +528,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
             )
             .join("")}</details>`
         : "");
-    const about = aboutOf(name);
+    const about = await aboutOf(name);
     const rigs = rigList(k);
     // A research campaign's page has a Reviews tab (goal 116): its runs' reviews, by run.
     const reviewCount = k.runs.reduce(
@@ -529,7 +542,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
         ? `<nav class="tabs"><a class="${campaignView ? "" : "on"}" href="${campaignHref(name)}">Overview</a><a class="${campaignView ? "on" : ""}" href="${campaignHref(name)}?view=reviews">Reviews <span class="muted">${reviewCount}</span></a></nav>`
         : "";
     const verifiedBy = new Map(
-      (leaderboard(store, { staleAfterMs: opts.staleAfterMs })[k.name] ?? []).map((r) => [
+      ((await leaderboard(store, { staleAfterMs: opts.staleAfterMs }))[k.name] ?? []).map((r) => [
         `${r.rig}\n${r.run}`,
         r.verified_by,
       ]),
@@ -543,13 +556,13 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
         active: "campaigns",
         actions: buttons,
       },
-      `${note}${copiedLine(k.name)}${
+      `${note}${await copiedLine(k.name)}${
         about || goals
           ? `<div class="card khead"><div>${about ? `<div class="small muted">What it is for</div>` : `<div class="small muted">Goals of its best run</div>`}${about ? `<div class="kabout-big">${esc(about)}</div>` : ""}${goals}</div><div class="small muted right">${rigs.length ? `on ${esc(rigs.join(", "))}` : ""}${bestRun ? `<br>best: ${esc(bestRun.id)}, ${esc(h.value)} ${esc(h.sub)}` : ""}</div></div>`
           : ""
       }${campaignTabs}${
         campaignView === "reviews"
-          ? campaignReviewsTab({
+          ? await campaignReviewsTab({
               runs: [...running, ...earlier].map((x) => ({
                 u: x.rig,
                 r: x.run,
@@ -564,14 +577,14 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
           : `<div class="cols run-cols"><div>
 <div class="block" data-part="at-work"><div class="head"><h2>At work now</h2><span class="n">${running.length}</span></div>${
               running.length
-                ? `<div class="kwork one">${running.map((x) => workCardFor(c, x.rig, x.run, now, waitingFor(x.rig, x.run), campaignHref(name))).join("")}</div>`
+                ? `<div class="kwork one">${(await mapInTurn(running, async (x) => workCardFor(c, x.rig, x.run, now, waitingFor(x.rig, x.run), campaignHref(name)))).join("")}</div>`
                 : `<div class="card"><div class="empty">No run is at work.${canStart ? ` <a href="${campaignHref(name)}?start=1" data-open="#start">Start one.</a>` : ""}</div></div>`
             }</div>
 ${waitingRuns.map((w) => `<div class="kneed">${icon.warn}<span class="grow"><b>${w.n} decision${w.n === 1 ? " waits" : "s wait"} for you</b> in ${esc(w.run.id)} on ${esc(w.rig.id)}.</span><a class="btn sm" href="${runHref(w.run)}#needs">Review</a></div>`).join("")}
 <div data-part="earlier">${
               earlier.length
                 ? `<div class="block"><div class="head"><h2>Earlier runs</h2><span class="n">${earlier.length}</span><span class="right">paused, completed and finished, and those of a retired rig or from before a full reset, newest first; open one for its attempts and history</span></div>${earlierRuns(
-                    earlier.map((x) => ({
+                    await mapInTurn(earlier, async (x) => ({
                       ...x,
                       // A hill climb's champion that other rigs confirmed (cross-verified).
                       result: (() => {
@@ -595,8 +608,8 @@ ${waitingRuns.map((w) => `<div class="kneed">${icon.warn}<span class="grow"><b>$
                     now,
                   )}</div>`
                 : ""
-            }</div>${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(name)}${kbWritesSection(c, name)}
-</div><div class="side">${campaignUsage(k)}</div></div>`
+            }</div>${await brief()}${await context()}${await proposalsBlock(dash, c, name)}${await additionsSection(c, name)}${await queueTargetSection(name)}${await knowledgeSection(name)}${await kbWritesSection(c, name)}
+</div><div class="side">${await campaignUsage(k)}</div></div>`
       }${drawer}`,
       vs,
     );

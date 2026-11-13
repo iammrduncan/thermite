@@ -46,10 +46,10 @@ export function contractContext(contract: unknown): AgentsContext | undefined {
 }
 
 /** A campaign's newest contract on control: its newest saved version, or else its newest assignment's. */
-export function campaignContract(store: ControlStore, campaign: string): unknown {
+export async function campaignContract(store: ControlStore, campaign: string): Promise<unknown> {
   return (
-    store.campaigns.versions(campaign)[0]?.contract ??
-    store.commands.latestAssignments().get(campaign)?.payload.contract
+    (await store.campaigns.versions(campaign))[0]?.contract ??
+    (await store.commands.latestAssignments()).get(campaign)?.payload.contract
   );
 }
 
@@ -113,11 +113,11 @@ const same = (a: AgentsContext | undefined, b: AgentsContext | undefined) =>
  * call sets them anew: what it leaves out, the new version does not have. A campaign control knows
  * only by an assignment gets its first saved version, from that assignment. Refused in words.
  */
-export function setCampaignContext(
+export async function setCampaignContext(
   store: ControlStore,
   req: CampaignContextRequest,
   by: string,
-): CampaignContextOutcome {
+): Promise<CampaignContextOutcome> {
   const { campaign } = req;
   if (isRigCheck(campaign))
     return {
@@ -131,7 +131,7 @@ export function setCampaignContext(
   });
   if (why) return { state: "refused", error: why, status: 400 };
   const want = requestedContext(req);
-  const out = saveWithField(store, {
+  const out = await saveWithField(store, {
     campaign,
     field: "agents_context",
     value: want,
@@ -211,18 +211,20 @@ export interface ContextApplies {
 }
 
 /** One agent's own model on control, with the provider's window and its cap and point. */
-function ownModel(
+async function ownModel(
   store: ControlStore,
   rig: string,
   agent: AgentPlace,
-):
-  | { model: string; listed: number; cap?: number | undefined; at?: number | undefined }
-  | undefined {
+): Promise<
+  { model: string; listed: number; cap?: number | undefined; at?: number | undefined } | undefined
+> {
   const own =
-    agent === "workers" ? store.agentModels.byRig()[rig] : store.agentModels.byRole(rig)[agent];
+    agent === "workers"
+      ? (await store.agentModels.byRig())[rig]
+      : (await store.agentModels.byRole(rig))[agent];
   if (!own) return undefined;
   const listed =
-    store.modelProviders.get(own.provider)?.models.find((m) => m.id === own.model)
+    (await store.modelProviders.get(own.provider))?.models.find((m) => m.id === own.model)
       ?.context_window ?? 0;
   return { model: own.model, listed, cap: own.contextCap, at: own.compactAt };
 }
@@ -231,16 +233,16 @@ function ownModel(
  * What applies to the agents of a run of a campaign with its own settings on a rig, as Start a
  * run says it: each agent's model, window and point. Undefined when the campaign sets none.
  */
-export function contextApplies(
+export async function contextApplies(
   store: ControlStore,
   rig: string,
   contract: unknown,
-): ContextApplies | undefined {
+): Promise<ContextApplies | undefined> {
   const campaign = contractContext(contract);
   if (!campaign) return undefined;
   const agents: Partial<Record<AgentPlace, AgentContext>> = {};
-  const workers = (): AgentContext => {
-    const own = ownModel(store, rig, "workers");
+  const workers = async (): Promise<AgentContext> => {
+    const own = await ownModel(store, rig, "workers");
     if (!own)
       return {
         model: null,
@@ -258,11 +260,11 @@ export function contextApplies(
     };
   };
   for (const agent of agentsOfMode((contract as { mode?: unknown } | null)?.mode)) {
-    const own = agent === "workers" ? undefined : ownModel(store, rig, agent);
+    const own = agent === "workers" ? undefined : await ownModel(store, rig, agent);
     // A second teacher only when control gives both teachers a model: else there is one.
-    if (agent === "second_teacher" && (!own || !ownModel(store, rig, "teachers"))) continue;
+    if (agent === "second_teacher" && (!own || !(await ownModel(store, rig, "teachers")))) continue;
     if (agent === "workers" || (agent === "planner" && !own)) {
-      agents[agent] = workers();
+      agents[agent] = await workers();
       continue;
     }
     // The synthesizer and the final writer with no model of their own use the first teacher's.
@@ -317,16 +319,16 @@ export function contextAppliesWords(c: ContextApplies, rig: string): string {
  * is above what a provider lists for one of the rig's agents' models (control gave them). The
  * lower wins against a rig's cap; a window above the provider's is refused, as a cap is.
  */
-export function campaignContextRefusal(
+export async function campaignContextRefusal(
   store: ControlStore,
   rig: string,
   contract: unknown,
-): string {
+): Promise<string> {
   const window = contractContext(contract)?.context_window;
   if (!window) return "";
   for (const agent of agentsOfMode((contract as { mode?: unknown } | null)?.mode)) {
-    const own = ownModel(store, rig, agent);
-    if (agent === "second_teacher" && !ownModel(store, rig, "teachers")) continue;
+    const own = await ownModel(store, rig, agent);
+    if (agent === "second_teacher" && !(await ownModel(store, rig, "teachers"))) continue;
     if (own && own.listed > 0 && window > own.listed)
       return `This campaign sets a context window of ${tokens(window)} tokens. ${own.model}, the model of the ${AGENT_NAMES[agent].toLowerCase()} on ${rig}, takes at most ${tokens(own.listed)} tokens. Set the campaign's window to ${tokens(own.listed)} or less, or give that agent another model.`;
   }
@@ -361,14 +363,18 @@ const AGENT_ROLE_PLACES: AgentPlace[] = [
  * The agents of a rig with a model from control: those of a campaign's mode, or (no mode) every
  * agent; a second teacher only with a first.
  */
-export function ownModels(store: ControlStore, rig: string, mode?: unknown): OwnModel[] {
+export async function ownModels(
+  store: ControlStore,
+  rig: string,
+  mode?: unknown,
+): Promise<OwnModel[]> {
   const agents: AgentPlace[] =
     mode === undefined ? ["workers", ...AGENT_ROLE_PLACES] : agentsOfMode(mode);
   const out: OwnModel[] = [];
   for (const agent of agents) {
-    const own = ownModel(store, rig, agent);
+    const own = await ownModel(store, rig, agent);
     if (!own) continue;
-    if (agent === "second_teacher" && !ownModel(store, rig, "teachers")) continue;
+    if (agent === "second_teacher" && !(await ownModel(store, rig, "teachers"))) continue;
     out.push({
       agent,
       model: own.model,

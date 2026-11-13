@@ -1,3 +1,4 @@
+import { filterInTurn, mapInTurn } from "../../../common/in-turn.ts";
 import { isRigCheck } from "../../../core/ids.ts";
 import {
   type CampaignView,
@@ -81,35 +82,35 @@ export interface CampaignsListInput {
   /** A campaign's best result so far, in words. */
   best: (k: CampaignView) => string;
   /** What a campaign is for, from its contract, when control has it. */
-  about: (k: CampaignView) => string;
+  about: (k: CampaignView) => string | Promise<string>;
   /** The archived campaigns (goal 077), each with when and by whom, in words. */
   archived?: ReadonlyMap<string, string> | undefined;
   /** An archived campaign's Unarchive button (a form). */
-  unarchive?: ((name: string) => string) | undefined;
+  unarchive?: ((name: string) => string | Promise<string>) | undefined;
 }
 
 /**
  * The Campaigns list: what is at work now first, then what waits for the owner, then every
  * campaign as one row, with filters (links, so they work without the script) and a search box.
  */
-export function campaignsListBody(o: CampaignsListInput): string {
+export async function campaignsListBody(o: CampaignsListInput): Promise<string> {
   const kinds = new Map(o.camps.map((k) => [k.name, campaignKind(k)]));
   const shelf = o.archived ?? new Map<string, string>();
   const count = (f: CampaignFilter) =>
     o.camps.filter((k) => shows(f, kinds.get(k.name) ?? "finished", shelf.has(k.name))).length;
   const q = o.query.trim().toLowerCase();
   const archivedView = o.filter === "archived";
-  const rows = o.camps
-    .filter((k) => shows(o.filter, kinds.get(k.name) ?? "finished", shelf.has(k.name)))
-    .filter(
-      (k) =>
-        !q ||
-        [k.name, o.about(k), ...k.runs.map((x) => `${x.run.id} ${x.rig.id}`)]
-          .join(" ")
-          .toLowerCase()
-          .includes(q),
-    )
-    .map((k) => {
+  const found = await filterInTurn(
+    o.camps.filter((k) => shows(o.filter, kinds.get(k.name) ?? "finished", shelf.has(k.name))),
+    async (k) =>
+      !q ||
+      [k.name, await o.about(k), ...k.runs.map((x) => `${x.run.id} ${x.rig.id}`)]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+  );
+  const rows = (
+    await mapInTurn(found, async (k) => {
       const last = k.runs
         .map((x) => lastActivity(x.run))
         .sort()
@@ -117,13 +118,13 @@ export function campaignsListBody(o: CampaignsListInput): string {
       const rigs = [...new Set(k.runs.map((x) => x.rig.id))];
       const check = isRigCheck(k.name);
       const shelved = shelf.get(k.name);
-      const name = `<td><a class="kname" href="/ui/campaigns/${encodeURIComponent(k.name)}">${check ? `<span class="av ck" title="rig check">CK</span>` : modeAvatar(k.mode)}<span><b>${esc(k.name)}</b> <span class="muted small">${check ? "rig check" : esc(modeName(k.mode))}</span>${shelved !== undefined && !archivedView ? ` <span class="chip">archived</span>` : ""}${o.about(k) ? `<span class="kabout">${esc(o.about(k))}</span>` : ""}</span></a></td>`;
+      const name = `<td><a class="kname" href="/ui/campaigns/${encodeURIComponent(k.name)}">${check ? `<span class="av ck" title="rig check">CK</span>` : modeAvatar(k.mode)}<span><b>${esc(k.name)}</b> <span class="muted small">${check ? "rig check" : esc(modeName(k.mode))}</span>${shelved !== undefined && !archivedView ? ` <span class="chip">archived</span>` : ""}${(await o.about(k)) ? `<span class="kabout">${esc(await o.about(k))}</span>` : ""}</span></a></td>`;
       // The Archived view: when and by whom, and Unarchive, in place of the last activity and rigs.
       if (archivedView)
-        return `<tr class="click">${name}<td>${k.runs.length ? runCounts(k) : `<span class="muted small">no runs</span>`}</td><td><b class="fig">${esc(o.best(k))}</b></td><td class="muted nowrap">${esc(shelved ?? "")}</td><td class="right">${o.unarchive?.(k.name) ?? ""}</td></tr>`;
+        return `<tr class="click">${name}<td>${k.runs.length ? runCounts(k) : `<span class="muted small">no runs</span>`}</td><td><b class="fig">${esc(o.best(k))}</b></td><td class="muted nowrap">${esc(shelved ?? "")}</td><td class="right">${(await o.unarchive?.(k.name)) ?? ""}</td></tr>`;
       return `<tr class="click">${name}<td>${runCounts(k)}</td><td><b class="fig">${esc(o.best(k))}</b></td><td class="muted nowrap">${last ? `${esc(ago(last, o.now))} ago` : ""}</td><td class="muted small">${esc(rigs.join(", "))}</td></tr>`;
     })
-    .join("");
+  ).join("");
   const chip = (f: CampaignFilter, label: string) =>
     `<a class="fchip${o.filter === f ? " on" : ""}" href="/ui/campaigns${f === "default" ? "" : `?f=${f}`}${q ? `${f === "default" ? "?" : "&"}q=${encodeURIComponent(o.query)}` : ""}">${esc(label)} <span class="n">${count(f)}</span></a>`;
   const checks = count("check");

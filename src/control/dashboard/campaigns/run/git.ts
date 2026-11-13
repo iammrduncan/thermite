@@ -23,12 +23,12 @@ function branchPage(git: string, branch: string): string | undefined {
 
 export function runGitParts(dash: Dashboard) {
   const { store, csrf } = dash;
-  const branches = (x: RunOnRig) =>
-    runBranchesOf(store.reportedRigs.supervisor(x.rig.id), x.run.id);
+  const branches = async (x: RunOnRig) =>
+    runBranchesOf(await store.reportedRigs.supervisor(x.rig.id), x.run.id);
 
   /** The line under the Champions heading: where the branches are, and when they were pushed. */
-  const gitLine = (x: RunOnRig, now: number): string => {
-    const b = branches(x);
+  const gitLine = async (x: RunOnRig, now: number): Promise<string> => {
+    const b = await branches(x);
     if (!b) return "";
     const commits = Object.keys(b.champions).length;
     const page = branchPage(b.git, b.branch);
@@ -41,8 +41,8 @@ export function runGitParts(dash: Dashboard) {
   };
 
   /** A champion's commit and its menu, on its row; empty when it is not in git. */
-  const championGit = (x: RunOnRig, seq: number, patch: string): string => {
-    const b = branches(x);
+  const championGit = async (x: RunOnRig, seq: number, patch: string): Promise<string> => {
+    const b = await branches(x);
     const sha = b?.champions[String(seq)];
     if (!b || !sha) return "";
     const from = `${runHref(x.run)}?from_champion=${seq}#from-champion`;
@@ -60,9 +60,9 @@ export function runGitParts(dash: Dashboard) {
   };
 
   /** The drawer: a new campaign from champion `seq` of the run, open when the page asks. */
-  const fromDrawer = (c: Ctx, x: RunOnRig, vs: RigView[]): string => {
+  const fromDrawer = async (c: Ctx, x: RunOnRig, vs: RigView[]): Promise<string> => {
     const seq = Number(c.req.query("from_champion") ?? "");
-    const b = branches(x);
+    const b = await branches(x);
     if (!b || x.earlier) return "";
     const n =
       Number.isInteger(seq) && b.champions[String(seq)]
@@ -70,8 +70,8 @@ export function runGitParts(dash: Dashboard) {
         : Math.max(...Object.keys(b.champions).map(Number));
     const sha = b.champions[String(n)] ?? "";
     const campaign = x.run.campaign || x.run.id;
-    const assigned = store.runRegistry.assigned(x.run.id);
-    const payload = assigned ? store.commands.row(assigned.command)?.payload : undefined;
+    const assigned = await store.runRegistry.assigned(x.run.id);
+    const payload = assigned ? (await store.commands.row(assigned.command))?.payload : undefined;
     const contract = JSON.stringify(payload?.contract ?? {}, null, 2);
     const name = `${campaign.slice(0, 48)}-from-${n}`;
     const open = Number.isInteger(seq) && seq > 0;

@@ -8,6 +8,7 @@ import { startCampaign } from "../../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../../src/control/store/behind.ts";
 import { controlOnly, signIn } from "../../../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../../../helpers/control-store.ts";
 
@@ -77,10 +78,10 @@ async function stack() {
     }),
   });
   for (const name of Object.keys(listed)) {
-    servers.put({ name, url: `https://${name}.example.com/mcp`, auth: "none" }, "owner:test");
+    await servers.put({ name, url: `https://${name}.example.com/mcp`, auth: "none" }, "owner:test");
     assert.equal(await servers.check(name), null);
   }
-  const { keys, control } = controlOnly({
+  const { keys, control } = await controlOnly({
     store,
     tokens: { rigs: {} },
     options: { staleAfterMs: 600_000, kits, secrets, mcpServers: servers },
@@ -271,17 +272,17 @@ describe("Copy on a campaign's page (goal 069)", () => {
       decodeURIComponent(to),
       "/ui/campaigns/matmul-speed-b?ok=Copied matmul-speed version 2 as matmul-speed-b.",
     );
-    const [source] = s.store.campaigns.versions("matmul-speed");
-    const [copy] = s.store.campaigns.versions("matmul-speed-b");
+    const [source] = await s.store.campaigns.versions("matmul-speed");
+    const [copy] = await s.store.campaigns.versions("matmul-speed-b");
     assert.ok(source && copy);
     assert.deepEqual(copy.copied_from, { campaign: "matmul-speed", version: 2 });
     assert.equal(copy.created_by, "owner:ui");
     assert.deepEqual(copy.sources, source.sources);
     assert.equal((copy.contract as { campaign: string }).campaign, "matmul-speed-b");
     assert.ok(
-      s.store.auditLog
-        .list(50)
-        .some((a) => a.action === "campaign_copied" && a.actor === "owner:ui"),
+      (await s.store.auditLog.list(50)).some(
+        (a) => a.action === "campaign_copied" && a.actor === "owner:ui",
+      ),
     );
     const page = await s.page(to);
     assert.match(page, /<b class="ok">Copied matmul-speed version 2 as matmul-speed-b\.<\/b>/);
@@ -313,8 +314,8 @@ describe("Copy on a campaign's page (goal 069)", () => {
       decodeURIComponent(run.headers.get("location") ?? ""),
       /\/ui\/campaigns\/matmul-speed-b\/runs\/matmul-speed-b-try-1$/,
     );
-    const signed = s.store.db
-      .prepare("select signed from command where kind = 'assign_campaign'")
+    const signed = sqliteBehind(s.store)
+      .db.prepare("select signed from command where kind = 'assign_campaign'")
       .all() as { signed: string }[];
     const payload = JSON.parse(signed.at(-1)?.signed ?? "{}").envelope.payload;
     assert.equal(payload.contract.campaign, "matmul-speed-b");
@@ -361,7 +362,7 @@ describe("Copy on a campaign's page (goal 069)", () => {
     type(form, "name", "web-survey-papers");
     const r = await s.post(form.action, sent(form));
     assert.equal(r.status, 303, await r.clone().text());
-    const [copy] = s.store.campaigns.versions("web-survey-papers");
+    const [copy] = await s.store.campaigns.versions("web-survey-papers");
     assert.ok(copy);
     // In the panel's order, which is Settings'.
     assert.deepEqual((copy.contract as { mcp_servers: unknown }).mcp_servers, [
@@ -383,8 +384,8 @@ describe("Copy on a campaign's page (goal 069)", () => {
     type(same, "name", "web-survey-again");
     const r2 = await s.post(same.action, sent(same));
     assert.equal(r2.status, 303, await r2.clone().text());
-    const [again] = s.store.campaigns.versions("web-survey-again");
-    const [source] = s.store.campaigns.versions("web-survey");
+    const [again] = await s.store.campaigns.versions("web-survey-again");
+    const [source] = await s.store.campaigns.versions("web-survey");
     assert.ok(again && source);
     assert.deepEqual(again.copied_from, { campaign: "web-survey", version: 1 });
     assert.deepEqual(
@@ -393,7 +394,7 @@ describe("Copy on a campaign's page (goal 069)", () => {
     );
 
     // A server with no agent, and a kind of agent with no tool: refused in words, nothing saved.
-    const before = s.store.campaigns.versions().length;
+    const before = (await s.store.campaigns.versions()).length;
     const bad = copyForm(await s.page("/ui/campaigns/web-survey?copy=1"));
     tick(bad, "srv", "paper-search");
     tick(bad, "tool:web-search:workers", "search", false);
@@ -409,14 +410,14 @@ describe("Copy on a campaign's page (goal 069)", () => {
     assert.ok(again2.fields.some((x) => x.name === "srv" && x.value === "paper-search" && x.on));
     assert.match(again2.html, /<b class="warn">Not as web-survey\.<\/b>/);
     assert.match(again2.html, /data-c-mcp-reset>Use the servers of web-survey again/);
-    assert.equal(s.store.campaigns.versions().length, before);
+    assert.equal((await s.store.campaigns.versions()).length, before);
   });
 
   test("a taken name and a name that is not valid: refused in words, the panel open again", async () => {
     const s = await stack();
     // A campaign known only by a grant in the knowledge base: its name is taken too.
-    s.store.kb().grant("old-sweep", "matmul-speed", "owner:ui");
-    const before = s.store.campaigns.versions().length;
+    await s.store.kb().grant("old-sweep", "matmul-speed", "owner:ui");
+    const before = (await s.store.campaigns.versions()).length;
     const form = copyForm(await s.page("/ui/campaigns/web-survey"));
     assert.ok(form.data.taken.includes("old-sweep"));
     assert.deepEqual(form.data.folderOnly, ["old-sweep"]);
@@ -443,8 +444,8 @@ describe("Copy on a campaign's page (goal 069)", () => {
       "rig-check-mine",
       "A name that starts with rig-check- is for rig checks. Choose another name.",
     );
-    assert.equal(s.store.campaigns.versions().length, before, "nothing was saved");
-    assert.ok(!s.store.auditLog.list(100).some((a) => a.action === "campaign_copied"));
+    assert.equal((await s.store.campaigns.versions()).length, before, "nothing was saved");
+    assert.ok(!(await s.store.auditLog.list(100)).some((a) => a.action === "campaign_copied"));
   });
 
   test("a campaign control can't copy has no Copy: a rig check, and one control does not know", async () => {

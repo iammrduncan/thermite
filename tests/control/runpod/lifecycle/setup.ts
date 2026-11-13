@@ -27,10 +27,10 @@ export const TOKENS = {
 };
 
 /** Control with one RunPod account (the fake RunPod), its API, and a clock the test moves. */
-export function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
+export async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
   const store = controlStore();
   const secrets = SecretBox.ephemeral();
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(FAKE_RUNPOD_KEY),
@@ -51,7 +51,7 @@ export function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
     now,
     privateKeyPem: control.privateKeyPem,
   });
-  const { control: api } = controlOnly({
+  const { control: api } = await controlOnly({
     store,
     keys: control,
     tokens: TOKENS,
@@ -67,8 +67,9 @@ export function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
     clock += ms;
     await rigs.advance();
   };
-  const view = (rig: string) => rigs.view(rig) as RunpodRigView;
-  const steps = (rig: string) => store.rigHistory.list(rig).map((e) => [e.step, e.ok]);
+  const view = async (rig: string) => (await rigs.view(rig)) as RunpodRigView;
+  const steps = async (rig: string) =>
+    (await store.rigHistory.list(rig)).map((e) => [e.step, e.ok]);
   return { store, cloud, control, rigs, api, call, advance, view, steps };
 }
 
@@ -99,12 +100,15 @@ async function reportRun(store: ControlStore, rig: string, run: string, n: numbe
 }
 
 /** A launched rig that enrolled and whose harness reports one running run. */
-export async function working(s: ReturnType<typeof setup>, o: { spend_limit_usd?: number } = {}) {
+export async function working(
+  s: Awaited<ReturnType<typeof setup>>,
+  o: { spend_limit_usd?: number } = {},
+) {
   const v = await s.rigs.launch("runpod", { gpu: "RTX A4000", ...o }, "owner:api");
   await s.advance();
-  assert.ok(s.store.tunnels.pin(v.rig, "sign", "box"));
+  assert.ok(await s.store.tunnels.pin(v.rig, "sign", "box"));
   await reportRun(s.store, v.rig, "run-1", 1);
-  supervisorReports(s.store, v.rig);
+  await supervisorReports(s.store, v.rig);
   return v.rig;
 }
 

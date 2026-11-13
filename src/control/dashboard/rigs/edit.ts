@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import {
   COMPACT_AT_DEFAULT,
   COMPACT_AT_MAX,
@@ -82,8 +83,8 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
   // workers' model, the promotion policy. The harness parts go as one signed owner command
   // (rig_settings) with only what changed; the rig reports the settings it runs with.
   /** What the place of a rig control set up on a cluster allows it, as control last read it. */
-  const clusterLimits = (r: ClusterRig): string => {
-    const f = store.clusters.get(r.cluster)?.facts as ClusterFacts | null | undefined;
+  const clusterLimits = async (r: ClusterRig): Promise<string> => {
+    const f = (await store.clusters.get(r.cluster))?.facts as ClusterFacts | null | undefined;
     const s = r.spec;
     const n = (x: number) => String(Math.round(x * 1000) / 1000);
     if (r.placement === "slot") {
@@ -120,7 +121,7 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
    * rig's agent programs run (`mode`, goal 169). The field's least is the headless one, so that a
    * Save that also sets the rig headless can give it that; the server checks the mode's.
    */
-  const clusterSizeFields = (r: ClusterRig, mode: ProgramMode): string => {
+  const clusterSizeFields = async (r: ClusterRig, mode: ProgramMode): Promise<string> => {
     if (r.status === "removed" || r.status === "deploying") return "";
     const s = r.spec;
     const way =
@@ -130,7 +131,7 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
     const gpus = s.gpus
       ? `<label class="fd">${infoLabel("GPUs", `How many GPUs the rig's harness pod asks for, through ${way}: 1 to ${MAX_RIG_GPUS}. With two or more, some are the judge's and the rest the agents': half each, rounded up for the judge, unless you set GPUs for the judge below. A rig on GPUs can't move to none: add a rig on the CPU for that.`)}<input name="k_gpus" type="number" min="1" max="${MAX_RIG_GPUS}" step="1" value="${s.gpus}" data-label="its GPUs" data-moves></label>`
       : "";
-    const limits = clusterLimits(r);
+    const limits = await clusterLimits(r);
     const moves =
       "Its pods restart with the new GPUs, CPUs and memory, on the images it runs. A rig at work drains first: running trials and the judge's job finish, and it starts nothing new meanwhile. Its volume, tokens, runs and results stay.";
     return `<div class="g3" style="margin-top:10px" data-moves-say="${esc(moves)}">${gpus}
@@ -196,8 +197,8 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
       "cache-control": "no-cache",
     }),
   );
-  app.get("/ui/rigs/:rig/edit", (c) => {
-    const vs = views();
+  app.get("/ui/rigs/:rig/edit", async (c) => {
+    const vs = await views();
     const u = vs.find((x) => x.id === c.req.param("rig"));
     if (!u)
       return page(
@@ -209,8 +210,8 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
     const s = u.settings;
     const t = csrf(c);
     const rName = encodeURIComponent(u.id);
-    const providers = store.modelProviders.list().filter((p) => p.models.length);
-    const want = store.agentModels.byRig()[u.id];
+    const providers = (await store.modelProviders.list()).filter((p) => p.models.length);
+    const want = (await store.agentModels.byRig())[u.id];
     const sw = (p: (typeof PARTS)[number]) => `<div class="pt">
 <label class="sw"><input type="checkbox" name="${p.id}" value="1" data-part data-name="${esc(p.name)}"${s?.[p.id] ? " checked" : ""}${s ? "" : " disabled"}><span class="knob"></span></label>
 <div><div><b>${esc(p.name)}</b> <span class="pt-state ${s?.[p.id] ? "on" : "off"}">${s ? (s[p.id] ? "on" : "off") : "?"}</span></div><div class="muted small">${esc(p.does)}</div><div class="small pt-off"><b>When it is off:</b> ${esc(p.off)}</div>${p.id === "workers" ? `<label class="fd" style="max-width:220px;margin-top:8px">${infoLabel("Workers at a time", `How many agents work at the same time: 1 to ${MAX_LANES}. Each one uses its own CPUs, memory and disk, and the same model.`)}<input name="lanes" type="number" min="1" max="${MAX_LANES}" value="${s?.lanes ?? 1}"${s ? "" : " disabled"}></label>` : ""}</div></div>`;
@@ -235,12 +236,12 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
         window: m.context_window ?? 0,
       })),
     }));
-    const roles = store.agentModels.byRole(u.id);
+    const roles = await store.agentModels.byRole(u.id);
     const none: AgentLineNow = { picked: "", effort: null, harness: null, cap: null, at: null };
-    const roleNow = (role: AgentRole): AgentLineNow => {
+    const roleNow = async (role: AgentRole): Promise<AgentLineNow> => {
       const r = roles[role];
       if (!r) return none;
-      const p = store.modelProviders.get(r.provider);
+      const p = await store.modelProviders.get(r.provider);
       return {
         picked: modelValue(r.provider, r.model),
         effort: r.effort,
@@ -249,10 +250,9 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
         at: r.compactAt ?? null,
       };
     };
-    const now = Object.fromEntries(AGENT_ROLES.map((r) => [r, roleNow(r)])) as Record<
-      AgentLineId,
-      AgentLineNow
-    >;
+    const now = Object.fromEntries(
+      await mapInTurn(AGENT_ROLES, async (r) => [r, await roleNow(r)]),
+    ) as Record<AgentLineId, AgentLineNow>;
     now.workers = want
       ? {
           picked: modelValue(want.provider, want.model),
@@ -286,7 +286,7 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
         advisors: advisorsFileOf(u.supervisor),
       },
     });
-    const placed = store.machines.rig(u.id) ?? store.clusters.rig(u.id);
+    const placed = (await store.machines.rig(u.id)) ?? (await store.clusters.rig(u.id));
     // The core (goal 206): where it is, and what it keeps.
     const lanes = s?.lanes ?? 1;
     const keeps = `the run's records, the planner, ${lanes} lane${lanes === 1 ? "'s" : "s'"} agent program${lanes === 1 ? "" : "s"} and the judge's decisions`;
@@ -297,8 +297,8 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
     const where = placed
       ? `<span><b>The core</b> on ${esc("machine" in placed ? placed.machine : placed.namespace)} <span class="chip">${esc("machine" in placed ? "over SSH" : placed.placement === "slot" ? `a slot of ${placed.cluster}` : `a namespace of ${placed.cluster}`)}</span> <span class="chip info">the core</span></span><span class="small muted">${esc(`${size}${keeps}`)}. Set up by control: stop, start or remove it from the rig's page.</span>`
       : `<span><b>The core</b> set up outside control <span class="chip info">the core</span></span><span class="small muted">${esc(keeps)}. Set up by your own tooling: its GPUs and version change with a roll.</span>`;
-    const mode = programModeOf(store, u.id);
-    const sized = placed && !("machine" in placed) ? clusterSizeFields(placed, mode) : "";
+    const mode = await programModeOf(store, u.id);
+    const sized = placed && !("machine" in placed) ? await clusterSizeFields(placed, mode) : "";
     // On a rig set up on a cluster with its CPUs and memory set, a new mode restarts its pods.
     const modeMoves = !!placed && !("machine" in placed) && placed.spec.resources !== undefined;
     return page(
@@ -337,7 +337,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
           ? runnersFields(
               u,
               s,
-              runnerPlaces(
+              await runnerPlaces(
                 store,
                 u.id,
                 s.runners.map((r) => r.name),
@@ -353,7 +353,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
   });
   app.post("/ui/rigs/:rig/edit", async (c) => {
     const rig = c.req.param("rig");
-    const u = views().find((x) => x.id === rig);
+    const u = (await views()).find((x) => x.id === rig);
     const back = (k: "ok" | "error", msg: string) =>
       c.redirect(`/ui/rigs/${encodeURIComponent(rig)}?${k}=${encodeURIComponent(msg)}`, 303);
     if (!u) return back("error", "No such rig.");
@@ -375,14 +375,14 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
       return /^\d+$/.test(t) ? Number(t) : "";
     };
     /** The window its provider lists for a choice's model, in tokens (0: none). */
-    const listedOf = (choice: string) => {
+    const listedOf = async (choice: string) => {
       const [pRaw, mRaw] = choice.split("|");
       try {
         const model = decodeURIComponent(mRaw ?? "");
         return (
-          store.modelProviders
-            .get(decodeURIComponent(pRaw ?? ""))
-            ?.models.find((m) => m.id === model)?.context_window ?? 0
+          (await store.modelProviders.get(decodeURIComponent(pRaw ?? "")))?.models.find(
+            (m) => m.id === model,
+          )?.context_window ?? 0
         );
       } catch {
         return 0;
@@ -392,10 +392,12 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
      * A line's cap and point as the form gives them: the provider's own window is no cap, and 80%
      * no point of its own (the default), as the line's Context cell says; or why not, in words.
      */
-    const contextOf = (
+    const contextOf = async (
       id: AgentLineId,
       choice: string,
-    ): { cap: number | null | undefined; at: number | null | undefined } | { error: string } => {
+    ): Promise<
+      { cap: number | null | undefined; at: number | null | undefined } | { error: string }
+    > => {
       const cap = typed(id === "workers" ? "context_workers" : `context_${id}`, false);
       const at = typed(id === "workers" ? "compact_workers" : `compact_${id}`, true);
       if (cap === "") return { error: "write the number of tokens in digits, such as 131072." };
@@ -404,7 +406,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
           error: `the compaction point is a whole percent of the context window, from ${COMPACT_AT_MIN} to ${COMPACT_AT_MAX}.`,
         };
       return {
-        cap: typeof cap === "number" && cap === listedOf(choice) ? null : cap,
+        cap: typeof cap === "number" && cap === (await listedOf(choice)) ? null : cap,
         at: at === COMPACT_AT_DEFAULT ? null : at,
       };
     };
@@ -427,7 +429,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
     // and point. Only the lines the form has: a line it lacks keeps its model. The first teacher
     // with no model (the advisors file's) takes the second teacher and the merged by model with
     // it, as set_rig_model's clear does; a second teacher needs a first.
-    const roles = store.agentModels.byRole(rig);
+    const roles = await store.agentModels.byRole(rig);
     const noTeachers = "role_teachers" in f && !String(f.role_teachers ?? "");
     if (noTeachers && twoTeachers)
       return refuse(
@@ -446,10 +448,10 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
       if (!raw && !cur) continue;
       const roleEffort = effortOf(`effort_${role}`);
       const picked = HARNESSES.find((h) => h === String(f[`harness_${role}`] ?? ""));
-      const ctx = contextOf(role, raw);
+      const ctx = await contextOf(role, raw);
       if ("error" in ctx) return refuse(role, ctx.error);
       if (cur && raw === modelValue(cur.provider, cur.model)) {
-        const p = store.modelProviders.get(cur.provider);
+        const p = await store.modelProviders.get(cur.provider);
         const curHarness = cur.harness ?? (p ? neededHarness(p, cur.model) : "pi");
         if (
           (roleEffort ?? null) === cur.effort &&
@@ -459,18 +461,27 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
         )
           continue;
       }
-      const plan = checkAgentModel(store, rig, role, raw, roleEffort, picked, ctx.cap, ctx.at);
+      const plan = await checkAgentModel(
+        store,
+        rig,
+        role,
+        raw,
+        roleEffort,
+        picked,
+        ctx.cap,
+        ctx.at,
+      );
       if ("error" in plan) return refuse(role, plan.error);
       plans.push(plan);
     }
 
     // The workers' line: as in Providers, with its own window and point.
     const choice = String(f.choice ?? "");
-    const want = store.agentModels.byRig()[rig];
+    const want = (await store.agentModels.byRig())[rig];
     // A form without the harness (the line had no model) keeps the one control has.
     const harness = "harness" in f ? harnessOf(f.harness) : (want?.harness ?? "pi");
     const effort = effortOf("effort");
-    const wCtx = contextOf("workers", choice);
+    const wCtx = await contextOf("workers", choice);
     if ("error" in wCtx) return refuse("workers", wCtx.error);
     const workersChange =
       choice !== (want ? modelValue(want.provider, want.model) : "") ||
@@ -484,7 +495,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
       const [, mRaw] = choice.split("|");
       const why =
         (typeof wCtx.cap === "number"
-          ? contextCapRefusal(decodeURIComponent(mRaw ?? ""), listedOf(choice), wCtx.cap)
+          ? contextCapRefusal(decodeURIComponent(mRaw ?? ""), await listedOf(choice), wCtx.cap)
           : undefined) ?? (typeof wCtx.at === "number" ? compactAtRefusal(wCtx.at) : undefined);
       if (why) return refuse("workers", why);
     }
@@ -492,7 +503,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
     // A rig control set up on a cluster: its GPUs, CPUs and memory (goal 118), checked here with
     // the rest, against the slot's quota read again, and changed last. With a new number of GPUs,
     // GPUs for the judge is the judge's share of them, not a split of the old ones.
-    const onCluster = store.clusters.rig(rig);
+    const onCluster = await store.clusters.rig(rig);
     let resize: Awaited<ReturnType<typeof prepareResize>> | undefined;
     let gpusMoved = false;
     // A new mode for its agent programs moves the supervisor's share of set CPUs and memory
@@ -567,10 +578,10 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
     // Everything is checked: save the models, then send the settings.
     if (workersChange) {
       if (!choice) {
-        clearRigModel(store, rig);
+        await clearRigModel(store, rig);
         said.push("its own model settings");
       } else {
-        const given = giveRigModel(
+        const given = await giveRigModel(
           store,
           rig,
           choice,
@@ -586,18 +597,20 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
     }
     const teachersCleared = plans.some((p) => p.role === "teachers" && p.clear);
     for (const plan of plans) {
-      const ok = applyAgentModel(store, rig, plan).ok;
+      const ok = (await applyAgentModel(store, rig, plan)).ok;
       // The teachers back to the advisors file: said once, for their three models.
       if (!(teachersCleared && plan.clear && plan.role !== "teachers")) said.push(ok);
     }
     let sent: string | undefined;
     if (settings) {
-      sent = issueCommand(store, opts.privateKeyPem, {
-        rig,
-        kind: "rig_settings",
-        payload: settings,
-        issuedBy: "owner:ui",
-      }).id;
+      sent = (
+        await issueCommand(store, opts.privateKeyPem, {
+          rig,
+          kind: "rig_settings",
+          payload: settings,
+          issuedBy: "owner:ui",
+        })
+      ).id;
       said.push(settingsCount(Object.keys(settings).length));
       // A runner process control set up and the owner took away: once the rig has heard, what
       // control set up for it goes (goal 206).

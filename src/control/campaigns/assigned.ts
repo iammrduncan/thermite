@@ -25,23 +25,30 @@ function assignedContract(payload: unknown): { contract: Contract; sha: string }
  * Saves an issued assignment's contract as its campaign's version, unless control has that version:
  * then control keeps its own, as the owner may assign a contract changed under the same version.
  */
-export function keepAssignedCampaign(store: ControlStore, signed: SignedCommand): void {
+export async function keepAssignedCampaign(
+  store: ControlStore,
+  signed: SignedCommand,
+): Promise<void> {
   const e = signed.envelope;
   if (e.kind !== "assign_campaign") return;
   const a = assignedContract(e.payload);
   if (!a) return;
   const { campaign, version } = a.contract;
-  if (store.campaigns.versions(campaign).some((v) => v.version === version)) return;
-  store.campaigns.put({
-    campaign,
-    version,
-    contract: a.contract,
-    sha: a.sha,
-    sources: {
-      assignment: Object.fromEntries(
-        Object.entries(e.payload as Record<string, unknown>).filter(([k]) => !RUN_FIELDS.has(k)),
-      ),
-    },
-    by: e.issued_by,
+  // The look and the save in one transaction: the same contract assigned to two rigs at once is
+  // saved once, and the second finds it.
+  await store.tx(async () => {
+    if ((await store.campaigns.versions(campaign)).some((v) => v.version === version)) return;
+    await store.campaigns.put({
+      campaign,
+      version,
+      contract: a.contract,
+      sha: a.sha,
+      sources: {
+        assignment: Object.fromEntries(
+          Object.entries(e.payload as Record<string, unknown>).filter(([k]) => !RUN_FIELDS.has(k)),
+        ),
+      },
+      by: e.issued_by,
+    });
   });
 }

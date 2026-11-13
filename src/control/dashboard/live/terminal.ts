@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { errorText } from "../../../common/errors.ts";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { log } from "../../../common/log.ts";
 import { KEYS_MAX, SCREENS_WATCHED_MAX, type ScreenFrame } from "../../../core/screens.ts";
 import {
@@ -112,21 +113,22 @@ function outcomeOf(
 }
 
 /** The owner's inputs to a trial, newest first, with what became of each. */
-function inputs(dash: Dashboard, rig: string, run: string, trial: string): TermInputRow[] {
+async function inputs(
+  dash: Dashboard,
+  rig: string,
+  run: string,
+  trial: string,
+): Promise<TermInputRow[]> {
   const now = Date.now();
   const timeline =
-    dash
-      .views()
-      .find((u) => u.id === rig)
-      ?.runs.find((r) => r.id === run)?.timeline ?? [];
+    (await dash.views()).find((u) => u.id === rig)?.runs.find((r) => r.id === run)?.timeline ?? [];
   const later = new Map(
     timeline
       .filter((e) => e.kind === "terminal_input" && e.body.trial === trial)
       .filter((e) => e.body.outcome === "typed_after_reset" || e.body.outcome === "dropped")
       .map((e) => [String(e.body.command), e.body]),
   );
-  const sent = dash.store.commands
-    .latest(rig, "terminal_input", 200)
+  const sent = (await dash.store.commands.latest(rig, "terminal_input", 200))
     .filter((cmd) => cmd.payload.trial === trial)
     .slice(0, INPUTS_LISTED)
     .map((cmd) => ({ at: cmd.issued_at, ...inputOf(cmd.payload), ...outcomeOf(cmd, later, now) }));
@@ -146,7 +148,7 @@ function inputs(dash: Dashboard, rig: string, run: string, trial: string): TermI
 }
 
 /** A trial's terminal as a page shows it: its frames' address, its console's, its inputs. */
-function terminalPaneOf(
+async function terminalPaneOf(
   dash: Dashboard,
   c: Ctx,
   o: {
@@ -159,7 +161,7 @@ function terminalPaneOf(
     key?: string | undefined;
     kind?: string | undefined;
   },
-): TerminalPane {
+): Promise<TerminalPane> {
   return {
     stream: `${rigHref(o.rig)}/live/screen?trial=${encodeURIComponent(o.trial)}`,
     action: `${rigHref(o.rig)}/live/terminal`,
@@ -169,7 +171,7 @@ function terminalPaneOf(
     run: o.run,
     trial: o.trial,
     ended: o.ended,
-    inputs: inputs(dash, o.rig, o.run, o.trial),
+    inputs: await inputs(dash, o.rig, o.run, o.trial),
     error: dash.said(c, "termerror"),
     title: o.title,
     label: o.label,
@@ -179,23 +181,26 @@ function terminalPaneOf(
 }
 
 /** A trial's own page's terminal (goal 169), with what the page carries for it. */
-export function terminalPanel(
+export async function terminalPanel(
   dash: Dashboard,
   c: Ctx,
   o: { rig: string; run: string; trial: string; ended: boolean },
-): string {
-  return terminalHtml({ ...terminalPaneOf(dash, c, o), xtermCss: xtermFile("xterm.css") ?? "" });
+): Promise<string> {
+  return terminalHtml({
+    ...(await terminalPaneOf(dash, c, o)),
+    xtermCss: xtermFile("xterm.css") ?? "",
+  });
 }
 
 /** Several trials' terminals: a run's Live (goals 181, 188), with what its row of tabs carries. */
-export function terminalGrid(
+export async function terminalGrid(
   dash: Dashboard,
   c: Ctx,
   panes: Parameters<typeof terminalPaneOf>[2][],
   o: Parameters<typeof terminalGridHtml>[2] = {},
-): string {
+): Promise<string> {
   return terminalGridHtml(
-    panes.map((p) => terminalPaneOf(dash, c, p)),
+    await mapInTurn(panes, async (p) => terminalPaneOf(dash, c, p)),
     xtermFile("xterm.css") ?? "",
     o,
   );
@@ -222,10 +227,10 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
 
   // A trial's screen, pushed to its page while the page watches: control asks the rig's
   // supervisor for it only then (live/screens.ts), and keeps the newest in memory meanwhile.
-  app.get("/ui/rigs/:rig/live/screen", (c) => {
+  app.get("/ui/rigs/:rig/live/screen", async (c) => {
     const rig = c.req.param("rig");
     const trial = c.req.query("trial") ?? "";
-    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
+    if (!(await store.reportedRigs.listed(rig))) return c.json({ error: "no such rig" }, 404);
     if (!TERMINAL_ID.test(trial)) return c.json({ error: "no such trial" }, 404);
     return streamSSE(c, async (stream) => {
       const stop = parts.screens.watch(rig, trial);
@@ -280,7 +285,7 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     const rig = c.req.param("rig");
     const trial = String(f.trial ?? "");
     const data = String(f.data ?? "");
-    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
+    if (!(await store.reportedRigs.listed(rig))) return c.json({ error: "no such rig" }, 404);
     if (!TERMINAL_ID.test(trial) || !data || data.length > KEYS_MAX)
       return c.json({ error: "not keys for a terminal" }, 400);
     if (!parts.screens.press(rig, trial, data))
@@ -318,7 +323,7 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     if (risky && !confirmed) return refuse(`Confirm it first: ${risky}.`);
     let id: string;
     try {
-      ({ id } = issueCommand(store, opts.privateKeyPem, {
+      ({ id } = await issueCommand(store, opts.privateKeyPem, {
         rig,
         kind: "terminal_input",
         payload: {
@@ -335,7 +340,7 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     } catch (err) {
       return refuse(errorText(err));
     }
-    const cmd = json ? store.commands.row(id) : undefined;
+    const cmd = json ? await store.commands.row(id) : undefined;
     if (cmd) return c.json({ ...commandProgress(cmd, Date.now()), follow: commandFollowUrl(id) });
     return c.redirect(back, 303);
   });

@@ -112,17 +112,17 @@ export interface NeedsContext {
  * Everything that waits for the owner on these rigs, with full context. Each kind of need has its
  * card in a module of operator/; they are gathered in this order, and then sorted by kind and age.
  */
-export function needs(
+export async function needs(
   store: ControlStore,
   vs: RigView[],
   f: Forms,
   now: number,
   back: string,
-): Need[] {
+): Promise<Need[]> {
   const out: Need[] = [];
-  const c: NeedsContext = { ds: store.commands.decisions(), f, now, back };
+  const c: NeedsContext = { ds: await store.commands.decisions(), f, now, back };
   for (const u of vs) {
-    const key = store.reportedRigs.key(u.id);
+    const key = await store.reportedRigs.key(u.id);
     out.push(...keyNeeds(c, u, key));
     for (const r of u.runs) {
       // A closed run is finished, and nothing in it waits for the owner (goal 087; the owner,
@@ -133,30 +133,30 @@ export function needs(
       out.push(...auditNeeds(c, u, r));
       out.push(...reviewNeeds(c, u, r));
       // A trial quiet past the rig's setting, or one that repeats the same calls (goal 143).
-      out.push(...stuckNeeds(store, u, r, f, now, back));
+      out.push(...(await stuckNeeds(store, u, r, f, now, back)));
       out.push(...agentsNeeds(c, u, r));
       out.push(...conclusionNeeds(c, u, r));
     }
     // Off the message bus, which a rig needs to work at all; or its commands held off it.
-    const off = offBusNeeds(c, store, u);
+    const off = await offBusNeeds(c, store, u);
     out.push(...off);
     if (!off.length) out.push(...staleNeeds(c, u, key));
     out.push(...heldCommandNeeds(c, store, u));
     // Its subscription's weekly limit full, until the owner chooses (goal 169).
-    out.push(...weeklyLimitNeeds(c, store, u));
+    out.push(...(await weeklyLimitNeeds(c, store, u)));
     // Its disk at its floor, or a drain past its deadline (goal 173).
     out.push(...diskNeeds(c, u));
-    out.push(...drainNeeds(c, store, u));
+    out.push(...(await drainNeeds(c, store, u)));
     // Its keys on the message bus changed, or were refused, since the owner saw them.
-    out.push(...busKeyNeeds(c, store, u));
+    out.push(...(await busKeyNeeds(c, store, u)));
   }
-  out.push(...resetNeeds(c, store, vs));
+  out.push(...(await resetNeeds(c, store, vs)));
   // Control's own disk at its floor (goal 173).
   out.push(...controlDiskNeeds(c, store));
   // The bus's server that keeps not taking control's users file.
   out.push(...busUsersNeeds(c, store));
   // The operator's changes to a campaign's settings that wait for the owner.
-  out.push(...proposalNeeds(c, store));
+  out.push(...(await proposalNeeds(c, store)));
   const order = [
     "key",
     "off_bus",

@@ -15,7 +15,26 @@ export interface RigRefusal {
   last_at: string | null;
 }
 
-export class RigRefusals extends StorePart {
+export interface RigRefusals {
+  /**
+   * Why control refuses the rig now, and since when; how many of its calls control refused since,
+   * and when the last one came. Undefined when it does not refuse it.
+   */
+  get(rig: string): Promise<RigRefusal | undefined>;
+  /** One more of a refused rig's calls, refused: counted, with its time. */
+  countCall(rig: string): Promise<void>;
+  /** The rigs control refuses now. */
+  rigs(): Promise<string[]>;
+  /**
+   * Refuses the rig for this reason, or (null) ends its refusal. Each new refusal and each end
+   * goes to the audit log once, not on every call the rig makes. A refused rig that never sent a
+   * report is listed (with no report: offline), so the owner sees why.
+   */
+  set(rig: string, reason: string | null, detail?: Record<string, unknown>): Promise<void>;
+}
+
+/** RigRefusals on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigRefusals extends StorePart {
   /**
    * Why control refuses the rig now, and since when; how many of its calls control refused since,
    * and when the last one came. Undefined when it does not refuse it.

@@ -57,3 +57,35 @@ export function transaction<T>(db: DatabaseSync, fn: () => T): T {
     depths.set(db, depth);
   }
 }
+
+/**
+ * `transaction` for work that waits: `fn` gives a promise, and the transaction is kept when it is
+ * kept, and dropped when it fails. The database has one connection, so whoever calls this makes
+ * sure that nothing but `fn`'s own work uses the database until the promise settles (control's
+ * store does: control/store/waits.ts). A `transaction` inside it is a savepoint of it.
+ */
+export async function transactionWaiting<T>(db: DatabaseSync, fn: () => Promise<T>): Promise<T> {
+  const depth = depths.get(db) ?? 0;
+  const savepoint = depth > 0 ? `sp${depth}` : undefined;
+  db.exec(savepoint ? `savepoint ${savepoint}` : "begin immediate");
+  depths.set(db, depth + 1);
+  try {
+    const out = await fn();
+    db.exec(savepoint ? `release ${savepoint}` : "commit");
+    return out;
+  } catch (err) {
+    try {
+      db.exec(savepoint ? `rollback to ${savepoint}; release ${savepoint}` : "rollback");
+    } catch (rollback) {
+      log(
+        "sqlite",
+        "rollback failed",
+        { error: errorText(rollback), after: errorText(err) },
+        "error",
+      );
+    }
+    throw err;
+  } finally {
+    depths.set(db, depth);
+  }
+}

@@ -52,9 +52,9 @@ export type { DashboardOptions };
  * what it takes from the context (dashboard/context.ts). They are added in this order, which is
  * the order Hono matches them in: signing in comes first, since its session check guards the rest.
  */
-export function createDashboard(store: ControlStore, opts: DashboardOptions): Hono {
+export async function createDashboard(store: ControlStore, opts: DashboardOptions): Promise<Hono> {
   const app = new Hono();
-  const dash = dashboardContext(store, opts);
+  const dash = await dashboardContext(store, opts);
   sessionRoutes(app, dash);
   overviewRoutes(app, dash);
   metricsRoutes(app, dash);
@@ -92,6 +92,6 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
 }
 
 /** The dashboard as control's API mounts it (control/pages.ts): every page under "/". */
-export const mountDashboard: MountPages = (app, store, o) => {
-  app.route("/", createDashboard(store, o));
+export const mountDashboard: MountPages = async (app, store, o) => {
+  app.route("/", await createDashboard(store, o));
 };

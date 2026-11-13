@@ -7,7 +7,7 @@ import { keepFolds } from "../views/index.ts";
  * stream, so its first view after is whole. False when the rig is not retired.
  */
 export async function bringBackRig(store: ControlStore, rig: string, by: string): Promise<boolean> {
-  if (!store.retired.get(rig)) return false;
+  if (!(await store.retired.get(rig))) return false;
   await keepFolds(store).restore(rig);
   return store.retired.bringBack(rig, by);
 }

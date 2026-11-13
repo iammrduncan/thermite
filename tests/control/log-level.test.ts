@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, type TestContext, test } from "node:test";
 import { logLevel, startLogging } from "../../src/common/log.ts";
 import { applyControlLogLevel, controlLogLevelOf } from "../../src/control/log-level.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { openControlStore } from "../../src/control/store/index.ts";
 import { ADMIN, controlOnly, mcpClient } from "../helpers/control-stack.ts";
 import { controlStore } from "../helpers/control-store.ts";
 
@@ -27,9 +27,9 @@ function quiet(t: TestContext) {
   t.mock.method(process.stdout, "write", () => true);
 }
 
-function stack(store = controlStore()) {
-  const { control } = controlOnly({ tokens: TOKENS, store });
-  store.reportedRigs.addUnreported("rig-a", new Date().toISOString());
+async function stack(store = controlStore()) {
+  const { control } = await controlOnly({ tokens: TOKENS, store });
+  await store.reportedRigs.addUnreported("rig-a", new Date().toISOString());
   const rest = async (method: string, path: string, body?: unknown, token = ADMIN) => {
     const r = await control.request(path, {
       method,
@@ -52,7 +52,7 @@ function stack(store = controlStore()) {
 describe("log levels from control (the guide's question 16)", () => {
   test("control's own: read, set at once over REST and MCP, refused in words, audited", async (t) => {
     startLogging("control", {});
-    const s = stack();
+    const s = await stack();
     assert.deepEqual((await s.rest("GET", "/v1/control/log-level")).body, {
       level: "info",
       from: "environment",
@@ -96,7 +96,10 @@ describe("log levels from control (the guide's question 16)", () => {
     );
     assert.equal(logLevel(), "info");
     assert.deepEqual(
-      s.store.auditLog.list(20, { action: "control_log_level_set" }).map((e) => [e.actor, e.body]),
+      (await s.store.auditLog.list(20, { action: "control_log_level_set" })).map((e) => [
+        e.actor,
+        e.body,
+      ]),
       [
         ["owner:mcp", { level: null, was: "debug" }],
         ["owner:api", { level: "debug", was: "info" }],
@@ -107,29 +110,29 @@ describe("log levels from control (the guide's question 16)", () => {
   test("control's own level stays across its restarts, over THERMITE_LOG_LEVEL", async (t) => {
     const path = join(mkdtempSync(join(tmpdir(), "thermite-log-level-")), "control.db");
     startLogging("control", {});
-    const s = stack(controlStore(path));
+    const s = await stack(controlStore(path));
     quiet(t);
     await s.rest("PUT", "/v1/control/log-level", { level: "warn" });
     t.mock.restoreAll();
-    s.store.db.close();
+    await s.store.close();
     // A restart: the environment's level first, then the one the owner set.
     startLogging("control", { THERMITE_LOG_LEVEL: "error" });
     assert.equal(logLevel(), "error");
-    const again = new ControlStore(path);
+    const again = openControlStore(path);
     quiet(t);
-    applyControlLogLevel(again);
+    await applyControlLogLevel(again);
     t.mock.restoreAll();
     assert.equal(logLevel(), "warn");
     assert.deepEqual(
-      [controlLogLevelOf(again).level, controlLogLevelOf(again).environment],
+      [(await controlLogLevelOf(again)).level, (await controlLogLevelOf(again)).environment],
       ["warn", "error"],
     );
-    again.db.close();
+    await again.close();
     for (const l of process.listeners("SIGUSR2")) process.removeListener("SIGUSR2", l);
   });
 
   test("a rig part's level goes as a signed log_level command, from the owner's and the operator's tokens, and the audit log says which", async () => {
-    const s = stack();
+    const s = await stack();
     const sent = await s.rest("POST", "/v1/commands", {
       rig: "rig-a",
       kind: "log_level",
@@ -158,19 +161,17 @@ describe("log levels from control (the guide's question 16)", () => {
     });
     assert.equal(bad.status, 400);
     assert.deepEqual(
-      s.store.auditLog
-        .list(20, { action: "log_level_sent" })
-        .map((e) => [
-          e.actor,
-          (e.body as { part: string }).part,
-          (e.body as { level: unknown }).level,
-        ]),
+      (await s.store.auditLog.list(20, { action: "log_level_sent" })).map((e) => [
+        e.actor,
+        (e.body as { part: string }).part,
+        (e.body as { level: unknown }).level,
+      ]),
       [
         ["owner:operator", "harness", null],
         ["owner:api", "supervisor", "debug"],
       ],
     );
-    const first = s.store.auditLog.list(20, { action: "log_level_sent" })[1];
+    const first = (await s.store.auditLog.list(20, { action: "log_level_sent" }))[1];
     assert.equal((first?.body as { command?: string } | undefined)?.command, sent.body.id);
   });
 });

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { buildInfo } from "../../src/common/build-info.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { openControlStore } from "../../src/control/store/index.ts";
 import type { RigVersions } from "../../src/control/versions.ts";
 import { reportingState, rigView } from "../../src/control/views/index.ts";
 import { generateSigningKeys, reportBody, signJson } from "../../src/core/commands.ts";
@@ -40,8 +40,8 @@ interface Listed {
  * changes the build headers the supervisor's reports carry: null sends none, as a supervisor
  * from before version checks. `seen` keeps each report's headers.
  */
-function setup(build?: BuildInfo) {
-  const s = controlStack({ env: makeHarnessEnv("rig-a"), options: build ? { build } : {} });
+async function setup(build?: BuildInfo) {
+  const s = await controlStack({ env: makeHarnessEnv("rig-a"), options: build ? { build } : {} });
   const { env, store, control, bus } = s;
   const rig: { supervisor: Record<string, string> | null | undefined; seen: Headers[] } = {
     supervisor: undefined,
@@ -69,8 +69,8 @@ function setup(build?: BuildInfo) {
       headers: owner,
       body: JSON.stringify({ rig: "rig-a", kind: "assign_campaign", payload: env.assignPayload() }),
     });
-  const audits = (action: string) =>
-    store.auditLog.list(1000).filter((a) => a.action === action) as { body: unknown }[];
+  const audits = async (action: string) =>
+    (await store.auditLog.list(1000)).filter((a) => a.action === action) as { body: unknown }[];
   /** The supervisor's daily report on the bus: control's answer, or its refusal. */
   const daily = async () => {
     await s.relay(0);
@@ -90,7 +90,7 @@ const hdrs = (b: Partial<BuildInfo>) => ({
 
 describe("versions between control and its rigs", () => {
   test("a control update never cuts off a rig on the build before version checks: it reports, takes commands, and shows as unknown", async () => {
-    const s = setup();
+    const s = await setup();
     // The build before: its supervisor sends no build headers, its harness no build.
     s.rig.supervisor = null;
     s.env.service.build = undefined;
@@ -98,7 +98,7 @@ describe("versions between control and its rigs", () => {
     assert.equal(issued.status, 201);
     const { id } = (await issued.json()) as { id: string };
     await s.relay(2);
-    assert.equal(s.store.commands.get(id)?.status, "delivered");
+    assert.equal((await s.store.commands.get(id))?.status, "delivered");
     assert.ok((await heldEvents(s.store, "rig-a")).length > 0);
     const r = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(r?.state, "reporting");
@@ -110,7 +110,7 @@ describe("versions between control and its rigs", () => {
       String(r?.version.notice),
       /harness and supervisor send no version\. Their images are older than version checks\. Control still works with it\./,
     );
-    assert.equal(s.audits("rig_refused").length, 0);
+    assert.equal((await s.audits("rig_refused")).length, 0);
   });
 
   test("a control one protocol newer still works with rigs on the protocol before it, and marks them behind", async () => {
@@ -122,12 +122,12 @@ describe("versions between control and its rigs", () => {
       protocol: PROTOCOL + 1,
       oldest_protocol: Math.max(OLDEST_PROTOCOL, PROTOCOL),
     };
-    const s = setup(next);
+    const s = await setup(next);
     // Every report the supervisor publishes carries its build.
     const issued = await s.issue();
     const { id } = (await issued.json()) as { id: string };
     await s.relay(2);
-    assert.equal(s.store.commands.get(id)?.status, "delivered");
+    assert.equal((await s.store.commands.get(id))?.status, "delivered");
     assert.ok(s.rig.seen.length >= 3);
     for (const h of s.rig.seen) {
       assert.equal(h.get(BUILD_HEADERS.version), own.version);
@@ -160,7 +160,7 @@ describe("versions between control and its rigs", () => {
 
   test("an incompatible rig is refused, with the reason, on its reports and commands, until it runs a build control works with", async () => {
     const control = { version: "0.9.0", commit: null, protocol: 3, oldest_protocol: 2 };
-    const s = setup(control);
+    const s = await setup(control);
     appendOther(s.env.service.ledger, "t", "one", null, {});
     s.rig.supervisor = hdrs({ version: "0.1.0", protocol: 1, oldest_protocol: 1 });
     const why =
@@ -181,7 +181,7 @@ describe("versions between control and its rigs", () => {
     assert.equal(r?.version.notice, why);
     assert.equal(r?.version.supervisor?.protocol, 1);
     // In the audit log once, not once for each call it makes.
-    const refused = s.audits("rig_refused");
+    const refused = await s.audits("rig_refused");
     assert.equal(refused.length, 1);
     const body = refused[0]?.body as { reason: string; control: BuildInfo } | undefined;
     assert.equal(body?.reason, why);
@@ -203,30 +203,30 @@ describe("versions between control and its rigs", () => {
     assert.equal(after?.version.state, "current");
     assert.equal(after?.version.refused, null);
     assert.equal(after?.version.notice, null);
-    assert.equal(s.audits("rig_refusal_ended").length, 1);
+    assert.equal((await s.audits("rig_refusal_ended")).length, 1);
     assert.equal((await s.issue()).status, 201);
   });
 
   test("a harness control cannot work with is refused, though its supervisor is fine", async () => {
-    const s = setup();
+    const s = await setup();
     appendOther(s.env.service.ledger, "t", "one", null, {});
     const own = buildInfo();
     s.env.service.build = { version: "9.0.0", commit: null, protocol: 70, oldest_protocol: 70 };
     const why = `Control cannot work with this rig: its harness works with protocol 70 or later, and control speaks protocol ${own.protocol}. Update control.`;
     await s.relay();
-    assert.equal(s.store.refusals.get("rig-a")?.reason, why);
-    assert.equal(s.store.builds.ofRig("rig-a", "harness")?.protocol, 70);
+    assert.equal((await s.store.refusals.get("rig-a"))?.reason, why);
+    assert.equal((await s.store.builds.ofRig("rig-a", "harness"))?.protocol, 70);
     // Its asks wait on the harness too: the supervisor's own build is not enough.
     await assert.rejects(s.daily(), AskRefused);
     s.env.service.build = own;
     s.bus.forgetIds();
     await s.relay(3);
-    assert.equal(s.store.refusals.get("rig-a"), undefined);
+    assert.equal(await s.store.refusals.get("rig-a"), undefined);
     assert.ok((await heldEvents(s.store, "rig-a")).length > 0);
   });
 
   test("a protocol control does not know is never a reason to refuse", async () => {
-    const s = setup();
+    const s = await setup();
     // A newer supervisor that does not say how old a control it works with, and a harness that
     // sends a malformed protocol.
     s.rig.supervisor = hdrs({ version: "5.0.0", protocol: 9 });
@@ -244,25 +244,25 @@ describe("versions between control and its rigs", () => {
     assert.match(String(r?.version.notice), /a newer Thermite than control.*Update control\./);
   });
 
-  test("a new control checks refused rigs again: one it can work with is no longer refused", () => {
-    const store = new ControlStore(":memory:");
+  test("a new control checks refused rigs again: one it can work with is no longer refused", async () => {
+    const store = openControlStore(":memory:");
     const env = makeHarnessEnv("rig-a");
-    store.builds.setRig("rig-a", "supervisor", {
+    await store.builds.setRig("rig-a", "supervisor", {
       version: "0.1.0",
       commit: null,
       protocol: 1,
       oldest_protocol: 1,
     });
-    store.refusals.set("rig-a", "an older control's reason");
-    controlOnly({
+    await store.refusals.set("rig-a", "an older control's reason");
+    await controlOnly({
       store,
       keys: env.keys,
       tokens,
       options: { build: { version: "0.2.0", commit: null, protocol: 2, oldest_protocol: 1 } },
     });
-    assert.equal(store.refusals.get("rig-a"), undefined);
+    assert.equal(await store.refusals.get("rig-a"), undefined);
     assert.equal(
-      store.auditLog.list(100).filter((a) => a.action === "rig_refusal_ended").length,
+      (await store.auditLog.list(100)).filter((a) => a.action === "rig_refusal_ended").length,
       1,
     );
   });
@@ -284,20 +284,23 @@ describe("versions between control and its rigs", () => {
     assert.equal(reportingState(seen(899_000), { staleAfterMs: 180_000, now: at }), "stale");
     assert.equal(reportingState(seen(901_000), { staleAfterMs: 180_000, now: at }), "offline");
     // The rig view says it, with stale kept for both.
-    const s = setup();
+    const s = await setup();
     await s.relay();
-    const last = Date.parse(String(s.store.reportedRigs.list()[0]?.last_seen));
-    const view = (now: number) => rigView(s.store, "rig-a", { ...opts, now });
-    assert.deepEqual([view(last)?.state, view(last)?.stale], ["reporting", false]);
-    assert.deepEqual([view(last + 200_000)?.state, view(last + 200_000)?.stale], ["stale", true]);
+    const last = Date.parse(String((await s.store.reportedRigs.list())[0]?.last_seen));
+    const view = async (now: number) => rigView(s.store, "rig-a", { ...opts, now });
+    assert.deepEqual([(await view(last))?.state, (await view(last))?.stale], ["reporting", false]);
     assert.deepEqual(
-      [view(last + 1_000_000)?.state, view(last + 1_000_000)?.stale],
+      [(await view(last + 200_000))?.state, (await view(last + 200_000))?.stale],
+      ["stale", true],
+    );
+    assert.deepEqual(
+      [(await view(last + 1_000_000))?.state, (await view(last + 1_000_000))?.stale],
       ["offline", true],
     );
   });
 
   test("MCP's list_rigs shows each rig's state and versions", async () => {
-    const s = setup({
+    const s = await setup({
       version: "99.0.0",
       commit: null,
       protocol: PROTOCOL,
@@ -333,7 +336,7 @@ describe("a newer rig's fields that control does not know", () => {
   });
 
   test("a newer supervisor's figures and daily report are taken; the fields control does not know are dropped", async () => {
-    const s = setup();
+    const s = await setup();
     s.rig.supervisor = newer;
     await s.relay();
     const at = new Date().toISOString();
@@ -384,7 +387,7 @@ describe("a newer rig's fields that control does not know", () => {
     const onBus = { rig: "rig-a", bus: s.bus };
     await ask(onBus, "figures", figures({ cursor: 3, lag_ms: 20 }) as never);
     // Stored as this control knows them: nothing it does not know is kept or shown.
-    const sup = s.store.reportedRigs.supervisor("rig-a") as Record<string, unknown>;
+    const sup = (await s.store.reportedRigs.supervisor("rig-a")) as Record<string, unknown>;
     assert.deepEqual(sup.relay, { cursor: 3 });
     assert.equal("uptime_s" in sup, false);
     assert.equal("bandwidth" in (sup.export as object), false);
@@ -398,7 +401,7 @@ describe("a newer rig's fields that control does not know", () => {
       review_panel: 0,
     });
     // The rest is used: the download is a step in the rig's history.
-    assert.ok(s.store.rigHistory.list("rig-a").some((e) => e.step === "model_started"));
+    assert.ok((await s.store.rigHistory.list("rig-a")).some((e) => e.step === "model_started"));
     // A field control knows keeps its check.
     await assert.rejects(
       ask(onBus, "figures", figures({ cursor: "three" }) as never),
@@ -410,7 +413,7 @@ describe("a newer rig's fields that control does not know", () => {
       body: "# The day",
       format: "markdown",
     } as never);
-    assert.equal(s.store.rigReports.list(5, "rig-a")[0]?.id, daily.id);
+    assert.equal((await s.store.rigReports.list(5, "rig-a"))[0]?.id, daily.id);
     // The rig is ahead of control, not refused.
     const listed = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(listed?.version.state, "ahead");
@@ -418,7 +421,7 @@ describe("a newer rig's fields that control does not know", () => {
   });
 
   test("a newer supervisor's export is taken with a field control does not know", async () => {
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       tokens,
       options: { exportsDir: join(mkdtempSync(join(tmpdir(), "thermite-versions-")), "exports") },
     });
@@ -442,7 +445,7 @@ describe("a newer rig's fields that control does not know", () => {
   });
 
   test("a signed report stays exact: a field a newer harness signed fails the signature; one the supervisor adds is dropped", async () => {
-    const s = setup();
+    const s = await setup();
     appendOther(s.env.service.ledger, "t", "one", null, {});
     const snap = s.env.service.snapshot(0, 100) as Omit<
       Parameters<typeof reportBody>[0],

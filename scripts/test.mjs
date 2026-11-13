@@ -9,8 +9,12 @@
 // after the others, one at a time, with the machine to themselves. CI runs the two parts as
 // separate jobs, on separate machines, at the same time.
 //
-// Usage: node scripts/test.mjs [--part parallel|alone] [files or globs]; with no files, every
-// tests/**/*.test.ts. THERMITE_TEST_JOBS sets how many files run side by side.
+// Usage: node scripts/test.mjs [--part parallel|alone] [--store-waits turn] [files or globs]; with
+// no files, every tests/**/*.test.ts. THERMITE_TEST_JOBS sets how many files run side by side.
+//
+// --store-waits turn: every call of control's store takes a turn of the event loop, as a store on
+// a server does (tests/helpers/store-turns.ts). Without it a call's answer is there at once, as
+// SQLite gives it.
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
@@ -24,6 +28,12 @@ const at = args.indexOf("--part");
 const part = at >= 0 ? args.splice(at, 2)[1] : "all";
 if (!["all", "parallel", "alone"].includes(part)) {
   console.error(`test.mjs: --part is parallel or alone, not ${part}`);
+  process.exit(2);
+}
+const waitsAt = args.indexOf("--store-waits");
+const storeWaits = waitsAt >= 0 ? args.splice(waitsAt, 2)[1] : "none";
+if (!["none", "turn"].includes(storeWaits)) {
+  console.error(`test.mjs: --store-waits is turn, not ${storeWaits}`);
   process.exit(2);
 }
 
@@ -81,6 +91,7 @@ for (const g of groups) {
     [
       "--experimental-strip-types",
       "--disable-warning=ExperimentalWarning",
+      ...(storeWaits === "turn" ? ["--import", "./tests/helpers/store-turns.ts"] : []),
       "--test",
       `--test-concurrency=${g.jobs}`,
       "--test-force-exit",

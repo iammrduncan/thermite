@@ -53,7 +53,7 @@ describe("thermite kit (goal 096)", () => {
     const readFile = join(root, "read");
     writeFileSync(readFile, "read-token-abcdef\n");
 
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       tokens: { admin: "owner-token-abcdef", read: "read-token-abcdef", rigs: {} },
       options: { kits: new KitRepos(join(root, "kits")) },
     });

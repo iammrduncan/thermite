@@ -20,13 +20,17 @@ const KIND: Record<string, string> = {
 };
 
 /** The weekly limit's card, while the owner has not chosen yet. */
-export function weeklyLimitNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
-  const w = weeklyLimit(store, u, c.now);
+export async function weeklyLimitNeeds(
+  c: NeedsContext,
+  store: ControlStore,
+  u: RigView,
+): Promise<Need[]> {
+  const w = await weeklyLimit(store, u, c.now);
   if (!w || w.chose) return [];
   const rig = esc(u.id);
   const at = `/ui/rigs/${encodeURIComponent(u.id)}/weekly-limit`;
   const hidden = `<input type="hidden" name="csrf" value="${c.f.csrf}"><input type="hidden" name="until" value="${esc(w.until)}">`;
-  const p = w.provider ? store.modelProviders.get(w.provider) : undefined;
+  const p = w.provider ? await store.modelProviders.get(w.provider) : undefined;
   const meta = [
     `since ${esc(waitEnd(w.since))}`,
     w.provider ? `${esc(KIND[p?.type ?? ""] ?? "provider")} “${esc(w.provider)}”` : "",
@@ -35,8 +39,7 @@ export function weeklyLimitNeeds(c: NeedsContext, store: ControlStore, u: RigVie
     .filter(Boolean)
     .join(" · ");
   // Each provider's models but the subscription that is full, for the rig's new trials.
-  const options = store.modelProviders
-    .list()
+  const options = (await store.modelProviders.list())
     .filter((x) => x.name !== w.provider)
     .flatMap((x) =>
       x.models.map(

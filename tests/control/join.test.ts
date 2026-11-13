@@ -11,6 +11,7 @@ import {
   joinNamespaceManifest,
 } from "../../src/control/join.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import { controlOnly, signIn } from "../helpers/control-stack.ts";
 
 const SECRETS = { controlToken: "rig-token-123", harnessSupervisorToken: "hs-token-456" };
@@ -123,7 +124,7 @@ describe("join a rig yourself: what control renders", () => {
 });
 
 async function control(o: { rigBus?: { url: string; ca: string } } = {}) {
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     tokens: { rigs: {} },
     options: {
       secrets: SecretBox.ephemeral(),
@@ -216,7 +217,7 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     const rigToken =
       /control-rig-token" <<'THERMITE_EOF_[0-9a-f]+'\n(.+)\n/.exec(script)?.[1] ?? "";
     assert.ok(
-      s.store.enrollments.tokenMatches("box-a", rigToken),
+      await s.store.enrollments.tokenMatches("box-a", rigToken),
       "the script carries the rig's own token",
     );
     // Used once: it stops working.
@@ -233,7 +234,7 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     assert.ok(fresh && fresh !== token);
     const second = await (await s.fetchJoin("/v1/join/box-a/script?uid=0", fresh)).text();
     assert.ok(
-      !s.store.enrollments.tokenMatches("box-a", rigToken),
+      !(await s.store.enrollments.tokenMatches("box-a", rigToken)),
       "the old rig token stopped working",
     );
     assert.match(second, /\/etc\/containers\/systemd/);
@@ -246,7 +247,7 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
       await s.where(await s.post("/ui/rigs/box-a/join/retire", { confirm: "retire box-a" })),
       /box-a is retired: its token no longer works/,
     );
-    assert.equal(s.store.enrollments.rig("box-a"), undefined);
+    assert.equal(await s.store.enrollments.rig("box-a"), undefined);
     assert.match(await s.page("/ui/rigs/box-a"), /box-a is retired/);
 
     // Four GPUs, one for the judge: the lowest-numbered is the judge's, the rest the agents'.
@@ -299,8 +300,8 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     assert.equal((await s.fetchJoin("/v1/join/box-b/manifest", token)).status, 401);
     // Expired: likewise.
     const late = s.tokenOf(await (await s.post("/ui/rigs/box-b/join/new", {})).text());
-    s.store.db
-      .prepare("update joined_rig set join_expires_at = ? where rig = ?")
+    sqliteBehind(s.store)
+      .db.prepare("update joined_rig set join_expires_at = ? where rig = ?")
       .run("2000-01-01T00:00:00.000Z", "box-b");
     assert.equal((await s.fetchJoin("/v1/join/box-b/manifest", late)).status, 401);
     const ok = s.tokenOf(await (await s.post("/ui/rigs/box-b/join/new", {})).text());
@@ -311,7 +312,7 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     assert.ok(!kinds.includes("Namespace"));
     assert.ok(kinds.includes("ResourceClaimTemplate"));
     assert.ok(kinds.includes("NetworkPolicy"));
-    assert.ok(s.store.enrollments.rig("box-b"));
+    assert.ok(await s.store.enrollments.rig("box-b"));
     assert.match(await s.page("/ui/rigs/box-b"), /kubectl scale deployment -n team-a/);
   });
 
@@ -327,7 +328,7 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     const held = await s.fetchJoin("/v1/join/box-c/script", token);
     assert.equal(held.status, 429);
     assert.equal(await held.text(), "thermite: too many join requests failed; wait a minute\n");
-    assert.equal(s.store.auditLog.list(5, { action: "join_throttled" }).length, 1);
+    assert.equal((await s.store.auditLog.list(5, { action: "join_throttled" })).length, 1);
     // The command itself was not used: it waits for the rig.
     assert.match(await s.page("/ui/rigs/box-c"), /A join command waits, until/);
   });

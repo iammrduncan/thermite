@@ -40,7 +40,7 @@ Run these from the repository root before each commit:
 | --- | --- |
 | `npm run typecheck` | The TypeScript types |
 | `npm run web:typecheck` | The types of the dashboard's app (`web/`) |
-| `npm run lint` | Style and common mistakes, with Biome. `npm run format` fixes what it can |
+| `npm run lint` | Style and common mistakes, with Biome. `npm run format` fixes what it can. It refuses a promise that nobody waits for |
 | `node scripts/test.mjs <files>` | The test files that your change touches |
 | `npm run check:public` | That no tracked or staged file holds private names or addresses. Stage new files first |
 | `npm run check:sizes` | That no file over 800 lines grows, and no file newly passes 800 lines. After a split, `npm run check:sizes -- --lower` lowers its recorded size. It warns at 700 lines: a file newly over 700 fails until `npm run check:sizes -- --due` lists it as due a split |

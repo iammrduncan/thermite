@@ -131,20 +131,20 @@ test("a kept conversation reaches control scrubbed of its credentials, and whole
   const at = files.path(compacted.file.sha256);
   mkdirSync(dirname(at), { recursive: true });
   writeFileSync(at, sent);
-  store.kb().files.kept(compacted.file.sha256, compacted.file.bytes);
+  await store.kb().files.kept(compacted.file.sha256, compacted.file.bytes);
   assert.equal(await new KbText(store, files).look(), 1);
   const campaign = String(env.service.ledger.runs.get(RUN)?.campaign);
-  const [hit] = store.kb().find("zirconium", [{ campaign }]).hits;
+  const [hit] = (await store.kb().find("zirconium", [{ campaign }])).hits;
   assert.equal(hit?.kind, "doc");
   assert.equal(hit?.ref, `compactions/${TRIAL}-1.md`);
   const address = `${campaign}/${RUN}/records/doc:compactions/${TRIAL}-1.md`;
-  const read = ownerKbRead(store, [], { address, offset: hit?.passage?.from });
+  const read = await ownerKbRead(store, [], { address, offset: hit?.passage?.from });
   assert.ok(!("error" in read), JSON.stringify(read));
   assert.match(read.item.text, /zirconium/);
   assert.equal(read.item.head, "Kept before compaction 1, at about 41,000 tokens.");
   assert.equal(read.item.chars, read.item.head.length + 2 + sent.length, "whole");
   for (let offset = 0; offset < read.item.chars; offset += 10_000) {
-    const page = ownerKbRead(store, [], { address, offset });
+    const page = await ownerKbRead(store, [], { address, offset });
     assert.ok(!("error" in page));
     assert.ok(!page.item.text.includes(token));
     for (const value of Object.values(secrets)) assert.ok(!page.item.text.includes(value));

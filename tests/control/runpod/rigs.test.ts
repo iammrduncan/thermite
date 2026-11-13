@@ -6,6 +6,7 @@ import type { RunpodRigView } from "../../../src/control/runpod/rig-view.ts";
 import { DEFAULT_IDLE_STOP_MINUTES, RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { LEAF_ENV, LEAF_PORT } from "../../../src/core/link/leaf.ts";
 import { keySha256 } from "../../../src/core/tunnel.ts";
@@ -24,10 +25,10 @@ const KEY = FAKE_RUNPOD_KEY;
 const IMAGE = "ghcr.io/example/thermite-rig:test-cuda";
 const HOUR = 3_600_000;
 
-function setup(o: { noCapacity?: boolean; image?: string | undefined; busCa?: string } = {}) {
+async function setup(o: { noCapacity?: boolean; image?: string | undefined; busCa?: string } = {}) {
   const store = controlStore();
   const secrets = SecretBox.ephemeral();
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(KEY),
@@ -100,7 +101,7 @@ const runCreated = (): [string, string, object] => [
 
 describe("rigs on RunPod: the launch", () => {
   test("a pod of the rig image in pull mode: Secure by default, the volume, the port, the launch values and nothing else", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch("runpod", { gpu: "RTX A4000" }, "owner:api");
     const [body] = s.created();
     assert.ok(body);
@@ -131,7 +132,7 @@ describe("rigs on RunPod: the launch", () => {
     assert.equal(body.env.THERMITE_TUNNEL_PORT, "8790");
     assert.ok(!JSON.stringify(body).includes(KEY), "control's RunPod key never goes to the pod");
     // Control follows the pod in pull mode, with the rig's settings for a GPU rig.
-    const t = s.store.tunnels.get(v.rig);
+    const t = await s.store.tunnels.get(v.rig);
     assert.equal(t?.pod, "pod1");
     assert.equal(t?.url, podPortUrl("pod1", 8790));
     assert.deepEqual(t?.config.env, { THERMITE_TARGET: "cuda-gpu", THERMITE_GPUS: "0" });
@@ -144,13 +145,13 @@ describe("rigs on RunPod: the launch", () => {
     assert.equal(v.idle_stop_minutes, DEFAULT_IDLE_STOP_MINUTES, "the default: none, until set");
     assert.equal(v.idle_stop_minutes, null);
     assert.equal(v.enrolled_at, null);
-    const audit = s.store.auditLog.list(10).find((a) => a.action === "runpod_rig_launched");
+    const audit = (await s.store.auditLog.list(10)).find((a) => a.action === "runpod_rig_launched");
     assert.equal(audit?.actor, "owner:api");
     assert.equal((audit?.body as { pod?: string } | undefined)?.pod, "pod1");
   });
 
   test("with control's authority for the bus: the leaf's port as TCP, its values, and the pod's address from RunPod while it runs", async () => {
-    const s = setup({ busCa: makeCa(new Date(), 30).cert });
+    const s = await setup({ busCa: makeCa(new Date(), 30).cert });
     const v = await s.rigs.launch("runpod", { gpu: "RTX A4000" }, "owner:api");
     const [body] = s.created();
     assert.deepEqual(body?.ports, ["8790/http", `${LEAF_PORT}/tcp`]);
@@ -165,16 +166,18 @@ describe("rigs on RunPod: the launch", () => {
     assert.ok(pod);
     pod.tcp = { [LEAF_PORT]: { ip: "203.0.113.5", public: 40123 } };
     await s.advance(30_000);
-    assert.equal(s.rigs.view(v.rig)?.bus_leaf, "203.0.113.5:40123");
+    assert.equal((await s.rigs.view(v.rig))?.bus_leaf, "203.0.113.5:40123");
     // Stopped, the pod has no address; started again, RunPod may give another.
     pod.status = "EXITED";
     await s.advance(30_000);
-    assert.equal(s.rigs.view(v.rig)?.bus_leaf, null);
+    assert.equal((await s.rigs.view(v.rig))?.bus_leaf, null);
     pod.status = "STARTING";
     pod.tcp = { [LEAF_PORT]: { ip: "198.51.100.7", public: 41000 } };
     await s.advance(30_000);
-    assert.equal(s.rigs.view(v.rig)?.bus_leaf, "198.51.100.7:41000");
-    const steps = s.store.rigHistory.list(v.rig).filter((e) => e.step === "runpod_leaf_address");
+    assert.equal((await s.rigs.view(v.rig))?.bus_leaf, "198.51.100.7:41000");
+    const steps = (await s.store.rigHistory.list(v.rig)).filter(
+      (e) => e.step === "runpod_leaf_address",
+    );
     assert.deepEqual(
       steps.map((e) => e.detail),
       ["203.0.113.5:40123", "198.51.100.7:41000"],
@@ -182,7 +185,7 @@ describe("rigs on RunPod: the launch", () => {
   });
 
   test("GPUs, a data center, an expiry for the code and the owner's settings", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch(
       "runpod",
       {
@@ -207,7 +210,7 @@ describe("rigs on RunPod: the launch", () => {
     assert.deepEqual(body?.mounts, { persistent: { size: 300, path: "/workspace" } });
     assert.equal(v.rig, "big-rig");
     assert.ok(body?.env.THERMITE_TUNNEL_ENROLL_UNTIL);
-    assert.deepEqual(s.store.tunnels.get("big-rig")?.config.env, {
+    assert.deepEqual((await s.store.tunnels.get("big-rig"))?.config.env, {
       THERMITE_TARGET: "cuda-gpu",
       THERMITE_GPUS: "0,1",
       THERMITE_JUDGE_GPUS: "1",
@@ -219,7 +222,7 @@ describe("rigs on RunPod: the launch", () => {
   });
 
   test("refusals start nothing and leave no rig: each says why", async () => {
-    const s = setup();
+    const s = await setup();
     const refused: [Parameters<RunpodRigs["launch"]>[1], RegExp][] = [
       [{ gpu: "" }, /name a GPU type/],
       [{ gpu: "B200" }, /RunPod lists no GPU type "B200"/],
@@ -242,35 +245,35 @@ describe("rigs on RunPod: the launch", () => {
     for (const [req, why] of refused)
       await assert.rejects(s.rigs.launch("runpod", req, "owner:api"), why, JSON.stringify(req));
     await assert.rejects(s.rigs.launch("aws", { gpu: "RTX A4000" }, "o"), /no GPU cloud "aws"/);
-    const noImage = setup({ image: undefined });
+    const noImage = await setup({ image: undefined });
     await assert.rejects(
       noImage.rigs.launch("runpod", { gpu: "RTX A4000" }, "o"),
       /no image: give one, or set THERMITE_RUNPOD_RIG_IMAGE/,
     );
     for (const x of [s, noImage]) {
       assert.deepEqual(x.created(), [], "no pod was asked for");
-      assert.deepEqual(x.store.tunnels.list(), []);
-      assert.deepEqual(x.store.runpod.rigs(), []);
+      assert.deepEqual(await x.store.tunnels.list(), []);
+      assert.deepEqual(await x.store.runpod.rigs(), []);
     }
   });
 
   test("a pod RunPod refuses leaves no rig, and its code can never enroll", async () => {
-    const s = setup({ noCapacity: true });
+    const s = await setup({ noCapacity: true });
     await assert.rejects(
       s.rigs.launch("runpod", { gpu: "RTX A4000", rig: "rig-x" }, "owner:api"),
       /^Error: RunPod has no 1 × .+ free on Secure cloud now: RunPod answered 400 .*no capacity for that GPU.*\. No pod was started and nothing is billed\. Choose another GPU, or try again in a few minutes\.$/,
     );
-    assert.equal(s.store.tunnels.get("rig-x"), undefined);
-    assert.deepEqual(s.store.runpod.rigs(), []);
-    assert.ok(s.store.auditLog.list(10).some((a) => a.action === "tunnel_rig_dropped"));
+    assert.equal(await s.store.tunnels.get("rig-x"), undefined);
+    assert.deepEqual(await s.store.runpod.rigs(), []);
+    assert.ok((await s.store.auditLog.list(10)).some((a) => a.action === "tunnel_rig_dropped"));
     // The name is free again.
-    const ok = setup();
+    const ok = await setup();
     await ok.rigs.launch("runpod", { gpu: "RTX A4000", rig: "rig-x" }, "owner:api");
-    assert.ok(ok.store.tunnels.get("rig-x")?.pod);
+    assert.ok((await ok.store.tunnels.get("rig-x"))?.pod);
   });
 
   test("each pod gets its own snapshot key, which goes to RunPod's settings and nowhere else", async () => {
-    const s = setup();
+    const s = await setup();
     const out: string[] = [];
     const write = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -291,13 +294,15 @@ describe("rigs on RunPod: the launch", () => {
     for (const k of keys) assert.equal(Buffer.from(k, "base64url").length, 32);
     assert.notEqual(keys[0], keys[1], "a new key for each launch");
     // Not in control's database (any table), its audit, the views or its log.
-    const tables = s.store.db
-      .prepare("select name from sqlite_master where type = 'table'")
+    const tables = sqliteBehind(s.store)
+      .db.prepare("select name from sqlite_master where type = 'table'")
       .all() as { name: string }[];
     const dump = tables
-      .map((t) => JSON.stringify(s.store.db.prepare(`select * from "${t.name}"`).all()))
+      .map((t) =>
+        JSON.stringify(sqliteBehind(s.store).db.prepare(`select * from "${t.name}"`).all()),
+      )
       .join("\n");
-    const views = JSON.stringify([s.rigs.view(a.rig), s.rigs.view(b.rig), a, b]);
+    const views = JSON.stringify([await s.rigs.view(a.rig), await s.rigs.view(b.rig), a, b]);
     for (const k of keys) {
       assert.ok(!dump.includes(k), "not in control's database");
       assert.ok(!views.includes(k), "not in what control shows");
@@ -306,7 +311,7 @@ describe("rigs on RunPod: the launch", () => {
   });
 
   test("a refusal that echoes the launch's values is told without them", async () => {
-    const s = setup();
+    const s = await setup();
     let sent: Record<string, string> = {};
     // RunPod refuses the pod, naming the values it was sent: by name, and one bare.
     const echo = async (init: RequestInit | undefined) => {
@@ -350,16 +355,16 @@ describe("rigs on RunPod: the launch", () => {
 
 describe("rigs on RunPod: price, spend and the owner's limits", () => {
   test("the price per hour and the spend so far follow the pod; with no limit set, nothing stops it", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch("runpod", { gpu: "RTX A4000", gpu_count: 2 }, "owner:api");
     await s.advance(HOUR);
-    let now = s.rigs.view(v.rig) as RunpodRigView;
+    let now = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.equal(now.status, "RUNNING");
     assert.equal(now.price_per_hr, 0.5, "RunPod's own price for the running pod");
     assert.equal(now.spend_usd, 0.5);
     // A hundred hours later it still runs: no default limit.
     for (let i = 0; i < 100; i++) await s.advance(HOUR);
-    now = s.rigs.view(v.rig) as RunpodRigView;
+    now = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.equal(now.status, "RUNNING");
     assert.equal(now.spend_usd, 50.5);
     assert.deepEqual(s.cloud.stops(), [], "control never stopped it");
@@ -367,21 +372,21 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
     const pod = s.cloud.pods.get("pod1");
     if (pod) pod.status = "EXITED";
     await s.advance(HOUR);
-    const spent = s.rigs.view(v.rig)?.spend_usd;
+    const spent = (await s.rigs.view(v.rig))?.spend_usd;
     await s.advance(5 * HOUR);
-    assert.equal(s.rigs.view(v.rig)?.spend_usd, spent);
-    assert.equal(s.rigs.view(v.rig)?.status, "EXITED");
+    assert.equal((await s.rigs.view(v.rig))?.spend_usd, spent);
+    assert.equal((await s.rigs.view(v.rig))?.status, "EXITED");
     // Gone at RunPod: control stops following it.
     s.cloud.pods.delete("pod1");
     await s.advance(HOUR);
-    const gone = s.rigs.view(v.rig) as RunpodRigView;
+    const gone = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.equal(gone.active, false);
     assert.ok(gone.ended_at);
     assert.match(gone.notes.join(" "), /RunPod no longer has the pod/);
   });
 
   test("a spend limit stops the pod once it is reached, and only then", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch("runpod", { gpu: "RTX A4000", spend_limit_usd: 1 }, "owner:api");
     await s.advance(HOUR);
     await s.advance(HOUR);
@@ -389,21 +394,21 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
     assert.deepEqual(s.cloud.stops(), [], "$0.75 of $1.00");
     await s.advance(HOUR);
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }], "$1.00 reached");
-    const stopped = s.rigs.view(v.rig) as RunpodRigView;
+    const stopped = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.equal(stopped.stopped_by, "spend_limit");
     assert.equal(stopped.status, "EXITED");
     assert.equal(stopped.spend_usd, 1);
     assert.match(stopped.notes.join(" "), /reached the spend limit you set \(\$1\.00\)/);
-    const audit = s.store.auditLog.list(10).find((a) => a.action === "runpod_rig_stopped");
+    const audit = (await s.store.auditLog.list(10)).find((a) => a.action === "runpod_rig_stopped");
     assert.deepEqual(audit?.body, { rig: v.rig, pod: "pod1", why: "spend_limit", spend_usd: 1 });
     // Stopped, it costs nothing more and is not stopped again.
     await s.advance(10 * HOUR);
-    assert.equal(s.rigs.view(v.rig)?.spend_usd, 1);
+    assert.equal((await s.rigs.view(v.rig))?.spend_usd, 1);
     assert.equal(s.cloud.stops().length, 1);
   });
 
   test("a limit passed while control was away stops the pod at its first step, and says so (goal 165)", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch("runpod", { gpu: "RTX A4000", spend_limit_usd: 1 }, "owner:api");
     await s.advance(60_000);
     assert.deepEqual(s.cloud.stops(), [], "a minute: $0.00 of $1.00");
@@ -417,7 +422,7 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
     });
     await again.advance();
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
-    const stopped = again.view(v.rig) as RunpodRigView;
+    const stopped = (await again.view(v.rig)) as RunpodRigView;
     assert.equal(stopped.stopped_by, "spend_limit");
     assert.match(
       stopped.notes.join(" "),
@@ -426,7 +431,7 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
   });
 
   test("an idle stop counts only after enrollment, and only while no run is at work", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch(
       "runpod",
       { gpu: "RTX A4000", idle_stop_minutes: 30 },
@@ -435,9 +440,9 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
     // Not enrolled yet: a slow image pull is not idleness.
     await s.advance(HOUR);
     assert.deepEqual(s.cloud.stops(), []);
-    assert.equal(s.rigs.view(v.rig)?.idle_since, null);
+    assert.equal((await s.rigs.view(v.rig))?.idle_since, null);
     // Enrolled, with a lane's trial in progress: at work, however long the trial takes.
-    assert.ok(s.store.tunnels.pin(v.rig, "sign", "box"));
+    assert.ok(await s.store.tunnels.pin(v.rig, "sign", "box"));
     await s.report(v.rig, runCreated(), ["trial_started", RUN, { lane: "lane-1", trial: "t-1" }]);
     for (let i = 0; i < 4; i++) await s.advance(20 * 60_000);
     assert.deepEqual(s.cloud.stops(), [], "a trial is in progress");
@@ -450,18 +455,18 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
     await s.advance(20 * 60_000);
     assert.deepEqual(s.cloud.stops(), []);
     await s.advance(20 * 60_000);
-    const asked = s.rigs.view(v.rig) as RunpodRigView;
+    const asked = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.deepEqual(
       [asked.op?.kind, asked.op?.why, asked.op?.phase],
       ["stop", "idle_stop", "exporting"],
     );
     assert.deepEqual(s.cloud.stops(), [], "not before the rig's results have left it");
-    harnessApplies(s.store, v.rig, exportName(1));
-    supervisorReports(s.store, v.rig);
-    exportOnControl(s.store, v.rig, exportName(1));
+    await harnessApplies(s.store, v.rig, exportName(1));
+    await supervisorReports(s.store, v.rig);
+    await exportOnControl(s.store, v.rig, exportName(1));
     await s.advance(30_000);
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
-    const stopped = s.rigs.view(v.rig) as RunpodRigView;
+    const stopped = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.equal(stopped.stopped_by, "idle_stop");
     assert.equal(stopped.op, null);
     assert.match(
@@ -471,51 +476,55 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
   });
 
   test("a running run with nothing under way and no new event is idle: blocked, it is paused and the pod stops", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch(
       "runpod",
       { gpu: "RTX A4000", idle_stop_minutes: 30 },
       "owner:api",
     );
-    assert.ok(s.store.tunnels.pin(v.rig, "sign", "box"));
+    assert.ok(await s.store.tunnels.pin(v.rig, "sign", "box"));
     // The run runs, but no trial is in progress and no judge job waits: it waits for the owner.
     await s.report(v.rig, runCreated(), ["promotion_awaiting_approval", RUN, { attempt: "a-1" }]);
     await s.advance(20 * 60_000);
     assert.deepEqual(s.cloud.stops(), []);
-    assert.equal(s.rigs.view(v.rig)?.op, null);
+    assert.equal((await s.rigs.view(v.rig))?.op, null);
     await s.advance(15 * 60_000);
-    const asked = s.rigs.view(v.rig) as RunpodRigView;
+    const asked = (await s.rigs.view(v.rig)) as RunpodRigView;
     assert.deepEqual([asked.op?.kind, asked.op?.why], ["stop", "idle_stop"]);
     // The stop pauses the blocked run; the next start resumes it.
     assert.deepEqual(asked.op?.paused, [RUN]);
   });
 
   test("a running run's new events count as work: the planner's gap between trials is not idle", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch(
       "runpod",
       { gpu: "RTX A4000", idle_stop_minutes: 30 },
       "owner:api",
     );
-    assert.ok(s.store.tunnels.pin(v.rig, "sign", "box"));
+    assert.ok(await s.store.tunnels.pin(v.rig, "sign", "box"));
     await s.report(v.rig, runCreated());
     await s.advance(20 * 60_000);
     // The planner planned a round, 20 minutes in: the idle time counts from here.
     await s.report(v.rig, ["epoch_planned", RUN, { n: 1, source: "planner", assignments: [] }]);
     await s.advance(20 * 60_000);
-    assert.equal(s.rigs.view(v.rig)?.op, null, "20 minutes since its last event");
+    assert.equal((await s.rigs.view(v.rig))?.op, null, "20 minutes since its last event");
     await s.advance(15 * 60_000);
-    assert.equal(s.rigs.view(v.rig)?.op?.why, "idle_stop", "35 minutes since its last event");
+    assert.equal(
+      (await s.rigs.view(v.rig))?.op?.why,
+      "idle_stop",
+      "35 minutes since its last event",
+    );
   });
 
   test("a paused run is idle, and its queued judge jobs are not work; a judge job that runs is", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch(
       "runpod",
       { gpu: "RTX A4000", idle_stop_minutes: 30 },
       "owner:api",
     );
-    assert.ok(s.store.tunnels.pin(v.rig, "sign", "box"));
+    assert.ok(await s.store.tunnels.pin(v.rig, "sign", "box"));
     // A job queued for the run, then the run paused: the job waits for the resume.
     await s.report(
       v.rig,
@@ -530,32 +539,40 @@ describe("rigs on RunPod: price, spend and the owner's limits", () => {
       ["job_leased", "j-2", {}],
     );
     for (let i = 0; i < 4; i++) await s.advance(20 * 60_000);
-    assert.equal(s.rigs.view(v.rig)?.op, null, "the judge is at work");
+    assert.equal((await s.rigs.view(v.rig))?.op, null, "the judge is at work");
     await s.report(v.rig, ["job_finished", "j-2", { state: "done" }]);
     await s.advance(20 * 60_000);
-    assert.equal(s.rigs.view(v.rig)?.op, null);
+    assert.equal((await s.rigs.view(v.rig))?.op, null);
     await s.advance(15 * 60_000);
-    assert.equal(s.rigs.view(v.rig)?.op?.why, "idle_stop", "only a paused run and its queued job");
+    assert.equal(
+      (await s.rigs.view(v.rig))?.op?.why,
+      "idle_stop",
+      "only a paused run and its queued job",
+    );
   });
 
   test("limits are set and cleared later; an idle stop set later counts from then", async () => {
-    const s = setup();
+    const s = await setup();
     const v = await s.rigs.launch("runpod", { gpu: "RTX A4000" }, "owner:api");
-    s.store.tunnels.pin(v.rig, "sign", "box");
+    await s.store.tunnels.pin(v.rig, "sign", "box");
     await s.advance(3 * HOUR);
     assert.deepEqual(s.cloud.stops(), [], "idle for hours, but no idle stop is set");
-    const set = s.rigs.limits(v.rig, { idle_stop_minutes: 60, spend_limit_usd: 100 }, "owner:api");
+    const set = await s.rigs.limits(
+      v.rig,
+      { idle_stop_minutes: 60, spend_limit_usd: 100 },
+      "owner:api",
+    );
     assert.equal(set.idle_stop_minutes, 60);
     await s.advance(30 * 60_000);
     assert.deepEqual(s.cloud.stops(), [], "the idle time counts from when it was set");
-    const cleared = s.rigs.limits(v.rig, { idle_stop_minutes: null }, "owner:api");
+    const cleared = await s.rigs.limits(v.rig, { idle_stop_minutes: null }, "owner:api");
     assert.equal(cleared.idle_stop_minutes, null);
     assert.equal(cleared.spend_limit_usd, 100, "left out: kept");
     await s.advance(2 * HOUR);
     assert.deepEqual(s.cloud.stops(), []);
-    assert.throws(() => s.rigs.limits(v.rig, { spend_limit_usd: -1 }, "o"), /above 0/);
-    assert.throws(() => s.rigs.limits("nope", {}, "o"), /no rig nope on a GPU cloud/);
-    assert.ok(s.store.auditLog.list(20).some((a) => a.action === "runpod_rig_limits"));
+    await assert.rejects(async () => s.rigs.limits(v.rig, { spend_limit_usd: -1 }, "o"), /above 0/);
+    await assert.rejects(async () => s.rigs.limits("nope", {}, "o"), /no rig nope on a GPU cloud/);
+    assert.ok((await s.store.auditLog.list(20)).some((a) => a.action === "runpod_rig_limits"));
   });
 });
 
@@ -569,8 +586,8 @@ describe("rigs on RunPod over REST and MCP: the owner's alone", () => {
   };
 
   test("REST: the owner launches, lists, reads and sets limits; another token is refused", async () => {
-    const s = setup();
-    const { control: api } = controlOnly({
+    const s = await setup();
+    const { control: api } = await controlOnly({
       store: s.store,
       keys: s.control,
       tokens,
@@ -648,8 +665,8 @@ describe("rigs on RunPod over REST and MCP: the owner's alone", () => {
   });
 
   test("MCP: only the owner may launch or set limits; the operator, readers and the owner see the rigs; agents nothing", async () => {
-    const s = setup();
-    const { control: api } = controlOnly({
+    const s = await setup();
+    const { control: api } = await controlOnly({
       store: s.store,
       keys: s.control,
       tokens,

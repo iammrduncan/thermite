@@ -67,11 +67,13 @@ export function usageQueryRefusal(raw: unknown): string | undefined {
  * provider's, and every Claude Code call: Claude Code runs only on a subscription) are on its
  * plan; else the provider's listed price for the model, else the owner's; else none.
  */
-export function pricingOf(
+export async function pricingOf(
   store: ControlStore,
-): (provider: string | null, model: string, harness: string) => Pricing {
-  const providers = new Map(store.modelProviders.list().map((p) => [p.name, p]));
-  const owner = new Map(store.usage.prices().map((x) => [`${x.provider}\n${x.model}`, x.price]));
+): Promise<(provider: string | null, model: string, harness: string) => Pricing> {
+  const providers = new Map((await store.modelProviders.list()).map((p) => [p.name, p]));
+  const owner = new Map(
+    (await store.usage.prices()).map((x) => [`${x.provider}\n${x.model}`, x.price]),
+  );
   return (provider, model, harness) => {
     const p = provider ? providers.get(provider) : undefined;
     if (p?.type === "claude" || p?.type === "chatgpt" || harness === "claude-code")
@@ -85,19 +87,23 @@ export function pricingOf(
 }
 
 /** The report for a query; a query that does not read throws its problem in words. */
-export function modelUsage(store: ControlStore, raw: unknown, now = new Date()): UsageReport {
-  return usageData(store, raw, now).report;
+export async function modelUsage(
+  store: ControlStore,
+  raw: unknown,
+  now = new Date(),
+): Promise<UsageReport> {
+  return (await usageData(store, raw, now)).report;
 }
 
 /**
  * The report for a query, with the records it sums (each priced) and the pods' spend: what the
  * dashboard's screens draw their bars from. A query that does not read throws its problem.
  */
-export function usageData(
+export async function usageData(
   store: ControlStore,
   raw: unknown,
   now = new Date(),
-): { report: UsageReport; rows: UsageRow[]; pods: PodSpendRow[] } {
+): Promise<{ report: UsageReport; rows: UsageRow[]; pods: PodSpendRow[] }> {
   const refused = usageQueryRefusal(raw);
   if (refused) throw new Error(refused);
   const q = UsageQuery.parse(raw);
@@ -108,19 +114,20 @@ export function usageData(
       : { kind: "system" };
   const tz = q.tz ?? "UTC";
   const since = usageSince(q.period, now, tz);
-  const price = pricingOf(store);
-  const rows = store.usage
-    .rows(scope, since)
-    .map((r) => ({ ...r, pricing: price(r.provider, r.model, r.harness) }));
-  const pods = store.usage.podSpend(scope, since);
+  const price = await pricingOf(store);
+  const rows = (await store.usage.rows(scope, since)).map((r) => ({
+    ...r,
+    pricing: price(r.provider, r.model, r.harness),
+  }));
+  const pods = await store.usage.podSpend(scope, since);
   const report = usageReport(rows, scope, q.period, since, pods, tz);
   // One run over all its time (goal 193): a line for each agent its rig gives a model to, with
   // none of its records too. Not for part of its time: an agent may have worked before it.
-  const rig = q.run && q.period === "all" ? store.runRegistry.rigsOf(q.run)[0] : undefined;
+  const rig = q.run && q.period === "all" ? (await store.runRegistry.rigsOf(q.run))[0] : undefined;
   return {
     report:
       rig && q.run
-        ? withConfigured(report, configuredAgents(store, rig, q.run), sameModel)
+        ? withConfigured(report, await configuredAgents(store, rig, q.run), sameModel)
         : report,
     rows,
     pods,
@@ -150,12 +157,12 @@ export interface PriceView {
 }
 
 /** Every price model usage uses: the providers' listed ones, then the owner's. */
-export function modelPrices(store: ControlStore): PriceView[] {
+export async function modelPrices(store: ControlStore): Promise<PriceView[]> {
   const out: PriceView[] = [];
-  for (const p of store.modelProviders.list())
+  for (const p of await store.modelProviders.list())
     for (const m of p.models)
       if (m.price) out.push({ provider: p.name, model: m.id, price: m.price, source: "list" });
-  for (const x of store.usage.prices())
+  for (const x of await store.usage.prices())
     if (!out.some((o) => o.provider === x.provider && o.model === x.model))
       out.push({ provider: x.provider, model: x.model, price: x.price, source: "owner" });
   return out;
@@ -167,16 +174,17 @@ const dollars = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDig
  * Sets or clears the owner's price for a provider's model; refuses in words. The price counts for
  * every call of the model in model usage, the earlier ones too, until the provider lists one.
  */
-export function setModelPrice(
+export async function setModelPrice(
   store: ControlStore,
   raw: unknown,
   by: string,
-):
+): Promise<
   | {
       ok: true;
       answer: { provider: string; model: string; price: ModelPrice | null; said: string };
     }
-  | { ok: false; status: 400 | 404 | 409; error: string } {
+  | { ok: false; status: 400 | 404 | 409; error: string }
+> {
   const r = PriceRequest.safeParse(raw);
   if (!r.success) {
     const issue = r.error.issues[0];
@@ -194,7 +202,7 @@ export function setModelPrice(
     };
   }
   const q = r.data;
-  const p = store.modelProviders.get(q.provider);
+  const p = await store.modelProviders.get(q.provider);
   if (!p) return { ok: false, status: 404, error: `Providers has no provider ${q.provider}.` };
   if (p.type === "claude" || p.type === "chatgpt")
     return {
@@ -223,7 +231,7 @@ export function setModelPrice(
       q.cache_write !== undefined
     )
       return { ok: false, status: 400, error: "Give clear: true alone, or a price." };
-    store.usage.setPrice(p.name, q.model, null, by);
+    await store.usage.setPrice(p.name, q.model, null, by);
     return {
       ok: true,
       answer: {
@@ -251,7 +259,7 @@ export function setModelPrice(
     price.cache_write === null || price.cache_write === undefined
       ? ""
       : `, ${dollars(price.cache_write)} a cache write`;
-  store.usage.setPrice(p.name, q.model, price, by);
+  await store.usage.setPrice(p.name, q.model, price, by);
   return {
     ok: true,
     answer: {

@@ -117,18 +117,18 @@ export class EventsApply {
    * or once the apply stopped or closed.
    */
   async reach(place: number, ms: number): Promise<boolean> {
-    const applied = () => this.o.store.busPositions.of(EVENT_STREAM);
+    const applied = async () => this.o.store.busPositions.of(EVENT_STREAM);
     let timer: NodeJS.Timeout | undefined;
     const late = new Promise<boolean>((r) => {
       timer = setTimeout(() => r(false), ms);
     });
     try {
-      while (applied() < place) {
+      while ((await applied()) < place) {
         if (this.stopped || this.closed) return false;
-        const before = applied();
+        const before = await applied();
         if (!(await Promise.race([this.nudge().then(() => true), late]))) return false;
         // A turn that found nothing new yet: the next looks again after a pause.
-        if (applied() === before && !(await Promise.race([pause(REACH_PAUSE_MS), late])))
+        if ((await applied()) === before && !(await Promise.race([pause(REACH_PAUSE_MS), late])))
           return false;
       }
       return true;
@@ -166,7 +166,7 @@ export class EventsApply {
   private async check(): Promise<void> {
     const { store, bus } = this.o;
     const last = await bus.lastSeq(EVENT_STREAM);
-    const place = store.busPositions.of(EVENT_STREAM);
+    const place = await store.busPositions.of(EVENT_STREAM);
     if (place > last) {
       this.stopped = `control's store has applied the ${EVENT_STREAM} stream to place ${place}, past its last, ${last}: the stream is older than the store, as when one of them was restored from an older backup. Restore the stream from a backup at least as new as the store, or the store from one no newer than the stream, then start control again`;
       log("control", "control's store is past the events stream's end", { place, last }, "error");
@@ -193,10 +193,11 @@ export class EventsApply {
     }
     while (!this.closed) {
       const from =
-        Math.min(store.busPositions.of(EVENT_STREAM), this.folds.through, this.days.through) + 1;
+        Math.min(await store.busPositions.of(EVENT_STREAM), this.folds.through, this.days.through) +
+        1;
       const read = await bus.read(EVENT_STREAM, { from, limit: APPLY_PAGE });
       if (read.next <= from) return;
-      this.applyPage(read.messages, read.next - 1);
+      await this.applyPage(read.messages, read.next - 1);
       if (read.done) return;
     }
   }
@@ -206,27 +207,31 @@ export class EventsApply {
    * in one transaction; then every message after the folds' place to the folds. Each rig
    * ledger's held cursor is read once a page, and written once at its end where it moved.
    */
-  private applyPage(messages: readonly BusMessage[], through: number): void {
+  private async applyPage(messages: readonly BusMessage[], through: number): Promise<void> {
     const { store } = this.o;
-    const place = store.busPositions.of(EVENT_STREAM);
-    if (through > place) this.record(messages, place, through);
+    const place = await store.busPositions.of(EVENT_STREAM);
+    if (through > place) await this.record(messages, place, through);
     const folds = this.folds.through;
     const events = messages.flatMap((m) => (m.seq > folds ? (streamEvent(m) ?? []) : []));
-    this.folds.take(events, through);
+    await this.folds.take(events, through);
     this.days.take(messages);
     this.sizes.take(messages);
   }
 
   /** The messages after the store's place, applied, and the place it ends at, in one transaction. */
-  private record(messages: readonly BusMessage[], place: number, through: number): void {
+  private async record(
+    messages: readonly BusMessage[],
+    place: number,
+    through: number,
+  ): Promise<void> {
     const { store } = this.o;
     const now = new Date().toISOString();
     const kb = store.kb();
-    const fromTable = kb.indexedFromTable();
+    const fromTable = await kb.indexedFromTable();
     const held = new Map<string, Held>();
     let applied = 0;
     let refused = 0;
-    store.tx(() => {
+    await store.tx(async () => {
       for (const m of messages) {
         if (m.seq <= place) continue;
         const read = readOrSay(m);
@@ -238,7 +243,7 @@ export class EventsApply {
         const h = held.get(key) ?? {
           rig: read.rig,
           ledger: read.ledger,
-          through: store.reportedRigs.heldCursor(read.rig, read.ledger),
+          through: await store.reportedRigs.heldCursor(read.rig, read.ledger),
           moved: false,
         };
         held.set(key, h);
@@ -247,14 +252,14 @@ export class EventsApply {
         // The knowledge base was indexed from control's events table up to `fromTable` before the
         // apply fed it: a message copied from a row at or below it is in it already.
         const toKb = read.seq === undefined || read.seq > fromTable;
-        applyEvent(store, read, now, toKb);
+        await applyEvent(store, read, now, toKb);
         h.through = read.event.id;
         h.moved = true;
         applied++;
       }
       for (const h of held.values())
-        if (h.moved) store.reportedRigs.holdThrough(h.rig, h.ledger, h.through, now);
-      store.busPositions.set(EVENT_STREAM, through);
+        if (h.moved) await store.reportedRigs.holdThrough(h.rig, h.ledger, h.through, now);
+      await store.busPositions.set(EVENT_STREAM, through);
     });
     this.applied += applied;
     this.refused += refused;
@@ -289,39 +294,44 @@ function readOrSay(m: BusMessage): EventRead | undefined {
  * its run's records slot, or a writer's `kb_item` into the writer's slot (knowledge.ts). An event
  * the knowledge base can't index is left out of it, in control's log and the audit log.
  */
-function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boolean): void {
+async function applyEvent(
+  store: ControlStore,
+  read: EventRead,
+  now: string,
+  toKb: boolean,
+): Promise<void> {
   const { rig, ledger } = read;
   const e = currentEvent(read.event);
-  store.runRegistry.registerRunCreated(rig, ledger, e);
+  await store.runRegistry.registerRunCreated(rig, ledger, e);
   if (e.kind === "command" && e.subject) {
     const b = (e.body ?? {}) as { accepted?: boolean };
     const status = b.accepted === false ? "failed" : "delivered";
     const outcome = canonicalJson({ source: "harness", ...(e.body as object) });
-    store.commands.confirmApplied(rig, e.subject, status, outcome, now);
+    await store.commands.confirmApplied(rig, e.subject, status, outcome, now);
   }
   // A command the harness refused names itself in the event's body.
   const refused = e.kind === "command_rejected" ? (e.body as { id?: unknown } | null)?.id : null;
   if (typeof refused === "string") {
     const outcome = canonicalJson({ source: "harness", ...(e.body as object) });
-    store.commands.confirmRejected(rig, refused, outcome, now);
+    await store.commands.confirmRejected(rig, refused, outcome, now);
   }
   const call = e.kind === MODEL_CALL_EVENT && e.subject ? ModelCallBody.safeParse(e.body) : null;
-  if (call?.success) store.usage.recordCall(rig, ledger, e.id, String(e.subject), call.data);
+  if (call?.success) await store.usage.recordCall(rig, ledger, e.id, String(e.subject), call.data);
   // What a retention policy removed on the rig: in the history and the audit log.
-  if (e.kind === "retention_removed") takeRigRemoval(store, rig, e);
+  if (e.kind === "retention_removed") await takeRigRemoval(store, rig, e);
   if (!toKb) return;
   try {
     // A savepoint: an event indexed in part is not kept.
-    store.tx(() =>
+    await store.tx(async () =>
       e.kind === "kb_item"
-        ? takeKbItem(store, { rig, ledger }, e)
-        : store.kb().index({ rig, ledger }, e),
+        ? await takeKbItem(store, { rig, ledger }, e)
+        : await store.kb().index({ rig, ledger }, e),
     );
   } catch (err) {
     const error = redact(errorText(err));
     const what = { rig, ledger, event: e.id, kind: e.kind, error };
     log("control", "an event not indexed in the knowledge base", what, "error");
-    store.auditLog.add("control", "kb_failed", { rig, error });
+    await store.auditLog.add("control", "kb_failed", { rig, error });
   }
 }
 
@@ -331,8 +341,8 @@ function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boo
  * not answer), the messages between them, those applied and passed over since control started,
  * and why it waits or stopped.
  */
-export function applyState(store: ControlStore, apply: EventsApply, last: number | null) {
-  const place = store.busPositions.of(EVENT_STREAM);
+export async function applyState(store: ControlStore, apply: EventsApply, last: number | null) {
+  const place = await store.busPositions.of(EVENT_STREAM);
   return {
     place,
     last_place: last,

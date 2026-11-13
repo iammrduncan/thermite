@@ -120,7 +120,66 @@ const COLUMNS = "id, at, actor, action, body, count, coalesce(last_at, at) as la
 /** The action of a retention policy's removal: no policy removes its entry. */
 export const RETENTION_REMOVED_ACTION = "retention_removed";
 
-export class AuditLog extends StorePart {
+export interface AuditLog {
+  /**
+   * Every entry an audit-log policy may remove, as it reads them: its id, when it came and about
+   * how many bytes it takes. A policy's removal's own entry is never one of them.
+   */
+  retentionItems(): Promise<{ id: number; at: string; bytes: number }[]>;
+  /** Removes the entries a policy covers, never a removal's own; how many went. */
+  removeEntries(ids: readonly number[]): Promise<number>;
+  add(actor: string, action: string, body: unknown): Promise<void>;
+  /**
+   * The newest entry's number, 0 with none: it moves with every change the owner, an agent or
+   * control makes, so the dashboard's stream can tell that something changed.
+   */
+  newestId(): Promise<number>;
+  /**
+   * A refusal of a rig's or a token's call, written as add writes an entry, but once: a repeat
+   * (the same actor, action and body, so the same route and reason) adds no entry. It counts on
+   * the first one, and moves that one's last time.
+   */
+  refusal(actor: string, action: string, body: unknown): Promise<void>;
+  /** The newest audit entries; `action` keeps those whose action contains it, `mcp` MCP reads. */
+  list(limit?: number, filter?: AuditFilter): Promise<AuditEntry[]>;
+  /**
+   * One page of the audit log, newest first (goal 015). With no cursor, the newest entries;
+   * `before` keeps those older than it, `after` those newer. `older` and `newer` are the cursors
+   * for the next page each way: give `older` as `before`, `newer` as `after`. Null when no entry
+   * that matches is left that way.
+   */
+  page(
+    limit?: number,
+    filter?: AuditFilter,
+    cursor?: { before?: number | undefined; after?: number | undefined },
+  ): Promise<{ entries: AuditEntry[]; older: number | null; newer: number | null }>;
+  /**
+   * How many entries match: all of them, and those newer than `after` (where a page starts in the
+   * list), for the audit log page's "1–50 of N".
+   */
+  count(filter?: AuditFilter, after?: number): Promise<number>;
+  /**
+   * The writes control refused into the knowledge base (kb_item_refused), newest first: a page of
+   * rows, each with how many times it came, and how many rows there are.
+   */
+  kbRefusedPage(
+    offset: number,
+    limit: number,
+  ): Promise<{
+    total: number;
+    rows: { at: string; rig: string; run: string; slot: string; why: string; count: number }[];
+  }>;
+  kbRefusals(
+    run: string,
+    slot: string,
+    limit: number,
+  ): Promise<{ total: number; newest: { at: string; event: number | null; why: string }[] }>;
+  /** The body of the newest audit entry by this actor with this action, if there is one. */
+  last(actor: string, action: string): Promise<unknown>;
+}
+
+/** AuditLog on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteAuditLog extends StorePart {
   /**
    * Every entry an audit-log policy may remove, as it reads them: its id, when it came and about
    * how many bytes it takes. A policy's removal's own entry is never one of them.

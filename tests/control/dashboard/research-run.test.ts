@@ -114,7 +114,7 @@ describe("a research run's page (goals 116 and 117)", () => {
   test("the Reviews tab: newest first; asked and posted, tries, outcome, cost, decisions with dissent and what came before, each reviewer, messages, Live lines; nothing secret", async () => {
     const c = await researchControl();
     await c.ingest(researchRunEvents());
-    reviewLiveLines(c.store);
+    await reviewLiveLines(c.store);
     const html = await c.page(`${RUN}/reviews`);
     // Newest first.
     const order = [3, 2, 1].map((n) => html.indexOf(`data-k="review-rig-a-s-1-${n}"`));
@@ -342,7 +342,7 @@ describe("a research run's page (goals 116 and 117)", () => {
     });
     assert.equal(sent.status, 200, JSON.stringify(sent.answer));
     assert.match(String(sent.answer.follow), /^\/ui\/commands\//);
-    const cmd = c.store.commands.latest("rig-a", "hypothesis_status")[0];
+    const cmd = (await c.store.commands.latest("rig-a", "hypothesis_status"))[0];
     assert.deepEqual(cmd?.payload, {
       run: "s-1",
       id: "h-p1",

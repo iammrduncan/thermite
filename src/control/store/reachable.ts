@@ -33,7 +33,15 @@ const entryOf = (r: Row): ReachableAddress => ({
   set_by: String(r.set_by),
 });
 
-export class ReachableAddresses extends StorePart {
+export interface ReachableAddresses {
+  /** The list, by address. */
+  list(): Promise<ReachableAddress[]>;
+  /** The list as it is to be from now on, in place of the one before; an entry that stays keeps its time. */
+  set(entries: ReachEntry[], by: string): Promise<void>;
+}
+
+/** ReachableAddresses on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteReachableAddresses extends StorePart {
   /** The list, by address. */
   list(): ReachableAddress[] {
     return (this.db.prepare("select * from reachable_address order by address").all() as Row[]).map(

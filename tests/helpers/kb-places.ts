@@ -16,13 +16,17 @@ import type { KbItemBody } from "../../src/core/kb/index.ts";
  */
 export const KB_RIG = { rig: "rig-a", ledger: "ledger-rig-a" };
 
-export function fillKnowledge(store: ControlStore): void {
+export async function fillKnowledge(store: ControlStore): Promise<void> {
   let minute = 0;
   const at = () => new Date(Date.parse("2026-10-30T10:00:00Z") + minute++ * 60_000).toISOString();
-  const event = (actor: string, kind: string, subject: string, body: Record<string, unknown>) =>
-    store.kb().index(KB_RIG, { at: at(), actor, kind, subject, body });
-  const write = (run: string, b: Partial<KbItemBody> & Pick<KbItemBody, "slot" | "kind">) => {
-    const refused = store.kb().write({ ...KB_RIG, run, event: 1000 + minute, at: at() }, {
+  const event = async (
+    actor: string,
+    kind: string,
+    subject: string,
+    body: Record<string, unknown>,
+  ) => store.kb().index(KB_RIG, { at: at(), actor, kind, subject, body });
+  const write = async (run: string, b: Partial<KbItemBody> & Pick<KbItemBody, "slot" | "kind">) => {
+    const refused = await store.kb().write({ ...KB_RIG, run, event: 1000 + minute, at: at() }, {
       item: 1,
       version: 1,
       title: "untitled",
@@ -31,60 +35,60 @@ export function fillKnowledge(store: ControlStore): void {
     } as KbItemBody);
     if (refused) throw new Error(refused);
   };
-  event("harness", "run_created", "gs-1", { campaign: "gemv", mode: "goal" });
-  event("supervisor", "experiment_added", "gs-1", {
+  await event("harness", "run_created", "gs-1", { campaign: "gemv", mode: "goal" });
+  await event("supervisor", "experiment_added", "gs-1", {
     id: "x-1",
     title: "Load int4 weights with vector loads",
     details: "128-bit loads of the packed weights",
     by: "planner",
   });
-  event("supervisor", "experiment_added", "gs-1", {
+  await event("supervisor", "experiment_added", "gs-1", {
     id: "x-2",
     title: "Tile the vector in shared memory",
     by: "lane-2",
   });
-  event("harness", "attempt_recorded", "a-1", {
+  await event("harness", "attempt_recorded", "a-1", {
     run: "gs-1",
     lane: "lane-1",
     hypothesis: "vector loads for the weights",
   });
-  event("judge", "verdict", "a-1", { verdict: "win_confirmed", delta: 0.061 });
-  event("harness", "experiment_finished", "gs-1", {
+  await event("judge", "verdict", "a-1", { verdict: "win_confirmed", delta: 0.061 });
+  await event("harness", "experiment_finished", "gs-1", {
     id: "x-1",
     lane: "lane-1",
     attempt: "a-1",
     result: "submitted",
   });
-  event("planner", "experiment_dropped", "gs-1", { id: "x-2", why: "the L2 is too small" });
-  event("harness", "journal_note", "gs-1", {
+  await event("planner", "experiment_dropped", "gs-1", { id: "x-2", why: "the L2 is too small" });
+  await event("harness", "journal_note", "gs-1", {
     id: 1,
     by: "lane-1",
     kind: "decision",
     text: "Kept the old path below n = 4096.",
   });
-  write("gs-1", {
+  await write("gs-1", {
     slot: "worker-1",
     kind: "finding",
     title: "<script>alert(1)</script> Vector loads double the bandwidth",
     text: "128-bit loads doubled the measured bandwidth. See [the doc](/ui/settings).",
   });
-  write("gs-1", {
+  await write("gs-1", {
     slot: "worker-1",
     item: 2,
     kind: "reference",
     title: "A paper on wide loads",
     file: { sha256: "a".repeat(64), name: "loads.pdf", type: "application/pdf", bytes: 52_000 },
   });
-  write("gs-1", {
+  await write("gs-1", {
     slot: "planner",
     kind: "decision",
     title: "Tile next",
     text: "Tiling comes after the loads.",
     links: [{ rel: "follows", to: "gemv/gs-1/worker-1/finding:1" }],
   });
-  event("harness", "run_created", "gs-2", { campaign: "gemv", mode: "goal" });
-  store.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
-  event("harness", "run_created", "at-1", { campaign: "attic", mode: "hill_climb" });
-  store.archive.add("attic", "owner:ui");
-  store.kb().makeCollection("empty", at());
+  await event("harness", "run_created", "gs-2", { campaign: "gemv", mode: "goal" });
+  await store.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
+  await event("harness", "run_created", "at-1", { campaign: "attic", mode: "hill_climb" });
+  await store.archive.add("attic", "owner:ui");
+  await store.kb().makeCollection("empty", at());
 }

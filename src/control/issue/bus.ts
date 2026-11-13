@@ -76,8 +76,8 @@ function whyNot(err: unknown): string {
 export async function sendCommandsOn(store: ControlStore, bus: CommandBus): Promise<void> {
   const on: OnBus = { bus, last: Promise.resolve(), waiting: 0, held: new Map() };
   buses.set(store, on);
-  for (const rig of store.commands.rigsWithPending())
-    for (const signed of store.commands.pending(rig))
+  for (const rig of await store.commands.rigsWithPending())
+    for (const signed of await store.commands.pending(rig))
       hold(on, signed, "the commands stream is being made");
   await bus.makeStream(COMMAND_STREAM_CONFIG);
   log("control", "commands go over the message bus", { stream: COMMAND_STREAM });
@@ -152,8 +152,8 @@ export function publishCommand(store: ControlStore, signed: SignedCommand): void
 export async function publishHeld(store: ControlStore): Promise<void> {
   const on = buses.get(store);
   if (!on) return;
-  for (const rig of store.commands.rigsWithPending()) {
-    const pending = store.commands.pending(rig);
+  for (const rig of await store.commands.rigsWithPending()) {
+    const pending = await store.commands.pending(rig);
     const ids = new Set(pending.map((c) => c.envelope.id));
     for (const h of on.held.values()) if (h.rig === rig && !ids.has(h.id)) on.held.delete(h.id);
     if (!on.held.size) continue;

@@ -16,8 +16,8 @@ export function usageRoutes(app: Hono, api: ApiContext): void {
   // the space each kind of what control keeps takes.
   app.get("/metrics", reader, async (c) =>
     c.text(
-      metricsText(store, opts.staleAfterMs) +
-        healthMetricsText(store, parts.loops, opts.staleAfterMs) +
+      (await metricsText(store, opts.staleAfterMs)) +
+        (await healthMetricsText(store, parts.loops, opts.staleAfterMs)) +
         (await busMetricsText(store, parts.bus)) +
         (await spaceMetricsText(store, parts.bus)),
       200,
@@ -26,18 +26,18 @@ export function usageRoutes(app: Hono, api: ApiContext): void {
   );
 
   // The agents' model usage (goal 075): a run's, a campaign's or the whole system's, for a period.
-  app.get("/v1/usage", reader, (c) => {
+  app.get("/v1/usage", reader, async (c) => {
     const q = Object.fromEntries(Object.entries(c.req.query()).filter(([, v]) => v !== ""));
     const refused = usageQueryRefusal(q);
     if (refused) return c.json({ error: refused }, 400);
-    return c.json(modelUsage(store, q));
+    return c.json(await modelUsage(store, q));
   });
 
   // The models' prices that model usage costs calls at (goal 075): the providers' listed ones and
   // the owner's. The owner sets or clears a price for a model whose list gives none.
-  app.get("/v1/model-prices", reader, (c) => c.json({ prices: modelPrices(store) }));
+  app.get("/v1/model-prices", reader, async (c) => c.json({ prices: await modelPrices(store) }));
   app.post("/v1/model-prices", admin, bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
-    const out = setModelPrice(store, await jsonBody(c.req), "owner:api");
+    const out = await setModelPrice(store, await jsonBody(c.req), "owner:api");
     return out.ok ? c.json(out.answer) : c.json({ error: out.error }, out.status);
   });
 }

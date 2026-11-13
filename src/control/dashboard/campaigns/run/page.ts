@@ -45,9 +45,10 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
    * command (goal 080); the page opens on the run once the rig reports it. A start the rig refused
    * says why. Undefined: control signed no assignment of this run for this campaign.
    */
-  const startingCard = (campaign: string, run: string) => {
-    const a = store.runRegistry.assigned(run);
-    const cmd = a && (a.campaign ?? run) === campaign ? store.commands.row(a.command) : undefined;
+  const startingCard = async (campaign: string, run: string) => {
+    const a = await store.runRegistry.assigned(run);
+    const cmd =
+      a && (a.campaign ?? run) === campaign ? await store.commands.row(a.command) : undefined;
     if (!a || !cmd) return undefined;
     const p = commandProgress(cmd, Date.now());
     const failed = p.state === "refused" || p.state === "expired";
@@ -72,7 +73,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
    * The run's buttons: Live, Message, Resume now (while it waits for its provider), Pause or
    * Resume, Export and ⋯; none for an earlier run.
    */
-  const actions = (c: Ctx, x: RunOnRig, back: string) => {
+  const actions = async (c: Ctx, x: RunOnRig, back: string) => {
     const { rig: u, run: r } = x;
     if (x.earlier) return "";
     const quick =
@@ -89,12 +90,12 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
           : "";
     // A run without agents (a try, a rig check) has no one to message and no lanes to restart.
     const agents = r.has_agents !== false;
-    return `<a class="btn" href="${runLiveHref(r)}">${icon.terminal}Live</a>${agents ? `<a class="btn" href="${runLiveHref(r, { compose: true })}">Message</a>` : ""}${resumeNow(c, x, back)}${quick}${exportMenu({ csrf: csrf(c), rig: u.id, run: r.id, back })}${moreMenu(c, u.id, r, back, "", true)}`;
+    return `<a class="btn" href="${runLiveHref(r)}">${icon.terminal}Live</a>${agents ? `<a class="btn" href="${runLiveHref(r, { compose: true })}">Message</a>` : ""}${resumeNow(c, x, back)}${quick}${exportMenu({ csrf: csrf(c), rig: u.id, run: r.id, back })}${await moreMenu(c, u.id, r, back, "", true)}`;
   };
 
   const runPage = async (c: Ctx, tab: RunTab) => {
     const now = Date.now();
-    const vs = views();
+    const vs = await views();
     const campaign = c.req.param("campaign") ?? "";
     const id = c.req.param("run") ?? "";
     const x = await runOf(campaign, id);
@@ -103,7 +104,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
       { href: campaignHref(campaign), text: campaign },
     ];
     if (!x) {
-      const starting = startingCard(campaign, id);
+      const starting = await startingCard(campaign, id);
       if (!starting) c.status(404);
       return page(
         c,
@@ -146,7 +147,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
           `<div class="card hl" style="margin-bottom:12px"><b>Judge only:</b> ${esc(JUDGE_ONLY_WORDS)}</div>`;
     // What its agents search in the knowledge base: set when it started (goal 175), with the grants
     // given since (goal 182).
-    const scope = agents && !x.earlier ? store.kb().scope(campaign, r.id) : undefined;
+    const scope = agents && !x.earlier ? await store.kb().scope(campaign, r.id) : undefined;
     const searches = scope
       ? `<div class="muted small" style="margin-bottom:12px" data-part="kb-scope">Its agents search ${scope.fresh ? "only this run's own items" : "the campaign's whole collection"} in the <a href="${knowledgeHref(campaign)}">knowledge base</a>${scope.granted.length ? `, and ${esc(scope.granted.join(", "))}, read only` : ""}: set when the run started, with the grants given since.</div>`
       : "";
@@ -159,9 +160,9 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
         crumbs,
         summary: `${where} · ${esc(modeName(r.mode))}${agents ? "" : " · judge only"} · <span class="label ${st.cls}">${st.icon}${esc(st.text)}</span>`,
         active: "campaigns",
-        actions: actions(c, x, back),
+        actions: await actions(c, x, back),
       },
-      `${said}${earlierCard}${kind}${searches}${runSection(c, x, vs, now, tab, prompts)}${tab === "overview" ? fromDrawer(c, x, vs) : ""}`,
+      `${said}${earlierCard}${kind}${searches}${await runSection(c, x, vs, now, tab, prompts)}${tab === "overview" ? await fromDrawer(c, x, vs) : ""}`,
       vs,
     );
   };

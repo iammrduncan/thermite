@@ -20,7 +20,7 @@ async function stack() {
     store,
     control: api,
     rigConfig,
-  } = controlOnly({
+  } = await controlOnly({
     options: { staleAfterMs: 600_000, secrets },
   });
   await ingestReport(store, {
@@ -32,13 +32,13 @@ async function stack() {
     events: [],
     summary: {},
   });
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "lab",
     type: "openai",
     base_url: "https://models.example.com/v1",
     key: { sealed: secrets.seal("lab-key-for-tests"), hint: "…ests" },
   });
-  store.modelProviders.setModels("lab", [
+  await store.modelProviders.setModels("lab", [
     { id: "wide-model", context_window: 204_800 },
     { id: "strong-model", context_window: 400_000 },
   ]);
@@ -49,7 +49,7 @@ async function stack() {
     return decodeURIComponent(r.headers.get("location") ?? "");
   };
   const report = async (advisors: unknown) =>
-    figuresCall(store, "rig-a", { at: new Date().toISOString(), advisors }).status;
+    (await figuresCall(store, "rig-a", { at: new Date().toISOString(), advisors })).status;
   const advisorRoutes = async () =>
     (await rigConfig("advisor-routes")) as unknown as Record<
       string,
@@ -181,7 +181,7 @@ describe("Edit rig's synthesizer and final writer (goal 166)", () => {
       off: true,
     });
     // The Teachers line has a model: they follow it, its window and point.
-    s.store.agentModels.assignRole("rig-a", "teachers", {
+    await s.store.agentModels.assignRole("rig-a", "teachers", {
       provider: "lab",
       model: "wide-model",
       compactAt: 70,
@@ -207,7 +207,7 @@ describe("Edit rig's synthesizer and final writer (goal 166)", () => {
       said,
       /ok=Control sent a model for the synthesizer and a model for the final writer to rig-a\./,
     );
-    const roles = s.store.agentModels.byRole("rig-a");
+    const roles = await s.store.agentModels.byRole("rig-a");
     assert.deepEqual(
       [
         roles.synthesizer?.model,
@@ -238,9 +238,9 @@ describe("Edit rig's synthesizer and final writer (goal 166)", () => {
       await s.post({ ...formOf(html), role_final_writer: "", harness_final_writer: "" }),
       /ok=Control sent the final writer back to the first teacher's model to rig-a\./,
     );
-    assert.equal(s.store.agentModels.byRole("rig-a").final_writer, undefined);
+    assert.equal((await s.store.agentModels.byRole("rig-a")).final_writer, undefined);
     assert.equal((await s.advisorRoutes()).final_writer, null);
     // The teachers emptied keep them: they have models of their own.
-    assert.equal(s.store.agentModels.byRole("rig-a").synthesizer?.model, "strong-model");
+    assert.equal((await s.store.agentModels.byRole("rig-a")).synthesizer?.model, "strong-model");
   });
 });

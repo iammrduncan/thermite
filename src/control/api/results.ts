@@ -57,7 +57,7 @@ export function resultRoutes(
   // The owner's search of the knowledge base, and one item read (goal 175): as MCP's kb_search and
   // kb_read. A list of names is given with commas, or as a repeated parameter; more queries
   // (`query`) and the addresses seen (`seen`) only as a repeated parameter.
-  app.get(KB_SEARCH.path, admin, (c) => {
+  app.get(KB_SEARCH.path, admin, async (c) => {
     const list = (k: string) =>
       (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
     const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
@@ -87,10 +87,10 @@ export function resultRoutes(
       ...num("limit"),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
-    const r = ownerKbSearch(store, q.data);
+    const r = await ownerKbSearch(store, q.data);
     return "error" in r ? c.json(r, 400) : c.json(r);
   });
-  app.get(KB_ITEM.path, admin, (c) => {
+  app.get(KB_ITEM.path, admin, async (c) => {
     const v = c.req.query("version");
     const at = c.req.query("offset");
     const q = KbReadQuery.safeParse({
@@ -99,19 +99,19 @@ export function resultRoutes(
       ...(at !== undefined ? { offset: Number(at) } : {}),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
-    const r = ownerKbRead(store, rigViews(store, viewOpts), q.data);
+    const r = await ownerKbRead(store, await rigViews(store, viewOpts), q.data);
     return "error" in r ? c.json(r, 404) : c.json(r);
   });
 
   // One version's file (goal 176): always an attachment, sent as bytes unless its type is passive.
-  app.get(KB_FILE.path, admin, (c) => {
+  app.get(KB_FILE.path, admin, async (c) => {
     const v = c.req.query("version");
     const q = KbReadQuery.safeParse({
       address: c.req.query("address") ?? "",
       ...(v !== undefined ? { version: Number(v) } : {}),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
-    const f = kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
+    const f = await kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
     return "error" in f ? c.json({ error: f.error }, f.status) : kbFileResponse(f);
   });
 
@@ -127,20 +127,22 @@ export function resultRoutes(
   // The knowledge base's settings on control (goal 175): as MCP's kb_settings and set_kb_settings,
   // `thermite kb settings` and Settings › Knowledge base.
   const orphanHoursDefault = opts.kbFiles?.orphanHoursDefault ?? 0;
-  app.get(KB_SETTINGS.path, admin, (c) => c.json(kbSettingsOf(store, orphanHoursDefault)));
+  app.get(KB_SETTINGS.path, admin, async (c) =>
+    c.json(await kbSettingsOf(store, orphanHoursDefault)),
+  );
   app.put(
     SET_KB_SETTINGS.path,
     admin,
     bodyLimit({ maxSize: SET_KB_SETTINGS.maxBytes }),
     async (c) => {
       const body = await c.req.json().catch(() => undefined);
-      const o = setKbSettings(store, body, orphanHoursDefault, "owner:api");
+      const o = await setKbSettings(store, body, orphanHoursDefault, "owner:api");
       return o.ok
         ? c.json({ ...o.settings, said: o.said })
         : c.json({ error: `bad request: ${o.error}` }, 400);
     },
   );
-  app.get(KB_LIST.path, admin, (c) => {
+  app.get(KB_LIST.path, admin, async (c) => {
     const list = (k: string) =>
       (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
     const given = {
@@ -163,7 +165,7 @@ export function resultRoutes(
       ...num("limit"),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
-    const r = ownerKbList(store, rigViews(store, viewOpts), q.data);
+    const r = await ownerKbList(store, await rigViews(store, viewOpts), q.data);
     return "error" in r ? c.json(r, 404) : c.json(r);
   });
 
@@ -189,20 +191,24 @@ export function resultRoutes(
       const body = CAMPAIGN_KB_GRANT.body.safeParse(await c.req.json().catch(() => undefined));
       if (!body.success) return c.json({ error: queryRefusal(body.error) }, 400);
       const g = { campaign: c.req.param("campaign"), reads: body.data.reads };
-      return granted(c, grantCollection(store, rigViews(store, viewOpts), g, "owner:api"), true);
+      return granted(
+        c,
+        await grantCollection(store, await rigViews(store, viewOpts), g, "owner:api"),
+        true,
+      );
     },
   );
   // The owner's note on an item (goal 176): as MCP's kb_note and the reader's Add a note.
   app.post(KB_NOTE.path, admin, bodyLimit({ maxSize: KB_NOTE.maxBytes }), async (c) => {
     const body = KbNoteQuery.safeParse(await c.req.json().catch(() => undefined));
     if (!body.success) return c.json({ error: queryRefusal(body.error) }, 400);
-    const o = writeOwnerNote(store, body.data, "owner:api");
+    const o = await writeOwnerNote(store, body.data, "owner:api");
     return o.ok ? c.json(o, 201) : c.json({ error: o.error }, 400);
   });
-  app.delete(CAMPAIGN_KB_REVOKE.path, admin, (c) =>
+  app.delete(CAMPAIGN_KB_REVOKE.path, admin, async (c) =>
     granted(
       c,
-      revokeCollection(
+      await revokeCollection(
         store,
         { campaign: c.req.param("campaign"), reads: c.req.param("reads") },
         "owner:api",
@@ -238,21 +244,23 @@ export function resultRoutes(
     admin,
   });
   // Have all of a rig's results left it? (What a terminate waits for: goal 023.)
-  app.get("/v1/rigs/:rig/results-left", admin, (c) =>
-    c.json(resultsLeft(store, c.req.param("rig"), { export: c.req.query("export") || undefined })),
+  app.get("/v1/rigs/:rig/results-left", admin, async (c) =>
+    c.json(
+      await resultsLeft(store, c.req.param("rig"), { export: c.req.query("export") || undefined }),
+    ),
   );
 
-  app.get("/v1/reports", admin, (c) =>
+  app.get("/v1/reports", admin, async (c) =>
     c.json({
-      reports: store.rigReports.list(
+      reports: await store.rigReports.list(
         clampLimit(c.req.query("limit"), 20),
         c.req.query("rig") || undefined,
       ),
     }),
   );
 
-  app.get("/v1/leaderboard", admin, (c) =>
-    c.json({ campaigns: leaderboard(store, { staleAfterMs: opts.staleAfterMs }) }),
+  app.get("/v1/leaderboard", admin, async (c) =>
+    c.json({ campaigns: await leaderboard(store, { staleAfterMs: opts.staleAfterMs }) }),
   );
 
   // One run's published champion to another run of its campaign, each named alone (goal 170).

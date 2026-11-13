@@ -14,12 +14,12 @@ export function appReadRoutes(app: Hono, dash: Dashboard): void {
   const { archivedNames, needs, notArchived, opts, parts, store, views } = dash;
   const noStore = { "cache-control": "no-store" };
 
-  app.get(HOME.path, opts.ownerOnly, (c) => {
+  app.get(HOME.path, opts.ownerOnly, async (c) => {
     const now = Date.now();
-    const vs = views();
-    const archived = archivedNames();
-    const feed = notArchived(vs, needs(c, vs, now), archived);
-    return c.json(homeAnswer(store, vs, feed, archived, now), 200, noStore);
+    const vs = await views();
+    const archived = await archivedNames();
+    const feed = notArchived(vs, await needs(c, vs, now), archived);
+    return c.json(await homeAnswer(store, vs, feed, archived, now), 200, noStore);
   });
 
   app.get(RUN_OVERVIEW.path, opts.ownerOnly, async (c) => {
@@ -27,7 +27,7 @@ export function appReadRoutes(app: Hono, dash: Dashboard): void {
     const run = c.req.param("run") ?? "";
     const x = await parts.run(run);
     if (!x) return c.json({ error: `no run ${run}` }, 404);
-    const feed = needs(c, [x.rig], now).filter((n) => n.run === x.run.id);
-    return c.json(runOverviewAnswer(store, x.rig, x.run, feed, now), 200, noStore);
+    const feed = (await needs(c, [x.rig], now)).filter((n) => n.run === x.run.id);
+    return c.json(await runOverviewAnswer(store, x.rig, x.run, feed, now), 200, noStore);
   });
 }

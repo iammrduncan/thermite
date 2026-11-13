@@ -15,7 +15,7 @@ const DAY = 86_400_000;
 
 describe("a retention policy on a rig, end to end", () => {
   test("Run now reaches the rig, which removes its old builds and says what went", async () => {
-    const s = controlStack();
+    const s = await controlStack();
     await s.relay();
     const { ledger, paths } = s.env.service;
     const key = "b".repeat(64);
@@ -49,12 +49,12 @@ describe("a retention policy on a rig, end to end", () => {
 
     await s.relay(2);
     assert.equal(existsSync(dir), false, "the rig removed the build");
-    const [removal] = s.store.retention.removals(5);
+    const [removal] = await s.store.retention.removals(5);
     assert.equal(removal?.rig, "rig-a");
     assert.equal(removal?.count, 1);
     assert.ok((removal?.bytes ?? 0) >= 2048);
     assert.equal(removal?.by, "Run now");
-    const audit = s.store.auditLog.list(200).find((a) => a.action === "retention_removed");
+    const audit = (await s.store.auditLog.list(200)).find((a) => a.action === "retention_removed");
     assert.equal(audit?.actor, "rig:rig-a");
   });
 });

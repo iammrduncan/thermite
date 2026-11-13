@@ -36,13 +36,13 @@ export interface LiveFeed {
   /** None: every rig's new lines wake it. */
   rig?: string | undefined;
   /** The view's lines after `after`, oldest first, `limit` at most. */
-  after(after: number, limit: number): PushedLine[];
+  after(after: number, limit: number): PushedLine[] | Promise<PushedLine[]>;
   /** The view's newest `limit` lines, oldest first. */
-  newest(limit: number): PushedLine[];
+  newest(limit: number): PushedLine[] | Promise<PushedLine[]>;
   /** How many lines of the view there are after `after`. */
-  count(after: number): number;
+  count(after: number): number | Promise<number>;
   /** Of these lines, drawn while they waited for their event, the ones that wait no more. */
-  redraw?(ids: number[]): { id: number; html: string }[];
+  redraw?(ids: number[]): { id: number; html: string }[] | Promise<{ id: number; html: string }[]>;
 }
 
 /** A line id from a request, or 0 for none: a whole number at least 0. */
@@ -72,10 +72,12 @@ async function sendNew(
   after: number,
   waiting: Set<number>,
 ): Promise<number> {
-  const n = feed.count(after);
+  const n = await feed.count(after);
   if (!n) return after;
   const behind = n > LIVE_PUSH_LINES;
-  const lines = behind ? feed.newest(LIVE_PUSH_LINES) : feed.after(after, LIVE_PUSH_LINES);
+  const lines = behind
+    ? await feed.newest(LIVE_PUSH_LINES)
+    : await feed.after(after, LIVE_PUSH_LINES);
   const last = lines.at(-1);
   if (!last) return after;
   if (behind)
@@ -96,7 +98,7 @@ async function sendNew(
 /** Sends again the waiting lines whose event has come. */
 async function sendRedrawn(stream: SSEStreamingApi, feed: LiveFeed, waiting: Set<number>) {
   if (!waiting.size || !feed.redraw) return;
-  const redrawn = feed.redraw([...waiting]);
+  const redrawn = await feed.redraw([...waiting]);
   for (const r of redrawn) waiting.delete(r.id);
   if (redrawn.length)
     await stream.writeSSE({ event: "redrawn", data: JSON.stringify({ redrawn }) });

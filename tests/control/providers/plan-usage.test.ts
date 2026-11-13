@@ -10,7 +10,11 @@ import {
   providersWithUsage,
 } from "../../../src/control/providers/plan-usage.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { ControlStore, type ModelProvider } from "../../../src/control/store/index.ts";
+import {
+  type ControlStore,
+  type ModelProvider,
+  openControlStore,
+} from "../../../src/control/store/index.ts";
 import { usageBlock, usageChips } from "../../../src/control/ui/providers/usage.ts";
 import { CHATGPT_API } from "../../../src/core/agents.ts";
 
@@ -21,8 +25,8 @@ const S = NOW / 1000;
 const jwt = (claims: object) =>
   ["e30", Buffer.from(JSON.stringify(claims)).toString("base64url"), "sig"].join(".");
 
-function signedIn(answer: (url: string, init: RequestInit) => Response) {
-  const store = new ControlStore(":memory:");
+async function signedIn(answer: (url: string, init: RequestInit) => Response) {
+  const store = openControlStore(":memory:");
   const seen: { url: string; headers: Record<string, string> }[] = [];
   const fake = (async (url: string | URL, init: RequestInit = {}) => {
     seen.push({ url: String(url), headers: init.headers as Record<string, string> });
@@ -38,13 +42,13 @@ function signedIn(answer: (url: string, init: RequestInit) => Response) {
     client_id: "c",
     host_id: "h",
   });
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "codex-1",
     type: "chatgpt",
     base_url: CHATGPT_API,
     key: { sealed, hint: "…ab12" },
   });
-  const p = store.modelProviders.get("codex-1") as ModelProvider;
+  const p = (await store.modelProviders.get("codex-1")) as ModelProvider;
   return { store, chatgpt, p, seen, access };
 }
 
@@ -101,7 +105,7 @@ describe("a subscription's usage on Providers (goal 151)", () => {
 
   test("control asks ChatGPT with the sign-in's token and account, and says a refusal in words", async () => {
     let status = 200;
-    const t = signedIn(() => Response.json(WHAM, { status }));
+    const t = await signedIn(() => Response.json(WHAM, { status }));
     const ok = await t.chatgpt.usage(t.p);
     assert.equal(ok.source, "openai");
     assert.equal(ok.windows.length, 2);
@@ -113,7 +117,7 @@ describe("a subscription's usage on Providers (goal 151)", () => {
     const refused = await t.chatgpt.usage(t.p);
     assert.deepEqual(refused.windows, []);
     assert.equal(refused.error, "ChatGPT's usage endpoint refused this sign-in: HTTP 403");
-    const odd = signedIn(() => new Response("<html>challenge</html>", { status: 200 }));
+    const odd = await signedIn(() => new Response("<html>challenge</html>", { status: 200 }));
     assert.equal((await odd.chatgpt.usage(odd.p)).error, "its answer was not in a known shape");
     // The token went to OpenAI's usage endpoint only, and the answer keeps no token.
     assert.ok(t.seen.every((s) => s.url === CHATGPT_USAGE_URL));
@@ -233,7 +237,7 @@ describe("a subscription's usage on Providers (goal 151)", () => {
   });
 
   test("the providers tool gives each subscription's usage, never a key", async () => {
-    const t = signedIn(() => Response.json(WHAM));
+    const t = await signedIn(() => Response.json(WHAM));
     const reader = new PlanUsageReader(t.store, (p) => t.chatgpt.usage(p));
     const listed = await providersWithUsage(t.store, (p) => reader.of(p));
     assert.equal(listed[0]?.name, "codex-1");

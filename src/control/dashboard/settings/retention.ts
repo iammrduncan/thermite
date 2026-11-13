@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { filterInTurn, mapInTurn } from "../../../common/in-turn.ts";
 import {
   DAYS,
   dayWords,
@@ -71,10 +72,12 @@ const unreportedWords = (p: PolicyPreview) =>
 const byWords = (by: string) => (by === "schedule" ? "its schedule" : "you, Run now");
 
 /** Each kind's items now, everywhere, for the form's list: their count and bytes. */
-function kindSizes(store: ControlStore): Map<RetentionKind, { count: number; bytes: number }> {
+async function kindSizes(
+  store: ControlStore,
+): Promise<Map<RetentionKind, { count: number; bytes: number }>> {
   return new Map(
-    RETENTION_KIND_KEYS.map((kind) => {
-      const { items } = itemsOf(store, { kind, where: "all", rigs: [], campaigns: [] });
+    await mapInTurn(RETENTION_KIND_KEYS, async (kind) => {
+      const { items } = await itemsOf(store, { kind, where: "all", rigs: [], campaigns: [] });
       const count = items.reduce((n, x) => n + x.count, 0);
       return [kind, { count, bytes: items.reduce((n, x) => n + x.bytes, 0) }] as const;
     }),
@@ -106,14 +109,14 @@ function seg(name: string, value: string, opts: [string, string][], label: strin
 }
 
 /** The form for a new policy or a change to one; `spec` is what it shows. */
-function policyForm(
+async function policyForm(
   store: ControlStore,
   t: string,
   spec: RetentionSpec & { id?: number | undefined },
   sizes: Map<RetentionKind, { count: number; bytes: number }>,
   preview: PolicyPreview | undefined,
   now: Date,
-): string {
+): Promise<string> {
   const kinds = (["control", "rigs", "supervisors"] as const)
     .map(
       (on) =>
@@ -130,11 +133,11 @@ function policyForm(
     const kk = kindOf(k);
     return `<div class="rt-kindinfo" data-kind-info="${k}"${k === spec.kind ? "" : " hidden"}>${esc(kk.words)} Kept on: ${esc(kk.on)}. ${s.count.toLocaleString("en-US")} ${esc(kk.unit)} now, ${esc(sizeWords(s.bytes))}.${kk.warn ? `<div class="card warn rt-warn">${esc(kk.warn)}</div>` : ""}</div>`;
   }).join("");
-  const rigs = store.reportedRigs
-    .list()
-    .map((r) => r.id)
-    .filter((r) => !store.retired.get(r));
-  const campaigns = [...new Set(store.campaigns.versions().map((v) => v.campaign))].sort();
+  const rigs = await filterInTurn(
+    (await store.reportedRigs.list()).map((r) => r.id),
+    async (r) => !(await store.retired.get(r)),
+  );
+  const campaigns = [...new Set((await store.campaigns.versions()).map((v) => v.campaign))].sort();
   const picks = (name: "rigs" | "campaigns", all: string[], chosen: string[]) =>
     all.length
       ? all
@@ -261,14 +264,14 @@ const REMOVALS_SHOWN = 50;
  * The policies, the form when asked (`retention=new`, or `edit` with `policy`), Run now's
  * confirmation (`run` with `policy`), what no policy removes, and what the policies removed.
  */
-export function retentionBlocks(
+export async function retentionBlocks(
   store: ControlStore,
   t: string,
   q: (k: string) => string | undefined,
   draft: Record<string, unknown> | undefined,
   now = new Date(),
-): string {
-  const views = policyViews(store, now);
+): Promise<string> {
+  const views = await policyViews(store, now);
   const asked = q("retention");
   const id = Number(q("policy"));
   const said = q("at") === "retention" ? (q("error") ?? q("ok")) : undefined;
@@ -279,16 +282,16 @@ export function retentionBlocks(
     : "";
   let form = "";
   if (asked === "new" || (asked === "edit" && views.some((v) => v.id === id))) {
-    const was = asked === "edit" ? policyOf(store, id) : undefined;
+    const was = asked === "edit" ? await policyOf(store, id) : undefined;
     const spec = { ...blankSpec(), ...specPart({ ...was, ...draft }), id: was?.id };
     let preview: PolicyPreview | undefined;
     try {
       const design = specPart({ ...spec, name: spec.name || "preview" });
-      preview = previewOf(store, specOf(store, design), now);
+      preview = await previewOf(store, await specOf(store, design), now);
     } catch {
       preview = undefined;
     }
-    form = policyForm(store, t, spec as RetentionSpec, kindSizes(store), preview, now);
+    form = await policyForm(store, t, spec as RetentionSpec, await kindSizes(store), preview, now);
   }
   const list = views.length
     ? `<div class="card flat" style="overflow-x:auto"><table class="ktable"><thead><tr><th>On</th><th>Policy</th><th>Where</th><th>Rule</th><th>When</th><th>Runs</th><th></th></tr></thead><tbody>${views.map((v) => policyRow(t, v, asked === "run" && v.id === id)).join("")}</tbody></table></div>${form ? "" : `<div><a class="btn primary" href="/ui/settings/retention?retention=new#retention">New policy</a></div>`}`
@@ -299,7 +302,7 @@ export function retentionBlocks(
   ).join("");
   return `<div class="block" id="retention"><div class="head"><h2>Retention policies</h2><span class="n">${views.length}</span><span class="right">each removes only what it says, where and when it says</span></div>${note}${list}${form}</div>
 <div class="block" id="never-removed"><div class="head"><h2>Never removed by a policy</h2></div><div class="card rt-never">${never}</div></div>
-<div class="block" id="removals"><div class="head"><h2>What policies removed</h2><span class="right">also in the audit log</span></div><div class="card flat" style="overflow-x:auto">${removalsTable(store.retention.removals(REMOVALS_SHOWN))}</div></div>
+<div class="block" id="removals"><div class="head"><h2>What policies removed</h2><span class="right">also in the audit log</span></div><div class="card flat" style="overflow-x:auto">${removalsTable(await store.retention.removals(REMOVALS_SHOWN))}</div></div>
 <script src="/ui/assets/retention.js" defer></script>`;
 }
 
@@ -356,8 +359,8 @@ export function retentionRoutes(app: Hono, dash: Dashboard): void {
     const design = designOf(await c.req.parseBody({ all: true }));
     const now = new Date();
     try {
-      const spec = specOf(store, { ...design, name: design.name || "preview" });
-      const p = previewOf(store, spec, now);
+      const spec = await specOf(store, { ...design, name: design.name || "preview" });
+      const p = await previewOf(store, spec, now);
       return c.json({
         ...p,
         unreported_words: unreportedWords(p),
@@ -375,7 +378,9 @@ export function retentionRoutes(app: Hono, dash: Dashboard): void {
     const on = f.save === "on";
     const id = Number(f.policy);
     try {
-      const p = id ? updatePolicy(store, id, design, on, by) : createPolicy(store, design, on, by);
+      const p = id
+        ? await updatePolicy(store, id, design, on, by)
+        : await createPolicy(store, design, on, by);
       return c.redirect(
         backUrl("ok", `Saved “${p.name}”${p.on ? " and turned it on" : ", off"}.`),
         303,
@@ -390,7 +395,7 @@ export function retentionRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/settings/retention/:id/on", async (c) => {
     const f = await c.req.parseBody();
     try {
-      const p = setPolicyOn(store, Number(c.req.param("id")), f.on === "1", by);
+      const p = await setPolicyOn(store, Number(c.req.param("id")), f.on === "1", by);
       return c.redirect(
         backUrl("ok", `“${p.name}” is ${p.on ? "on" : "off: it removes nothing"}.`),
         303,
@@ -400,9 +405,9 @@ export function retentionRoutes(app: Hono, dash: Dashboard): void {
     }
   });
 
-  app.post("/ui/settings/retention/:id/delete", (c) => {
+  app.post("/ui/settings/retention/:id/delete", async (c) => {
     try {
-      const p = deletePolicy(store, Number(c.req.param("id")), by);
+      const p = await deletePolicy(store, Number(c.req.param("id")), by);
       return c.redirect(backUrl("ok", `Deleted “${p.name}”. What it removed stays below.`), 303);
     } catch (err) {
       return c.redirect(backUrl("error", errorText(err)), 303);

@@ -200,7 +200,7 @@ export class EventsMove {
    * is gone (or was not there), or the move stopped: `stopped` says why.
    */
   async run(): Promise<void> {
-    if (!this.o.store.eventsTable.exists()) return;
+    if (!(await this.o.store.eventsTable.exists())) return;
     while (!this.stopped && !this.closed) {
       try {
         await this.turn();
@@ -237,13 +237,13 @@ export class EventsMove {
   private async turn(): Promise<void> {
     const { store, bus } = this.o;
     await bus.makeStream(EVENT_STREAM_CONFIG);
-    const { rows, lastSeq } = store.eventsTable.size();
+    const { rows, lastSeq } = await store.eventsTable.size();
     const end = await movedEnd(bus);
     if (end.seq > lastSeq)
       return this.stopAtStream(
         `the stream holds rows to seq ${end.seq}, past the table's last, ${lastSeq}: control's store is older than the stream`,
       );
-    const behind = store.eventsTable.countAfter(end.seq);
+    const behind = await store.eventsTable.countAfter(end.seq);
     if (behind > 0) {
       const last = await bus.lastSeq(EVENT_STREAM);
       if (end.place < last)
@@ -261,7 +261,7 @@ export class EventsMove {
       last_seq: lastSeq,
       sampled: samplePlaces(rows).length,
     });
-    this.copy = store.migrate({ eventsMoved: { rows, lastSeq } });
+    this.copy = await store.migrate({ eventsMoved: { rows, lastSeq } });
     log("control", "control's events table dropped: the events stream keeps every event", {
       rows,
       copy: this.copy ?? null,
@@ -283,9 +283,9 @@ export class EventsMove {
     let logged = 0;
     let moved = 0;
     for (;;) {
-      const rows = store.eventsTable.inOrder(seq, BUS_BATCH_MAX);
+      const rows = await store.eventsTable.inOrder(seq, BUS_BATCH_MAX);
       if (!rows.length) break;
-      const { messages, legacy, stop } = this.messagesOf(rows);
+      const { messages, legacy, stop } = await this.messagesOf(rows);
       for (const batch of inBatches(messages)) {
         place = await publishAfter(bus, place, batch);
         this.published += batch.length;
@@ -293,7 +293,8 @@ export class EventsMove {
         this.o.published?.();
         // The rows of this batch the move put under `legacy`, said once the stream holds them.
         const through = Number(batch.at(-1)?.headers?.[EVENT_HEADERS.seq]);
-        while (legacy[0] && legacy[0].seq <= through) this.saidLegacy(legacy.shift() as Legacy);
+        while (legacy[0] && legacy[0].seq <= through)
+          await this.saidLegacy(legacy.shift() as Legacy);
       }
       if (stop) {
         this.stop(stop);
@@ -302,7 +303,7 @@ export class EventsMove {
       seq = rows.at(-1)?.seq ?? seq;
       if (moved - logged >= MOVE_LOG_ROWS) {
         logged = moved;
-        const left = store.eventsTable.countAfter(seq);
+        const left = await store.eventsTable.countAfter(seq);
         log("control", "moving control's events table to the events stream", { moved, left });
       }
     }
@@ -315,7 +316,7 @@ export class EventsMove {
    * The rows' messages, in order, up to a row the bus can't carry, and why it stops there; and the
    * rows among them that go under `legacy`, in order.
    */
-  private messagesOf(rows: StoredEvent[]) {
+  private async messagesOf(rows: StoredEvent[]) {
     const { store } = this.o;
     const messages: { out: ReturnType<typeof outgoing>; bytes: number }[] = [];
     const legacy: Legacy[] = [];
@@ -323,7 +324,7 @@ export class EventsMove {
     const rigsOf = new Map<string, string[]>();
     for (const row of rows) {
       const run = row.run;
-      if (run !== null && !rigsOf.has(run)) rigsOf.set(run, store.runRegistry.rigsOf(run));
+      if (run !== null && !rigsOf.has(run)) rigsOf.set(run, await store.runRegistry.rigsOf(run));
       const m = rowOnBus(row, run !== null && isTheRigsRun(row.rig, rigsOf.get(run) ?? []));
       if ("error" in m) {
         const at = { rig: row.rig, ledger: row.ledger_id, seq: row.seq };
@@ -344,14 +345,14 @@ export class EventsMove {
   }
 
   /** Says, in control's log and its audit log, that a row went on the stream under `legacy`. */
-  private saidLegacy(l: Legacy): void {
+  private async saidLegacy(l: Legacy): Promise<void> {
     log(
       "control",
       "an event of control's events table moved under the kind legacy",
       { ...l },
       "warn",
     );
-    this.o.store.auditLog.add("control", "event_moved_as_legacy", l);
+    await this.o.store.auditLog.add("control", "event_moved_as_legacy", l);
   }
 
   /**
@@ -369,7 +370,8 @@ export class EventsMove {
     for (const place of samplePlaces(rows)) {
       const m = await bus.message(EVENT_STREAM, place);
       const seq = Number(m?.header(EVENT_HEADERS.seq));
-      const row = Number.isSafeInteger(seq) && seq > before ? store.eventsTable.at(seq) : undefined;
+      const row =
+        Number.isSafeInteger(seq) && seq > before ? await store.eventsTable.at(seq) : undefined;
       if (!m || !row || !holdsRow(m, row))
         return `its place ${place} does not hold the row it should, in the table's order`;
       before = seq;

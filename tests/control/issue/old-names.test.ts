@@ -10,8 +10,8 @@ import { enrollRigs } from "../../helpers/control-store.ts";
  */
 describe("old names in a new command (goal 125)", () => {
   test("refused before anything is signed, with the new name", async () => {
-    const { store, control } = controlOnly({ tokens: { rigs: {} } });
-    enrollRigs(store, ["rig-a"]);
+    const { store, control } = await controlOnly({ tokens: { rigs: {} } });
+    await enrollRigs(store, ["rig-a"]);
     const post = (kind: string, payload: unknown) =>
       control.request("/v1/commands", {
         method: "POST",
@@ -48,7 +48,7 @@ describe("old names in a new command (goal 125)", () => {
       { run: "r-2", direction: "memory first" },
       "`direction` is now `note`",
     );
-    assert.equal(store.commands.list(10).length, 0, "nothing was signed");
+    assert.equal((await store.commands.list(10)).length, 0, "nothing was signed");
     // The new names are taken.
     assert.equal(
       (await post("queue_add", { run: "r-1", title: "tile it", direction: "tiling" })).status,

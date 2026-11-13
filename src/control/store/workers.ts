@@ -36,7 +36,20 @@ const read = (r: Row): ChosenWorkers => ({
   ...(r.given ? { given: JSON.parse(String(r.given)) as ChosenWorkers["given"] } : {}),
 });
 
-export class RigWorkers extends StorePart {
+export interface RigWorkers {
+  /** The new rig's Workers at a time, to give it; a choice before it is replaced. */
+  choose(rig: string, lanes: number, by: string): Promise<void>;
+  get(rig: string): Promise<ChosenWorkers | undefined>;
+  /** Every rig's, not taken yet. */
+  waiting(): Promise<ChosenWorkers[]>;
+  /** Its gives to the rig, as they stand now. */
+  setGiven(rig: string, given: ChosenWorkers["given"]): Promise<void>;
+  /** The rig took it, or would not: nothing more to give. */
+  done(rig: string): Promise<void>;
+}
+
+/** RigWorkers on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigWorkers extends StorePart {
   /** The new rig's Workers at a time, to give it; a choice before it is replaced. */
   choose(rig: string, lanes: number, by: string): void {
     this.db

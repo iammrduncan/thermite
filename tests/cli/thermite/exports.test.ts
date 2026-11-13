@@ -22,7 +22,7 @@ describe("thermite exports", () => {
   test("delete removes exports control keeps, with the owner's token, and prints what went", async () => {
     const root = mkdtempSync(join(tmpdir(), "thermite-cli-exports-"));
     const kept = join(root, "control-exports");
-    const { control: api, store } = controlOnly({
+    const { control: api, store } = await controlOnly({
       tokens: { admin: OWNER, rigs: { "rig-a": RIG_A } },
       options: { exportsDir: kept },
     });
@@ -67,14 +67,14 @@ describe("thermite exports", () => {
         as(other, "delete", "rig-a", NAME),
         (err: { code?: number; stderr?: string }) => err.code === 2 && /401/.test(err.stderr ?? ""),
       );
-      assert.ok(store.exports.get("rig-a", NAME));
+      assert.ok(await store.exports.get("rig-a", NAME));
 
       const out = await cli("delete", "rig-a", NAME, "20261101T020000Z-89abcdef");
       assert.match(out.stdout, new RegExp(`^Deleted 1 export from control: rig-a · ${NAME} \\(`));
       assert.match(out.stdout, /Control did not have rig-a · 20261101T020000Z-89abcdef/);
-      assert.equal(store.exports.get("rig-a", NAME), undefined);
+      assert.equal(await store.exports.get("rig-a", NAME), undefined);
       assert.equal(existsSync(join(kept, "rig-a", NAME)), false);
-      assert.ok(store.auditLog.list(20).some((a) => a.action === "export_deleted"));
+      assert.ok((await store.auditLog.list(20)).some((a) => a.action === "export_deleted"));
 
       // Without a name: the usage, exit code 2.
       await assert.rejects(cli("delete", "rig-a"), (err: { code?: number }) => err.code === 2);

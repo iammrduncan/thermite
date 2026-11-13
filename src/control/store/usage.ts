@@ -44,7 +44,62 @@ function usageRowOf(r: Row): UsageRow {
   };
 }
 
-export class UsageRecords extends StorePart {
+export interface UsageRecords {
+  /**
+   * The model usage records the sums read (goal 075): one run's (on one rig, or on any), one
+   * campaign's runs' on every rig, or every record, since a time (ISO; null: all). A rig's records
+   * stay after it leaves a ledger, or is retired: the calls were made.
+   */
+  rows(scope: UsageScope, since: string | null): Promise<UsageRow[]>;
+  /**
+   * A model call's usage (goal 075) from a rig's report, as columns the sums read, with the
+   * campaign of the run the rig created (control's run registry). A call recorded already is
+   * ignored.
+   */
+  recordCall(
+    rig: string,
+    ledgerId: string,
+    eventId: number,
+    run: string,
+    u: z.infer<typeof ModelCallBody>,
+  ): Promise<void>;
+  /**
+   * The program (harness) an agent of a run made its newest model call in, on the rig given or
+   * any; undefined when control has no call of it.
+   */
+  programOf(run: string, agent: string, rig?: string): Promise<string | undefined>;
+  /**
+   * A run's model calls in its reviews (goal 116), by the review's number: the review panel's
+   * records, whose round the supervisor names "review N".
+   */
+  reviewRows(rig: string, run: string): Promise<Map<number, UsageRow[]>>;
+  /**
+   * A pod's spend since control last counted it (goal 075), for the runs its rig is running now
+   * (`runs`, as the rig's view says), split evenly when it runs more than one; for no run when it
+   * runs none.
+   */
+  notePodSpend(rig: string, usd: number, runs: RunningRun[]): Promise<void>;
+  /**
+   * GPU cloud pods' spend (goal 075): one run's (on one rig, or on any), one campaign's runs', or
+   * every pod's, idle time included, since a time (ISO; null: all).
+   */
+  podSpend(scope: UsageScope, since: string | null): Promise<PodSpendRow[]>;
+  /** The prices the owner set for providers' models (goal 075). */
+  prices(): Promise<
+    {
+      provider: string;
+      model: string;
+      price: ModelPrice;
+      set_by: string;
+      set_at: string;
+    }[]
+  >;
+  /** Sets (or, with null, removes) the owner's price for a provider's model. */
+  setPrice(provider: string, model: string, price: ModelPrice | null, by: string): Promise<void>;
+}
+
+/** UsageRecords on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteUsageRecords extends StorePart {
   /**
    * The model usage records the sums read (goal 075): one run's (on one rig, or on any), one
    * campaign's runs' on every rig, or every record, since a time (ISO; null: all). A rig's records

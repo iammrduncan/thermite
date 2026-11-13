@@ -24,20 +24,24 @@ export function inBackground(
 ): Promise<void> {
   return work.then(
     () => undefined,
-    (err: unknown) => {
+    async (err: unknown) => {
       const why = errorText(err);
       log("control", "background work failed", { rig, placement, step, error: why }, "error");
-      store.rigHistory.add(rig, step, false, why);
-      const now =
-        placement === "machine"
-          ? store.machines.rig(rig)?.status
-          : placement === "cluster"
-            ? store.clusters.rig(rig)?.status
-            : store.joinedRigs.get(rig)?.status;
-      if (now === undefined || !UNDER_WAY.includes(now)) return;
-      if (placement === "machine") store.machines.setRigStatus(rig, "failed");
-      else if (placement === "cluster") store.clusters.setRigStatus(rig, "failed");
-      else store.joinedRigs.set(rig, { status: "failed" });
+      await store.rigHistory.add(rig, step, false, why);
+      // The status is read and set in one transaction: a stop, a removal or the rig's first
+      // report between the two is not written over with "failed".
+      await store.tx(async () => {
+        const now =
+          placement === "machine"
+            ? (await store.machines.rig(rig))?.status
+            : placement === "cluster"
+              ? (await store.clusters.rig(rig))?.status
+              : (await store.joinedRigs.get(rig))?.status;
+        if (now === undefined || !UNDER_WAY.includes(now)) return;
+        if (placement === "machine") await store.machines.setRigStatus(rig, "failed");
+        else if (placement === "cluster") await store.clusters.setRigStatus(rig, "failed");
+        else await store.joinedRigs.set(rig, { status: "failed" });
+      });
     },
   );
 }

@@ -46,7 +46,43 @@ export interface CopiedFrom {
   other_mcp_servers?: true | undefined;
 }
 
-export class CampaignVersions extends StorePart {
+export interface CampaignVersions {
+  /** The campaigns whose latest version fetches its project or kit with this Git access. */
+  usingGitAccess(name: string): Promise<string[]>;
+  /** The next version number for a campaign created on control (1 for a new one). */
+  nextVersion(campaign: string): Promise<number>;
+  /**
+   * Stores a campaign version, approved by whoever created it, with where its runs fetch from
+   * and, for a copy, where it was copied from. The campaign's collection in the knowledge base is
+   * made with its first version.
+   */
+  put(c: {
+    campaign: string;
+    version: number;
+    contract: unknown;
+    sha: string;
+    sources?: CampaignSources | undefined;
+    copiedFrom?: CopiedFrom | undefined;
+    by: string;
+  }): Promise<void>;
+  /** Every campaign version created on control, newest first. */
+  versions(campaign?: string): Promise<
+    {
+      campaign: string;
+      version: number;
+      contract: unknown;
+      sha: string;
+      sources: CampaignSources;
+      created_at: string;
+      created_by: string;
+      /** For a copy: where it was copied from; null otherwise. */
+      copied_from: CopiedFrom | null;
+    }[]
+  >;
+}
+
+/** CampaignVersions on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteCampaignVersions extends StorePart {
   /** The campaigns whose latest version fetches its project or kit with this Git access. */
   usingGitAccess(name: string): string[] {
     const latest = new Map<string, CampaignSources>();

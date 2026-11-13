@@ -51,7 +51,7 @@ async function waiting(
       Promise.all([view.bus.lastSeq(EVENT_STREAM), view.bus.streams([KB_FILES_STREAM])]),
       late,
     ]);
-    const place = store.busPositions.of(EVENT_STREAM);
+    const place = await store.busPositions.of(EVENT_STREAM);
     return {
       bus: "on",
       error: null,
@@ -73,11 +73,11 @@ export async function kbStored(
   o: { offset?: number | undefined } = {},
 ) {
   const kb = store.kb();
-  const f = kb.stored();
-  const archived = new Set(store.archive.list().map((a) => a.campaign));
-  const by = new Map(kb.collections().map((c) => [c.campaign, c]));
+  const f = await kb.stored();
+  const archived = new Set((await store.archive.list()).map((a) => a.campaign));
+  const by = new Map((await kb.collections()).map((c) => [c.campaign, c]));
   const offset = Math.max(0, Math.floor(o.offset ?? 0));
-  const refused = store.auditLog.kbRefusedPage(offset, KB_REFUSED_PAGE);
+  const refused = await store.auditLog.kbRefusedPage(offset, KB_REFUSED_PAGE);
   const collections = f.collections.map((c) => ({
     ...c,
     archived: archived.has(c.campaign),

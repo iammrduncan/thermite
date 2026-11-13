@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { applyControlLogLevel } from "../../../src/control/log-level.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { openControlStore } from "../../../src/control/store/index.ts";
 import { keepOldRows } from "../../helpers/old-store.ts";
 
 /**
@@ -28,18 +29,18 @@ const tables = (db: DatabaseSync) =>
     ).map((t) => t.name),
   );
 
-test("a store v0.1.0 ran opens with every table control's start reads, its events table waiting for the move", () => {
+test("a store v0.1.0 ran opens with every table control's start reads, its events table waiting for the move", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "thermite-upgrade-")), "control.db");
   const old = new DatabaseSync(path);
   old.exec(V010);
   keepOldRows(old, [{ rig: "rig-a", ledger: "l-1", id: 1, kind: "journal_note" }]);
   old.close();
 
-  const store = new ControlStore(path);
+  const store = openControlStore(path);
   // What control's start reads before the move, with no error.
-  assert.doesNotThrow(() => applyControlLogLevel(store));
-  store.auditLog.add("owner:test", "upgrade_checked", {});
-  const have = tables(store.db);
+  await assert.doesNotReject(async () => applyControlLogLevel(store));
+  await store.auditLog.add("owner:test", "upgrade_checked", {});
+  const have = tables(sqliteBehind(store).db);
   for (const t of [
     "control_setting",
     "event_floor",
@@ -51,15 +52,15 @@ test("a store v0.1.0 ran opens with every table control's start reads, its event
   // The events table and its migration wait for the move.
   assert.ok(have.has("rig_event"), "the events table stays until the move");
   assert.equal(
-    store.db.prepare("select 1 from schema_migrations where version = 12").get(),
+    sqliteBehind(store).db.prepare("select 1 from schema_migrations where version = 12").get(),
     undefined,
     "the drop waits",
   );
-  store.db.close();
+  await store.close();
 
   // A second start finds the same and migrates nothing more.
-  const again = new ControlStore(path);
-  assert.doesNotThrow(() => applyControlLogLevel(again));
-  assert.ok(tables(again.db).has("rig_event"));
-  again.db.close();
+  const again = openControlStore(path);
+  await assert.doesNotReject(async () => applyControlLogLevel(again));
+  assert.ok(tables(sqliteBehind(again).db).has("rig_event"));
+  await again.close();
 });

@@ -56,7 +56,7 @@ import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
 import { moveSecretsKey, SecretBox } from "./secrets.ts";
 import { CONTROL_NUMBERS, controlPublicUrl, notReadWords } from "./settings.ts";
-import { ControlStore } from "./store/index.ts";
+import { openControlStore } from "./store/index.ts";
 
 /** Control service entry point. Generates its signing key on first start. */
 async function main(): Promise<void> {
@@ -114,9 +114,9 @@ async function main(): Promise<void> {
   // set is not read: said at start, in words, and control starts.
   const notRead = notReadWords(env);
   if (notRead) logWarn("control", notRead);
-  const store = new ControlStore(join(dir, CONTROL_STATE.db));
+  const store = openControlStore(join(dir, CONTROL_STATE.db));
   // The log level the owner set on control, over THERMITE_LOG_LEVEL's (control/log-level.ts).
-  applyControlLogLevel(store);
+  await applyControlLogLevel(store);
   const { host, port } = parseListen(env.THERMITE_CONTROL_LISTEN ?? "0.0.0.0:8800");
   // A rig is stale after 3 missed reports (the supervisor reports every 60 s by default).
   const staleAfterMs = readNumber(env, CONTROL_NUMBERS.staleSeconds) * 1000;
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   const secrets = SecretBox.fromFile(secretsKey);
   // Who may use the bus: control's own users and each rig's that registered its key, written to
   // the server's users file, which the server reloads on control's request (bus/users.ts).
-  const busUsers = new BusUsers({
+  const busUsers = await BusUsers.open({
     store,
     secrets,
     file: join(busDir, BUS_USERS_FILE),
@@ -237,7 +237,7 @@ async function main(): Promise<void> {
     orphanHours: kbOrphanHours,
   });
   const kbText = new KbText(store, kbFiles);
-  const api = createControlApi(store, tokens, privateKeyPem, {
+  const api = await createControlApi(store, tokens, privateKeyPem, {
     staleAfterMs,
     offlineAfterMs,
     driver,
@@ -270,10 +270,7 @@ async function main(): Promise<void> {
     host,
     port,
     build: buildInfo(),
-    enrolled: store.enrollments
-      .rigs()
-      .filter((r) => !r.retired_at)
-      .map((r) => r.rig),
+    enrolled: (await store.enrollments.rigs()).filter((r) => !r.retired_at).map((r) => r.rig),
     lifecycle: driver?.kind ?? null,
     bus: new URL(natsUrl).host,
     bus_for_rigs: rigBusUrl ? new URL(rigBusUrl).host : null,
@@ -343,8 +340,8 @@ async function main(): Promise<void> {
   followKbFiles(bus, kbFiles).catch((err) =>
     log("control", "files for the knowledge base stopped", { error: String(err) }, "error"),
   );
-  kbFiles.removeOrphans();
-  const orphans = every(loops, "control", "kb_orphans", KB_ORPHANS_LOOK_MS, () =>
+  await kbFiles.removeOrphans();
+  const orphans = every(loops, "control", "kb_orphans", KB_ORPHANS_LOOK_MS, async () =>
     kbFiles.removeOrphans(),
   );
   // The files' text, in the background: the first look reads the files kept before control
@@ -425,7 +422,7 @@ async function main(): Promise<void> {
   // The owner's retention policies (retention/): each that is on runs once at each of its times.
   // None exists until the owner makes one, so by default nothing is removed.
   const retention = every(loops, "control", "retention", RETENTION_LOOK_MS, () => {
-    retentionTick({ store, privateKeyPem });
+    void retentionTick({ store, privateKeyPem });
   });
   // GPU clouds' prices, pods and spend, read again every 15 minutes.
   const clouds = every(loops, "control", "gpu_clouds", 15 * 60_000, () =>

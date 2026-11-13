@@ -26,6 +26,6 @@ export async function keepChampionPatch(
   const pub = x?.run.published_patches.findLast((p) => p.seq === seq);
   if (!x || !pub) return "not_published";
   if (sha256Hex(patch) !== pub.sha256) return "mismatch";
-  store.championPatches.put(rig, x.rig.ledger_id ?? "", run, seq, pub, patch);
+  await store.championPatches.put(rig, x.rig.ledger_id ?? "", run, seq, pub, patch);
   return "stored";
 }

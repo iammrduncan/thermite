@@ -81,7 +81,7 @@ export function registerKits(tools: ToolContext): void {
           if (a.git) {
             if (a.ref) throw new Error("With git, name the branch, tag or commit as git.ref");
             const g = a.git;
-            const access = gitAccessFor(store, opts.parts.secrets, kits.dir, g.access, g.url);
+            const access = await gitAccessFor(store, opts.parts.secrets, kits.dir, g.access, g.url);
             const out = await addKitFromGit(
               store,
               kits,

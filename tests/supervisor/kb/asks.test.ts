@@ -57,7 +57,7 @@ describe("the supervisor asks control for the agents", () => {
   test("a worker's kb_search goes from the harness through the supervisor to control, and back with the run's scope", async () => {
     // Control, which assigned the run to the rig, with an item in the run's collection.
     const store = controlStore();
-    store.commands.enqueue({
+    await store.commands.enqueue({
       envelope: {
         v: 1,
         id: "c-1",
@@ -72,14 +72,14 @@ describe("the supervisor asks control for the agents", () => {
     } as unknown as SignedCommand);
     const RIG = { rig: "rig-a", ledger: "ledger-a" };
     const at = "2026-10-29T10:00:00.000Z";
-    store.kb().index(RIG, {
+    await store.kb().index(RIG, {
       at,
       actor: "harness",
       kind: "run_created",
       subject: RUN,
       body: { campaign: "js-sum" },
     });
-    store.kb().index(RIG, {
+    await store.kb().index(RIG, {
       at,
       actor: "harness",
       kind: "journal_note",
@@ -92,7 +92,7 @@ describe("the supervisor asks control for the agents", () => {
         const at = kbAskOf(subject);
         assert.ok(at);
         return new TextEncoder().encode(
-          JSON.stringify(answerKbAsk(store, at.rig, at.kind, JSON.parse(String(data)))),
+          JSON.stringify(await answerKbAsk(store, at.rig, at.kind, JSON.parse(String(data)))),
         );
       },
     };

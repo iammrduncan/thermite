@@ -47,16 +47,16 @@ export const copiedBy = (by: string) =>
 export function campaignHelpers(dash: Dashboard) {
   const { opts, pauseMenu, store } = dash;
   /** Past research a new run of a campaign can start from: its readable collections' newest matches. */
-  const pastResults = (campaign: string, q: string) => {
+  const pastResults = async (campaign: string, q: string) => {
     const kb = store.kb();
-    return kb.search(q, kb.readable(campaign), {
+    return kb.search(q, await kb.readable(campaign), {
       kinds: (Object.keys(PICKABLE) as KbKind[]).filter((k) => PICKABLE[k]),
       limit: 40,
     });
   };
 
   /** A run at work as a card: its brief, then Live, Message and Pause. */
-  const workCardFor = (
+  const workCardFor = async (
     c: Ctx,
     u: RigView,
     r: RunView,
@@ -65,7 +65,7 @@ export function campaignHelpers(dash: Dashboard) {
     back: string,
   ) =>
     workCard(
-      runBrief(store, u, r, now, { heading: true }),
+      await runBrief(store, u, r, now, { heading: true }),
       // A run without agents (a try, a rig check) has no one to message.
       `<a class="btn sm" href="${runLiveHref(r)}">${icon.terminal}Live</a>${r.has_agents === false ? "" : `<a class="btn sm" href="${runLiveHref(r, { compose: true })}">Message</a>`}${pauseMenu(c, u.id, r.id, back, "sm ghost")}`,
       waiting,
@@ -77,15 +77,16 @@ export function campaignHelpers(dash: Dashboard) {
    * a campaign's page, the newest run whose rig reported it; else what the contract says. Undefined
    * when control has no goal contract for the campaign and no rig reported its checks.
    */
-  const goalChecksFor = (
+  const goalChecksFor = async (
     name: string,
     vs: RigView[],
     rig?: string,
     run?: RunView,
-  ): { checks: GoalChecks; source: ChecksSource } | undefined => {
+  ): Promise<{ checks: GoalChecks; source: ChecksSource } | undefined> => {
     if (rig && run?.goal_checks) return { checks: run.goal_checks, source: { from: "rig", rig } };
-    const v = store.campaigns.versions(name)[0];
-    const raw = v?.contract ?? store.commands.latestAssignments().get(name)?.payload.contract;
+    const v = (await store.campaigns.versions(name))[0];
+    const raw =
+      v?.contract ?? (await store.commands.latestAssignments()).get(name)?.payload.contract;
     const parsed = raw ? parseStoredContract(raw) : undefined;
     const contract = parsed?.ok && parsed.contract.mode === "goal" ? parsed.contract : undefined;
     const ref = contract?.project.kit;
@@ -119,9 +120,9 @@ export function campaignHelpers(dash: Dashboard) {
   };
 
   /** What a campaign is for, from its contract on control: its title, topic or objective. */
-  const aboutOf = (name: string): string => {
-    const contract = (store.campaigns.versions(name)[0]?.contract ??
-      store.commands.latestAssignments().get(name)?.payload.contract) as
+  const aboutOf = async (name: string): Promise<string> => {
+    const contract = ((await store.campaigns.versions(name))[0]?.contract ??
+      (await store.commands.latestAssignments()).get(name)?.payload.contract) as
       | { title?: string; topic?: string; objective?: { description?: string } }
       | undefined;
     return contract?.title ?? contract?.topic ?? contract?.objective?.description ?? "";

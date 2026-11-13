@@ -42,7 +42,7 @@ export class RigConsumers {
       this.made.clear();
       this.lookedAt = now;
     }
-    for (const { rig } of busRigs(this.o.store)) {
+    for (const { rig } of await busRigs(this.o.store)) {
       if (this.made.has(rig)) continue;
       try {
         await this.o.bus.makeConsumer(COMMAND_STREAM, commandConsumerConfig(rig));

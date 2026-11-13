@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { ControlStore } from "../store/index.ts";
 import { findRun, type RunOnRig, type RunView } from "../views/index.ts";
 import type { QueueSeed } from "./new.ts";
@@ -38,14 +39,14 @@ export async function copiedFromRecords(
   queue: unknown[],
 ): Promise<unknown[]> {
   const kb = store.kb();
-  const readable = new Set([campaign, ...(campaign ? kb.reads(campaign) : [])]);
+  const readable = new Set([campaign, ...(campaign ? await kb.reads(campaign) : [])]);
   // Each run copied from is read once, however many of its experiments are copied.
   const runs = new Map<string, RunOnRig | undefined>();
   for (const x of queue) {
     const run = (x as { from?: { run?: unknown } } | null)?.from?.run;
     if (typeof run === "string" && !runs.has(run)) runs.set(run, await findRun(store, run));
   }
-  return queue.map((x) => {
+  return mapInTurn(queue, async (x) => {
     if (!x || typeof x !== "object") return x;
     const { from } = x as { from?: { run?: unknown; id?: unknown } };
     const run = from?.run;
@@ -53,19 +54,19 @@ export async function copiedFromRecords(
     const at = typeof run === "string" && typeof id === "string" ? runs.get(run) : undefined;
     const found = at?.run.queue.find((e) => e.id === id);
     // Only from a run of a campaign the new run's campaign may read (its own, or granted).
-    const source = at && found ? kb.runCampaign(at.rig.id, at.run.id) : undefined;
+    const source = at && found ? await kb.runCampaign(at.rig.id, at.run.id) : undefined;
     const rec = found && source && readable.has(source) ? found : undefined;
     if (!rec || !at || !source || typeof run !== "string" || typeof id !== "string")
       return { ...x, by: "copied" };
     // What became of it in that run, as Start a run says (queueSeedOf), when the folder has it.
-    const item = kb.byOrigin({
+    const item = await kb.byOrigin({
       campaign: source,
       rig: at.rig.id,
       run,
       kind: "experiment",
       ref: id,
     });
-    const result = item ? kb.resultOf(item) : null;
+    const result = item ? await kb.resultOf(item) : null;
     const details = [rec.details, result ? `In ${run} (${source}) it was ${result}.` : ""]
       .filter(Boolean)
       .join("\n");

@@ -360,7 +360,7 @@ interface BusFiguresOptions {
   look?: FiguresAsker | undefined;
   bus?: BusView | undefined;
   /** Who holds each user key the server knows, in words. */
-  holders?: (() => ReadonlyMap<string, string>) | undefined;
+  holders?: (() => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>) | undefined;
   now?: (() => number) | undefined;
 }
 
@@ -477,7 +477,7 @@ export class BusFiguresLook {
         for (const c of x.consumer_detail ?? []) consumers.push(consumerOf(name, c));
       }
     streams.sort((a, b) => a.name.localeCompare(b.name));
-    const holders = this.o.holders?.() ?? new Map<string, string>();
+    const holders = (await this.o.holders?.()) ?? new Map<string, string>();
     const connections: BusConnection[] = (connz?.connections ?? []).map((x) => ({
       id: n(x.cid),
       kind: String(x.kind ?? ""),

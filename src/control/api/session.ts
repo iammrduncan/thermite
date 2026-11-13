@@ -109,14 +109,14 @@ export class OwnerSessions {
    * The request's session, when it has one that holds: its ID. A browser signed in before goal
    * 243 keeps a cookie for /ui alone, and may send it beside a newer one: any that holds counts.
    */
-  sessionOf(c: Ctx): string | undefined {
+  async sessionOf(c: Ctx): Promise<string | undefined> {
     const now = Date.now();
     for (const sid of cookieValues(c.req.header("cookie"), SESSION_COOKIE)) {
-      const s = this.store.uiSessions.get(hashOf(sid));
+      const s = await this.store.uiSessions.get(hashOf(sid));
       if (!s || s.expiresAt <= now || !sameSecret(s.tokenFp, this.tokenFp)) continue;
       // Renewed at most once a day, so a session in use does not run out.
       if (s.expiresAt - now < this.sessionMs - DAY_MS) {
-        this.store.uiSessions.extend(hashOf(sid), now + this.sessionMs);
+        await this.store.uiSessions.extend(hashOf(sid), now + this.sessionMs);
         this.cookie(c, sid);
       }
       return sid;
@@ -125,18 +125,18 @@ export class OwnerSessions {
   }
 
   /** Signs in with the owner's token: a new session and its cookie, or undefined for a wrong token. */
-  start(c: Ctx, token: string): string | undefined {
+  async start(c: Ctx, token: string): Promise<string | undefined> {
     if (!this.owner.matches(token)) return undefined;
     const sid = randomBytes(24).toString("base64url");
-    this.store.uiSessions.create(hashOf(sid), this.tokenFp, Date.now() + this.sessionMs);
+    await this.store.uiSessions.create(hashOf(sid), this.tokenFp, Date.now() + this.sessionMs);
     this.cookie(c, sid);
     return sid;
   }
 
   /** Ends the request's session on control, and takes its cookie back. */
-  end(c: Ctx): void {
+  async end(c: Ctx): Promise<void> {
     for (const sid of cookieValues(c.req.header("cookie"), SESSION_COOKIE))
-      this.store.uiSessions.delete(hashOf(sid));
+      await this.store.uiSessions.delete(hashOf(sid));
     deleteCookie(c, SESSION_COOKIE, { path: "/" });
   }
 
@@ -145,8 +145,8 @@ export class OwnerSessions {
    * and a change carries the session's token in its header. `refused` says why not: 401 with no
    * session, 403 for a change without its token.
    */
-  takes(c: Ctx): { ok: true } | { ok: false; status: 401 | 403; error: string } {
-    const sid = this.sessionOf(c);
+  async takes(c: Ctx): Promise<{ ok: true } | { ok: false; status: 401 | 403; error: string }> {
+    const sid = await this.sessionOf(c);
     if (!sid) return { ok: false, status: 401, error: "unauthorized" };
     const method = c.req.method;
     if (method === "GET" || method === "HEAD") return { ok: true };

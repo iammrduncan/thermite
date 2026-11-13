@@ -20,18 +20,18 @@ import { type Answer, RUN, twoChampions } from "../helpers/withdraw-env.ts";
  * attempt's page and the knowledge base.
  */
 
-type Stack = ReturnType<typeof controlStack<HarnessEnv>>;
+type Stack = Awaited<ReturnType<typeof controlStack<HarnessEnv>>>;
 
 /** The run as control's views have it, and one of its attempts. */
-function runOf(stack: Stack) {
-  const run = rigView(stack.store, "rig-a")?.runs.find((r) => r.id === RUN);
+async function runOf(stack: Stack) {
+  const run = (await rigView(stack.store, "rig-a"))?.runs.find((r) => r.id === RUN);
   assert.ok(run, "control has the run");
   return run;
 }
 
 /** What control shows once the withdrawal of `a` reached it: views, History and the KB. */
-function reachedControl(stack: Stack, a: string, b: string, d: string) {
-  const run = runOf(stack);
+async function reachedControl(stack: Stack, a: string, b: string, d: string) {
+  const run = await runOf(stack);
   const [inv] = run.invalidations;
   assert.ok(inv);
   assert.deepEqual(
@@ -48,25 +48,25 @@ function reachedControl(stack: Stack, a: string, b: string, d: string) {
     run.champion.filter((c) => !c.reopened).map((c) => c.seq),
     [1],
   );
-  const jobs = rigView(stack.store, "rig-a")?.judge.jobs.filter((j) => j.attempt === d) ?? [];
+  const jobs =
+    (await rigView(stack.store, "rig-a"))?.judge.jobs.filter((j) => j.attempt === d) ?? [];
   assert.deepEqual(
     jobs.map((j) => j.state),
     ["cancelled"],
   );
-  const [item] = stack.store
-    .kb()
-    .search("", ["smoke-matmul"], { kinds: ["attempt"] })
-    .filter((x) => x.ref === a);
+  const [item] = (
+    await stack.store.kb().search("", ["smoke-matmul"], { kinds: ["attempt"] })
+  ).filter((x) => x.ref === a);
   assert.match(String(item?.body), /Verdict: invalidated \(withdrawn: /);
 }
 
 describe("withdrawing evidence through control (goal 174)", () => {
   test("the dashboard: the attempt's page previews what it reaches, confirms it, and shows what it reached", async () => {
     const { env, a, b, d } = await twoChampions();
-    const stack = controlStack({ env });
+    const stack = await controlStack({ env });
     await stack.relay();
     const s = await signIn(stack.control);
-    const path = attemptHref(runOf(stack), a.attempt);
+    const path = attemptHref(await runOf(stack), a.attempt);
     const page = await s.page(path);
     assert.match(page, /Withdraw its evidence…/);
     const form = {
@@ -92,13 +92,13 @@ describe("withdrawing evidence through control (goal 174)", () => {
     assert.match(seen, /moves back from #3 to #1, the starting point/);
     assert.match(seen, /Withdraw the evidence/);
     // Nothing changed yet.
-    assert.equal(runOf(stack).invalidations.length, 0);
+    assert.equal((await runOf(stack)).invalidations.length, 0);
     const sha = /name="reach" value="([0-9a-f]{64})"/.exec(seen)?.[1];
     assert.ok(sha);
     const sent = await s.post("/ui/commands", { ...form, reason, reach: sha });
     assert.equal(sent.status, 303);
     await stack.relay(3);
-    reachedControl(stack, a.attempt, b.attempt, d.attempt);
+    await reachedControl(stack, a.attempt, b.attempt, d.attempt);
     // The attempt's page says what it reached, when, by whom and why.
     const after = await s.page(path);
     assert.match(after, /Its evidence was withdrawn/);
@@ -106,14 +106,14 @@ describe("withdrawing evidence through control (goal 174)", () => {
     assert.match(after, /The run's champion moved back from #3 to #1/);
     assert.doesNotMatch(after, /Withdraw its evidence…/);
     // The run's History tells it.
-    const history = await s.page(runHref(runOf(stack), "history"));
+    const history = await s.page(runHref(await runOf(stack), "history"));
     assert.match(history, /You withdrew attempt/);
     assert.match(history, /champion moved back from #3 to #1/);
   });
 
   test("REST and MCP: a preview, then the confirmation that names its sha", async () => {
     const { env, a, b, d, jobA } = await twoChampions();
-    const stack = controlStack({ env });
+    const stack = await controlStack({ env });
     await stack.relay();
     // REST: a confirmation without a preview's sha is refused before it is signed.
     const bare = await stack.api("POST", "/v1/commands", {
@@ -140,7 +140,7 @@ describe("withdrawing evidence through control (goal 174)", () => {
     // published yet out of the rig (goal 185).
     await env.service.export("owner", {});
     await stack.relay();
-    assert.equal(runOf(stack).published?.seq, 3);
+    assert.equal((await runOf(stack)).published?.seq, 3);
     // MCP, with the owner's token: the same preview of the attempt, then the confirmation.
     const mcp = await mcpClient(stack.control, ADMIN);
     const call = async (name: string, args: Record<string, unknown>) =>
@@ -173,14 +173,14 @@ describe("withdrawing evidence through control (goal 174)", () => {
       payload: { run: RUN, attempt: a.attempt, reason: "slow card", reach: sha },
     });
     await stack.relay(3);
-    reachedControl(stack, a.attempt, b.attempt, d.attempt);
+    await reachedControl(stack, a.attempt, b.attempt, d.attempt);
     // The withdrawn champion is no longer the run's published one: none stands but the seed.
-    assert.equal(runOf(stack).published, null);
+    assert.equal((await runOf(stack)).published, null);
   });
 
   test("the command line prints what it reaches, and withdraws it with --yes", async () => {
     const { env, a, b, d } = await twoChampions();
-    const stack = controlStack({ env });
+    const stack = await controlStack({ env });
     await stack.relay();
     const server = serve({ fetch: stack.control.fetch, port: 0 });
     await new Promise<void>((resolve) => server.once("listening", () => resolve()));
@@ -228,6 +228,6 @@ describe("withdrawing evidence through control (goal 174)", () => {
     assert.match(out.stdout, new RegExp(`${b.attempt} .*-> {2}withdrawn for good`));
     assert.match(out.stdout, /Withdrawn: invalidation \d+ on the rig\./);
     await stack.relay();
-    reachedControl(stack, a.attempt, b.attempt, d.attempt);
+    await reachedControl(stack, a.attempt, b.attempt, d.attempt);
   });
 });

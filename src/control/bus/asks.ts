@@ -1,6 +1,7 @@
 import type { Bus, BusRequest } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
+import { filterInTurn } from "../../common/in-turn.ts";
 import {
   RIG_ASK_SUBJECTS,
   RIG_ASKS,
@@ -37,12 +38,12 @@ export interface RigAsksDeps {
 type Answer = object;
 
 /** Control's answer to one ask of a rig, a refusal in words included. `raw` is its body. */
-export function answerRigAsk(
+export async function answerRigAsk(
   d: RigAsksDeps,
   rig: string,
   kind: RigAskKind,
   raw: unknown,
-): Answer | RigAskRefusal {
+): Promise<Answer | RigAskRefusal> {
   const read = RIG_ASKS[kind].body.safeParse(raw);
   if (!read.success)
     return {
@@ -52,15 +53,15 @@ export function answerRigAsk(
   // Refused while the rig's recorded builds and control's do not meet, as its reports are; its
   // figures are not taken then, but answered with control's place in its reports, where a page
   // control refused meanwhile goes again once the rig runs a build control works with.
-  const refused = checkRig(store, rig, d.control);
+  const refused = await checkRig(store, rig, d.control);
   if (refused) {
-    store.refusals.countCall(rig);
-    return kind === "figures" ? { reports: reportPlace(store, rig) } : { refused };
+    await store.refusals.countCall(rig);
+    return kind === "figures" ? { reports: await reportPlace(store, rig) } : { refused };
   }
   switch (kind) {
     case "figures": {
-      takeFigures(store, rig, RIG_ASKS.figures.body.parse(raw));
-      return { ok: true, reports: reportPlace(store, rig) };
+      await takeFigures(store, rig, RIG_ASKS.figures.body.parse(raw));
+      return { ok: true, reports: await reportPlace(store, rig) };
     }
     case "screens": {
       const { frames } = RIG_ASKS.screens.body.parse(raw);
@@ -75,14 +76,14 @@ export function answerRigAsk(
     }
     case "daily": {
       const b = RIG_ASKS.daily.body.parse(raw);
-      return { id: store.rigReports.add(rig, b.kind, b.body) };
+      return { id: await store.rigReports.add(rig, b.kind, b.body) };
     }
     case "renew": {
       const b = RIG_ASKS.renew.body.parse(raw);
       return renewCommand(store, d.privateKeyPem, rig, b.id);
     }
     case "space": {
-      store.retention.takeSpace(rig, RIG_ASKS.space.body.parse(raw));
+      await store.retention.takeSpace(rig, RIG_ASKS.space.body.parse(raw));
       return { ok: true };
     }
     case "kb-files": {
@@ -92,7 +93,12 @@ export function answerRigAsk(
       // remove (the knowledge base's settings) would otherwise be lost to the item that names it.
       const { files } = RIG_ASKS["kb-files"].body.parse(raw);
       const kb = store.kb();
-      return { held: files.filter((f) => kb.files.has(f) && kb.files.named(f)) };
+      return {
+        held: await filterInTurn(
+          files,
+          async (f) => (await kb.files.has(f)) && (await kb.files.named(f)),
+        ),
+      };
     }
   }
 }
@@ -106,14 +112,16 @@ const SERVICE_IMPORT_REPLY = "_R_.";
  * the server routes back to that account alone. A rig on control's own server can't take such a
  * reply, so it is refused there.
  */
-export function answerStaysWithRig(
+export async function answerStaysWithRig(
   store: ControlStore,
   rig: string,
   reply: string | undefined,
-): boolean {
+): Promise<boolean> {
   if (!reply) return false;
   if (reply.startsWith(`${rigInboxPrefix(rig)}.`)) return true;
-  return reply.startsWith(SERVICE_IMPORT_REPLY) && leafRigsOf(store).some((l) => l.rig === rig);
+  return (
+    reply.startsWith(SERVICE_IMPORT_REPLY) && (await leafRigsOf(store)).some((l) => l.rig === rig)
+  );
 }
 
 /**
@@ -128,7 +136,7 @@ export function serveRigAsks(bus: Pick<Bus, "serve">, d: RigAsksDeps): Promise<v
       log("control", "an ask on a subject that is no rig's", { subject: r.subject }, "warn");
       return undefined;
     }
-    if (!answerStaysWithRig(d.store, at.rig, r.reply)) {
+    if (!(await answerStaysWithRig(d.store, at.rig, r.reply))) {
       const what = { rig: at.rig, kind: at.kind, reply: r.reply ?? null };
       log("control", "a rig's ask refused: its answer would leave its rig's inbox", what, "warn");
       return undefined;
@@ -141,7 +149,7 @@ export function serveRigAsks(bus: Pick<Bus, "serve">, d: RigAsksDeps): Promise<v
       return JSON.stringify({ refused: `the ${at.kind} is not JSON: ${errorText(err)}` });
     }
     try {
-      return JSON.stringify(answerRigAsk(d, at.rig, at.kind, body));
+      return JSON.stringify(await answerRigAsk(d, at.rig, at.kind, body));
     } catch (err) {
       const what = { rig: at.rig, kind: at.kind, error: errorText(err) };
       log("control", "a rig's ask failed on control", what, "error");

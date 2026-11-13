@@ -60,7 +60,39 @@ function providerOf(r: Row): ModelProvider {
   };
 }
 
-export class ModelProviders extends StorePart {
+export interface ModelProviders {
+  /**
+   * Creates or changes a model provider. A change without a new key keeps the sealed one. A
+   * provider needs a key unless it is OpenCode's own or OpenAI-compatible: a new one, and one with
+   * no key changed to another type. Its version moves on every change, so the rigs that use it
+   * pick it up.
+   */
+  put(p: {
+    name: string;
+    type: ProviderType;
+    base_url: string;
+    key?: { sealed: string; hint: string } | undefined;
+  }): Promise<"created" | "updated" | "needs_key">;
+  list(): Promise<ModelProvider[]>;
+  get(name: string): Promise<ModelProvider | undefined>;
+  /**
+   * Keeps what the provider listed (and the models the owner added by name), or, when listing
+   * failed, its error, keeping the last list so the rigs' models stay choosable.
+   */
+  setModels(name: string, listed: ProviderModel[] | { error: string }): Promise<void>;
+  /**
+   * A provider's sealed key replaced where nothing else changes (a ChatGPT login control renewed):
+   * its version stays; the routes' revisions follow the key.
+   */
+  setKey(name: string, sealed: string): Promise<void>;
+  /** A model the provider does not list, added by the owner by its name. */
+  addModel(name: string, id: string): Promise<void>;
+  /** Deletes a provider no rig uses. */
+  delete(name: string): Promise<"deleted" | "in_use" | "missing">;
+}
+
+/** ModelProviders on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteModelProviders extends StorePart {
   /**
    * Creates or changes a model provider. A change without a new key keeps the sealed one. A
    * provider needs a key unless it is OpenCode's own or OpenAI-compatible: a new one, and one with

@@ -62,12 +62,12 @@ type Payload = {
  * Saves the new campaign's first version: the champion's commit as its starting point. Starting a
  * run of it is Start a run's (startRun), with the rig the caller chose.
  */
-function campaignFromChampion(
+async function campaignFromChampion(
   store: ControlStore,
   req: FromChampionRequest,
   by: string,
   known: ReadonlyMap<string, unknown> | ReadonlySet<string>,
-): FromChampionOutcome {
+): Promise<FromChampionOutcome> {
   const refuse = (error: string, status: 400 | 404 | 409 = 409): FromChampionOutcome => ({
     ok: false,
     status,
@@ -81,13 +81,17 @@ function campaignFromChampion(
       400,
     );
   const kb = store.kb();
-  if (known.has(name) || store.campaigns.versions(name).length || kb.reads(name).length)
+  if (
+    known.has(name) ||
+    (await store.campaigns.versions(name)).length ||
+    (await kb.reads(name)).length
+  )
     return refuse(`There is a campaign named ${name} already. Choose another name.`);
-  const assigned = store.runRegistry.assigned(run);
-  const row = assigned ? store.commands.row(assigned.command) : undefined;
+  const assigned = await store.runRegistry.assigned(run);
+  const row = assigned ? await store.commands.row(assigned.command) : undefined;
   if (!assigned || !row) return refuse(`Control signed no assignment of ${run}.`, 404);
   const p = row.payload as Payload;
-  const branches = runBranchesOf(store.reportedRigs.supervisor(assigned.rig), run);
+  const branches = runBranchesOf(await store.reportedRigs.supervisor(assigned.rig), run);
   const commit = branches?.champions[String(champion)];
   if (!p.results || !branches)
     return refuse(
@@ -106,7 +110,7 @@ function campaignFromChampion(
   const kit = (p.imports ?? []).find((i) => i.kind === "kit_bundle");
   if (!seed || !project?.source?.git || !kit?.source)
     return refuse(`${run}'s assignment names no project and kit to start from.`, 400);
-  const version = store.campaigns.nextVersion(name);
+  const version = await store.campaigns.nextVersion(name);
   const source = (req.contract ?? p.contract) as Record<string, unknown> | undefined;
   if (!source || typeof source !== "object") return refuse("The contract is not an object.", 400);
   const parsed = parseContract({ ...source, campaign: name, version });
@@ -141,7 +145,7 @@ function campaignFromChampion(
     ...(results ? { results } : {}),
   };
   const from = assigned.campaign ?? run;
-  store.campaigns.put({
+  await store.campaigns.put({
     campaign: name,
     version,
     contract: parsed.contract,
@@ -150,8 +154,8 @@ function campaignFromChampion(
     copiedFrom: { campaign: from, rig: assigned.rig, run },
     by,
   });
-  if (req.grant && from !== name) kb.grant(name, from, by);
-  store.auditLog.add(by, "campaign_from_champion", {
+  if (req.grant && from !== name) await kb.grant(name, from, by);
+  await store.auditLog.add(by, "campaign_from_champion", {
     campaign: name,
     from: { campaign: from, run, champion, commit },
     sha: parsed.sha,
@@ -196,7 +200,7 @@ export async function startFromChampion(
     }
   | { ok: false; status: 400 | 404 | 409; error: string }
 > {
-  const saved = campaignFromChampion(
+  const saved = await campaignFromChampion(
     parts.store,
     {
       run: body.from.run,
@@ -206,7 +210,7 @@ export async function startFromChampion(
       grant: body.grant,
     },
     by,
-    campaignModes(parts.store, parts.views()),
+    await campaignModes(parts.store, await parts.views()),
   );
   if (!saved.ok) return saved;
   const out = {

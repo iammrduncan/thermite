@@ -23,24 +23,24 @@ import { runRoutes } from "./runs.ts";
 export function rigRecordRoutes(app: Hono, api: ApiContext): void {
   const { store, admin, reader } = api;
 
-  app.get("/v1/rigs/:rig/live", reader, (c) => {
+  app.get("/v1/rigs/:rig/live", reader, async (c) => {
     const after = Math.max(0, Math.trunc(Number(c.req.query("after") ?? "0")) || 0);
     const source = c.req.query("source") || undefined;
     const limit = clampLimit(c.req.query("limit"), 500);
     return c.json({
-      sources: store.liveLines.sources(c.req.param("rig")),
+      sources: await store.liveLines.sources(c.req.param("rig")),
       entries: after
-        ? store.liveLines.after(c.req.param("rig"), after, limit, source)
-        : store.liveLines.tail(c.req.param("rig"), limit, source),
+        ? await store.liveLines.after(c.req.param("rig"), after, limit, source)
+        : await store.liveLines.tail(c.req.param("rig"), limit, source),
     });
   });
 
-  app.post("/v1/rigs/:rig/key/accept", admin, (c) =>
-    store.reportedRigs.acceptPendingKey(
+  app.post("/v1/rigs/:rig/key/accept", admin, async (c) =>
+    (await store.reportedRigs.acceptPendingKey(
       c.req.param("rig"),
       "owner:api",
       c.req.query("fingerprint") ?? "",
-    )
+    ))
       ? c.json({ accepted: true })
       : c.json({ error: "no pending key" }, 404),
   );
@@ -54,7 +54,7 @@ export function rigRecordRoutes(app: Hono, api: ApiContext): void {
     const rig = c.req.param("rig");
     return c.json({
       events: await rigEventsPage(store, { rig, after, limit }),
-      removed: store.retention.floors(rig).map((f) => ({
+      removed: (await store.retention.floors(rig)).map((f) => ({
         ledger: f.ledger,
         through_event: f.through_event,
         before_place: f.before_place,
@@ -69,7 +69,7 @@ export function recordRoutes(app: Hono, api: ApiContext): void {
   const { store, viewOpts, admin } = api;
 
   // A page of the audit log, newest first; older and newer are the cursors for the next pages.
-  app.get("/v1/audit", admin, (c) => {
+  app.get("/v1/audit", admin, async (c) => {
     const raw = { before: c.req.query("before"), after: c.req.query("after") };
     const before = cursorOf(raw.before);
     const after = cursorOf(raw.after);
@@ -81,31 +81,35 @@ export function recordRoutes(app: Hono, api: ApiContext): void {
       return c.json({ error: "before and after are whole numbers" }, 400);
     if (before !== undefined && after !== undefined)
       return c.json({ error: "give before or after, not both" }, 400);
-    const p = store.auditLog.page(clampLimit(c.req.query("limit"), 200), {}, { before, after });
+    const p = await store.auditLog.page(
+      clampLimit(c.req.query("limit"), 200),
+      {},
+      { before, after },
+    );
     return c.json({ audit: p.entries, older: p.older, newer: p.newer });
   });
 
   // The rig as its page has it, with its connection to the message bus (goal 168).
-  app.get("/v1/rigs/:rig/view", admin, (c) => {
-    const v = rigView(store, c.req.param("rig"), viewOpts);
+  app.get("/v1/rigs/:rig/view", admin, async (c) => {
+    const v = await rigView(store, c.req.param("rig"), viewOpts);
     if (!v) return c.json({ error: "not found" }, 404);
-    const bus = busReach(store, v.id, {
+    const bus = await busReach(store, v.id, {
       lastSeen: v.last_seen,
       now: Date.now(),
       podStopped: podStopped(v),
     });
     // Its subscription's weekly limit, while one holds its runs (goal 169), as Needs you shows it.
-    return c.json({ ...v, bus, weekly_limit: weeklyLimit(store, v) ?? null });
+    return c.json({ ...v, bus, weekly_limit: (await weeklyLimit(store, v)) ?? null });
   });
 
   // How the rig's runners spent their time (goal 231): the twin of MCP's runner_use.
-  app.get("/v1/rigs/:rig/runner-use", admin, (c) => {
-    const v = rigView(store, c.req.param("rig"), viewOpts);
+  app.get("/v1/rigs/:rig/runner-use", admin, async (c) => {
+    const v = await rigView(store, c.req.param("rig"), viewOpts);
     if (!v) return c.json({ error: "not found" }, 404);
     const w = c.req.query("window");
     if (w !== undefined && !(USE_WINDOWS as readonly string[]).includes(w))
       return c.json({ error: "window is hour, day or run" }, 400);
-    const read = runnerUseRead(store, v, useWindowOf(w), Date.now());
+    const read = await runnerUseRead(store, v, useWindowOf(w), Date.now());
     return read
       ? c.json(read)
       : c.json({ error: `${v.id} has no run: ask for the hour or the day` }, 404);

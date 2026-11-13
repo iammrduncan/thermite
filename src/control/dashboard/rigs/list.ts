@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { offBus } from "../../bus/index.ts";
 import { bringBackRig } from "../../rigs/index.ts";
 import type { RunpodRigView } from "../../runpod/index.ts";
@@ -26,8 +27,9 @@ export function rigListRoutes(app: Hono, dash: Dashboard): void {
     const f = await c.req.parseBody();
     if (String(f.confirm ?? "").trim() !== `retire ${rig}`)
       return back("error", `Type "retire ${rig}" to retire it.`);
-    if (!store.reportedRigs.list().some((u) => u.id === rig)) return back("error", "No such rig.");
-    store.retired.add(rig, "owner:ui");
+    if (!(await store.reportedRigs.list()).some((u) => u.id === rig))
+      return back("error", "No such rig.");
+    await store.retired.add(rig, "owner:ui");
     return back("ok", `${rig} is retired.`);
   });
   app.post("/ui/rigs/:rig/bring-back", async (c) => {
@@ -40,58 +42,66 @@ export function rigListRoutes(app: Hono, dash: Dashboard): void {
   });
 
   /** Where a rig runs, for its row on the Rigs list: the kind of place and its name. */
-  const whereOf = (rig: string, pod: RunpodRigView | undefined): RigWhere => {
+  const whereOf = async (rig: string, pod: RunpodRigView | undefined): Promise<RigWhere> => {
     const gone = (status: string) => (status === "removed" ? ", removed" : "");
-    const m = store.machines.rig(rig);
+    const m = await store.machines.rig(rig);
     if (m) return { kind: "Machine", name: `${m.machine}${gone(m.status)}` };
-    const k = store.clusters.rig(rig);
+    const k = await store.clusters.rig(rig);
     if (k) return { kind: "Cluster", name: `${k.cluster}${gone(k.status)}` };
     if (pod) return { kind: "RunPod", name: pod.datacenter ?? "" };
-    const j = store.joinedRigs.get(rig);
+    const j = await store.joinedRigs.get(rig);
     if (j) return { kind: "Joined", name: j.form === "namespace" ? "a namespace" : "a machine" };
     return { kind: "Set up by you", name: "" };
   };
-  app.get("/ui/rigs", (c) => {
+  app.get("/ui/rigs", async (c) => {
     const now = Date.now();
-    const vs = views();
-    const gone = store.retired.list();
+    const vs = await views();
+    const gone = await store.retired.list();
     const listed = new Set([...vs.map((u) => u.id), ...gone.map((r) => r.rig)]);
     const rows: RigsListRow[] = [
-      ...vs.map((u) => ({
+      ...(await mapInTurn(vs, async (u) => ({
         id: u.id,
         u,
-        where: whereOf(u.id, u.runpod),
+        where: await whereOf(u.id, u.runpod),
         pod: u.runpod,
-        keyPending: Boolean(store.reportedRigs.key(u.id).pending),
-        offBus: offBus(store, u.id, { lastSeen: u.last_seen, now, podStopped: podStopped(u) }),
-      })),
+        keyPending: Boolean((await store.reportedRigs.key(u.id)).pending),
+        offBus: await offBus(store, u.id, {
+          lastSeen: u.last_seen,
+          now,
+          podStopped: podStopped(u),
+        }),
+      }))),
       // A rig control sets up on a machine or a cluster is listed before its first report too,
       // and one whose setup failed, so that its page says why (goal 206).
-      ...[...store.machines.rigs(), ...store.clusters.rigs()]
-        .filter((r) => r.status !== "removed" && !listed.has(r.rig))
-        .map((r) => ({
+      ...(await mapInTurn(
+        [...(await store.machines.rigs()), ...(await store.clusters.rigs())].filter(
+          (r) => r.status !== "removed" && !listed.has(r.rig),
+        ),
+        async (r) => ({
           id: r.rig,
-          where: whereOf(r.rig, undefined),
+          where: await whereOf(r.rig, undefined),
           keyPending: false,
           setup: r.status,
-        })),
+        }),
+      )),
       // A pod costs from its launch: it is listed before its first report too.
-      ...(opts.runpodRigs?.list() ?? [])
-        .filter((p) => p.active && !listed.has(p.rig))
-        .map((p) => ({
+      ...(await mapInTurn(
+        ((await opts.runpodRigs?.list()) ?? []).filter((p) => p.active && !listed.has(p.rig)),
+        async (p) => ({
           id: p.rig,
-          where: whereOf(p.rig, p),
+          where: await whereOf(p.rig, p),
           pod: p,
           keyPending: false,
-          offBus: offBus(store, p.rig, {
+          offBus: await offBus(store, p.rig, {
             lastSeen: "",
             now,
             podStopped: p.active && p.status === "EXITED",
           }),
-        })),
+        }),
+      )),
     ];
     const launch =
-      opts.runpodRigs && store.gpuClouds.list().length
+      opts.runpodRigs && (await store.gpuClouds.list()).length
         ? `<a class="btn" href="/ui/rigs/add/runpod">Launch on RunPod</a>`
         : "";
     return page(

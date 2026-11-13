@@ -233,8 +233,8 @@ export class RunpodDriver implements DeploymentDriver {
   }
 
   /** Whether the rig is one control launched on RunPod and still follows. */
-  serves(rig: string): boolean {
-    return Boolean(this.rigs.view(rig)?.active);
+  async serves(rig: string): Promise<boolean> {
+    return Boolean((await this.rigs.view(rig))?.active);
   }
 
   /** Stops the pod and starts it again; its volume stays. Both parts restart together. */
@@ -320,69 +320,87 @@ async function advanceOnce(input: {
   staleAfterMs: number;
 }): Promise<void> {
   const { store } = input;
-  for (const r of store.fullResets
-    .list(50)
-    .filter((x) => !["done", "failed", "cancelled"].includes(String(x.state)))) {
+  for (const r of (await store.fullResets.list(50)).filter(
+    (x) => !["done", "failed", "cancelled"].includes(String(x.state)),
+  )) {
     const id = Number(r.id);
     const rig = String(r.rig);
     const state = String(r.state);
-    const issue = (kind: "pause_run" | "export_now" | "wipe_state", payload: unknown) =>
-      issueCommand(store, input.privateKeyPem, {
-        rig,
-        kind,
-        payload,
-        ttlMinutes: 30,
-        // The owner who asked for the reset: the harness accepts wipe_state only from the owner.
-        issuedBy: String(r.requested_by),
-      }).id;
+    const issue = async (kind: "pause_run" | "export_now" | "wipe_state", payload: unknown) =>
+      (
+        await issueCommand(store, input.privateKeyPem, {
+          rig,
+          kind,
+          payload,
+          ttlMinutes: 30,
+          // The owner who asked for the reset: the harness accepts wipe_state only from the owner.
+          issuedBy: String(r.requested_by),
+        })
+      ).id;
     // A rig control launched on RunPod: every result leaves the pod, which stays, with its GPU.
-    const onRunpod = Boolean(store.runpod.rig(rig));
-    const fail = (detail: string) => {
-      store.fullResets.update(id, {
-        state: "failed",
-        detail: `${detail} (the rig's campaigns stay paused: resume them when it is safe)`,
+    const onRunpod = Boolean(await store.runpod.rig(rig));
+    /** Whether the reset is still in the state this step read it in. */
+    const still = async () =>
+      String((await store.fullResets.list(200)).find((x) => Number(x.id) === id)?.state) === state;
+    /**
+     * Moves the reset on to what `to` gives, in one transaction with a new read of its state: a
+     * reset the owner cancelled or confirmed since this step read it is left as the owner set it,
+     * and `to`, which may issue the step's command, is not run for it.
+     */
+    const move = async (to: () => Promise<Parameters<typeof store.fullResets.update>[1]>) =>
+      store.tx(async () => {
+        if (await still()) await store.fullResets.update(id, await to());
       });
-      if (onRunpod) store.rigHistory.add(rig, "reset_failed", false, detail);
-      log("control", "reset failed", { rig, detail }, "error");
+    const fail = async (detail: string) => {
+      const failed = await store.tx(async () => {
+        if (!(await still())) return false;
+        await store.fullResets.update(id, {
+          state: "failed",
+          detail: `${detail} (the rig's campaigns stay paused: resume them when it is safe)`,
+        });
+        if (onRunpod) await store.rigHistory.add(rig, "reset_failed", false, detail);
+        return true;
+      });
+      if (failed) log("control", "reset failed", { rig, detail }, "error");
     };
     const limit = STEP_LIMIT_MS[state];
     if (limit && Date.now() - Date.parse(String(r.updated_at)) > limit) {
-      fail(`timed out while ${state}`);
+      await fail(`timed out while ${state}`);
       continue;
     }
     try {
       switch (state) {
         case "start": {
-          const refused = runpodResetRefusal(store, rig);
+          const refused = await runpodResetRefusal(store, rig);
           if (refused) {
-            fail(refused);
+            await fail(refused);
             break;
           }
           if (onRunpod)
-            store.rigHistory.add(
+            await store.rigHistory.add(
               rig,
               "reset_requested",
               true,
               `asked by ${String(r.requested_by)}`,
             );
-          const v = rigView(store, rig, { staleAfterMs: input.staleAfterMs });
+          const v = await rigView(store, rig, { staleAfterMs: input.staleAfterMs });
           for (const i of v?.runs.filter((x) => x.status === "running") ?? []) {
-            issue("pause_run", { run: i.id, reason: "full reset" });
+            await issue("pause_run", { run: i.id, reason: "full reset" });
           }
-          store.fullResets.update(id, { state: "quiescing" });
+          await move(async () => ({ state: "quiescing" }));
           break;
         }
         case "quiescing": {
-          const v = rigView(store, rig, { staleAfterMs: input.staleAfterMs });
-          if (judgeBusy(v) > 0 || store.commands.pending(rig).length > 0) break;
-          store.fullResets.update(id, {
+          const v = await rigView(store, rig, { staleAfterMs: input.staleAfterMs });
+          if (judgeBusy(v) > 0 || (await store.commands.pending(rig)).length > 0) break;
+          await move(async () => ({
             state: "exporting",
-            command: issue("export_now", { full: true }),
-          });
+            command: await issue("export_now", { full: true }),
+          }));
           break;
         }
         case "exporting": {
-          const c = store.commands.get(String(r.command));
+          const c = await store.commands.get(String(r.command));
           // The harness's own (signed) record of the command, not the supervisor's acknowledgement.
           if (!c || c.status === "pending" || !harnessConfirmed(c.outcome)) break;
           const out = (c.outcome ?? {}) as {
@@ -390,53 +408,55 @@ async function advanceOnce(input: {
           };
           const result = out.result;
           if (c.status !== "delivered" || !result?.export) {
-            fail(`the export did not complete (${c.status})`);
+            await fail(`the export did not complete (${c.status})`);
             break;
           }
-          store.fullResets.update(id, {
+          await move(async () => ({
             state: "verifying",
             export_name: result.export,
             through_event: Number(result.through_event ?? 0),
-          });
+          }));
           break;
         }
         case "verifying": {
           // The export reached the results repository (the supervisor reports the push), or, for
           // a rig without one, control holds every file of it (control checks its own copy).
           const name = String(r.export_name);
-          const e = exportLeft(store, rig, name);
+          const e = await exportLeft(store, rig, name);
           if (e.never) {
-            fail(`${e.why}: its export cannot be verified`);
+            await fail(`${e.why}: its export cannot be verified`);
             break;
           }
           if (!e.left) break;
           // On RunPod, every result too: what waits on the pod is gone after the wipe.
-          if (onRunpod && !resultsLeft(store, rig, { export: name }).left) break;
-          store.fullResets.update(id, {
+          if (onRunpod && !(await resultsLeft(store, rig, { export: name })).left) break;
+          await move(async () => ({
             state: "awaiting_owner",
             detail:
               e.to === "control"
                 ? `export ${name} is on control, every file checked against its manifest; check it there (GET /v1/rigs/${rig}/exports/${name}), then confirm the wipe`
                 : `export ${name} reported pushed${e.commit ? ` (results repository commit ${e.commit})` : ""}; check it there, then confirm the wipe`,
-          });
+          }));
           break;
         }
         case "confirmed": {
-          store.fullResets.update(id, {
+          // The wipe is asked for only of a reset that is confirmed still: read again, in the
+          // transaction that records its command.
+          await move(async () => ({
             state: "wiping",
-            command: issue("wipe_state", {
+            command: await issue("wipe_state", {
               confirm: "wipe",
               export: String(r.export_name),
               through_event: Number(r.through_event),
             }),
-          });
+          }));
           break;
         }
         case "wiping": {
-          const c = store.commands.get(String(r.command));
+          const c = await store.commands.get(String(r.command));
           if (!c || c.status === "pending" || !harnessConfirmed(c.outcome)) break;
           if (c.status !== "delivered") {
-            fail(`the harness refused the wipe: ${JSON.stringify(c.outcome).slice(0, 300)}`);
+            await fail(`the harness refused the wipe: ${JSON.stringify(c.outcome).slice(0, 300)}`);
             break;
           }
           let restart = "the rig restarted itself (no deployment driver configured)";
@@ -444,7 +464,7 @@ async function advanceOnce(input: {
             // RunPod's driver keeps the pod: a stop could give its GPU to someone else.
             restart =
               "the pod and its GPU stay: the harness and the supervisor restarted themselves in it";
-            store.rigHistory.add(rig, "reset_done", true, `export ${String(r.export_name)}`);
+            await store.rigHistory.add(rig, "reset_done", true, `export ${String(r.export_name)}`);
           } else if (input.driver) {
             try {
               restart = `restarted ${(await input.driver.restart(rig, ["harness", "supervisor"])).join(", ")}`;
@@ -453,37 +473,48 @@ async function advanceOnce(input: {
               restart = `the restart through the driver failed (${errorText(err)}); the rig restarts itself`;
             }
           }
-          store.fullResets.update(id, { state: "done", detail: `wiped; ${restart}` });
+          await move(async () => ({ state: "done", detail: `wiped; ${restart}` }));
           break;
         }
       }
     } catch (err) {
-      fail(errorText(err));
+      await fail(errorText(err));
     }
   }
 }
 
-/** The owner's confirmation of a reset waiting for it. */
-export function confirmReset(store: ControlStore, id: number, by: string): void {
-  const r = store.fullResets.list(200).find((x) => Number(x.id) === id);
-  if (!r) throw new Refusal(`no reset ${id}`);
-  if (String(r.state) !== "awaiting_owner")
-    throw new Refusal(`reset ${id} is ${String(r.state)}, not waiting for confirmation`);
-  store.fullResets.update(id, { state: "confirmed", detail: `confirmed by ${by}` });
+/**
+ * The owner's confirmation of a reset waiting for it. Its state is read and set in one
+ * transaction, as each step of a reset is: a reset that timed out or was cancelled between the
+ * two is not confirmed.
+ */
+export async function confirmReset(store: ControlStore, id: number, by: string): Promise<void> {
+  await store.tx(async () => {
+    const r = (await store.fullResets.list(200)).find((x) => Number(x.id) === id);
+    if (!r) throw new Refusal(`no reset ${id}`);
+    if (String(r.state) !== "awaiting_owner")
+      throw new Refusal(`reset ${id} is ${String(r.state)}, not waiting for confirmation`);
+    await store.fullResets.update(id, { state: "confirmed", detail: `confirmed by ${by}` });
+  });
 }
 
-/** The owner cancels a reset that has not wiped yet. */
-export function cancelReset(store: ControlStore, id: number, by: string): void {
-  const r = store.fullResets.list(200).find((x) => Number(x.id) === id);
-  if (!r) throw new Refusal(`no reset ${id}`);
-  if (["wiping", "done", "failed", "cancelled"].includes(String(r.state)))
-    throw new Refusal(`reset ${id} is ${String(r.state)}`);
-  store.fullResets.update(id, {
-    state: "cancelled",
-    detail: `cancelled by ${by}; the rig's campaigns stay paused until resumed`,
+/**
+ * The owner cancels a reset that has not wiped yet. Its state is read and set in one
+ * transaction: a reset that began to wipe between the two is not marked cancelled.
+ */
+export async function cancelReset(store: ControlStore, id: number, by: string): Promise<void> {
+  await store.tx(async () => {
+    const r = (await store.fullResets.list(200)).find((x) => Number(x.id) === id);
+    if (!r) throw new Refusal(`no reset ${id}`);
+    if (["wiping", "done", "failed", "cancelled"].includes(String(r.state)))
+      throw new Refusal(`reset ${id} is ${String(r.state)}`);
+    await store.fullResets.update(id, {
+      state: "cancelled",
+      detail: `cancelled by ${by}; the rig's campaigns stay paused until resumed`,
+    });
+    if (await store.runpod.rig(String(r.rig)))
+      await store.rigHistory.add(String(r.rig), "reset_cancelled", true, `by ${by}`);
   });
-  if (store.runpod.rig(String(r.rig)))
-    store.rigHistory.add(String(r.rig), "reset_cancelled", true, `by ${by}`);
 }
 
 /**

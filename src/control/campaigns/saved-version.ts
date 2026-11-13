@@ -30,7 +30,7 @@ export type SavedVersion =
  * rig check's refusal. The audit log records `action` with the version and `audit`. With `check`,
  * nothing is saved: the answer says whether it would be.
  */
-export function saveWithField(
+export async function saveWithField(
   store: ControlStore,
   o: {
     campaign: string;
@@ -43,7 +43,7 @@ export function saveWithField(
     audit: Record<string, unknown>;
     check?: boolean | undefined;
   },
-): SavedVersion {
+): Promise<SavedVersion> {
   const refuse = (error: string, status: 400 | 404 | 409 = 409): SavedVersion => ({
     state: "refused",
     error,
@@ -52,55 +52,59 @@ export function saveWithField(
   const { campaign } = o;
   if (isRigCheck(campaign))
     return refuse(`${campaign} is a rig check's campaign. Its agents keep ${o.what}.`, 400);
-  const saved = store.campaigns.versions(campaign)[0];
-  const assigned = store.commands.latestAssignments().get(campaign);
-  // A new version: the source's keys under the new names (core/names.ts).
-  const source = currentContract(
-    (saved?.contract ?? assigned?.payload.contract) as Record<string, unknown> | undefined,
-  );
-  if (!source)
-    return refuse(
-      `Control has no saved version or earlier assignment of ${campaign}. Save it on the New campaign page first.`,
-      404,
+  // The newest version is read, and the next one built from it, numbered and saved, in one
+  // transaction: two settings saved for one campaign at once each build on the other's version.
+  return store.tx(async () => {
+    const saved = (await store.campaigns.versions(campaign))[0];
+    const assigned = (await store.commands.latestAssignments()).get(campaign);
+    // A new version: the source's keys under the new names (core/names.ts).
+    const source = currentContract(
+      (saved?.contract ?? assigned?.payload.contract) as Record<string, unknown> | undefined,
     );
-  if (saved && o.same(saved.contract))
-    return { state: "unchanged", campaign, version: saved.version, sha: saved.sha };
-  // Newer than every version a rig may hold: the harness refuses a version that is not newer.
-  const assignedVersion = Number((assigned?.payload.contract as { version?: unknown })?.version);
-  const version = Math.max(
-    store.campaigns.nextVersion(campaign),
-    Number.isInteger(assignedVersion) ? assignedVersion + 1 : 1,
-  );
-  const { [o.field]: _old, ...rest } = source;
-  const parsed = parseContract({
-    ...rest,
-    version,
-    ...(o.value !== undefined ? { [o.field]: o.value } : {}),
-  });
-  if (!parsed.ok)
-    return refuse(
-      `The contract of ${campaign} is not valid, so control cannot save a new version: ${parsed.errors.join("; ")}`,
+    if (!source)
+      return refuse(
+        `Control has no saved version or earlier assignment of ${campaign}. Save it on the New campaign page first.`,
+        404,
+      );
+    if (saved && o.same(saved.contract))
+      return { state: "unchanged", campaign, version: saved.version, sha: saved.sha };
+    // Newer than every version a rig may hold: the harness refuses a version that is not newer.
+    const assignedVersion = Number((assigned?.payload.contract as { version?: unknown })?.version);
+    const version = Math.max(
+      await store.campaigns.nextVersion(campaign),
+      Number.isInteger(assignedVersion) ? assignedVersion + 1 : 1,
     );
-  if (o.check) return { state: "valid", campaign, version, sha: parsed.sha };
-  const sources: CampaignSources = saved
-    ? saved.sources
-    : {
-        assignment: Object.fromEntries(
-          Object.entries((assigned as NonNullable<typeof assigned>).payload).filter(
-            ([k]) => !RUN_FIELDS.has(k),
+    const { [o.field]: _old, ...rest } = source;
+    const parsed = parseContract({
+      ...rest,
+      version,
+      ...(o.value !== undefined ? { [o.field]: o.value } : {}),
+    });
+    if (!parsed.ok)
+      return refuse(
+        `The contract of ${campaign} is not valid, so control cannot save a new version: ${parsed.errors.join("; ")}`,
+      );
+    if (o.check) return { state: "valid", campaign, version, sha: parsed.sha };
+    const sources: CampaignSources = saved
+      ? saved.sources
+      : {
+          assignment: Object.fromEntries(
+            Object.entries((assigned as NonNullable<typeof assigned>).payload).filter(
+              ([k]) => !RUN_FIELDS.has(k),
+            ),
           ),
-        ),
-      };
-  store.campaigns.put({
-    campaign,
-    version,
-    contract: parsed.contract,
-    sha: parsed.sha,
-    sources,
-    // A copy's later versions still say where it came from.
-    copiedFrom: saved?.copied_from ?? undefined,
-    by: o.by,
+        };
+    await store.campaigns.put({
+      campaign,
+      version,
+      contract: parsed.contract,
+      sha: parsed.sha,
+      sources,
+      // A copy's later versions still say where it came from.
+      copiedFrom: saved?.copied_from ?? undefined,
+      by: o.by,
+    });
+    await store.auditLog.add(o.by, o.action, { campaign, version, sha: parsed.sha, ...o.audit });
+    return { state: "saved", campaign, version, sha: parsed.sha };
   });
-  store.auditLog.add(o.by, o.action, { campaign, version, sha: parsed.sha, ...o.audit });
-  return { state: "saved", campaign, version, sha: parsed.sha };
 }

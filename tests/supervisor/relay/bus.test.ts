@@ -43,8 +43,8 @@ class FakeBus implements RelayBus {
 }
 
 /** Control, a rig's harness with `events` events, and the relay's settings for them with `bus`. */
-function rig(events: number, bus: RelayBus) {
-  const s = controlStack({ env: makeHarnessEnv("rig-a") });
+async function rig(events: number, bus: RelayBus) {
+  const s = await controlStack({ env: makeHarnessEnv("rig-a") });
   for (let i = 0; i < events; i++) appendOther(s.env.service.ledger, "t", "step", null, { i });
   // What the relay asked control for: the ingest route must stay out of it on the bus.
   const calls: string[] = [];
@@ -59,7 +59,7 @@ function rig(events: number, bus: RelayBus) {
 describe("the supervisor's reports on the message bus", () => {
   test("each page goes to the rig's subject with its id, and the cursor moves only on an ack", async () => {
     const bus = new FakeBus();
-    const s = rig(25, bus);
+    const s = await rig(25, bus);
     const ledger = s.env.service.ledger.ledgerId();
     let state: RelayState = await relayOnce(s.cfg, { cursor: 0, pageLimit: 10 });
     assert.equal(state.cursor, 25);
@@ -101,7 +101,7 @@ describe("the supervisor's reports on the message bus", () => {
   test("a page over the bus's limit is halved, and one event over it stops the round", async () => {
     const bus = new FakeBus();
     // Four events of a quarter of the limit each: two fit in a message, four do not.
-    const s = rig(0, bus);
+    const s = await rig(0, bus);
     const quarter = "x".repeat(REPORT_MAX_BYTES / 4);
     for (let i = 0; i < 4; i++) appendOther(s.env.service.ledger, "t", "big", null, { quarter });
     const state = await relayOnce(s.cfg, { cursor: 0 });

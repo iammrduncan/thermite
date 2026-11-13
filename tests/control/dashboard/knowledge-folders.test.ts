@@ -10,12 +10,12 @@ import { FINDING, fillReader } from "../../helpers/kb-reader.ts";
  */
 
 async function stack() {
-  const { store, control } = controlOnly({
+  const { store, control } = await controlOnly({
     tokens: { rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" } },
     options: { staleAfterMs: 600_000 },
   });
   await fillReader(store);
-  store.auditLog.add("control", "kb_item_refused", {
+  await store.auditLog.add("control", "kb_item_refused", {
     ...KB_RIG,
     event: 77,
     run: "gs-1",

@@ -90,14 +90,14 @@ const SAFE_PART = [
 ];
 
 /** The scripts control serves, by their routes. */
-function servedScripts(control: ReturnType<typeof controlOnly>["control"]): string[] {
+function servedScripts(control: Awaited<ReturnType<typeof controlOnly>>["control"]): string[] {
   const paths = control.routes.filter((r) => r.method === "GET" && ASSET.test(r.path));
   return [...new Set(paths.map((r) => r.path))].sort();
 }
 
 describe("the dashboard's browser scripts", () => {
   test("every script control serves parses as JavaScript", async () => {
-    const { control } = controlOnly();
+    const { control } = await controlOnly();
     const { get } = await signIn(control);
     const served = servedScripts(control);
     assert.ok(served.length >= 10, `served scripts: ${served.join(", ")}`);
@@ -111,7 +111,7 @@ describe("the dashboard's browser scripts", () => {
     }
   });
 
-  test("the pages' script tags name the scripts control serves, and no page has an inline script", () => {
+  test("the pages' script tags name the scripts control serves, and no page has an inline script", async () => {
     const named = new Set<string>();
     for (const { file, text } of pageSources())
       for (const m of text.matchAll(/<script\b[^>]*>/g)) {
@@ -120,7 +120,7 @@ describe("the dashboard's browser scripts", () => {
         named.add(src);
       }
     // Each tag names a script control serves, and control serves no script that no page loads.
-    assert.deepEqual([...named].sort(), servedScripts(controlOnly().control));
+    assert.deepEqual([...named].sort(), servedScripts((await controlOnly()).control));
   });
 
   test("a server constant goes into a browser script only through JSON.stringify", () => {

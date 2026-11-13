@@ -181,13 +181,13 @@ export function newestRunStart(u: Pick<RigView, "runs">): string | undefined {
  * A rig's runners over a window, from control's samples: the last hour, the last 24 hours, or
  * from `runStarted`, its newest run's start. Undefined: the run's window, with no run.
  */
-export function rigRunnerUse(
+export async function rigRunnerUse(
   store: Pick<ControlStore, "runnerUse">,
   rig: string,
   window: UseWindow,
   now: number,
   runStarted?: string | undefined,
-): UseView | undefined {
+): Promise<UseView | undefined> {
   const start =
     window === "hour"
       ? now - 3_600_000
@@ -198,7 +198,12 @@ export function rigRunnerUse(
           : Number.NaN;
   if (!Number.isFinite(start)) return undefined;
   const from = new Date(start).toISOString();
-  return runnerUse(store.runnerUse.samples(rig, from), window, from, new Date(now).toISOString());
+  return runnerUse(
+    await store.runnerUse.samples(rig, from),
+    window,
+    from,
+    new Date(now).toISOString(),
+  );
 }
 
 /**
@@ -206,13 +211,13 @@ export function rigRunnerUse(
  * each runner with its shares in percent of the time it reported. Undefined: the run's window on a
  * rig with no run.
  */
-export function runnerUseRead(
+export async function runnerUseRead(
   store: Pick<ControlStore, "runnerUse">,
   u: RigView,
   window: UseWindow,
   now: number,
 ) {
-  const v = rigRunnerUse(store, u.id, window, now, newestRunStart(u));
+  const v = await rigRunnerUse(store, u.id, window, now, newestRunStart(u));
   if (!v) return undefined;
   return {
     rig: u.id,

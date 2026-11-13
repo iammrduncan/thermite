@@ -224,7 +224,7 @@ export async function eventsPurgeChecks(ctx) {
     rigs: ["rig-a"],
     when: "hand",
   });
-  const policy = createPolicy(store, spec, false, "owner:check");
+  const policy = await createPolicy(store, spec, false, "owner:check");
   const ran = await runPolicy({ store, privateKeyPem: "" }, policy.id, "hand", "owner:check");
   // What it must remove: rig-a's events of more than 30 days ago on r-a1's subjects and its own;
   // not r-a2's (open), and not r-s's, where rig-b's events, which it keeps, lie between rig-a's.
@@ -247,10 +247,10 @@ export async function eventsPurgeChecks(ctx) {
     before.filter((m) => m.rig === "rig-b").every((m) => left.some((x) => x.seq === m.seq)),
   );
   const ids = gone.filter((m) => m.ledger === "ledger-a").map((m) => eventIn(m.data).id);
-  const floor = store.retention.floor("rig-a", "ledger-a");
+  const floor = await store.retention.floor("rig-a", "ledger-a");
   check(
     "rig-a's ledger's floor is its last event removed; rig-b's has none",
-    floor === Math.max(...ids) && store.retention.floor("rig-b", "ledger-b") === 0,
+    floor === Math.max(...ids) && (await store.retention.floor("rig-b", "ledger-b")) === 0,
     { floor, last_removed: Math.max(...ids) },
   );
   // Rig-a sends events the policy removed again, and a new one, as after a restore of an older

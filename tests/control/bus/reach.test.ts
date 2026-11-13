@@ -34,7 +34,7 @@ const report = (store: Parameters<typeof ingestReport>[0], rig = "rig-a") =>
 
 describe("a rig off the message bus", () => {
   test("one that calls over HTTP with no keys is broken while it calls, its history says so once a day, and it is set up again", async () => {
-    const s = controlOnly();
+    const s = await controlOnly();
     const call = await s.api(
       "POST",
       "/v1/rigs/rig-a/supervisor",
@@ -46,21 +46,27 @@ describe("a rig off the message bus", () => {
       ((await call.json()) as { error: string }).error,
       /^this rig has no keys on the message bus: control takes a rig's reports, commands and config only on the bus\. Set the rig up again/,
     );
-    noteOffBusCall(s.store, "rig-a");
-    const off = offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() });
+    await noteOffBusCall(s.store, "rig-a");
+    const off = await offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() });
     assert.equal(off?.why, "http");
     assert.match(off?.words ?? "", /It calls control over HTTP, with no keys on the message bus/);
-    assert.match(offBusFix(s.store, "rig-a", off as NonNullable<typeof off>), /Set it up again/);
-    assert.equal(s.store.rigHistory.list("rig-a").filter((h) => h.step === "bus_off").length, 1);
+    assert.match(
+      await offBusFix(s.store, "rig-a", off as NonNullable<typeof off>),
+      /Set it up again/,
+    );
+    assert.equal(
+      (await s.store.rigHistory.list("rig-a")).filter((h) => h.step === "bus_off").length,
+      1,
+    );
     // Fifteen minutes with no such call: no longer said.
     assert.equal(
-      offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() + 16 * 60_000 }),
+      await offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() + 16 * 60_000 }),
       undefined,
     );
   });
 
   test("one that registered its keys and has not reported on the bus since is broken, after a grace", async () => {
-    const s = controlOnly();
+    const s = await controlOnly();
     const registered = await s.api(
       "POST",
       "/v1/rigs/rig-a/supervisor",
@@ -72,22 +78,28 @@ describe("a rig off the message bus", () => {
       RIG_TOKEN,
     );
     assert.equal(registered.status, 200);
-    const step = s.store.rigHistory.list("rig-a").find((h) => h.step === BUS_REGISTERED_STEP);
+    const step = (await s.store.rigHistory.list("rig-a")).find(
+      (h) => h.step === BUS_REGISTERED_STEP,
+    );
     assert.ok(step);
     const at = Date.parse(step.at);
-    assert.equal(offBus(s.store, "rig-a", { lastSeen: "", now: at + 60_000 }), undefined, "grace");
+    assert.equal(
+      await offBus(s.store, "rig-a", { lastSeen: "", now: at + 60_000 }),
+      undefined,
+      "grace",
+    );
     const later = at + BUS_REACH_GRACE_MS + 1000;
-    const off = offBus(s.store, "rig-a", { lastSeen: "", now: later });
+    const off = await offBus(s.store, "rig-a", { lastSeen: "", now: later });
     assert.equal(off?.why, "silent");
     assert.match(off?.words ?? "", /nothing came from it on the message bus since/);
     // A report on the bus since: not broken.
     await report(s.store);
-    const seen = s.store.reportedRigs.list()[0]?.last_seen ?? "";
-    assert.equal(offBus(s.store, "rig-a", { lastSeen: seen, now: later }), undefined);
+    const seen = (await s.store.reportedRigs.list())[0]?.last_seen ?? "";
+    assert.equal(await offBus(s.store, "rig-a", { lastSeen: seen, now: later }), undefined);
   });
 
   test("REST's rig list and rig view, MCP's list_rigs and thermite rig list give its connection: on since its registration, or off, broken, why and what to do", async () => {
-    const s = controlOnly();
+    const s = await controlOnly();
     // A rig that reported, and never registered keys over HTTPS: nothing says it is off the bus.
     await report(s.store);
     type Listed = { rigs: { id: string; bus: unknown }[] };
@@ -120,19 +132,21 @@ describe("a rig off the message bus", () => {
       RIG_TOKEN,
     );
     assert.equal(registered.status, 200);
-    const step = s.store.rigHistory.list("rig-a").find((h) => h.step === BUS_REGISTERED_STEP);
+    const step = (await s.store.rigHistory.list("rig-a")).find(
+      (h) => h.step === BUS_REGISTERED_STEP,
+    );
     assert.ok(step);
     assert.deepEqual(await listed(), { state: "on", since: step.at });
     // It calls over HTTP with no keys on the bus: off it, broken, the same words as its page.
-    noteOffBusCall(s.store, "rig-a");
-    const off = offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() });
+    await noteOffBusCall(s.store, "rig-a");
+    const off = await offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() });
     assert.ok(off);
     const expected = {
       state: "off",
       why: "http",
       words: off.words,
       since: off.since,
-      fix: offBusFix(s.store, "rig-a", off),
+      fix: await offBusFix(s.store, "rig-a", off),
     };
     assert.deepEqual(await listed(), expected);
     assert.deepEqual(await viewed(), expected);
@@ -149,9 +163,9 @@ describe("a rig off the message bus", () => {
   });
 
   test("its page, the rigs list and Needs you say it is broken, with what to do", async () => {
-    const s = controlOnly();
+    const s = await controlOnly();
     await report(s.store);
-    noteOffBusCall(s.store, "rig-a");
+    await noteOffBusCall(s.store, "rig-a");
     const ui = await signIn(s.control);
     const page = await ui.page("/ui/rigs/rig-a");
     assert.match(page, /data-state="broken"/);

@@ -47,7 +47,36 @@ export function runnerBusKeyTable(db: DatabaseSync): void {
 )`);
 }
 
-export class BusKeys extends StorePart {
+export interface BusKeys {
+  /** The key a rig registered, or undefined when it has none. */
+  rigKey(rig: string): Promise<string | undefined>;
+  /** Records the key a rig registered, in place of the one before. */
+  setRigKey(rig: string, key: string): Promise<void>;
+  /** The seal key a rig registered, or undefined when it has none. */
+  rigSealKey(rig: string): Promise<string | undefined>;
+  /** Records the seal key a rig registered, in place of the one before: after its user key. */
+  setRigSealKey(rig: string, key: string): Promise<void>;
+  /**
+   * Who holds this key on the bus, other than `rig`: another rig that registered it as its user
+   * key or its seal key (a retired one too), or control, as one of its own; undefined when none.
+   */
+  holderOf(key: string, rig: string): Promise<string | undefined>;
+  /** The key a runner process of a rig registered (goal 206), or undefined when it has none. */
+  runnerKey(rig: string, runner: string): Promise<string | undefined>;
+  /** Records the key a runner process registered, in place of the one before. */
+  setRunnerKey(rig: string, runner: string, key: string): Promise<void>;
+  /** Every runner process's registered key, by rig and runner. */
+  runnerKeys(): Promise<{ rig: string; runner: string; key: string }[]>;
+  /** Every rig's registered key, by rig, with its seal key when it registered one. */
+  rigKeys(): Promise<{ rig: string; key: string; sealKey?: string | undefined }[]>;
+  /** One of control's own keys, or undefined before it was made. */
+  identity(name: BusIdentityName): Promise<{ publicKey: string; sealedSeed: string } | undefined>;
+  /** Keeps one of control's own keys, unless it has one of that name already. */
+  addIdentity(name: BusIdentityName, publicKey: string, sealedSeed: string): Promise<void>;
+}
+
+/** BusKeys on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteBusKeys extends StorePart {
   /** The key a rig registered, or undefined when it has none. */
   rigKey(rig: string): string | undefined {
     const r = this.db.prepare("select public_key from rig_bus_key where rig = ?").get(rig) as

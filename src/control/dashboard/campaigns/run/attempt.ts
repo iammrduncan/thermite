@@ -32,7 +32,7 @@ export function attemptRoutes(app: Hono, dash: Dashboard): void {
     const x = await named(c);
     const p =
       m && x
-        ? store.championPatches.get(x.rig.id, x.rig.ledger_id, x.run.id, Number(m[1]))
+        ? await store.championPatches.get(x.rig.id, x.rig.ledger_id, x.run.id, Number(m[1]))
         : undefined;
     if (!m || !x || !p) return c.text("No patch for that champion yet.", 404);
     // A project in a folder: named after the repository's commit, the one its owner has.
@@ -59,9 +59,11 @@ export function attemptRoutes(app: Hono, dash: Dashboard): void {
   });
 
   /** The follow of the owner's newest decision on a change, while the rig has not done it. */
-  const followDecision = (rig: string, attempt: string, now: number) => {
-    const d = store.commands.decisions().find((x) => x.rig === rig && x.attempt === attempt);
-    const cmd = d ? store.commands.row(d.id) : undefined;
+  const followDecision = async (rig: string, attempt: string, now: number) => {
+    const d = (await store.commands.decisions()).find(
+      (x) => x.rig === rig && x.attempt === attempt,
+    );
+    const cmd = d ? await store.commands.row(d.id) : undefined;
     const p = cmd ? commandProgress(cmd, now) : undefined;
     return cmd && p && !p.final
       ? ` data-follow="${esc(commandFollowUrl(cmd.id))}" data-follow-state="${esc(p.state)}"`
@@ -86,22 +88,20 @@ export function attemptRoutes(app: Hono, dash: Dashboard): void {
     // An earlier run's changes wait for no one: its rig takes no more commands for it.
     const decision = x.earlier
       ? undefined
-      : operatorNeeds(store, [u], forms(c), now, back).find((n) => n.attempt === a.id);
+      : (await operatorNeeds(store, [u], forms(c), now, back)).find((n) => n.attempt === a.id);
     // A champion's patch, once the rig has published it.
     const champ = r.champion.find((y) => y.attempt === a.id && !y.reopened);
     const patch =
-      champ && store.championPatches.get(u.id, u.ledger_id, r.id, champ.seq)
+      champ && (await store.championPatches.get(u.id, u.ledger_id, r.id, champ.seq))
         ? `<a href="${championPatchHref(r, champ.seq)}">Download champion #${champ.seq} as a patch</a>`
         : undefined;
     // The owner's withdrawal of its evidence (goal 174): the newest command about it or its jobs.
     const jobs = u.judge.jobs.filter((j) => j.attempt === a.id);
-    const asked = store.commands
-      .latest(u.id, "invalidate_evidence")
-      .find(
-        (y) =>
-          y.payload.run === r.id &&
-          (y.payload.attempt === a.id || jobs.some((j) => Number(j.id) === y.payload.job)),
-      );
+    const asked = (await store.commands.latest(u.id, "invalidate_evidence")).find(
+      (y) =>
+        y.payload.run === r.id &&
+        (y.payload.attempt === a.id || jobs.some((j) => Number(j.id) === y.payload.job)),
+    );
     const withdraw = x.earlier
       ? undefined
       : withdrawBlock({ csrf: forms(c).csrf, rig: u.id, back }, r, a, jobs, asked, now);
@@ -118,7 +118,7 @@ export function attemptRoutes(app: Hono, dash: Dashboard): void {
       },
       // One part: the owner's decision and what the rig did show without a refresh (goal 080),
       // followed while the rig has not done it.
-      `<div data-part="attempt"${followDecision(u.id, a.id, now)}>${attemptDetail(u, r, a, now, { decision, patch, withdraw })}</div>`,
+      `<div data-part="attempt"${await followDecision(u.id, a.id, now)}>${attemptDetail(u, r, a, now, { decision, patch, withdraw })}</div>`,
     );
   });
 }

@@ -34,20 +34,24 @@ export interface TrialSessionArgs {
 
 const trialOf = (source: string) => source.slice("trial:".length);
 
-export function trialSession(store: ControlStore, a: TrialSessionArgs): Record<string, unknown> {
+export async function trialSession(
+  store: ControlStore,
+  a: TrialSessionArgs,
+): Promise<Record<string, unknown>> {
   // The rig the run ran on, which keeps its live log: the newest run of that name.
-  const rig = store.runRegistry.created(a.run)?.rig ?? store.runRegistry.rigsOf(a.run)[0];
+  const rig =
+    (await store.runRegistry.created(a.run))?.rig ?? (await store.runRegistry.rigsOf(a.run))[0];
   if (!rig) throw new Error(`no run ${a.run}`);
   if (a.advisor !== undefined) return advisorLines(store, rig, a, a.advisor);
-  const all = store.liveLines.trials(rig).filter((t) => t.run === a.run);
-  const counts = new Map(store.liveLines.sources(rig).map((s) => [s.source, s.lines]));
+  const all = (await store.liveLines.trials(rig)).filter((t) => t.run === a.run);
+  const counts = new Map((await store.liveLines.sources(rig)).map((s) => [s.source, s.lines]));
   if (a.trial === undefined)
     return keepToBudget(
       {
         run: a.run,
         rig,
         total: all.length,
-        advisors: store.liveLines.advisors(rig, a.run).map((x) => ({
+        advisors: (await store.liveLines.advisors(rig, a.run)).map((x) => ({
           advisor: x.source.slice("advisor:".length),
           first_at: x.first_at,
           last_at: x.last_at,
@@ -74,7 +78,7 @@ export function trialSession(store: ControlStore, a: TrialSessionArgs): Record<s
     throw new Error(
       `control has no lines of trial ${trialOf(source)} in run ${a.run}: it keeps a rig's newest 20,000 lines, and trial_session with no trial lists the run's sessions it has`,
     );
-  const rows = store.liveLines.after(rig, a.after, a.limit + 1, source);
+  const rows = await store.liveLines.after(rig, a.after, a.limit + 1, source);
   const page = rows.slice(0, a.limit);
   return keepToBudget(
     {
@@ -93,20 +97,20 @@ export function trialSession(store: ControlStore, a: TrialSessionArgs): Record<s
 }
 
 /** One advisor's lines in the run (goal 218), oldest first, paged as a trial's are. */
-function advisorLines(
+async function advisorLines(
   store: ControlStore,
   rig: string,
   a: TrialSessionArgs,
   advisor: string,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const source = advisor.startsWith("advisor:") ? advisor : advisorLiveSource(advisor);
   const name = source.slice("advisor:".length);
-  const known = store.liveLines.advisors(rig, a.run).find((x) => x.source === source);
+  const known = (await store.liveLines.advisors(rig, a.run)).find((x) => x.source === source);
   if (!known)
     throw new Error(
       `control has no lines of advisor ${name} in run ${a.run}: trial_session with run alone lists the run's advisors it has`,
     );
-  const rows = store.liveLines.after(rig, a.after, a.limit + 1, source, a.run);
+  const rows = await store.liveLines.after(rig, a.after, a.limit + 1, source, a.run);
   const page = rows.slice(0, a.limit);
   return keepToBudget(
     {

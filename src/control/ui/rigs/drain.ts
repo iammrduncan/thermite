@@ -94,22 +94,22 @@ export interface DrainPage {
 }
 
 /** The stops sent for this rig's trials during the drain, newest first. */
-function stopsSent(o: DrainPage): CommandRow[] {
-  return o.store.commands
-    .latest(o.rig, "stop_trial", 20)
-    .filter((c) => Date.parse(c.issued_at) >= Date.parse(o.drain.since));
+async function stopsSent(o: DrainPage): Promise<CommandRow[]> {
+  return (await o.store.commands.latest(o.rig, "stop_trial", 20)).filter(
+    (c) => Date.parse(c.issued_at) >= Date.parse(o.drain.since),
+  );
 }
 
 /**
  * The drain's deadline (goal 173): when it stops waiting by itself; once passed, the owner's two
  * choices, each with what it does. "" from a harness older than goal 173.
  */
-function deadlineHtml(o: DrainPage): string {
+async function deadlineHtml(o: DrainPage): Promise<string> {
   const d = o.drain;
   if (!d.deadline) return "";
   if (!d.deadlineReached)
     return `<p class="small" style="margin:0 0 6px;color:var(--foreground)">Its deadline is ${esc(clockUtc(d.deadline))}, ${Date.parse(d.deadline) > o.now ? `in ${esc(span(new Date(o.now).toISOString(), Date.parse(d.deadline)))}` : "now"}. Then it stops waiting by itself and asks you: go ahead now, or end the drain.</p>`;
-  const c = drainChoices(o.store, o.rig);
+  const c = await drainChoices(o.store, o.rig);
   const form = (choice: "apply" | "end", label: string, cls: string) =>
     `<form class="inline" method="post" action="/ui/rigs/${encodeURIComponent(o.rig)}/drain/${choice}"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><button class="${cls}">${esc(label)}</button></form>`;
   return `<p class="small" style="margin:0 0 6px;color:var(--foreground)"><b class="warn">Its deadline passed at ${esc(clockUtc(d.deadlineReached))}.</b> It still starts nothing new, and waits for your choice: nothing is chosen for you.</p>
@@ -118,7 +118,7 @@ function deadlineHtml(o: DrainPage): string {
 }
 
 /** The card at the top of the rig's page while it drains. */
-export function drainBanner(o: DrainPage): string {
+export async function drainBanner(o: DrainPage): Promise<string> {
   const d = o.drain;
   const w = waitsFor(d);
   const listed = d.open?.map((t) => t.trial) ?? [];
@@ -126,7 +126,7 @@ export function drainBanner(o: DrainPage): string {
     ? "Nothing runs any more: it is ready for what the drain is for."
     : `It waits for ${esc(w)}.${d.open === null && d.trials ? " Its harness is too old to say which trials, or to stop one: update it." : ""}`;
   // Trials stopped during the drain that no longer run: what became of them.
-  const stopped = stopsSent(o)
+  const stopped = (await stopsSent(o))
     .filter((c) => !listed.includes(String(c.payload.trial)))
     .map((c) => {
       const p = commandProgress(c, o.now);
@@ -145,7 +145,7 @@ export function drainBanner(o: DrainPage): string {
     : "The rig goes back to work on its images.";
   return `<div class="card warn" style="margin-bottom:16px" id="drain" data-state="draining"><div class="card-head">${icon.clock}<span class="title">Draining for ${esc(span(d.since, o.now))}, since ${esc(clockUtc(d.since))}.</span></div>
 <p class="small" style="margin:6px 0 6px;color:var(--foreground)">${askedBy(d.by)}: <i>${esc(d.reason)}</i>. The rig starts no new trial, plan or judge job, and the work under way ends as it would. ${waits}${o.cluster ? " Control restarts its pods once nothing runs." : ""}</p>
-${deadlineHtml(o)}${stopped}${listed.length ? `<p class="small muted" style="margin:0 0 10px;color:var(--muted-foreground)">Each trial it waits for is under <b>At work</b>, with a way to stop it.</p>` : ""}
+${await deadlineHtml(o)}${stopped}${listed.length ? `<p class="small muted" style="margin:0 0 10px;color:var(--muted-foreground)">Each trial it waits for is under <b>At work</b>, with a way to stop it.</p>` : ""}
 ${
   // Past its deadline, the two choices above take the place of End the drain.
   d.deadlineReached
@@ -158,11 +158,11 @@ ${
  * What a trial last did, from its lines in Live: its newest line, and its newest tool call. A
  * stuck trial's card says it too (stuck.ts).
  */
-export function lastDone(
+export async function lastDone(
   o: { store: ControlStore; rig: string; now: number },
   t: { trial: string },
-): { at: string | null; html: string } {
-  const lines = o.store.liveLines.tail(o.rig, 12, `trial:${t.trial}`);
+): Promise<{ at: string | null; html: string }> {
+  const lines = await o.store.liveLines.tail(o.rig, 12, `trial:${t.trial}`);
   const newest = lines.at(-1);
   if (!newest) return { at: null, html: "" };
   const i = lines.map((l) => l.kind).lastIndexOf("tool");
@@ -189,18 +189,18 @@ const STUCK_TIP =
  * What the drain adds beside a lane under At work: a mark on the lane's row, and below it the
  * trial's facts and Stop this trial…. Nothing for a lane whose trial the drain doesn't list.
  */
-export function drainLane(
+export async function drainLane(
   o: DrainPage,
   run: string,
   lane: string,
-): { mark: string; below: string } | undefined {
+): Promise<{ mark: string; below: string } | undefined> {
   const t = o.drain.open?.find((x) => x.run === run && x.lane === lane);
   if (!t) return undefined;
   const r = t.refused_again;
   const mark = r
     ? ` <span class="chip warn" title="${esc(STUCK_TIP)}">repeats a refused request</span>`
     : "";
-  const last = lastDone(o, t);
+  const last = await lastDone(o, t);
   // What the drain waits for once this trial has ended.
   const rest = waitsFor({ ...o.drain, trials: Math.max(0, o.drain.trials - 1) });
   const facts = [
@@ -245,7 +245,7 @@ export function drainLane(
     .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
     .join("");
   // A stop sent for this trial: how it stands, instead of the button, unless it was not taken.
-  const sent = stopsSent(o).find((c) => c.payload.trial === t.trial);
+  const sent = (await stopsSent(o)).find((c) => c.payload.trial === t.trial);
   const p = sent ? commandProgress(sent, o.now) : undefined;
   const stop =
     p && p.tone !== "bad"
@@ -259,19 +259,24 @@ export function drainLane(
 }
 
 /** What a drain adds to a lane under At work (runBrief's `lane`). */
-export type LaneExtra = (lane: string) => { mark: string; below: string } | undefined;
+export type LaneExtra = (
+  lane: string,
+) =>
+  | { mark: string; below: string }
+  | undefined
+  | Promise<{ mark: string; below: string } | undefined>;
 
 /** A drain's parts on the rig's page: its sentence, its card and its lanes; null without one. */
-export function drainView(
+export async function drainView(
   u: Pick<RigView, "id" | "summary">,
   o: Omit<DrainPage, "rig" | "drain">,
-): { said: string; banner: string; lanes: (run: string) => LaneExtra } | null {
+): Promise<{ said: string; banner: string; lanes: (run: string) => LaneExtra } | null> {
   const drain = drainOf(u);
   if (!drain) return null;
   const p = { ...o, rig: u.id, drain };
   return {
     said: drainSaid(u.id, drain),
-    banner: drainBanner(p),
-    lanes: (run) => (lane) => drainLane(p, run, lane),
+    banner: await drainBanner(p),
+    lanes: (run) => async (lane) => drainLane(p, run, lane),
   };
 }

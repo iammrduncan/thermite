@@ -4,8 +4,33 @@ import { StorePart } from "./part.ts";
  * Champions' patches (goal 125, T6), by the rig and ledger of the run that published them. The
  * caller (control/champions.ts) keeps one only when it is the one the rig published.
  */
+export interface ChampionPatches {
+  /**
+   * A champion's patch, which the caller found to be the one the run published in this ledger
+   * as champion `seq`, with its SHA-256 and base commit. One kept already stays.
+   */
+  put(
+    rig: string,
+    ledgerId: string,
+    run: string,
+    seq: number,
+    published: { sha256: string; base_commit: string },
+    patch: Buffer,
+  ): Promise<void>;
+  /**
+   * The patch of champion `seq` of a run, in the ledger its view gives (RigView.ledger_id): none
+   * until it arrives.
+   */
+  get(
+    rig: string,
+    ledgerId: string | null,
+    run: string,
+    seq: number,
+  ): Promise<{ patch: Buffer; sha256: string; base_commit: string } | undefined>;
+}
 
-export class ChampionPatches extends StorePart {
+/** ChampionPatches on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteChampionPatches extends StorePart {
   /**
    * A champion's patch, which the caller found to be the one the run published in this ledger
    * as champion `seq`, with its SHA-256 and base commit. One kept already stays.

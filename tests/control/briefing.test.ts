@@ -41,13 +41,13 @@ test("a briefing item from one of two runs of one name, on two rigs, is found by
   await ran(store, "rig-a", "s-1", "On rig-a the cache was the limit.");
   await ran(store, "rig-b", "s-1", "On rig-b the clock was the limit.");
   const kb = store.kb();
-  const fromB = kb.search("clock", ["speed"]).find((x) => x.rig === "rig-b");
+  const fromB = (await kb.search("clock", ["speed"])).find((x) => x.rig === "rig-b");
   assert.ok(fromB);
   const seed = briefingSeedOf(fromB);
   assert.equal(seed?.from.rig, "rig-b");
 
   const payload = { contract: { campaign: "speed" }, briefing: [seed] };
-  const out = briefingFromKb(store, payload) as { briefing?: { text: string }[] };
+  const out = (await briefingFromKb(store, payload)) as { briefing?: { text: string }[] };
   assert.deepEqual(
     out.briefing?.map((b) => b.text),
     [seed?.text],
@@ -56,6 +56,6 @@ test("a briefing item from one of two runs of one name, on two rigs, is found by
 
   // Without its rig the item can't be told apart: it is left out, and control's log says so.
   const { rig: _rig, ...noRig } = seed?.from ?? {};
-  const left = briefingFromKb(store, { ...payload, briefing: [{ ...seed, from: noRig }] });
+  const left = await briefingFromKb(store, { ...payload, briefing: [{ ...seed, from: noRig }] });
   assert.equal((left as { briefing?: unknown }).briefing, undefined);
 });

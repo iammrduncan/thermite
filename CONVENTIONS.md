@@ -155,6 +155,19 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 - **A new folder gets a place** in the order, here and in the check (`ORDERS` in `scripts/checks/lib/imports.ts`): after every folder it imports and before every folder that imports it. Change the order itself only on purpose, in a commit of its own.
 - `npm run check:imports` holds the order, for types too. Today's imports against it are listed with the check's exceptions, and that list only shrinks; `npm run check:imports -- --list` says what is left, by pair of folders.
 
+### How control's store is called
+
+- **Through its interface, and every call is waited for.** `src/control/store/index.ts` is the one way in: `ControlStore` has one sub-store for each domain, each an interface whose calls give a promise. `await` every call, one that gives nothing too, since it may fail. The types refuse an answer used before it is there, and the linter refuses a call that nobody waits for (`noFloatingPromises`).
+- **All of control's SQL is in `src/control/store/`.** The store behind the interface is SQLite (`sqlite.ts`): its classes answer at once, and nothing outside the folder imports them or reaches the database. A test that must reach the database itself, to make a store as an older version left it, takes it from `sqliteBehind` (`store/behind.ts`), which production code can't import.
+- **A new call goes in two places:** the sub-store's interface, with its comment, and its SQLite class beside it. The store's opener stops typechecking when the two differ.
+- **What must happen in one piece is one transaction.** A wait lets other work in: between two calls, a rig's report, one of control's loops or another request can change what the first call read. Where a write relies on a read (a name that must be free, a state that must still hold, a number that counts up), and where writes stand or fall together, put the read and the writes in one `store.tx(async () => { ... })`. While it is open, every other caller of the store waits.
+- **A transaction's function waits for the store and for nothing else:** no fetch, message bus, SSH, subprocess or timer. What it waits for holds every other caller. A throw drops everything it wrote, so a note that must stay after a refusal is written once the transaction has ended.
+- **What leaves control is sent once its record is kept:** `store.onceKept(() => ...)`. A command published to a rig, or anything else that can't be taken back, must not have gone when the transaction around it is dropped. Outside a transaction it is done at once.
+- **An array's own methods do not wait.** `items.map(async ...)` gives promises, and `filter`, `some` and `find` take every promise as true. Where an item's work waits, use `common/in-turn.ts` (`mapInTurn`, `filterInTurn` and the others), which waits for each item before the next. Code that only draws a page waits for nothing: read what the page needs first, and give it to the page.
+- **Inside `try`, `return await`.** A promise returned without `await` fails outside its `catch`.
+- **State in memory around a wait is looked at again.** A check of a map or a flag, then a wait, then its change, is no longer one piece: check again after the wait, or change it before.
+- `node scripts/test.mjs --store-waits turn` runs the tests on a store whose every call takes a turn of the event loop, as a store on a server does. Run it after a change to how the store is called: a missing wait, or two calls that relied on nothing between them, shows there.
+
 ### Contracts, events and names
 
 - **A wire contract has one home.** Each body that crosses a process boundary has one schema in `core`: a route's request and answer, a signed command, an event, a file that one container hands to another, an environment variable. Route paths and limits are named constants beside it.

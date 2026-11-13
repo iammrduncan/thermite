@@ -10,26 +10,26 @@ import type { ControlStore } from "../store/index.ts";
  * run control does not know, a rig the run is not on, and an earlier run: one of a retired rig,
  * or from before its rig's full reset, which takes no more commands.
  */
-export function commandRig(
+export async function commandRig(
   store: ControlStore,
   kind: CommandKind,
   rig: string | undefined,
   payload: unknown,
-): string {
+): Promise<string> {
   const run = (payload as { run?: unknown } | null)?.run;
   if (!RUN_KINDS.has(kind) || typeof run !== "string") {
     if (!rig) throw new Refusal(`A ${kind} command names its rig: give the rig.`);
     return rig;
   }
-  const on = store.runRegistry.rigsOf(run);
+  const on = await store.runRegistry.rigsOf(run);
   if (rig && on.length && !on.includes(rig))
     throw new Refusal(`Run ${run} is on ${listText(on)}, not on ${rig}.`);
   const to = rig ?? on[0];
   if (!to) throw new Refusal(`Control knows no run ${run}: name a run a rig reported.`);
-  if (store.retired.get(to))
+  if (await store.retired.get(to))
     throw new Refusal(`Run ${run} is an earlier run: ${to} is retired, so it takes no commands.`);
-  const ledger = store.runRegistry.ledgerOf(run, to);
-  const current = store.reportedRigs.reportRow(to)?.ledger_id;
+  const ledger = await store.runRegistry.ledgerOf(run, to);
+  const current = (await store.reportedRigs.reportRow(to))?.ledger_id;
   if (ledger && typeof current === "string" && ledger !== current)
     throw new Refusal(
       `Run ${run} is an earlier run: it ran on ${to} before the rig's full reset, so it takes no commands.`,

@@ -39,7 +39,7 @@ async function rig(
   o: { requireKeyAcceptance?: boolean; clock?: () => Date; stream?: StreamSettings } = {},
 ) {
   const requireKeyAcceptance = o.requireKeyAcceptance ?? false;
-  const s = controlStack({
+  const s = await controlStack({
     env: makeHarnessEnv("rig-a", o.clock),
     options: { requireKeyAcceptance },
   });
@@ -103,7 +103,7 @@ describe("a report page refused on the bus heals", () => {
     ]);
     state = healCursor(state, await r.figures(state.cursor));
     assert.deepEqual([state.cursor, state.healing], [0, true]);
-    const pending = r.store.reportedRigs.key("rig-a").pending ?? "";
+    const pending = (await r.store.reportedRigs.key("rig-a")).pending ?? "";
     const accepted = await r.api(
       "POST",
       `/v1/rigs/rig-a/key/accept?fingerprint=${fingerprint(pending)}`,

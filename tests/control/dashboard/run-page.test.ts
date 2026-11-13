@@ -25,7 +25,7 @@ describe("control dashboard", () => {
       assert.equal(r.status, 303);
       await s.relay(); // the signed command to the harness
       await s.relay(); // its events back to control
-      const [cmd] = s.store.commands.list(1);
+      const [cmd] = await s.store.commands.list(1);
       assert.equal(cmd?.kind, form.kind);
       assert.notEqual(cmd?.status, "failed", JSON.stringify(cmd?.outcome));
     };
@@ -208,7 +208,7 @@ describe("control dashboard", () => {
     assert.equal(r.status, 303);
     await s.relay(); // the signed command to the harness
     await s.relay(); // its events back to control
-    const [cmd] = s.store.commands.list(1);
+    const [cmd] = await s.store.commands.list(1);
     assert.equal(cmd?.kind, "end_wait");
     assert.notEqual(cmd?.status, "failed", JSON.stringify(cmd?.outcome));
     const after = await (await s.get(href)).text();

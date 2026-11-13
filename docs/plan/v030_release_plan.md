@@ -1,6 +1,6 @@
 # v0.3.0, step by step
 
-**Status:** written on 2026-11-12 for the owner, who asked for it: one command for each step, and what the owner looks at between them. The build started on 2026-11-12, when the owner ran step 1; step 1 is built and waits for the owner's look.
+**Status:** written on 2026-11-12 for the owner, who asked for it: one command for each step, and what the owner looks at between them. The build started on 2026-11-12, when the owner ran step 1. Steps 1 and 2 are built and wait for the owner's look.
 
 [The release plan](release-v0.3.0.md) says what v0.3.0 is and why. [The app's build plan](app-build-plan.md) and [goal 258's design](goal-258-design.md) say how it is built. This page is the run sheet: 35 steps in one line, one goal at a time, from today to the tag.
 
@@ -106,8 +106,8 @@ Every call into control's store can wait for its answer. Still SQLite, the same 
 **Look at:**
 
 - **Your control after the update, for a day of real use:** the old dashboard and `/next` as before, a campaign at work through the update, a backup taken.
-- The count of tests, which may not fall, and the list of places that hold a transaction outside the store, each with its test.
-- How it was done (in one piece or area by area), in the goal's Decisions.
+- The count of tests, which may not fall, and the 36 places that hold a transaction outside the store, each with its test in `tests/control/together/`.
+- How it was done (in one piece, by a script), and the short list of what a person could notice, in the goal's Decisions.
 
 Nothing here is a matter of taste. The hands-on is short unless something changed.
 

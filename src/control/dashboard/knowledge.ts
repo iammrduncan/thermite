@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { flatMapInTurn, mapInTurn } from "../../common/in-turn.ts";
 import {
   KB_ITEM_TYPES,
   KB_LIST_SORTS,
@@ -100,7 +101,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   };
 
   /** The explorer's page around its main part, with the tree open down to the open folder. */
-  const explorer = (
+  const explorer = async (
     c: Ctx,
     o: {
       parts: string[];
@@ -111,14 +112,17 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       summary?: string;
     },
   ) => {
-    const vs = views();
+    const vs = await views();
     const [campaign, run] = o.parts;
-    const collections = kbFolders(store, vs, {}, { sort: "name" });
+    const collections = await kbFolders(store, vs, {}, { sort: "name" });
     const kids = new Map<string, KbFolder[]>();
     if (campaign && collections.some((f) => f.name === campaign))
-      kids.set(campaign, kbFolders(store, vs, { campaign }, { sort: "name" }));
+      kids.set(campaign, await kbFolders(store, vs, { campaign }, { sort: "name" }));
     if (campaign && run && kids.get(campaign)?.some((f) => f.name === run))
-      kids.set(`${campaign}/${run}`, kbFolders(store, vs, { campaign, run }, { sort: "name" }));
+      kids.set(
+        `${campaign}/${run}`,
+        await kbFolders(store, vs, { campaign, run }, { sort: "name" }),
+      );
     const folder = o.parts.slice(0, 3).join("/");
     const crumbs = o.parts.map((p, i) => ({
       path: o.parts.slice(0, i + 1).join("/"),
@@ -126,16 +130,17 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     }));
     const items = collections.reduce((n, f) => n + f.items, 0);
     // The runs a search can be made as: each running run, as the rigs report it.
-    const runs = vs
-      .flatMap((u) =>
-        u.runs
-          .filter((r) => r.status === "running")
-          .map((r) => ({
+    const runs = (
+      await flatMapInTurn(vs, async (u) =>
+        mapInTurn(
+          u.runs.filter((r) => r.status === "running"),
+          async (r) => ({
             run: r.id,
-            collection: store.kb().runCampaign(u.id, r.id) ?? r.campaign ?? "",
-          })),
+            collection: (await store.kb().runCampaign(u.id, r.id)) ?? r.campaign ?? "",
+          }),
+        ),
       )
-      .sort((a, b) => a.run.localeCompare(b.run, "en", { numeric: true }));
+    ).sort((a, b) => a.run.localeCompare(b.run, "en", { numeric: true }));
     return page(
       c,
       {
@@ -161,7 +166,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     );
   };
   /** What the explorer says when an address names nothing it holds. */
-  const notFound = (c: Ctx, parts: string[], query: ExplorerQuery, words: string) => {
+  const notFound = async (c: Ctx, parts: string[], query: ExplorerQuery, words: string) => {
     c.status(404);
     // The crumbs go as far as the address names a place.
     let named = 0;
@@ -175,7 +180,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   };
 
   // ---------------------------------------------------------------- the Knowledge page (goal 176)
-  const knowledgePage = (c: Ctx) => {
+  const knowledgePage = async (c: Ctx) => {
     const parts = knowledgeParts(new URL(c.req.url).pathname);
     const query = queryOf(c);
     if (!parts) return notFound(c, [], query, "This is not an address in the knowledge base.");
@@ -191,7 +196,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         ...(query.offset ? { offset: query.offset } : {}),
       });
       const r = read.success
-        ? ownerKbRead(store, views(), read.data)
+        ? await ownerKbRead(store, await views(), read.data)
         : { error: "not an item's address" };
       if ("error" in r) return notFound(c, parts, query, String(r.error));
       return explorer(c, {
@@ -210,9 +215,9 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         ),
       });
     }
-    const vs = views();
+    const vs = await views();
     const searching = query.q.trim() !== "" || query.as !== undefined;
-    const list = ownerKbList(store, vs, {
+    const list = await ownerKbList(store, vs, {
       at: placeParts.join("/"),
       ...(query.kinds.length ? { kinds: query.kinds } : {}),
       ...(query.outcomes.length ? { outcomes: query.outcomes } : {}),
@@ -225,19 +230,19 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       limit: searching ? 0 : KB_LIST_DEFAULT,
     });
     if ("error" in list) return notFound(c, placeParts, query, list.error);
-    const search = searching ? searchFolder(at, query) : undefined;
+    const search = searching ? await searchFolder(at, query) : undefined;
     return explorer(c, {
       parts: placeParts,
       query,
       pane: query.item
-        ? pane(c, placeParts.join("/"), query, query.item)
+        ? await pane(c, placeParts.join("/"), query, query.item)
         : folderPaneHtml({
             place: list.at,
             summary: list.summary,
             grants: {
               csrf: csrf(c),
               back: explorerHref(placeParts.join("/"), query),
-              collections: [...campaignModes(store, vs).keys()].sort(),
+              collections: [...(await campaignModes(store, vs)).keys()].sort(),
             },
             note: { ok: c.req.query("ok"), error: c.req.query("error") },
             // A run's pane searches as the run: its agents' search, over all that it reads.
@@ -275,13 +280,15 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     error: c.req.query("error"),
   });
 
-  const pane = (c: Ctx, folder: string, query: ExplorerQuery, address: string) => {
+  const pane = async (c: Ctx, folder: string, query: ExplorerQuery, address: string) => {
     const close = explorerHref(folder, { ...query, item: undefined, version: undefined });
     const read = KbReadQuery.safeParse({
       address,
       ...(query.version ? { version: query.version } : {}),
     });
-    const r = read.success ? ownerKbRead(store, views(), read.data) : { error: "not an address" };
+    const r = read.success
+      ? await ownerKbRead(store, await views(), read.data)
+      : { error: "not an address" };
     if ("error" in r) return readerMissing(String(r.error), close);
     return readerHtml(
       r.item,
@@ -301,10 +308,10 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
    * its collection, its run and its slot, with the filters it takes (kinds, outcomes, types and
    * slots); as a run, the answer its agents' kb_search gets, narrowed the same way.
    */
-  const searchFolder = (
+  const searchFolder = async (
     at: { campaign?: string | undefined; run?: string | undefined; slot?: string | undefined },
     query: ExplorerQuery,
-  ): ExplorerSearch => {
+  ): Promise<ExplorerSearch> => {
     const none: ExplorerSearch = {
       matched: 0,
       next_offset: null,
@@ -328,7 +335,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       limit: KB_SEARCH_MAX,
     });
     if (!s.success) return { ...none, error: "The search can't read these words." };
-    const r = ownerKbSearch(store, s.data);
+    const r = await ownerKbSearch(store, s.data);
     if ("error" in r) return { ...none, error: r.error };
     const { matched, next_offset, counts, hits, did_you_mean } = r;
     return { matched, next_offset, counts, hits, did_you_mean };
@@ -347,21 +354,21 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/kb/grant", async (c) => {
     const f = await c.req.parseBody();
     const g = { campaign: String(f.campaign ?? ""), reads: String(f.reads ?? "") };
-    return grantBack(c, f.back, grantCollection(store, views(), g, "owner:ui"));
+    return grantBack(c, f.back, await grantCollection(store, await views(), g, "owner:ui"));
   });
   // The owner's note on an item, from the reader's Add a note: back to the item, which says so.
   app.post("/ui/kb/note", async (c) => {
     const f = await c.req.parseBody();
     const n = KbNoteQuery.safeParse({ address: f.address, text: f.text });
     const o: KbNoteOutcome = n.success
-      ? writeOwnerNote(store, n.data, "owner:ui")
+      ? await writeOwnerNote(store, n.data, "owner:ui")
       : { ok: false, error: "Write the note: 1 to 2,000 characters." };
     return grantBack(c, f.back, o);
   });
   app.post("/ui/kb/revoke", async (c) => {
     const f = await c.req.parseBody();
     const g = { campaign: String(f.campaign ?? ""), reads: String(f.reads ?? "") };
-    return grantBack(c, f.back, revokeCollection(store, g, "owner:ui"));
+    return grantBack(c, f.back, await revokeCollection(store, g, "owner:ui"));
   });
 
   // What's stored (goal 176): a page of its own, under /ui/kb/, where no campaign's name can be.
@@ -380,7 +387,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         Date.now(),
         (offset) => `${KB_STORED_PAGE}${offset ? `?offset=${offset}` : ""}#refused`,
       ),
-      views(),
+      await views(),
     );
   });
 
@@ -388,22 +395,24 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   app.get("/ui/knowledge/*", knowledgePage);
 
   // The tree's folders under one folder, drawn for the page's script as a folder opens.
-  app.get("/ui/kb/tree", (c) => {
+  app.get("/ui/kb/tree", async (c) => {
     c.header("cache-control", "no-store");
     const at = readKbPlace(c.req.query("at") ?? "");
     if (!at?.campaign || at.slot) return c.text("no such folder", 404);
-    return c.html(treeList(kbFolders(store, views(), at, { sort: "name" }), new Map(), ""));
+    return c.html(
+      treeList(await kbFolders(store, await views(), at, { sort: "name" }), new Map(), ""),
+    );
   });
 
   // One version's file, downloaded: always an attachment, never a page of the dashboard's.
-  app.get("/ui/kb/file", (c) => {
+  app.get("/ui/kb/file", async (c) => {
     const v = c.req.query("version");
     const q = KbReadQuery.safeParse({
       address: c.req.query("address") ?? "",
       ...(v !== undefined ? { version: Number(v) } : {}),
     });
     if (!q.success) return c.text("not an item's address", 400);
-    const f = kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
+    const f = await kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
     return "error" in f ? c.text(f.error, f.status) : kbFileResponse(f);
   });
 
@@ -418,18 +427,18 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
    * Start a run's "From past research": a search of the collections one campaign may read (its own
    * and those granted), of the kinds a new run can start from. Agents' text, sent as JSON data.
    */
-  app.get("/ui/kb/search.json", (c) => {
+  app.get("/ui/kb/search.json", async (c) => {
     c.header("cache-control", "no-store");
     const campaign = c.req.query("campaign") ?? "";
-    if (!campaignKnown(store, campaign)) return c.json({ error: "no such campaign" }, 404);
+    if (!(await campaignKnown(store, campaign))) return c.json({ error: "no such campaign" }, 404);
     const kb = store.kb();
-    const collections = kb.readable(campaign);
-    const items = pastResults(campaign, (c.req.query("q") ?? "").slice(0, 300));
+    const collections = await kb.readable(campaign);
+    const items = await pastResults(campaign, (c.req.query("q") ?? "").slice(0, 300));
     return c.json({
       campaign,
       collections,
-      items: items.map((x) => {
-        const w = pastWords(x, kb.resultOf(x));
+      items: await mapInTurn(items, async (x) => {
+        const w = pastWords(x, await kb.resultOf(x));
         return {
           id: x.id,
           kind: x.kind,

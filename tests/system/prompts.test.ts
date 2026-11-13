@@ -9,7 +9,7 @@ const AGENT_TOKEN = "agent-token-abcdef";
 const READ_TOKEN = "read-token-abcdef";
 
 test("a prompt kept on a rig reaches control, and REST and MCP show it with its sources (goal 166)", async () => {
-  const stack = controlStack({ tokens: { agent: AGENT_TOKEN, read: READ_TOKEN } });
+  const stack = await controlStack({ tokens: { agent: AGENT_TOKEN, read: READ_TOKEN } });
   const { env, api } = stack;
   await env.start();
   const run = (env.assign.envelope.payload as { run: string }).run;

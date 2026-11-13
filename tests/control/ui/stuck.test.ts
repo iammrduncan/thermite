@@ -165,7 +165,7 @@ describe("a stuck trial asks under Needs you (goal 143)", () => {
     assert.equal(left.status, 303);
     assert.equal(left.headers.get("location"), RUN);
     assert.doesNotMatch(needsOf(await c.page(RUN)), /sent nothing/);
-    const audit = c.store.auditLog.list(5).find((a) => a.action === "trial_left");
+    const audit = (await c.store.auditLog.list(5)).find((a) => a.action === "trial_left");
     assert.equal(audit?.actor, "owner:ui");
     // It sent a line, then went quiet again: the card is back.
     await c.report({ ...QUIET, last_line_at: ago(45) });
@@ -194,7 +194,7 @@ describe("a stuck trial asks under Needs you (goal 143)", () => {
     assert.equal(fields.kind, "stop_trial");
     const r = await c.send(fields);
     assert.ok(r.status < 400, JSON.stringify(r.answer));
-    assert.deepEqual(c.store.commands.latest("rig-a", "stop_trial", 1)[0]?.payload, {
+    assert.deepEqual((await c.store.commands.latest("rig-a", "stop_trial", 1))[0]?.payload, {
       run: "s-1",
       trial: "t-1",
       reason: "stopped from Needs you: it repeated the same calls",

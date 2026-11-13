@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import {
   type McpAuth,
   type McpServer,
@@ -127,15 +128,15 @@ function authFields(s: McpServer): string {
 }
 
 /** One server's row: its state, its sign-in, the kits that name it, its tools and its fields. */
-function serverRow(
+async function serverRow(
   store: ControlStore,
   s: McpServer,
   t: string,
   now: number,
   open: boolean,
-): string {
+): Promise<string> {
   const n = encodeURIComponent(s.name);
-  const kits = namedBy(store, s.name).map((x) => x.kit);
+  const kits = (await namedBy(store, s.name)).map((x) => x.kit);
   const st = statusLine(s, now);
   const signIn = s.auth === "oauth" && (!s.signed_in || s.status === "needs_sign_in");
   const kitsLine = kits.length ? `named by ${kits.map(esc).join(", ")}` : "no kit names it";
@@ -183,14 +184,14 @@ function addForm(t: string): string {
 }
 
 /** The two blocks on the Providers page: the servers, and the form to add one. */
-export function mcpSettingsBlocks(
+export async function mcpSettingsBlocks(
   store: ControlStore,
   servers: McpServers,
   t: string,
   now: number,
   q: (k: string) => string | undefined,
-): string {
-  const list = servers.list();
+): Promise<string> {
+  const list = await servers.list();
   const opened = q("mcp") ?? "";
   const error = q("at") === "mcp" ? q("error") : undefined;
   const ok = q("at") === "mcp" ? q("ok") : undefined;
@@ -201,11 +202,11 @@ export function mcpSettingsBlocks(
       : "";
   const signIn = q("signin");
   const signInCard =
-    signIn && servers.get(signIn)?.auth === "oauth"
+    signIn && (await servers.get(signIn))?.auth === "oauth"
       ? `<div class="card" style="margin-bottom:10px"><b>Now sign in to ${esc(signIn)}.</b> <span class="small">The server's sign-in page opens in a new tab. Allow Thermite there, and the tab comes back here.</span><div class="act" style="margin-top:8px"><a class="btn sm primary" href="/ui/settings/mcp/${encodeURIComponent(signIn)}/sign-in" target="_blank" rel="noopener">Sign in to ${esc(signIn)} ↗</a></div></div>`
       : "";
   const rows = list.length
-    ? `<div class="dqs" id="mcp-list">${list.map((s, i) => serverRow(store, s, t, now, s.name === opened || (!opened && i === 0 && list.length === 1))).join("")}</div>`
+    ? `<div class="dqs" id="mcp-list">${(await mapInTurn(list, async (s, i) => serverRow(store, s, t, now, s.name === opened || (!opened && i === 0 && list.length === 1)))).join("")}</div>`
     : `<div class="card"><div class="empty">No MCP server yet: add one below. A kit then names it, and the agents it names get its tools.</div></div>`;
   return `<div class="block" id="mcp"><div class="head"><h2>MCP servers</h2><span class="n" id="mcp-n">${list.length}</span><span class="right">tools for the agents; a campaign's kit says which servers its agents use</span></div>${note}${signInCard}${rows}</div>
 <div class="block" id="add-mcp"><div class="head"><h2>Add an MCP server</h2></div><div class="card">${addForm(t)}</div></div>`;
@@ -256,7 +257,7 @@ export function mountMcpUi(
       : back(
           c,
           "ok",
-          `${said} Control read ${servers.get(name)?.tools?.length ?? 0} tools, and called none of them. Next: name it in a kit, on a campaign's How to measure step.`,
+          `${said} Control read ${(await servers.get(name))?.tools?.length ?? 0} tools, and called none of them. Next: name it in a kit, on a campaign's How to measure step.`,
           name,
         );
   };
@@ -265,9 +266,10 @@ export function mountMcpUi(
     const f = await c.req.parseBody();
     const name = String(f.name ?? "").trim();
     const auth = String(f.auth ?? "") as McpAuth;
-    if (servers.get(name)) return back(c, "error", `There is a server named ${name} already.`);
+    if (await servers.get(name))
+      return back(c, "error", `There is a server named ${name} already.`);
     try {
-      servers.put(inputOf(f, auth, name, String(f.url ?? "")), "owner:ui");
+      await servers.put(inputOf(f, auth, name, String(f.url ?? "")), "owner:ui");
     } catch (err) {
       return back(c, "error", errorText(err));
     }
@@ -286,11 +288,11 @@ export function mountMcpUi(
 
   app.post("/ui/settings/mcp/:name", async (c) => {
     const name = c.req.param("name");
-    const old = servers.get(name);
+    const old = await servers.get(name);
     if (!old) return back(c, "error", "Settings has no server of that name.");
     const f = await c.req.parseBody();
     try {
-      servers.put(
+      await servers.put(
         {
           ...inputOf(f, old.auth, name, String(f.url ?? old.url)),
           header:
@@ -309,7 +311,7 @@ export function mountMcpUi(
     } catch (err) {
       return back(c, "error", errorText(err), name);
     }
-    const now = servers.get(name);
+    const now = await servers.get(name);
     if (now?.auth === "oauth" && !now.signed_in)
       return c.redirect(
         settingsUrl(
@@ -324,7 +326,7 @@ export function mountMcpUi(
 
   app.post("/ui/settings/mcp/:name/check", async (c) => {
     const name = c.req.param("name");
-    if (!servers.get(name)) return back(c, "error", "Settings has no server of that name.");
+    if (!(await servers.get(name))) return back(c, "error", "Settings has no server of that name.");
     return checked(c, name, `${name} answers.`);
   });
 
@@ -343,9 +345,9 @@ export function mountMcpUi(
     }
   });
 
-  app.post("/ui/settings/mcp/:name/delete", (c) => {
+  app.post("/ui/settings/mcp/:name/delete", async (c) => {
     const name = c.req.param("name");
-    const r = servers.delete(name, "owner:ui");
+    const r = await servers.delete(name, "owner:ui");
     if (r === "missing") return back(c, "error", "Settings has no server of that name.");
     if (r !== "deleted")
       return back(

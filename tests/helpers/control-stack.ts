@@ -109,7 +109,10 @@ export const TEST_RIG_BUS = { url: "nats://control.example.com:4222", ca: TEST_B
 /** Control's options, or a function that makes them once the store and the keys exist. */
 type Options =
   | Partial<ControlOptions>
-  | ((store: ControlStore, keys: { privateKeyPem: string }) => Partial<ControlOptions>);
+  | ((
+      store: ControlStore,
+      keys: { privateKeyPem: string },
+    ) => Partial<ControlOptions> | Promise<Partial<ControlOptions>>);
 
 /**
  * Control's tokens in a test: the owner's and the others' as control takes them, and `rigs`, each
@@ -119,16 +122,16 @@ type Options =
 export type TestTokens = Partial<ControlTokens> & { rigs?: Record<string, string> };
 
 /** Control on `store` with `options`, signing with `privateKeyPem`, and a call to its REST API. */
-function makeControl(
+async function makeControl(
   store: ControlStore,
   given: TestTokens | undefined,
   keys: { privateKeyPem: string },
   options: Options | undefined,
 ) {
   const { rigs = { "rig-a": RIG_TOKEN }, ...own } = given ?? {};
-  enrollRigs(store, rigs);
+  await enrollRigs(store, rigs);
   const tokens: ControlTokens = { admin: ADMIN, ...own };
-  const opts = typeof options === "function" ? options(store, keys) : options;
+  const opts = typeof options === "function" ? await options(store, keys) : options;
   // The rigs control sets up reach its bus here unless a test says otherwise (`rigBus`).
   const made = { staleAfterMs: 180_000, pages: mountDashboard, rigBus: TEST_RIG_BUS, ...opts };
   // Control's parts, made here as the API would, so a test reads what a rig's config holds.
@@ -139,7 +142,7 @@ function makeControl(
       offlineAfterMs: made.offlineAfterMs,
       control: made.build ?? buildInfo(),
     });
-  const control = createControlApi(store, tokens, keys.privateKeyPem, { ...made, parts });
+  const control = await createControlApi(store, tokens, keys.privateKeyPem, { ...made, parts });
   /**
    * What control writes to a rig's config on the bus for `key` now, before it is sealed
    * (bus/config.ts): what the rig's supervisor gets there.
@@ -163,12 +166,12 @@ function makeControl(
  * test that fills the store before control starts makes it first, with controlStore()), and
  * `api()` as below.
  */
-export function controlOnly(
+export async function controlOnly(
   o: { tokens?: TestTokens; options?: Options; store?: ControlStore; keys?: KeyPairPem } = {},
 ) {
   const store = o.store ?? controlStore();
   const keys = o.keys ?? generateSigningKeys();
-  return { store, keys, ...makeControl(store, o.tokens, keys, o.options) };
+  return { store, keys, ...(await makeControl(store, o.tokens, keys, o.options)) };
 }
 
 /** A rig's harness for the stack: its service and the key that signs its commands. */
@@ -185,12 +188,12 @@ interface RigEnv {
  * their outcomes; each round ends once control applied the events it took. `api()` calls
  * control's REST API with the owner's token unless given another.
  */
-export function controlStack<E extends RigEnv = ReturnType<typeof makeJudgeEnv>>(
+export async function controlStack<E extends RigEnv = ReturnType<typeof makeJudgeEnv>>(
   o: { env?: E; tokens?: TestTokens; options?: Options } = {},
 ) {
   const env = (o.env ?? makeJudgeEnv()) as E;
   const store = controlStore();
-  const { tokens, control, api, opts, parts, rigConfig } = makeControl(
+  const { tokens, control, api, opts, parts, rigConfig } = await makeControl(
     store,
     o.tokens,
     env.keys,
@@ -275,8 +278,8 @@ export function controlStack<E extends RigEnv = ReturnType<typeof makeJudgeEnv>>
   const live = async (): Promise<LiveRelayState> => {
     await onBus;
     lines = await publishLiveOnce({ ...cfg, counts, own: supervisorLive }, lines);
-    await bus.follow(LIVE_STREAM_CONFIG, LIVE_CONSUMER_CONFIG, (m) => {
-      foldLive({ store, taken }, m);
+    await bus.follow(LIVE_STREAM_CONFIG, LIVE_CONSUMER_CONFIG, async (m) => {
+      await foldLive({ store, taken }, m);
     });
     return lines;
   };

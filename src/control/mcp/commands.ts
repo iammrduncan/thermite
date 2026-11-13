@@ -37,12 +37,12 @@ export function registerCommands(tools: ToolContext): void {
         "issue_command",
         async (a: { rig?: string; kind: CommandKind; payload: unknown; ttl_minutes: number }) => {
           // A kind about one run goes to the run's rig, which the caller may leave out (goal 170).
-          const rig = commandRig(store, a.kind, a.rig, a.payload);
+          const rig = await commandRig(store, a.kind, a.rig, a.payload);
           // During the owner's full reset of a rig, agents do not steer it.
-          if (role === "agent" && store.fullResets.open(rig))
+          if (role === "agent" && (await store.fullResets.open(rig)))
             throw new Error(`${rig} is being reset by the owner`);
           // A briefing takes the knowledge base's own words (goal 065); the queue's come next.
-          if (a.kind === "assign_campaign") a.payload = briefingFromKb(store, a.payload);
+          if (a.kind === "assign_campaign") a.payload = await briefingFromKb(store, a.payload);
           // A run assigned or resumed on a stopped RunPod pod starts the pod first: the owner's
           // token only, as for a launch and a start. `woke` says so, only then.
           const { id, woke } = await issueWaking(store, opts.privateKeyPem, opts.runpodRigs, {
@@ -92,7 +92,7 @@ export function registerCommands(tools: ToolContext): void {
           "Ask a running run's teachers for a round now, the same round their timer starts: they review the run from its brief and give their advice, and the next timed round counts from this one. The owner's messages to them stay as they are. Control knows the rig the run is on. Returns {started, id, rig, said}; follow id with command_status. A request while a round is under way waits for it to end; at the rig's spending limit for the day, the teachers review the run after midnight UTC. Refused in words before it is signed: a run that is not running (a paused one: resume it first), a rig with no teachers (give them a model with set_rig_model), or a rig with its teachers off (set_rig_settings with teachers: true).",
         inputSchema: { run: z.string().min(1) },
       },
-      audited("start_teachers_round", (a: { run: string }) =>
+      audited("start_teachers_round", async (a: { run: string }) =>
         startTeachersRound(store, opts.privateKeyPem, { run: a.run, issuedBy: actor }),
       ),
     );
@@ -110,7 +110,7 @@ export function registerCommands(tools: ToolContext): void {
           hours: z.number().positive().max(ADD_HOURS_MAX),
         },
       },
-      audited("add_run_hours", (a: { run: string; hours: number }) =>
+      audited("add_run_hours", async (a: { run: string; hours: number }) =>
         addRunHours(store, opts.privateKeyPem, { ...a, issuedBy: actor }),
       ),
     );
@@ -123,8 +123,8 @@ export function registerCommands(tools: ToolContext): void {
       description: "Delivery status and outcome of one command.",
       inputSchema: { id: z.string().min(1) },
     },
-    audited("command_status", (a: { id: string }) => {
-      const c = store.commands.get(a.id);
+    audited("command_status", async (a: { id: string }) => {
+      const c = await store.commands.get(a.id);
       if (!c) throw new Error(`no command ${a.id}`);
       return c;
     }),

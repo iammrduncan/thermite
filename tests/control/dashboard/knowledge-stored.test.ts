@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { KB_REFUSED_PAGE, kbStored } from "../../../src/control/kb/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { sizeWords } from "../../../src/control/ui/exports.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { KB_RIG } from "../../helpers/kb-places.ts";
@@ -21,11 +22,14 @@ const TOKENS = {
 };
 
 async function stack() {
-  const { store, control } = controlOnly({ tokens: TOKENS, options: { staleAfterMs: 600_000 } });
+  const { store, control } = await controlOnly({
+    tokens: TOKENS,
+    options: { staleAfterMs: 600_000 },
+  });
   await fillReader(store);
   // More refused writes than a page holds; the newest names a <tag>.
   for (let i = 0; i < KB_REFUSED_PAGE + 2; i++)
-    store.auditLog.add("control", "kb_item_refused", {
+    await store.auditLog.add("control", "kb_item_refused", {
       ...KB_RIG,
       event: 100 + i,
       run: "gs-1",
@@ -55,9 +59,10 @@ describe("What's stored", () => {
   test("its counts and sizes are the store's own, on the page and over REST", async () => {
     const s = await stack();
     const kb = s.store.kb();
-    const all = kb.totals({});
+    const all = await kb.totals({});
     const items = Number(
-      (s.store.db.prepare("select count(*) as n from kb_item").get() as { n: number }).n,
+      (sqliteBehind(s.store).db.prepare("select count(*) as n from kb_item").get() as { n: number })
+        .n,
     );
     const r = await s.rest("/v1/kb/stored");
     assert.equal(r.status, 200);
@@ -69,7 +74,7 @@ describe("What's stored", () => {
     assert.equal(b.totals.records, all.types.record ?? 0);
     assert.equal(b.totals.blurbs, all.types.blurb ?? 0);
     for (const c of b.collections) {
-      const own = kb.totals({ campaign: c.campaign });
+      const own = await kb.totals({ campaign: c.campaign });
       assert.equal(c.stored_bytes, own.stored_bytes, c.campaign);
       assert.equal(c.older_versions, own.older_versions, c.campaign);
       assert.equal(c.records, own.types.record ?? 0, c.campaign);
@@ -80,7 +85,9 @@ describe("What's stored", () => {
     // The words index holds every item; meaning is not installed.
     const words = Number(
       (
-        s.store.db.prepare("select count(distinct item) as n from kb_passage").get() as {
+        sqliteBehind(s.store)
+          .db.prepare("select count(distinct item) as n from kb_passage")
+          .get() as {
           n: number;
         }
       ).n,
@@ -126,7 +133,7 @@ describe("What's stored", () => {
       page,
       new RegExp(`<div class="k">Older versions</div><div class="v ">${all.older_versions}</div>`),
     );
-    const gemv = kb.totals({ campaign: "gemv" });
+    const gemv = await kb.totals({ campaign: "gemv" });
     assert.match(
       page,
       new RegExp(
@@ -159,7 +166,7 @@ describe("What's stored", () => {
 
   test("what waits on the bus: the events after control's place and the file chunks not taken; away in words", async () => {
     const s = await stack();
-    const place = s.store.busPositions.of("EVENTS");
+    const place = await s.store.busPositions.of("EVENTS");
     const view = (bus: Record<string, unknown>) =>
       ({ bus }) as unknown as Parameters<typeof kbStored>[1];
     const on = await kbStored(
@@ -198,7 +205,7 @@ describe("What's stored", () => {
       content: { text: string }[];
     };
     const b = JSON.parse(String(out.content[0]?.text)) as Stored;
-    assert.equal(b.totals.stored_bytes, s.store.kb().totals({}).stored_bytes);
+    assert.equal(b.totals.stored_bytes, (await s.store.kb().totals({})).stored_bytes);
     assert.equal(b.refused.rows.length, 2);
     const agent = await mcpClient(s.control, TOKENS.agent);
     assert.ok(!(await agent.listTools()).tools.some((t) => t.name === "kb_stored"));

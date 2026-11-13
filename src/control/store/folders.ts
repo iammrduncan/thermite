@@ -3,8 +3,31 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * The navigation's campaign folders (goal 077; goal 125, T6).
  */
+export interface CampaignFolders {
+  /** The navigation's folders, by name, each with the campaigns in it (by name). */
+  list(): Promise<
+    {
+      id: number;
+      name: string;
+      created_at: string;
+      created_by: string;
+      campaigns: string[];
+    }[]
+  >;
+  /** A folder of the navigation by its name, whatever its case. */
+  get(name: string): Promise<{ id: number; name: string } | undefined>;
+  add(name: string, by: string): Promise<number>;
+  rename(id: number, name: string): Promise<void>;
+  /** Deletes a folder (campaigns/folders.ts deletes only an empty one). */
+  delete(id: number): Promise<void>;
+  /** Puts a campaign in a folder of the navigation, or (null) in none. */
+  place(campaign: string, folder: number | null): Promise<void>;
+  /** The folder a campaign shows in, or undefined for none. */
+  of(campaign: string): Promise<{ id: number; name: string } | undefined>;
+}
 
-export class CampaignFolders extends StorePart {
+/** CampaignFolders on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteCampaignFolders extends StorePart {
   /** The navigation's folders, by name, each with the campaigns in it (by name). */
   list(): {
     id: number;

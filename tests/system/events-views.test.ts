@@ -3,10 +3,12 @@ import { mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { mapInTurn } from "../../src/common/in-turn.ts";
 import { readKnowledgeAgain } from "../../src/control/events/index.ts";
 import { runPrompts } from "../../src/control/prompts.ts";
-import { EventsTable } from "../../src/control/store/events.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { SqliteEventsTable } from "../../src/control/store/events.ts";
+import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { findRunOn, keepFolds, rigView } from "../../src/control/views/index.ts";
 import { EVENT_HEADERS, EVENT_STREAM } from "../../src/core/link/events.ts";
 import { assigned } from "../helpers/assignments.ts";
@@ -95,8 +97,9 @@ describe("control's views and raw reads from the events stream", () => {
     const first = controlStore(path);
     await fill(first);
     await applied(first);
-    const views = (s: ControlStore) => ["rig-a", "rig-b"].map((r) => rigView(s, r, OPTS));
-    const before = views(first);
+    const views = async (s: ControlStore) =>
+      mapInTurn(["rig-a", "rig-b"], async (r) => rigView(s, r, OPTS));
+    const before = await views(first);
     assert.deepEqual(
       before.map((v) => [v?.id, v?.ledger_id, v?.runs.map((r) => r.id)]),
       [
@@ -112,7 +115,7 @@ describe("control's views and raw reads from the events stream", () => {
     await applied(second);
     assert.equal(busOf(second).apply.applied, 0, "no record applied again");
     assert.equal(keepFolds(second).through, await bus.lastSeq(EVENT_STREAM));
-    assert.deepStrictEqual(views(second), before);
+    assert.deepStrictEqual(await views(second), before);
     assert.deepEqual(
       keepFolds(second)
         .held()
@@ -138,7 +141,7 @@ describe("control's views and raw reads from the events stream", () => {
     ]);
     await applied(second);
     assert.equal(
-      rigView(second, "rig-b", OPTS)?.runs.find((r) => r.id === "r-2")?.status,
+      (await rigView(second, "rig-b", OPTS))?.runs.find((r) => r.id === "r-2")?.status,
       "paused",
     );
   });
@@ -148,8 +151,8 @@ describe("control's views and raw reads from the events stream", () => {
     const first = controlStore(path);
     await fill(first);
     await applied(first);
-    const before = rigView(first, "rig-b", OPTS);
-    first.retired.add("rig-b", "owner:test");
+    const before = await rigView(first, "rig-b", OPTS);
+    await first.retired.add("rig-b", "owner:test");
     const { bus } = busOf(first);
     closeBus(first);
     const second = controlStore(path, bus);
@@ -165,12 +168,12 @@ describe("control's views and raw reads from the events stream", () => {
     assert.deepEqual([r2?.earlier, r2?.run.id], ["retired", "r-2"]);
     // Brought back: its fold is ready first, and its view is whole.
     await keepFolds(second).restore("rig-b");
-    second.retired.bringBack("rig-b", "owner:test");
-    assert.deepStrictEqual(rigView(second, "rig-b", OPTS), before);
+    await second.retired.bringBack("rig-b", "owner:test");
+    assert.deepStrictEqual(await rigView(second, "rig-b", OPTS), before);
   });
 
   test("GET /v1/rigs/<rig>/events pages a rig's events by their places in the stream, over its ledgers, with no other rig's", async () => {
-    const { store, api } = controlOnly();
+    const { store, api } = await controlOnly();
     await fill(store);
     await applied(store);
     const { bus } = busOf(store);
@@ -302,9 +305,9 @@ describe("control's views and raw reads from the events stream", () => {
   test("the knowledge base reads again what it read before an upgrade: to the store's place, and to the hand-over mark", async () => {
     // A store from before the stream, its five events in its events table, moved at the start.
     const path = join(mkdtempSync(join(tmpdir(), "thermite-views-")), "control.db");
-    const old = new ControlStore(path);
-    assigned(old, "rig-a", "r-1", "gemv");
-    withEventsTable(old.db);
+    const old = openControlStore(path);
+    await assigned(old, "rig-a", "r-1", "gemv");
+    withEventsTable(sqliteBehind(old).db);
     const added = (id: number, x: string) => ({
       rig: "rig-a",
       ledger: "l-1",
@@ -314,7 +317,7 @@ describe("control's views and raw reads from the events stream", () => {
       run: "r-1",
       body: { id: x, title: `try ${x}`, by: "planner", state: "queued" },
     });
-    keepOldRows(old.db, [
+    keepOldRows(sqliteBehind(old).db, [
       {
         rig: "rig-a",
         ledger: "l-1",
@@ -329,29 +332,25 @@ describe("control's views and raw reads from the events stream", () => {
       added(4, "x-3"),
       added(5, "x-4"),
     ]);
-    old.db.close();
+    await old.close();
     const store = controlStore(path);
     await applied(store);
-    assert.equal(store.eventsTable.exists(), false, "moved, and dropped");
-    const experiments = () =>
-      store
-        .kb()
-        .search("", ["gemv"], { kinds: ["experiment"] })
-        .map((x) => x.ref)
-        .sort();
-    assert.deepEqual(experiments(), ["x-1", "x-2", "x-3", "x-4"]);
+    assert.equal(await store.eventsTable.exists(), false, "moved, and dropped");
+    const experiments = async () =>
+      (await store.kb().search("", ["gemv"], { kinds: ["experiment"] })).map((x) => x.ref).sort();
+    assert.deepEqual(await experiments(), ["x-1", "x-2", "x-3", "x-4"]);
     // As a store before reading 3 holds it: no experiment items; applied to place 2, and indexed
     // from control's events table to its seq 4 (the hand-over mark).
     closeBus(store);
-    store.db.exec("delete from kb_item where kind = 'experiment'");
-    store.db.exec("update kb_meta set value = '2' where key = 'reading'");
-    store.db.exec("update kb_cursor set seq = 4");
-    store.busPositions.set(EVENT_STREAM, 2);
+    sqliteBehind(store).db.exec("delete from kb_item where kind = 'experiment'");
+    sqliteBehind(store).db.exec("update kb_meta set value = '2' where key = 'reading'");
+    sqliteBehind(store).db.exec("update kb_cursor set seq = 4");
+    await store.busPositions.set(EVENT_STREAM, 2);
     const again = await readKnowledgeAgain(store, busOf(store).bus);
     // Places 1 and 2 were applied; seqs 3 and 4 indexed from the table: x-1 to x-3. The apply
     // indexes x-4 when it comes to it.
     assert.equal(again, 3);
-    assert.deepEqual(experiments(), ["x-1", "x-2", "x-3"]);
+    assert.deepEqual(await experiments(), ["x-1", "x-2", "x-3"]);
     assert.equal(await readKnowledgeAgain(store, busOf(store).bus), 0, "once only");
   });
 
@@ -368,7 +367,7 @@ describe("control's views and raw reads from the events stream", () => {
       "src/control/store/schema.ts",
     ]);
     // The store's part keeps no event: it reads an old store's table for the move alone.
-    const methods = Object.getOwnPropertyNames(EventsTable.prototype).filter(
+    const methods = Object.getOwnPropertyNames(SqliteEventsTable.prototype).filter(
       (m) => m !== "constructor",
     );
     assert.deepEqual(methods.sort(), ["at", "countAfter", "exists", "inOrder", "size"]);

@@ -9,14 +9,15 @@ import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { localEnroll } from "../../../src/cli/local/index.ts";
 import { controlClient } from "../../../src/common/api/control.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { ADMIN, controlOnly } from "../../helpers/control-stack.ts";
 
 const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
 
 /** A control with no rig enrolled, the enroll step's client of it, and its rig's token file. */
-function stack() {
-  const c = controlOnly({ tokens: { rigs: {} } });
+async function stack() {
+  const c = await controlOnly({ tokens: { rigs: {} } });
   const client = controlClient({
     url: "http://control:8800",
     token: ADMIN,
@@ -41,19 +42,23 @@ function stack() {
 
 describe("thermite local enroll: the compose stack's enroll step", () => {
   test("enrolls the rig once; a later up keeps its token; control keeps only the hash", async () => {
-    const s = stack();
+    const s = await stack();
     assert.equal(await s.enroll(), "enrolled");
     const token = s.held();
     assert.ok(token.length >= 32);
-    assert.ok(s.store.enrollments.tokenMatches("local-1", token));
-    assert.ok(!JSON.stringify(s.store.db.prepare("select * from rig_token").all()).includes(token));
+    assert.ok(await s.store.enrollments.tokenMatches("local-1", token));
+    assert.ok(
+      !JSON.stringify(sqliteBehind(s.store).db.prepare("select * from rig_token").all()).includes(
+        token,
+      ),
+    );
     // Written in place, the file the supervisor's container mounts, readable by its user.
     assert.equal(statSync(s.tokenFile).mode & 0o777, 0o644 & ~process.umask());
     // A second `up`, and a third: the token stays, and control enrolls nothing again.
     assert.equal(await s.enroll(), "kept");
     assert.equal(await s.enroll(), "kept");
     assert.equal(s.held(), token);
-    assert.equal(s.store.auditLog.list(50, { action: "rig_enrolled" }).length, 1);
+    assert.equal((await s.store.auditLog.list(50, { action: "rig_enrolled" })).length, 1);
     assert.deepEqual(s.said, [
       "local-1 enrolled with control",
       "local-1 is enrolled with control: its token is kept",
@@ -62,41 +67,41 @@ describe("thermite local enroll: the compose stack's enroll step", () => {
   });
 
   test("a token file emptied gets a new token; a control whose state is gone enrolls the rig again", async () => {
-    const s = stack();
+    const s = await stack();
     await s.enroll();
     const first = s.held();
     writeFileSync(s.tokenFile, "");
     assert.equal(await s.enroll(), "replaced");
     const second = s.held();
     assert.notEqual(second, first);
-    assert.ok(s.store.enrollments.tokenMatches("local-1", second));
-    assert.ok(!s.store.enrollments.tokenMatches("local-1", first));
+    assert.ok(await s.store.enrollments.tokenMatches("local-1", second));
+    assert.ok(!(await s.store.enrollments.tokenMatches("local-1", first)));
     // A new control (its volume removed): the token in the file is not one it made.
-    const fresh = stack();
+    const fresh = await stack();
     writeFileSync(fresh.tokenFile, `${second}\n`);
     assert.equal(await fresh.enroll(), "enrolled");
     assert.notEqual(fresh.held(), second);
-    assert.ok(fresh.store.enrollments.tokenMatches("local-1", fresh.held()));
+    assert.ok(await fresh.store.enrollments.tokenMatches("local-1", fresh.held()));
   });
 
   test("a rig the owner retired is left retired; brought back, it is enrolled again", async () => {
-    const s = stack();
+    const s = await stack();
     await s.enroll();
     const token = s.held();
-    s.store.retired.add("local-1", "owner:ui");
+    await s.store.retired.add("local-1", "owner:ui");
     assert.equal(await s.enroll(), "retired");
     assert.equal(s.held(), token);
-    assert.equal(s.store.enrollments.rig("local-1"), undefined, "still retired");
+    assert.equal(await s.store.enrollments.rig("local-1"), undefined, "still retired");
     assert.match(String(s.said.at(-1)), /^local-1 is retired in control: it is not enrolled again/);
     // Brought back by the owner, its token stays ended: the next up enrolls it again.
-    s.store.retired.bringBack("local-1", "owner:ui");
+    await s.store.retired.bringBack("local-1", "owner:ui");
     assert.equal(await s.enroll(), "enrolled");
     assert.notEqual(s.held(), token);
-    assert.ok(s.store.enrollments.tokenMatches("local-1", s.held()));
+    assert.ok(await s.store.enrollments.tokenMatches("local-1", s.held()));
   });
 
   test("it waits for control while control starts, and gives up after its wait, in words", async () => {
-    const s = stack();
+    const s = await stack();
     let asked = 0;
     const starting = controlClient({
       url: "http://control:8800",
@@ -155,7 +160,7 @@ describe("thermite local enroll: the compose stack's enroll step", () => {
   });
 
   test("the command enrolls the rig into the file it names and prints no token", async () => {
-    const s = stack();
+    const s = await stack();
     const server = serve({ fetch: s.control.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
     const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -167,7 +172,7 @@ describe("thermite local enroll: the compose stack's enroll step", () => {
       const args = ["--control", url, "--token-file", owner, "--out", s.tokenFile];
       const first = await cli("local", "enroll", "local-1", ...args);
       assert.equal(first.stdout, "local enroll: local-1 enrolled with control\n");
-      assert.ok(s.store.enrollments.tokenMatches("local-1", s.held()));
+      assert.ok(await s.store.enrollments.tokenMatches("local-1", s.held()));
       assert.ok(!first.stdout.includes(s.held()));
       const again = await cli("local", "enroll", "local-1", ...args);
       assert.equal(

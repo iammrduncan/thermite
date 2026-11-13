@@ -28,7 +28,7 @@ describe("each agent's model over REST and MCP", () => {
     assert.equal(agents.teachers.models[0]?.model, "gpt-sol");
     assert.equal(agents.workers?.model, "wide-model", "the workers keep theirs");
     assert.equal(agents.planner, null);
-    const audit = s.store.auditLog.list(5, { action: "agent_model_given" })[0];
+    const audit = (await s.store.auditLog.list(5, { action: "agent_model_given" }))[0];
     assert.equal(audit?.actor, "owner:operator");
 
     // An advisor's own cap and point (goal 070); one above the provider's window is refused.
@@ -67,11 +67,11 @@ describe("each agent's model over REST and MCP", () => {
     });
     assert.equal(unknown.isError, true);
     assert.equal(
-      s.store.agentModels.byRole("rig-a").teachers?.contextCap,
+      (await s.store.agentModels.byRole("rig-a")).teachers?.contextCap,
       65_536,
       "kept, not refused",
     );
-    assert.equal(s.store.agentModels.byRole("rig-a").second_teacher, undefined);
+    assert.equal((await s.store.agentModels.byRole("rig-a")).second_teacher, undefined);
     // Two teachers and a merged by model over MCP, as over REST.
     const two = text(
       await operator.callTool({

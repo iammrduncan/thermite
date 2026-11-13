@@ -36,10 +36,10 @@ async function cli(...args: string[]): Promise<{ code: number; stdout: string; s
 }
 
 /** Control with two collections: the gemv campaign's tried experiments, and sorting's. */
-function control() {
-  const { store, control: api } = controlOnly({ tokens: TOKENS });
+async function control() {
+  const { store, control: api } = await controlOnly({ tokens: TOKENS });
   let n = 0;
-  const event = (run: string, kind: string, body: Record<string, unknown>) =>
+  const event = async (run: string, kind: string, body: Record<string, unknown>) =>
     store.kb().index(RIG, {
       at: `2026-10-29T10:${String(n++).padStart(2, "0")}:00.000Z`,
       actor: "harness",
@@ -47,29 +47,29 @@ function control() {
       subject: run,
       body,
     });
-  event("gs-1", "run_created", { campaign: "gemv" });
-  event("so-1", "run_created", { campaign: "sorting" });
-  event("gs-1", "experiment_added", {
+  await event("gs-1", "run_created", { campaign: "gemv" });
+  await event("so-1", "run_created", { campaign: "sorting" });
+  await event("gs-1", "experiment_added", {
     id: "x-1",
     title: "Vector loads",
     details: "128-bit loads.",
   });
-  event("gs-1", "experiment_finished", {
+  await event("gs-1", "experiment_finished", {
     id: "x-1",
     attempt: "a-1",
     result: "failed to improve speed",
   });
-  event("gs-1", "experiment_added", {
+  await event("gs-1", "experiment_added", {
     id: "x-2",
     title: "Tile by 32",
     details: "Tiles in shared memory.",
   });
-  event("gs-1", "experiment_finished", {
+  await event("gs-1", "experiment_finished", {
     id: "x-2",
     attempt: "a-2",
     result: "win confirmed (+6.10%)",
   });
-  event("so-1", "experiment_added", {
+  await event("so-1", "experiment_added", {
     id: "x-9",
     title: "Radix sort",
     details: "It failed to improve speed.",
@@ -79,7 +79,7 @@ function control() {
 
 describe("the owner's search of the knowledge base", () => {
   test("REST: ranked hits with their ids, addresses, excerpts and why; one item whole; refusals in words", async () => {
-    const { api } = control();
+    const { api } = await control();
     const get = async (path: string, token = TOKENS.admin) => {
       const r = await api.request(path, { headers: { authorization: `Bearer ${token}` } });
       return { status: r.status, body: (await r.json()) as Record<string, unknown> };
@@ -123,7 +123,7 @@ describe("the owner's search of the knowledge base", () => {
   });
 
   test("REST: the agents' options: more queries, outcomes, exact mode, pages, and a read from an offset", async () => {
-    const { api } = control();
+    const { api } = await control();
     const get = async (path: string) => {
       const r = await api.request(path, { headers: { authorization: `Bearer ${TOKENS.admin}` } });
       return { status: r.status, body: (await r.json()) as Record<string, unknown> };
@@ -156,7 +156,7 @@ describe("the owner's search of the knowledge base", () => {
   });
 
   test("thermite kb search, read and list print control's answer; a wrong use is refused", async () => {
-    const { api } = control();
+    const { api } = await control();
     const server = serve({ fetch: api.fetch, port: 0, hostname: "127.0.0.1" });
     await new Promise((r) => server.once("listening", r));
     const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -416,7 +416,7 @@ describe("the owner's search of the knowledge base", () => {
   });
 
   test("thermite kb settings reads the knowledge base's settings, and sets them as PUT /v1/kb/settings does", async () => {
-    const { api } = control();
+    const { api } = await control();
     const server = serve({ fetch: api.fetch, port: 0, hostname: "127.0.0.1" });
     await new Promise((r) => server.once("listening", r));
     const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

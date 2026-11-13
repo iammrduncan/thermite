@@ -164,7 +164,7 @@ export class ControlDisk {
         low ? "warn" : "info",
       );
       try {
-        this.o.store.auditLog.add("control", low ? "disk_low" : "disk_room", {
+        await this.o.store.auditLog.add("control", low ? "disk_low" : "disk_room", {
           ...what,
           ...(low ? { held: this.held } : {}),
         });

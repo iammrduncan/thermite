@@ -149,7 +149,7 @@ describe("RunPod reader", () => {
 
 async function control(f: typeof fetch) {
   const secrets = SecretBox.ephemeral();
-  const { store, control: api } = controlOnly({
+  const { store, control: api } = await controlOnly({
     tokens: { rigs: {} },
     options: { secrets, cloudFetch: f },
   });
@@ -175,20 +175,20 @@ describe("RunPod in Providers", () => {
       ),
       /Not added: RunPod refused the key/,
     );
-    assert.equal(s.store.gpuClouds.get("runpod"), undefined);
+    assert.equal(await s.store.gpuClouds.get("runpod"), undefined);
     // The refusal is kept in control's log, without the key.
-    const refusal = s.store.auditLog.list(10, { action: "refused" })[0]?.body as
+    const refusal = (await s.store.auditLog.list(10, { action: "refused" }))[0]?.body as
       | { path?: string; why?: string }
       | undefined;
     assert.equal(refusal?.path, "/ui/settings/add");
     assert.match(String(refusal?.why), /RunPod refused the key/);
-    assert.ok(!JSON.stringify(s.store.auditLog.list(100)).includes("wrong-key-000000"));
+    assert.ok(!JSON.stringify(await s.store.auditLog.list(100)).includes("wrong-key-000000"));
     // A name typed with capitals is taken in lowercase.
     assert.match(
       await s.post("/ui/settings/add", { type: "runpod", name: "RunPod", runpod_key: KEY }),
       /"runpod" is added and read/,
     );
-    const g = s.store.gpuClouds.get("runpod");
+    const g = await s.store.gpuClouds.get("runpod");
     assert.equal(s.secrets.open(g?.key_sealed ?? ""), KEY);
     assert.equal(g?.key_hint, "…cdef");
     let page = await s.page("/ui/settings/machines");
@@ -221,7 +221,7 @@ describe("RunPod in Providers", () => {
       ),
       /Kept the old key: RunPod refused the key/,
     );
-    assert.equal(s.secrets.open(s.store.gpuClouds.get("runpod")?.key_sealed ?? ""), KEY);
+    assert.equal(s.secrets.open((await s.store.gpuClouds.get("runpod"))?.key_sealed ?? ""), KEY);
 
     // A key that may not read billing: the rest is read, and the spend says why.
     const nb = await control(fakeRunpod({ noBilling: true }).f);
@@ -245,7 +245,7 @@ describe("RunPod in Providers", () => {
       await s.post("/ui/settings/clouds/runpod/delete", {}),
       /"runpod" is deleted: control keeps nothing of its key/,
     );
-    assert.equal(s.store.gpuClouds.get("runpod"), undefined);
+    assert.equal(await s.store.gpuClouds.get("runpod"), undefined);
     page = await s.page("/ui/settings/machines");
     assert.ok(!page.includes("RunPod ·"));
     // Every call only read.

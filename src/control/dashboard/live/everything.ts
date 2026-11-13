@@ -69,12 +69,12 @@ const runsOf = (vs: readonly RigView[]) =>
 export function everythingRoutes(app: Hono, dash: Dashboard): void {
   const { page, store, views } = dash;
 
-  app.get(EVERYTHING_HREF, (c) => {
-    const vs = views();
+  app.get(EVERYTHING_HREF, async (c) => {
+    const vs = await views();
     const now = Date.now();
     const n = narrowOf(c);
     const w = c.req.query("w") || "all";
-    const lines = store.liveLines.everywhereTail(FIRST_LINES).filter(keeps(n));
+    const lines = (await store.liveLines.everywhereTail(FIRST_LINES)).filter(keeps(n));
     const runs = runsOf(vs);
     const { nav } = liveRunsNav(vs, now, "everything");
     // A filter for each agent with lines here, in the order of a run's Live, each in its colour.
@@ -124,9 +124,9 @@ export function everythingRoutes(app: Hono, dash: Dashboard): void {
   // Every rig's new lines, narrowed as the page is, pushed to it.
   app.get(`${EVERYTHING_HREF}/stream`, (c) => {
     const n = narrowOf(c);
-    const draw = (lines: Line[]): PushedLine[] => {
+    const draw = async (lines: Line[]): Promise<PushedLine[]> => {
       const now = Date.now();
-      const runs = runsOf(views());
+      const runs = runsOf(await views());
       return lines.filter(keeps(n)).map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -136,9 +136,9 @@ export function everythingRoutes(app: Hono, dash: Dashboard): void {
       }));
     };
     const feed: LiveFeed = {
-      after: (after, limit) => draw(store.liveLines.everywhere(after, limit)),
-      newest: (limit) => draw(store.liveLines.everywhereTail(limit)),
-      count: (after) => store.liveLines.everywhereCount(after),
+      after: async (after, limit) => draw(await store.liveLines.everywhere(after, limit)),
+      newest: async (limit) => draw(await store.liveLines.everywhereTail(limit)),
+      count: async (after) => store.liveLines.everywhereCount(after),
     };
     const after = pushStart(c.req.header("last-event-id"), c.req.query("after"));
     return streamSSE(c, (stream) => pushLive(stream, store, feed, { after, recheck: [] }));

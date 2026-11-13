@@ -23,13 +23,13 @@ const PORTS_TIP = `The TCP ports the harness reaches it on, such as 8000, separa
 const NOTE_TIP = `What it is, for whoever reads the list and the rigs' pages later, such as "the model server". At most ${REACH_NOTE_MAX} characters.`;
 
 /** The block, with what its last form did when the page came back to it. */
-export function reachBlock(
+export async function reachBlock(
   store: ControlStore,
   t: string,
   now: number,
   q: (k: string) => string | undefined,
-): string {
-  const list = store.reachable.list();
+): Promise<string> {
+  const list = await store.reachable.list();
   const said = q("at") === "reach" ? (q("error") ?? q("ok")) : undefined;
   const note = said
     ? q("error")
@@ -65,10 +65,10 @@ function portsOf(text: string): number[] | string {
 /** The block's two forms: save an address (new, or in place of the same one), and remove one. */
 export function reachRoutes(app: Hono, dash: Dashboard): void {
   const { parts, store } = dash;
-  const current = () =>
-    store.reachable.list().map(({ address, ports, note }) => ({ address, ports, note }));
-  const save = (list: unknown) => {
-    const r = setReachableAddresses(parts, list, "owner:ui");
+  const current = async () =>
+    (await store.reachable.list()).map(({ address, ports, note }) => ({ address, ports, note }));
+  const save = async (list: unknown) => {
+    const r = await setReachableAddresses(parts, list, "owner:ui");
     return reachUrl("error" in r ? "error" : "ok", "error" in r ? r.error : r.ok);
   };
 
@@ -79,15 +79,15 @@ export function reachRoutes(app: Hono, dash: Dashboard): void {
     if (typeof ports === "string") return c.redirect(reachUrl("error", ports), 303);
     const entry = { address, ports, note: String(f.note ?? "") };
     const same = canonicalAddress(address) ?? address;
-    const others = current().filter((e) => e.address !== same);
-    return c.redirect(save([...others, entry]), 303);
+    const others = (await current()).filter((e) => e.address !== same);
+    return c.redirect(await save([...others, entry]), 303);
   });
   app.post("/ui/settings/reach/remove", async (c) => {
     const f = await c.req.parseBody();
     const address = String(f.address ?? "");
-    const list = current();
+    const list = await current();
     if (!list.some((e) => e.address === address))
       return c.redirect(reachUrl("error", `${address} is not in the list.`), 303);
-    return c.redirect(save(list.filter((e) => e.address !== address)), 303);
+    return c.redirect(await save(list.filter((e) => e.address !== address)), 303);
   });
 }

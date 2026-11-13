@@ -1,4 +1,5 @@
 import { log } from "../common/env.ts";
+import { flatMapInTurn } from "../common/in-turn.ts";
 import { briefingSeedOf } from "./kb/index.ts";
 import type { ControlStore } from "./store/index.ts";
 
@@ -8,13 +9,13 @@ import type { ControlStore } from "./store/index.ts";
  * takes that item's text. One control cannot find, or from a folder the run's campaign may not
  * read, is left out.
  */
-export function briefingFromKb(store: ControlStore, payload: unknown): unknown {
+export async function briefingFromKb(store: ControlStore, payload: unknown): Promise<unknown> {
   const p = payload as { briefing?: unknown; contract?: unknown };
   if (!p || typeof p !== "object" || !Array.isArray(p.briefing)) return payload;
   const campaign = (p.contract as { campaign?: unknown } | null | undefined)?.campaign;
   const kb = store.kb();
-  const readable = new Set(typeof campaign === "string" ? kb.readable(campaign) : []);
-  const briefing = p.briefing.flatMap((x: unknown) => {
+  const readable = new Set(typeof campaign === "string" ? await kb.readable(campaign) : []);
+  const briefing = await flatMapInTurn(p.briefing, async (x: unknown) => {
     const f = (x as { from?: Record<string, unknown> } | null)?.from;
     const s = (k: string) => (typeof f?.[k] === "string" ? (f[k] as string) : "");
     const from = {
@@ -24,7 +25,7 @@ export function briefingFromKb(store: ControlStore, payload: unknown): unknown {
       kind: s("kind"),
       ref: s("ref"),
     };
-    const item = kb.byOrigin(from);
+    const item = await kb.byOrigin(from);
     const seed = item && readable.has(item.campaign) ? briefingSeedOf(item) : undefined;
     // Never left out without a word: control's log says which item, and why.
     if (!seed)

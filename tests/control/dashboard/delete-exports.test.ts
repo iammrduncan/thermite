@@ -36,12 +36,12 @@ const files = () => ({
 });
 
 /** Control with a folder for exports, an operator's token, and rig-a sending it exports. */
-function setup() {
+async function setup() {
   const root = mkdtempSync(join(tmpdir(), "thermite-delete-exports-"));
   const outbox = join(root, "outbox");
   mkdirSync(outbox);
   const kept = join(root, "control-exports");
-  const { store, control, api } = controlOnly({
+  const { store, control, api } = await controlOnly({
     tokens: { admin: OWNER, operator: OPERATOR, rigs: { "rig-a": RIG_A } },
     options: { exportsDir: kept },
   });
@@ -97,9 +97,8 @@ function setup() {
     };
     walk(join(kept, "rig-a", name));
   };
-  const audits = () =>
-    store.auditLog
-      .list(100)
+  const audits = async () =>
+    (await store.auditLog.list(100))
       .filter((a) => a.action === "export_deleted")
       .map((a) => a.body as { rig: string; export: string; bytes: number });
   return { root, store, control, api, send, onDisk, age, audits };
@@ -107,18 +106,18 @@ function setup() {
 
 describe("exports on control are deleted by hand", () => {
   test("over REST: the owner deletes; one still arriving is refused, and nothing goes; each delete is audited", async () => {
-    const s = setup();
+    const s = await setup();
     await s.send(DONE, { run: "r-1" });
     await s.send(ALSO);
     await s.send(PART, { pieces: 3 });
-    assert.ok(s.store.exports.get("rig-a", DONE)?.complete_at);
-    assert.equal(s.store.exports.get("rig-a", PART)?.complete_at, null);
+    assert.ok((await s.store.exports.get("rig-a", DONE))?.complete_at);
+    assert.equal((await s.store.exports.get("rig-a", PART))?.complete_at, null);
 
     // Only the owner's token: a rig's, the operator's (REST has none of its own) and none refused.
     const body = { exports: [{ rig: "rig-a", name: DONE }] };
     for (const token of [RIG_A, OPERATOR, ""])
       assert.equal((await s.api("POST", "/v1/exports/delete", body, token)).status, 401);
-    assert.ok(s.store.exports.get("rig-a", DONE));
+    assert.ok(await s.store.exports.get("rig-a", DONE));
 
     // All or none: with one still arriving, nothing is deleted, and it says why.
     const refused = await s.api("POST", "/v1/exports/delete", {
@@ -135,8 +134,8 @@ describe("exports on control are deleted by hand", () => {
         `^rig-a · ${PART} \\(\\d of 3 files\\) is still arriving: control is receiving its files\\. Delete it once complete\\. Nothing was deleted\\.$`,
       ),
     );
-    assert.ok(s.store.exports.get("rig-a", DONE) && s.onDisk(DONE), "nothing was deleted");
-    assert.deepEqual(s.audits(), []);
+    assert.ok((await s.store.exports.get("rig-a", DONE)) && s.onDisk(DONE), "nothing was deleted");
+    assert.deepEqual(await s.audits(), []);
 
     // A bad name is refused as input.
     const bad = await s.api("POST", "/v1/exports/delete", {
@@ -144,7 +143,7 @@ describe("exports on control are deleted by hand", () => {
     });
     assert.equal(bad.status, 400);
 
-    const bytes = s.store.exports.get("rig-a", DONE)?.bytes ?? 0;
+    const bytes = (await s.store.exports.get("rig-a", DONE))?.bytes ?? 0;
     const ok = await s.api("POST", "/v1/exports/delete", {
       exports: [
         { rig: "rig-a", name: DONE },
@@ -161,10 +160,12 @@ describe("exports on control are deleted by hand", () => {
     assert.deepEqual(out.gone, [{ rig: "rig-a", name: "20261101T050000Z-00000000" }]);
     assert.match(out.said, new RegExp(`^Deleted 1 export from control: rig-a · ${DONE} \\(`));
     assert.match(out.said, /Control did not have rig-a · 20261101T050000Z-00000000/);
-    assert.equal(s.store.exports.get("rig-a", DONE), undefined, "its record is gone");
+    assert.equal(await s.store.exports.get("rig-a", DONE), undefined, "its record is gone");
     assert.equal(s.onDisk(DONE), false, "its files are gone");
     assert.ok(s.onDisk(ALSO), "another export stays");
-    assert.deepEqual(s.audits(), [{ rig: "rig-a", export: DONE, bytes, files: 3, complete: true }]);
+    assert.deepEqual(await s.audits(), [
+      { rig: "rig-a", export: DONE, bytes, files: 3, complete: true },
+    ]);
     assert.equal(
       (await s.api("GET", `/v1/rigs/rig-a/exports/${DONE}`)).status,
       404,
@@ -177,12 +178,12 @@ describe("exports on control are deleted by hand", () => {
       exports: [{ rig: "rig-a", name: PART }],
     });
     assert.equal(stale.status, 200);
-    assert.equal(s.store.exports.get("rig-a", PART), undefined);
+    assert.equal(await s.store.exports.get("rig-a", PART), undefined);
     assert.equal(s.onDisk(PART), false);
   });
 
   test("on the Exports page: tick, Delete, the confirmation says what goes, and Delete again deletes", async () => {
-    const s = setup();
+    const s = await setup();
     await s.send(DONE, { run: "r-1" });
     await s.send(ALSO);
     await s.send(PART, { pieces: 3 });
@@ -221,7 +222,7 @@ describe("exports on control are deleted by hand", () => {
     assert.match(card, /<button class="danger">Delete 2 exports<\/button>/);
     assert.match(card, /<a class="btn" href="\/ui\/exports">Cancel<\/a>/);
     assert.match(ask, new RegExp(`value="rig-a/${DONE}" checked`), "the boxes stay ticked");
-    assert.ok(s.store.exports.get("rig-a", DONE), "asking deletes nothing");
+    assert.ok(await s.store.exports.get("rig-a", DONE), "asking deletes nothing");
 
     // The still-arriving one ticked by hand: refused in words, with nothing to press.
     const no = await page(`/ui/exports?delete=1&pick=${encodeURIComponent(`rig-a/${PART}`)}`);
@@ -246,16 +247,10 @@ describe("exports on control are deleted by hand", () => {
       decodeURIComponent(to.replace(/\+/g, " ")),
       new RegExp(`Deleted 2 exports from control: rig-a · ${DONE} \\(.*\\) and rig-a · ${ALSO}`),
     );
-    assert.equal(s.store.exports.get("rig-a", DONE), undefined);
-    assert.equal(s.store.exports.get("rig-a", ALSO), undefined);
+    assert.equal(await s.store.exports.get("rig-a", DONE), undefined);
+    assert.equal(await s.store.exports.get("rig-a", ALSO), undefined);
     assert.equal(s.onDisk(DONE) || s.onDisk(ALSO), false);
-    assert.deepEqual(
-      s
-        .audits()
-        .map((a) => a.export)
-        .sort(),
-      [ALSO, DONE].sort(),
-    );
+    assert.deepEqual((await s.audits()).map((a) => a.export).sort(), [ALSO, DONE].sort());
     const after = await (await get(to)).text();
     assert.match(after, /<b class="ok">Deleted 2 exports from control/);
     assert.doesNotMatch(after, new RegExp(`data-export="${DONE}"`));
@@ -269,7 +264,7 @@ describe("exports on control are deleted by hand", () => {
     const back = await (await get(refused.headers.get("location") ?? "")).text();
     assert.match(back, /<b class="bad">Not deleted\.<\/b>/);
     assert.match(back, /is still arriving/);
-    assert.ok(s.store.exports.get("rig-a", PART));
+    assert.ok(await s.store.exports.get("rig-a", PART));
     // A form with no export: refused in words.
     const empty = await post("/ui/exports/delete", [
       ["csrf", csrf],
@@ -282,7 +277,7 @@ describe("exports on control are deleted by hand", () => {
   });
 
   test("over MCP: the owner's delete_exports deletes; an operator has no such tool", async () => {
-    const s = setup();
+    const s = await setup();
     await s.send(DONE);
     await s.send(PART, { pieces: 3 });
     const operator = await mcpClient(s.control, OPERATOR);
@@ -294,7 +289,7 @@ describe("exports on control are deleted by hand", () => {
       arguments: { exports: [{ rig: "rig-a", name: DONE }] },
     })) as { isError?: boolean };
     assert.equal(tried.isError, true);
-    assert.ok(s.store.exports.get("rig-a", DONE));
+    assert.ok(await s.store.exports.get("rig-a", DONE));
 
     const owner = await mcpClient(s.control, OWNER);
     const call = (name: string) =>
@@ -310,9 +305,9 @@ describe("exports on control are deleted by hand", () => {
     const out = JSON.parse(yes.content[0]?.text ?? "{}") as { said: string; deleted: unknown[] };
     assert.equal(out.deleted.length, 1);
     assert.match(out.said, /^Deleted 1 export from control/);
-    assert.equal(s.store.exports.get("rig-a", DONE), undefined);
+    assert.equal(await s.store.exports.get("rig-a", DONE), undefined);
     assert.equal(s.onDisk(DONE), false);
-    assert.equal(s.audits().length, 1);
+    assert.equal((await s.audits()).length, 1);
     await operator.close();
     await owner.close();
   });

@@ -37,7 +37,7 @@ test("a judge-only run's queue says no worker takes it, and how to carry it to a
     } as Partial<RunView>);
   const LINE =
     /<b>Judge only:<\/b> no worker takes these experiments, so they wait for a run with workers\. To carry them over, <a href="\/ui\/campaigns\/quality\?start=1&amp;copy=q-1">Start a run<\/a> of the campaign with <b>Copy the untried experiments of<\/b> q-1 ticked\./;
-  const tab = (r: RunView) =>
+  const tab = async (r: RunView) =>
     experimentsTab({
       u: rig,
       r,
@@ -47,10 +47,10 @@ test("a judge-only run's queue says no worker takes it, and how to carry it to a
       cmd: () => "",
       directions: [],
     });
-  assert.match(tab(run(false, waiting("queued"))), LINE);
+  assert.match(await tab(run(false, waiting("queued"))), LINE);
   assert.match(judgeOnlyQueueLine(run(false, waiting("proposed"))), LINE);
   // A run with workers, or nothing waiting: no line.
-  assert.doesNotMatch(tab(run(true, waiting("queued"))), /Judge only/);
+  assert.doesNotMatch(await tab(run(true, waiting("queued"))), /Judge only/);
   assert.equal(judgeOnlyQueueLine(run(false, [])), "");
   assert.equal(judgeOnlyQueueLine(run(false, waiting("done"))), "");
 });
@@ -80,7 +80,7 @@ test("a tried experiment has Send back to up next, with why; one still queued, o
     x("x-000000000003", "dropped"),
   ] as unknown as RunView["queue"];
   const sent: string[] = [];
-  const tab = (mode: string) =>
+  const tab = async (mode: string) =>
     experimentsTab({
       u: rig,
       r: statusRun("q-1", "running", "2026-10-20T00:00:00Z", {
@@ -98,7 +98,7 @@ test("a tried experiment has Send back to up next, with why; one still queued, o
       },
       directions: [],
     });
-  const html = tab("hill_climb");
+  const html = await tab("hill_climb");
   assert.match(html, /<summary class="btn sm ghost">Send back<\/summary>/);
   assert.match(html, /<form data-kind="queue_retry"><input name="why" required maxlength="2000"/);
   assert.deepEqual(
@@ -107,7 +107,7 @@ test("a tried experiment has Send back to up next, with why; one still queued, o
     "the done one alone",
   );
   sent.length = 0;
-  assert.doesNotMatch(tab("research"), /Send back/);
+  assert.doesNotMatch(await tab("research"), /Send back/);
   assert.deepEqual(
     sent.filter((k) => k.startsWith("queue_retry")),
     [],
@@ -181,7 +181,7 @@ test("a research run's rounds are counted as research rounds, not as planner fal
     summary: {},
   } as never);
   await applied(store);
-  const v = rigView(store, "rig-a", { staleAfterMs: 600_000 });
+  const v = await rigView(store, "rig-a", { staleAfterMs: 600_000 });
   const a = v?.runs.find((r) => r.id === "r-1")?.agents;
   assert.deepEqual([a?.epochs, a?.research_rounds, a?.fallbacks], [2, 2, 0]);
 });

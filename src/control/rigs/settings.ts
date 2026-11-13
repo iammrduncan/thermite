@@ -233,7 +233,7 @@ export async function setRigSettings(
     error,
     status,
   });
-  const now = rigSettingsOf(store, rig);
+  const now = await rigSettingsOf(store, rig);
   if (!now) return refuse(`no rig ${rig}`, 404);
   if (!now.settings)
     return refuse(
@@ -262,7 +262,7 @@ export async function setRigSettings(
   if (resize && "error" in resize) return refuse(`Not saved: ${resize.error}`, resize.status);
   let id: string;
   try {
-    ({ id } = issueCommand(store, privateKeyPem, {
+    ({ id } = await issueCommand(store, privateKeyPem, {
       rig,
       kind: "rig_settings",
       payload: change,
@@ -299,8 +299,8 @@ export const rigSettingsAnswer = (
     : { rig, id: null, sent: {}, restarts: false, said: out.said };
 
 /** What the rig reports: its settings (null from an older harness) and its GPU split (null: none). */
-export const rigSettingsRead = (store: ControlStore, rig: string) => {
-  const now = rigSettingsOf(store, rig);
+export const rigSettingsRead = async (store: ControlStore, rig: string) => {
+  const now = await rigSettingsOf(store, rig);
   return now ? { rig, settings: now.settings, gpu_split: now.gpu_split } : undefined;
 };
 

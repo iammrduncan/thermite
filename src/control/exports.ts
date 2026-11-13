@@ -182,7 +182,7 @@ export class ExportFiles {
         };
       }
       renameSync(part, target);
-      const { complete } = store.exports.fileDone(e.rig, e.name, path);
+      const { complete } = await store.exports.fileDone(e.rig, e.name, path);
       return { ok: true, received: want.size, done: true, complete };
     } finally {
       this.busy.delete(key);
@@ -198,19 +198,23 @@ export const archiveName = (e: Pick<RigExport, "rig" | "name">): string =>
  * A complete export as one .tar.gz, for the owner (REST and the dashboard): 404 with the reason
  * for an export control does not have, or has not all of.
  */
-export function archiveResponse(
+export async function archiveResponse(
   c: Context,
   o: { store: ControlStore; files: ExportFiles | undefined; by: string },
   rig: string,
   name: string,
-): Response {
-  const e = EXPORT_NAME.test(name) ? o.store.exports.get(rig, name) : undefined;
+): Promise<Response> {
+  const e = EXPORT_NAME.test(name) ? await o.store.exports.get(rig, name) : undefined;
   if (!e) return c.json({ error: "no such export" }, 404);
   if (!o.files)
     return c.json({ error: "control keeps no exports: it has no folder for them" }, 404);
   const entries = o.files.archiveEntries(e);
   if (typeof entries === "string") return c.json({ error: entries }, 404);
-  o.store.auditLog.add(o.by, "export_downloaded", { rig, export: name, files: entries.length - 1 });
+  await o.store.auditLog.add(o.by, "export_downloaded", {
+    rig,
+    export: name,
+    files: entries.length - 1,
+  });
   return c.body(Readable.toWeb(tarGz(entries)) as ReadableStream, 200, {
     "content-type": "application/gzip",
     "content-disposition": `attachment; filename="${archiveName(e)}"`,
@@ -258,16 +262,16 @@ export function stillReceiving(
  * The exports a delete names, as control has them, and those it does not (`gone`), or the
  * refusal of the whole delete in words: one of them is still arriving.
  */
-export function exportsToDelete(
+export async function exportsToDelete(
   o: { store: ControlStore; files: ExportFiles | undefined },
   refs: readonly ExportRef[],
   now = Date.now(),
-): { found: RigExport[]; gone: ExportRef[] } {
+): Promise<{ found: RigExport[]; gone: ExportRef[] }> {
   const unique = [...new Map(refs.map((r) => [`${r.rig}\0${r.name}`, r])).values()];
   const found: RigExport[] = [];
   const gone: ExportRef[] = [];
   for (const r of unique) {
-    const e = EXPORT_NAME.test(r.name) ? o.store.exports.get(r.rig, r.name) : undefined;
+    const e = EXPORT_NAME.test(r.name) ? await o.store.exports.get(r.rig, r.name) : undefined;
     if (e) found.push(e);
     else gone.push({ rig: r.rig, name: r.name });
   }
@@ -292,17 +296,17 @@ export function exportsToDelete(
  * deleted. One control does not have is in `gone`. It can't be undone: a rig's outbox lets an
  * export go once control holds it, so control's copy is the only one off the rig.
  */
-export function deleteExports(
+export async function deleteExports(
   o: { store: ControlStore; files: ExportFiles | undefined },
   refs: readonly ExportRef[],
   by: string,
   now = Date.now(),
-): { deleted: RigExport[]; gone: ExportRef[]; said: string } {
-  const { found, gone } = exportsToDelete(o, refs, now);
+): Promise<{ deleted: RigExport[]; gone: ExportRef[]; said: string }> {
+  const { found, gone } = await exportsToDelete(o, refs, now);
   for (const e of found) {
     o.files?.remove(e);
-    o.store.exports.remove(e.rig, e.name);
-    o.store.auditLog.add(by, "export_deleted", {
+    await o.store.exports.remove(e.rig, e.name);
+    await o.store.auditLog.add(by, "export_deleted", {
       rig: e.rig,
       export: e.name,
       bytes: e.bytes,
@@ -376,7 +380,7 @@ export function mountExports(
       const promised = Object.fromEntries(
         Object.entries(body.files).map(([p, size]) => [p, { size, sha256: m.files[p] as string }]),
       );
-      const r = store.exports.begin(rig, name, {
+      const r = await store.exports.begin(rig, name, {
         manifest: m,
         files: promised,
         full: m.full === true,
@@ -386,7 +390,7 @@ export function mountExports(
       if (r === "different")
         return c.json({ error: `control has another export named ${name} from this rig` }, 409);
       if (r === "created") files.writeManifest(rig, name, m);
-      const e = store.exports.get(rig, name) as RigExport;
+      const e = (await store.exports.get(rig, name)) as RigExport;
       return c.json({
         received: Object.fromEntries(Object.keys(e.files).map((p) => [p, files.received(e, p)])),
         done: e.done,
@@ -399,7 +403,7 @@ export function mountExports(
     const rig = c.req.param("rig");
     const name = c.req.param("name");
     if (!files) return c.json({ error: noFolder }, 503);
-    const e = EXPORT_NAME.test(name) ? store.exports.get(rig, name) : undefined;
+    const e = EXPORT_NAME.test(name) ? await store.exports.get(rig, name) : undefined;
     if (!e) return c.json({ error: `no export ${name}: start it first` }, 404);
     const path = c.req.query("path") ?? "";
     if (!(path in e.files))
@@ -413,14 +417,16 @@ export function mountExports(
     return c.json({ received: r.received, done: r.done, complete: r.complete });
   });
 
-  app.get("/v1/rigs/:rig/exports", o.admin, (c) =>
+  app.get("/v1/rigs/:rig/exports", o.admin, async (c) =>
     c.json({
-      exports: store.exports.ofRig(c.req.param("rig"), 1000).map((e) => exportSummary(files, e)),
+      exports: (await store.exports.ofRig(c.req.param("rig"), 1000)).map((e) =>
+        exportSummary(files, e),
+      ),
     }),
   );
 
-  app.get("/v1/rigs/:rig/exports/:name", o.admin, (c) => {
-    const e = store.exports.get(c.req.param("rig"), c.req.param("name"));
+  app.get("/v1/rigs/:rig/exports/:name", o.admin, async (c) => {
+    const e = await store.exports.get(c.req.param("rig"), c.req.param("name"));
     if (!e) return c.json({ error: "no such export" }, 404);
     return c.json({
       ...exportSummary(files, e),
@@ -441,7 +447,7 @@ export function mountExports(
     bodyLimit({ maxSize: EXPORTS_DELETE.maxBytes }),
     async (c) => {
       const body = EXPORTS_DELETE.body.parse(await jsonBody(c.req));
-      const r = deleteExports({ store, files }, body.exports, "owner:api");
+      const r = await deleteExports({ store, files }, body.exports, "owner:api");
       return c.json({
         deleted: r.deleted.map((e) => ({
           rig: e.rig,
@@ -456,12 +462,12 @@ export function mountExports(
   );
 
   // The whole export as one .tar.gz: its manifest and every file (goal 103).
-  app.get("/v1/rigs/:rig/exports/:name/archive", o.admin, (c) =>
+  app.get("/v1/rigs/:rig/exports/:name/archive", o.admin, async (c) =>
     archiveResponse(c, { store, files, by: "owner:api" }, c.req.param("rig"), c.req.param("name")),
   );
 
-  app.get("/v1/rigs/:rig/exports/:name/file", o.admin, (c) => {
-    const e = store.exports.get(c.req.param("rig"), c.req.param("name"));
+  app.get("/v1/rigs/:rig/exports/:name/file", o.admin, async (c) => {
+    const e = await store.exports.get(c.req.param("rig"), c.req.param("name"));
     const path = c.req.query("path") ?? "";
     if (!e || !files || !e.done.includes(path) || !e.files[path])
       return c.json({ error: "no such file in that export" }, 404);

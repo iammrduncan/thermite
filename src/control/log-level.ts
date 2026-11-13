@@ -37,15 +37,17 @@ interface ControlLogLevel {
 }
 
 /** The level the owner set, if one is set and is a level. */
-function setLevel(store: ControlStore): { level: LogLevel; by: string; at: string } | undefined {
-  const row = store.ownSettings.get(LOG_LEVEL_KEY);
+async function setLevel(
+  store: ControlStore,
+): Promise<{ level: LogLevel; by: string; at: string } | undefined> {
+  const row = await store.ownSettings.get(LOG_LEVEL_KEY);
   const level = LOG_LEVELS.find((l) => l === row?.value);
   return row && level ? { level, by: row.set_by, at: row.set_at } : undefined;
 }
 
 /** Control's log level now. */
-export function controlLogLevelOf(store: ControlStore): ControlLogLevel {
-  const set = setLevel(store);
+export async function controlLogLevelOf(store: ControlStore): Promise<ControlLogLevel> {
+  const set = await setLevel(store);
   return {
     level: set?.level ?? startedLogLevel(),
     from: set ? "setting" : "environment",
@@ -72,29 +74,29 @@ type ControlLogLevelOutcome =
   | { ok: false; error: string };
 
 /** A change of control's log level by `by`: checked, kept, applied at once and audited. */
-export function setControlLogLevel(
+export async function setControlLogLevel(
   store: ControlStore,
   raw: unknown,
   by: string,
-): ControlLogLevelOutcome {
+): Promise<ControlLogLevelOutcome> {
   const r = ControlLogLevelBody.safeParse(raw);
   if (!r.success)
     return {
       ok: false,
       error: r.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
     };
-  const was = controlLogLevelOf(store).level;
-  store.tx(() => {
-    store.ownSettings.set(LOG_LEVEL_KEY, r.data.level, by);
-    store.auditLog.add(by, "control_log_level_set", { level: r.data.level, was });
+  const was = (await controlLogLevelOf(store)).level;
+  await store.tx(async () => {
+    await store.ownSettings.set(LOG_LEVEL_KEY, r.data.level, by);
+    await store.auditLog.add(by, "control_log_level_set", { level: r.data.level, was });
   });
   setLogLevel("control", r.data.level, { by, from: r.data.level ? "setting" : "environment" });
-  const level = controlLogLevelOf(store);
+  const level = await controlLogLevelOf(store);
   return { ok: true, level, said: controlLogLevelWords(level) };
 }
 
 /** At control's start, after its environment's level: the level the owner set, if any. */
-export function applyControlLogLevel(store: ControlStore): void {
-  const set = setLevel(store);
+export async function applyControlLogLevel(store: ControlStore): Promise<void> {
+  const set = await setLevel(store);
   if (set) setLogLevel("control", set.level, { by: set.by, from: "setting", set_at: set.at });
 }

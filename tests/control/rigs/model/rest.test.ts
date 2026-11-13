@@ -181,14 +181,14 @@ describe("each agent's model over REST and MCP", () => {
     // The workers back to the rig's own settings, as Providers says it.
     const own = await s.give({ clear: true });
     assert.equal(own.body.said, "rig-a goes back to its own settings within a minute.");
-    assert.equal(s.store.agentModels.byRig()["rig-a"], undefined);
+    assert.equal((await s.store.agentModels.byRig())["rig-a"], undefined);
     assert.equal(
-      s.store.agentModels.byRole("rig-a").teachers?.model,
+      (await s.store.agentModels.byRole("rig-a")).teachers?.model,
       "gpt-sol",
       "the advisors keep theirs",
     );
 
-    const audit = s.store.auditLog.list(50, { action: "agent_model_given" }).reverse();
+    const audit = (await s.store.auditLog.list(50, { action: "agent_model_given" })).reverse();
     assert.deepEqual(
       audit.map((e) => [e.actor, (e.body as { role: string }).role]),
       [
@@ -215,7 +215,7 @@ describe("each agent's model over REST and MCP", () => {
       const old = await s.give({ agent, provider: "lab", model: "strong-model" });
       assert.match(`${old.status} ${old.body.error}`, /^400 bad request: agent/);
     }
-    assert.deepEqual(s.store.agentModels.byRole("rig-a"), {});
+    assert.deepEqual(await s.store.agentModels.byRole("rig-a"), {});
   });
 
   test("REST: Edit rig's refusals in its words, and a refusal changes nothing", async () => {
@@ -250,13 +250,13 @@ describe("each agent's model over REST and MCP", () => {
       "Give clear alone, or a provider and a model.",
     );
     await refused({ agent: "auditor" }, "Give a provider and a model, or clear: true.");
-    assert.equal(s.store.agentModels.byRole("rig-a").auditor?.model, "wide-model");
+    assert.equal((await s.store.agentModels.byRole("rig-a")).auditor?.model, "wide-model");
     // OpenCode's own models suit any agent, which runs in OpenCode then.
     assert.equal(
       (await s.give({ agent: "planner", provider: "zen", model: "big-pickle" })).status,
       200,
     );
-    const refusals = s.store.auditLog.list(50, { action: "refused" });
+    const refusals = await s.store.auditLog.list(50, { action: "refused" });
     assert.equal(refusals.length, 7);
     assert.ok(refusals.every((e) => (e.body as { path: string }).path === "/v1/rigs/rig-a/model"));
 
@@ -270,6 +270,6 @@ describe("each agent's model over REST and MCP", () => {
       const get = await s.as(token)("GET");
       assert.ok(get.status === 401 || get.status === 403, "REST takes the owner's token");
     }
-    assert.equal(s.store.agentModels.byRole("rig-a").auditor?.model, "wide-model");
+    assert.equal((await s.store.agentModels.byRole("rig-a")).auditor?.model, "wide-model");
   });
 });

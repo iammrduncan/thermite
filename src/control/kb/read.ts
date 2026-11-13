@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { Harness } from "../../core/agents.ts";
 import {
   KB_OWNER,
@@ -68,11 +69,14 @@ const USAGE_AGENT: Record<KbWriterRole, UsageAgent> = {
  * Who writes a run's slot: Thermite's code for the records slot, else the slot's role and the
  * agent program its newest model call in the run ran in (on `rig` when given), when control has one.
  */
-export function slotWriter(store: ControlStore, p: { run: string; slot: string; rig?: string }) {
+export async function slotWriter(
+  store: ControlStore,
+  p: { run: string; slot: string; rig?: string },
+) {
   if (p.slot === KB_RECORDS) return { role: null, program: null, words: "Thermite's code" };
   if (p.slot === KB_OWNER) return { role: null, program: null, words: "you" };
   const role = roleOfSlot(p.slot) ?? null;
-  const harness = role ? store.usage.programOf(p.run, USAGE_AGENT[role], p.rig) : undefined;
+  const harness = role ? await store.usage.programOf(p.run, USAGE_AGENT[role], p.rig) : undefined;
   const program = harness ? (HARNESS_NAMES[harness as Harness] ?? harness) : null;
   return { role, program, words: [role ?? p.slot, program].filter(Boolean).join(" · ") };
 }
@@ -82,25 +86,25 @@ export function slotWriter(store: ControlStore, p: { run: string; slot: string; 
  * or kept whole, and why in words: where its text was cut, why it is kept whole, or what it waits
  * for; null for a text read whole.
  */
-export function fileTextFacts(
+export async function fileTextFacts(
   store: ControlStore,
   f: KbItemFile,
-): { searched: boolean; text_state: KbTextState; text_why: string | null } {
+): Promise<{ searched: boolean; text_state: KbTextState; text_why: string | null }> {
   const files = store.kb().files;
-  const t = files.textState(f.sha256);
+  const t = await files.textState(f.sha256);
   if (t?.state === "searched") return { searched: true, text_state: "searched", text_why: t.why };
   if (t) return { searched: false, text_state: "kept whole", text_why: t.why };
   if (!kbTextReader(f.type))
     return { searched: false, text_state: "kept whole", text_why: notSearchedWhy(f.type) };
   // A record's file (a source's text, a lane's document) over the largest file control takes.
-  const limit = store.kb().settings.maxFileBytes();
-  if (!files.has(f.sha256) && limit > 0 && f.bytes > limit)
+  const limit = await store.kb().settings.maxFileBytes();
+  if (!(await files.has(f.sha256)) && limit > 0 && f.bytes > limit)
     return {
       searched: false,
       text_state: "waiting",
       text_why: `${overLimitWords(f, limit)}: control does not keep it, and the item keeps its own words alone`,
     };
-  const waits = files.has(f.sha256)
+  const waits = (await files.has(f.sha256))
     ? "control extracts its text soon: it reads one file at a time"
     : "control extracts its text once it holds the file";
   return { searched: false, text_state: "waiting", text_why: waits };
@@ -129,14 +133,18 @@ export interface KbReader {
  * scope as control works it out for their kb_search (store/kb/scope.ts), never from what the run
  * asks; with why, by run name.
  */
-export function readersOf(store: ControlStore, vs: readonly RigView[], x: KbItem): KbReader[] {
+export async function readersOf(
+  store: ControlStore,
+  vs: readonly RigView[],
+  x: KbItem,
+): Promise<KbReader[]> {
   const kb = store.kb();
   const out: KbReader[] = [];
   for (const u of vs)
     for (const r of u.runs) {
       if (r.status !== "running") continue;
-      const collection = kb.runCampaign(u.id, r.id) ?? runCampaign(r);
-      const { scope, where } = kb.scopeWhere(collection, r.id);
+      const collection = (await kb.runCampaign(u.id, r.id)) ?? runCampaign(r);
+      const { scope, where } = await kb.scopeWhere(collection, r.id);
       const can = where.some((w) => w.campaign === x.campaign && (!w.run || w.run === x.run));
       const why: KbReaderWhy =
         x.campaign === collection
@@ -145,7 +153,7 @@ export function readersOf(store: ControlStore, vs: readonly RigView[], x: KbItem
             : x.run === r.id
               ? "its own run"
               : "started fresh"
-          : kb.reads(collection).includes(x.campaign)
+          : (await kb.reads(collection)).includes(x.campaign)
             ? can
               ? "granted and included"
               : "grant not included"
@@ -156,11 +164,11 @@ export function readersOf(store: ControlStore, vs: readonly RigView[], x: KbItem
 }
 
 /** The owner's read of one item: one version whole, and what the reader shows beside it. */
-export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbReadQuery) {
+export async function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbReadQuery) {
   const kb = store.kb();
-  const x = kb.at(q.address);
+  const x = await kb.at(q.address);
   if (!x) return { error: `the knowledge base has no item ${q.address}` } as const;
-  const versions = kb.versions(x.id);
+  const versions = await kb.versions(x.id);
   const v =
     q.version === undefined ? versions.at(-1) : versions.find((o) => o.version === q.version);
   if (!v)
@@ -168,7 +176,7 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
       error: `${q.address} has versions 1 to ${versions.length}, not ${q.version}`,
     } as const;
   const { excerpt: _e, why: _w, passage: _p, file: _f, ...item } = hitOf(x);
-  const titleAt = (address: string) => kb.at(address)?.title ?? null;
+  const titleAt = async (address: string) => (await kb.at(address))?.title ?? null;
   return {
     note: KB_IS_DATA,
     item: {
@@ -179,7 +187,7 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
       title: v.title,
       version: v.version,
       at: v.at,
-      ...textPage(kb.versionText(v), q.offset),
+      ...textPage(await kb.versionText(v), q.offset),
       // A file item's own words, which its text starts with: a source's address. None for others.
       head: v.file && v.body ? v.body : null,
       versions: versions.length,
@@ -190,23 +198,23 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
         at: o.at,
         file: o.file,
       })),
-      writer: slotWriter(store, x),
+      writer: await slotWriter(store, x),
       withdrawn: withdrawnWhy(x.kind, x.meta),
       file: v.file && {
         ...v.file,
-        held: kb.files.has(v.file.sha256),
-        ...fileTextFacts(store, v.file),
+        held: await kb.files.has(v.file.sha256),
+        ...(await fileTextFacts(store, v.file)),
         from: `${x.slot} wrote it in ${x.run}, on ${x.rig}`,
       },
-      links: v.links.map((l) => ({ ...l, title: titleAt(l.to) })),
-      linked_from: kb.linksTo(kbAddress(x)).map((l) => ({
+      links: await mapInTurn(v.links, async (l) => ({ ...l, title: await titleAt(l.to) })),
+      linked_from: (await kb.linksTo(kbAddress(x))).map((l) => ({
         rel: l.rel,
         address: kbAddress(l.item),
         title: l.item.title,
       })),
-      readers: readersOf(store, vs, x),
-      result: kb.resultOf(x),
+      readers: await readersOf(store, vs, x),
+      result: await kb.resultOf(x),
     },
   };
 }
-export type KbReadAnswer = Exclude<ReturnType<typeof ownerKbRead>, { error: string }>;
+export type KbReadAnswer = Exclude<Awaited<ReturnType<typeof ownerKbRead>>, { error: string }>;

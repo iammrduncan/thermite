@@ -140,6 +140,6 @@ async function auditRefusedCalls(store: ControlStore, actor: string, answer: Res
     const text = r?.isError ? r.content?.[0]?.text : undefined;
     if (typeof text !== "string" || !text.startsWith("MCP error ")) continue;
     const tool = /\btool (\S+?)(?=:| not found| disabled)/i.exec(text)?.[1] ?? "unknown";
-    store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: redact(text) });
+    await store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: redact(text) });
   }
 }

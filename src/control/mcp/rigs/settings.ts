@@ -30,8 +30,8 @@ export function registerRigSettings(tools: ToolContext): void {
         "The settings a rig reports, as Edit rig shows them. Returns {rig, settings, gpu_split}. settings holds each part on or off (judge, workers, planner, teachers, auditor, review for the review panel, exports), lanes (workers at a time), trial_minutes (how long one trial lasts when the campaign sets no limit; null: no limit), max_turns (turns per trial; null: no limit), quiet_minutes (after how many minutes without a line a trial asks the owner under Needs you; null: never), check_seconds (how long the model check waits for an answer; null: 120), program_mode (terminal: Claude Code, Codex and OpenCode run each trial in their own terminal, and a worker in Pi in its Pi view; headless: one command for each turn), promotion (auto or owner_approval), judge_gpus (the judge's share the rig keeps; null: its default) and runners (its runner processes on other machines, each {name, pools}; []: none); settings is null for a rig whose harness is older and reports none. gpu_split is {set, judge}, the rig's GPU set and the judge's share now, or null for a rig with no GPU set to split. Change them with set_rig_settings; each agent's model is rig_models'.",
       inputSchema: { rig: z.string().min(1) },
     },
-    audited("rig_settings", (a: { rig: string }) => {
-      const read = rigSettingsRead(store, a.rig);
+    audited("rig_settings", async (a: { rig: string }) => {
+      const read = await rigSettingsRead(store, a.rig);
       if (!read) throw new Error(`no rig ${a.rig}`);
       return read;
     }),
@@ -48,8 +48,13 @@ export function registerRigSettings(tools: ToolContext): void {
         window: z.enum(USE_WINDOWS).optional().describe("hour (the default), day or run"),
       },
     },
-    audited("runner_use", (a: { rig: string; window?: UseWindow }) => {
-      const read = runnerUseRead(store, tools.view(a.rig), a.window ?? "hour", Date.now());
+    audited("runner_use", async (a: { rig: string; window?: UseWindow }) => {
+      const read = await runnerUseRead(
+        store,
+        await tools.view(a.rig),
+        a.window ?? "hour",
+        Date.now(),
+      );
       if (!read) throw new Error(`${a.rig} has no run: ask for the hour or the day`);
       return read;
     }),
@@ -89,12 +94,12 @@ export function registerRetire(tools: ToolContext): void {
           confirm: z.string().describe('"retire <rig>", as on the dashboard'),
         },
       },
-      audited("retire_rig", (a: { rig: string; confirm: string }) => {
+      audited("retire_rig", async (a: { rig: string; confirm: string }) => {
         if (a.confirm.trim() !== `retire ${a.rig}`)
           throw new Error(`confirm with "retire ${a.rig}"`);
-        if (!store.reportedRigs.list().some((u) => u.id === a.rig))
+        if (!(await store.reportedRigs.list()).some((u) => u.id === a.rig))
           throw new Error(`no rig ${a.rig}`);
-        store.retired.add(a.rig, actor);
+        await store.retired.add(a.rig, actor);
         return { rig: a.rig, retired: true };
       }),
     );

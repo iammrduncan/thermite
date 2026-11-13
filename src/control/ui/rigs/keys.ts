@@ -8,11 +8,11 @@ import { ago, esc } from "../components/index.ts";
  * A rig's keys on the message bus on its page: the fingerprints of the user key and the seal key
  * its supervisor registered, and when one last changed or was refused (HTML).
  */
-export function busKeysHtml(store: ControlStore, rig: string, now: number): string {
-  const key = store.busKeys.rigKey(rig);
+export async function busKeysHtml(store: ControlStore, rig: string, now: number): Promise<string> {
+  const key = await store.busKeys.rigKey(rig);
   if (!key) return `<span class="muted">none registered yet</span>`;
-  const seal = store.busKeys.rigSealKey(rig);
-  const last = store.rigHistory.latest(rig, BUS_KEY_CHANGE_STEPS, 1)[0];
+  const seal = await store.busKeys.rigSealKey(rig);
+  const last = (await store.rigHistory.latest(rig, BUS_KEY_CHANGE_STEPS, 1))[0];
   const change = last
     ? ` · <span class="${last.ok ? "warn" : "bad"}">${last.ok ? "changed" : "a new one refused"} ${esc(ago(last.at, now))} ago</span>`
     : "";

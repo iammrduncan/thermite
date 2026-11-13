@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { BusReach } from "../../core/api/control/bus.ts";
 import { type PartUse, readPartUse } from "../../core/hardware.ts";
 import { busReach } from "../bus/index.ts";
@@ -41,13 +42,13 @@ function diskOf(x: unknown): { places: RigFigures["disks"]; floor: number | null
 }
 
 /** Each rig control knows, from its last report. */
-export function rigFigures(
+export async function rigFigures(
   store: ControlStore,
   views: readonly RigView[],
   now = Date.now(),
-): RigFigures[] {
-  return views
-    .map((v) => {
+): Promise<RigFigures[]> {
+  return (
+    await mapInTurn(views, async (v) => {
       const summary = v.summary as { usage?: unknown; disk?: unknown } | null | undefined;
       const disk = diskOf(summary?.disk);
       return {
@@ -60,8 +61,8 @@ export function rigFigures(
         memory_limit_mib: v.hardware?.memory.limit_mib ?? null,
         disks: disk.places,
         disk_floor_gib: disk.floor,
-        bus: busReach(store, v.id, { lastSeen: v.last_seen, now, podStopped: podStopped(v) }),
+        bus: await busReach(store, v.id, { lastSeen: v.last_seen, now, podStopped: podStopped(v) }),
       };
     })
-    .sort((a, b) => a.rig.localeCompare(b.rig));
+  ).sort((a, b) => a.rig.localeCompare(b.rig));
 }

@@ -11,7 +11,7 @@ import { ingestReport } from "../../helpers/control-store.ts";
 
 describe("hypothesis_status at control (goal 117)", () => {
   test("refused for a run the rig reports as no research run; signed for a research run", async () => {
-    const { store, control } = controlOnly({ tokens: { rigs: {} } });
+    const { store, control } = await controlOnly({ tokens: { rigs: {} } });
     const created = (id: number, run: string, mode: string) => ({
       id,
       at: new Date().toISOString(),
@@ -45,11 +45,11 @@ describe("hypothesis_status at control (goal 117)", () => {
       ((await bad.json()) as { error: string }).error,
       "Run h-1 is not a research run: only a research run has hypotheses to promote or retire.",
     );
-    assert.equal(store.commands.list(10).length, 0, "nothing was signed");
+    assert.equal((await store.commands.list(10)).length, 0, "nothing was signed");
     assert.equal((await post("r-1")).status, 201);
     assert.equal((await post("r-2")).status, 201, "a run not reported yet: the rig checks it");
     assert.deepEqual(
-      store.commands.list(10).map((c) => c.kind),
+      (await store.commands.list(10)).map((c) => c.kind),
       ["hypothesis_status", "hypothesis_status"],
     );
   });

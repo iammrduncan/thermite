@@ -39,7 +39,8 @@ export async function seedDemo(
 ): Promise<void> {
   startDemo(now);
   for (const rig of ["gpu-1", "gpu-2", "gpu-3", "cpu-1", "gpu-4", "rig-a", "rig-b", "rig-c"])
-    if (!store.enrollments.rig(rig)) store.enrollments.enroll(rig, newToken().sha256, "demo");
+    if (!(await store.enrollments.rig(rig)))
+      await store.enrollments.enroll(rig, newToken().sha256, "demo");
 
   // The rigs are made in this order, which the seeded random sequences depend on.
   const { g1, g2 } = hillClimbRigs();
@@ -47,7 +48,7 @@ export async function seedDemo(
   const c1 = researchRig();
   const g4 = pilotRig();
   await reportRigs(store, { g1, g2, g3, c1, g4 });
-  liveSessions(store);
+  await liveSessions(store);
   await decisionRigs(store, now);
 
   for (const [rig, kind, payload] of [
@@ -71,22 +72,22 @@ export async function seedDemo(
       },
     ],
   ] as const) {
-    issueCommand(store, signingKey, { rig, kind, payload, issuedBy: "owner:ui" });
+    await issueCommand(store, signingKey, { rig, kind, payload, issuedBy: "owner:ui" });
   }
-  store.rigReports.add(
+  await store.rigReports.add(
     "gpu-1",
     "daily",
     "Daily report for gpu-1\n\nCampaign decode-speed (decode-a): champion seq 6, +24.1% over its baseline.\n48 attempts today: 6 wins confirmed, 1 held by audit.\nAgents: 16 epochs, 48 trials, planner valid 94%.",
   );
 
   // A model provider whose list prices one model and not the other (goal 075's price field).
-  store.modelProviders.put({
+  await store.modelProviders.put({
     name: "demo-models",
     type: "openai",
     base_url: "https://models.example.com/v1",
     key: { sealed: "demo", hint: "…demo" },
   });
-  store.modelProviders.setModels("demo-models", [
+  await store.modelProviders.setModels("demo-models", [
     {
       id: "glm-5.1",
       context_window: 131_072,

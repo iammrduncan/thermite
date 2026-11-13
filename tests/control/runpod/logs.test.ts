@@ -30,7 +30,7 @@ const tokens = {
 async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
   const store = controlStore();
   const secrets = SecretBox.ephemeral();
-  store.gpuClouds.add({
+  await store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
     key_sealed: secrets.seal(FAKE_RUNPOD_KEY),
@@ -46,7 +46,7 @@ async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
     privateKeyPem: keys.privateKeyPem,
     logTimes: FAST,
   });
-  const { control: api } = controlOnly({
+  const { control: api } = await controlOnly({
     store,
     keys,
     tokens,

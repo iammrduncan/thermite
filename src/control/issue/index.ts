@@ -108,21 +108,28 @@ export function nobodyReads(
  * words when it has none or when nothing on the rig would read it (nobodyReads). Every path that
  * sends one (the dashboard, MCP, the API) comes through issueCommand, so each refuses alike.
  */
-function checkedMessage(store: ControlStore, rig: string, payload: unknown): unknown {
+async function checkedMessage(
+  store: ControlStore,
+  rig: string,
+  payload: unknown,
+): Promise<unknown> {
   if (!payload || typeof payload !== "object") return payload;
   const p = payload as { run?: unknown; to?: unknown; text?: unknown };
   const to = p.to;
   const text = typeof p.text === "string" ? p.text.trim() : p.text;
   if (text === "") throw new Error("Write a message first.");
-  const u = typeof p.run === "string" && typeof to === "string" ? rigView(store, rig) : undefined;
+  const u =
+    typeof p.run === "string" && typeof to === "string" ? await rigView(store, rig) : undefined;
   const r = u?.runs.find((x) => x.id === p.run);
   const why = u && r ? nobodyReads(u, String(to), r) : "";
   if (why) throw new Error(why);
   // The run's campaign: as the rig reported it, or as control assigned it (before its report).
   const campaign =
     r?.campaign ||
-    (typeof p.run === "string" ? store.runRegistry.assignedCampaigns(rig).get(p.run) : undefined);
-  if (to === "review_panel" && campaign && !panelReviews(store, campaign))
+    (typeof p.run === "string"
+      ? (await store.runRegistry.assignedCampaigns(rig)).get(p.run)
+      : undefined);
+  if (to === "review_panel" && campaign && !(await panelReviews(store, campaign)))
     throw new Error("This run has no goal the review panel reviews, so nothing would read it.");
   return { ...p, to, text };
 }
@@ -132,9 +139,9 @@ function checkedMessage(store: ControlStore, rig: string, payload: unknown): unk
  * campaign's questions (goal 112). The review panel reads only then. From the version saved on
  * control, or else the newest assignment.
  */
-export function panelReviews(store: ControlStore, campaign: string): boolean {
-  const contract = (store.campaigns.versions(campaign)[0]?.contract ??
-    store.commands.latestAssignments().get(campaign)?.payload.contract) as
+export async function panelReviews(store: ControlStore, campaign: string): Promise<boolean> {
+  const contract = ((await store.campaigns.versions(campaign))[0]?.contract ??
+    (await store.commands.latestAssignments()).get(campaign)?.payload.contract) as
     | { mode?: string; goals?: { verify?: { type?: string } }[] }
     | undefined;
   return (
@@ -161,22 +168,22 @@ export function assignRefusal(payload: unknown): string {
  * (goal 077), or "". Archiving waits until no run is at work, so an archived campaign has none;
  * it starts none either until the owner unarchives it.
  */
-export function archivedRefusal(
+export async function archivedRefusal(
   store: ControlStore,
   rig: string,
   kind: CommandKind,
   payload: unknown,
-): string {
+): Promise<string> {
   if (kind !== "assign_campaign" && kind !== "resume_run") return "";
   const p = payload as { run?: unknown; contract?: { campaign?: unknown } } | null;
   const campaign =
     kind === "assign_campaign"
       ? p?.contract?.campaign
       : typeof p?.run === "string"
-        ? (store.runRegistry.assignedCampaigns(rig).get(p.run) ??
-          store.runRegistry.campaignOf(p.run, rig))
+        ? ((await store.runRegistry.assignedCampaigns(rig)).get(p.run) ??
+          (await store.runRegistry.campaignOf(p.run, rig)))
         : undefined;
-  if (typeof campaign !== "string" || !store.archive.get(campaign)) return "";
+  if (typeof campaign !== "string" || !(await store.archive.get(campaign))) return "";
   return `${campaign} is archived. Unarchive it first.`;
 }
 
@@ -184,10 +191,14 @@ export function archivedRefusal(
  * Why control refuses a model check now, or "" (goal 191, issue 44): while the rig takes the model
  * control gave it, it has no route to check yet, and it checks the new one itself once it has it.
  */
-export function modelCheckRefusal(store: ControlStore, rig: string, p: { check: string }): string {
+export async function modelCheckRefusal(
+  store: ControlStore,
+  rig: string,
+  p: { check: string },
+): Promise<string> {
   if (p.check !== "model") return "";
-  const want = store.agentModels.byRig()[rig];
-  if (!takingModel(rigView(store, rig)?.model ?? null, want)) return "";
+  const want = (await store.agentModels.byRig())[rig];
+  if (!takingModel((await rigView(store, rig))?.model ?? null, want)) return "";
   return want
     ? `${rig} is taking ${want.model} now: it checks the model itself once it has it, within a minute. Check it again after that.`
     : `${rig} is going back to its own settings now: it checks its model itself once it has them, within a minute. Check it again after that.`;
@@ -198,22 +209,30 @@ export function modelCheckRefusal(store: ControlStore, rig: string, p: { check: 
  * be running, on a rig with teachers, switched on. From the rig's reports; what they don't show
  * yet is the rig's to check, and its harness refuses a run that is not running.
  */
-export function teachersRoundAsked(store: ControlStore, rig: string, p: { run: string }): string {
+export async function teachersRoundAsked(
+  store: ControlStore,
+  rig: string,
+  p: { run: string },
+): Promise<string> {
   // A status the rig has not reported yet ("unknown") is the rig's to check.
-  const status = rigView(store, rig)?.runs.find((x) => x.id === p.run)?.status;
+  const status = (await rigView(store, rig))?.runs.find((x) => x.id === p.run)?.status;
   const refused =
     status === "paused" || status === "closed" ? teachersRoundRefusal(p.run, status) : "";
   if (refused) return refused;
-  if (rigHasTeachers(store, rig) === false)
+  if ((await rigHasTeachers(store, rig)) === false)
     return `${rig} has no teachers: give them a model on Edit rig.`;
-  if (rigSettingsOf(store, rig)?.settings?.teachers === false)
+  if ((await rigSettingsOf(store, rig))?.settings?.teachers === false)
     return `${rig}'s teachers are off: switch them on on Edit rig.`;
   return "";
 }
 
 /** Why control refuses a command for a run its rig reports closed, or "" (goal 198). */
-function closedRefusal(store: ControlStore, rig: string, p: { run: string }): string {
-  const run = rigView(store, rig)?.runs.find((x) => x.id === p.run);
+async function closedRefusal(
+  store: ControlStore,
+  rig: string,
+  p: { run: string },
+): Promise<string> {
+  const run = (await rigView(store, rig))?.runs.find((x) => x.id === p.run);
   return run?.status === "closed"
     ? `${p.run} is closed: start a new run of its campaign instead.`
     : "";
@@ -224,10 +243,14 @@ function closedRefusal(store: ControlStore, rig: string, p: { run: string }): st
  * direction the run doesn't have yet: the planner designs it (goal 066). A research run has no
  * planner, so there only its task kinds may be named. The rig's harness checks the same.
  */
-export function redirectRefusal(store: ControlStore, rig: string, payload: unknown): string {
+export async function redirectRefusal(
+  store: ControlStore,
+  rig: string,
+  payload: unknown,
+): Promise<string> {
   const p = payload as { run?: unknown; directives?: { direction?: unknown }[] } | null;
   if (typeof p?.run !== "string") return "";
-  const r = rigView(store, rig)?.runs.find((x) => x.id === p.run);
+  const r = (await rigView(store, rig))?.runs.find((x) => x.id === p.run);
   if (r?.mode !== "research") return "";
   const kinds: readonly string[] = RESEARCH_TASK_KINDS;
   const unknown = [
@@ -245,14 +268,14 @@ export function redirectRefusal(store: ControlStore, rig: string, payload: unkno
  * has hypotheses to promote, return or retire. From the rig's report; a run the report does not
  * show yet is the rig's to check, and its harness refuses the same.
  */
-export function hypothesisStatusRefusal(
+export async function hypothesisStatusRefusal(
   store: ControlStore,
   rig: string,
   payload: unknown,
-): string {
+): Promise<string> {
   const p = payload as { run?: unknown } | null;
   if (typeof p?.run !== "string") return "";
-  const r = rigView(store, rig)?.runs.find((x) => x.id === p.run);
+  const r = (await rigView(store, rig))?.runs.find((x) => x.id === p.run);
   if (!r || r.mode === "research") return "";
   return `Run ${p.run} is not a research run: only a research run has hypotheses to promote or retire.`;
 }
@@ -262,7 +285,7 @@ export function hypothesisStatusRefusal(
  * has no kit), filled in when the caller left it out. Refused, in words, when it differs from the
  * contract's, or when it names a server Settings lacks: such a campaign can't start.
  */
-function withMcpServers(store: ControlStore, payload: unknown): unknown {
+async function withMcpServers(store: ControlStore, payload: unknown): Promise<unknown> {
   if (!payload || typeof payload !== "object") return payload;
   const p = payload as {
     contract?: { mode?: unknown; mcp_servers?: unknown };
@@ -281,7 +304,7 @@ function withMcpServers(store: ControlStore, payload: unknown): unknown {
     }
   }
   const uses = McpUses.safeParse(out.mcp_servers ?? []);
-  const why = uses.success ? mcpRefusal(store, uses.data) : "";
+  const why = uses.success ? await mcpRefusal(store, uses.data) : "";
   if (why) throw new Error(why);
   return out;
 }
@@ -294,13 +317,13 @@ function withMcpServers(store: ControlStore, payload: unknown): unknown {
  * each renewal is in the audit log: a download longer than a command's life no longer expires its
  * assignment. Refused in words when control holds no such pending command for the rig.
  */
-export function renewCommand(
+export async function renewCommand(
   store: ControlStore,
   privateKeyPem: string,
   rig: string,
   id: string,
-): { command: SignedCommand } | { refused: string } {
-  const c = store.commands.pending(rig).find((p) => p.envelope.id === id);
+): Promise<{ command: SignedCommand } | { refused: string }> {
+  const c = (await store.commands.pending(rig)).find((p) => p.envelope.id === id);
   if (!c)
     return {
       refused: `control holds no pending command ${id} for ${rig}: it expired, was cancelled, or has its outcome`,
@@ -314,8 +337,8 @@ export function renewCommand(
   const expires = Date.parse(e.expires_at);
   if (expires - now > COMMAND_RENEW_BEFORE_MS || until <= expires) return { command: c };
   const renewed = signEnvelope({ ...e, expires_at: new Date(until).toISOString() }, privateKeyPem);
-  store.commands.renew(e.id, canonicalJson(renewed));
-  store.auditLog.add("control", "command_renewed", {
+  await store.commands.renew(e.id, canonicalJson(renewed));
+  await store.auditLog.add("control", "command_renewed", {
     id: e.id,
     rig,
     expires_at: renewed.envelope.expires_at,
@@ -354,16 +377,17 @@ export interface IssueInput {
  * The payload is validated against its kind's schema before signing; the rig's harness
  * validates and verifies it again on arrival.
  */
-export function issueCommand(
+export async function issueCommand(
   store: ControlStore,
   privateKeyPem: string,
   input: IssueInput,
-): { id: string } {
-  const signed = prepareCommand(store, privateKeyPem, input);
-  store.commands.enqueue(signed);
-  keepAssignedCampaign(store, signed);
-  auditChange(store, signed);
-  publishCommand(store, signed);
+): Promise<{ id: string }> {
+  const signed = await prepareCommand(store, privateKeyPem, input);
+  await store.commands.enqueue(signed);
+  await keepAssignedCampaign(store, signed);
+  await auditChange(store, signed);
+  // On the bus once its record is kept: a command of a transaction that is dropped is not sent.
+  store.onceKept(() => publishCommand(store, signed));
   return { id: signed.envelope.id };
 }
 
@@ -371,14 +395,14 @@ export function issueCommand(
  * A teachers' round now (goal 194), as the MCP tool and the REST route ask for it: one signed
  * start_teachers_round to the run's rig, refused in words before signing (teachersRoundAsked).
  */
-export function startTeachersRound(
+export async function startTeachersRound(
   store: ControlStore,
   privateKeyPem: string,
   a: { run: string; issuedBy: string },
-): { started: true; id: string; rig: string; said: string } {
+): Promise<{ started: true; id: string; rig: string; said: string }> {
   const payload = { run: a.run };
-  const rig = commandRig(store, "start_teachers_round", undefined, payload);
-  const { id } = issueCommand(store, privateKeyPem, {
+  const rig = await commandRig(store, "start_teachers_round", undefined, payload);
+  const { id } = await issueCommand(store, privateKeyPem, {
     rig,
     kind: "start_teachers_round",
     payload,
@@ -392,14 +416,14 @@ export function startTeachersRound(
  * More hours of work for a run (goal 198), as the MCP tool and the REST route ask for them: one
  * signed add_run_hours to the run's rig, refused in words before signing for a closed run.
  */
-export function addRunHours(
+export async function addRunHours(
   store: ControlStore,
   privateKeyPem: string,
   a: { run: string; hours: number; issuedBy: string },
-): { id: string; rig: string; said: string } {
+): Promise<{ id: string; rig: string; said: string }> {
   const payload = { run: a.run, hours: a.hours };
-  const rig = commandRig(store, "add_run_hours", undefined, payload);
-  const { id } = issueCommand(store, privateKeyPem, {
+  const rig = await commandRig(store, "add_run_hours", undefined, payload);
+  const { id } = await issueCommand(store, privateKeyPem, {
     rig,
     kind: "add_run_hours",
     payload,
@@ -413,10 +437,10 @@ export function addRunHours(
  * A command that changes a rig part's setting says in the audit log what it changes, beside the
  * `command_issued` that every command gets: a `log_level` its part and level.
  */
-function auditChange(store: ControlStore, signed: SignedCommand): void {
+async function auditChange(store: ControlStore, signed: SignedCommand): Promise<void> {
   const e = signed.envelope;
   if (e.kind !== "log_level") return;
-  store.auditLog.add(e.issued_by, "log_level_sent", {
+  await store.auditLog.add(e.issued_by, "log_level_sent", {
     command: e.id,
     rig: e.rig,
     ...(e.payload as Record<string, unknown>),
@@ -428,10 +452,14 @@ function auditChange(store: ControlStore, signed: SignedCommand): void {
  * with the message bus on, takes it off its rig's subject, so the rig's supervisor never delivers
  * it. False when it was not pending.
  */
-export function cancelCommand(store: ControlStore, id: string, actor: string): boolean {
-  const rig = store.commands.row(id)?.rig;
-  if (!store.commands.cancel(id, actor)) return false;
-  if (rig) unpublishCommand(store, rig, id);
+export async function cancelCommand(
+  store: ControlStore,
+  id: string,
+  actor: string,
+): Promise<boolean> {
+  const rig = (await store.commands.row(id))?.rig;
+  if (!(await store.commands.cancel(id, actor))) return false;
+  if (rig) store.onceKept(() => unpublishCommand(store, rig, id));
   return true;
 }
 
@@ -450,7 +478,9 @@ export class AssignmentHeld extends WakeRefused {}
 /** What issueWaking needs of the rigs on RunPod (RunpodRigs, runpod/rigs.ts). */
 export interface PodWaker {
   /** The rig's pod as control follows it, when the rig is one launched on RunPod. */
-  view(rig: string): { active: boolean; status: string; op?: { kind: string } | null } | undefined;
+  view(
+    rig: string,
+  ): Promise<{ active: boolean; status: string; op?: { kind: string } | null } | undefined>;
   /** Starts the rig's pod when it is stopped: what it did in words, or null when nothing. */
   wake(rig: string, by: string, why?: string): Promise<string | null>;
 }
@@ -473,11 +503,11 @@ export async function issueWaking(
   // Control's disk at its floor holds new runs; what runs already goes on.
   const held = input.kind === "assign_campaign" ? controlDiskOf(store)?.held : undefined;
   if (held) throw new AssignmentHeld(held);
-  const signed = prepareCommand(store, privateKeyPem, input);
+  const signed = await prepareCommand(store, privateKeyPem, input);
   const rig = signed.envelope.rig;
   let woke: string | null = null;
   if (pods && WAKING_KINDS.includes(input.kind)) {
-    const pod = pods.view(rig);
+    const pod = await pods.view(rig);
     if (pod?.active && pod.status === "EXITED" && !pod.op && !input.owner)
       throw new WakeRefused(
         `${rig}'s pod on RunPod is stopped, and only the owner can start it: start the pod from the rig's page, or start the run with the owner's token`,
@@ -495,10 +525,11 @@ export async function issueWaking(
       );
     }
   }
-  store.commands.enqueue(signed);
-  keepAssignedCampaign(store, signed);
-  auditChange(store, signed);
-  publishCommand(store, signed);
+  await store.commands.enqueue(signed);
+  await keepAssignedCampaign(store, signed);
+  await auditChange(store, signed);
+  // On the bus once its record is kept: a command of a transaction that is dropped is not sent.
+  store.onceKept(() => publishCommand(store, signed));
   return { id: signed.envelope.id, woke };
 }
 
@@ -507,28 +538,31 @@ export async function issueWaking(
  * payload fits its kind's schema, and the signed command is small enough to deliver. Throws, in
  * words, otherwise. issueCommand and issueWaking queue what it returns.
  */
-export function prepareCommand(
+export async function prepareCommand(
   store: ControlStore,
   privateKeyPem: string,
   input: IssueInput,
-): SignedCommand {
+): Promise<SignedCommand> {
   // A kind about one run goes to the run's rig, which the caller may leave out (goal 170).
-  const rig = commandRig(store, input.kind, input.rig, input.payload);
-  if (!store.reportedRigs.list().some((u) => u.id === rig) && !store.enrollments.knownRig(rig)) {
+  const rig = await commandRig(store, input.kind, input.rig, input.payload);
+  if (
+    !(await store.reportedRigs.list()).some((u) => u.id === rig) &&
+    !(await store.enrollments.knownRig(rig))
+  ) {
     throw new Error(`unknown rig ${rig}`);
   }
   // A rig control refuses would never fetch it: say why now, not when it expires.
-  const refused = store.refusals.get(rig);
+  const refused = await store.refusals.get(rig);
   if (refused) throw new Error(`Control sends no commands to ${rig}. ${refused.reason}`);
   const assigns = input.kind === "assign_campaign";
   const unrunnable = assigns
     ? (input.agent ? agentAssignRefusal(input.payload) : "") ||
-      (input.owner === false ? savedSettingsRefusal(store, input.payload) : "") ||
+      (input.owner === false ? await savedSettingsRefusal(store, input.payload) : "") ||
       assignRefusal(input.payload) ||
-      gitAccessRefusal(store, input.payload)
+      (await gitAccessRefusal(store, input.payload))
     : "";
   if (unrunnable) throw new Error(unrunnable);
-  const shelved = archivedRefusal(store, rig, input.kind, input.payload);
+  const shelved = await archivedRefusal(store, rig, input.kind, input.payload);
   if (shelved) throw new Error(shelved);
   // Typing into an agent's terminal is the owner's own (goal 169): never an operator's or an agent's.
   if (input.kind === "terminal_input" && !typesIntoTerminals(input.issuedBy))
@@ -538,7 +572,7 @@ export function prepareCommand(
   const assigned = input.payload as { contract?: unknown; agents?: unknown } | null;
   const tooWide =
     input.kind === "assign_campaign" && assigned?.agents !== false
-      ? campaignContextRefusal(store, rig, assigned?.contract)
+      ? await campaignContextRefusal(store, rig, assigned?.contract)
       : "";
   if (tooWide) throw new Error(tooWide);
   // The old names a command took before v0.1.1 are refused in words (core/names.ts).
@@ -546,9 +580,9 @@ export function prepareCommand(
   if (old.length) throw new Error(`bad ${input.kind} payload: ${old.join("; ")}`);
   const parsed = CommandPayloads[input.kind].safeParse(
     input.kind === "message_agent"
-      ? checkedMessage(store, rig, input.payload)
+      ? await checkedMessage(store, rig, input.payload)
       : input.kind === "assign_campaign"
-        ? withMcpServers(store, input.payload)
+        ? await withMcpServers(store, input.payload)
         : input.payload,
   );
   if (!parsed.success) {
@@ -559,17 +593,17 @@ export function prepareCommand(
   const payload = parsed.data;
   const ruled =
     input.kind === "redirect"
-      ? redirectRefusal(store, rig, payload)
+      ? await redirectRefusal(store, rig, payload)
       : input.kind === "hypothesis_status"
-        ? hypothesisStatusRefusal(store, rig, payload)
+        ? await hypothesisStatusRefusal(store, rig, payload)
         : input.kind === "assign_campaign"
-          ? usedRunRefusal(store, payload as { run: string })
+          ? await usedRunRefusal(store, payload as { run: string })
           : input.kind === "rig_check"
-            ? modelCheckRefusal(store, rig, payload as { check: string })
+            ? await modelCheckRefusal(store, rig, payload as { check: string })
             : input.kind === "start_teachers_round"
-              ? teachersRoundAsked(store, rig, payload as { run: string })
+              ? await teachersRoundAsked(store, rig, payload as { run: string })
               : input.kind === "add_run_hours"
-                ? closedRefusal(store, rig, payload as { run: string })
+                ? await closedRefusal(store, rig, payload as { run: string })
                 : "";
   if (ruled) throw new Error(ruled);
   const now = Date.now();
@@ -618,7 +652,7 @@ export async function propagateChampion(
   const to = await findRun(store, input.toRun, opts);
   const dst = to?.run;
   if (!to || !dst) throw new Refusal(`no run ${input.toRun}`);
-  if (input.agent && store.fullResets.open(to.rig.id))
+  if (input.agent && (await store.fullResets.open(to.rig.id)))
     throw new Refusal(`${to.rig.id} is being reset by the owner`);
   if (to.rig.id === from.rig.id)
     throw new Refusal(`${input.run} and ${input.toRun} are on one rig: propagate between two rigs`);
@@ -637,7 +671,7 @@ export async function propagateChampion(
     throw new Refusal(`the target works on ${dst.seed_repo}, the champion is in ${pub.repo}`);
   }
   // The receiving supervisor fetches the patch from the source rig's results: where it ran.
-  const { id } = issueCommand(store, privateKeyPem, {
+  const { id } = await issueCommand(store, privateKeyPem, {
     rig: to.rig.id,
     kind: "propagate",
     payload: {

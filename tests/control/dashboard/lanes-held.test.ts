@@ -10,7 +10,9 @@ import { ingestReport } from "../../helpers/control-store.ts";
  */
 
 test("a run whose lanes wait for the judge says why on its page and in History; ⋯ sets the limit (goal 230)", async () => {
-  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": "t-a-abcdef" } } });
+  const { store, control: api } = await controlOnly({
+    tokens: { rigs: { "rig-a": "t-a-abcdef" } },
+  });
   const { page } = await signIn(api);
   let id = 0;
   const ingest = (events: { kind: string; subject: string; body: Record<string, unknown> }[]) =>

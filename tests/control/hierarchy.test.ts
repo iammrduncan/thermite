@@ -23,8 +23,8 @@ const THE_RIGS_OWN = new Set(["POST /v1/rigs/:rig/champions/:run/:seq/patch"]);
 /** Starts a new run of a campaign: the campaign's, and no run is named yet. */
 const NEW_RUN = new Set(["POST /ui/campaigns/:campaign/runs", "POST /v1/campaigns/:campaign/runs"]);
 
-test("no dashboard or REST route addresses a run-scoped thing through its rig", () => {
-  const { control } = controlOnly();
+test("no dashboard or REST route addresses a run-scoped thing through its rig", async () => {
+  const { control } = await controlOnly();
   const routes = [...new Set(control.routes.map((r) => `${r.method} ${r.path}`))];
   assert.ok(routes.length > 150, "every route of control, the dashboard's too");
   const wrong = routes.filter((r) => {
@@ -46,7 +46,7 @@ test("no dashboard or REST route addresses a run-scoped thing through its rig", 
 });
 
 test("no MCP tool takes a rig with a run, an attempt or a trial", async () => {
-  const { control } = controlOnly();
+  const { control } = await controlOnly();
   const client = await mcpClient(control, ADMIN);
   const tools = (await client.listTools()).tools;
   await client.close();
@@ -73,7 +73,7 @@ test("no MCP tool takes a rig with a run, an attempt or a trial", async () => {
 });
 
 test("the old addresses through a rig are gone, with no redirect", async () => {
-  const { control, api } = controlOnly();
+  const { control, api } = await controlOnly();
   const { get } = await signIn(control);
   for (const path of [
     "/ui/rigs/rig-a/attempts/a-1",

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { sqliteBehind } from "../../../../src/control/store/behind.ts";
 import type { RigView } from "../../../../src/control/views/index.ts";
 import type { HarnessService } from "../../../../src/harness/service/index.ts";
 import { ask } from "../../../../src/supervisor/ask.ts";
@@ -15,7 +16,7 @@ import type { Form } from "./page.ts";
 
 /** Control with one rig (rig-a) whose harness is `env`'s; the supervisor's relay is called directly. */
 export async function stack(env: { service: HarnessService; keys: { privateKeyPem: string } }) {
-  const { store, control, harness, bus, relay, live, api } = controlStack({ env });
+  const { store, control, harness, bus, relay, live, api } = await controlStack({ env });
   /**
    * Two passes of the supervisor's relay: control's commands reach the harness, then the events
    * they caused and the harness's new live lines reach control.
@@ -80,7 +81,9 @@ export async function stack(env: { service: HarnessService; keys: { privateKeyPe
   /** The payloads of the commands control signed of one kind, oldest first. */
   const signed = (kind: string) =>
     (
-      store.db.prepare("select signed from command where kind = ? order by rowid").all(kind) as {
+      sqliteBehind(store)
+        .db.prepare("select signed from command where kind = ? order by rowid")
+        .all(kind) as {
         signed: string;
       }[]
     ).map((x) => JSON.parse(x.signed).envelope.payload as Record<string, unknown>);

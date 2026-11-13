@@ -52,7 +52,7 @@ const { tlsOf } = await import("../../src/common/bus/tls.ts");
 const { BusTls, BusUsers, reloadBus } = await import("../../src/control/bus/index.ts");
 const { ControlTunnels } = await import("../../src/control/runpod/tunnel.ts");
 const { SecretBox } = await import("../../src/control/secrets.ts");
-const { ControlStore } = await import("../../src/control/store/index.ts");
+const { openControlStore } = await import("../../src/control/store/index.ts");
 const { generateSigningKeys } = await import("../../src/core/commands.ts");
 const commands = await import("../../src/core/link/commands.ts");
 const config = await import("../../src/core/link/config.ts");
@@ -293,12 +293,12 @@ try {
   sh(engine, ["network", "create", "--subnet", `${subnet}.0/24`, net]);
 
   // Control: its store, its authority and server certificate, its users, and a launch's leaf.
-  const store = new ControlStore(join(work, "control.db"));
+  const store = openControlStore(join(work, "control.db"));
   const secrets = SecretBox.ephemeral();
   const tls = new BusTls({ stateDir: work, configDir: files, names: ["127.0.0.1"] });
   const trust = { ca: tls.caCert };
   let serverUp = false;
-  const busUsers = new BusUsers({
+  const busUsers = await BusUsers.open({
     store,
     secrets,
     file: join(files, "users.conf"),
@@ -312,7 +312,7 @@ try {
   const tunnels = new ControlTunnels(store, secrets, generateSigningKeys().privateKeyPem, {
     busCa: tls.caCert,
   });
-  const minted = tunnels.mint({ by: "owner:check", rig: RIG });
+  const minted = await tunnels.mint({ by: "owner:check", rig: RIG });
   check(
     "a launch gives the pod its leaf node's values",
     Object.values(leafLink.LEAF_ENV).every((k) => minted.env[k]),
@@ -386,7 +386,7 @@ try {
   const sup = supervisorOn(ports.pod, supSeed, values);
   sups.push(sup);
   check("no address yet: control's server does not dial the pod", !(await reportAcked(sup, 3_000)));
-  store.tunnels.setLeafAddress(RIG, address);
+  await store.tunnels.setLeafAddress(RIG, address);
   await busUsers.sync();
   const t0 = Date.now();
   check(
@@ -471,7 +471,7 @@ try {
   /** @type {string[]} */
   const seen = [];
   const all = raw.subscribe(">");
-  (async () => {
+  void (async () => {
     for await (const m of all) if (!m.subject.includes(RIG)) seen.push(m.subject);
   })();
   await raw.flush();
@@ -552,14 +552,16 @@ try {
   const other = /** @type {LeafValues} */ (
     leafValues(
       /** @type {Record<string, string | undefined>} */ (
-        new ControlTunnels(
-          new ControlStore(":memory:"),
-          secrets,
-          generateSigningKeys().privateKeyPem,
-          {
-            busCa: tls.caCert,
-          },
-        ).mint({ by: "owner:check", rig: RIG }).env
+        (
+          await new ControlTunnels(
+            openControlStore(":memory:"),
+            secrets,
+            generateSigningKeys().privateKeyPem,
+            {
+              busCa: tls.caCert,
+            },
+          ).mint({ by: "owner:check", rig: RIG })
+        ).env
       ),
     )
   );
@@ -573,7 +575,7 @@ try {
   );
   const imp = supervisorOn(ports.impostor, impKey.getSeed(), other);
   sups.push(imp);
-  store.tunnels.setLeafAddress(RIG, impAddress);
+  await store.tunnels.setLeafAddress(RIG, impAddress);
   await busUsers.sync();
   check(
     "control's server refuses a pod whose certificate another authority signed",
@@ -591,7 +593,7 @@ try {
   );
   const again = supervisorOn(ports.moved, supSeed, values);
   sups.push(again);
-  store.tunnels.setLeafAddress(RIG, moved);
+  await store.tunnels.setLeafAddress(RIG, moved);
   await busUsers.sync();
   check(
     "started again at a new address, with its launch values: the reports go again",
@@ -599,7 +601,7 @@ try {
   );
 
   // Retired: its connection and its account go.
-  store.retired.add(RIG, "owner:check");
+  await store.retired.add(RIG, "owner:check");
   await busUsers.sync();
   await pause(2_000);
   check(

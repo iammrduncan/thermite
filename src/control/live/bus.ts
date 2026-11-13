@@ -72,7 +72,7 @@ function onSubject(e: LiveEntry, s: LiveSubject): boolean {
  * that rig in control's run registry, and the batch as the harness signed it, or, unsigned, the
  * supervisor's own lines. The lines kept go into the rig's live view.
  */
-export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
+export async function foldLive(t: LiveIntake, m: BusMessage): Promise<LiveFolded> {
   const { store, taken } = t;
   const subject = readLiveSubject(m.subject);
   const rig = subject && "rig" in subject ? subject.rig : m.header(LIVE_RIG_HEADER);
@@ -85,9 +85,10 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
   if (!subject) return refuse("not a live subject");
   if (!rig) return refuse("no rig named");
   // A retired rig's token has ended too: it is told it is retired, before control knows it not.
-  if (store.retired.get(rig)) return refuse("this rig is retired in control");
-  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
-  if ("run" in subject && !store.runRegistry.rigsOf(subject.run).includes(rig))
+  if (await store.retired.get(rig)) return refuse("this rig is retired in control");
+  if (!(await store.enrollments.knownRig(rig)))
+    return refuse("no such rig: control has no token for it");
+  if ("run" in subject && !(await store.runRegistry.rigsOf(subject.run)).includes(rig))
     return refuse("a run control does not give this rig");
   let read: { batch: LiveBatchRead; entries: LiveEntry[]; unknown: Record<string, number> };
   try {
@@ -99,7 +100,7 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
   if (b.rig !== rig) return refuse("rig mismatch");
   const signed = b.signature !== undefined;
   if (signed) {
-    const refused = harnessRefusal(store, rig, b);
+    const refused = await harnessRefusal(store, rig, b);
     if (refused) return refuse(refused[1]);
   } else if (subject.source !== "supervisor" && !subject.source.startsWith("advisor:"))
     // The supervisor's unsigned lines: its own, and its advisors' (goal 188).
@@ -108,7 +109,7 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
   const leftOut =
     Object.values(read.unknown).reduce((a, n) => a + n, 0) + read.entries.length - lines.length;
   const logId = signed ? b.log_id : `supervisor:${b.log_id}`;
-  const added = store.liveLines.add(rig, logId, lines, signed);
+  const added = await store.liveLines.add(rig, logId, lines, signed);
   taken.messages++;
   taken.lines += added;
   taken.leftOut += leftOut;
@@ -123,7 +124,7 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
  * takes each message in order and acks it once folded or refused. Runs until the bus is closed.
  */
 export async function followLive(bus: Pick<Bus, "follow">, t: LiveIntake): Promise<void> {
-  await bus.follow(LIVE_STREAM_CONFIG, LIVE_CONSUMER_CONFIG, (m) => {
-    foldLive(t, m);
+  await bus.follow(LIVE_STREAM_CONFIG, LIVE_CONSUMER_CONFIG, async (m) => {
+    await foldLive(t, m);
   });
 }

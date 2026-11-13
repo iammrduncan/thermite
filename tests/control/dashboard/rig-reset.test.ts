@@ -9,7 +9,7 @@ import { ingestReport } from "../../helpers/control-store.ts";
  */
 
 test("a full reset under way: its card on the rig's page, and Cancel back to it", async () => {
-  const s = controlOnly();
+  const s = await controlOnly();
   await ingestReport(s.store, {
     rig: "rig-a",
     ledger_id: "ledger-a",
@@ -19,7 +19,7 @@ test("a full reset under way: its card on the rig's page, and Cancel back to it"
     summary: {},
     generated_at: new Date().toISOString(),
   });
-  const id = s.store.fullResets.create("rig-a", "owner:ui");
+  const id = await s.store.fullResets.create("rig-a", "owner:ui");
   const ui = await signIn(s.control);
   const html = await ui.page("/ui/rigs/rig-a");
   assert.match(html, /<span class="title">A full reset is under way<\/span>/);

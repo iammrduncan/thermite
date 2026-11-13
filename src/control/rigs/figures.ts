@@ -9,13 +9,13 @@ import type { ControlStore } from "../store/index.ts";
  * model download that starts or ends is a step in the rig's history. Its keys are kept apart from
  * the figures, which pages show.
  */
-export function takeFigures(
+export async function takeFigures(
   store: ControlStore,
   rig: string,
   figures: Omit<z.output<typeof SupervisorFigures>, "bus_key" | "bus_seal_key">,
-): void {
-  const before = store.reportedRigs.supervisor(rig)?.models;
-  store.reportedRigs.setSupervisor(rig, figures);
+): Promise<void> {
+  const before = (await store.reportedRigs.supervisor(rig))?.models;
+  await store.reportedRigs.setSupervisor(rig, figures);
   for (const s of modelSteps(before, figures.models))
-    store.rigHistory.add(rig, s.step, s.ok, s.detail);
+    await store.rigHistory.add(rig, s.step, s.ok, s.detail);
 }

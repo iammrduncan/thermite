@@ -28,32 +28,32 @@ import { streamEvent } from "../views/index.ts";
  * refused item is recorded in control's audit log (`kb_item_refused`) and its log, and the rest of
  * the page goes on. Its file meets it by its SHA-256 (control/kb/files.ts), whichever comes first.
  */
-export function takeKbItem(
+export async function takeKbItem(
   store: ControlStore,
   src: { rig: string; ledger: string },
   e: { id: number; at: string; actor: string; subject: string | null; body: unknown },
-): void {
+): Promise<void> {
   const run = e.subject ?? "";
   const read = readKbItem(e.body);
   const why =
     "refused" in read
       ? `not an item: ${read.refused}`
-      : storeItem(store, { ...src, run }, e, read.body);
+      : await storeItem(store, { ...src, run }, e, read.body);
   if (!why) return;
   const slot = "body" in read ? read.body.slot : null;
   const what = { ...src, event: e.id, run, writer: e.actor, slot, why };
   log("control", "an item for the knowledge base refused", what, "warn");
-  store.auditLog.add("control", "kb_item_refused", what);
+  await store.auditLog.add("control", "kb_item_refused", what);
 }
 
 /** An item stored after control's checks; else why not, in words. */
-function storeItem(
+async function storeItem(
   store: ControlStore,
   src: { rig: string; ledger: string; run: string },
   e: { id: number; at: string; actor: string },
   b: KbItemBody,
-): string | undefined {
-  if (!src.run || store.runRegistry.ledgerOf(src.run, src.rig) !== src.ledger)
+): Promise<string | undefined> {
+  if (!src.run || (await store.runRegistry.ledgerOf(src.run, src.rig)) !== src.ledger)
     return `run ${src.run || "(none)"} is not this rig's: control's run registry has no such run of this ledger`;
   const own = slotOfWriter(e.actor);
   if (!own) return `${e.actor} has no slot in the knowledge base: it writes no item`;
@@ -61,12 +61,12 @@ function storeItem(
     return `${e.actor} writes only in its own slot, ${own}: not in ${b.slot}, another writer's`;
   // An agent writes the kinds its role may; Thermite's code, any kind in its records slot.
   // A run control signed no assignment of (one a rig assigned itself) keeps to the default.
-  const writes = store.commands.assignedKbWrites(src.rig, src.run) ?? KB_WRITES_DEFAULT;
+  const writes = (await store.commands.assignedKbWrites(src.rig, src.run)) ?? KB_WRITES_DEFAULT;
   const kinds = kindsForSlot(writes, b.slot);
   if (b.slot !== KB_RECORDS && !kinds.includes(b.kind))
     return `the campaign lets ${b.slot} write ${kinds.length ? kinds.join(", ") : "nothing"} in run ${src.run}: not a ${b.kind}`;
   // No limit unless the owner set one on control (control/kb/settings.ts).
-  const limit = store.kb().settings.maxFileBytes();
+  const limit = await store.kb().settings.maxFileBytes();
   if (b.file && limit > 0 && b.file.bytes > limit) return overLimitWords(b.file, limit);
   return store.kb().write({ ...src, event: e.id, at: e.at }, b);
 }
@@ -87,13 +87,13 @@ export async function readKnowledgeAgain(
   bus: Pick<Bus, "read">,
 ): Promise<number> {
   const kb = store.kb();
-  const kinds = kb.kindsToReadAgain();
+  const kinds = await kb.kindsToReadAgain();
   if (!kinds.length) return 0;
-  const place = store.busPositions.of(EVENT_STREAM);
-  const mark = kb.indexedFromTable();
+  const place = await store.busPositions.of(EVENT_STREAM);
+  const mark = await kb.indexedFromTable();
   const subjects = kinds.flatMap(kindSubjects);
   const ledgers = new Map(
-    store.reportedRigs.list({ withRetired: true }).map((r) => [r.id, r.ledger_id]),
+    (await store.reportedRigs.list({ withRetired: true })).map((r) => [r.id, r.ledger_id]),
   );
   const started = performance.now();
   let again = 0;
@@ -113,11 +113,11 @@ export async function readKnowledgeAgain(
       }
       if (ledgers.get(e.read.rig) === e.read.ledger) due.push(e.read);
     }
-    store.tx(() => {
+    await store.tx(async () => {
       for (const { rig, ledger, event } of due)
         try {
           // A savepoint: an event indexed in part is not kept.
-          store.tx(() => kb.index({ rig, ledger }, event, { again: true }));
+          await store.tx(async () => kb.index({ rig, ledger }, event, { again: true }));
           again++;
         } catch (err) {
           const what = { rig, ledger, event: event.id, kind: event.kind, error: errorText(err) };
@@ -127,7 +127,7 @@ export async function readKnowledgeAgain(
     if (ended || page.done || page.next <= from) break;
     from = page.next;
   }
-  kb.readAgainDone();
+  await kb.readAgainDone();
   const ms = Math.round(performance.now() - started);
   const level = again ? "info" : "debug";
   log("control", "the knowledge base read events again for its new reading", { again, ms }, level);

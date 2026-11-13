@@ -33,17 +33,17 @@ async function world(t: TestContext) {
   const fake = await startFakeMcp({ kind: "bearer", token: KEY.slice(7) });
   t.after(() => fake.close());
   const secrets = SecretBox.ephemeral();
-  const { env, store, harness, fetchImpl, rigConfig } = controlStack({
+  const { env, store, harness, fetchImpl, rigConfig } = await controlStack({
     env: makeJudgeEnv({ kitMcpServers: USES, assign: { mcp_servers: USES } }),
     tokens: { rigs: { "rig-a": "rig-token-aaaaaa" } },
-    options: (store) => {
+    options: async (store) => {
       const servers = new McpServers(store, secrets);
-      servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
-      servers.put({ name: "papers", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+      await servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+      await servers.put({ name: "papers", url: fake.url, auth: "key", secret: KEY }, "owner:test");
       return { secrets, mcpServers: servers };
     },
   });
-  assigned(store, "rig-a", RUN, "js", { mcp_servers: USES });
+  await assigned(store, "rig-a", RUN, "js", { mcp_servers: USES });
   await env.service.applyCommand(env.assign);
   return { fake, env, harness, fetchImpl, rigConfig };
 }

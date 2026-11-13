@@ -68,7 +68,7 @@ export const wantsJson = (c: Ctx) => (c.req.header("accept") ?? "").includes("ap
  * and the options; the session and CSRF helpers; the rigs' views; the command forms; what waits
  * for the owner; and the page shell. Each section (a module of this folder) takes what it needs.
  */
-export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
+export async function dashboardContext(store: ControlStore, opts: DashboardOptions) {
   const chatgpt = opts.chatgpt ?? new ChatGPTLogins(store, opts.secrets, opts.providerFetch);
   const mcpServers = opts.mcpServers ?? new McpServers(store, opts.secrets);
   // Control's own build, which each rig's is compared with, and the window after which a rig
@@ -85,15 +85,22 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       staleAfterMs: opts.staleAfterMs,
       offlineAfterMs: opts.offlineAfterMs,
     });
-  updates.endUnfinished();
+  await updates.endUnfinished();
   // The owner's sessions, which these pages share with the app at /next and the owner's routes
   // of /v1 (api/session.ts).
   const sessions = opts.sessions;
   const { tokenFp, sessionMs } = sessions;
   const csrfOf = (sid: string) => sessions.csrfOf(sid);
   const cookie = (c: Ctx, sid: string) => sessions.cookie(c, sid);
-  const sessionOf = (c: Ctx) => sessions.sessionOf(c);
-  const csrf = (c: Ctx) => csrfOf(sessionOf(c) ?? "");
+  // The session each request was found to have. Every page's request is asked for its session
+  // first (session.ts), so what a page draws reads it here and does not ask the store again.
+  const found = new WeakMap<Request, string>();
+  const sessionOf = async (c: Ctx) => {
+    const sid = await sessions.sessionOf(c);
+    if (sid) found.set(c.req.raw, sid);
+    return sid;
+  };
+  const csrf = (c: Ctx) => csrfOf(found.get(c.req.raw) ?? "");
   const parts = opts.parts;
   const views = parts.views;
   /**
@@ -143,16 +150,23 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
    * run with agents (the run's header and Live's), and, with `close` (the run's page), Close run
    * for a run not closed yet (goal 087).
    */
-  const moreMenu = (c: Ctx, rig: string, r: RunView, back: string, cls = "", close = false) => {
+  const moreMenu = async (
+    c: Ctx,
+    rig: string,
+    r: RunView,
+    back: string,
+    cls = "",
+    close = false,
+  ) => {
     const working = r.status === "running" && r.has_agents !== false;
     const restart = working
       ? `${cmdForm(c, { rig, kind: "reset_workers", fields: { run: r.id }, label: "Restart the lanes", cls, back })}<div class="muted small">Ends the lanes' running trials now and the current round: every lane starts again from the champion. Nothing the judge decided is lost.</div>`
       : "";
     // Off, with why, on a rig without teachers or with its teachers off: control refuses it there.
     const noRound =
-      rigHasTeachers(store, rig) === false
+      (await rigHasTeachers(store, rig)) === false
         ? "This rig has no teachers: give them a model on Edit rig."
-        : rigSettingsOf(store, rig)?.settings?.teachers === false
+        : (await rigSettingsOf(store, rig))?.settings?.teachers === false
           ? "This rig's teachers are off: switch them on on Edit rig."
           : "";
     const round = working
@@ -186,15 +200,15 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
    * A decision already sent, and not refused, is left out at once; it comes back only if the
    * rig refuses it or the item needs the owner again.
    */
-  const needs = (c: Ctx, vs: RigView[], now: number, back = "/ui"): Need[] =>
-    operatorNeeds(store, vs, forms(c), now, back).filter((n) => !n.decided);
+  const needs = async (c: Ctx, vs: RigView[], now: number, back = "/ui"): Promise<Need[]> =>
+    (await operatorNeeds(store, vs, forms(c), now, back)).filter((n) => !n.decided);
   /** The archived campaigns (goal 077): out of the navigation, Needs you and the Overview. */
-  const archivedNames = () => new Set(store.archive.list().map((a) => a.campaign));
+  const archivedNames = async () => new Set((await store.archive.list()).map((a) => a.campaign));
   /** Leaves out what belongs to an archived campaign's runs: for Needs you and the lists. */
   const notArchived = <T extends { rig: string; run?: string | undefined }>(
     vs: RigView[],
     xs: T[],
-    archived = archivedNames(),
+    archived: ReadonlySet<string>,
   ) =>
     archived.size
       ? xs.filter((x) => !x.run || !archived.has(campaignOfRun(vs, x.rig, x.run) ?? ""))
@@ -203,12 +217,13 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
    * The page shell with the navigation's campaigns and their folders, collapsed to its icons when
    * this browser keeps it so (NAV_COOKIE).
    */
-  const page = (
+  const page = async (
     c: Ctx,
     s: Omit<Shell, "rigs" | "needs" | "now" | "rail">,
     body: string,
-    vs = views(),
+    given?: RigView[],
   ) => {
+    const vs = given ?? (await views());
     const now = Date.now();
     // A command just sent from this page (POST /ui/commands): say so at the top.
     const sent = c.req.query("sent");
@@ -219,7 +234,7 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       body = `<div class="card warn" style="margin-bottom:16px"><b class="bad">${esc(head)}</b> ${esc(rest.join(" "))}</div>${body}`;
     } else if (sent)
       body = `<div class="card sent-note" style="margin-bottom:16px"><b class="ok">${esc(sent)}</b></div>${body}`;
-    const archived = archivedNames();
+    const archived = await archivedNames();
     const path = new URL(c.req.url).pathname;
     const current = path.startsWith("/ui/campaigns/")
       ? decodeURIComponent(path.slice("/ui/campaigns/".length).split("/")[0] ?? "")
@@ -231,14 +246,14 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
           rigs: vs,
           needs: notArchived(
             vs,
-            needs(c, vs, now).filter((n) => n.kind !== "stale"),
+            (await needs(c, vs, now)).filter((n) => n.kind !== "stale"),
             archived,
           ).length,
           now,
           rail: getCookie(c, NAV_COOKIE) === "rail",
           build: control,
           nav: {
-            folders: store.folders.list(),
+            folders: await store.folders.list(),
             archived,
             csrf: csrf(c),
             back: backHere(c),
@@ -291,4 +306,4 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
 }
 
 /** The dashboard's context: what its sections share (dashboardContext). */
-export type Dashboard = ReturnType<typeof dashboardContext>;
+export type Dashboard = Awaited<ReturnType<typeof dashboardContext>>;

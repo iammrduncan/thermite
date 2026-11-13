@@ -4,8 +4,15 @@ import { type Row, StorePart } from "./part.ts";
  * The dashboard's sign-in sessions (goal 125, T6): each by its id's hash, with its token's
  * fingerprint and when it ends.
  */
+export interface UiSessions {
+  create(idHash: string, tokenFp: string, expiresAt: number): Promise<void>;
+  get(idHash: string): Promise<{ tokenFp: string; expiresAt: number } | undefined>;
+  extend(idHash: string, expiresAt: number): Promise<void>;
+  delete(idHash: string): Promise<void>;
+}
 
-export class UiSessions extends StorePart {
+/** UiSessions on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteUiSessions extends StorePart {
   create(idHash: string, tokenFp: string, expiresAt: number): void {
     const now = Date.now();
     this.db.prepare("delete from ui_session where expires_at <= ?").run(now);

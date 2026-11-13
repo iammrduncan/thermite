@@ -70,7 +70,7 @@ export interface ControlParts {
   /** The screens of the trials the owner watches, in memory only (goal 169). */
   screens: Screens;
   /** Every rig as control sees it now (views.ts), through the folds control keeps. */
-  views(): RigView[];
+  views(): RigView[] | Promise<RigView[]>;
   /**
    * A run wherever it ran (goal 170), read now; undefined for a run no rig created. A run of an
    * earlier ledger may be read from the message bus first.
@@ -170,7 +170,7 @@ export function controlParts(
     }),
     notes: new PageNotes(),
     screens: new Screens(),
-    views: () => folds.views(viewOpts),
+    views: async () => folds.views(viewOpts),
     run: (id) => folds.run(id, viewOpts),
     campaignRuns: (campaign) => folds.campaignRuns(campaign, viewOpts),
   };

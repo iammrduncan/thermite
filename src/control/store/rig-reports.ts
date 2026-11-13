@@ -3,8 +3,16 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * The written reports rigs send to control (goal 125, T6), such as a daily report.
  */
+export interface RigReports {
+  add(rig: string, kind: string, body: string): Promise<number>;
+  list(
+    limit?: number,
+    rig?: string,
+  ): Promise<{ id: number; rig: string; kind: string; body: string; at: string }[]>;
+}
 
-export class RigReports extends StorePart {
+/** RigReports on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteRigReports extends StorePart {
   add(rig: string, kind: string, body: string): number {
     const r = this.db
       .prepare("insert into rig_report (rig, kind, body, at) values (?, ?, ?, ?)")

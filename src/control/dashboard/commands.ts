@@ -72,12 +72,13 @@ export function commandRoutes(app: Hono, dash: Dashboard): void {
       return json ? c.json(notSent(why), 400) : c.text(`refused: ${why}`, 400);
     }
     const now = Date.now();
-    const cmd = store.commands.row(id);
+    const cmd = await store.commands.row(id);
     // A check's row says how it stands itself; any other command says it beside its button.
     const check = kind === "rig_check" ? String(f.check ?? "") : "";
     const progress: Progress = check
       ? checkProgress(
-          checkRows(store, String(f.rig), now)[check] ?? checkRow(check, undefined, cmd, now),
+          (await checkRows(store, String(f.rig), now))[check] ??
+            checkRow(check, undefined, cmd, now),
         )
       : cmd
         ? commandProgress(cmd, now)

@@ -43,7 +43,7 @@ export const modelUseTabs = () => tabsRow("use");
 export async function systemTabPage(c: Ctx, dash: Dashboard, tab: Exclude<MetricsTab, "use">) {
   const now = Date.now();
   const system = dash.parts.system;
-  const vs = dash.views();
+  const vs = await dash.views();
   const body =
     tab === "bus"
       ? busTab(await system.bus(), now)
@@ -51,7 +51,7 @@ export async function systemTabPage(c: Ctx, dash: Dashboard, tab: Exclude<Metric
         ? controlTab(system.control(), now)
         : tab === "storage"
           ? storageTab(await system.storage())
-          : rigsTab(system.rigs(vs), now);
+          : rigsTab(await system.rigs(vs), now);
   return dash.page(
     c,
     { title: "Metrics", summary: "the whole system, live", active: "metrics" },
@@ -67,7 +67,7 @@ export function metricsRoutes(app: Hono, dash: Dashboard): void {
     { href: metricsHref("bus"), text: "Bus" },
   ];
   /** A page that says what it can't show, with the way back. */
-  const missing = (c: Ctx, title: string, words: string, status: 400 | 404 | 409 = 404) => {
+  const missing = async (c: Ctx, title: string, words: string, status: 400 | 404 | 409 = 404) => {
     c.status(status);
     return page(
       c,
@@ -96,8 +96,8 @@ export function metricsRoutes(app: Hono, dash: Dashboard): void {
         after: place(c.req.query("after"), "after"),
       });
     } catch (err) {
-      if (err instanceof BadInput) return missing(c, stream, err.message, 400);
-      return missing(c, stream, `The bus did not answer: ${errorText(err)}`, 409);
+      if (err instanceof BadInput) return await missing(c, stream, err.message, 400);
+      return await missing(c, stream, `The bus did not answer: ${errorText(err)}`, 409);
     }
     return page(
       c,

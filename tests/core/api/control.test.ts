@@ -38,7 +38,9 @@ describe("control's API has one contract (core/api/control/)", () => {
       assert.ok(!seen.has(key), `${name}: ${key} is named twice`);
       seen.add(key);
     }
-    const { control } = controlOnly({ tokens: { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } } });
+    const { control } = await controlOnly({
+      tokens: { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } },
+    });
     for (const [list, token] of [
       [RIG_ROUTES, RIG_TOKEN],
       [OWNER_ROUTES, ADMIN],
@@ -72,7 +74,9 @@ describe("control's API has one contract (core/api/control/)", () => {
   });
 
   test("a body past its route's limit is answered 413, the code its sender acts on", async () => {
-    const { control } = controlOnly({ tokens: { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } } });
+    const { control } = await controlOnly({
+      tokens: { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } },
+    });
     const res = await control.request(pathOf(rigs.REGISTER, PARAMS), {
       method: "POST",
       headers: { authorization: `Bearer ${RIG_TOKEN}`, "content-type": "application/json" },

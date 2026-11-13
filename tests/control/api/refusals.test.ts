@@ -16,8 +16,8 @@ import {
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
 
-function control() {
-  const { store, control: api } = controlOnly({
+async function control() {
+  const { store, control: api } = await controlOnly({
     tokens: { rigs: { "rig-a": "rig-token-aaaaaa", "rig-b": "rig-token-bbbbbb" } },
   });
   // The body as given, not as JSON: some tests send one that isn't.
@@ -34,7 +34,7 @@ function control() {
 
 describe("refusals over REST are answered as refusals, never as server errors (goal 161)", () => {
   test("a body that is not JSON is a 400 with its words", async () => {
-    const { post } = control();
+    const { post } = await control();
     assert.deepEqual(await post("/v1/propagate", "{not json"), {
       status: 400,
       error: "the request's body is not JSON",
@@ -46,7 +46,7 @@ describe("refusals over REST are answered as refusals, never as server errors (g
   });
 
   test("a body that doesn't fit its schema is a 400", async () => {
-    const { post } = control();
+    const { post } = await control();
     assert.deepEqual(await post("/v1/propagate", JSON.stringify({ run: "r-1" })), {
       status: 400,
       error: "invalid request",
@@ -54,7 +54,7 @@ describe("refusals over REST are answered as refusals, never as server errors (g
   });
 
   test("propagate's refusals are 409s with their words", async () => {
-    const { store, post } = control();
+    const { store, post } = await control();
     const body = { run: "r-1", to_run: "r-2" };
     assert.deepEqual(await post("/v1/propagate", JSON.stringify(body)), {
       status: 409,
@@ -85,7 +85,7 @@ describe("refusals over REST are answered as refusals, never as server errors (g
   });
 
   test("a reset's confirm and cancel of no such reset, and a second reset, are 409s", async () => {
-    const { store, post } = control();
+    const { store, post } = await control();
     assert.deepEqual(await post("/v1/resets/99/confirm", "{}"), {
       status: 409,
       error: "no reset 99",
@@ -94,7 +94,7 @@ describe("refusals over REST are answered as refusals, never as server errors (g
       status: 409,
       error: "no reset 99",
     });
-    store.fullResets.create("rig-a", "owner:api");
+    await store.fullResets.create("rig-a", "owner:api");
     assert.deepEqual(
       await post("/v1/rigs/rig-a/reset", JSON.stringify({ confirm: "reset rig-a" })),
       {
@@ -111,8 +111,8 @@ describe("refusals over REST are answered as refusals, never as server errors (g
   });
 
   test("a fault answers an id only; control's output and audit log keep its words under it", async () => {
-    const { store, control: api } = controlOnly();
-    store.commands.list = () => {
+    const { store, control: api } = await controlOnly();
+    (store.commands as { list: unknown }).list = () => {
       throw new Error("SQLITE_IOERR: disk I/O error at /var/lib/thermite-control/control.db");
     };
     const r = await api.request("/v1/commands", { headers: { authorization: `Bearer ${ADMIN}` } });
@@ -120,7 +120,7 @@ describe("refusals over REST are answered as refusals, never as server errors (g
     const { error } = (await r.json()) as { error: string };
     const id = /^internal error ([0-9a-f]{8})$/.exec(error)?.[1];
     assert.ok(id, error);
-    const entry = store.auditLog.list(5, { action: "failed" })[0];
+    const entry = (await store.auditLog.list(5, { action: "failed" }))[0];
     assert.equal(entry?.actor, "owner:api");
     assert.deepEqual(entry?.body, {
       method: "GET",
@@ -132,8 +132,8 @@ describe("refusals over REST are answered as refusals, never as server errors (g
   });
 
   test("an MCP tool's error reaches its caller with any secret in it masked", async () => {
-    const { store, control: api } = controlOnly();
-    store.commands.get = () => {
+    const { store, control: api } = await controlOnly();
+    (store.commands as { get: unknown }).get = () => {
       throw new Error("the provider said 401 to Authorization: Bearer made-up-0123456789abcdef");
     };
     const mcp = await mcpClient(api);
@@ -147,7 +147,7 @@ describe("refusals over REST are answered as refusals, never as server errors (g
     assert.match(text, /said 401 to Authorization: \*\*\*/);
   });
   test("every route that reads a body refuses one past its limit, 413, before it reads it", async () => {
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       tokens: { rigs: { "rig-a": "rig-token-aaaaaa" } },
     });
     const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };

@@ -19,7 +19,7 @@ const TOKENS = { admin: "owner-token-abcdef", rigs: {} };
 
 describe("thermite rig", () => {
   test("add enrolls a rig and writes its files; token replaces its token; retire shuts it out", async () => {
-    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
+    const { keys, store, control: api } = await controlOnly({ tokens: TOKENS });
     const server = serve({ fetch: api.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
     const control = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -55,13 +55,13 @@ describe("thermite rig", () => {
         readFileSync(join(out, "rig.env"), "utf8"),
         /^THERMITE_RIG_ID=gpu-1\nCONTROL_URL=http/,
       );
-      assert.ok(store.enrollments.tokenMatches("gpu-1", token));
+      assert.ok(await store.enrollments.tokenMatches("gpu-1", token));
       // A second add into the same directory is refused before control is asked.
       await assert.rejects(
         cli("rig", "add", "gpu-2", "--control", control, "--token-file", ownerFile, "--out", out),
         /not empty/,
       );
-      assert.equal(store.enrollments.rig("gpu-2"), undefined);
+      assert.equal(await store.enrollments.rig("gpu-2"), undefined);
       const newFile = join(dir, "gpu-1.token");
       await cli(
         "rig",
@@ -75,10 +75,10 @@ describe("thermite rig", () => {
         newFile,
       );
       const rotated = readFileSync(newFile, "utf8").trim();
-      assert.ok(!store.enrollments.tokenMatches("gpu-1", token));
-      assert.ok(store.enrollments.tokenMatches("gpu-1", rotated));
+      assert.ok(!(await store.enrollments.tokenMatches("gpu-1", token)));
+      assert.ok(await store.enrollments.tokenMatches("gpu-1", rotated));
       await cli("rig", "retire", "gpu-1", "--control", control, "--token-file", ownerFile);
-      assert.ok(!store.enrollments.tokenMatches("gpu-1", rotated));
+      assert.ok(!(await store.enrollments.tokenMatches("gpu-1", rotated)));
     } finally {
       server.close();
     }
@@ -86,7 +86,7 @@ describe("thermite rig", () => {
 
   test("add: the rig's files name the message bus and hold control's authority; without the bus, none", async () => {
     const bus = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
-    const { api } = controlOnly({ tokens: TOKENS, options: { rigBus: bus } });
+    const { api } = await controlOnly({ tokens: TOKENS, options: { rigBus: bus } });
     const r = await api("POST", "/v1/rigs", { rig: "gpu-2" });
     assert.equal(r.status, 201);
     const enrolled = (await r.json()) as Enrolled;
@@ -102,7 +102,7 @@ describe("thermite rig", () => {
     assert.match(readFileSync(join(out, "README.txt"), "utf8"), /THERMITE_NATS_CA_FILE/);
     // Without an address for rigs on control's bus: no bus in the answer, and no files at all, in
     // words, since a rig works only on the bus.
-    const off = controlOnly({ tokens: TOKENS, options: { rigBus: undefined } });
+    const off = await controlOnly({ tokens: TOKENS, options: { rigBus: undefined } });
     const plain = (await (await off.api("POST", "/v1/rigs", { rig: "gpu-3" })).json()) as Enrolled;
     assert.equal(plain.bus, null);
     const out2 = join(mkdtempSync(join(tmpdir(), "thermite-rig-bus-")), "rig");
@@ -114,7 +114,7 @@ describe("thermite rig", () => {
   });
 
   test("list shows each rig's state and versions against control's, with what to do", async () => {
-    const { store, control: api } = controlOnly({
+    const { store, control: api } = await controlOnly({
       tokens: TOKENS,
       options: {
         build: { version: "0.2.0", commit: "1a2b3c4d5e6f7a8b", protocol: 2, oldest_protocol: 1 },
@@ -128,11 +128,11 @@ describe("thermite rig", () => {
       generated_at: new Date().toISOString(),
     });
     const old = { version: "0.1.0", commit: "abcdef0123456789", protocol: 1, oldest_protocol: 1 };
-    store.builds.setRig("rig-old", "harness", old);
-    store.builds.setRig("rig-old", "supervisor", old);
-    store.enrollments.enroll("rig-new", "0".repeat(64), "owner:test");
-    store.builds.setRig("rig-x", "supervisor", { ...old, protocol: 0, oldest_protocol: 0 });
-    store.refusals.set(
+    await store.builds.setRig("rig-old", "harness", old);
+    await store.builds.setRig("rig-old", "supervisor", old);
+    await store.enrollments.enroll("rig-new", "0".repeat(64), "owner:test");
+    await store.builds.setRig("rig-x", "supervisor", { ...old, protocol: 0, oldest_protocol: 0 });
+    await store.refusals.set(
       "rig-x",
       "Control cannot work with this rig: its supervisor speaks protocol 0.",
     );

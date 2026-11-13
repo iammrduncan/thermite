@@ -31,12 +31,12 @@ describe("a cluster whose connection control can't check", () => {
       await add("k8s-a", `${KUBECONFIG}# server: http://k.example.com\n`),
       /error=Not added: cluster "c" reaches its API server over plain http/,
     );
-    assert.equal(s.store.clusters.get("k8s-a"), undefined, "nothing is kept");
+    assert.equal(await s.store.clusters.get("k8s-a"), undefined, "nothing is kept");
     assert.match(
       await add("k8s-a", skips, { unchecked: "1" }),
       /ok="k8s-a" is added and checked: see what control found below\. You accepted that its connection isn't checked: cluster "c" skips TLS checks \(insecure-skip-tls-verify\)\./,
     );
-    const k = s.store.clusters.get("k8s-a");
+    const k = await s.store.clusters.get("k8s-a");
     assert.deepEqual(k?.unchecked?.what, [
       'cluster "c" skips TLS checks (insecure-skip-tls-verify)',
     ]);
@@ -45,7 +45,7 @@ describe("a cluster whose connection control can't check", () => {
       await s.page("/ui/settings/machines"),
       /<span class="chip warn" title="cluster &quot;c&quot; skips TLS checks \(insecure-skip-tls-verify\)">connection not checked: you accepted it [^<]+ ago<\/span>/,
     );
-    const added = s.store.auditLog.list(10, { action: "cluster_added" })[0]?.body as Record<
+    const added = (await s.store.auditLog.list(10, { action: "cluster_added" }))[0]?.body as Record<
       string,
       unknown
     >;
@@ -54,6 +54,6 @@ describe("a cluster whose connection control can't check", () => {
     ]);
     // A checked kubeconfig needs no tick and shows no chip.
     await add("k8s-b", KUBECONFIG);
-    assert.equal(s.store.clusters.get("k8s-b")?.unchecked, null);
+    assert.equal((await s.store.clusters.get("k8s-b"))?.unchecked, null);
   });
 });

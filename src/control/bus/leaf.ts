@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../../common/env.ts";
 import { writeAtomic } from "../../common/fs.ts";
+import { flatMapInTurn } from "../../common/in-turn.ts";
 import { envLine, LEAF_CERT_DAYS, LEAF_ENV, leafTlsName } from "../../core/link/leaf.ts";
 import { LIVE_RUNS_PER_RIG } from "../../core/link/live.ts";
 import type { LeafRigs } from "../../core/link/users.ts";
@@ -76,26 +77,24 @@ interface KeptLeaf {
 }
 
 /** The rigs launched with a leaf and not retired, with the pod's address when RunPod gave one. */
-export function leafRigsOf(store: ControlStore): KeptLeaf[] {
-  return store.tunnels
-    .list()
-    .flatMap((t) =>
-      t.leaf_ca && !store.retired.get(t.rig)
-        ? [{ rig: t.rig, ca: t.leaf_ca, address: t.leaf_address }]
-        : [],
-    );
+export async function leafRigsOf(store: ControlStore): Promise<KeptLeaf[]> {
+  return flatMapInTurn(await store.tunnels.list(), async (t) =>
+    t.leaf_ca && !(await store.retired.get(t.rig))
+      ? [{ rig: t.rig, ca: t.leaf_ca, address: t.leaf_address }]
+      : [],
+  );
 }
 
 /**
  * The leaf rigs as the users file names them, with the runs control gives each: each one's
  * account, and its pod's address only when `dial` says the server may dial it (BusUsers).
  */
-export function leafRigsFor(
+export async function leafRigsFor(
   store: ControlStore,
   rigs: readonly KeptLeaf[],
   dial: (rig: string) => boolean = () => true,
-): LeafRigs {
-  const runs = store.runRegistry.runsByRig(LIVE_RUNS_PER_RIG);
+): Promise<LeafRigs> {
+  const runs = await store.runRegistry.runsByRig(LIVE_RUNS_PER_RIG);
   return {
     rigs: rigs.map((r) => ({
       rig: r.rig,

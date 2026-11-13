@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -93,10 +94,10 @@ const keep = (store: ControlStore, r: IngestReport) =>
   busOf(store).writer.turn(() => keepReport(store, r));
 
 /** A rig's harness with `n` events and its signed pages, and what taking a report needs. */
-function signed(store: ControlStore, rig: string, n: number) {
+async function signed(store: ControlStore, rig: string, n: number) {
   const env = makeHarnessEnv(rig);
   for (let i = 0; i < n; i++) appendOther(env.service.ledger, "t", "step", null, { i });
-  enrollRigs(store, [rig]);
+  await enrollRigs(store, [rig]);
   const intake: Intake = { store, control: buildInfo(), requireKeyAcceptance: false };
   const snapshot = (cursor: number, limit: number) =>
     readReport(env.service.snapshot(cursor, limit));
@@ -106,7 +107,7 @@ function signed(store: ControlStore, rig: string, n: number) {
 describe("control publishes each report's events first", () => {
   test("in order, each with its id and report, and answers once it has applied them", async () => {
     const store = controlStore();
-    const { intake, snapshot } = signed(store, "rig-a", 30);
+    const { intake, snapshot } = await signed(store, "rig-a", 30);
     const first = snapshot(0, 20);
     const [status, answer] = await takeReport(intake, "rig-a", first);
     assert.deepEqual([status, answer], [200, { added: 20 }]);
@@ -114,15 +115,15 @@ describe("control publishes each report's events first", () => {
     const kept = onStream(bus);
     assert.equal(kept.length, 20);
     // Applied before control answered: its place, the ledger's held cursor, the rig's row.
-    assert.equal(store.busPositions.of(EVENT_STREAM), kept.at(-1)?.seq);
+    assert.equal(await store.busPositions.of(EVENT_STREAM), kept.at(-1)?.seq);
     const ledger = first.report.ledger_id;
-    assert.equal(store.reportedRigs.heldCursor("rig-a", ledger), 20);
-    assert.deepEqual(store.reportedRigs.reportRow("rig-a"), {
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", ledger), 20);
+    assert.deepEqual(await store.reportedRigs.reportRow("rig-a"), {
       ledger_id: ledger,
       cursor: 20,
       report_at: first.report.generated_at,
     });
-    assert.equal(store.reportedRigs.list()[0]?.last_cursor, 20);
+    assert.equal((await store.reportedRigs.list())[0]?.last_cursor, 20);
     for (const [i, k] of kept.entries()) {
       const read = readEventMessage(asMessage(k));
       assert.equal(read.event.id, i + 1);
@@ -138,9 +139,8 @@ describe("control publishes each report's events first", () => {
       kept.map((k) => k.seq),
     );
     assert.deepEqual(
-      keepFolds(store)
-        .view("rig-a", { staleAfterMs: 600_000 })
-        ?.recent.map((e) => e.seq)
+      (await keepFolds(store).view("rig-a", { staleAfterMs: 600_000 }))?.recent
+        .map((e) => e.seq)
         .toReversed()
         .slice(-3),
       [18, 19, 20],
@@ -173,14 +173,14 @@ describe("control publishes each report's events first", () => {
     assert.equal(writer.later, 1);
     // Nothing of the rig's row moved for the page refused; its first batch is applied, and the
     // held cursor says where it ends.
-    assert.equal(store.reportedRigs.reportRow("rig-a")?.report_at, null);
+    assert.equal((await store.reportedRigs.reportRow("rig-a"))?.report_at, null);
     // The bus is back: the same page publishes only what follows.
     bus.failing = false;
     bus.failAfter = undefined;
     assert.deepEqual(await keep(store, r), { added: 1500 });
     assert.deepEqual(idsOnStream(bus).get("rig-a/l-1"), range(1, 2500));
     assert.deepEqual(batches, [1000, 1000, 1000, 500]);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 2500);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 2500);
     assert.equal(writer.waiting, null);
   });
 
@@ -235,23 +235,37 @@ describe("control publishes each report's events first", () => {
     await ingestReport(store, page("rig-a", "l-1", [{ id: 3 }, { id: 1 }, { id: 2 }, { id: 2 }]));
     await ingestReport(store, page("rig-a", "l-1", [{ id: 5 }, { id: 4 }]));
     assert.deepEqual(idsOnStream(busOf(store).bus).get("rig-a/l-1"), range(1, 5));
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 5);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 5);
   });
 
   test("two ways in at once, HTTP and the reports stream, with pages that overlap: each event once, in order", async () => {
     const store = controlStore();
-    const { intake, snapshot } = signed(store, "rig-a", 40);
+    const { intake, snapshot } = await signed(store, "rig-a", 40);
     const over = (r: ReturnType<typeof snapshot>) => ({
       subject: reportSubject("rig-a"),
       seq: 1,
       data: new TextEncoder().encode(JSON.stringify(r.report)),
       header: () => undefined,
     });
-    const answers = await Promise.all([
-      takeReport(intake, "rig-a", snapshot(0, 25)),
-      foldReport(intake, over(snapshot(0, 40))),
-      takeReport(intake, "rig-a", snapshot(10, 30)),
-    ]);
+    // The stream's page asks the store about its rig before it takes its place in the writer's
+    // line: the third report comes once it has, so the three wait in the line in this order. The
+    // page's own work is known by the context it runs in.
+    const { writer } = busOf(store);
+    const turn = writer.turn.bind(writer);
+    const page = new AsyncLocalStorage<true>();
+    const second = new Promise<void>((joined) => {
+      writer.turn = (work) => {
+        if (page.getStore()) joined();
+        return turn(work);
+      };
+    });
+    const [a, b, c] = [snapshot(0, 25), snapshot(0, 40), snapshot(10, 30)];
+    const first = [
+      takeReport(intake, "rig-a", a),
+      page.run(true, () => foldReport(intake, over(b))),
+    ] as const;
+    await second;
+    const answers = await Promise.all([...first, takeReport(intake, "rig-a", c)]);
     const added = answers.map((a) =>
       Array.isArray(a) ? (a[1] as { added: number }).added : (a as { folded: number }).folded,
     );
@@ -274,26 +288,26 @@ describe("control publishes each report's events first", () => {
     const dying = new EventsWriter({
       store: first,
       bus,
-      apply: { reach: async (place) => first.busPositions.of(EVENT_STREAM) >= place },
+      apply: { reach: async (place) => (await first.busPositions.of(EVENT_STREAM)) >= place },
       applyWaitMs: 10,
     });
     const r = page("rig-a", "l-1", notes(11, 10));
     const lost = await dying.turn(() => keepReport(first, r));
     assert.ok("later" in lost);
     assert.equal(onStream(bus).length, 20, "published");
-    assert.equal(first.reportedRigs.heldCursor("rig-a", "l-1"), 10, "not applied");
+    assert.equal(await first.reportedRigs.heldCursor("rig-a", "l-1"), 10, "not applied");
     closeBus(first);
-    first.db.close();
+    await first.close();
     // Control starts again: the apply takes what the stream holds after the store's place.
     const again = controlStore(path, bus);
     await applied(again);
-    assert.equal(again.reportedRigs.heldCursor("rig-a", "l-1"), 20);
+    assert.equal(await again.reportedRigs.heldCursor("rig-a", "l-1"), 20);
     // The rig sends the page again: nothing published twice; the view holds each event once.
     assert.equal(await ingestReport(again, r), 0);
     assert.equal(onStream(bus).length, 20);
     const ids = (await heldEvents(again, "rig-a")).map((e) => e.id);
     assert.deepEqual(ids, range(1, 20));
-    const recent = keepFolds(again).view("rig-a", { staleAfterMs: 600_000 })?.recent ?? [];
+    const recent = (await keepFolds(again).view("rig-a", { staleAfterMs: 600_000 }))?.recent ?? [];
     assert.equal(new Set(recent.map((e) => e.id)).size, recent.length, "no event twice");
   });
 
@@ -320,12 +334,12 @@ describe("control publishes each report's events first", () => {
       ],
     );
     assert.equal(readEventMessage(asMessage(kept[3] as (typeof kept)[0])).event.run, "nr-1");
-    assert.deepEqual(store.runRegistry.rigsOf("nr-1"), ["rig-a"]);
+    assert.deepEqual(await store.runRegistry.rigsOf("nr-1"), ["rig-a"]);
   });
 
   test("the gap check holds each rig ledger's cursor; a full reset's new ledger starts at 0", async () => {
     const store = controlStore();
-    const { intake, snapshot } = signed(store, "rig-a", 20);
+    const { intake, snapshot } = await signed(store, "rig-a", 20);
     const ledger = snapshot(0, 1).report.ledger_id;
     assert.equal((await takeReport(intake, "rig-a", snapshot(0, 10)))[0], 200);
     // A gap after the events control holds: refused, with its held cursor.
@@ -335,42 +349,42 @@ describe("control publishes each report's events first", () => {
     ]);
     // A full reset: the harness's new ledger starts again at event 1, and at 0 for control.
     // A report made now: never older than one taken before.
-    const check = (ledgerId: string, cursor: number) =>
+    const check = async (ledgerId: string, cursor: number) =>
       store.reportedRigs.reportCheck("rig-a", {
         ledgerId,
         cursor,
         generatedAt: new Date().toISOString(),
       });
-    assert.deepEqual(check("l-new", 3), {
+    assert.deepEqual(await check("l-new", 3), {
       ok: false,
       reason: "a new ledger's events start at 0",
       expectedCursor: 0,
     });
-    assert.deepEqual(check("l-new", 0), { ok: true });
+    assert.deepEqual(await check("l-new", 0), { ok: true });
     await ingestReport(store, page("rig-a", "l-new", notes(1, 4)));
     assert.deepEqual(
       [
-        store.reportedRigs.heldCursor("rig-a", ledger),
-        store.reportedRigs.heldCursor("rig-a", "l-new"),
+        await store.reportedRigs.heldCursor("rig-a", ledger),
+        await store.reportedRigs.heldCursor("rig-a", "l-new"),
       ],
       [10, 4],
     );
     // The ledger it left is refused for good; the new one goes on from its own cursor.
-    assert.deepEqual(check(ledger, 10), {
+    assert.deepEqual(await check(ledger, 10), {
       ok: false,
       reason: "a report from a ledger the rig has left",
     });
-    assert.deepEqual(check("l-new", 4), { ok: true });
-    assert.deepEqual(check("l-new", 5), {
+    assert.deepEqual(await check("l-new", 4), { ok: true });
+    assert.deepEqual(await check("l-new", 5), {
       ok: false,
       reason: "a gap in the event stream",
       expectedCursor: 4,
     });
-    assert.deepEqual(store.reportedRigs.reportRow("rig-a")?.cursor, 4);
+    assert.deepEqual((await store.reportedRigs.reportRow("rig-a"))?.cursor, 4);
   });
 
   test("a full store, and the bus away: the page not taken, in words; the rig keeps its cursor", async () => {
-    const s = controlStack({ env: makeHarnessEnv("rig-a") });
+    const s = await controlStack({ env: makeHarnessEnv("rig-a") });
     await s.relay(0);
     for (let i = 0; i < 5; i++) appendOther(s.env.service.ledger, "t", "step", null, { i });
     const { bus } = busOf(s.store);
@@ -383,7 +397,11 @@ describe("control publishes each report's events first", () => {
       return true;
     });
     assert.equal(onStream(bus).length, 0);
-    assert.equal(s.store.reportedRigs.reportRow("rig-a")?.report_at ?? null, null, "nothing kept");
+    assert.equal(
+      (await s.store.reportedRigs.reportRow("rig-a"))?.report_at ?? null,
+      null,
+      "nothing kept",
+    );
     // The bus away: the same.
     bus.full = false;
     bus.failing = true;
@@ -398,7 +416,7 @@ describe("control publishes each report's events first", () => {
 
   test("on the reports stream, a page refused for now is handed again, before any later one", async () => {
     const store = controlStore();
-    const { intake, snapshot } = signed(store, "rig-a", 5);
+    const { intake, snapshot } = await signed(store, "rig-a", 5);
     const { bus } = busOf(store);
     bus.full = true;
     const m = {

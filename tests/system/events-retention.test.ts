@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { eventDaysOf } from "../../src/control/events/index.ts";
 import { createPolicy, previewOf, runPolicy } from "../../src/control/retention/index.ts";
-import { ControlStore } from "../../src/control/store/index.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { openControlStore } from "../../src/control/store/index.ts";
 import { EVENT_HEADERS, EVENT_STREAM } from "../../src/core/link/events.ts";
 import { RetentionSpec } from "../../src/core/retention/index.ts";
 import { busOf, ingestReport, storeOnBus } from "../helpers/control-store.ts";
@@ -83,7 +84,7 @@ function events(): Event[] {
 /** Control's store on a bus whose events were stored on the days their events say, as at a start. */
 async function setup() {
   const bus = new FakeBus();
-  const first = storeOnBus(new ControlStore(":memory:"), bus);
+  const first = storeOnBus(openControlStore(":memory:"), bus);
   const all = events();
   await ingestReport(first, {
     rig: "rig-a",
@@ -130,8 +131,8 @@ describe("a retention policy of control's copy of the rigs' events", () => {
       rule: "older",
       older_n: 30,
     });
-    const p = createPolicy(store, spec, false, "owner:ui");
-    const preview = previewOf(store, p);
+    const p = await createPolicy(store, spec, false, "owner:ui");
+    const preview = await previewOf(store, p);
     // r-1's day (3 events) and rig-a's own old day (1); r-2 is open, and rig-a's newer day inside.
     assert.equal(preview.count, 4);
     assert.match(preview.words, /^It would remove 4 events on 1 rig, /);
@@ -146,17 +147,20 @@ describe("a retention policy of control's copy of the rigs' events", () => {
     );
     // Each rig ledger's floor: the last event removed on purpose.
     assert.deepEqual(
-      store.retention.floors("rig-a").map((f) => [f.ledger, f.through_event]),
+      (await store.retention.floors("rig-a")).map((f) => [f.ledger, f.through_event]),
       [["ledger-a", 5]],
     );
     assert.equal(
-      store.reportedRigs.takenThrough("rig-a", "ledger-a"),
+      await store.reportedRigs.takenThrough("rig-a", "ledger-a"),
       6,
       "its held cursor, higher",
     );
-    const [removal] = store.retention.removals(1);
+    const [removal] = await store.retention.removals(1);
     assert.deepEqual([removal?.kind, removal?.rig, removal?.count], ["events", null, 4]);
-    assert.equal(store.auditLog.list(50).filter((a) => a.action === "retention_removed").length, 1);
+    assert.equal(
+      (await store.auditLog.list(50)).filter((a) => a.action === "retention_removed").length,
+      1,
+    );
     // Run again: nothing more to remove.
     assert.equal(
       (await runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui")).removed?.count,
@@ -173,23 +177,27 @@ describe("a retention policy of control's copy of the rigs' events", () => {
       older_n: 30,
       keep: { open: false },
     });
-    const p = createPolicy(store, spec, false, "owner:ui");
+    const p = await createPolicy(store, spec, false, "owner:ui");
     await runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
     assert.deepEqual(onBus(bus), [6]);
-    assert.equal(store.retention.floor("rig-a", "ledger-a"), 5);
+    assert.equal(await store.retention.floor("rig-a", "ledger-a"), 5);
     // As after a restore of an older store: the held cursor is back at 0, and the floor stays.
-    store.db.prepare("update rig_ledger set through_event = 0").run();
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "ledger-a"), 0);
+    sqliteBehind(store).db.prepare("update rig_ledger set through_event = 0").run();
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "ledger-a"), 0);
     // The report check asks the rig to go on after the floor, not from 0: a gap goes back there.
     const at = new Date().toISOString();
-    const gap = store.reportedRigs.reportCheck("rig-a", {
+    const gap = await store.reportedRigs.reportCheck("rig-a", {
       ledgerId: "ledger-a",
       cursor: 7,
       generatedAt: at,
     });
     assert.deepEqual(gap, { ok: false, reason: "a gap in the event stream", expectedCursor: 5 });
     assert.deepEqual(
-      store.reportedRigs.reportCheck("rig-a", { ledgerId: "ledger-a", cursor: 5, generatedAt: at }),
+      await store.reportedRigs.reportCheck("rig-a", {
+        ledgerId: "ledger-a",
+        cursor: 5,
+        generatedAt: at,
+      }),
       { ok: true },
     );
     // The rig sends its old events again all the same: none at or below the floor goes back.
@@ -209,7 +217,7 @@ describe("a retention policy of control's copy of the rigs' events", () => {
   });
   test("a run two rigs used: a day of one rig's is purged only where the other's kept days do not lie between", async () => {
     const bus = new FakeBus();
-    const first = storeOnBus(new ControlStore(":memory:"), bus);
+    const first = storeOnBus(openControlStore(":memory:"), bus);
     const at = (days: number, minutes: number) =>
       new Date(NOW - days * DAY + minutes * 60_000).toISOString();
     const made = { campaign: "speed", mode: "hill_climb" };
@@ -270,7 +278,7 @@ describe("a retention policy of control's copy of the rigs' events", () => {
 
     // A policy of rig-a alone: its own old day goes; its day of r-s, which rig-b's lies inside,
     // stays whole, and so does rig-b's.
-    const rigA = createPolicy(
+    const rigA = await createPolicy(
       store,
       RetentionSpec.parse({
         name: "Rig-a",
@@ -289,11 +297,11 @@ describe("a retention policy of control's copy of the rigs' events", () => {
       held(bus),
       before.filter((e) => e !== "rig-a:5"),
     );
-    assert.equal(store.retention.floor("rig-a", "ledger-rig-a"), 5);
-    assert.equal(store.retention.floor("rig-b", "ledger-rig-b"), 0);
+    assert.equal(await store.retention.floor("rig-a", "ledger-rig-a"), 5);
+    assert.equal(await store.retention.floor("rig-b", "ledger-rig-b"), 0);
 
     // A policy of both: the run's old day of each goes whole, rig-a's events after rig-b's too.
-    const both = createPolicy(
+    const both = await createPolicy(
       store,
       RetentionSpec.parse({ name: "Both", kind: "events", rule: "older", older_n: 30 }),
       false,
@@ -302,7 +310,7 @@ describe("a retention policy of control's copy of the rigs' events", () => {
     const r2 = await runPolicy({ store, privateKeyPem: "" }, both.id, "hand", "owner:ui");
     assert.equal(r2.removed?.count, 7);
     assert.deepEqual(held(bus), ["rig-a:6"]);
-    assert.equal(store.retention.floor("rig-a", "ledger-rig-a"), 5);
-    assert.equal(store.retention.floor("rig-b", "ledger-rig-b"), 3);
+    assert.equal(await store.retention.floor("rig-a", "ledger-rig-a"), 5);
+    assert.equal(await store.retention.floor("rig-b", "ledger-rig-b"), 3);
   });
 });

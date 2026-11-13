@@ -18,13 +18,16 @@ import { json, setup, TOKENS, text, working } from "./setup.ts";
  */
 
 /** A rig that reported a run, then stopped by the owner once its results left: its pod EXITED. */
-async function stoppedRig(s: ReturnType<typeof setup>, o: { spend_limit_usd?: number } = {}) {
+async function stoppedRig(
+  s: Awaited<ReturnType<typeof setup>>,
+  o: { spend_limit_usd?: number } = {},
+) {
   const rig = await working(s, o);
   await s.rigs.stop(rig, "owner:api");
-  harnessApplies(s.store, rig, exportName(1));
-  exportOnControl(s.store, rig, exportName(1));
+  await harnessApplies(s.store, rig, exportName(1));
+  await exportOnControl(s.store, rig, exportName(1));
   await s.advance();
-  assert.equal(s.view(rig).status, "EXITED");
+  assert.equal((await s.view(rig)).status, "EXITED");
   return rig;
 }
 
@@ -37,23 +40,23 @@ const assignment = (run: string) => ({
 });
 
 /** The owner signed in on the dashboard: a page's form token, and a form post. */
-async function signedIn(s: ReturnType<typeof setup>, path: string) {
+async function signedIn(s: Awaited<ReturnType<typeof setup>>, path: string) {
   const { page, csrfOf, post } = await signIn(s.api, TOKENS.admin);
   const csrf = csrfOf(await page(path));
   return (to: string, form: Record<string, string>) => post(to, { csrf, ...form });
 }
 
-const starts = (s: ReturnType<typeof setup>) =>
+const starts = (s: Awaited<ReturnType<typeof setup>>) =>
   s.cloud.actions().filter((a) => a.action === "start");
 
 describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it first", () => {
   test("REST: the pod starts, then the command is queued and waits for it; the answer says so", async () => {
     const seen: string[][] = [];
     const hook = { rig: "", store: undefined as ControlStore | undefined };
-    const s = setup({
+    const s = await setup({
       // What waits for the rig when RunPod starts the pod: not the new run yet.
-      onStart: () => {
-        if (hook.store) seen.push(pendingOf(hook.store, hook.rig).map((c) => c.kind));
+      onStart: async () => {
+        if (hook.store) seen.push((await pendingOf(hook.store, hook.rig)).map((c) => c.kind));
       },
     });
     const rig = await stoppedRig(s);
@@ -72,18 +75,18 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     );
     assert.deepEqual(s.cloud.actions().at(-1), { action: "start" });
     assert.deepEqual(seen, [[]], "the pod started before the run was queued");
-    const pending = pendingOf(s.store, rig);
+    const pending = await pendingOf(s.store, rig);
     assert.ok(pending.some((c) => c.id === out.id && c.kind === "assign_campaign"));
     // The start's own resume of the run its stop paused waits with it.
     assert.ok(pending.some((c) => c.kind === "resume_run"));
-    const starting = s.store.rigHistory.list(rig).find((e) => e.step === "runpod_starting");
+    const starting = (await s.store.rigHistory.list(rig)).find((e) => e.step === "runpod_starting");
     assert.match(String(starting?.detail), /asked by owner:api to assign run camp-2/);
-    const audit = s.store.auditLog.list(30).find((a) => a.action === "runpod_rig_start");
+    const audit = (await s.store.auditLog.list(30)).find((a) => a.action === "runpod_rig_start");
     assert.deepEqual(audit?.body, { rig, pod: "pod1", note: "to assign run camp-2" });
   });
 
   test("a resume starts the pod too; a running pod, and other kinds, start nothing", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await stoppedRig(s);
     // A pause or an export waits for the pod: it does not start it.
     for (const [kind, payload] of [
@@ -105,7 +108,7 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
       String((await json<{ woke?: string }>(resumed)).woke),
       /pod was stopped: control started it/,
     );
-    assert.equal(s.view(rig).status, "RUNNING");
+    assert.equal((await s.view(rig)).status, "RUNNING");
     // Now it runs: a new run is queued with no start.
     const again = await s.call("/v1/commands", {
       rig,
@@ -117,7 +120,7 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
   });
 
   test("a start RunPod refuses, or the spend limit, refuses the command: nothing is queued", async () => {
-    const s = setup({ noGpuOnStart: true });
+    const s = await setup({ noGpuOnStart: true });
     const rig = await stoppedRig(s);
     const r = await s.call("/v1/commands", {
       rig,
@@ -128,14 +131,14 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     const { error } = await json<{ error: string }>(r);
     assert.match(error, /^Not sent: control could not start .*'s pod on RunPod for it\./);
     assert.match(error, /RunPod has no free GPU for pod pod1 now, so the pod stays stopped/);
-    assert.deepEqual(pendingOf(s.store, rig), []);
-    assert.equal(s.view(rig).status, "EXITED");
+    assert.deepEqual(await pendingOf(s.store, rig), []);
+    assert.equal((await s.view(rig)).status, "EXITED");
 
-    const t = setup();
+    const t = await setup();
     const limited = await stoppedRig(t, { spend_limit_usd: 1 });
-    const stored = t.store.runpod.rig(limited);
+    const stored = await t.store.runpod.rig(limited);
     assert.ok(stored);
-    saveRunpodRig(t.store, limited, { ...(stored.state as object), spent_usd: 1.5 }, true);
+    await saveRunpodRig(t.store, limited, { ...(stored.state as object), spent_usd: 1.5 }, true);
     const capped = await t.call("/v1/commands", {
       rig: limited,
       kind: "assign_campaign",
@@ -143,12 +146,12 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     });
     assert.equal(capped.status, 409);
     assert.match((await json<{ error: string }>(capped)).error, /at its spend limit/);
-    assert.deepEqual(pendingOf(t.store, limited), []);
+    assert.deepEqual(await pendingOf(t.store, limited), []);
     assert.deepEqual(starts(t), []);
   });
 
   test("a bad payload starts nothing; a stop under way refuses until it ends", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await stoppedRig(s);
     const bad = await s.call("/v1/commands", {
       rig,
@@ -159,7 +162,7 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     assert.match((await json<{ error: string }>(bad)).error, /bad assign_campaign payload/);
     assert.deepEqual(starts(s), []);
 
-    const t = setup();
+    const t = await setup();
     const other = await working(t);
     await t.rigs.stop(other, "owner:api");
     const during = await t.call("/v1/commands", {
@@ -172,11 +175,11 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
       (await json<{ error: string }>(during)).error,
       /a stop of .*'s pod is under way: wait until it has stopped, then start the run again/,
     );
-    assert.ok(!pendingOf(t.store, other).some((c) => c.kind === "assign_campaign"));
+    assert.ok(!(await pendingOf(t.store, other)).some((c) => c.kind === "assign_campaign"));
   });
 
   test("MCP: the owner's issue_command starts the pod; an operator's is refused and starts nothing", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await stoppedRig(s);
     const operator = await mcpClient(s.api, TOKENS.operator);
     const refused = await operator.callTool({
@@ -186,7 +189,7 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     assert.equal(refused.isError, true);
     assert.match(text(refused), /pod on RunPod is stopped, and only the owner can start it/);
     assert.deepEqual(starts(s), []);
-    assert.deepEqual(pendingOf(s.store, rig), []);
+    assert.deepEqual(await pendingOf(s.store, rig), []);
     const owner = await mcpClient(s.api, TOKENS.admin);
     const r = JSON.parse(
       text(
@@ -197,24 +200,26 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
       ),
     ) as { id: string; woke?: string };
     assert.match(String(r.woke), /pod was stopped: control started it/);
-    assert.ok(pendingOf(s.store, rig).some((c) => c.id === r.id));
+    assert.ok((await pendingOf(s.store, rig)).some((c) => c.id === r.id));
     assert.match(
-      String(s.store.rigHistory.list(rig).find((e) => e.step === "runpod_starting")?.detail),
+      String(
+        (await s.store.rigHistory.list(rig)).find((e) => e.step === "runpod_starting")?.detail,
+      ),
       /asked by owner:mcp to assign run camp-2/,
     );
   });
 
   test("Start a run's twins: REST and the owner's start_run start the stopped pod first; an operator's is refused", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await stoppedRig(s);
     // The campaign was assigned before, over the API: Start a run assigns it again.
-    issueCommand(s.store, s.control.privateKeyPem, {
+    await issueCommand(s.store, s.control.privateKeyPem, {
       rig,
       kind: "assign_campaign",
       payload: assignment("camp-1"),
       issuedBy: "owner:api",
     });
-    const before = pendingOf(s.store, rig).length;
+    const before = (await pendingOf(s.store, rig)).length;
     const operator = await mcpClient(s.api, TOKENS.operator);
     const refused = await operator.callTool({
       name: "start_run",
@@ -223,7 +228,7 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     assert.equal(refused.isError, true);
     assert.match(text(refused), /pod on RunPod is stopped, and only the owner can start it/);
     assert.deepEqual(starts(s), []);
-    assert.equal(pendingOf(s.store, rig).length, before, "nothing was queued");
+    assert.equal((await pendingOf(s.store, rig)).length, before, "nothing was queued");
     const r = await s.call("/v1/campaigns/camp/runs", { rig, agents: false });
     assert.equal(r.status, 201);
     const out = await json<{ run: string; command: string; woke?: string }>(r);
@@ -232,16 +237,18 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
       `${rig}'s pod was stopped: control started it. The run starts once the pod runs.`,
     );
     assert.deepEqual(starts(s), [{ action: "start" }]);
-    assert.ok(pendingOf(s.store, rig).some((c) => c.id === out.command));
+    assert.ok((await pendingOf(s.store, rig)).some((c) => c.id === out.command));
     assert.match(
-      String(s.store.rigHistory.list(rig).find((e) => e.step === "runpod_starting")?.detail),
+      String(
+        (await s.store.rigHistory.list(rig)).find((e) => e.step === "runpod_starting")?.detail,
+      ),
       new RegExp(`asked by owner:api to assign run ${out.run}`),
     );
 
     // Another stopped pod: the owner's start_run starts it the same way.
-    const t = setup();
+    const t = await setup();
     const other = await stoppedRig(t);
-    issueCommand(t.store, t.control.privateKeyPem, {
+    await issueCommand(t.store, t.control.privateKeyPem, {
       rig: other,
       kind: "assign_campaign",
       payload: assignment("camp-1"),
@@ -258,16 +265,18 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     ) as { run: string; woke?: string };
     assert.match(String(o.woke), /pod was stopped: control started it/);
     assert.match(
-      String(t.store.rigHistory.list(other).find((e) => e.step === "runpod_starting")?.detail),
+      String(
+        (await t.store.rigHistory.list(other)).find((e) => e.step === "runpod_starting")?.detail,
+      ),
       new RegExp(`asked by owner:mcp to assign run ${o.run}`),
     );
   });
 
   test("the dashboard: Start a run and a resume start the stopped pod first, and the page says so", async () => {
-    const s = setup();
+    const s = await setup();
     const rig = await stoppedRig(s);
     // The campaign was assigned before, over the API: Start a run assigns it again.
-    issueCommand(s.store, s.control.privateKeyPem, {
+    await issueCommand(s.store, s.control.privateKeyPem, {
       rig,
       kind: "assign_campaign",
       payload: assignment("camp-1"),
@@ -281,10 +290,10 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
       /pod was stopped: control started it\. The run starts once the pod runs\./,
     );
     assert.deepEqual(starts(s), [{ action: "start" }]);
-    assert.ok(pendingOf(s.store, rig).some((c) => c.kind === "assign_campaign"));
+    assert.ok((await pendingOf(s.store, rig)).some((c) => c.kind === "assign_campaign"));
 
     // Another stopped pod: a resume from the dashboard starts it the same way.
-    const t = setup();
+    const t = await setup();
     const other = await stoppedRig(t);
     const tPost = await signedIn(t, `/ui/rigs/${other}`);
     const resumed = await tPost("/ui/commands", { rig: other, kind: "resume_run", run: "run-1" });
@@ -293,6 +302,6 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
       decodeURIComponent(resumed.headers.get("location") ?? ""),
       /pod was stopped: control started it\. The run starts once the pod runs\. Sent to rp-\w+ at \d\d:\d\d UTC\./,
     );
-    assert.equal(t.view(other).status, "RUNNING");
+    assert.equal((await t.view(other)).status, "RUNNING");
   });
 });

@@ -12,7 +12,9 @@ import type { ApiContext } from "./context.ts";
  */
 export function reachRoutes(app: Hono, api: ApiContext): void {
   const { parts, store, admin } = api;
-  app.get(REACHABLE_ADDRESSES.path, admin, (c) => c.json({ addresses: store.reachable.list() }));
+  app.get(REACHABLE_ADDRESSES.path, admin, async (c) =>
+    c.json({ addresses: await store.reachable.list() }),
+  );
   app.put(
     SET_REACHABLE_ADDRESSES.path,
     admin,
@@ -22,13 +24,13 @@ export function reachRoutes(app: Hono, api: ApiContext): void {
       const keys = body && typeof body === "object" ? Object.keys(body) : [];
       if (keys.length !== 1 || keys[0] !== "addresses")
         throw new BadInput('the body is {"addresses": [{"address", "ports", "note"}, …]}');
-      const r = setReachableAddresses(
+      const r = await setReachableAddresses(
         parts,
         (body as { addresses: unknown }).addresses,
         "owner:api",
       );
       if ("error" in r) throw new BadInput(r.error);
-      return c.json({ addresses: store.reachable.list(), said: r.ok });
+      return c.json({ addresses: await store.reachable.list(), said: r.ok });
     },
   );
 }

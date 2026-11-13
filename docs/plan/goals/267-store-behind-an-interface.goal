@@ -1,16 +1,16 @@
 ---
 id: "267"
 title: "Control's store behind an interface whose calls can wait, still on SQLite"
-status: READY
+status: IN_PROGRESS
 version: "0.3.0"
 depends_on: ["258"]
 created: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # 267 · Control's store behind an interface whose calls can wait, still on SQLite
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [258](258-runs-own-their-resources.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [258](258-runs-own-their-resources.goal)
 
 ## What
 
@@ -46,29 +46,62 @@ The design's size for this step is XL: several weeks, by the readers' first esti
 
 ## Done when
 
-- [ ] The store's interface exists, and the types refuse a caller that does not wait for an answer.
-- [ ] No file outside `src/control/store/` reaches SQLite for control's store.
-- [ ] Each place that opens a transaction outside the store has a test that its changes are kept together or dropped together.
-- [ ] `npm run check` passes, and the count of tests is no lower than before the step.
-- [ ] These acceptance checks pass: `npm run smoke:compose`, `npm run acceptance:control`, `npm run acceptance:backup`, `npm run acceptance:campaign` and `npm run acceptance:browser`.
-- [ ] Pages: none for the people who use Thermite, since nothing they see changes. [CONVENTIONS.md](../../../CONVENTIONS.md) says how control's store is called.
+- [x] The store's interface exists, and the types refuse a caller that does not wait for an answer. `src/control/store/index.ts` (`ControlStore`) and an interface beside each sub-store's SQLite class. `tests/control/store/waits.test.ts` holds four lines the typecheck must refuse (an answer used before it is waited for, the database, a transaction's function that does not wait), and that every call of the SQLite store is on the interface. A call that gives nothing is refused by the linter (`noFloatingPromises`, in `npm run lint`): a made-up `store.ownSettings.set(...)` with no `await` failed it.
+- [x] No file outside `src/control/store/` reaches SQLite for control's store. `tests/control/store/behind.test.ts` holds it for control's files, with the import check's folder rule; a made-up import of SQLite fails it. The backup program opens the store's file itself, as another process, as before (Progress).
+- [x] Each place that opens a transaction outside the store has a test that its changes are kept together or dropped together. 36 places, in `tests/control/together/` (11 files): a later write is made to fail and the whole store is read before and after; where a transaction holds a read and one write, another caller's change is shown to wait for it. One of the 36 can't be made to fail without a change to its code (the page's transaction of the knowledge base's second reading, whose every call is caught event by event): its test proves that one transaction holds the page. The page of events the apply records was proven already, by `tests/system/events-apply.test.ts`.
+- [x] `npm run check` passes, and the count of tests is no lower than before the step. It passed whole on 2026-11-13 (exit 0). The side-by-side part has 3,034 tests where it had 2,972: 3,030 passed, none failed, 4 skipped (they need Linux or root). The judge's and the broker's part: 212 of 213, 1 skipped. On a store whose every call takes a turn of the event loop (`--store-waits turn`) the side-by-side part gives the same: 3,030 of 3,034, none failed.
+- [x] These acceptance checks pass: `npm run smoke:compose`, `npm run acceptance:control`, `npm run acceptance:backup`, `npm run acceptance:campaign` and `npm run acceptance:browser`. All five passed on 2026-11-13, with Podman; the browser check 70 of 70, and its sweep of the pages again with a new check, that no page draws a promise in place of its words.
+- [x] Pages: none for the people who use Thermite, since nothing they see changes. [CONVENTIONS.md](../../../CONVENTIONS.md) says how control's store is called ("How control's store is called"). AGENTS.md, CONTRIBUTING.md and the site's Contributing page name the linter's rule, `--store-waits turn` and CI's new job.
 
 ## Decisions
 
 - 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "postgres". Control's store moves from SQLite to PostgreSQL, since services that share a store need one that takes several writers. This step is the first of that move.
 - 2026-11-12, the owner, on [the design](../goal-258-design.md): agreed, and each step of it is a goal of its own.
+- 2026-11-12, the owner ran this step's command ([v0.3.0, step by step](../v030_release_plan.md), step 2). The step has no question for the owner, so each choice below is the builder's, for the owner to change.
+- **In one piece, by a script** (the first open question). A script that reads the types put `await` at every call of the store and made each function around it wait, then each caller of that function, until nothing was left; a second script took back each wait that nothing needed. No old call stayed beside a new one. What the scripts could not do by rule was done by hand: two constructors that called the store, three default values that waited, the types that name a function, and the tests' helpers.
+- **SQLite's own code stays as it was, behind the interface.** Each sub-store's class (`SqliteJoinedRigs` and the others) still answers at once, with its SQL and its transactions untouched: nothing inside the store can now come apart that could not before. Beside each class is its interface (`JoinedRigs`), with every call a promise, and `store/waits.ts` puts the waiting calls over the class. The interfaces are written out, not worked out from the classes: goal [268](268-postgresql-beside-sqlite.goal) writes a second store against them, goal [270](270-move-to-postgresql.goal) ends SQLite, and the linter's rule below reads only a written interface.
+- **A caller that does not wait is refused twice.** The types refuse an answer used before it is there. A call that gives nothing has no answer to misuse, so the linter refuses it: Biome's `noFloatingPromises` is on for the whole repository, in `npm run lint`. It found three promises nobody waited for that were there before the step; each now says so with `void`.
+- **A transaction is given to a caller as one call, `store.tx(fn)`** (the second open question): the interface takes the unit of work as a function. All of the function's calls are kept, or none. While it is open, every other caller of the store waits: SQLite has one connection, and a call from elsewhere would otherwise join the transaction. The function's own work is known by the asynchronous context it runs in, so its calls go on. A transaction inside another is a savepoint, as before.
+- **What leaves control is sent once its record is kept:** `store.onceKept(fn)`. A command is published to its rig only when the transaction that records it is kept, and not at all when it is dropped; outside a transaction it is published at once, as before. The tests of the transactions found the need: a wipe issued in a transaction that was then dropped had still gone to the rig.
+- **The rule that goes with it: a transaction's function waits for the store and for nothing else.** What it waits for holds every other caller. This is the "transaction held across a wait" that the reading named as the step's main risk; CONVENTIONS.md says it, and each transaction of this step was read for it.
+- **The places that rely on two calls with nothing between them were found by a script, then read** (the third open question). The script lists every function in which a read of the store is followed by a write, straight or through a function it calls, with no wait between them that was there before: 187 functions. Each was read for one question: can a rig's report, one of control's loops, the operator or the owner change what was read before the write lands, and would the result be wrong state? 22 were put in a transaction, with the read inside it: a reset's steps and the owner's confirm and cancel; a rig's key on the bus, and the look for another holder of it; a new version of a campaign built from the newest; the owner's note and its number; a proposal's decision; a RunPod rig's limits and a test's end; the drain, its cancel and the resize that waits for it; a runner given to its rig; a cluster rig set up again; the removal of orphan files; a rig marked failed or running after a wait. The other 164 were left, each with its reason: the write does not depend on the read, one call of the store does both, the last write wins as before, or the function already waited between the two (for a machine, a cluster, RunPod or the bus), so it was never one piece.
+- **One more place was left on judgement, not for a reason of those kinds:** the join command's request (`/v1/join/:rig/:what`). The owner's Retire on the same rig in the same instant could be written over. A transaction there would also change what a failure keeps (the command would work again). It is the owner against the owner's own rig, so it stays as it is.
+- **The old dashboard's pages changed with everything else** (the fourth open question): the run sheet puts this step before goal 244 and goal 253, and the pages must work on PostgreSQL from step 6 on. Code that only draws a page waits for nothing: the request's session is read once, by the check every page's request passes first, so a form's token needs no call of the store; and what a page needs is read before it is drawn.
+- **Control as one object stays where the plan has it** (the fifth open question): with goal 256's later parts and goal [272](272-the-door-apart-from-the-record.goal), not before this step.
+- **An array's methods for a function that waits** are in `src/common/in-turn.ts` (`mapInTurn` and six others): each item is waited for before the next, so the calls happen in the order they did. `Promise.all` over `map` would start them all at once.
+- **The tests can run on a store whose every call takes a turn of the event loop,** as a store on a server does: `node scripts/test.mjs --store-waits turn`. The whole suite passes so. CI runs it as a job of its own; `npm run check` does not, to keep it as fast as it was.
+- **The browser check gained one check:** no page draws a promise or an object in place of its words. A page that forgot to wait would show `[object Promise]`.
+- **What changed that a person could notice, each small and on purpose:**
+  - The bus's users are opened with `BusUsers.open(...)`, which waits for control's own keys, in place of a constructor that read them.
+  - An update of a rig's images is noted as under way, the check and the note in one transaction, before its page answers; the update then runs on behind it, as before.
+  - The MCP servers' tables are made at the first call that needs them, in the store, and no longer by the constructor of the servers' object.
+  - In the 22 new transactions a failure part way now drops the earlier writes with the later ones. Before, the earlier writes stayed.
+  - A report that comes over the message bus asks the store about its rig before it takes its place in the writer's line. Two reports that arrive in the same instant by the two ways may now be taken in the other order; the one found older is refused in words, as an older report always was, and its rig sends again.
 
 ## Open questions
 
-- Whether the change is made in one piece or area by area. Area by area needs the old calls beside the new ones for a time.
-- How a transaction is given to a caller outside the store: the work moves into the store, or the interface takes the whole unit of work as one call.
-- Which places rely on two calls with nothing between them, and how each is found. The reading names a transaction held across a wait as this step's main risk.
-- The old dashboard's pages hold about 320 of the calls. Goal [244](244-one-door.goal) moves actions out of page code, and goal [253](253-the-switch.goal) removes the pages. Which of them is done before this step, to change less code that will go.
-- Goal [256](256-layers-and-splits.goal) makes control one object and ends the nine registries that are found through the store. Whether that comes before this step, or with step 6 (goal [272](272-the-door-apart-from-the-record.goal)).
+None. Each of the five that stood here has its answer in Decisions.
 
 ## Progress
 
 - 2026-11-12: Written from goal 258's design, which the owner agreed.
+- 2026-11-13: **Built, and it waits for the owner's look** ([step 2 of the run sheet](../v030_release_plan.md)). The goal is `VERIFIED` when the owner says so.
+  - **What was built.** The store's interface in `src/control/store/`: `ControlStore`, with an interface for each of its 44 sub-stores (356 calls, each a promise), `store.tx` and `store.onceKept`. SQLite's classes behind it, unchanged in what they do. Every caller waits: 3,039 calls in 373 files outside the store (1,663 of them in tests) were changed by script, and the functions around them up to the routes, the tools, the loops and the tests. 36 places outside the store now open a transaction: the 15 there were, and 21 new ones, where a write relied on a read that a wait would have parted from it.
+  - **What the first reading's counts were, now counted:** 356 public calls, not 376; 3,039 calls from outside, of which 1,376 in production code and scripts, not about 1,100; 15 transactions outside the store, as it said.
+  - **Found on the way, and fixed.**
+    - A command issued inside a transaction went on the message bus before the transaction was kept: one that was dropped had still reached its rig. Commands are now sent once their record is kept (`store.onceKept`).
+    - A promise returned inside a `try` without a wait fails outside its `catch`: a rig whose events can't be read broke every page that lists rigs. The script now waits there (23 places).
+    - An update of a rig's images refused a second update by a throw that its page caught. As a promise nobody waited for, the refusal was lost and the page said the update began. Its page now waits for the note.
+    - Two checks of state in memory had a wait put between the check and the change: what a rig was handed (an audit entry written twice), and a draining rig marked as moving. Each looks again after the wait.
+    - Three promises nobody waited for that were there before the step, found by the linter's new rule.
+  - **Left as it is, and why.**
+    - The backup program (`src/common/backup/`) is another process: it opens the store's file itself, read only, to copy it, as before. Goal 268 gives backup its PostgreSQL form.
+    - 58 test files outside the store's own tests reach the database itself, through `sqliteBehind`, which production code can't import: to make a store as an older version left it, or to read a table no call gives. They are marked, and are goal 268's to look at: on PostgreSQL they do not run as they are.
+    - `store.path` stays on the interface: three files read the size of the store's file and of its copies. Goal 268 gives the sizes their PostgreSQL form.
+    - With SQLite behind it, a call's answer is there at once, so between two calls only work that was due in the same instant can run. A store on a server lets any work in. The 21 new transactions are for that; the 164 places read and left are listed by the script, and each has its reason. A place that was misjudged shows first under `--store-waits turn`, or on PostgreSQL in goal 268's run of the tests on both stores.
+  - **Checks.** On 2026-11-13: `npm run check` whole (typecheck, the app's typecheck, lint with 7 old warnings, every test, the public, size, import and loose-ends checks); the side-by-side tests again with `--store-waits turn`; the five acceptance checks of Done when, the compose ones with Podman, and `smoke:compose` and `acceptance:control` a second time on the last code; `npm run docs:build` and `npm run docs:check`. One judge's test that times real processes (`tests/harness/judge/held-out.test.ts`) failed in the first whole run and passed alone twice and in the second whole run; this step does not touch the judge. Not run: the other acceptance checks (steering, agents, runners, RunPod, the cluster and the rest), which test parts this step changes only where they call control's store, and CI.
+  - **For the owner's look:** your control after its update, for a day of real use (the old dashboard and `/next` as before, a campaign at work through the update, a backup taken); the 36 transactions and their tests; and the choices in Decisions, above all the list of what a person could notice.
+  - **Next:** goal [243](243-web-app-base.goal)'s part of the build (step 3), at the owner's command.
 
 ---
 

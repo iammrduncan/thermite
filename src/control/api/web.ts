@@ -71,7 +71,9 @@ export function webRoutes(app: Hono, api: ApiContext): void {
   });
   const noStore = { "cache-control": "no-store" };
 
-  app.get(SESSION.path, (c) => c.json(sessionAnswer(sessions.sessionOf(c)), 200, noStore));
+  app.get(SESSION.path, async (c) =>
+    c.json(sessionAnswer(await sessions.sessionOf(c)), 200, noStore),
+  );
 
   app.post(SESSION_START.path, bodyLimit({ maxSize: SESSION_START.maxBytes }), async (c) => {
     const now = Date.now();
@@ -80,19 +82,19 @@ export function webRoutes(app: Hono, api: ApiContext): void {
       return c.json({ error: "Too many failed sign-ins. Wait a minute." }, 429);
     const body = SESSION_START.body.safeParse(await jsonBody(c.req));
     if (!body.success) throw new BadInput("the sign-in takes a token");
-    const sid = sessions.start(c, body.data.token);
+    const sid = await sessions.start(c, body.data.token);
     if (!sid) {
       if (sessions.failures.add(client, now) === SIGN_IN_FAILURES)
-        store.auditLog.add("control", "login_throttled", {});
+        await store.auditLog.add("control", "login_throttled", {});
       return c.json({ error: "That is not the owner's token." }, 403);
     }
-    store.auditLog.add("owner:ui", "login", {});
+    await store.auditLog.add("owner:ui", "login", {});
     return c.json(sessionAnswer(sid), 200, noStore);
   });
 
   // Signing out needs no session token: the worst a forged sign-out does is sign the owner out.
-  app.delete(SESSION_END.path, (c) => {
-    sessions.end(c);
+  app.delete(SESSION_END.path, async (c) => {
+    await sessions.end(c);
     return c.json({ ok: true }, 200, noStore);
   });
 
@@ -100,7 +102,8 @@ export function webRoutes(app: Hono, api: ApiContext): void {
   // A screen that is open reads again when this says so. It compares a cheap mark of what the
   // rigs reported and of the changes made on control (each one has an entry in the audit log); a
   // `beat` shows the stream is alive, so the app can say when it is not.
-  const markNow = () => `${store.auditLog.newestId()}\n${store.reportedRigs.mark()}`;
+  const markNow = async () =>
+    `${await store.auditLog.newestId()}\n${await store.reportedRigs.mark()}`;
   app.get(STREAM_PATH, admin, (c) => {
     // A proxy in front of control must pass each event on as it comes: nginx obeys this header.
     c.header("x-accel-buffering", "no");
@@ -109,13 +112,13 @@ export function webRoutes(app: Hono, api: ApiContext): void {
       stream.onAbort(() => {
         open = false;
       });
-      let mark = markNow();
+      let mark = await markNow();
       let beatAt = Date.now();
       await stream.writeSSE({ event: "beat", data: "{}" });
       while (open) {
         await stream.sleep(STREAM_LOOK_MS);
         if (!open) break;
-        const now = markNow();
+        const now = await markNow();
         if (now !== mark) {
           mark = now;
           await stream.writeSSE({ event: "changed", data: "{}" });

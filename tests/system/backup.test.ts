@@ -20,7 +20,7 @@ import {
   restoreControl,
 } from "../../src/common/backup/index.ts";
 import { EventsApply } from "../../src/control/events/index.ts";
-import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";
+import { type IngestReport, openControlStore } from "../../src/control/store/index.ts";
 import { keepFolds } from "../../src/control/views/index.ts";
 import { CONTROL_STATE, STREAMS_LEFT_OUT, snapshotFile } from "../../src/core/backup.ts";
 import { EVENT_STREAM } from "../../src/core/link/events.ts";
@@ -77,7 +77,7 @@ async function controlState(events: number): Promise<{ dir: string; bus: FakeBus
     await ingestReport(store, page("rig-a", from, Math.min(50, events - from + 1)));
   await applied(store);
   closeBus(store);
-  store.db.close();
+  await store.close();
   writeFileSync(join(dir, CONTROL_STATE.signingKey), "the signing key\n", { mode: 0o600 });
   writeFileSync(join(dir, CONTROL_STATE.signingPub), "the public key\n");
   writeFileSync(join(dir, CONTROL_STATE.secretsKey), "the secrets key\n", { mode: 0o600 });
@@ -98,12 +98,12 @@ const refused = (words: RegExp) => (err: unknown) =>
   err instanceof RestoreRefused && words.test(err.message);
 
 /** The store's place in the events stream, read from its file. */
-function placeIn(dir: string): number {
-  const store = new ControlStore(join(dir, CONTROL_STATE.db));
+async function placeIn(dir: string): Promise<number> {
+  const store = openControlStore(join(dir, CONTROL_STATE.db));
   try {
-    return store.busPositions.of(EVENT_STREAM);
+    return await store.busPositions.of(EVENT_STREAM);
   } finally {
-    store.db.close();
+    await store.close();
   }
 }
 
@@ -204,16 +204,16 @@ describe("backup and restore of control (goal 173)", () => {
     for (const name of [CONTROL_STATE.signingKey, "kits/matmul/HEAD", "exports/rig-b/ledger.db"])
       assert.deepEqual(readFileSync(join(target, name)), readFileSync(join(dir, name)), name);
     assert.equal(existsSync(join(target, "notes.txt")), false, "not control's: not in the backup");
-    assert.equal(placeIn(target), 120);
+    assert.equal(await placeIn(target), 120);
     // Control starts on the restored store and stream: its start check holds, and it applies the
     // stream from its place, including what came after it.
-    const store = new ControlStore(join(target, CONTROL_STATE.db));
+    const store = openControlStore(join(target, CONTROL_STATE.db));
     const apply = new EventsApply({ store, bus: newBus, retryMs: 5 });
     await apply.start();
     assert.equal(apply.stopped, null);
-    assert.equal(store.busPositions.of(EVENT_STREAM), 120);
+    assert.equal(await store.busPositions.of(EVENT_STREAM), 120);
     apply.close();
-    store.db.close();
+    await store.close();
     // Run again, it finds the stream and the state as the backup holds them, and changes nothing.
     const again: string[] = [];
     await restoreControl({
@@ -260,7 +260,7 @@ describe("backup and restore of control (goal 173)", () => {
     // The backup holds no secrets key: the folder's, which opens the store, stays where it is.
     assert.equal(readFileSync(join(dir, CONTROL_STATE.secretsKey), "utf8"), "the secrets key\n");
     assert.equal(existsSync(join(aside, CONTROL_STATE.secretsKey)), false);
-    assert.equal(placeIn(dir), 60);
+    assert.equal(await placeIn(dir), 60);
   });
 
   test("a backup from before v0.1.1 holds a secrets key: its restore moves the folder's aside, never over it", async () => {
@@ -338,8 +338,8 @@ describe("backup and restore of control (goal 173)", () => {
     const ranOn = controlStore(join(dir, CONTROL_STATE.db), bus);
     await ingestReport(ranOn, page("rig-a", 61, 5));
     closeBus(ranOn);
-    ranOn.db.close();
-    assert.equal(placeIn(dir), 65);
+    await ranOn.close();
+    assert.equal(await placeIn(dir), 65);
     // Control's state goes back to the backup's, and the bus is kept as it is.
     const lines: string[] = [];
     const r = await restoreControl({
@@ -355,14 +355,14 @@ describe("backup and restore of control (goal 173)", () => {
       "EVENTS on the bus holds the backup's events and 5 newer ones after them, to 65: control applies them from its place, 60, as it starts",
     );
     assert.equal(bus.kept.filter((k) => k.stream === EVENT_STREAM).length, 65);
-    assert.equal(placeIn(dir), 60);
+    assert.equal(await placeIn(dir), 60);
     // Control starts on the restored store: its start check holds, and it applies the newer events
     // from its place, so that its records and its views end at the stream's end.
     const store = controlStore(join(dir, CONTROL_STATE.db), bus);
     const events = await heldEvents(store, "rig-a");
     assert.equal(busOf(store).apply.stopped, null);
-    assert.equal(store.busPositions.of(EVENT_STREAM), 65);
-    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 65);
+    assert.equal(await store.busPositions.of(EVENT_STREAM), 65);
+    assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 65);
     assert.deepEqual(keepFolds(store).held(), [{ rig: "rig-a", ledger: "l-1", seq: 65 }]);
     assert.equal(keepFolds(store).through, 65);
     assert.deepEqual(
@@ -373,7 +373,7 @@ describe("backup and restore of control (goal 173)", () => {
     assert.equal(await ingestReport(store, page("rig-a", 61, 5)), 0);
     assert.equal(bus.kept.filter((k) => k.stream === EVENT_STREAM).length, 65);
     closeBus(store);
-    store.db.close();
+    await store.close();
   });
 
   test("another control's stream on the bus is refused, as is a changed backup", async () => {

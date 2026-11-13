@@ -22,7 +22,7 @@ import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 type Answer = Progress & { follow?: string };
 
 async function stack() {
-  const { env, store, control, relay } = controlStack({
+  const { env, store, control, relay } = await controlStack({
     env: makeJudgeEnv({ promotion: "owner_approval" }),
   });
   const session = await signIn(control);
@@ -213,7 +213,7 @@ describe("Run it on a rig's checks (goal 080)", () => {
 
   test("a check the rig never takes expires, and says so", async () => {
     const s = await stack();
-    issueCommand(s.store, s.env.keys.privateKeyPem, {
+    await issueCommand(s.store, s.env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "rig_check",
       payload: { check: "model" },
@@ -365,7 +365,7 @@ describe("every button that sends a command (goal 080)", () => {
   test("Start a run: the Starting card follows the run's command, and opens the run once it reports", async () => {
     const s = await stack();
     const assign = s.env.assign.envelope.payload as Record<string, unknown>;
-    const { id } = issueCommand(s.store, s.env.keys.privateKeyPem, {
+    const { id } = await issueCommand(s.store, s.env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
       payload: { ...assign, run: "js-2" },
@@ -422,13 +422,13 @@ describe("every button that sends a command (goal 080)", () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-follow-route-"));
     s.env.service.models = new ModelSource(join(dir, "model-route.json"), undefined);
     await s.relay();
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "lab",
       type: "openai",
       base_url: "https://models.example.com/v1",
       key: { sealed: SecretBox.ephemeral().seal("not-a-key"), hint: "…-key" },
     });
-    s.store.modelProviders.setModels("lab", [{ id: "m" }]);
+    await s.store.modelProviders.setModels("lab", [{ id: "m" }]);
     const a = JSON.parse(
       (await s.send("/ui/settings/rigs", { rig: "rig-a", choice: "lab|m", harness: "pi" })).text,
     ) as Answer;

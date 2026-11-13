@@ -35,7 +35,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
       // A refused command (a bad payload, a message nothing would read) is the client's to fix,
       // and in the audit log as the dashboard's and MCP's refusals are.
       const error = errorText(err);
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: "/v1/commands",
         kind: body.kind,
         why: redact(error),
@@ -59,7 +59,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
     if (!body.success)
       return c.json({ error: "hours is the hours to add: more than 0, at most 8760" }, 400);
     try {
-      const r = addRunHours(store, privateKeyPem, {
+      const r = await addRunHours(store, privateKeyPem, {
         run,
         hours: body.data.hours,
         issuedBy: "owner:api",
@@ -67,7 +67,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
       return c.json(r, 201);
     } catch (err) {
       const error = errorText(err);
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: RUN_HOURS.path,
         run,
         why: redact(error),
@@ -77,13 +77,16 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
   });
 
   // A teachers' round now (goal 194), the run named alone: control sends it to the run's rig.
-  app.post(TEACHERS_ROUND.path, admin, (c) => {
+  app.post(TEACHERS_ROUND.path, admin, async (c) => {
     const run = c.req.param("run");
     try {
-      return c.json(startTeachersRound(store, privateKeyPem, { run, issuedBy: "owner:api" }), 201);
+      return c.json(
+        await startTeachersRound(store, privateKeyPem, { run, issuedBy: "owner:api" }),
+        201,
+      );
     } catch (err) {
       const error = errorText(err);
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: TEACHERS_ROUND.path,
         run,
         why: redact(error),
@@ -92,8 +95,8 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
     }
   });
 
-  app.get("/v1/commands", admin, (c) =>
-    c.json({ commands: store.commands.list(clampLimit(c.req.query("limit"), 100)) }),
+  app.get("/v1/commands", admin, async (c) =>
+    c.json({ commands: await store.commands.list(clampLimit(c.req.query("limit"), 100)) }),
   );
 }
 
@@ -101,8 +104,8 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
 export function commandStatusRoutes(app: Hono, api: ApiContext): void {
   const { store, admin } = api;
 
-  app.get(COMMAND.path, admin, (c) => {
-    const cmd = store.commands.get(c.req.param("id"));
+  app.get(COMMAND.path, admin, async (c) => {
+    const cmd = await store.commands.get(c.req.param("id"));
     return cmd ? c.json(cmd) : c.json({ error: "not found" }, 404);
   });
 }

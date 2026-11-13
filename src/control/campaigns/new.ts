@@ -74,7 +74,7 @@ export async function startCampaign(deps: Deps, input: StartInput): Promise<Star
     mode: string;
     project: { repo: string; kit?: { repo: string; commit: string } };
   };
-  const version = deps.store.campaigns.nextVersion(contract.campaign);
+  const version = await deps.store.campaigns.nextVersion(contract.campaign);
   contract.version = version;
   if (built.kit && contract.project.kit) {
     contract.project.kit.commit = deps.kits.commit(
@@ -112,7 +112,7 @@ export async function startCampaign(deps: Deps, input: StartInput): Promise<Star
           ...(built.mcp_servers?.length ? { mcp_servers: built.mcp_servers } : {}),
           ...(results ? { results } : {}),
         };
-  deps.store.campaigns.put({
+  await deps.store.campaigns.put({
     campaign: contract.campaign,
     version,
     contract: parsed.contract,
@@ -220,7 +220,7 @@ export interface QueueSeed {
  * newest assignment again, with the same contract, starting point and imports, as a new run.
  */
 async function againLikeBefore(deps: Deps, input: RunInput): Promise<RunStarted> {
-  const past = deps.store.commands.latestAssignments().get(input.campaign);
+  const past = (await deps.store.commands.latestAssignments()).get(input.campaign);
   if (!past)
     return {
       ok: false,
@@ -237,7 +237,7 @@ async function againLikeBefore(deps: Deps, input: RunInput): Promise<RunStarted>
       ],
     };
   const name = input.agents ? input.campaign : `${input.campaign.slice(0, 54)}-try`;
-  const run = nextRunName(deps.store, name);
+  const run = await nextRunName(deps.store, name);
   const {
     run: _old,
     agents: _agents,
@@ -267,7 +267,7 @@ async function againLikeBefore(deps: Deps, input: RunInput): Promise<RunStarted>
 
 /** Starts a run of a stored campaign version on a rig: its own run, or a try with no agents. */
 export async function startRun(deps: Deps, input: RunInput): Promise<RunStarted> {
-  const versions = deps.store.campaigns.versions(input.campaign);
+  const versions = await deps.store.campaigns.versions(input.campaign);
   const v =
     input.version === undefined ? versions[0] : versions.find((x) => x.version === input.version);
   if (!v && input.version === undefined) return againLikeBefore(deps, input);
@@ -285,7 +285,7 @@ export async function startRun(deps: Deps, input: RunInput): Promise<RunStarted>
       ],
     };
   const name = input.agents ? input.campaign : `${input.campaign.slice(0, 54)}-try`;
-  const run = nextRunName(deps.store, name);
+  const run = await nextRunName(deps.store, name);
   const kept = v.sources.assignment;
   if (kept) {
     // A copy of a campaign control knew only by an assignment (goal 069): that assignment's

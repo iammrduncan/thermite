@@ -33,7 +33,7 @@ export function busRoutes(app: Hono, api: ApiContext): void {
       );
     const out: Record<string, unknown> = {};
     for (const p of (asked.length ? asked : SYSTEM_PARTS) as SystemPart[])
-      out[p] = await parts.system.part(p, () => parts.views());
+      out[p] = await parts.system.part(p, async () => parts.views());
     return c.json(out);
   });
 

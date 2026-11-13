@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { RETENTION_TIPS } from "../../../src/control/dashboard/settings/retention.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { esc } from "../../../src/control/ui/components/index.ts";
 import { RETENTION_JS } from "../../../src/control/ui/retention.ts";
 import { controlOnly, signIn } from "../../helpers/control-stack.ts";
@@ -14,9 +15,9 @@ import { controlOnly, signIn } from "../../helpers/control-stack.ts";
 const OWNER = "owner-token-abcdef";
 
 /** An audit entry `days` old, for a policy of the audit log to remove. */
-function oldEntry(store: ReturnType<typeof controlOnly>["store"], days: number) {
-  store.db
-    .prepare(
+function oldEntry(store: Awaited<ReturnType<typeof controlOnly>>["store"], days: number) {
+  sqliteBehind(store)
+    .db.prepare(
       "insert into audit (at, actor, action, body) values (?, 'owner:api', 'old_thing', '{}')",
     )
     .run(new Date(Date.now() - days * 86_400_000).toISOString());
@@ -27,7 +28,7 @@ const location = (r: Response) =>
 
 describe("Settings › Retention policies", () => {
   test("by default: no policy, Space says where each kind is kept and what removes it", async () => {
-    const { control } = controlOnly({ tokens: { admin: OWNER } });
+    const { control } = await controlOnly({ tokens: { admin: OWNER } });
     const s = await signIn(control, OWNER);
     // Space and the policies are two areas of Settings (goal 181).
     let html = await s.page("/ui/settings/space");
@@ -61,7 +62,7 @@ describe("Settings › Retention policies", () => {
   });
 
   test("New policy: every label has its ⓘ; Save waits for a name; saved off or on", async () => {
-    const { control, store } = controlOnly({ tokens: { admin: OWNER } });
+    const { control, store } = await controlOnly({ tokens: { admin: OWNER } });
     const s = await signIn(control, OWNER);
     const form = await s.page("/ui/settings?retention=new");
     assert.match(form, /<h3>New policy<\/h3>/);
@@ -101,7 +102,7 @@ describe("Settings › Retention policies", () => {
     });
     assert.equal(off.status, 303);
     assert.match(location(off), /ok=Saved “Old audit”, off\./);
-    const [p] = store.retention.list();
+    const [p] = await store.retention.list();
     assert.equal(p?.on, false, "Save, off");
     assert.equal(p?.when, "weekly");
     const html = await s.page("/ui/settings/retention");
@@ -127,15 +128,15 @@ describe("Settings › Retention policies", () => {
       save: "on",
     });
     assert.match(location(on), /Saved “Old builds” and turned it on\./);
-    const builds = store.retention.list().find((x) => x.name === "Old builds");
+    const builds = (await store.retention.list()).find((x) => x.name === "Old builds");
     assert.equal(builds?.on, true);
     assert.deepEqual(builds?.keep, { open: true, champions: true, newest: false });
 
     // The switch turns one on or off at once; Edit opens the form with what it holds.
     await s.post(`/ui/settings/retention/${p?.id}/on`, { csrf, on: "1" });
-    assert.equal(store.retention.get(p?.id ?? 0)?.on, true);
+    assert.equal((await store.retention.get(p?.id ?? 0))?.on, true);
     await s.post(`/ui/settings/retention/${p?.id}/on`, { csrf });
-    assert.equal(store.retention.get(p?.id ?? 0)?.on, false);
+    assert.equal((await store.retention.get(p?.id ?? 0))?.on, false);
     const edit = await s.page(`/ui/settings?retention=edit&policy=${p?.id}`);
     assert.match(edit, /<h3>Edit policy<\/h3>/);
     assert.match(edit, /name="name" maxlength="80" value="Old audit"/);
@@ -147,7 +148,7 @@ describe("Settings › Retention policies", () => {
     // The words sat in a single-quoted attribute, so "Each lane's champion builds" ended it at the
     // apostrophe: the script's JSON.parse threw on every change, before Save could wait for a
     // name, and Save stayed off. Read as a browser reads an attribute, in either quote.
-    const { control } = controlOnly({ tokens: { admin: OWNER } });
+    const { control } = await controlOnly({ tokens: { admin: OWNER } });
     const s = await signIn(control, OWNER);
     const form = await s.page("/ui/settings?retention=new");
     const attrs = [...form.matchAll(/data-keep-words=(?:"([^"]*)"|'([^']*)')/g)].map((m) =>
@@ -164,7 +165,7 @@ describe("Settings › Retention policies", () => {
   });
 
   test("a refused design comes back to the form with what was typed, and says why", async () => {
-    const { control, store } = controlOnly({ tokens: { admin: OWNER } });
+    const { control, store } = await controlOnly({ tokens: { admin: OWNER } });
     const s = await signIn(control, OWNER);
     const csrf = s.csrfOf(await s.page("/ui/settings?retention=new"));
     const bad = await s.post("/ui/settings/retention", {
@@ -177,14 +178,14 @@ describe("Settings › Retention policies", () => {
     });
     const to = bad.headers.get("location") ?? "";
     assert.match(location(bad), /error=not a retention policy: older_n/);
-    assert.equal(store.retention.list().length, 0);
+    assert.equal((await store.retention.list()).length, 0);
     const again = await (await s.get(to)).text();
     assert.match(again, /<b class="bad">Not done\.<\/b>/);
     assert.match(again, /value="Too small"/, "what was typed stays");
   });
 
   test("Run now asks first, in the page, saying what it removes; Remove now removes it and lists it", async () => {
-    const { control, store } = controlOnly({ tokens: { admin: OWNER } });
+    const { control, store } = await controlOnly({ tokens: { admin: OWNER } });
     oldEntry(store, 40);
     oldEntry(store, 45);
     const s = await signIn(control, OWNER);
@@ -197,7 +198,7 @@ describe("Settings › Retention policies", () => {
       older_n: "30",
       save: "off",
     });
-    const [p] = store.retention.list();
+    const [p] = await store.retention.list();
     const list = await s.page("/ui/settings/retention");
     assert.match(
       list,
@@ -220,14 +221,17 @@ describe("Settings › Retention policies", () => {
     assert.match(card, /<button class="danger solid">Remove now<\/button>/);
     assert.match(card, /<a class="btn" href="\/ui\/settings\/retention">Cancel<\/a>/);
     assert.equal(
-      store.auditLog.list(100).filter((a) => a.action === "old_thing").length,
+      (await store.auditLog.list(100)).filter((a) => a.action === "old_thing").length,
       2,
       "asking removes nothing",
     );
 
     const done = await s.post(`/ui/settings/retention/${p?.id}/run`, { csrf });
     assert.match(location(done), /ok=“Old audit” removed 2 entries/);
-    assert.equal(store.auditLog.list(100).filter((a) => a.action === "old_thing").length, 0);
+    assert.equal(
+      (await store.auditLog.list(100)).filter((a) => a.action === "old_thing").length,
+      0,
+    );
     const after = await s.page("/ui/settings/retention");
     assert.match(
       after,
@@ -238,12 +242,12 @@ describe("Settings › Retention policies", () => {
 
     // Delete: the policy goes; what it removed stays.
     await s.post(`/ui/settings/retention/${p?.id}/delete`, { csrf });
-    assert.equal(store.retention.list().length, 0);
+    assert.equal((await store.retention.list()).length, 0);
     assert.match(await s.page("/ui/settings/retention"), /<td>Old audit<\/td>/);
   });
 
   test("If it ran now follows the form: the page's script asks control as the design changes", async () => {
-    const { control, store } = controlOnly({ tokens: { admin: OWNER } });
+    const { control, store } = await controlOnly({ tokens: { admin: OWNER } });
     oldEntry(store, 40);
     const s = await signIn(control, OWNER);
     const csrf = s.csrfOf(await s.page("/ui/settings?retention=new"));
@@ -263,7 +267,7 @@ describe("Settings › Retention policies", () => {
     assert.equal(none.stays, "Everything it covers is inside the rule today.");
     const bad = await ask({ kind: "audit", rule: "older", older_n: "x" });
     assert.match(String(bad.error), /^not a retention policy/);
-    assert.equal(store.retention.list().length, 0, "a preview saves nothing");
+    assert.equal((await store.retention.list()).length, 0, "a preview saves nothing");
   });
 
   test("the page's script parses, and asks with no browser dialog", () => {

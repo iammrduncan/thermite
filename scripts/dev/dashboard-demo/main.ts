@@ -33,10 +33,12 @@ await seedDemo(store, Date.now(), keys.privateKeyPem);
 
 const port = Number(values.port);
 serve({
-  fetch: createControlApi(store, tokens, keys.privateKeyPem, {
-    staleAfterMs: 180_000,
-    pages: mountDashboard,
-  }).fetch,
+  fetch: (
+    await createControlApi(store, tokens, keys.privateKeyPem, {
+      staleAfterMs: 180_000,
+      pages: mountDashboard,
+    })
+  ).fetch,
   hostname: "127.0.0.1",
   port,
 });

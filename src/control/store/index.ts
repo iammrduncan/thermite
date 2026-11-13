@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-import { openDatabase, transaction } from "../../common/sqlite.ts";
 import {
   EFFORTS,
   type Effort,
@@ -9,54 +7,70 @@ import {
 } from "../../core/agents.ts";
 import { fingerprint } from "../../core/commands.ts";
 import { RIG_ID } from "../../core/ids.ts";
-import { CampaignArchive } from "./archive.ts";
-import { AuditLog } from "./audit.ts";
-import { Builds } from "./builds.ts";
-import { BusKeys } from "./bus.ts";
-import { CampaignVersions } from "./campaigns.ts";
-import { ChampionPatches } from "./champions.ts";
-import { Clusters } from "./clusters.ts";
-import { IssuedCommands } from "./commands.ts";
-import { Enrollments } from "./enrollments.ts";
-import { EventsTable } from "./events.ts";
-import { RigExports } from "./exports.ts";
-import { CampaignFolders } from "./folders.ts";
-import { GitAccessStore } from "./git-access.ts";
-import { GpuClouds } from "./gpu-clouds.ts";
-import { RigHistory } from "./history.ts";
-import { JoinedRigs } from "./joined.ts";
-import { KnowledgeBase } from "./kb/index.ts";
-import { LiveLines } from "./live.ts";
-import { Machines } from "./machines.ts";
-import { McpServerRows } from "./mcp-servers.ts";
-import { ModelAssignments } from "./models.ts";
-import { OwnSettings } from "./own-settings.ts";
-import { BusPositions } from "./positions.ts";
-import { CampaignProposals } from "./proposals.ts";
-import { ModelProviders } from "./providers.ts";
-import { ReachableAddresses } from "./reachable.ts";
-import { RigRefusals } from "./refusals.ts";
+import type { CampaignArchive } from "./archive.ts";
+import type { AuditLog } from "./audit.ts";
+import { keepBehind } from "./behind.ts";
+import type { Builds } from "./builds.ts";
+import type { BusKeys } from "./bus.ts";
+import type { CampaignVersions } from "./campaigns.ts";
+import type { ChampionPatches } from "./champions.ts";
+import type { Clusters } from "./clusters.ts";
+import type { IssuedCommands } from "./commands.ts";
+import type { Enrollments } from "./enrollments.ts";
+import type { EventsTable } from "./events.ts";
+import type { RigExports } from "./exports.ts";
+import type { CampaignFolders } from "./folders.ts";
+import type { GitAccessStore } from "./git-access.ts";
+import type { GpuClouds } from "./gpu-clouds.ts";
+import type { RigHistory } from "./history.ts";
+import type { JoinedRigs } from "./joined.ts";
+import {
+  type KnowledgeBase,
+  SqliteKbFileRows,
+  SqliteKbSettingRows,
+  SqliteKnowledgeBase,
+} from "./kb/index.ts";
+import type { LiveLines } from "./live.ts";
+import type { Machines } from "./machines.ts";
+import type { McpServerRows } from "./mcp-servers.ts";
+import type { ModelAssignments } from "./models.ts";
+import type { OwnSettings } from "./own-settings.ts";
+import type { BusPositions } from "./positions.ts";
+import type { CampaignProposals } from "./proposals.ts";
+import type { ModelProviders } from "./providers.ts";
+import type { ReachableAddresses } from "./reachable.ts";
+import type { RigRefusals } from "./refusals.ts";
 import type { IngestReport } from "./report.ts";
-import { FullResets } from "./resets.ts";
-import { RetentionPolicies } from "./retention.ts";
-import { RetiredRigs } from "./retired.ts";
-import { RigReports } from "./rig-reports.ts";
-import { ReportedRigs } from "./rigs.ts";
-import { RunpodStore } from "./runpod.ts";
-import { RunRegistry } from "./runs.ts";
-import { type MigrateGiven, migrateStore } from "./schema.ts";
-import { UiSessions } from "./sessions.ts";
-import { StoreSize } from "./size.ts";
-import { TunnelRigs } from "./tunnels.ts";
-import { RigUpdates } from "./updates.ts";
-import { UsageRecords } from "./usage.ts";
+import type { FullResets } from "./resets.ts";
+import type { RetentionPolicies } from "./retention.ts";
+import type { RetiredRigs } from "./retired.ts";
+import type { RigReports } from "./rig-reports.ts";
+import type { ReportedRigs } from "./rigs.ts";
+import type { RunnerUse } from "./runner-use.ts";
+import type { RigRunners } from "./runners.ts";
+import type { RunpodStore } from "./runpod.ts";
+import type { RunRegistry } from "./runs.ts";
+import type { MigrateGiven } from "./schema.ts";
+import type { UiSessions } from "./sessions.ts";
+import type { StoreSize } from "./size.ts";
+import { SqliteStore } from "./sqlite.ts";
+import type { TunnelRigs } from "./tunnels.ts";
+import type { RigUpdates } from "./updates.ts";
+import type { UsageRecords } from "./usage.ts";
+import { Turns, waiting, waitingOnce } from "./waits.ts";
+import type { RigWorkers } from "./workers.ts";
 
 /**
  * Control's store: rigs, what control derives from the events they report (the events themselves
- * are on the message bus, control/events), and command queues. A single control process owns it.
+ * are on the message bus, control/events), and command queues.
  *
- * Its tables are kept by sub-stores, one for each domain (goal 125, T6), in store/: each owns its
- * tables' SQL, and no other production code reads or writes them.
+ * This is its interface (goal 267), and the one way the rest of control calls it. Each of its
+ * calls gives its answer later: the caller waits for it. The store behind is SQLite (sqlite.ts),
+ * one file that one control process owns; all of control's SQL is in this folder, and no file
+ * outside it reaches the database.
+ *
+ * Its tables are kept by sub-stores, one for each domain (goal 125, T6): each owns its tables'
+ * SQL, and no other production code reads or writes them.
  */
 
 export {
@@ -94,22 +108,16 @@ export type {
   KbTextState,
   KbTotals,
 } from "./kb/index.ts";
-export type { RunnerUseSample } from "./runner-use.ts";
-
-import { RunnerUse } from "./runner-use.ts";
-import { RigRunners } from "./runners.ts";
-import { RigWorkers } from "./workers.ts";
-
 export { KB_STORED_FILES } from "./kb/index.ts";
 export { OPEN_TRIAL_LINES } from "./live.ts";
 export type { Machine, MachineRig } from "./machines.ts";
-export type { McpServerRows } from "./mcp-servers.ts";
 export { AGENT_ROLES, type AgentRole, codexTakes, harnessOf } from "./models.ts";
 export type { CampaignProposal, ProposedField } from "./proposals.ts";
 export type { ModelProvider, ProviderModel } from "./providers.ts";
 export type { ReachableAddress } from "./reachable.ts";
 export type { RigRefusal } from "./refusals.ts";
 export type { RetentionRemovalRow } from "./retention.ts";
+export type { RunnerUseSample } from "./runner-use.ts";
 export type { RigRunner } from "./runners.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
 export type { RegisteredRun } from "./runs.ts";
@@ -120,9 +128,14 @@ export type { RunningRun } from "./usage.ts";
 export type { IngestReport };
 export { EFFORTS, type Effort, fingerprint, HARNESSES, type Harness, type ProviderType, RIG_ID };
 
-export class ControlStore {
-  readonly db: DatabaseSync;
-  // One sub-store for each domain, each over this database (goal 125, T6).
+/**
+ * Control's store, as every caller outside this folder sees it: one sub-store for each domain,
+ * each an interface whose calls give a promise. Wait for it, and for a call that gives nothing
+ * too, since the call may fail.
+ */
+export interface ControlStore {
+  /** The store's file, or `:memory:`. */
+  readonly path: string;
   /** The rigs as they report: their rows, report-signing keys and supervisors' figures. */
   readonly reportedRigs: ReportedRigs;
   /** The events table of a store from before the events stream, until it is moved there. */
@@ -175,82 +188,101 @@ export class ControlStore {
   readonly retention: RetentionPolicies;
   /** control.db's own size, as SQLite counts it, for Metrics (goal 179). */
   readonly size: StoreSize;
-  private knowledge: KnowledgeBase | undefined;
-
-  /** The store's file, or `:memory:`. */
-  readonly path: string;
-
-  constructor(path: string) {
-    this.path = path;
-    this.db = openDatabase(path);
-    migrateStore(this.db, path);
-    // Each sub-store holds the store and its database, and calls no other while it is built.
-    this.reportedRigs = new ReportedRigs(this, this.db);
-    this.eventsTable = new EventsTable(this, this.db);
-    this.liveLines = new LiveLines(this, this.db);
-    this.rigReports = new RigReports(this, this.db);
-    this.fullResets = new FullResets(this, this.db);
-    this.uiSessions = new UiSessions(this, this.db);
-    this.auditLog = new AuditLog(this, this.db);
-    this.championPatches = new ChampionPatches(this, this.db);
-    this.exports = new RigExports(this, this.db);
-    this.modelProviders = new ModelProviders(this, this.db);
-    this.agentModels = new ModelAssignments(this, this.db);
-    this.usage = new UsageRecords(this, this.db);
-    this.commands = new IssuedCommands(this, this.db);
-    this.runRegistry = new RunRegistry(this, this.db);
-    this.gitAccess = new GitAccessStore(this, this.db);
-    this.machines = new Machines(this, this.db);
-    this.rigHistory = new RigHistory(this, this.db);
-    this.joinedRigs = new JoinedRigs(this, this.db);
-    this.gpuClouds = new GpuClouds(this, this.db);
-    this.retired = new RetiredRigs(this, this.db);
-    this.builds = new Builds(this, this.db);
-    this.refusals = new RigRefusals(this, this.db);
-    this.tunnels = new TunnelRigs(this, this.db);
-    this.runpod = new RunpodStore(this, this.db);
-    this.clusters = new Clusters(this, this.db);
-    this.campaigns = new CampaignVersions(this, this.db);
-    this.folders = new CampaignFolders(this, this.db);
-    this.archive = new CampaignArchive(this, this.db);
-    this.enrollments = new Enrollments(this, this.db);
-    this.busKeys = new BusKeys(this, this.db);
-    this.rigRunners = new RigRunners(this, this.db);
-    this.rigWorkers = new RigWorkers(this, this.db);
-    this.runnerUse = new RunnerUse(this, this.db);
-    this.rigUpdates = new RigUpdates(this, this.db);
-    this.mcpServers = new McpServerRows(this, this.db);
-    this.proposals = new CampaignProposals(this, this.db);
-    this.busPositions = new BusPositions(this, this.db);
-    this.reachable = new ReachableAddresses(this, this.db);
-    this.ownSettings = new OwnSettings(this, this.db);
-    this.retention = new RetentionPolicies(this, this.db);
-    this.size = new StoreSize(this, this.db);
-  }
-
   /**
-   * Brings the store as far as it may go now, given what control found outside it: the events
-   * table goes once the move found the events stream to hold it whole (schema.ts). Returns the path
-   * of a copy of the store kept outside the copies' rotation, made now.
+   * Runs `fn` in one transaction: all of its calls to the store are kept, or none of them. A
+   * call inside another is a savepoint of the outer one. For writes that stand or fall together,
+   * and for a read that a write relies on. While it is open, every other caller of the store
+   * waits; so `fn` waits for the store and for nothing else.
    */
-  migrate(given: MigrateGiven): string | undefined {
-    return migrateStore(this.db, this.path, given);
-  }
-
+  tx<T>(fn: () => Promise<T>): Promise<T>;
   /**
-   * Runs fn in one transaction: all of it is kept, or none of it. Nested calls become savepoints
-   * of the outer one. For writes to more than one sub-store that stand or fall together.
+   * Does `fn` once what the caller wrote is kept: at once outside a transaction; inside one, when
+   * the outermost one is kept, and never when it is dropped. For what leaves control and can't be
+   * taken back, such as a command published to a rig: a transaction that is dropped must not
+   * have sent it. It answers at once, and `fn` waits for nothing.
    */
-  tx<T>(fn: () => T): T {
-    return transaction(this.db, fn);
-  }
-
+  onceKept(fn: () => void): void;
   /**
    * Thermite's own knowledge base (goal 065), which the apply of the events stream feeds
-   * (control/events) as it applies each event. It makes its tables on first use.
+   * (control/events) as it applies each event. It is made at its first call.
    */
-  kb(): KnowledgeBase {
-    this.knowledge ??= new KnowledgeBase(this.db);
-    return this.knowledge;
-  }
+  kb(): KnowledgeBase;
+  /**
+   * Brings the store as far as it may go now, given what control found outside it: the events
+   * table goes once the move found the events stream to hold it whole (schema.ts). Gives the path
+   * of a copy of the store kept outside the copies' rotation, made now.
+   */
+  migrate(given: MigrateGiven): Promise<string | undefined>;
+  /** Closes the store. No call is made after it. */
+  close(): Promise<void>;
 }
+
+/**
+ * Opens control's store at `path` (`:memory:` for one in memory) and brings it to this code's
+ * version (schema.ts).
+ */
+export function openControlStore(path: string): ControlStore {
+  const sqlite = new SqliteStore(path);
+  const turns = new Turns();
+  // Made at its first call, in that call's turn: making it writes to the store.
+  const kb: KnowledgeBase = {
+    ...waitingOnce(SqliteKnowledgeBase.prototype, () => sqlite.kb(), turns),
+    files: waitingOnce(SqliteKbFileRows.prototype, () => sqlite.kb().files, turns),
+    settings: waitingOnce(SqliteKbSettingRows.prototype, () => sqlite.kb().settings, turns),
+  };
+  // Each sub-store's waiting calls stand where its interface is asked for: a call the SQLite
+  // class has and its interface names otherwise does not typecheck here.
+  const store: ControlStore = {
+    path: sqlite.path,
+    reportedRigs: waiting(sqlite.reportedRigs, turns),
+    eventsTable: waiting(sqlite.eventsTable, turns),
+    liveLines: waiting(sqlite.liveLines, turns, ["watch"]),
+    rigReports: waiting(sqlite.rigReports, turns),
+    fullResets: waiting(sqlite.fullResets, turns),
+    uiSessions: waiting(sqlite.uiSessions, turns),
+    auditLog: waiting(sqlite.auditLog, turns),
+    championPatches: waiting(sqlite.championPatches, turns),
+    exports: waiting(sqlite.exports, turns),
+    modelProviders: waiting(sqlite.modelProviders, turns),
+    agentModels: waiting(sqlite.agentModels, turns),
+    usage: waiting(sqlite.usage, turns),
+    commands: waiting(sqlite.commands, turns),
+    runRegistry: waiting(sqlite.runRegistry, turns),
+    gitAccess: waiting(sqlite.gitAccess, turns),
+    machines: waiting(sqlite.machines, turns),
+    rigHistory: waiting(sqlite.rigHistory, turns),
+    joinedRigs: waiting(sqlite.joinedRigs, turns),
+    gpuClouds: waiting(sqlite.gpuClouds, turns),
+    retired: waiting(sqlite.retired, turns),
+    builds: waiting(sqlite.builds, turns),
+    refusals: waiting(sqlite.refusals, turns),
+    tunnels: waiting(sqlite.tunnels, turns),
+    runpod: waiting(sqlite.runpod, turns),
+    clusters: waiting(sqlite.clusters, turns),
+    campaigns: waiting(sqlite.campaigns, turns),
+    folders: waiting(sqlite.folders, turns),
+    archive: waiting(sqlite.archive, turns),
+    enrollments: waiting(sqlite.enrollments, turns),
+    busKeys: waiting(sqlite.busKeys, turns),
+    rigRunners: waiting(sqlite.rigRunners, turns),
+    rigWorkers: waiting(sqlite.rigWorkers, turns),
+    runnerUse: waiting(sqlite.runnerUse, turns),
+    rigUpdates: waiting(sqlite.rigUpdates, turns),
+    mcpServers: waiting(sqlite.mcpServers, turns),
+    proposals: waiting(sqlite.proposals, turns),
+    busPositions: waiting(sqlite.busPositions, turns),
+    reachable: waiting(sqlite.reachable, turns),
+    ownSettings: waiting(sqlite.ownSettings, turns),
+    retention: waiting(sqlite.retention, turns),
+    size: waiting(sqlite.size, turns),
+    tx: <T>(fn: () => Promise<T>) => turns.tx(sqlite.db, fn),
+    onceKept: (fn: () => void) => turns.onceKept(fn),
+    kb: () => kb,
+    migrate: (given: MigrateGiven) => turns.call(() => sqlite.migrate(given)),
+    close: () => turns.call(() => sqlite.db.close()),
+  };
+  keepBehind(store, sqlite);
+  return store;
+}
+
+export type { KnowledgeBase, McpServerRows };

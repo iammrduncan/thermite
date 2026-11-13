@@ -91,20 +91,20 @@ test("a weekly limit under Needs you: what waits until when, wait for the reset,
   rig = (await (await s.get("/ui/rigs/rig-a")).text()) as string;
   assert.ok(rig.includes(`waits for its subscription's weekly limit to reset, ${at}`));
   assert.doesNotMatch(rig, /Needs you asks what to do meanwhile/);
-  assert.equal(s.store.rigHistory.latest("rig-a", [WEEKLY_WAIT_STEP], 1)[0]?.detail, reset);
-  assert.ok(s.store.auditLog.list(50).some((a) => a.action === "weekly_limit_wait"));
+  assert.equal((await s.store.rigHistory.latest("rig-a", [WEEKLY_WAIT_STEP], 1))[0]?.detail, reset);
+  assert.ok((await s.store.auditLog.list(50)).some((a) => a.action === "weekly_limit_wait"));
 
   // The limit met again later: the card is back. Another model, for new trials.
   await new Promise((r) => setTimeout(r, 5));
   await meet(reset);
   needs = (await (await s.get("/ui")).text()) as string;
   assert.match(needs, /waits for its subscription's weekly limit/);
-  s.store.modelProviders.put({
+  await s.store.modelProviders.put({
     name: "zen",
     type: "opencode",
     base_url: "https://opencode.ai/zen/v1",
   });
-  s.store.modelProviders.setModels("zen", [{ id: "deepseek-v4.1-flash-free" }]);
+  await s.store.modelProviders.setModels("zen", [{ id: "deepseek-v4.1-flash-free" }]);
   needs = (await (await s.get("/ui")).text()) as string;
   assert.match(needs, /<summary class="btn primary">Give rig-a another model…<\/summary>/);
   assert.match(
@@ -126,21 +126,21 @@ test("a weekly limit under Needs you: what waits until when, wait for the reset,
       `rig-a takes zen · deepseek-v4.1-flash-free for new trials within a minute; Edit rig shows it. Written to the audit log. The subscription's weekly limit still resets ${at}.`,
     ),
   );
-  assert.deepEqual(s.store.agentModels.byRig()["rig-a"], {
+  assert.deepEqual((await s.store.agentModels.byRig())["rig-a"], {
     provider: "zen",
     model: "deepseek-v4.1-flash-free",
     harness: "opencode",
   });
-  const audit = s.store.auditLog.list(50).map((a) => a.action);
+  const audit = (await s.store.auditLog.list(50)).map((a) => a.action);
   assert.ok(audit.includes("weekly_limit_model") && audit.includes("rig_model_given"));
   assert.equal(
-    s.store.rigHistory.latest("rig-a", [WEEKLY_MODEL_STEP], 1)[0]?.detail,
+    (await s.store.rigHistory.latest("rig-a", [WEEKLY_MODEL_STEP], 1))[0]?.detail,
     "zen · deepseek-v4.1-flash-free",
   );
   needs = (await (await s.get("/ui")).text()) as string;
   assert.doesNotMatch(needs, /waits for its subscription's weekly limit/);
   // The run's wait ends on the rig: its end_wait, signed as the owner's, then the rig's report.
-  const ended = s.store.commands.latest("rig-a", "end_wait", 5);
+  const ended = await s.store.commands.latest("rig-a", "end_wait", 5);
   assert.equal(ended.length, 1);
   assert.equal(ended[0]?.issued_by, "owner:ui");
   await s.relay();

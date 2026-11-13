@@ -10,7 +10,9 @@ import { ingestReport } from "../../helpers/control-store.ts";
  */
 
 async function control() {
-  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": "t-a-abcdef" } } });
+  const { store, control: api } = await controlOnly({
+    tokens: { rigs: { "rig-a": "t-a-abcdef" } },
+  });
   const { page } = await signIn(api);
   const rest = async (path: string) =>
     (await api.request(path, { headers: { authorization: `Bearer ${ADMIN}` } })).json();

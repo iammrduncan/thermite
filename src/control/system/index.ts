@@ -58,13 +58,13 @@ interface SystemFiguresOptions {
 }
 
 /** What the server's user keys are, in words: control's own, and each rig's. */
-function holders(store: ControlStore, own: readonly string[]): Map<string, string> {
+async function holders(store: ControlStore, own: readonly string[]): Promise<Map<string, string>> {
   const names = ["control", "control's system user", "the backup"];
   const m = new Map<string, string>();
   own.forEach((key, i) => {
     m.set(key, names[i] ?? "control");
   });
-  for (const r of store.busKeys.rigKeys()) m.set(r.key, `rig ${r.rig}`);
+  for (const r of await store.busKeys.rigKeys()) m.set(r.key, `rig ${r.rig}`);
   return m;
 }
 
@@ -79,7 +79,7 @@ export class SystemFigures {
     this.busLook = new BusFiguresLook({
       look: o.look,
       bus: o.bus,
-      holders: () => holders(o.store, o.ownKeys?.() ?? []),
+      holders: async () => holders(o.store, o.ownKeys?.() ?? []),
     });
     this.controlLook = new ControlLook({ loops: o.loops, build: o.build });
   }
@@ -101,15 +101,18 @@ export class SystemFigures {
     });
   }
 
-  rigs(views: readonly RigView[]): RigFigures[] {
+  async rigs(views: readonly RigView[]): Promise<RigFigures[]> {
     return rigFigures(this.o.store, views);
   }
 
   /** The figures of one part, as REST and MCP give them. */
-  async part(part: SystemPart, views: () => readonly RigView[]): Promise<unknown> {
+  async part(
+    part: SystemPart,
+    views: () => readonly RigView[] | Promise<readonly RigView[]>,
+  ): Promise<unknown> {
     if (part === "bus") return this.bus();
     if (part === "control") return this.control();
     if (part === "storage") return this.storage();
-    return this.rigs(views());
+    return this.rigs(await views());
   }
 }

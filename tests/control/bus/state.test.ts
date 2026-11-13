@@ -30,8 +30,8 @@ const READ = "read-token-abcdef";
  * Control with the bus given as `bus` (none: off), on `store` when given, and calls with the
  * reader's token.
  */
-function setup(bus?: BusView, store?: ControlStore) {
-  const s = controlOnly({
+async function setup(bus?: BusView, store?: ControlStore) {
+  const s = await controlOnly({
     tokens: { read: READ, rigs: { "rig-a": RIG_TOKEN } },
     ...(bus ? { options: { bus } } : {}),
     ...(store ? { store } : {}),
@@ -39,7 +39,7 @@ function setup(bus?: BusView, store?: ControlStore) {
   const read = (path: string) =>
     s.control.request(path, { headers: { authorization: `Bearer ${READ}` } });
   /** The rig's supervisor's figures, with its live counts, and its config counts when given. */
-  const figures = (live: unknown, config?: unknown) =>
+  const figures = async (live: unknown, config?: unknown) =>
     figuresCall(s.store, "rig-a", {
       at: new Date().toISOString(),
       live,
@@ -76,7 +76,7 @@ async function onBus() {
 
 describe("the message bus's state", () => {
   test("control made without its bus, as only a test makes it: it says so, and /metrics has none of its series", async () => {
-    const s = setup();
+    const s = await setup();
     assert.deepEqual(await (await s.read("/v1/bus")).json(), { on: false });
     assert.equal((await s.control.request("/v1/bus")).status, 401);
     // Control's health says the bus is off, and needs no token.
@@ -96,7 +96,7 @@ describe("the message bus's state", () => {
 
   test("with the bus on: its streams, and the live stream's figures from control and the rig", async () => {
     const b = await onBus();
-    const s = setup(b.view, b.store);
+    const s = await setup(b.view, b.store);
     const live = {
       published: 7,
       dropped: 2,
@@ -173,7 +173,7 @@ describe("the message bus's state", () => {
     b.config.written["mcp-servers"] = 1;
     b.config.failed = 1;
     b.config.rigs.set("rig-a", 3);
-    const s = setup(b.view, b.store);
+    const s = await setup(b.view, b.store);
     const config = {
       taken: 3,
       refused: 1,
@@ -253,7 +253,7 @@ describe("the message bus's state", () => {
       })),
     });
     await ingestReport(b.store, page(1, 3));
-    const s = setup(b.view, b.store);
+    const s = await setup(b.view, b.store);
     const state = async () =>
       ((await (await s.read("/v1/bus")).json()) as { events: Record<string, unknown> }).events;
     assert.deepEqual(await state(), {
@@ -311,7 +311,7 @@ describe("the message bus's state", () => {
     b.bus.streams = async () => {
       throw new Error("connection refused: nats:4222");
     };
-    const s = setup(b.view, b.store);
+    const s = await setup(b.view, b.store);
     // Control's health, as a probe asks it (goal 173).
     const health = async () => (await s.control.request("/v1/health")).json();
     assert.deepEqual(await health(), { ok: true, bus: "connected" });

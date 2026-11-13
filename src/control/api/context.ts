@@ -198,18 +198,18 @@ export interface ApiContext {
  * The context, built once: control's build noted, its parts made, the tunnels' calls answered by
  * `app`, and the guards of the owner's, the rigs' and the reader's routes.
  */
-export function apiContext(
+export async function apiContext(
   app: Hono,
   store: ControlStore,
   tokens: ControlTokens,
   privateKeyPem: string,
   opts: ControlOptions,
-): ApiContext {
+): Promise<ApiContext> {
   const control = opts.build ?? buildInfo();
   // A rig refused by an earlier control may work with this one.
-  recheckRefusals(store, control);
+  await recheckRefusals(store, control);
   // Since when control runs this build: a rig's page says since when the two differ.
-  store.builds.noteControl(control);
+  await store.builds.noteControl(control);
   const viewOpts = {
     staleAfterMs: opts.staleAfterMs,
     offlineAfterMs: opts.offlineAfterMs,
@@ -252,16 +252,16 @@ export function apiContext(
   const sessions = new OwnerSessions(store, owner, privateKeyPem, opts.sessionDays);
   // The owner's token, as a script or the command line sends it; or the owner's session, as the
   // dashboard's app sends it, with the session's token on every change (api/session.ts).
-  const ownerOf = (c: Context): "owner:api" | "owner:ui" | Response => {
+  const ownerOf = async (c: Context): Promise<"owner:api" | "owner:ui" | Response> => {
     const token = bearer(c.req.header("authorization"));
     if (owner.matches(token)) return "owner:api";
     // A request with a token that is not the owner's is refused as before, whatever its cookie.
     if (token) return c.json({ error: "unauthorized" }, 401);
-    const session = sessions.takes(c);
+    const session = await sessions.takes(c);
     return session.ok ? "owner:ui" : c.json({ error: session.error }, session.status);
   };
   const admin: MiddlewareHandler = async (c, next) => {
-    const who = ownerOf(c);
+    const who = await ownerOf(c);
     if (typeof who !== "string") return who;
     callers.set(c, who);
     await next();
@@ -274,18 +274,23 @@ export function apiContext(
     const rig = c.req.param("rig") ?? "";
     const via = (c.env as { tunnelRig?: unknown } | undefined)?.tunnelRig;
     if (typeof via === "string") {
-      if (via !== rig || !store.tunnels.get(rig)?.enrolled_at || store.retired.get(rig))
+      if (
+        via !== rig ||
+        !(await store.tunnels.get(rig))?.enrolled_at ||
+        (await store.retired.get(rig))
+      )
         return c.json({ error: "unauthorized" }, 401);
     } else {
       const token = bearer(c.req.header("authorization"));
       // A runner process control set up has a token of its own, for its own route alone: its
       // registration on the bus (goal 206).
       const runner = c.req.param("runner");
-      const own = runner !== undefined && store.rigRunners.tokenMatches(rig, runner, token);
-      if (!own && !store.enrollments.tokenMatches(rig, token))
+      const own = runner !== undefined && (await store.rigRunners.tokenMatches(rig, runner, token));
+      if (!own && !(await store.enrollments.tokenMatches(rig, token)))
         return c.json({ error: "unauthorized" }, 401);
       // A retired rig is refused until the owner brings it back, whatever token it holds.
-      if (store.retired.get(rig)) return c.json({ error: "this rig is retired in control" }, 403);
+      if (await store.retired.get(rig))
+        return c.json({ error: "this rig is retired in control" }, 403);
     }
     // The supervisor's build, from its headers. A supervisor that sends none on the calls every
     // build makes is from before version checks: unknown, and never refused for it.
@@ -293,11 +298,11 @@ export function apiContext(
     const supervisorBuild = buildFromHeaders((h) => c.req.header(h));
     // A runner's supervisor is not the rig's: its build is not the rig's supervisor's.
     if (c.req.param("runner") === undefined && (supervisorBuild || route === "supervisor"))
-      store.builds.setRig(rig, "supervisor", supervisorBuild);
-    const refused = checkRig(store, rig, control);
+      await store.builds.setRig(rig, "supervisor", supervisorBuild);
+    const refused = await checkRig(store, rig, control);
     if (refused) {
       // Counted, so the rig's page can say that it still calls.
-      store.refusals.countCall(rig);
+      await store.refusals.countCall(rig);
       return c.json({ error: refused }, 409);
     }
     callers.set(c, `rig:${rig}`);
@@ -308,7 +313,7 @@ export function apiContext(
     const t = bearer(c.req.header("authorization"));
     if (creds.read?.matches(t)) callers.set(c, "reader:api");
     else {
-      const who = ownerOf(c);
+      const who = await ownerOf(c);
       if (typeof who !== "string") return who;
       callers.set(c, who);
     }

@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../common/in-turn.ts";
 import type { AuditEntry, CommandRow } from "../store/index.ts";
 import { commandStatus } from "./commands/index.ts";
 import { ago, esc, filterForm, infoLabel, pagerHtml } from "./components/index.ts";
@@ -83,20 +84,20 @@ function commandCell(row: CommandRow | undefined): string {
   return `<span class="chip ${s.tone}">${esc(s.word)}</span>${why ? ` <span class="muted small">${esc(why)}</span>` : ""}`;
 }
 
-export function auditBody(o: {
+export async function auditBody(o: {
   entries: AuditEntry[];
   query: AuditQuery;
   /** Every rig control knows: the Rig filter's choices. */
   rigs: string[];
   /** A command entry's command, by its id. */
-  command: (id: string) => CommandRow | undefined;
+  command: (id: string) => CommandRow | undefined | Promise<CommandRow | undefined>;
   /** Where the page is in the list: its first entry's place, and how many match in all. */
   from: number;
   total: number;
   older: number | null;
   newer: number | null;
   now: number;
-}): string {
+}): Promise<string> {
   const q = o.query;
   const kinds = q.type.length ? q.type : AUDIT_DEFAULT_KINDS;
   const filters = filterForm({
@@ -136,19 +137,19 @@ export function auditBody(o: {
   // A repeated refusal is one entry: when it came first, how often, and when last.
   const when = (x: AuditEntry) =>
     `<span title="${esc(x.at)}">${esc(ago(x.at, o.now))} ago</span>${x.count > 1 ? `<div class="xs">${x.count} times, the last ${esc(ago(x.last_at, o.now))} ago</div>` : ""}`;
-  const rows = o.entries
-    .map((x) => {
+  const rows = (
+    await mapInTurn(o.entries, async (x) => {
       const kind = auditKindOf(x.action);
       const body = (x.body ?? {}) as { rig?: unknown; id?: unknown };
       const rig = typeof body.rig === "string" ? body.rig : "";
       const cmd =
         x.action === "command_issued" && typeof body.id === "string"
-          ? o.command(body.id)
+          ? await o.command(body.id)
           : undefined;
       const detail = JSON.stringify(x.body ?? {});
       return `<tr data-entry="${x.id}"><td class="muted nowrap">${when(x)}</td><td>${esc(x.actor)}</td><td><span class="chip">${esc(AUDIT_KIND_WORDS[kind] ?? kind)}</span> <b>${esc(x.action.replace(/_/g, " "))}</b> <span class="muted xs">${esc(x.action)}</span>${cmd ? ` <span class="small">${esc(cmd.kind)}</span>` : ""}</td><td class="small">${rig ? `<a href="/ui/rigs/${encodeURIComponent(rig)}">${esc(rig)}</a>` : `<span class="muted">—</span>`}</td><td>${commandCell(cmd)}</td><td><details class="aud-d" data-k="a-${x.id}"><summary class="muted small">Detail</summary><code class="aud-json">${esc(detail)}</code>${cmd ? `<div class="small"><b>Outcome:</b> <code>${esc(JSON.stringify(cmd.outcome ?? null))}</code></div>` : ""}</details></td></tr>`;
     })
-    .join("");
+  ).join("");
   const pager = pagerHtml({
     from: o.entries.length ? o.from : 0,
     to: o.entries.length ? o.from + o.entries.length - 1 : 0,

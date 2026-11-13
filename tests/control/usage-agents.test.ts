@@ -34,29 +34,33 @@ async function stack(): Promise<ControlStore> {
     ["chatgpt-plan", "chatgpt"],
     ["claude-sub", "claude"],
   ] as const)
-    store.modelProviders.put({
+    await store.modelProviders.put({
       name,
       type,
       base_url: "https://models.example/v1",
       key: { sealed: "sealed-for-the-tests", hint: "…test" },
     });
-  store.agentModels.assignRig("rig-t", { provider: "lab", model: "wide-model", harness: "pi" });
-  store.agentModels.assignRole("rig-t", "teachers", {
-    provider: "chatgpt-plan",
-    model: "gpt-6.1",
-    harness: "codex",
-  });
-  store.agentModels.assignRole("rig-t", "second_teacher", {
-    provider: "claude-sub",
-    model: "sonnet-5.5",
-    harness: "claude-code",
-  });
-  store.agentModels.assignRole("rig-t", "merged_by", {
+  await store.agentModels.assignRig("rig-t", {
     provider: "lab",
     model: "wide-model",
     harness: "pi",
   });
-  store.agentModels.assignRole("rig-t", "auditor", {
+  await store.agentModels.assignRole("rig-t", "teachers", {
+    provider: "chatgpt-plan",
+    model: "gpt-6.1",
+    harness: "codex",
+  });
+  await store.agentModels.assignRole("rig-t", "second_teacher", {
+    provider: "claude-sub",
+    model: "sonnet-5.5",
+    harness: "claude-code",
+  });
+  await store.agentModels.assignRole("rig-t", "merged_by", {
+    provider: "lab",
+    model: "wide-model",
+    harness: "pi",
+  });
+  await store.agentModels.assignRole("rig-t", "auditor", {
     provider: "claude-sub",
     model: "opus-5.5",
     harness: "claude-code",
@@ -89,7 +93,7 @@ async function stack(): Promise<ControlStore> {
     summary: { settings: { planner: false } },
   });
   await applied(store);
-  store.liveLines.add(
+  await store.liveLines.add(
     "rig-t",
     "log-1",
     [
@@ -127,7 +131,7 @@ const lineOf = (l: UsageReport["by_agent_model"][number]) => [
 describe("a run's usage lists every agent with a model (goal 193)", () => {
   test("lines with records are marked; agents with none get a line, with why", async () => {
     const store = await stack();
-    const r = modelUsage(store, { run: "g-1" });
+    const r = await modelUsage(store, { run: "g-1" });
     assert.deepEqual(r.by_agent_model.map(lineOf), [
       ["workers", "pi", "wide-model", 1, true, null],
       [
@@ -159,9 +163,9 @@ describe("a run's usage lists every agent with a model (goal 193)", () => {
 
   test("none for part of the run's time, nor for a closed run", async () => {
     const store = await stack();
-    const today = modelUsage(store, { run: "g-1", period: "7d" });
+    const today = await modelUsage(store, { run: "g-1", period: "7d" });
     assert.ok(today.by_agent_model.every((l) => l.configured === undefined && l.records > 0));
-    const closed = modelUsage(store, { run: "g-0" });
+    const closed = await modelUsage(store, { run: "g-0" });
     assert.deepEqual(closed.by_agent_model.map(lineOf), [
       ["workers", "pi", "wide-model", 1, false, null],
     ]);
@@ -170,7 +174,7 @@ describe("a run's usage lists every agent with a model (goal 193)", () => {
   test("the Stats tab: No calls yet, with why, in place of the figures", async () => {
     const store = await stack();
     const html = runStatsTab({
-      report: modelUsage(store, { run: "g-1" }),
+      report: await modelUsage(store, { run: "g-1" }),
       rows: [],
       roundStarts: [],
       trials: 0,

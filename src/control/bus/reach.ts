@@ -46,15 +46,19 @@ const offCalls = new WeakMap<ControlStore, Map<string, { first: string; last: st
  * Notes a rig's call over HTTPS with no keys on the bus: it shows broken while it calls, and its
  * history says so once a day.
  */
-export function noteOffBusCall(store: ControlStore, rig: string, now = new Date()): void {
+export async function noteOffBusCall(
+  store: ControlStore,
+  rig: string,
+  now = new Date(),
+): Promise<void> {
   const at = now.toISOString();
   const calls = offCalls.get(store) ?? new Map<string, { first: string; last: string }>();
   offCalls.set(store, calls);
   const was = calls.get(rig);
   calls.set(rig, { first: was?.first ?? at, last: at });
-  const last = store.rigHistory.latest(rig, [BUS_OFF_STEP], 1)[0];
+  const last = (await store.rigHistory.latest(rig, [BUS_OFF_STEP], 1))[0];
   if (last && now.getTime() - Date.parse(last.at) < OFF_STEP_EVERY_MS) return;
-  store.rigHistory.add(
+  await store.rigHistory.add(
     rig,
     BUS_OFF_STEP,
     false,
@@ -64,9 +68,14 @@ export function noteOffBusCall(store: ControlStore, rig: string, now = new Date(
 }
 
 /** A registration of a rig's keys over HTTPS: a step in its history, and its calls with no keys forgotten. */
-export function noteRegistered(store: ControlStore, rig: string): void {
+export async function noteRegistered(store: ControlStore, rig: string): Promise<void> {
   offCalls.get(store)?.delete(rig);
-  store.rigHistory.add(rig, BUS_REGISTERED_STEP, true, "over HTTPS, at the supervisor's start");
+  await store.rigHistory.add(
+    rig,
+    BUS_REGISTERED_STEP,
+    true,
+    "over HTTPS, at the supervisor's start",
+  );
 }
 
 /**
@@ -74,11 +83,11 @@ export function noteRegistered(store: ControlStore, rig: string): void {
  * control last took a report of it (ISO; empty or 0: never); `podStopped`: a RunPod rig whose pod
  * is stopped, which reaches nothing and is not broken.
  */
-export function offBus(
+export async function offBus(
   store: ControlStore,
   rig: string,
   o: { lastSeen: string; now: number; podStopped?: boolean | undefined },
-): OffBus | undefined {
+): Promise<OffBus | undefined> {
   const call = offCalls.get(store)?.get(rig);
   if (call && o.now - Date.parse(call.last) < OFF_CALL_KEPT_MS)
     return {
@@ -89,7 +98,7 @@ export function offBus(
     };
   if (o.podStopped) return undefined;
   const seen = Date.parse(o.lastSeen) || 0;
-  const pod = store.tunnels.get(rig);
+  const pod = await store.tunnels.get(rig);
   if (pod?.enrolled_at && !pod.leaf_ca)
     return {
       why: "leaf",
@@ -111,7 +120,7 @@ export function offBus(
       words:
         "RunPod gives its pod no public address for the leaf node's port (7422), so control's bus can't dial it, and nothing comes from it.",
     };
-  const registered = store.rigHistory.latest(rig, [BUS_REGISTERED_STEP], 1)[0];
+  const registered = (await store.rigHistory.latest(rig, [BUS_REGISTERED_STEP], 1))[0];
   if (
     registered &&
     seen < Date.parse(registered.at) &&
@@ -131,14 +140,14 @@ export function offBus(
  * (core/api/control/bus.ts has its shape), from the same knowledge as its page; `o` as offBus
  * takes it.
  */
-export function busReach(
+export async function busReach(
   store: ControlStore,
   rig: string,
   o: { lastSeen: string; now: number; podStopped?: boolean | undefined },
-): BusReach {
-  const off = offBus(store, rig, o);
-  if (off) return { state: "off", ...off, fix: offBusFix(store, rig, off) };
-  const registered = store.rigHistory.latest(rig, [BUS_REGISTERED_STEP], 1)[0];
+): Promise<BusReach> {
+  const off = await offBus(store, rig, o);
+  if (off) return { state: "off", ...off, fix: await offBusFix(store, rig, off) };
+  const registered = (await store.rigHistory.latest(rig, [BUS_REGISTERED_STEP], 1))[0];
   return { state: "on", since: registered?.at ?? null };
 }
 
@@ -147,18 +156,18 @@ export function busReach(
  * version, or one set up without the bus, is set up again; one that can't reach the bus needs its
  * way there; a pod RunPod gives no address is launched again.
  */
-export function offBusFix(store: ControlStore, rig: string, off: OffBus): string {
+export async function offBusFix(store: ControlStore, rig: string, off: OffBus): Promise<string> {
   if (off.why === "silent")
     return "Check that the rig reaches the bus's address and port (4222 unless control says otherwise on Add a rig), through every firewall and network rule between them, and read the supervisor's log, which says why it could not sign in.";
-  if (store.tunnels.get(rig))
-    return off.why === "leaf" && store.tunnels.get(rig)?.leaf_ca
+  if (await store.tunnels.get(rig))
+    return off.why === "leaf" && (await store.tunnels.get(rig))?.leaf_ca
       ? "Terminate the rig, and launch a new one: RunPod may give the new pod a public address. A pod with no public address can't join the bus in this version."
       : "Terminate the rig, and launch a new one on control's image: a pod's settings can't change.";
-  if (store.machines.rig(rig))
+  if (await store.machines.rig(rig))
     return "Update it from its page: control writes its files again with the bus's address and control's authority. The machine must reach the bus's port.";
-  if (store.clusters.rig(rig))
+  if (await store.clusters.rig(rig))
     return "Update its images from its page: its deployments get the bus's address and control's authority. The cluster's network rules must let it reach the bus's port.";
-  if (store.joinedRigs.get(rig))
+  if (await store.joinedRigs.get(rig))
     return "Remove it where it runs, with the command on its page, then make a new join command there and run it where the rig is.";
   return "Set it up again with this version: the compose stack's new images and compose file; for a rig set up by hand, this version's images, with THERMITE_NATS_URL and THERMITE_NATS_CA_FILE for its supervisor as `thermite rig add` writes them.";
 }

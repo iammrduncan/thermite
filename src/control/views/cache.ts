@@ -1,4 +1,5 @@
 import { errorText } from "../../common/errors.ts";
+import { mapInTurn } from "../../common/in-turn.ts";
 import { log, logDebug } from "../../common/log.ts";
 import { RIG_ID } from "../../core/ids.ts";
 import { rigEventSubjects } from "../../core/link/events.ts";
@@ -83,8 +84,8 @@ export class FoldCache {
    * folds took already is passed over. A fold that fails on an event is dropped, and its rig's
    * views say so.
    */
-  take(events: readonly StreamEvent[], through: number): void {
-    const current = new Map(this.store.reportedRigs.list().map((r) => [r.id, r.ledger_id]));
+  async take(events: readonly StreamEvent[], through: number): Promise<void> {
+    const current = new Map((await this.store.reportedRigs.list()).map((r) => [r.id, r.ledger_id]));
     for (const e of events) {
       if (e.place <= this.through) continue;
       const { rig, ledger, event } = e.read;
@@ -101,8 +102,8 @@ export class FoldCache {
   }
 
   /** A rig's view, read now; undefined for a rig control does not list. */
-  view(rig: string, opts: ViewOptions): RigView | undefined {
-    const row = this.store.reportedRigs.list().find((x) => x.id === rig);
+  async view(rig: string, opts: ViewOptions): Promise<RigView | undefined> {
+    const row = (await this.store.reportedRigs.list()).find((x) => x.id === rig);
     if (!row) {
       this.drop(rig);
       return undefined;
@@ -115,8 +116,8 @@ export class FoldCache {
    * one part that reads it often. Undefined for a rig control does not list. The reader never
    * changes what it reads.
    */
-  folded(rig: string): FoldedRig | undefined {
-    const row = this.store.reportedRigs.list().find((x) => x.id === rig);
+  async folded(rig: string): Promise<FoldedRig | undefined> {
+    const row = (await this.store.reportedRigs.list()).find((x) => x.id === rig);
     if (!row) {
       this.drop(rig);
       return undefined;
@@ -128,28 +129,28 @@ export class FoldCache {
    * Every rig's view, read now. A rig whose events can't be read now is listed as `unreadable`,
    * with why, so one rig never keeps the others' views from a page.
    */
-  views(opts: ViewOptions): RigView[] {
-    const rows = this.store.reportedRigs.list();
+  async views(opts: ViewOptions): Promise<RigView[]> {
+    const rows = await this.store.reportedRigs.list();
     const listed = new Set(rows.map((u) => u.id));
     for (const rig of this.kept.keys()) if (!listed.has(rig)) this.drop(rig);
-    return rows.map((u) => this.readOrSay(u, opts));
+    return mapInTurn(rows, async (u) => this.readOrSay(u, opts));
   }
 
   /** A run's view wherever it ran, read now; undefined for a run no rig created. */
   async run(id: string, opts: ViewOptions): Promise<RunOnRig | undefined> {
-    const r = this.store.runRegistry.created(id);
+    const r = await this.store.runRegistry.created(id);
     return r ? (await this.place([r], opts))[0] : undefined;
   }
 
   /** The run of this name a rig created, wherever on the rig it ran, read now; or undefined. */
   async runOn(rig: string, id: string, opts: ViewOptions): Promise<RunOnRig | undefined> {
-    const r = this.store.runRegistry.createdOn(id, rig);
+    const r = await this.store.runRegistry.createdOn(id, rig);
     return r ? (await this.place([r], opts))[0] : undefined;
   }
 
   /** Every run of a campaign a rig created, newest first, earlier ones too, read now. */
-  campaignRuns(campaign: string, opts: ViewOptions): Promise<RunOnRig[]> {
-    return this.place(this.store.runRegistry.ofCampaign(campaign), opts);
+  async campaignRuns(campaign: string, opts: ViewOptions): Promise<RunOnRig[]> {
+    return this.place(await this.store.runRegistry.ofCampaign(campaign), opts);
   }
 
   /**
@@ -157,7 +158,9 @@ export class FoldCache {
    * or read from the stream, which its first view after takes as the rig's own.
    */
   async restore(rig: string): Promise<void> {
-    const row = this.store.reportedRigs.list({ withRetired: true }).find((x) => x.id === rig);
+    const row = (await this.store.reportedRigs.list({ withRetired: true })).find(
+      (x) => x.id === rig,
+    );
     if (!row || row.ledger_id === null || this.kept.get(rig)?.ledger === row.ledger_id) return;
     await this.earlierFold(rig, row.ledger_id);
   }
@@ -257,16 +260,16 @@ export class FoldCache {
     }
   }
 
-  private read(row: RigRow, opts: ViewOptions): RigView {
-    return readRig(this.current(row).state(), rigInputs(this.store, row, opts));
+  private async read(row: RigRow, opts: ViewOptions): Promise<RigView> {
+    return readRig(this.current(row).state(), await rigInputs(this.store, row, opts));
   }
 
   /** A rig's view; or, when its events can't be read now, one without them that says why. */
-  private readOrSay(row: RigRow, opts: ViewOptions): RigView {
+  private async readOrSay(row: RigRow, opts: ViewOptions): Promise<RigView> {
     try {
-      return this.read(row, opts);
+      return await this.read(row, opts);
     } catch (err) {
-      const empty = readRig(new RigFold().state(), rigInputs(this.store, row, opts));
+      const empty = readRig(new RigFold().state(), await rigInputs(this.store, row, opts));
       return { ...empty, unreadable: errorText(err) };
     }
   }
@@ -306,19 +309,21 @@ export class FoldCache {
    * rig's current ledger, else the view of an earlier fold. A rig is read once for all its runs.
    */
   private async place(runs: RegisteredRun[], opts: ViewOptions): Promise<RunOnRig[]> {
-    const rows = new Map(this.store.reportedRigs.list({ withRetired: true }).map((u) => [u.id, u]));
+    const rows = new Map(
+      (await this.store.reportedRigs.list({ withRetired: true })).map((u) => [u.id, u]),
+    );
     const read = new Map<string, RigView | undefined>();
     const out: RunOnRig[] = [];
     for (const r of runs) {
       const row = rows.get(r.rig);
       if (!row) continue;
-      const retired = this.store.retired.get(r.rig) !== undefined;
+      const retired = (await this.store.retired.get(r.rig)) !== undefined;
       const current = !retired && row.ledger_id === r.ledger_id;
       const key = keyOf(r.rig, r.ledger_id);
       if (!read.has(key))
         read.set(
           key,
-          current ? this.view(r.rig, opts) : await this.earlierView(row, r.ledger_id, opts),
+          current ? await this.view(r.rig, opts) : await this.earlierView(row, r.ledger_id, opts),
         );
       const rig = read.get(key);
       const run = rig?.runs.find((x) => x.id === r.run);
@@ -336,7 +341,7 @@ export class FoldCache {
     const k = await this.earlierFold(row.id, ledger);
     const own = row.ledger_id === ledger;
     const at = { ...row, ledger_id: ledger, summary: own ? row.summary : {} };
-    return readRig(k.fold.state(), rigInputs(this.store, at, opts));
+    return readRig(k.fold.state(), await rigInputs(this.store, at, opts));
   }
 
   /** An earlier fold of a rig ledger, read last now: kept, or read from the stream. */
@@ -426,16 +431,19 @@ const DEFAULT_VIEW: ViewOptions = { staleAfterMs: 180_000 };
  * A rig's view from its events (only the current ledger's, after a reset): through the folds
  * control keeps for the store, or, for a store without them, a view with no event.
  */
-export function rigView(
+export async function rigView(
   store: ControlStore,
   rig: string,
   opts: ViewOptions = DEFAULT_VIEW,
-): RigView | undefined {
+): Promise<RigView | undefined> {
   return foldsOf(store).view(rig, opts);
 }
 
 /** Every rig's view, as rigView reads one; a rig whose events can't be read says why (`unreadable`). */
-export function rigViews(store: ControlStore, opts: ViewOptions = DEFAULT_VIEW): RigView[] {
+export async function rigViews(
+  store: ControlStore,
+  opts: ViewOptions = DEFAULT_VIEW,
+): Promise<RigView[]> {
   return foldsOf(store).views(opts);
 }
 
@@ -475,18 +483,21 @@ export function campaignRuns(
  * its view: what a check's row reads, which the dashboard follows often. None for a rig control
  * does not list.
  */
-export function rigChecks(store: ControlStore, rig: string): Record<string, RigCheckView> {
-  return ownCopier()(foldsOf(store).folded(rig)?.checks ?? {});
+export async function rigChecks(
+  store: ControlStore,
+  rig: string,
+): Promise<Record<string, RigCheckView>> {
+  return ownCopier()((await foldsOf(store).folded(rig))?.checks ?? {});
 }
 
 /**
  * The runs a rig closed on its current ledger, from its fold. None while its events can't be read
  * (the view says why): then what is handed for a run rests on its assignment's status alone.
  */
-export function closedRuns(store: ControlStore, rig: string): Set<string> {
+export async function closedRuns(store: ControlStore, rig: string): Promise<Set<string>> {
   let runs: RunView[];
   try {
-    runs = foldsOf(store).folded(rig)?.runs ?? [];
+    runs = (await foldsOf(store).folded(rig))?.runs ?? [];
   } catch (err) {
     logDebug("control", "a rig's closed runs not read", { rig, error: errorText(err) });
     return new Set();
@@ -499,14 +510,12 @@ export function closedRuns(store: ControlStore, rig: string): Set<string> {
  * as its fold holds them, without the rest of its view: what Live checks a run's message lines
  * against each time it draws them (a worker's own line can claim anything).
  */
-export function runMessages(
+export async function runMessages(
   store: ControlStore,
   rig: string,
   run: string,
-): Map<number, { to: string; text: string; keep: boolean }> {
-  const r = foldsOf(store)
-    .folded(rig)
-    ?.runs.find((x) => x.id === run);
+): Promise<Map<number, { to: string; text: string; keep: boolean }>> {
+  const r = (await foldsOf(store).folded(rig))?.runs.find((x) => x.id === run);
   return new Map((r?.messages ?? []).map((m) => [m.id, { to: m.to, text: m.text, keep: m.keep }]));
 }
 

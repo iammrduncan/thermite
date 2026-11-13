@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { issueCommand, modelCheckRefusal } from "../../../src/control/issue/index.ts";
 import { researchModelRefusal } from "../../../src/control/rigs/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { rigView } from "../../../src/control/views/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
@@ -67,13 +68,13 @@ async function stack() {
     keys,
     store,
     control: api,
-  } = controlOnly({
+  } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000 },
   });
   // The assignment that started gs-3, before the rig reported it.
-  enrollRigs(store, ["rig-a"]);
-  issueCommand(store, keys.privateKeyPem, {
+  await enrollRigs(store, ["rig-a"]);
+  await issueCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
     payload: {
@@ -149,10 +150,10 @@ async function stack() {
     [["harness", "run_created", "other-1", { campaign: "other", mode: "hill_climb" }]],
     { hardware: hardware("cuda") },
   );
-  store.kb().grant("gemv-speed", "survey-study", "owner:ui");
+  await store.kb().grant("gemv-speed", "survey-study", "owner:ui");
   const kb = store.kb();
-  const exp = kb.search("vector loads", ["gemv-speed"], { kinds: ["experiment"] })[0];
-  const finding = kb.search("verifier", ["survey-study"], { kinds: ["finding"] })[0];
+  const exp = (await kb.search("vector loads", ["gemv-speed"], { kinds: ["experiment"] }))[0];
+  const finding = (await kb.search("verifier", ["survey-study"], { kinds: ["finding"] }))[0];
   assert.ok(exp && finding);
 
   const rest = (campaign: string, body: unknown, token = TOKENS.admin) =>
@@ -172,8 +173,8 @@ async function stack() {
   /** Every assign_campaign control signed, oldest first: who issued it, and its payload. */
   const assigned = () =>
     (
-      store.db
-        .prepare("select signed from command where kind = 'assign_campaign' order by rowid")
+      sqliteBehind(store)
+        .db.prepare("select signed from command where kind = 'assign_campaign' order by rowid")
         .all() as { signed: string }[]
     ).map(
       (x) =>
@@ -285,7 +286,7 @@ describe("Start a run over REST (goal 029)", () => {
     assert.equal(fresh.status, 201);
     const out = await json<{ run: string; knowledge: unknown }>(fresh);
     assert.deepEqual(out.knowledge, { collection: "fresh", granted: [] });
-    assert.deepEqual(s.store.kb().scope("gemv-speed", out.run), { fresh: true, granted: [] });
+    assert.deepEqual(await s.store.kb().scope("gemv-speed", out.run), { fresh: true, granted: [] });
     // A collection the campaign is not granted is refused, and nothing is sent.
     const before = s.assigned().length;
     const refused = await s.rest("gemv-speed", { rig: "rig-a", granted: ["secret-study"] });
@@ -304,7 +305,7 @@ describe("Start a run over REST (goal 029)", () => {
     ]);
     assert.equal(page.status, 303);
     const run = String(page.headers.get("location")).split("/").pop()?.split("?")[0] ?? "";
-    assert.deepEqual(s.store.kb().scope("gemv-speed", run), { fresh: true, granted: [] });
+    assert.deepEqual(await s.store.kb().scope("gemv-speed", run), { fresh: true, granted: [] });
     // Left as it is: the whole collection, and every collection granted now.
     const plain = await json<{ run: string; knowledge: unknown }>(
       await s.rest("gemv-speed", { rig: "rig-a" }),
@@ -362,7 +363,7 @@ describe("Start a run over REST (goal 029)", () => {
       400,
       "That provider does not list that model.",
     );
-    s.store.kb().revoke("gemv-speed", "survey-study");
+    await s.store.kb().revoke("gemv-speed", "survey-study");
     await refused(
       "gemv-speed",
       { rig: "rig-a", past: [s.finding.id] },
@@ -383,7 +384,7 @@ describe("Start a run over REST (goal 029)", () => {
     for (const token of [TOKENS.operator, TOKENS.agent, TOKENS.read])
       assert.equal((await s.rest("gemv-speed", { rig: "rig-a" }, token)).status, 401);
     assert.equal(s.assigned().length, before, "nothing was signed");
-    const audit = s.store.auditLog.list(100).filter((a) => a.action === "refused");
+    const audit = (await s.store.auditLog.list(100)).filter((a) => a.action === "refused");
     assert.ok(
       audit.some(
         (a) =>
@@ -396,12 +397,12 @@ describe("Start a run over REST (goal 029)", () => {
 
   test("a model given first, as the panel does: not started, then started once the rig has it", async () => {
     const s = await stack();
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "zen",
       type: "opencode",
       base_url: "https://opencode.ai/zen/v1",
     });
-    s.store.modelProviders.setModels("zen", [{ id: "glm-5.3-flash-free" }]);
+    await s.store.modelProviders.setModels("zen", [{ id: "glm-5.3-flash-free" }]);
     const given = await s.rest("gemv-speed", {
       rig: "rig-b",
       agents_model: { provider: "zen", model: "glm-5.3-flash-free" },
@@ -411,15 +412,15 @@ describe("Start a run over REST (goal 029)", () => {
       started: false,
       said: "rig-b takes glm-5.3-flash-free within a minute; its page shows it taking the model until then. Then start the run again.",
     });
-    assert.deepEqual(s.store.agentModels.byRig()["rig-b"], {
+    assert.deepEqual((await s.store.agentModels.byRig())["rig-b"], {
       provider: "zen",
       model: "glm-5.3-flash-free",
       harness: "opencode",
     });
     assert.ok(
-      s.store.auditLog
-        .list(50)
-        .some((a) => a.action === "rig_model_given" && a.actor === "owner:api"),
+      (await s.store.auditLog.list(50)).some(
+        (a) => a.action === "rig_model_given" && a.actor === "owner:api",
+      ),
     );
     assert.equal(s.assigned().length, 1, "no run yet");
     // Too early: the rig has not taken it.
@@ -430,8 +431,10 @@ describe("Start a run over REST (goal 029)", () => {
       /^rig-b has not taken glm-5\.3-flash-free yet \(it does within a minute/,
     );
     // The rig reports it runs the model: the run starts.
-    s.store.db
-      .prepare("update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'")
+    sqliteBehind(s.store)
+      .db.prepare(
+        "update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'",
+      )
       .run(JSON.stringify({ source: "control", model: "glm-5.3-flash-free", harness: "opencode" }));
     const started = await s.rest("gemv-speed", { rig: "rig-b" });
     assert.equal(started.status, 201);
@@ -440,20 +443,22 @@ describe("Start a run over REST (goal 029)", () => {
 
   test("a Claude subscription's model counts as taken under Claude Code's own name for it", async () => {
     const s = await stack();
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "claude-sub",
       type: "claude",
       base_url: "https://api.anthropic.com",
       key: { sealed: "sealed-for-the-tests", hint: "…test" },
     });
-    s.store.agentModels.assignRig("rig-b", {
+    await s.store.agentModels.assignRig("rig-b", {
       provider: "claude-sub",
       model: "sonnet-5.5",
       harness: "claude-code",
     });
     // Claude Code reports the model by its own name, not the subscription's id for it.
-    s.store.db
-      .prepare("update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'")
+    sqliteBehind(s.store)
+      .db.prepare(
+        "update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'",
+      )
       .run(
         JSON.stringify({
           source: "control",
@@ -468,73 +473,84 @@ describe("Start a run over REST (goal 029)", () => {
 
   test("a model check while the rig takes its new model is refused, with why (goal 191)", async () => {
     const s = await stack();
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "oai",
       type: "openai",
       base_url: "https://models.example/v1",
       key: { sealed: "sealed-for-the-tests", hint: "…test" },
     });
-    s.store.agentModels.assignRig("rig-b", { provider: "oai", model: "m1", harness: "pi" });
+    await s.store.agentModels.assignRig("rig-b", { provider: "oai", model: "m1", harness: "pi" });
     // rig-b still reports no model: it is taking m1.
     assert.equal(
-      modelCheckRefusal(s.store, "rig-b", { check: "model" }),
+      await modelCheckRefusal(s.store, "rig-b", { check: "model" }),
       "rig-b is taking m1 now: it checks the model itself once it has it, within a minute. Check it again after that.",
     );
-    assert.equal(modelCheckRefusal(s.store, "rig-b", { check: "isolation" }), "");
+    assert.equal(await modelCheckRefusal(s.store, "rig-b", { check: "isolation" }), "");
     // Once it reports it, the check goes.
-    s.store.db
-      .prepare("update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'")
+    sqliteBehind(s.store)
+      .db.prepare(
+        "update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'",
+      )
       .run(JSON.stringify({ source: "control", name: "oai", model: "m1", harness: "pi" }));
-    assert.equal(modelCheckRefusal(s.store, "rig-b", { check: "model" }), "");
+    assert.equal(await modelCheckRefusal(s.store, "rig-b", { check: "model" }), "");
     // Given back to its own settings: refused until it reports them.
-    s.store.agentModels.assignRig("rig-b", null);
+    await s.store.agentModels.assignRig("rig-b", null);
     assert.match(
-      modelCheckRefusal(s.store, "rig-b", { check: "model" }),
+      await modelCheckRefusal(s.store, "rig-b", { check: "model" }),
       /^rig-b is going back to its own settings now/,
     );
   });
 
   test("a research run on a Claude subscription is refused before it starts, with what to do (goal 190)", async () => {
     const s = await stack();
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "claude-sub",
       type: "claude",
       base_url: "https://api.anthropic.com",
       key: { sealed: "sealed-for-the-tests", hint: "…test" },
     });
-    const view = (rig: string) => {
-      const v = rigView(s.store, rig);
+    const view = async (rig: string) => {
+      const v = await rigView(s.store, rig);
       assert.ok(v, rig);
       return v;
     };
     const words =
       "sonnet-5.5 is a Claude subscription, which runs only in Claude Code, and research workers run in Pi or OpenCode: a research run on rig-b could not work. Give rig-b's agents another provider's model for research, on its Edit rig page or here.";
     // Chosen with the start (New campaign, Start a run): refused before the rig is given it.
-    assert.equal(researchModelRefusal(s.store, view("rig-b"), "claude-sub|sonnet-5.5"), words);
+    assert.equal(
+      await researchModelRefusal(s.store, await view("rig-b"), "claude-sub|sonnet-5.5"),
+      words,
+    );
     // Given before, on control's record.
-    s.store.agentModels.assignRig("rig-b", {
+    await s.store.agentModels.assignRig("rig-b", {
       provider: "claude-sub",
       model: "sonnet-5.5",
       harness: "claude-code",
     });
-    assert.equal(researchModelRefusal(s.store, view("rig-b")), words);
+    assert.equal(await researchModelRefusal(s.store, await view("rig-b")), words);
     // Another provider's model, or none chosen on a rig without a subscription: no refusal.
-    assert.equal(researchModelRefusal(s.store, view("rig-a")), undefined);
+    assert.equal(await researchModelRefusal(s.store, await view("rig-a")), undefined);
   });
 
   test("the model the rig has already keeps its harness; another model gets what it needs", async () => {
     const s = await stack();
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "oai",
       type: "openai",
       base_url: "https://models.example.com/v1",
       key: { sealed: "sealed-for-the-tests", hint: "…test" },
     });
-    s.store.modelProviders.setModels("oai", [{ id: "gpt-x" }, { id: "gpt-y" }]);
+    await s.store.modelProviders.setModels("oai", [{ id: "gpt-x" }, { id: "gpt-y" }]);
     // rig-a runs its agents in Codex with gpt-x, and reports so.
-    s.store.agentModels.assignRig("rig-a", { provider: "oai", model: "gpt-x", harness: "codex" });
-    s.store.db
-      .prepare("update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-a'")
+    await s.store.agentModels.assignRig("rig-a", {
+      provider: "oai",
+      model: "gpt-x",
+      harness: "codex",
+    });
+    sqliteBehind(s.store)
+      .db.prepare(
+        "update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-a'",
+      )
       .run(JSON.stringify({ source: "control", model: "gpt-x", harness: "codex" }));
     // Start a run naming the same model, over REST and on the dashboard's panel: Codex stays.
     const rest = await s.rest("gemv-speed", {
@@ -542,21 +558,21 @@ describe("Start a run over REST (goal 029)", () => {
       agents_model: { provider: "oai", model: "gpt-x" },
     });
     assert.equal(rest.status, 201);
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "codex");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "codex");
     const panel = await s.form("gemv-speed", [
       ["rig", "rig-a"],
       ["agents", "on"],
       ["agents_model", "oai|gpt-x"],
     ]);
     assert.equal(panel.status, 303);
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "codex");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "codex");
     // Another model: the harness it needs (Pi for an OpenAI-compatible key).
     const other = await s.rest("gemv-speed", {
       rig: "rig-a",
       agents_model: { provider: "oai", model: "gpt-y" },
     });
     assert.equal(other.status, 202);
-    assert.deepEqual(s.store.agentModels.byRig()["rig-a"], {
+    assert.deepEqual((await s.store.agentModels.byRig())["rig-a"], {
       provider: "oai",
       model: "gpt-y",
       harness: "pi",
@@ -578,13 +594,13 @@ describe("Start a run over REST (goal 029)", () => {
       await refused("oai|gpt-x"),
       /error=Claude Code runs only with a Claude subscription here: choose Pi, OpenCode v2 or Codex for this provider\./,
     );
-    s.store.modelProviders.put({
+    await s.store.modelProviders.put({
       name: "keyed",
       type: "anthropic",
       base_url: "https://api.anthropic.com",
       key: { sealed: "sealed-for-the-tests", hint: "…test" },
     });
-    s.store.modelProviders.setModels("keyed", [{ id: "claude-test" }]);
+    await s.store.modelProviders.setModels("keyed", [{ id: "claude-test" }]);
     assert.match(
       await refused("keyed|claude-test"),
       /error=Claude Code runs only with a Claude subscription here: choose Pi or OpenCode v2 for this provider\./,
@@ -641,7 +657,7 @@ describe("Start a run over MCP (goal 029)", () => {
     assert.equal(refused.isError, true);
     assert.match(text(refused), /rig-b has no model for its agents, so they could not work/);
     assert.equal(s.assigned().length, 2, "only the operator's run was signed");
-    const audit = s.store.auditLog.list(100);
+    const audit = await s.store.auditLog.list(100);
     assert.ok(audit.some((a) => a.action === "mcp:start_run" && a.actor === "owner:operator"));
     assert.ok(
       audit.some(

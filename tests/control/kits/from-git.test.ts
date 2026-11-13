@@ -42,7 +42,7 @@ describe("a kit from its git address", () => {
 
   test("MCP and REST: bundle or git, one of the two; a ref inside git; a Git access control keeps", async () => {
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-    const { control } = controlOnly({ tokens: TOKENS, options: { kits } });
+    const { control } = await controlOnly({ tokens: TOKENS, options: { kits } });
     const op = await mcpClient(control, TOKENS.operator);
     const call = async (args: Record<string, unknown>) =>
       text(await op.callTool({ name: "kit_add", arguments: { name: "lab-kit", ...args } })).error;

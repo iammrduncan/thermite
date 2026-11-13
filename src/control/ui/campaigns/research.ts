@@ -1,3 +1,4 @@
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { questionName, RESEARCH_REVIEW, SATURATION_TASKS } from "../../../core/research-check.ts";
 import {
   type HypothesisView,
@@ -596,18 +597,18 @@ ${list ? `<div class="dqs" data-part="reviews">${list}</div>` : `<div class="car
 }
 
 /** A research campaign's Reviews tab (goal 116): every review of each of its runs, by run. */
-export function campaignReviewsTab(o: {
+export async function campaignReviewsTab(o: {
   runs: { u: RigView; r: RunView; state: string }[];
   now: number;
-  sources: (u: RigView, r: RunView) => ReviewSources;
-}): string {
+  sources: (u: RigView, r: RunView) => ReviewSources | Promise<ReviewSources>;
+}): Promise<string> {
   const runs = o.runs.filter((x) => x.r.reviews.some((rv) => rv.goal === RESEARCH_REVIEW));
   if (!runs.length)
     return `<div class="card"><div class="empty">No review yet in any run of this campaign.</div></div>`;
-  return runs
-    .map(({ u, r, state }) => {
+  return (
+    await mapInTurn(runs, async ({ u, r, state }) => {
       const research = r.reviews.filter((x) => x.goal === RESEARCH_REVIEW);
-      const src = o.sources(u, r);
+      const src = await o.sources(u, r);
       return `<div class="block"><div class="head"><h2><a href="${runHref(r, "reviews")}">${esc(r.id)}</a></h2><span class="n">${plural(research.length, "review")}</span><span class="right">on ${esc(u.id)} · ${state}</span></div><div class="dqs">${[
         ...research,
       ]
@@ -615,7 +616,7 @@ export function campaignReviewsTab(o: {
         .map((rv) => reviewRow(u, r, rv, research, o.now, src))
         .join("")}</div></div>`;
     })
-    .join("");
+  ).join("");
 }
 
 // ---------------------------------------------------------------- the Hypotheses tab

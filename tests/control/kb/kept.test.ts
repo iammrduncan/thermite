@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
+import { mapInTurn } from "../../../src/common/in-turn.ts";
 import { answerKbAsk, ownerKbRead, scrubKeptConversations } from "../../../src/control/kb/index.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { keepVersion } from "../../../src/control/store/kb/items.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import type { KbReadAnswer, KbSearchAnswer } from "../../../src/core/link/kb.ts";
@@ -83,10 +85,10 @@ const oldEvent = (n: number, text: string) => ({
 });
 
 /** A store with gemv's run on rig-a, assigned by control. */
-function setup(): ControlStore {
-  const s = new ControlStore(":memory:");
-  s.commands.enqueue(assignment);
-  s.kb().index(RIG, {
+async function setup(): Promise<ControlStore> {
+  const s = openControlStore(":memory:");
+  await s.commands.enqueue(assignment);
+  await s.kb().index(RIG, {
     at: AT,
     actor: "harness",
     kind: "run_created",
@@ -100,13 +102,13 @@ function setup(): ControlStore {
 function storeAsBefore(s: ControlStore, n: number, text: string): void {
   const seq = Number(
     (
-      s.db
-        .prepare("update kb_cursor set item_seq = item_seq + 1 where id = 1 returning item_seq")
+      sqliteBehind(s)
+        .db.prepare("update kb_cursor set item_seq = item_seq + 1 where id = 1 returning item_seq")
         .get() as { item_seq: number }
     ).item_seq,
   );
   keepVersion(
-    s.db,
+    sqliteBehind(s).db,
     seq,
     { campaign: CAMPAIGN, ...RIG, run: RUN, slot: "records", kind: "doc", ref: snapshot(n) },
     {
@@ -121,14 +123,14 @@ function storeAsBefore(s: ControlStore, n: number, text: string): void {
   );
 }
 
-const agentRead = (s: ControlStore, address: string, version?: number) =>
-  answerKbAsk(s, RIG.rig, "read", {
+const agentRead = async (s: ControlStore, address: string, version?: number) =>
+  (await answerKbAsk(s, RIG.rig, "read", {
     run: RUN,
     address,
     ...(version ? { version } : {}),
-  }) as KbReadAnswer;
-const agentSearch = (s: ControlStore, q: string) =>
-  answerKbAsk(s, RIG.rig, "search", { run: RUN, q }) as KbSearchAnswer;
+  })) as KbReadAnswer;
+const agentSearch = async (s: ControlStore, q: string) =>
+  (await answerKbAsk(s, RIG.rig, "search", { run: RUN, q })) as KbSearchAnswer;
 
 const holdsNone = (text: string, s: ReturnType<typeof secrets>) => {
   for (const [what, value] of Object.entries(s)) assert.ok(!text.includes(value), what);
@@ -136,7 +138,7 @@ const holdsNone = (text: string, s: ReturnType<typeof secrets>) => {
 
 describe("kept conversations stored before the scrubbing", () => {
   test("each gets a scrubbed new version by shape, once; the version before stays for the owner", async () => {
-    const s = setup();
+    const s = await setup();
     const one = secrets();
     const two = secrets();
     storeAsBefore(s, 1, conversation(one, 1));
@@ -151,74 +153,74 @@ describe("kept conversations stored before the scrubbing", () => {
       [1, one],
       [2, two],
     ] as const) {
-      const x = kb.at(addressOf(n));
+      const x = await kb.at(addressOf(n));
       assert.ok(x);
       assert.equal(x.version, 2);
       assert.equal(x.by, "harness", "written by Thermite's code");
       assert.equal(x.meta.scrubbed, "Thermite's code scrubbed this text by shape");
       assert.equal(x.meta.lane, "lane-1", "its other fields stay");
-      const [before, after] = kb.versions(x.id);
+      const [before, after] = await kb.versions(x.id);
       assert.equal(before?.body, conversation(values, n), "the version before is kept as it came");
       holdsNone(after?.body ?? "", values);
       assert.match(after?.body ?? "", /THERMITE_TRIAL_AUTH=\*\*\*/);
       assert.match(after?.body ?? "", /Authorization: \*\*\* https/);
       assert.match(after?.body ?? "", /The zirconium layout wins\./);
       // The owner reads every version: the newest by default, and the one before.
-      const owner = ownerKbRead(s, [], { address: addressOf(n) });
+      const owner = await ownerKbRead(s, [], { address: addressOf(n) });
       assert.ok(!("error" in owner));
       assert.equal(owner.item.version, 2);
       holdsNone(owner.item.text, values);
-      const old = ownerKbRead(s, [], { address: addressOf(n), version: 1 });
+      const old = await ownerKbRead(s, [], { address: addressOf(n), version: 1 });
       assert.ok(!("error" in old));
       assert.equal(old.item.text, conversation(values, n));
     }
-    assert.equal(kb.at(addressOf(3))?.version, 1);
+    assert.equal((await kb.at(addressOf(3)))?.version, 1);
 
     // A second start finds none left: no version, no seq moves.
-    const seqs = [1, 2, 3].map((n) => kb.at(addressOf(n))?.seq);
+    const seqs = await mapInTurn([1, 2, 3], async (n) => (await kb.at(addressOf(n)))?.seq);
     assert.equal(await scrubKeptConversations(s), 0);
     assert.deepEqual(
-      [1, 2, 3].map((n) => kb.at(addressOf(n))?.seq),
+      await mapInTurn([1, 2, 3], async (n) => (await kb.at(addressOf(n)))?.seq),
       seqs,
     );
-    assert.equal(kb.versions(kb.at(addressOf(1))?.id ?? 0).length, 2);
+    assert.equal((await kb.versions((await kb.at(addressOf(1)))?.id ?? 0)).length, 2);
   });
 
   test("an agent reads the scrubbed version, never the one before; the owner still does", async () => {
-    const s = setup();
+    const s = await setup();
     const values = secrets();
     storeAsBefore(s, 1, conversation(values, 1));
     await scrubKeptConversations(s);
 
-    const newest = agentRead(s, addressOf(1));
+    const newest = await agentRead(s, addressOf(1));
     assert.ok(!("refused" in newest), JSON.stringify(newest));
     assert.equal(newest.item.version, 2);
     assert.equal(newest.item.versions, 2);
     holdsNone(newest.item.text, values);
-    const named = agentRead(s, addressOf(1), 2);
+    const named = await agentRead(s, addressOf(1), 2);
     assert.ok(!("refused" in named), JSON.stringify(named));
     holdsNone(named.item.text, values);
 
-    const older = agentRead(s, addressOf(1), 1) as { refused?: string };
+    const older = (await agentRead(s, addressOf(1), 1)) as { refused?: string };
     assert.match(
       older.refused ?? "",
       /^version 1 of gemv\/gs-1\/records\/doc:compactions\/t-0123456789abcdef-1\.md is not read by agents: Thermite's code scrubbed it into version 2/,
     );
     assert.ok(!JSON.stringify(older).includes(values.bearer));
-    const owner = ownerKbRead(s, [], { address: addressOf(1), version: 1 });
+    const owner = await ownerKbRead(s, [], { address: addressOf(1), version: 1 });
     assert.ok(!("error" in owner));
     assert.match(owner.item.text, new RegExp(values.bearer));
   });
 
   test("a search finds no word only the version before holds", async () => {
-    const s = setup();
+    const s = await setup();
     const values = secrets();
     storeAsBefore(s, 1, conversation(values, 1));
     // Before: the words index holds the text as it came.
-    assert.equal(agentSearch(s, values.bearer).matched, 1);
+    assert.equal((await agentSearch(s, values.bearer)).matched, 1);
     await scrubKeptConversations(s);
 
-    const gone = agentSearch(s, values.bearer);
+    const gone = await agentSearch(s, values.bearer);
     assert.equal(gone.matched, 0);
     assert.deepEqual(gone.hits, []);
     // No item holds the word, and none is offered in its place.
@@ -227,35 +229,39 @@ describe("kept conversations stored before the scrubbing", () => {
       [0],
     );
     assert.ok(!JSON.stringify(gone.did_you_mean).includes(values.bearer.slice(4)));
-    assert.equal(s.kb().find(values.bearer, [{ campaign: CAMPAIGN }]).matched, 0, "the owner's");
+    assert.equal(
+      (await s.kb().find(values.bearer, [{ campaign: CAMPAIGN }])).matched,
+      0,
+      "the owner's",
+    );
     // The words both versions hold find the item, at its scrubbed version.
-    const kept = agentSearch(s, "zirconium");
+    const kept = await agentSearch(s, "zirconium");
     assert.equal(kept.matched, 1);
     assert.equal(kept.hits[0]?.version, 2);
     assert.ok(!JSON.stringify(kept).includes(values.bearer));
   });
 
   test("the same event read again, or sent now by a rig of an earlier build, is kept scrubbed", async () => {
-    const s = setup();
+    const s = await setup();
     const kb = s.kb();
     const values = secrets();
     storeAsBefore(s, 1, conversation(values, 1));
     await scrubKeptConversations(s);
     // Read again, after an upgrade of the reading: the item stays at its scrubbed version.
-    kb.index(RIG, oldEvent(1, conversation(values, 1)), { again: true });
-    kb.index(RIG, oldEvent(1, conversation(values, 1)));
-    assert.equal(kb.at(addressOf(1))?.version, 2);
+    await kb.index(RIG, oldEvent(1, conversation(values, 1)), { again: true });
+    await kb.index(RIG, oldEvent(1, conversation(values, 1)));
+    assert.equal((await kb.at(addressOf(1)))?.version, 2);
 
     // Compaction 2 from a rig of an earlier build: scrubbed as it is stored, its first version.
     const later = secrets();
-    kb.index(RIG, oldEvent(2, conversation(later, 2)));
-    const x = kb.at(addressOf(2));
+    await kb.index(RIG, oldEvent(2, conversation(later, 2)));
+    const x = await kb.at(addressOf(2));
     assert.ok(x);
     assert.equal(x.version, 1);
     assert.equal(x.meta.scrubbed, "Thermite's code scrubbed this text by shape");
     holdsNone(x.body, later);
     assert.match(x.body, /The zirconium layout wins\./);
-    const read = agentRead(s, addressOf(2), 1);
+    const read = await agentRead(s, addressOf(2), 1);
     assert.ok(!("refused" in read), JSON.stringify(read));
     holdsNone(read.item.text, later);
     assert.equal(await scrubKeptConversations(s), 0);

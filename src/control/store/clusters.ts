@@ -133,7 +133,50 @@ const clusterRigOf = (r: Row): ClusterRig => ({
   ...(r.pending ? { pending: JSON.parse(String(r.pending)) as ClusterRigResize } : {}),
 });
 
-export class Clusters extends StorePart {
+export interface Clusters {
+  add(c: {
+    name: string;
+    kubeconfig_sealed: string;
+    context: string;
+    placement: Cluster["placement"];
+    namespace_pattern: string;
+    slots: string[];
+    by: string;
+    /** What of its connection control can't check, which the owner accepted; none: all checked. */
+    unchecked?: string[] | undefined;
+  }): Promise<void>;
+  get(name: string): Promise<(Cluster & { kubeconfig_sealed: string }) | undefined>;
+  list(): Promise<Cluster[]>;
+  /** A cluster of pre-made slots: the slots control may use. */
+  setSlots(name: string, slots: string[], by: string): Promise<void>;
+  setFacts(name: string, r: { facts: unknown } | { error: string }): Promise<void>;
+  delete(name: string, by: string): Promise<boolean>;
+  addRig(r: Omit<ClusterRig, "created_at" | "status">): Promise<void>;
+  rig(rig: string): Promise<ClusterRig | undefined>;
+  rigs(cluster?: string): Promise<ClusterRig[]>;
+  /** A rig's status there. A change waiting for its drain ends with the drain: kept only while draining. */
+  setRigStatus(rig: string, status: string): Promise<void>;
+  /** The change to a rig's GPUs, CPUs or memory that waits for its drain; null: none. */
+  setRigPending(rig: string, pending: ClusterRigResize | null): Promise<void>;
+  /** The GPUs, judge's share and CPUs and memory a rig on a cluster now runs with, after a change. */
+  setRigSize(rig: string, size: ClusterRigSize, controlUrl?: string | undefined): Promise<void>;
+  /** What a slot rig's slot opens of the list of addresses rigs may reach, and lets in, read now. */
+  setRigSlotNetwork(
+    rig: string,
+    n: Pick<ClusterRig["spec"], "openings" | "ingress">,
+  ): Promise<void>;
+  /** The node a rig control set up runs on, for its setup again (goal 206); none: any node. */
+  setRigNode(rig: string, node: string | undefined): Promise<void>;
+  setRigImages(
+    rig: string,
+    images: ClusterRig["spec"]["images"],
+    programMode: ProgramMode,
+    controlUrl?: string | undefined,
+  ): Promise<void>;
+}
+
+/** Clusters on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteClusters extends StorePart {
   add(c: {
     name: string;
     kubeconfig_sealed: string;

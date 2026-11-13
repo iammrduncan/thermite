@@ -1,5 +1,6 @@
 import { copiesOf } from "../../common/db-copy.ts";
 import { folderBytes } from "../../common/fs.ts";
+import { filterInTurn, flatMapInTurn } from "../../common/in-turn.ts";
 import {
   onRigs,
   perRig,
@@ -21,21 +22,24 @@ import type { ControlStore } from "../store/index.ts";
 type PolicyWhere = Pick<RetentionSpec, "kind" | "where" | "rigs" | "campaigns">;
 
 /** Whether control knows a rig: one that reported, or one it enrolled. */
-export const knownRig = (store: ControlStore, rig: string): boolean =>
-  store.reportedRigs.listed(rig) || store.enrollments.knownRig(rig);
+export const knownRig = async (store: ControlStore, rig: string): Promise<boolean> =>
+  (await store.reportedRigs.listed(rig)) || (await store.enrollments.knownRig(rig));
 
 /**
  * The rigs a policy covers, sorted: every rig control knows that is not retired, the rigs it
  * names, or every rig that ran one of its campaigns. A kind kept on control covers none.
  */
-export function rigsOf(store: ControlStore, p: PolicyWhere): string[] {
+export async function rigsOf(store: ControlStore, p: PolicyWhere): Promise<string[]> {
   if (!perRig(p.kind)) return [];
-  const retired = (rig: string) => store.retired.get(rig) !== undefined;
+  const retired = async (rig: string) => (await store.retired.get(rig)) !== undefined;
   let rigs: string[];
-  if (p.where === "all") rigs = store.reportedRigs.list().map((r) => r.id);
+  if (p.where === "all") rigs = (await store.reportedRigs.list()).map((r) => r.id);
   else if (p.where === "rigs") rigs = [...p.rigs];
-  else rigs = p.campaigns.flatMap((c) => store.runRegistry.ofCampaign(c).map((r) => r.rig));
-  return [...new Set(rigs)].filter((r) => !retired(r)).sort();
+  else
+    rigs = await flatMapInTurn(p.campaigns, async (c) =>
+      (await store.runRegistry.ofCampaign(c)).map((r) => r.rig),
+    );
+  return (await filterInTurn([...new Set(rigs)], async (r) => !(await retired(r)))).sort();
 }
 
 /** A store copy's time from its name ("2026-10-31T10-00-00-000Z") as ISO 8601. */
@@ -43,19 +47,19 @@ const stampAt = (stamp: string) =>
   stamp.replace(/T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, "T$1:$2:$3.$4Z");
 
 /** The items of a kind kept on control, read now. */
-export function controlItems(store: ControlStore, kind: RetentionKind): RetentionItem[] {
+export async function controlItems(
+  store: ControlStore,
+  kind: RetentionKind,
+): Promise<RetentionItem[]> {
   if (kind === "kb_versions")
-    return store
-      .kb()
-      .olderVersions()
-      .map((v) => ({
-        id: `${v.item}:${v.version}`,
-        rig: null,
-        run: v.run,
-        at: v.at,
-        bytes: v.bytes,
-        count: 1,
-      }));
+    return (await store.kb().olderVersions()).map((v) => ({
+      id: `${v.item}:${v.version}`,
+      rig: null,
+      run: v.run,
+      at: v.at,
+      bytes: v.bytes,
+      count: 1,
+    }));
   if (kind === "store_copies")
     return store.path === ":memory:"
       ? []
@@ -68,9 +72,14 @@ export function controlItems(store: ControlStore, kind: RetentionKind): Retentio
           count: 1,
         }));
   if (kind === "audit")
-    return store.auditLog
-      .retentionItems()
-      .map((e) => ({ id: String(e.id), rig: null, run: null, at: e.at, bytes: e.bytes, count: 1 }));
+    return (await store.auditLog.retentionItems()).map((e) => ({
+      id: String(e.id),
+      rig: null,
+      run: null,
+      at: e.at,
+      bytes: e.bytes,
+      count: 1,
+    }));
   return [];
 }
 
@@ -84,18 +93,18 @@ interface PolicyItems {
   read_at: string | null;
 }
 
-export function itemsOf(store: ControlStore, p: PolicyWhere): PolicyItems {
+export async function itemsOf(store: ControlStore, p: PolicyWhere): Promise<PolicyItems> {
   if (p.kind === "events") {
     // Control's copy of its rigs' events, by subject, rig and day, as its apply holds it.
-    const rigs = rigsOf(store, p);
+    const rigs = await rigsOf(store, p);
     const days = eventDaysOf(store);
     if (!days) return { items: [], rigs, unreported: rigs, read_at: null };
     return { items: days.items(new Set(rigs)), rigs, unreported: [], read_at: null };
   }
   if (!onRigs(p.kind))
-    return { items: controlItems(store, p.kind), rigs: [], unreported: [], read_at: null };
-  const rigs = rigsOf(store, p);
-  const spaces = store.retention.spaces();
+    return { items: await controlItems(store, p.kind), rigs: [], unreported: [], read_at: null };
+  const rigs = await rigsOf(store, p);
+  const spaces = await store.retention.spaces();
   const items: RetentionItem[] = [];
   const unreported: string[] = [];
   let readAt: string | null = null;

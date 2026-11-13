@@ -37,7 +37,7 @@ export function registerRunpod(tools: ToolContext): void {
           limit: z.number().int().min(1).max(50).default(5),
         },
       },
-      audited("runpod_tests", (a: { cloud?: string; limit: number }) =>
+      audited("runpod_tests", async (a: { cloud?: string; limit: number }) =>
         tests.list(a.cloud, a.limit),
       ),
     );
@@ -106,7 +106,7 @@ export function registerRunpod(tools: ToolContext): void {
             .describe("The GPU cloud's name in Settings › Machines"),
         },
       },
-      audited("runpod_rigs", (a: { cloud?: string }) => launched.list(a.cloud)),
+      audited("runpod_rigs", async (a: { cloud?: string }) => launched.list(a.cloud)),
     );
     // The pod's log is the pod's own output, like a setup step's detail: the owner's and the
     // operator's, not a reader's (rig_setup gives readers no detail either).
@@ -135,8 +135,8 @@ export function registerRunpod(tools: ToolContext): void {
         },
         audited(
           "runpod_rig_logs",
-          (a: { rig: string; tail?: number; source?: "container" | "system" }) => {
-            if (!launched.view(a.rig)) throw new Error(`no rig ${a.rig} on a GPU cloud`);
+          async (a: { rig: string; tail?: number; source?: "container" | "system" }) => {
+            if (!(await launched.view(a.rig))) throw new Error(`no rig ${a.rig} on a GPU cloud`);
             return launched.logs(a.rig, {
               tail: a.tail === undefined ? undefined : Math.min(POD_LOG_MAX_TAIL, a.tail),
               source: a.source,
@@ -202,7 +202,7 @@ export function registerRunpod(tools: ToolContext): void {
             idle_stop_minutes: z.number().min(MIN_IDLE_STOP_MINUTES).nullable().optional(),
           },
         },
-        audited("runpod_rig_limits", (a: LimitsChange & { rig: string }) => {
+        audited("runpod_rig_limits", async (a: LimitsChange & { rig: string }) => {
           const { rig, ...change } = a;
           return launched.limits(rig, change, actor);
         }),
@@ -246,7 +246,7 @@ export function registerRunpod(tools: ToolContext): void {
                 | "cancel_reset";
               confirm?: string;
             }) => {
-              if (!launched.view(a.rig)) throw new Error(`no rig ${a.rig} on a GPU cloud`);
+              if (!(await launched.view(a.rig))) throw new Error(`no rig ${a.rig} on a GPU cloud`);
               const step = () =>
                 advanceResets({
                   store,
@@ -254,8 +254,8 @@ export function registerRunpod(tools: ToolContext): void {
                   driver: opts.driver,
                   staleAfterMs: opts.staleAfterMs,
                 });
-              const open = () => {
-                const r = store.fullResets.open(a.rig);
+              const open = async () => {
+                const r = await store.fullResets.open(a.rig);
                 if (!r) throw new Error(`no full reset of ${a.rig} is under way`);
                 return Number(r.id);
               };
@@ -272,30 +272,30 @@ export function registerRunpod(tools: ToolContext): void {
                 case "reset": {
                   if (a.confirm !== `reset ${a.rig}`)
                     throw new Error(`confirm with "reset ${a.rig}"`);
-                  const refused = runpodResetRefusal(store, a.rig);
+                  const refused = await runpodResetRefusal(store, a.rig);
                   if (refused) throw new Error(refused);
-                  const id = store.fullResets.create(a.rig, actor);
+                  const id = await store.fullResets.create(a.rig, actor);
                   await step();
                   return {
                     rig: a.rig,
-                    reset: store.fullResets.list(50).find((r) => Number(r.id) === id),
+                    reset: (await store.fullResets.list(50)).find((r) => Number(r.id) === id),
                   };
                 }
                 case "confirm_wipe": {
-                  const id = open();
-                  confirmReset(store, id, actor);
+                  const id = await open();
+                  await confirmReset(store, id, actor);
                   await step();
                   return {
                     rig: a.rig,
-                    reset: store.fullResets.list(50).find((r) => Number(r.id) === id),
+                    reset: (await store.fullResets.list(50)).find((r) => Number(r.id) === id),
                   };
                 }
                 case "cancel_reset": {
-                  const id = open();
-                  cancelReset(store, id, actor);
+                  const id = await open();
+                  await cancelReset(store, id, actor);
                   return {
                     rig: a.rig,
-                    reset: store.fullResets.list(50).find((r) => Number(r.id) === id),
+                    reset: (await store.fullResets.list(50)).find((r) => Number(r.id) === id),
                   };
                 }
               }

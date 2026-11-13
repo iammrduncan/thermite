@@ -42,7 +42,7 @@ const draft: CampaignDraft = {
 
 async function stack() {
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-  const { keys, store, control, api } = controlOnly({
+  const { keys, store, control, api } = await controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, kits },
   });
@@ -57,8 +57,8 @@ async function stack() {
     },
   );
   assert.ok(saved.ok, JSON.stringify(saved));
-  const newest = () =>
-    store.campaigns.versions("matmul-speed")[0]?.contract as Record<string, unknown>;
+  const newest = async () =>
+    (await store.campaigns.versions("matmul-speed"))[0]?.contract as Record<string, unknown>;
   /** POST /v1/campaigns/matmul-speed/kb-writes: its status and its answer. */
   const set = async (body: unknown) => {
     const r = await api("POST", "/v1/campaigns/matmul-speed/kb-writes", body);
@@ -70,14 +70,14 @@ async function stack() {
 describe("who writes what in a campaign's collection", () => {
   test("the default holds until the owner sets one: REST saves a new version, and an empty body puts the default back", async () => {
     const s = await stack();
-    assert.equal(s.newest().kb_writes, undefined);
-    assert.deepEqual(kbWritesOf(s.newest()), KB_WRITES_DEFAULT);
+    assert.equal((await s.newest()).kb_writes, undefined);
+    assert.deepEqual(kbWritesOf(await s.newest()), KB_WRITES_DEFAULT);
     const set = await s.set({
       kb_writes: { worker: ["finding"], planner: [] },
     });
     assert.equal(set.status, 201);
     assert.match(String(set.body.said), /^Version 2 of matmul-speed is saved/);
-    assert.deepEqual(s.newest().kb_writes, { worker: ["finding"], planner: [] });
+    assert.deepEqual((await s.newest()).kb_writes, { worker: ["finding"], planner: [] });
     const same = await s.set({
       kb_writes: { planner: [], worker: ["finding"] },
     });
@@ -93,11 +93,11 @@ describe("who writes what in a campaign's collection", () => {
     assert.match(String(before.body.error), /^bad request: kb_writes/);
     const back = await s.set({});
     assert.equal(back.status, 201);
-    assert.equal(s.newest().kb_writes, undefined);
+    assert.equal((await s.newest()).kb_writes, undefined);
   });
 
   test("a contract signed with a role named as the slots were spelled before keeps its hash, and reads under today's name", async () => {
-    const saved = (await stack()).newest();
+    const saved = await (await stack()).newest();
     const s = (kb_writes: unknown) => {
       const p = parseContract({ ...saved, kb_writes });
       assert.ok(p.ok, JSON.stringify(p));
@@ -139,7 +139,7 @@ describe("who writes what in a campaign's collection", () => {
     // The operator's is a proposal, which the owner approves on the campaign's page.
     const proposed = JSON.parse((r as { content: { text: string }[] }).content[0]?.text ?? "{}");
     assert.equal(proposed.state, "proposed");
-    assert.equal(s.newest().kb_writes, undefined);
+    assert.equal((await s.newest()).kb_writes, undefined);
     const { page, csrfOf, post } = await signIn(s.control);
     const before = await page("/ui/campaigns/matmul-speed");
     assert.match(before, /proposes which roles write in its collection for matmul-speed/);
@@ -147,7 +147,7 @@ describe("who writes what in a campaign's collection", () => {
     await post(`/ui/campaigns/matmul-speed/proposals/${proposed.proposal}/approve`, {
       csrf: csrfOf(before),
     });
-    assert.deepEqual(s.newest().kb_writes, { auditor: ["review"] });
+    assert.deepEqual((await s.newest()).kb_writes, { auditor: ["review"] });
     // The owner's own call is saved at once.
     const own = await mcpClient(s.control, ADMIN);
     const mine = await own.callTool({
@@ -156,7 +156,7 @@ describe("who writes what in a campaign's collection", () => {
     });
     await own.close();
     assert.match(JSON.stringify(mine.content), /is saved with which roles write in its collection/);
-    assert.deepEqual(s.newest().kb_writes, { auditor: ["review", "note"] });
+    assert.deepEqual((await s.newest()).kb_writes, { auditor: ["review", "note"] });
     const html = await page("/ui/campaigns/matmul-speed");
     assert.match(html, /Who writes in its collection/);
     assert.match(html, /name="w_auditor_review" value="1"[^>]* checked/);
@@ -168,6 +168,6 @@ describe("who writes what in a campaign's collection", () => {
       ["w_worker_finding", "1"],
     ]);
     assert.equal(saved.status, 303);
-    assert.deepEqual(s.newest().kb_writes, { worker: ["note", "finding"] });
+    assert.deepEqual((await s.newest()).kb_writes, { worker: ["note", "finding"] });
   });
 });

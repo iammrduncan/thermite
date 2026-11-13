@@ -144,10 +144,10 @@ export interface StorageFigures {
 const DB_LOOKS = new WeakMap<ControlStore, DbFigures>();
 
 /** control.db's figures from the measure of the last DB_LOOK_MS, or a new one. */
-function keptDbFigures(store: ControlStore, now = Date.now()): DbFigures {
+async function keptDbFigures(store: ControlStore, now = Date.now()): Promise<DbFigures> {
   const kept = DB_LOOKS.get(store);
   if (kept && now - Date.parse(kept.at) < DB_LOOK_MS) return kept;
-  const fresh = store.size.measure(now);
+  const fresh = await store.size.measure(now);
   DB_LOOKS.set(store, fresh);
   return fresh;
 }
@@ -227,7 +227,7 @@ export async function storageFigures(o: {
   let db: DbFigures | null = null;
   let dbError: string | null = null;
   try {
-    db = keptDbFigures(o.store, now);
+    db = await keptDbFigures(o.store, now);
   } catch (err) {
     dbError = errorText(err);
   }

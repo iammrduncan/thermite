@@ -1,5 +1,6 @@
 import type { Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
+import { mapInTurn } from "../../common/in-turn.ts";
 import { EVENT_STREAM } from "../../core/link/events.ts";
 import { reportMessageId } from "../../core/link/report.ts";
 import type { ControlStore, IngestReport } from "../store/index.ts";
@@ -122,7 +123,7 @@ export class EventsWriter {
     // In the ledger's order, each once: the apply takes an event at or below its ledger's held
     // cursor as applied already.
     // Its floor too: an event a retention policy removed on purpose is not taken back.
-    const held = store.reportedRigs.takenThrough(rig, ledger);
+    const held = await store.reportedRigs.takenThrough(rig, ledger);
     const fresh = page.events
       .filter((e) => e.id > held)
       .sort((a, b) => a.id - b.id)
@@ -131,9 +132,9 @@ export class EventsWriter {
     const report = reportMessageId({ ...page, generated_at: page.generated_at ?? "" });
     // The rigs the run registry gives each run, looked up once a report.
     const rigsOf = new Map<string, string[]>();
-    const messages = fresh.map((event) => {
+    const messages = await mapInTurn(fresh, async (event) => {
       const run = event.run ?? null;
-      if (run !== null && !rigsOf.has(run)) rigsOf.set(run, store.runRegistry.rigsOf(run));
+      if (run !== null && !rigsOf.has(run)) rigsOf.set(run, await store.runRegistry.rigsOf(run));
       const runIsTheRigs = run !== null && isTheRigsRun(rig, rigsOf.get(run) ?? []);
       const m = onBus({ rig, ledger, event, runIsTheRigs, report });
       // Ingest refused a report with an event the bus can't carry before it came here.

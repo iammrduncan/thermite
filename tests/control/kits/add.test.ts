@@ -111,9 +111,9 @@ const TOKENS = {
   rigs: { "rig-a": "rig-token-abcdef" },
 };
 
-function control() {
+async function control() {
   const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
-  const { store, control: api } = controlOnly({ tokens: TOKENS, options: { kits } });
+  const { store, control: api } = await controlOnly({ tokens: TOKENS, options: { kits } });
   return { store, kits, api };
 }
 
@@ -146,7 +146,7 @@ describe("a kit written elsewhere, given to control as a git bundle", () => {
 
     // A rig's supervisor fetches the commit a contract names (not the head) from control, over
     // the route that serves kept kits, with git itself.
-    const { control: api } = controlOnly({
+    const { control: api } = await controlOnly({
       tokens: { admin: "owner-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } },
       options: { kits },
     });
@@ -292,7 +292,7 @@ describe("a kit written elsewhere, given to control as a git bundle", () => {
 
   test("REST: the owner's token adds, the reader's reads, refusals in words, kit_added in the audit log", async () => {
     const src = kitRepo();
-    const { store, api } = control();
+    const { store, api } = await control();
     const post = (path: string, body: Uint8Array, token = TOKENS.admin) =>
       api.request(path, {
         method: "POST",
@@ -318,7 +318,7 @@ describe("a kit written elsewhere, given to control as a git bundle", () => {
       String(answer.said),
       /Control keeps the kit lab-kit at [0-9a-f]{12} \(2 commits\)/,
     );
-    const audit = store.auditLog.list(50, { action: "kit_added" });
+    const audit = await store.auditLog.list(50, { action: "kit_added" });
     assert.equal(audit.length, 1);
     assert.equal(audit[0]?.actor, "owner:api");
     assert.deepEqual(audit[0]?.body, {
@@ -354,9 +354,9 @@ describe("a kit written elsewhere, given to control as a git bundle", () => {
     const big = await post("/v1/kits/lab-kit", new Uint8Array(KIT_BUNDLE_MAX + 1));
     assert.equal(big.status, 413);
     assert.match(((await big.json()) as { error: string }).error, /64 MiB/);
-    const whys = store.auditLog
-      .list(50, { action: "refused" })
-      .map((e) => String((e.body as { why?: string }).why));
+    const whys = (await store.auditLog.list(50, { action: "refused" })).map((e) =>
+      String((e.body as { why?: string }).why),
+    );
     for (const why of [/not a git bundle/, /not a kit name/, /64 MiB/, /give force/])
       assert.ok(
         whys.some((w) => why.test(w)),
@@ -391,7 +391,7 @@ describe("a kit written elsewhere, given to control as a git bundle", () => {
 
   test("MCP: kit_add for the owner and an operator, kits for them and the reader, none for agents", async () => {
     const src = kitRepo();
-    const { store, api } = control();
+    const { store, api } = await control();
     const tools = async (token: string) =>
       (await (await mcpClient(api, token)).listTools()).tools.map((t) => t.name);
     const owner = await tools(TOKENS.admin);
@@ -410,12 +410,12 @@ describe("a kit written elsewhere, given to control as a git bundle", () => {
     );
     assert.equal(added.head, src.c2);
     assert.deepEqual(added.kit, { name: "smoke-cpu", target: "cpu" });
-    const entry = store.auditLog.list(50, { action: "kit_added" })[0];
+    const entry = (await store.auditLog.list(50, { action: "kit_added" }))[0];
     assert.ok(entry);
     assert.equal(entry.actor, "owner:operator");
     assert.equal((entry.body as { size: number }).size, Buffer.from(b64, "base64").length);
     // The call's own entry does not hold the bundle.
-    const call = store.auditLog.list(50, { action: "mcp:kit_add" })[0];
+    const call = (await store.auditLog.list(50, { action: "mcp:kit_add" }))[0];
     assert.ok(call);
     assert.match(String((call.body as { bundle_base64: string }).bundle_base64), /^given \(…/);
 

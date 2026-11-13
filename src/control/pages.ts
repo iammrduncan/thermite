@@ -73,4 +73,4 @@ export interface PageOptions {
 }
 
 /** Mounts control's pages on its app, where the API serves them, with what they need. */
-export type MountPages = (app: Hono, store: ControlStore, o: PageOptions) => void;
+export type MountPages = (app: Hono, store: ControlStore, o: PageOptions) => void | Promise<void>;

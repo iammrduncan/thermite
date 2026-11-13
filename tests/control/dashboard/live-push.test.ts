@@ -21,7 +21,7 @@ async function setup() {
   const { cookie } = await signIn(s.control);
   const open = (path: string, headers: Record<string, string> = {}) =>
     s.control.request(path, { headers: { cookie, ...headers } });
-  const newest = () => s.store.liveLines.tail("rig-a", 1).at(-1)?.id ?? 0;
+  const newest = async () => (await s.store.liveLines.tail("rig-a", 1)).at(-1)?.id ?? 0;
   const texts = (events: PushedEvent[]) =>
     pushedOf<Lines>(events, "lines").flatMap((l) => l.entries.map((e) => e.html));
   return { ...s, open, newest, texts };
@@ -32,7 +32,7 @@ const RUN = "/ui/campaigns/js-sum/runs/js-1/live";
 describe("Live's push", () => {
   test("a run's page gets its new lines as control gets them from the bus", async () => {
     const s = await setup();
-    const reading = readPushed(await s.open(`${RUN}/stream?after=${s.newest()}`), (e) =>
+    const reading = readPushed(await s.open(`${RUN}/stream?after=${await s.newest()}`), (e) =>
       s.texts(e).join("\n").includes("from the bus"),
     );
     s.env.service.live.append({ source: "judge", kind: "log", text: "from the bus", run: "js-1" });
@@ -49,13 +49,13 @@ describe("Live's push", () => {
 
   test("a reader that connects again goes on after the last line it had, and gets none twice", async () => {
     const s = await setup();
-    const add = (text: string) =>
+    const add = async (text: string) =>
       s.store.liveLines.add(
         "rig-a",
         "log-push",
         [
           {
-            seq: s.newest() + 1,
+            seq: (await s.newest()) + 1,
             at: new Date().toISOString(),
             source: "judge",
             kind: "log",
@@ -65,17 +65,17 @@ describe("Live's push", () => {
         ],
         true,
       );
-    add("first");
-    const before = s.newest() - 1;
+    await add("first");
+    const before = (await s.newest()) - 1;
     const first = await readPushed(await s.open(`${RUN}/stream?after=${before}`), (e) =>
       e.some((x) => x.event === "lines"),
     );
     const last = first.filter((x) => x.event === "lines").at(-1)?.id;
-    assert.equal(last, String(s.newest()));
+    assert.equal(last, String(await s.newest()));
     // Away: two lines come. Its browser connects again with its last event's id, and the page's
     // first address, whose `after` is older.
-    add("second");
-    add("third");
+    await add("second");
+    await add("third");
     const again = await readPushed(
       await s.open(`${RUN}/stream?after=${before}`, { "last-event-id": last ?? "" }),
       (e) => e.some((x) => x.event === "lines"),
@@ -88,7 +88,7 @@ describe("Live's push", () => {
 
   test("a rig's page gets its lines, of one source when it shows one", async () => {
     const s = await setup();
-    const after = s.newest();
+    const after = await s.newest();
     s.env.service.live.append({
       source: "planner",
       kind: "status",

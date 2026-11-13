@@ -418,13 +418,13 @@ export function harnessRefusal(
 }
 
 /** Each agent's model, as control keeps them for the rig. */
-export function agentModelsOf(store: ControlStore, rig: string): AgentModels {
-  const w = store.agentModels.byRig()[rig];
-  const roles = store.agentModels.byRole(rig);
-  const of = (role: AgentRole): AgentModel | null => {
+export async function agentModelsOf(store: ControlStore, rig: string): Promise<AgentModels> {
+  const w = (await store.agentModels.byRig())[rig];
+  const roles = await store.agentModels.byRole(rig);
+  const of = async (role: AgentRole): Promise<AgentModel | null> => {
     const r = roles[role];
     if (!r) return null;
-    const p = store.modelProviders.get(r.provider);
+    const p = await store.modelProviders.get(r.provider);
     return {
       provider: r.provider,
       model: r.model,
@@ -435,8 +435,8 @@ export function agentModelsOf(store: ControlStore, rig: string): AgentModels {
     };
   };
   // A second teacher only with a first: without one, the teachers are the advisors file's.
-  const first = of("teachers");
-  const second = first ? of("second_teacher") : null;
+  const first = await of("teachers");
+  const second = first ? await of("second_teacher") : null;
   return {
     workers: w
       ? {
@@ -448,15 +448,15 @@ export function agentModelsOf(store: ControlStore, rig: string): AgentModels {
           compact_at: w.compactAt ?? null,
         }
       : null,
-    planner: of("planner"),
+    planner: await of("planner"),
     teachers: {
       models: [...(first ? [first] : []), ...(second ? [second] : [])],
-      merged_by: of("merged_by"),
+      merged_by: await of("merged_by"),
     },
-    auditor: of("auditor"),
-    review_panel: of("review_panel"),
-    synthesizer: of("synthesizer"),
-    final_writer: of("final_writer"),
+    auditor: await of("auditor"),
+    review_panel: await of("review_panel"),
+    synthesizer: await of("synthesizer"),
+    final_writer: await of("final_writer"),
   };
 }
 
@@ -490,18 +490,21 @@ export function advisorsFileOf(
  * Whether a rig has teachers (goal 194): models control gave them, or its advisors file's, as its
  * supervisor reports it; undefined when control can't tell.
  */
-export function rigHasTeachers(store: ControlStore, rig: string): boolean | undefined {
-  if (agentModelsOf(store, rig).teachers.models.length) return true;
-  const file = advisorsFileOf(store.reportedRigs.supervisor(rig));
+export async function rigHasTeachers(
+  store: ControlStore,
+  rig: string,
+): Promise<boolean | undefined> {
+  if ((await agentModelsOf(store, rig)).teachers.models.length) return true;
+  const file = advisorsFileOf(await store.reportedRigs.supervisor(rig));
   return file ? file.teachers.length > 0 : undefined;
 }
 
 /** The answer of `rig_models` and its REST twin: each agent's model, and the advisors file's. */
-export const rigModelsAnswer = (store: ControlStore, rig: string, agents: AgentModels) => ({
+export const rigModelsAnswer = async (store: ControlStore, rig: string, agents: AgentModels) => ({
   rig,
   agents,
   // null: the supervisor has not reported it (none yet, or an older supervisor).
-  advisors_file: advisorsFileOf(store.reportedRigs.supervisor(rig)) ?? null,
+  advisors_file: advisorsFileOf(await store.reportedRigs.supervisor(rig)) ?? null,
 });
 
 /**

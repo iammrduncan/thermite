@@ -13,6 +13,7 @@ import { startCampaign } from "../../src/control/campaigns/new.ts";
 import { cancelCommand } from "../../src/control/issue/index.ts";
 import { KitRepos } from "../../src/control/kits/repos.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
+import { sqliteBehind } from "../../src/control/store/behind.ts";
 import { gitAccessFrom, RigConfig } from "../../src/supervisor/config/index.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
 import { controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
@@ -28,7 +29,7 @@ async function control(extra: Partial<ControlOptions> = {}, tokens: Partial<Cont
     store,
     control: api,
     rigConfig,
-  } = controlOnly({
+  } = await controlOnly({
     tokens: { rigs: { "rig-a": "rig-token-aaaaaa", "rig-b": "rig-token-bbbbbb" }, ...tokens },
     options: { kits, secrets, ...extra },
   });
@@ -65,7 +66,7 @@ describe("Git access for private repositories", () => {
     // Each access is for one host, named when it is made.
     const hostless = await s.post("/ui/settings/git", { name: "github-deploy", kind: "ssh" });
     assert.match(decodeURIComponent(String(hostless.headers.get("location"))), /Name the host/);
-    assert.equal(s.store.gitAccess.get("github-deploy"), undefined);
+    assert.equal(await s.store.gitAccess.get("github-deploy"), undefined);
     const made = await s.post("/ui/settings/git", {
       name: "github-deploy",
       kind: "ssh",
@@ -74,7 +75,7 @@ describe("Git access for private repositories", () => {
     assert.equal(made.status, 303);
     const settings = await s.page("/ui/settings");
     assert.match(settings, /for github\.com only/);
-    const g = s.store.gitAccess.get("github-deploy");
+    const g = await s.store.gitAccess.get("github-deploy");
     assert.equal(g?.host, "github.com");
     assert.ok(g?.public_key && settings.includes(g.public_key));
     assert.ok(!settings.includes("PRIVATE KEY"));
@@ -103,7 +104,7 @@ describe("Git access for private repositories", () => {
       /<option value="github-deploy">github-deploy · SSH deploy key<\/option>/,
     );
     await s.post("/ui/settings/git/gitlab-token/delete", {});
-    assert.equal(s.store.gitAccess.get("gitlab-token"), undefined);
+    assert.equal(await s.store.gitAccess.get("gitlab-token"), undefined);
   });
 
   test("Providers lists models and Git access together, one form adds either, and access can be tried", async () => {
@@ -140,9 +141,9 @@ describe("Git access for private repositories", () => {
       base_url: "https://models.example.com/v1",
       api_key: "sk-model-key-9876",
     });
-    assert.equal(s.store.gitAccess.get("gitlab-token")?.kind, "token");
+    assert.equal((await s.store.gitAccess.get("gitlab-token"))?.kind, "token");
     assert.deepEqual(
-      s.store.modelProviders.get("lab-models")?.models.map((m) => m.id),
+      (await s.store.modelProviders.get("lab-models"))?.models.map((m) => m.id),
       ["model-a"],
     );
     const page = await s.page("/ui/settings");
@@ -193,7 +194,7 @@ describe("Git access for private repositories", () => {
     ]);
     // A token is replaced under the same name.
     await s.post("/ui/settings/git/gitlab-token/token", { token: "glpat-new-value-5678" });
-    const g = s.store.gitAccess.get("gitlab-token");
+    const g = await s.store.gitAccess.get("gitlab-token");
     assert.equal(g && s.secrets.open(g.secret_sealed), "glpat-new-value-5678");
     assert.match(await s.page("/ui/settings"), /token …5678 · user oauth2/);
     // Access a campaign fetches with can't be deleted.
@@ -208,12 +209,12 @@ describe("Git access for private repositories", () => {
       },
     );
     assert.ok(saved.ok, JSON.stringify(!saved.ok && saved.errors));
-    assert.deepEqual(s.store.campaigns.usingGitAccess("gitlab-token"), ["private-speed"]);
+    assert.deepEqual(await s.store.campaigns.usingGitAccess("gitlab-token"), ["private-speed"]);
     assert.match(
       where(await s.post("/ui/settings/git/gitlab-token/delete", {})),
       /"gitlab-token" is used by private-speed/,
     );
-    assert.ok(s.store.gitAccess.get("gitlab-token"));
+    assert.ok(await s.store.gitAccess.get("gitlab-token"));
     assert.match(await s.page("/ui/settings"), /In use by private-speed/);
   });
 
@@ -230,7 +231,7 @@ describe("Git access for private repositories", () => {
     const ask = async (rig: string) =>
       ((await s.rigConfig("git-access", rig)) as unknown as { accesses: unknown[] }).accesses;
     assert.deepEqual(await ask("rig-a"), []);
-    enrollRigs(s.store, ["rig-a", "rig-b"]);
+    await enrollRigs(s.store, ["rig-a", "rig-b"]);
     const start = (draft: ReturnType<typeof draftOf>, rig = "rig-a") =>
       startCampaign(
         { store: s.store, kits: s.kits, privateKeyPem: s.keys.privateKeyPem },
@@ -241,11 +242,11 @@ describe("Git access for private repositories", () => {
       start(draftOf("gitlab-token", "https://elsewhere.example.net/team/private.git")),
       /The Git access gitlab-token is for git\.example\.com only, and [^ ]+ comes from elsewhere\.example\.net/,
     );
-    assert.equal(s.store.commands.pending("rig-a").length, 0);
+    assert.equal((await s.store.commands.pending("rig-a")).length, 0);
     const r = await start(draftOf("gitlab-token"));
     assert.ok(r.ok, JSON.stringify(!r.ok && r.errors));
     // The signed command names the access, never its secret.
-    const signed = s.store.db.prepare("select id, signed from command").get() as {
+    const signed = sqliteBehind(s.store).db.prepare("select id, signed from command").get() as {
       id: string;
       signed: string;
     };
@@ -264,13 +265,13 @@ describe("Git access for private repositories", () => {
     // Another rig gets nothing.
     assert.deepEqual(await ask("rig-b"), []);
     // An assignment that failed, or that the owner withdrew, gives nothing: not for good.
-    answerCommand(s.store, "rig-a", signed.id, "failed", { error: "the kit did not build" });
+    await answerCommand(s.store, "rig-a", signed.id, "failed", { error: "the kit did not build" });
     assert.deepEqual(await ask("rig-a"), []);
     const again = await start({ ...draftOf("gitlab-token"), campaign: "private-speed-2" });
     assert.ok(again.ok, JSON.stringify(!again.ok && again.errors));
     assert.equal((await ask("rig-a")).length, 1);
-    const pending = s.store.commands.pending("rig-a").map((c) => c.envelope.id);
-    for (const id of pending) cancelCommand(s.store, id, "owner:ui");
+    const pending = (await s.store.commands.pending("rig-a")).map((c) => c.envelope.id);
+    for (const id of pending) await cancelCommand(s.store, id, "owner:ui");
     assert.deepEqual(await ask("rig-a"), []);
   });
 
@@ -282,7 +283,7 @@ describe("Git access for private repositories", () => {
       token: "glpat-secret-value-1234",
       host: "git.example.com",
     });
-    enrollRigs(s.store, ["rig-a"]);
+    await enrollRigs(s.store, ["rig-a"]);
     const payload = (run: string, source: Record<string, string>) => ({
       run,
       contract: { campaign: "private-speed", mode: "hill_climb" },
@@ -309,10 +310,10 @@ describe("Git access for private repositories", () => {
       assert.equal(refused.isError, true);
       assert.match(String(refused.content[0]?.text), /An agent's token may not name/);
     }
-    assert.equal(s.store.commands.pending("rig-a").length, 0);
+    assert.equal((await s.store.commands.pending("rig-a")).length, 0);
     const byOperator = await call("operator-token-abcdef", "op-1", access);
     assert.ok(!byOperator.isError, byOperator.content[0]?.text);
-    assert.equal(s.store.commands.pending("rig-a").length, 1);
+    assert.equal((await s.store.commands.pending("rig-a")).length, 1);
   });
 
   test("the supervisor fetches a private repository with the token control hands it", async () => {
@@ -386,7 +387,7 @@ describe("Git access for private repositories", () => {
         username: "oauth2",
         host: "127.0.0.1",
       });
-      enrollRigs(s.store, ["rig-a"]);
+      await enrollRigs(s.store, ["rig-a"]);
       const r = await startCampaign(
         { store: s.store, kits: s.kits, privateKeyPem: s.keys.privateKeyPem },
         {

@@ -40,7 +40,7 @@ export async function controlQueue(events: LedgerEvent[]) {
     events,
     summary: {},
   });
-  const u = rigView(store, "rig-a", { staleAfterMs: 600_000 });
+  const u = await rigView(store, "rig-a", { staleAfterMs: 600_000 });
   const r = u?.runs.find((x) => x.id === RUN);
   assert.ok(r, "control sees the run");
   return r;

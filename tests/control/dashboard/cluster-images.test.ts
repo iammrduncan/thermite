@@ -25,7 +25,7 @@ async function rigOn(deploymentStdout?: string) {
     "k_slot__k8s-c": "thermite-slot-1",
   });
   await new Promise((r) => setTimeout(r, 20));
-  s.store.clusters.setRigStatus("cpu-1", "running");
+  await s.store.clusters.setRigStatus("cpu-1", "running");
   return s;
 }
 

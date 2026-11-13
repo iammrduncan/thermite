@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { mapInTurn } from "../../../common/in-turn.ts";
 import { offBus, offBusFix } from "../../bus/index.ts";
 import {
   type ClusterFacts,
@@ -80,28 +81,28 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
   // ---------------------------------------------------------------- one rig
   /** A rig that never reported (its first report may wait for its key): no last report time. */
   const neverReported = (u: RigView) => !(Date.parse(u.last_seen) > 0);
-  app.get("/ui/rigs/:rig", (c, next) => {
+  app.get("/ui/rigs/:rig", async (c, next) => {
     // Rigs › Add a rig has its own page, registered further down.
     if (c.req.param("rig") === "add") return next();
     const now = Date.now();
-    const vs = views();
+    const vs = await views();
     const u = vs.find((x) => x.id === c.req.param("rig"));
-    const placed = store.machines.rig(c.req.param("rig"));
-    const onCluster = store.clusters.rig(c.req.param("rig"));
-    const joined = store.joinedRigs.get(c.req.param("rig"));
-    const pulled = store.tunnels.get(c.req.param("rig"));
+    const placed = await store.machines.rig(c.req.param("rig"));
+    const onCluster = await store.clusters.rig(c.req.param("rig"));
+    const joined = await store.joinedRigs.get(c.req.param("rig"));
+    const pulled = await store.tunnels.get(c.req.param("rig"));
     const flashOk = c.req.query("ok");
     const flashError = dash.said(c);
     // A command the green line is about (Edit rig's settings): the page says how it stands.
-    const flashCmd = flashOk ? store.commands.row(c.req.query("cmd") ?? "") : undefined;
+    const flashCmd = flashOk ? await store.commands.row(c.req.query("cmd") ?? "") : undefined;
     const flashing = flashCmd ? commandProgress(flashCmd, Date.now()) : undefined;
     const flash = flashError
       ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not done.</b> ${esc(flashError)}</div>`
       : flashOk
         ? `<div class="card" style="margin-bottom:16px"${flashCmd && flashing && !flashing.final ? ` data-follow="${esc(commandFollowUrl(flashCmd.id))}" data-follow-state="${flashing.state}" data-say` : ""}><b class="ok">${esc(flashOk)}</b>${flashing ? ` <span class="${flashing.tone}" data-say>${esc(flashing.said)}</span>` : ""}</div>`
         : "";
-    const retired = store.retired.get(c.req.param("rig"));
-    const launched = opts.runpodRigs?.view(c.req.param("rig"));
+    const retired = await store.retired.get(c.req.param("rig"));
+    const launched = await opts.runpodRigs?.view(c.req.param("rig"));
     if (!u && retired)
       return page(
         c,
@@ -114,7 +115,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           active: "rigs",
         },
         `${flash}<div class="card"><p>Retired ${esc(ago(retired.at, now))} ago by ${esc(retired.by)}. It is out of the rig lists, its campaigns' pages and Needs you, and control refuses its reports. Its records stay.${launched && !launched.active ? ` Its pod is terminated. It cost <b>$${(launched.spend_usd ?? launched.spent_usd).toFixed(2)}</b> while it ran, as control counted it.` : ""}</p>
-<form method="post" action="/ui/rigs/${encodeURIComponent(c.req.param("rig"))}/bring-back" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${csrf(c)}"><button>Bring it back</button><span class="muted small">It shows again, and its reports are taken again. A token control made for it stays ended: give it a new one if it needs one.</span></form></div>${launched ? `${podSection(c, c.req.param("rig"), now)}${podHistory(undefined, c.req.param("rig"), [], now)}` : ""}`,
+<form method="post" action="/ui/rigs/${encodeURIComponent(c.req.param("rig"))}/bring-back" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${csrf(c)}"><button>Bring it back</button><span class="muted small">It shows again, and its reports are taken again. A token control made for it stays ended: give it a new one if it needs one.</span></form></div>${launched ? `${await podSection(c, c.req.param("rig"), now)}${await podHistory(undefined, c.req.param("rig"), [], now)}` : ""}`,
         vs,
       );
     if (!u && onCluster)
@@ -127,8 +128,8 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           active: "rigs",
         },
         onCluster.status === "failed"
-          ? `${setupFailedCard(onCluster.rig, onCluster.cluster, `/ui/rigs/${encodeURIComponent(onCluster.rig)}/cluster/remove`, csrf(c), againOnNode(onCluster, csrf(c)))}${flash}${clusterPlacedBlock(onCluster, csrf(c))}`
-          : `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${clusterPlacedBlock(onCluster, csrf(c))}`,
+          ? `${await setupFailedCard(onCluster.rig, onCluster.cluster, `/ui/rigs/${encodeURIComponent(onCluster.rig)}/cluster/remove`, csrf(c), await againOnNode(onCluster, csrf(c)))}${flash}${await clusterPlacedBlock(onCluster, csrf(c))}`
+          : `<p class="run-said">Control is setting ${esc(onCluster.rig)} up on ${esc(onCluster.cluster)}. Its page fills in once the rig reports for the first time.</p>${flash}${await clusterPlacedBlock(onCluster, csrf(c))}`,
         vs,
       );
     if (!u && joined) return joinedPage(c, joined, flash);
@@ -141,7 +142,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           summary: `${podSummary(launched)} · ${pulled.enrolled_at ? "enrolled" : "not enrolled yet"}`,
           active: "rigs",
         },
-        `<p class="run-said">${podSaid(launched, now)} Its page fills in once the rig reports for the first time.</p>${flash}<div class="card" style="margin-bottom:16px"><div class="card-head"><span class="title">Getting it ready</span></div>${readySteps(launched, false)}</div>${podLogSection(c, pulled.rig, now, true)}${podSection(c, pulled.rig, now)}<div class="cols run-cols"><div>${podHistory(undefined, pulled.rig, [], now)}</div><div class="side">${pullBlock(pulled, now)}</div></div>`,
+        `<p class="run-said">${podSaid(launched, now)} Its page fills in once the rig reports for the first time.</p>${flash}<div class="card" style="margin-bottom:16px"><div class="card-head"><span class="title">Getting it ready</span></div>${readySteps(launched, false)}</div>${await podLogSection(c, pulled.rig, now, true)}${await podSection(c, pulled.rig, now)}<div class="cols run-cols"><div>${await podHistory(undefined, pulled.rig, [], now)}</div><div class="side">${pullBlock(pulled, now)}</div></div>`,
         vs,
       );
     if (!u && pulled)
@@ -166,8 +167,8 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           active: "rigs",
         },
         placed.status === "failed"
-          ? `${setupFailedCard(placed.rig, placed.machine, `/ui/rigs/${encodeURIComponent(placed.rig)}/machine/remove`, csrf(c))}${flash}${placedBlock(placed, csrf(c))}`
-          : `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${placedBlock(placed, csrf(c))}`,
+          ? `${await setupFailedCard(placed.rig, placed.machine, `/ui/rigs/${encodeURIComponent(placed.rig)}/machine/remove`, csrf(c))}${flash}${await placedBlock(placed, csrf(c))}`
+          : `<p class="run-said">Control is setting ${esc(placed.rig)} up on ${esc(placed.machine)}. Its page fills in once the rig reports for the first time.</p>${flash}${await placedBlock(placed, csrf(c))}`,
         vs,
       );
     if (!u)
@@ -178,25 +179,25 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
         vs,
       );
     const t = csrf(c);
-    const key = store.reportedRigs.key(u.id);
+    const key = await store.reportedRigs.key(u.id);
     const back = `/ui/rigs/${encodeURIComponent(u.id)}`;
-    const place = placeOf(u.id);
+    const place = await placeOf(u.id);
     const rp = u.runpod;
     const podStopped = Boolean(rp?.active && rp.status === "EXITED");
-    const steps = store.rigHistory.list(u.id);
+    const steps = await store.rigHistory.list(u.id);
     // Off the message bus, the rig is broken (bus/reach.ts).
-    const off = offBus(store, u.id, { lastSeen: u.last_seen, now, podStopped });
+    const off = await offBus(store, u.id, { lastSeen: u.last_seen, now, podStopped });
     const stateIn = {
       u,
       place,
       control,
-      controlSince: store.builds.controlSince(),
+      controlSince: await store.builds.controlSince(),
       staleAfterMs: opts.staleAfterMs,
       offlineAfterMs,
       steps,
-      updating: updates.waiting(u.id),
+      updating: await updates.waiting(u.id),
       podStopped,
-      offBus: off ? { ...off, fix: offBusFix(store, u.id, off) } : undefined,
+      offBus: off ? { ...off, fix: await offBusFix(store, u.id, off) } : undefined,
       held: heldCommands(store, u.id),
       csrf: t,
       now,
@@ -223,7 +224,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
     };
     const adv = sup?.advisors ? obj(sup.advisors) : null;
     // A drain under way (goal 136): a sentence, a card, and each trial it waits for by its lane.
-    const drain = drainView(u, {
+    const drain = await drainView(u, {
       store,
       now,
       csrf: t,
@@ -231,9 +232,9 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
       form: (f) => cmdForm(c, { rig: u.id, back, ...f }),
     });
     const live = u.runs.filter((i) => i.status === "running");
-    const weekly = weeklyLimit(store, u, now);
-    const runsNow = live
-      .map((i) =>
+    const weekly = await weeklyLimit(store, u, now);
+    const runsNow = (
+      await mapInTurn(live, async (i) =>
         runBrief(store, u, i, now, {
           heading: true,
           detail: true,
@@ -241,7 +242,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
           lane: drain?.lanes(i.id),
         }),
       )
-      .join("");
+    ).join("");
     const checks: [string, string, string][] = [
       [
         "model",
@@ -298,11 +299,11 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
       .filter(Boolean)
       .join(" ");
     // Each check's row in its state now: sent, running, its result, or why it did not run (goal 080).
-    const rows = checkRowsOf(store, u.id, u.checks, now);
+    const rows = await checkRowsOf(store, u.id, u.checks, now);
     const checkRows = refusedNow
       ? `<div class="empty">Control sends no command to a refused rig, so its checks can't run. Update it first.</div>`
-      : checks
-          .map(([k, name, what]) =>
+      : (
+          await mapInTurn(checks, async ([k, name, what]) =>
             checkRowHtml({
               rig: u.id,
               check: k,
@@ -311,9 +312,9 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
               row: rows[k] ?? checkRow(k, undefined, undefined, now),
               now,
               // The model check is off while the rig takes its new model (goal 191).
-              button: (label, disabled) => {
+              button: async (label, disabled) => {
                 const taking =
-                  k === "model" && takingModel(u.model, store.agentModels.byRig()[u.id]);
+                  k === "model" && takingModel(u.model, (await store.agentModels.byRig())[u.id]);
                 return cmdForm(c, {
                   rig: u.id,
                   kind: "rig_check",
@@ -326,7 +327,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
               },
             }),
           )
-          .join("");
+        ).join("");
     const runRows = u.runs.map((i) => runRow(u, i, now, "campaign")).join("");
     const jobs = u.judge.jobs
       .slice(-8)
@@ -403,7 +404,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
         : []),
       ...(place.words ? [["Placed on", esc(place.words)]] : []),
       ["Key", `<code>${esc(key.pubkey ? fingerprint(key.pubkey) : "not pinned")}</code>`],
-      ["Keys on the bus", busKeysHtml(store, u.id, now)],
+      ["Keys on the bus", await busKeysHtml(store, u.id, now)],
       ["Ledger", `<code>${esc(u.ledger_id ?? "")}</code>`],
       ...(sup
         ? [
@@ -436,7 +437,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
       .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`)
       .join("");
     const events = rp
-      ? podHistory(u, u.id, stateRows(stateIn), now)
+      ? await podHistory(u, u.id, stateRows(stateIn), now)
       : `<div class="block"><div class="head"><h2>Recent</h2><span class="right">newest first</span></div>${timeline(
           u.recent.map((e) => ({ u, e })),
           now,
@@ -465,7 +466,7 @@ ${
 <div class="divider" style="margin:2px 0"></div>
 ${retireForm}</div></details>`;
     // A full reset under way, with Cancel, or Confirm once it waits for the owner (goal 181).
-    const resetNow = store.fullResets.open(u.id);
+    const resetNow = await store.fullResets.open(u.id);
     return page(
       c,
       {
@@ -476,21 +477,21 @@ ${retireForm}</div></details>`;
         active: "rigs",
       },
       `<p class="run-said" data-part="said">${said}</p>
-${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Control can't read ${esc(u.id)}'s events now.</b> ${esc(u.unreadable)}. Until it can, its runs, checks and the judge's jobs are not shown here; the rest of this page is from its last report. Every other rig's pages are as they were.</div>` : ""}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}${resetNow ? resetCard(resetNow, t, now) : ""}</div>${keyCard}
-${rp ? podSection(c, u.id, now) : ""}
+${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Control can't read ${esc(u.id)}'s events now.</b> ${esc(u.unreadable)}. Until it can, its runs, checks and the judge's jobs are not shown here; the rest of this page is from its last report. Every other rig's pages are as they were.</div>` : ""}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc((await updateProgress(u.id)).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}${resetNow ? resetCard(resetNow, t, now) : ""}</div>${keyCard}
+${rp ? await podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>
-${coreAndRunners(store, u, now, useWindowOf(c.req.query("use")))}
-${agentsModelBlock(store, u, now)}
-<div class="block" data-part="checks"${takingModel(u.model, store.agentModels.byRig()[u.id]) ? ` data-follow="${esc(modelFollowUrl(u.id))}" data-follow-state="taking"` : ""}><div class="head"><h2>Checks</h2><span class="right">run by the rig itself; each result also goes to its history</span></div><div class="card flat cks">${checkRows}</div></div>
+${await coreAndRunners(store, u, now, useWindowOf(c.req.query("use")))}
+${await agentsModelBlock(store, u, now)}
+<div class="block" data-part="checks"${takingModel(u.model, (await store.agentModels.byRig())[u.id]) ? ` data-follow="${esc(modelFollowUrl(u.id))}" data-follow-state="taking"` : ""}><div class="head"><h2>Checks</h2><span class="right">run by the rig itself; each result also goes to its history</span></div><div class="card flat cks">${checkRows}</div></div>
 <div class="block" data-part="runs"><div class="head"><h2>Runs on this rig</h2><span class="n">${u.runs.length}</span>${u.state !== "reporting" || refusedNow ? `<span class="right">as of its last report${neverReported(u) ? "" : `, ${esc(ago(u.last_seen, now))} ago`}</span>` : ""}</div>${runRows ? `<div class="card flat">${runRows}</div>` : `<div class="card"><div class="empty">No campaign assigned.</div></div>`}</div>
 ${rp ? events : ""}
 <div class="block" data-part="jobs"><div class="head"><h2>The judge's last jobs</h2></div>${jobs ? `<div class="card flat tl">${jobs}</div>` : `<div class="card"><div class="empty">No job yet.</div></div>`}</div>
-${rp ? podLogSection(c, u.id, now, false) : ""}
+${rp ? await podLogSection(c, u.id, now, false) : ""}
 </div><div class="side">
 <div class="block"><div class="head"><h2>What it runs on</h2></div>${h ? `<div class="card"><dl class="facts">${hw}</dl></div><details class="card flat matrix" data-k="hw-${esc(u.id)}" style="margin-top:10px"><summary>Every detail</summary>${hardwareCard(h, now)}</details>` : hardwareCard(h, now)}</div>
 <div class="block" data-part="rig"><div class="head"><h2>The rig</h2></div><div class="card"><dl class="facts">${versionFact(stateIn)}${rigFacts}</dl>${sup ? `<div class="muted xs" style="margin-top:8px">The supervisor reports its figures itself (unsigned).</div>` : ""}</div></div>
-${placed ? placedBlock(placed, t) : ""}${onCluster ? clusterPlacedBlock(onCluster, t) : ""}${joined ? joinedBlock(joined, t, undefined, true) : ""}${pulled ? pullBlock(pulled, now) : ""}
+${placed ? await placedBlock(placed, t) : ""}${onCluster ? await clusterPlacedBlock(onCluster, t) : ""}${joined ? await joinedBlock(joined, t, undefined, true) : ""}${pulled ? pullBlock(pulled, now) : ""}
 ${rp ? "" : events}
 </div></div>`,
       vs,
@@ -506,8 +507,8 @@ ${rp ? "" : events}
    * For a rig on a cluster whose setup failed: set it up again on a node chosen, which keeps its
    * name and runners, as a slot that takes pods only on nodes it names needs (goal 206).
    */
-  const againOnNode = (r: ClusterRig, t: string) => {
-    const facts = store.clusters.get(r.cluster)?.facts as ClusterFacts | null | undefined;
+  const againOnNode = async (r: ClusterRig, t: string) => {
+    const facts = (await store.clusters.get(r.cluster))?.facts as ClusterFacts | null | undefined;
     // A slot whose rules take pods only on nodes they name offers those alone.
     const only = facts?.slots.find((x) => x.namespace === r.namespace)?.nodes;
     const nodes = only?.length
@@ -516,24 +517,21 @@ ${rp ? "" : events}
     const pick = r.spec.node && nodes.includes(r.spec.node) ? r.spec.node : only?.[0];
     return `<form method="post" action="/ui/rigs/${encodeURIComponent(r.rig)}/cluster/again" class="row" style="gap:8px;margin-bottom:10px"><input type="hidden" name="csrf" value="${t}"><label class="small">Node <select name="node">${only?.length ? "" : `<option value="">any node with room</option>`}${nodes.map((n) => `<option value="${esc(n)}"${n === pick ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label><button class="primary">Set it up again</button><span class="muted small">Keeps its name and its runners. A slot that takes pods only on nodes it names needs one of those.</span></form>`;
   };
-  const setupFailedCard = (
+  const setupFailedCard = async (
     rig: string,
     where: string,
     removeUrl: string,
     t: string,
     again = "",
   ) => {
-    const failed = store.rigHistory
-      .list(rig)
-      .filter((x) => !x.ok)
-      .at(-1);
+    const failed = (await store.rigHistory.list(rig)).filter((x) => !x.ok).at(-1);
     return `<div class="card warn" style="margin-bottom:16px" data-part="setup-failed"><p style="margin-top:0"><b class="bad">Control could not set ${esc(rig)} up on ${esc(where)}.</b>${failed?.detail ? ` ${esc(failed.detail)}` : " Its steps below say why."}</p>${again ? `<p class="small" style="margin-bottom:6px">Set it up again, on another node if its place needs one:</p>${again}<p class="small">Or remove it to start again under another name: control deletes what it made for the rig and its runners and frees the place. It never reported, so it holds no result to export first.</p>` : `<p class="small">Remove it to start again: control deletes what it made for the rig and its runners and frees the place, and you add the rig again under another name. It never reported, so it holds no result to export first.</p>`}<form method="post" action="${removeUrl}" class="row" style="gap:8px"><input type="hidden" name="csrf" value="${t}"><input name="confirm" placeholder="type: remove ${esc(rig)}" aria-label="Type remove ${esc(rig)} to remove it"><button class="danger solid">Remove the rig</button></form></div>`;
   };
 
   // The blocks a rig's place adds to its page: control's setup, on a cluster or a machine, and
   // pull mode.
   /** A rig control set up on a cluster: where, its setup history, and its controls. */
-  const clusterPlacedBlock = (r: ClusterRig, t: string) => {
+  const clusterPlacedBlock = async (r: ClusterRig, t: string) => {
     const rName = encodeURIComponent(r.rig);
     const act = (action: string, label: string, extra = "", cls = "sm") =>
       `<form class="inline" method="post" action="/ui/rigs/${rName}/cluster/${action}"${action === "remove" ? "" : " data-act"}><input type="hidden" name="csrf" value="${t}">${extra}<button class="${cls}">${label}</button></form>`;
@@ -548,7 +546,7 @@ ${rp ? "" : events}
       "Its volume, tokens, runs and results stay. Running trials and the judge's job under way finish first: the rig starts nothing new meanwhile. Update now skips the wait: a trial in progress then stops, and its experiment goes back to the queue.";
     // New images; or the same ones after a failed update (a retry); or a new address for control.
     // Draining for an update (goal 079): what it waits for, and the two ways out.
-    const work = rigWork(parts, r.rig);
+    const work = await rigWork(parts, r.rig);
     const waits = `${work ? `It waits for ${esc(workWords(work))} to finish, and starts nothing new.` : "It waits for its next report."} Its pods restart as soon as nothing runs.`;
     const draining =
       r.status === "draining" && r.pending
@@ -567,8 +565,8 @@ ${rp ? "" : events}
             : s.controlUrl && controlAddress(parts) && s.controlUrl !== controlAddress(parts)
               ? `<div class="small" style="margin-top:12px">Control's address for rigs changed: the rig reports to <span class="mono">${esc(s.controlUrl)}</span>, control is now at <span class="mono">${esc(controlAddress(parts) ?? "")}</span>.</div><div class="small muted" style="margin:4px 0 6px">Its pods restart with the new address, on the same images. ${keeps}</div>${act("images", "Give it control's new address")}`
               : "";
-    return `<div class="block" ${placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Cluster</dt><dd><a href="/ui/settings">${esc(r.cluster)}</a> (Providers)</dd><dt>Namespace</dt><dd>${esc(r.namespace)} <span class="muted">(${r.placement === "created" ? "made by control" : "a slot"})</span></dd><dt>GPUs</dt><dd>${s.gpus ? `${s.gpus} through ${s.gpuMode === "dra" ? `DRA (${esc(s.deviceClass ?? "")})` : "NVIDIA's device plugin"}: ${splitWords(s.gpus, s.judgeGpus)}` : "none: it measures on the CPU"}${s.node ? ` · on ${esc(s.node)}` : ""}</dd><dt>CPUs and memory</dt><dd>${s.resources ? esc(resourcesWords(s.resources)) : "the namespace's defaults"}${manage ? ` · <a href="/ui/rigs/${rName}/edit">change on Edit rig</a>` : ""}</dd><dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd><dt>Its harness reaches</dt><dd>${rigReachHtml(r, store.reachable.list())}</dd><dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>${slotIngressWarning(r)}
-<div class="tl" style="margin-top:10px">${setupSteps(r.rig) || `<div class="muted small">No step yet.</div>`}</div>${manage}${update}</div></div>`;
+    return `<div class="block" ${await placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Cluster</dt><dd><a href="/ui/settings">${esc(r.cluster)}</a> (Providers)</dd><dt>Namespace</dt><dd>${esc(r.namespace)} <span class="muted">(${r.placement === "created" ? "made by control" : "a slot"})</span></dd><dt>GPUs</dt><dd>${s.gpus ? `${s.gpus} through ${s.gpuMode === "dra" ? `DRA (${esc(s.deviceClass ?? "")})` : "NVIDIA's device plugin"}: ${splitWords(s.gpus, s.judgeGpus)}` : "none: it measures on the CPU"}${s.node ? ` · on ${esc(s.node)}` : ""}</dd><dt>CPUs and memory</dt><dd>${s.resources ? esc(resourcesWords(s.resources)) : "the namespace's defaults"}${manage ? ` · <a href="/ui/rigs/${rName}/edit">change on Edit rig</a>` : ""}</dd><dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd><dt>Its harness reaches</dt><dd>${rigReachHtml(r, await store.reachable.list())}</dd><dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>${slotIngressWarning(r)}
+<div class="tl" style="margin-top:10px">${(await setupSteps(r.rig)) || `<div class="muted small">No step yet.</div>`}</div>${manage}${update}</div></div>`;
   };
   /** A rig in pull mode: its pod, its enrollment, control's last connection and the refusals. */
   const pullBlock = (r: TunnelRig, now: number) => {
@@ -592,12 +590,12 @@ ${rp ? "" : events}
         : `<span class="muted">No address from RunPod now: the pod is starting or stopped, or RunPod gives it no public address for its port 7422. Its reports wait for one.</span>`;
     return `<div class="block"><div class="head"><h2>Pull mode</h2><span class="right">${esc(state)}</span></div><div class="card"><p class="small" style="margin-top:0">Control connects to this rig through RunPod's proxy, for its enrollment, the registration of its keys on the message bus, its results and the kits it fetches; everything else goes on the bus, through the pod's leaf node. The rig never connects to control. The pod answers only requests that control signed.</p><dl class="facts"><dt>Pod</dt><dd>${r.pod ? esc(r.pod) : `<span class="muted">not launched yet</span>`}</dd>${r.url ? `<dt>Address</dt><dd class="mono small">${esc(r.url)}</dd>` : ""}<dt>Enrollment</dt><dd>${enrollment}</dd><dt>Message bus</dt><dd>${bus}</dd><dt>Last exchange</dt><dd>${r.last_exchange_at ? `${esc(ago(r.last_exchange_at, now))} ago` : `<span class="muted">none yet</span>`}</dd><dt>Refused requests</dt><dd>${r.refused_total}${r.refused_total ? ` <span class="muted small">Requests that control did not sign. The pod gave each one an empty 404.</span>` : ""}</dd>${r.error ? `<dt>Last error</dt><dd class="bad">${esc(r.error)}</dd>` : ""}</dl></div></div>`;
   };
-  const placeAttrs = (rig: string, status: string) =>
-    `data-part="placed"${PLACE_BUSY.has(status) ? ` data-follow="${esc(placeFollowUrl(rig))}" data-follow-state="${esc(placeProgress(rig).state)}"` : ""}`;
+  const placeAttrs = async (rig: string, status: string) =>
+    `data-part="placed"${PLACE_BUSY.has(status) ? ` data-follow="${esc(placeFollowUrl(rig))}" data-follow-state="${esc((await placeProgress(rig)).state)}"` : ""}`;
   /** A rig control set up: where, its setup history, and stop, start, restart and remove. */
-  const placedBlock = (r: MachineRig, t: string) => {
+  const placedBlock = async (r: MachineRig, t: string) => {
     const rName = encodeURIComponent(r.rig);
-    const steps = setupSteps(r.rig);
+    const steps = await setupSteps(r.rig);
     const act = (action: string, label: string, extra = "", cls = "sm") =>
       `<form class="inline" method="post" action="/ui/rigs/${rName}/machine/${action}"${action === "remove" ? "" : " data-act"}><input type="hidden" name="csrf" value="${t}">${extra}<button class="${cls}">${label}</button></form>`;
     const manage =
@@ -605,7 +603,7 @@ ${rp ? "" : events}
         ? ""
         : `<div class="act" style="margin-top:10px">${r.status === "stopped" ? act("start", "Start its services") : act("stop", "Stop its services")}${act("restart", "Restart them")}</div>
 <details style="margin-top:8px"><summary class="small">Remove it from ${esc(r.machine)}</summary><div class="small muted" style="margin:6px 0">Stops its services and deletes its units, files and volumes on the machine, and retires its token. ${esc(removeWords(r.rig))}</div>${act("remove", "Remove the rig", `<input name="confirm" placeholder="type: remove ${esc(r.rig)}" style="margin-right:6px">`, "sm danger")}</details>`;
-    return `<div class="block" ${placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Machine</dt><dd><a href="/ui/settings">${esc(r.machine)}</a> (Providers)</dd><dt>GPUs</dt><dd>${r.gpus.length ? gpuRoles(r.gpus, r.judge_gpus) : "none: it measures on the CPU"}</dd><dt>Images</dt><dd class="mono small">${esc(r.images.harness)}<br>${esc(r.images.supervisor)}</dd></dl>
+    return `<div class="block" ${await placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Machine</dt><dd><a href="/ui/settings">${esc(r.machine)}</a> (Providers)</dd><dt>GPUs</dt><dd>${r.gpus.length ? gpuRoles(r.gpus, r.judge_gpus) : "none: it measures on the CPU"}</dd><dt>Images</dt><dd class="mono small">${esc(r.images.harness)}<br>${esc(r.images.supervisor)}</dd></dl>
 <div class="tl" style="margin-top:10px">${steps || `<div class="muted small">No step yet.</div>`}</div>${manage}</div></div>`;
   };
 
@@ -624,17 +622,17 @@ ${rp ? "" : events}
         ? `<span class="muted">stopped</span> · RunPod`
         : `<span class="${v.status === "RUNNING" ? "ok" : "warn"}">${esc(v.status.toLowerCase())}</span> · RunPod${v.price_per_hr !== null ? ` · $${v.price_per_hr.toFixed(2)}/h` : ""}`;
   /** A RunPod rig's pod block: its cost, limits, lifecycle and the results still in it. */
-  const podSection = (c: Ctx, rig: string, now: number) => {
-    const v = opts.runpodRigs?.view(rig);
+  const podSection = async (c: Ctx, rig: string, now: number) => {
+    const v = await opts.runpodRigs?.view(rig);
     if (!v) return "";
     const name = v.op?.export ?? v.last_export ?? null;
     return podBlock({
       v,
       t: csrf(c),
       now,
-      results: resultsLeft(store, rig),
-      lastExport: name ? { name, left: exportLeft(store, rig, name) } : null,
-      resetOpen: Boolean(store.fullResets.open(rig)),
+      results: await resultsLeft(store, rig),
+      lastExport: name ? { name, left: await exportLeft(store, rig, name) } : null,
+      resetOpen: Boolean(await store.fullResets.open(rig)),
       minIdle: MIN_IDLE_STOP_MINUTES,
     });
   };
@@ -643,20 +641,25 @@ ${rp ? "" : events}
    * report, the page reads it once as it opens when nothing was read yet. None for a pod that is
    * gone: RunPod keeps no log of it.
    */
-  const podLogSection = (c: Ctx, rig: string, now: number, auto: boolean) => {
-    const v = opts.runpodRigs?.view(rig);
+  const podLogSection = async (c: Ctx, rig: string, now: number, auto: boolean) => {
+    const v = await opts.runpodRigs?.view(rig);
     if (!v?.active || v.status === "TERMINATED") return "";
     return podLogBlock({ rig, kept: opts.runpodRigs?.lastLog(rig), t: csrf(c), now, auto });
   };
   /** A RunPod rig's history: the pod's steps, the rig's events and its state's lines, filtered. */
-  const podHistory = (u: RigView | undefined, rig: string, extra: TimelineRow[], now: number) =>
+  const podHistory = async (
+    u: RigView | undefined,
+    rig: string,
+    extra: TimelineRow[],
+    now: number,
+  ) =>
     `<div class="block"><div class="head"><h2>History</h2><span class="right">newest first</span></div>${HISTORY_FILTERS}${timeline(
       u ? u.recent.map((e) => ({ u, e })) : [],
       now,
       {
         limit: 40,
         kinds: true,
-        extra: [...podRows(store.rigHistory.list(rig)), ...extra],
+        extra: [...podRows(await store.rigHistory.list(rig)), ...extra],
         id: "hist",
       },
     )}</div>`;

@@ -55,7 +55,7 @@ export const clusterTarget = (
 /** Reads a cluster again (clusters/facts.ts) and keeps what it found; why not, in words. */
 export async function checkClusterNow(parts: ControlParts, name: string): Promise<string | null> {
   const { store } = parts;
-  const c = store.clusters.get(name);
+  const c = await store.clusters.get(name);
   if (!c) return "no such cluster";
   try {
     // The slots' node rules are read with control's own harness image, which slots take.
@@ -63,17 +63,17 @@ export async function checkClusterNow(parts: ControlParts, name: string): Promis
       parts.kube,
       clusterTarget(parts, c),
       c.slots,
-      store.reachable.list(),
+      await store.reachable.list(),
       parts.rigImages?.harness,
     );
-    store.clusters.setFacts(name, { facts });
+    await store.clusters.setFacts(name, { facts });
     // Each slot's rig takes what its slot's rules open and let in now, for its page.
-    const inSlots = store.clusters.rigs(name).filter((r) => r.placement === "slot");
+    const inSlots = (await store.clusters.rigs(name)).filter((r) => r.placement === "slot");
     for (const slot of facts.slots)
       for (const r of inSlots.filter(
         (x) => x.namespace === slot.namespace && x.status !== "removed",
       ))
-        store.clusters.setRigSlotNetwork(r.rig, {
+        await store.clusters.setRigSlotNetwork(r.rig, {
           openings: slot.openings ?? [],
           ingress:
             slot.ingress_ok === undefined
@@ -83,7 +83,7 @@ export async function checkClusterNow(parts: ControlParts, name: string): Promis
     return null;
   } catch (err) {
     const why = errorText(err);
-    store.clusters.setFacts(name, { error: why });
+    await store.clusters.setFacts(name, { error: why });
     return why;
   }
 }
@@ -96,18 +96,18 @@ export async function setClusterSlots(
   by: string,
 ): Promise<string | null> {
   const { store } = parts;
-  const k = store.clusters.get(name);
+  const k = await store.clusters.get(name);
   if (!k) return "no such cluster";
   if (k.placement !== "slot")
     return `${name} puts rigs in namespaces control creates, not in slots`;
   const bad = slots.find((x) => !NS.test(x));
   if (bad) return `"${bad}" is not a namespace name`;
-  const using = store.clusters
-    .rigs(name)
-    .filter((r) => r.status !== "removed" && !slots.includes(r.namespace));
+  const using = (await store.clusters.rigs(name)).filter(
+    (r) => r.status !== "removed" && !slots.includes(r.namespace),
+  );
   if (using.length)
     return `${using.map((r) => r.namespace).join(", ")} still holds a rig (${using.map((r) => r.rig).join(", ")}): keep it in the list`;
-  store.clusters.setSlots(name, [...new Set(slots)], by);
+  await store.clusters.setSlots(name, [...new Set(slots)], by);
   return await checkClusterNow(parts, name);
 }
 
@@ -147,12 +147,12 @@ export async function addClusterRig(
   const { store } = parts;
   const fail = (error: string) => ({ error });
   const { rig } = i;
-  const k = store.clusters.get(i.cluster);
+  const k = await store.clusters.get(i.cluster);
   if (!parts.rigImages) return fail("Control has no rig images configured.");
   if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
   if (!parts.rigBus) return fail(NO_RIG_BUS);
   if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
-  if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
+  if (await rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
   if (!k) return fail("Choose a machine or a cluster.");
   const facts = k.facts as ClusterFacts | null;
   if (!facts || k.check_error)
@@ -205,7 +205,9 @@ export async function addClusterRig(
     node = placed.node;
     slotQuota = slot.quota;
     if (
-      store.clusters.rigs(k.name).some((r) => r.namespace === namespace && r.status !== "removed")
+      (await store.clusters.rigs(k.name)).some(
+        (r) => r.namespace === namespace && r.status !== "removed",
+      )
     )
       return fail(`The slot ${namespace} is in use.`);
     // Refuse a slot whose rules don't keep this harness off the cluster; keep what they open of
@@ -215,7 +217,7 @@ export async function addClusterRig(
       clusterTarget(parts, k),
       namespace,
       { ...HARNESS_LABELS, "app.kubernetes.io/instance": rig },
-      store.reachable.list(),
+      await store.reachable.list(),
     );
     if (!net.ok)
       return fail(
@@ -260,8 +262,8 @@ export async function addClusterRig(
   const images = controlImages(parts, gpus, cuda);
   if (typeof images === "string") return fail(images);
   const token = newToken();
-  store.enrollments.enroll(rig, token.sha256, by);
-  store.clusters.addRig({
+  await store.enrollments.enroll(rig, token.sha256, by);
+  await store.clusters.addRig({
     rig,
     cluster: k.name,
     namespace,
@@ -285,8 +287,13 @@ export async function addClusterRig(
     },
     created_by: by,
   });
-  store.rigHistory.add(rig, "enrolled", true);
-  const deploy = deployClusterRig(parts, store.clusters.rig(rig) as ClusterRig, k, token.token);
+  await store.rigHistory.add(rig, "enrolled", true);
+  const deploy = deployClusterRig(
+    parts,
+    (await store.clusters.rig(rig)) as ClusterRig,
+    k,
+    token.token,
+  );
   void inBackground(store, "cluster", rig, "applied", deploy);
   return { rig };
 }
@@ -296,11 +303,11 @@ export async function addClusterRig(
  * supervisor's share follows how its agent programs run: as its report says, unless a caller
  * gives the mode (a new one, or the one its deployments have).
  */
-export const clusterPlan = (
+export const clusterPlan = async (
   parts: ControlParts,
   r: ClusterRig,
   images = r.spec.images,
-  programMode: ProgramMode = programModeOf(parts.store, r.rig),
+  programMode?: ProgramMode,
 ) => ({
   rig: r.rig,
   placement: r.placement,
@@ -315,11 +322,11 @@ export const clusterPlan = (
   storageClass: r.spec.storageClass,
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
-  programMode,
+  programMode: programMode ?? (await programModeOf(parts.store, r.rig)),
   judgeOnRunners: r.spec.judgeOnRunners,
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
-  reach: parts.store.reachable.list(),
+  reach: await parts.store.reachable.list(),
 });
 
 /**
@@ -334,35 +341,48 @@ export async function setClusterRigUpAgain(
   by: string,
 ): Promise<{ ok: string } | { error: string }> {
   const { store } = parts;
-  const r = store.clusters.rig(rig);
-  if (!r) return { error: `Control didn't set ${rig} up on a cluster.` };
-  if (r.status !== "failed" || store.reportedRigs.list().some((x) => x.id === rig))
-    return {
-      error: `${rig}'s setup did not fail before its first report: nothing to set up again.`,
-    };
-  const k = store.clusters.get(r.cluster);
-  if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
-  const facts = k.facts as ClusterFacts | null;
-  let node = asked;
-  if (node && facts?.nodes.length && !facts.nodes.some((n) => n.name === node && n.ready))
-    return { error: `${k.name} has no ready node ${node}.` };
-  // A slot whose rules take pods only on nodes they name: one of those (goal 206).
-  const placed = nodeInSlot(
-    facts?.slots.find((x) => x.namespace === r.namespace),
-    node,
-  );
-  if ("error" in placed) return { error: placed.error };
-  node = placed.node;
-  if (!parts.publicUrl) return { error: "Control's address for rigs is not set." };
-  if (!parts.rigBus) return { error: NO_RIG_BUS };
-  store.clusters.setRigNode(rig, node || undefined);
-  const token = newToken();
-  if (store.enrollments.rig(rig)) store.enrollments.rotateToken(rig, token.sha256, by);
-  else store.enrollments.enroll(rig, token.sha256, by);
-  store.clusters.setRigStatus(rig, "deploying");
-  store.rigHistory.add(rig, "set_up_again", true, node ? `on ${node}` : "on any node with room");
-  store.auditLog.add(by, "cluster_rig_set_up_again", { rig, node: node ?? null });
-  const again = store.clusters.rig(rig) as ClusterRig;
+  // The check that its setup failed with no report, and the new token and status, in one
+  // transaction: a first report that comes between them is not answered with a new setup.
+  const set = await store.tx(async () => {
+    const r = await store.clusters.rig(rig);
+    if (!r) return { error: `Control didn't set ${rig} up on a cluster.` };
+    if (r.status !== "failed" || (await store.reportedRigs.list()).some((x) => x.id === rig))
+      return {
+        error: `${rig}'s setup did not fail before its first report: nothing to set up again.`,
+      };
+    const k = await store.clusters.get(r.cluster);
+    if (!k) return { error: `The cluster ${r.cluster} is no longer in Settings › Machines.` };
+    const facts = k.facts as ClusterFacts | null;
+    let node = asked;
+    if (node && facts?.nodes.length && !facts.nodes.some((n) => n.name === node && n.ready))
+      return { error: `${k.name} has no ready node ${node}.` };
+    // A slot whose rules take pods only on nodes they name: one of those (goal 206).
+    const placed = nodeInSlot(
+      facts?.slots.find((x) => x.namespace === r.namespace),
+      node,
+    );
+    if ("error" in placed) return { error: placed.error };
+    node = placed.node;
+    if (!parts.publicUrl) return { error: "Control's address for rigs is not set." };
+    if (!parts.rigBus) return { error: NO_RIG_BUS };
+    await store.clusters.setRigNode(rig, node || undefined);
+    const token = newToken();
+    if (await store.enrollments.rig(rig))
+      await store.enrollments.rotateToken(rig, token.sha256, by);
+    else await store.enrollments.enroll(rig, token.sha256, by);
+    await store.clusters.setRigStatus(rig, "deploying");
+    await store.rigHistory.add(
+      rig,
+      "set_up_again",
+      true,
+      node ? `on ${node}` : "on any node with room",
+    );
+    await store.auditLog.add(by, "cluster_rig_set_up_again", { rig, node: node ?? null });
+    const again = (await store.clusters.rig(rig)) as ClusterRig;
+    return { again, k, token, node };
+  });
+  if (set.error !== undefined) return { error: set.error };
+  const { again, k, token, node } = set;
   void inBackground(
     store,
     "cluster",
@@ -384,10 +404,13 @@ async function deployClusterRig(
 ) {
   const { store } = parts;
   try {
-    const objects = clusterRigObjects(clusterPlan(parts, r, r.spec.images, r.spec.programMode), {
-      controlToken,
-      harnessSupervisorToken: newToken().token,
-    });
+    const objects = clusterRigObjects(
+      await clusterPlan(parts, r, r.spec.images, r.spec.programMode),
+      {
+        controlToken,
+        harnessSupervisorToken: newToken().token,
+      },
+    );
     const out = await parts.kube.kubectl(
       clusterTarget(parts, k),
       ["apply", "-f", "-"],
@@ -395,14 +418,14 @@ async function deployClusterRig(
       120_000,
     );
     if (out.code !== 0) throw new Error(kubeError(out));
-    store.rigHistory.add(r.rig, "applied", true, `namespace ${r.namespace}`);
-    store.clusters.setRigStatus(r.rig, "starting");
+    await store.rigHistory.add(r.rig, "applied", true, `namespace ${r.namespace}`);
+    await store.clusters.setRigStatus(r.rig, "starting");
   } catch (err) {
-    store.rigHistory.add(r.rig, "deploy", false, errorText(err));
-    store.clusters.setRigStatus(r.rig, "failed");
+    await store.rigHistory.add(r.rig, "deploy", false, errorText(err));
+    await store.clusters.setRigStatus(r.rig, "failed");
     return;
   }
-  await awaitFirstReport(parts, r.rig, (s) => store.clusters.setRigStatus(r.rig, s));
+  await awaitFirstReport(parts, r.rig, async (s) => store.clusters.setRigStatus(r.rig, s));
 }
 
 /** Whether both of a rig's deployments (kubectl get -o json) run only their newest pods. */
@@ -446,10 +469,10 @@ export async function awaitNewPods(
 ) {
   const { store } = parts;
   const n = clusterNames(r.rig);
-  const set = (st: string) => store.clusters.setRigStatus(r.rig, st);
+  const set = async (st: string) => store.clusters.setRigStatus(r.rig, st);
   // The status this wait is for: a stop or a removal meanwhile ends it.
   const waiting = why === "start" ? "starting" : "updating";
-  const still = () => store.clusters.rig(r.rig)?.status === waiting;
+  const still = async () => (await store.clusters.rig(r.rig))?.status === waiting;
   const [pods, report] =
     why === "images"
       ? ["images_running", "report_after_images"]
@@ -458,7 +481,7 @@ export async function awaitNewPods(
         : ["pods_running", "report_after_start"];
   const deadline = Date.now() + 15 * 60_000;
   for (;;) {
-    if (!still()) return;
+    if (!(await still())) return;
     const out = await parts.kube.kubectl(
       clusterTarget(parts, k),
       ["get", "deployment", n.harness, n.supervisor, "-n", r.namespace, "-o", "json"],
@@ -467,16 +490,19 @@ export async function awaitNewPods(
     );
     if (out.code === 0 && rolledOut(out.stdout)) break;
     if (Date.now() > deadline) {
-      if (!still()) return;
-      const err = out.code === 0 ? "" : `: ${kubeError(out)}`;
-      store.rigHistory.add(r.rig, pods, false, `not running after 15 minutes${err}`);
-      set("failed");
+      // The look and the status in one transaction: a stop or a removal between them stays.
+      await store.tx(async () => {
+        if (!(await still())) return;
+        const err = out.code === 0 ? "" : `: ${kubeError(out)}`;
+        await store.rigHistory.add(r.rig, pods, false, `not running after 15 minutes${err}`);
+        await set("failed");
+      });
       return;
     }
     await sleep(5000);
   }
-  if (!still()) return;
-  store.rigHistory.add(r.rig, pods, true);
+  if (!(await still())) return;
+  await store.rigHistory.add(r.rig, pods, true);
   await awaitFirstReport(parts, r.rig, set, 10, Date.now(), { step: report, still });
 }
 
@@ -484,12 +510,12 @@ export const IMAGES_REASON = "its images are about to change";
 export const RESIZE_REASON = "its GPUs, CPUs or memory are about to change";
 
 /** What a rig still runs, as its last report says (goal 079); none from an older harness. */
-export function rigWork(
+export async function rigWork(
   parts: ControlParts,
   rig: string,
-): { trials: number; judge_jobs: number; draining: unknown } | undefined {
+): Promise<{ trials: number; judge_jobs: number; draining: unknown } | undefined> {
   const w = (
-    parts.store.reportedRigs.list().find((x) => x.id === rig)?.summary as
+    (await parts.store.reportedRigs.list()).find((x) => x.id === rig)?.summary as
       | { work?: unknown }
       | undefined
   )?.work as { trials?: unknown; judge_jobs?: unknown; draining?: unknown } | undefined;
@@ -506,7 +532,7 @@ export const workWords = (w: { trials: number; judge_jobs: number }) =>
     .join(" and ") || "its work";
 
 /** A drain ends: the rig starts work again (its images did not change). */
-export const undrain = (parts: ControlParts, rig: string, by: string) =>
+export const undrain = async (parts: ControlParts, rig: string, by: string) =>
   issueCommand(parts.store, parts.privateKeyPem, {
     rig,
     kind: "drain_rig",
@@ -519,8 +545,8 @@ export async function checkClusterRig(
   parts: Pick<ControlParts, "store" | "secrets" | "kube">,
   rig: string,
 ): Promise<{ ok: boolean; words: string }> {
-  const r = parts.store.clusters.rig(rig);
-  const k = r ? parts.store.clusters.get(r.cluster) : undefined;
+  const r = await parts.store.clusters.rig(rig);
+  const k = r ? await parts.store.clusters.get(r.cluster) : undefined;
   if (!r || !k) return { ok: false, words: "The cluster is no longer in Settings › Machines." };
   const n = clusterNames(rig);
   const out = await parts.kube.kubectl(

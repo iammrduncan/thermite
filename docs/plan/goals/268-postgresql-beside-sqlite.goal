@@ -71,6 +71,9 @@ The design's size for this step is L: a week or more, by the readers' first esti
 - Whether a deployment may use a PostgreSQL server it already has, in place of the service the install brings.
 - The reading found more triggers in the store's source than a fresh store holds, and did not trace why. The copy must know which are in use.
 - Acceptance scripts open control's store file themselves (`scripts/acceptance/lib/control-bus.mjs` and others). Whether they read through control, or through the store's interface.
+- From goal [267](267-store-behind-an-interface.goal): 58 test files outside the store's own tests reach the database itself, through `sqliteBehind` (`src/control/store/behind.ts`), to make a store as an older version left it or to read a table that no call gives. On PostgreSQL they do not run as they are. Which become calls of the interface, and which stay tests of the SQLite store alone.
+- From goal 267: three files read the size of the store's file and of its copies by `store.path` (`src/control/space.ts`, `src/control/retention/items.ts`, `src/control/system/local.ts`). What they read on PostgreSQL.
+- From goal 267: a transaction on SQLite holds every other caller of the store, since SQLite has one connection. What holds a read and the write that relies on it on PostgreSQL, where other callers go on: the isolation level, or a lock on the rows read. The 36 transactions outside the store are listed by their tests (`tests/control/together/`).
 
 ## Progress
 

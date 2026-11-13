@@ -8,8 +8,94 @@ import type { IngestReport } from "./report.ts";
  * time and summary, its report-signing keys and its supervisor's own figures; the ledgers it
  * reported from, those it has left, and each one's held cursor.
  */
+export interface ReportedRigs {
+  /**
+   * The supervisor's own figures for a rig (unsigned: it reports them about itself). They never
+   * make a rig look live: only the harness's signed reports move last_seen.
+   */
+  setSupervisor(rig: string, stats: unknown): Promise<void>;
+  /**
+   * Whether a signed report may be taken: not from a ledger the rig has left, starting no later
+   * than the events control holds of its ledger (no gap: its held cursor, which the apply of the
+   * events stream moves), and, in the rig's current ledger, no older than the newest report taken.
+   * A ledger control holds no event of (a full reset's new one) starts at 0.
+   */
+  reportCheck(
+    rig: string,
+    r: { ledgerId: string; cursor: number; generatedAt: string },
+  ): Promise<{ ok: true } | { ok: false; reason: string; expectedCursor?: number }>;
+  supervisor(rig: string): Promise<Record<string, unknown> | null>;
+  /** The rig's pinned report-signing key, if any. */
+  key(rig: string): Promise<{ pubkey: string | null; pending: string | null }>;
+  /** Pins a rig's key on first contact (trust on first use, shown on the dashboard). */
+  pinKey(rig: string, pubkey: string): Promise<void>;
+  /** A different key arrived: hold it until the owner accepts it. */
+  holdKey(rig: string, pubkey: string): Promise<void>;
+  /** Accepts the held key, but only the one with the fingerprint the owner checked. */
+  acceptPendingKey(rig: string, actor: string, fingerprintSeen: string): Promise<boolean>;
+  /** Whether a rig reported and is not retired: one list() names. */
+  listed(rig: string): Promise<boolean>;
+  /**
+   * The rigs that reported, but not the retired ones unless asked for. `last_cursor` is the cursor
+   * after the last event control holds of the rig's current ledger: its held cursor.
+   */
+  list(opts?: { withRetired?: boolean }): Promise<
+    {
+      id: string;
+      last_seen: string;
+      last_cursor: number;
+      ledger_id: string | null;
+      summary: unknown;
+    }[]
+  >;
+  /**
+   * A mark that changes whenever a rig reported or control took a new event of it: each rig's last
+   * report and held cursor, in one string. The dashboard's stream of changes compares it
+   * (api/web.ts); it reads no report's summary, so it is cheap to ask often.
+   */
+  mark(): Promise<string>;
+  /**
+   * The ledger a report comes from becomes the rig's current one, before its events go on the
+   * events stream: a ledger new to the rig (a full reset's) supersedes the ones before it, for
+   * good, as the report's signature proves the harness moved on. A rig with no row gets one, not
+   * seen yet: noteReport says it was, once the report is taken.
+   */
+  enterLedger(rig: string, ledgerId: string, now: string): Promise<void>;
+  /**
+   * A report taken, once the apply of the events stream has its events: the rig was seen now, with
+   * this summary, at the report's time.
+   */
+  noteReport(report: IngestReport, now: string): Promise<void>;
+  /**
+   * A rig ledger's held cursor: the last event of it whose records control's store holds, as the
+   * apply of the events stream moved it (control/events); 0 before any.
+   */
+  heldCursor(rig: string, ledgerId: string): Promise<number>;
+  /**
+   * Where a rig's report of a ledger goes on from: its held cursor, or its floor when higher, the
+   * last event a retention policy removed of control's copy on purpose (store/retention.ts), so
+   * control never asks the rig for those again, nor takes them back. The apply reads the held
+   * cursor alone: it applies every event the stream still holds.
+   */
+  takenThrough(rig: string, ledgerId: string): Promise<number>;
+  /**
+   * The apply alone moves a ledger's held cursor, to the last event of it that it applied, never
+   * back. A ledger the store has no row for yet, as in a store older than the stream, gets one.
+   */
+  holdThrough(rig: string, ledgerId: string, eventId: number, now: string): Promise<void>;
+  /** A row for a rig that never reported, so it is listed (with no report: offline). */
+  addUnreported(rig: string, now: string): Promise<void>;
+  /**
+   * The rig's row as reports move it: its current ledger, the cursor after the last event control
+   * holds of it (its held cursor), and its newest report's time.
+   */
+  reportRow(
+    rig: string,
+  ): Promise<{ ledger_id: string | null; cursor: number; report_at: string | null } | undefined>;
+}
 
-export class ReportedRigs extends StorePart {
+/** ReportedRigs on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
+export class SqliteReportedRigs extends StorePart {
   /**
    * The supervisor's own figures for a rig (unsigned: it reports them about itself). They never
    * make a rig look live: only the harness's signed reports move last_seen.

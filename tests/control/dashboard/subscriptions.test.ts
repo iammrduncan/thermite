@@ -4,6 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { sqliteBehind } from "../../../src/control/store/behind.ts";
 import { ModelSource } from "../../../src/harness/agents/model/source.ts";
 import { handModelRoute } from "../../../src/supervisor/model-route.ts";
 import { stack } from "./stack.ts";
@@ -58,8 +59,8 @@ describe("control dashboard", () => {
     assert.ok(
       !JSON.stringify([
         page,
-        s.store.db.prepare("select * from model_provider").all(),
-        s.store.db.prepare("select * from audit").all(),
+        sqliteBehind(s.store).db.prepare("select * from model_provider").all(),
+        sqliteBehind(s.store).db.prepare("select * from audit").all(),
       ]).includes(token),
     );
     // Its model goes to a rig in Claude Code, whatever harness the form named.
@@ -69,7 +70,7 @@ describe("control dashboard", () => {
       harness: "pi",
       choice: "claude-max|opus-5.5%5B1m%5D",
     });
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "claude-code");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "claude-code");
     const route = (await s.rigConfig("model-route")) as unknown as {
       route: { type: string; harness: string; model: string; api_key: string };
     };
@@ -207,7 +208,7 @@ describe("control dashboard", () => {
       /did not start this sign-in/,
     );
     assert.deepEqual(
-      s.store.modelProviders.get("chatgpt-pro")?.models.map((m) => m.id),
+      (await s.store.modelProviders.get("chatgpt-pro"))?.models.map((m) => m.id),
       ["gpt-test"],
       "only the models OpenAI lists for display",
     );
@@ -269,7 +270,7 @@ describe("control dashboard", () => {
     });
     const toCodex = await s.post("/ui/rigs/rig-a/edit", editForm("codex"));
     assert.match(decodeURIComponent(String(toCodex.headers.get("location"))), /a new model/);
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "codex");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "codex");
     const codexRoute = await asRig();
     assert.equal(codexRoute.route?.harness, "codex");
     assert.equal(codexRoute.route?.type, "chatgpt");
@@ -284,7 +285,7 @@ describe("control dashboard", () => {
     assert.match(edit, /data-ctx-sum="planner"><span class="muted">as the workers: [^<]+ · 80%</);
     // Left to control, a ChatGPT sign-in keeps Pi.
     await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "chatgpt-pro|gpt-test" });
-    assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "pi");
+    assert.equal((await s.store.agentModels.byRig())["rig-a"]?.harness, "pi");
     await s.post("/ui/settings/rigs", {
       csrf,
       rig: "rig-a",

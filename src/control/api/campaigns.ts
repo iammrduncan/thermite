@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";
 import { redact } from "../../common/env.ts";
+import { mapInTurn } from "../../common/in-turn.ts";
 import {
   CAMPAIGN_ADDITIONS,
   CAMPAIGN_CONTEXT,
@@ -64,7 +65,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
       // In the audit log, as the dashboard's and MCP's refusals are.
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/runs`,
         why: redact(out.error),
       });
@@ -81,10 +82,10 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const raw: unknown = await c.req.json().catch(() => undefined);
     const body = CopyCampaignBody.safeParse(raw);
     const out = body.success
-      ? copyACampaign(parts, { from, ...body.data }, "owner:api")
+      ? await copyACampaign(parts, { from, ...body.data }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${from}/copy`,
         why: redact(out.error),
       });
@@ -106,7 +107,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
         ? await startFromChampion(parts, body.data, "owner:api", true)
         : ({ ok: false, error: bodyRefusal(body.error), status: 400 } as const);
       if (!out.ok) {
-        store.auditLog.refusal("owner:api", "refused", {
+        await store.auditLog.refusal("owner:api", "refused", {
           path: CAMPAIGN_FROM_CHAMPION.path,
           why: redact(out.error),
         });
@@ -125,7 +126,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const raw: unknown = await c.req.json().catch(() => undefined);
     const body = CampaignContextBody.safeParse(raw);
     const out = body.success
-      ? setCampaignContext(
+      ? await setCampaignContext(
           store,
           {
             campaign,
@@ -136,7 +137,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
         )
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/context`,
         why: redact(out.error),
       });
@@ -153,10 +154,10 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const raw: unknown = await c.req.json().catch(() => undefined);
     const body = CampaignAdditionsBody.safeParse(raw);
     const out = body.success
-      ? setCampaignAdditions(store, { campaign, additions: body.data.additions }, "owner:api")
+      ? await setCampaignAdditions(store, { campaign, additions: body.data.additions }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/additions`,
         why: redact(out.error),
       });
@@ -173,10 +174,10 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const raw: unknown = await c.req.json().catch(() => undefined);
     const body = CampaignKbWritesBody.safeParse(raw);
     const out = body.success
-      ? setCampaignKbWrites(store, { campaign, kb_writes: body.data.kb_writes }, "owner:api")
+      ? await setCampaignKbWrites(store, { campaign, kb_writes: body.data.kb_writes }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.refusal("owner:api", "refused", {
+      await store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/kb-writes`,
         why: redact(out.error),
       });
@@ -187,15 +188,14 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
 
   // Archive a campaign, and the left navigation's folders (goal 077): the same functions as the
   // dashboard and MCP, with their refusals in words. The owner's token.
-  const allViews = () =>
-    store.reportedRigs
-      .list()
-      .map((u) => rigView(store, u.id, viewOpts))
-      .filter((v): v is NonNullable<typeof v> => v !== undefined);
+  const allViews = async () =>
+    (
+      await mapInTurn(await store.reportedRigs.list(), async (u) => rigView(store, u.id, viewOpts))
+    ).filter((v): v is NonNullable<typeof v> => v !== undefined);
   /** A shelf outcome as the answer, a refusal in the audit log as the other routes' are. */
-  const shelf = <T>(c: Context, path: string, out: ShelfOutcome<T>, created = false) => {
+  const shelf = async <T>(c: Context, path: string, out: ShelfOutcome<T>, created = false) => {
     if (out.ok) return c.json(out.answer, created ? 201 : 200);
-    store.auditLog.refusal("owner:api", "refused", { path, why: redact(out.error) });
+    await store.auditLog.refusal("owner:api", "refused", { path, why: redact(out.error) });
     return c.json({ error: out.error }, out.status);
   };
   const refusedBody = (e: z.ZodError) =>
@@ -204,20 +204,20 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const raw: unknown = await c.req.json().catch(() => undefined);
     return schema.safeParse(raw);
   };
-  app.post("/v1/campaigns/:campaign/archive", admin, (c) => {
+  app.post("/v1/campaigns/:campaign/archive", admin, async (c) => {
     const campaign = c.req.param("campaign");
     return shelf(
       c,
       `/v1/campaigns/${campaign}/archive`,
-      archiveCampaign(store, allViews(), campaign, "owner:api"),
+      await archiveCampaign(store, await allViews(), campaign, "owner:api"),
     );
   });
-  app.post("/v1/campaigns/:campaign/unarchive", admin, (c) => {
+  app.post("/v1/campaigns/:campaign/unarchive", admin, async (c) => {
     const campaign = c.req.param("campaign");
     return shelf(
       c,
       `/v1/campaigns/${campaign}/unarchive`,
-      unarchiveCampaign(store, campaign, "owner:api"),
+      await unarchiveCampaign(store, campaign, "owner:api"),
     );
   });
   app.post("/v1/campaigns/:campaign/folder", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
@@ -225,13 +225,18 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const path = `/v1/campaigns/${campaign}/folder`;
     const body = await bodyOf(c, MoveBody);
     if (!body.success) return shelf(c, path, refusedBody(body.error));
-    return shelf(c, path, moveCampaign(store, campaign, body.data.folder, "owner:api"));
+    return shelf(c, path, await moveCampaign(store, campaign, body.data.folder, "owner:api"));
   });
-  app.get("/v1/campaign-folders", admin, (c) => c.json(campaignFoldersAnswer(store)));
+  app.get("/v1/campaign-folders", admin, async (c) => c.json(await campaignFoldersAnswer(store)));
   app.post("/v1/campaign-folders", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
     const body = await bodyOf(c, FolderNameBody);
     if (!body.success) return shelf(c, "/v1/campaign-folders", refusedBody(body.error));
-    return shelf(c, "/v1/campaign-folders", createFolder(store, body.data.name, "owner:api"), true);
+    return shelf(
+      c,
+      "/v1/campaign-folders",
+      await createFolder(store, body.data.name, "owner:api"),
+      true,
+    );
   });
   app.post(
     "/v1/campaign-folders/:folder/rename",
@@ -242,15 +247,15 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       const path = `/v1/campaign-folders/${folder}/rename`;
       const body = await bodyOf(c, FolderNameBody);
       if (!body.success) return shelf(c, path, refusedBody(body.error));
-      return shelf(c, path, renameFolder(store, folder, body.data.name, "owner:api"));
+      return shelf(c, path, await renameFolder(store, folder, body.data.name, "owner:api"));
     },
   );
-  app.post("/v1/campaign-folders/:folder/delete", admin, (c) => {
+  app.post("/v1/campaign-folders/:folder/delete", admin, async (c) => {
     const folder = c.req.param("folder");
     return shelf(
       c,
       `/v1/campaign-folders/${folder}/delete`,
-      deleteFolder(store, folder, "owner:api"),
+      await deleteFolder(store, folder, "owner:api"),
     );
   });
 }

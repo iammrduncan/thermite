@@ -4,6 +4,7 @@ import { createUser, fromSeed } from "@nats-io/nkeys";
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { writeAtomic } from "../../common/fs.ts";
+import { filterInTurn } from "../../common/in-turn.ts";
 import { sealKeyFingerprint } from "../../core/link/config.ts";
 import { LIVE_RUNS_PER_RIG } from "../../core/link/live.ts";
 import { isUserKey, userKeyFingerprint, usersFile } from "../../core/link/users.ts";
@@ -76,13 +77,13 @@ export const BUS_KEYS_SEEN_STEP = "bus_keys_seen";
  * Undefined when no one does. Two users with one key would each sign in as the other, and a users
  * file that names a key twice may not load at all.
  */
-export function busKeyHolder(
+export async function busKeyHolder(
   store: ControlStore,
   rig: string,
   key: string,
   own: readonly string[] = [],
-): string | undefined {
-  return own.includes(key) ? "control" : store.busKeys.holderOf(key, rig);
+): Promise<string | undefined> {
+  return own.includes(key) ? "control" : await store.busKeys.holderOf(key, rig);
 }
 
 /** The words of a refusal of a key another holds: no name of who holds it, which is not the rig's. */
@@ -93,19 +94,21 @@ export const keyHeldWords = (field: "bus_key" | "bus_seal_key") =>
  * Notes a refused key in the rig's history, for its page and Needs you, with who holds it: once,
  * while the same key is refused again at each of the supervisor's calls.
  */
-export function noteKeyRefused(
+export async function noteKeyRefused(
   store: ControlStore,
   rig: string,
   field: "bus_key" | "bus_seal_key",
   key: string,
   holder: string,
-): void {
+): Promise<void> {
   const step = field === "bus_key" ? "bus_key_refused" : "seal_key_refused";
   const fingerprint = field === "bus_key" ? userKeyFingerprint(key) : sealKeyFingerprint(key);
   const detail = `fingerprint ${fingerprint}, which ${holder} holds`;
-  const last = store.rigHistory.latest(rig, [...BUS_KEY_CHANGE_STEPS, "bus_key", "seal_key"], 1)[0];
+  const last = (
+    await store.rigHistory.latest(rig, [...BUS_KEY_CHANGE_STEPS, "bus_key", "seal_key"], 1)
+  )[0];
   if (last?.step === step && last.detail === detail) return;
-  store.rigHistory.add(rig, step, false, detail);
+  await store.rigHistory.add(rig, step, false, detail);
   log(
     "control",
     "a rig's key on the bus refused: another holds it",
@@ -120,26 +123,31 @@ export function noteKeyRefused(
  * key's fingerprint, in one transaction with the key. What changed: a first key, another key, or
  * nothing.
  */
-export function takeRigBusKey(
+export async function takeRigBusKey(
   store: ControlStore,
   rig: string,
   key: string,
-): "new" | "changed" | "same" {
-  const before = store.busKeys.rigKey(rig);
-  if (before === key) return "same";
+): Promise<"new" | "changed" | "same"> {
   const fingerprint = userKeyFingerprint(key);
-  const previous = before === undefined ? undefined : userKeyFingerprint(before);
-  store.tx(() => {
-    store.busKeys.setRigKey(rig, key);
+  // The key before is read in the transaction that sets the new one: what the audit log and the
+  // history say of the change (a first key, or which key it replaced) is what was there.
+  const was = await store.tx(async () => {
+    const before = await store.busKeys.rigKey(rig);
+    if (before === key) return { same: true as const };
+    const previous = before === undefined ? undefined : userKeyFingerprint(before);
+    await store.busKeys.setRigKey(rig, key);
     if (previous === undefined) {
-      store.auditLog.add(`rig:${rig}`, "rig_bus_key_registered", { fingerprint });
-      store.rigHistory.add(rig, "bus_key", true, `fingerprint ${fingerprint}`);
+      await store.auditLog.add(`rig:${rig}`, "rig_bus_key_registered", { fingerprint });
+      await store.rigHistory.add(rig, "bus_key", true, `fingerprint ${fingerprint}`);
     } else {
-      store.auditLog.add(`rig:${rig}`, "rig_bus_key_changed", { fingerprint, previous });
+      await store.auditLog.add(`rig:${rig}`, "rig_bus_key_changed", { fingerprint, previous });
       const detail = `fingerprint ${previous} → ${fingerprint}`;
-      store.rigHistory.add(rig, "bus_key_changed", true, detail);
+      await store.rigHistory.add(rig, "bus_key_changed", true, detail);
     }
+    return { same: false as const, previous };
   });
+  if (was.same) return "same";
+  const { previous } = was;
   if (previous === undefined) {
     log("control", "a rig's key on the bus registered", { rig, fingerprint });
     return "new";
@@ -152,10 +160,11 @@ export function takeRigBusKey(
  * The rigs that have a user on the bus: each with a registered key, known to control and not
  * retired, with its seal key when it registered one.
  */
-export function busRigs(store: ControlStore) {
-  return store.busKeys
-    .rigKeys()
-    .filter((r) => store.enrollments.knownRig(r.rig) && !store.retired.get(r.rig));
+export async function busRigs(store: ControlStore) {
+  return filterInTurn(
+    await store.busKeys.rigKeys(),
+    async (r) => (await store.enrollments.knownRig(r.rig)) && !(await store.retired.get(r.rig)),
+  );
 }
 
 export interface BusUsersOptions {
@@ -220,11 +229,19 @@ export class BusUsers {
   private readonly clock: () => number;
   private last: Promise<void> = Promise.resolve();
 
-  constructor(o: BusUsersOptions) {
+  /**
+   * The bus's users over `o.store`, with control's own keys read from it, and made there first
+   * when it has none.
+   */
+  static async open(o: BusUsersOptions): Promise<BusUsers> {
+    return new BusUsers(o, await identity(o, "control"), await identity(o, "system"));
+  }
+
+  private constructor(o: BusUsersOptions, control: Identity, system: Identity) {
     this.o = o;
     this.clock = o.clock ?? Date.now;
-    this.control = identity(o, "control");
-    this.system = identity(o, "system");
+    this.control = control;
+    this.system = system;
     this.backup = o.backupSeedFile ? backupKey(o.backupSeedFile) : undefined;
     this.leafTaken = leafAccountsIn(existsSync(o.file) ? readFileSync(o.file, "utf8") : "");
     watched.set(o.store, this);
@@ -266,19 +283,21 @@ export class BusUsers {
    * The users file's text now: each rig's user with the runs control's run registry gives it, and
    * each rig on RunPod whose pod's server control's server dials (leaf.ts).
    */
-  text(): string {
+  async text(): Promise<string> {
     const { store } = this.o;
-    const runs = store.runRegistry.runsByRig(LIVE_RUNS_PER_RIG);
-    const rigs = busRigs(store).map((r) => ({
+    const runs = await store.runRegistry.runsByRig(LIVE_RUNS_PER_RIG);
+    const rigs = (await busRigs(store)).map((r) => ({
       rig: r.rig,
       key: r.key,
       runs: runs.get(r.rig) ?? [],
     }));
     // The runner processes of the rigs that have their users (goal 206).
     const known = new Set(rigs.map((r) => r.rig));
-    const runners = store.busKeys.runnerKeys().filter((r) => known.has(r.rig));
+    const runners = (await store.busKeys.runnerKeys()).filter((r) => known.has(r.rig));
     const own = { control: this.control.publicKey, system: this.system.publicKey };
-    const leaf = leafRigsFor(store, leafRigsOf(store), (rig) => this.leafTaken.has(rig));
+    const leaf = await leafRigsFor(store, await leafRigsOf(store), (rig) =>
+      this.leafTaken.has(rig),
+    );
     return usersFile({ ...own, backup: this.backup, rigs, runners, leaf });
   }
 
@@ -300,8 +319,9 @@ export class BusUsers {
       // The certificate first, and each pod's authority: the server starts once the users file is
       // there, and reads the files it names.
       if (this.o.tls?.write()) this.reloaded = false;
-      if (writeLeafFiles(dirname(this.o.file), leafRigsOf(this.o.store))) this.reloaded = false;
-      text = this.text();
+      if (writeLeafFiles(dirname(this.o.file), await leafRigsOf(this.o.store)))
+        this.reloaded = false;
+      text = await this.text();
       if (text !== this.written) {
         writeAtomic(this.o.file, text, USERS_FILE_MODE);
         this.written = text;
@@ -381,18 +401,18 @@ const leafAccountsIn = (text: string) =>
  * One of control's own keys, from its store; made there first, its seed sealed. Throws, with what
  * to look at, when the seed does not open, as after control's secrets key was replaced.
  */
-function identity(o: BusUsersOptions, name: BusIdentityName): Identity {
+async function identity(o: BusUsersOptions, name: BusIdentityName): Promise<Identity> {
   const keys = o.store.busKeys;
-  if (!keys.identity(name)) {
+  if (!(await keys.identity(name))) {
     const made = createUser();
     const seed = new TextDecoder().decode(made.getSeed());
-    keys.addIdentity(name, made.getPublicKey(), o.secrets.seal(seed));
+    await keys.addIdentity(name, made.getPublicKey(), o.secrets.seal(seed));
     log("control", "made control's key on the bus", {
       user: name,
       fingerprint: userKeyFingerprint(made.getPublicKey()),
     });
   }
-  const kept = keys.identity(name);
+  const kept = await keys.identity(name);
   let seed: Uint8Array | undefined;
   try {
     seed = new TextEncoder().encode(o.secrets.open(kept?.sealedSeed ?? ""));

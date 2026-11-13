@@ -140,7 +140,7 @@ async function stack() {
       }),
     ],
   ]);
-  const { control: api } = controlOnly({
+  const { control: api } = await controlOnly({
     store,
     tokens: TOKENS,
     options: { staleAfterMs: 600_000 },
@@ -153,7 +153,7 @@ async function stack() {
 describe("model usage on control (goal 075)", () => {
   test("a run's usage: its records only, by agent and by model; a figure none reports is null", async () => {
     const s = await stack();
-    const r = modelUsage(s.store, { run: "r-1" });
+    const r = await modelUsage(s.store, { run: "r-1" });
     assert.deepEqual(r.scope, { kind: "run", run: "r-1" });
     assert.equal(r.total.records, 3);
     assert.equal(r.total.calls, 3);
@@ -187,15 +187,15 @@ describe("model usage on control (goal 075)", () => {
     );
     assert.equal(r.by_run, undefined);
     // Today, and the last 7 days.
-    assert.equal(modelUsage(s.store, { run: "r-1", period: "7d" }).total.records, 3);
-    const week = modelUsage(s.store, { run: "r-1", period: "today" });
+    assert.equal((await modelUsage(s.store, { run: "r-1", period: "7d" })).total.records, 3);
+    const week = await modelUsage(s.store, { run: "r-1", period: "today" });
     assert.ok(week.since?.endsWith("T00:00:00.000Z"));
     assert.ok(week.total.records <= 2);
   });
 
   test("a campaign's usage sums all its runs on every rig, with each run's share; the system's, each campaign's", async () => {
     const s = await stack();
-    const c = modelUsage(s.store, { campaign: "matmul" });
+    const c = await modelUsage(s.store, { campaign: "matmul" });
     assert.equal(c.total.records, 4);
     assert.equal(c.total.calls, 3);
     assert.equal(c.total.calls_not_reported, 1, "a Codex turn says no count of calls");
@@ -206,15 +206,15 @@ describe("model usage on control (goal 075)", () => {
         ["rig-a", "r-1", 0.2736],
       ],
     );
-    const all = modelUsage(s.store, {});
+    const all = await modelUsage(s.store, {});
     assert.equal(all.total.records, 5);
     assert.deepEqual(
       all.by_campaign?.map((x) => x.campaign),
       ["matmul", "gemv"],
     );
     // The last 7 days leave out the audit nine days ago.
-    assert.equal(modelUsage(s.store, { period: "7d" }).total.records, 4);
-    assert.equal(modelUsage(s.store, { campaign: "nope" }).total.records, 0);
+    assert.equal((await modelUsage(s.store, { period: "7d" })).total.records, 4);
+    assert.equal((await modelUsage(s.store, { campaign: "nope" })).total.records, 0);
   });
 
   test("a rig's records stay when it leaves its ledger: the calls were made", async () => {
@@ -223,14 +223,14 @@ describe("model usage on control (goal 075)", () => {
       ["run_created", "r-9", { campaign: "matmul", mode: "hill_climb", version: 1, agents: true }],
       ["model_call", "r-9", call({ at: ago(1), tokensIn: 10, tokensOut: 1 })],
     ]);
-    assert.equal(modelUsage(s.store, { campaign: "matmul" }).total.records, 5);
+    assert.equal((await modelUsage(s.store, { campaign: "matmul" })).total.records, 5);
     // A run is named alone (goal 170): its records wherever it ran.
-    assert.equal(modelUsage(s.store, { run: "r-1" }).total.records, 3);
+    assert.equal((await modelUsage(s.store, { run: "r-1" })).total.records, 3);
   });
 
   test("the pages built from every event leave the calls out; the rig's event list keeps them", async () => {
     const s = await stack();
-    const v = rigView(s.store, "rig-a", { staleAfterMs: 600_000 });
+    const v = await rigView(s.store, "rig-a", { staleAfterMs: 600_000 });
     assert.ok(v);
     assert.ok(v.recent.every((e) => e.kind !== "model_call"));
     assert.ok(v.runs.every((r) => r.timeline.every((e) => e.kind !== "model_call")));
@@ -274,7 +274,7 @@ describe("model usage on control (goal 075)", () => {
       unknown
     >;
     const { since: _, ...expected } = JSON.parse(
-      JSON.stringify(modelUsage(s.store, { run: "r-1", period: "7d" })),
+      JSON.stringify(await modelUsage(s.store, { run: "r-1", period: "7d" })),
     ) as Record<string, unknown>;
     assert.deepEqual(report, expected);
     assert.ok(Date.parse(String(since)) < NOW - 6 * 86_400_000);
@@ -296,17 +296,17 @@ describe("model usage cost on control (goal 075)", () => {
       ["lab", "openai"],
       ["sub", "claude"],
     ] as const)
-      s.store.modelProviders.put({
+      await s.store.modelProviders.put({
         name,
         type,
         base_url: "https://models.example.com/v1",
         key: { sealed: "sealed-for-tests", hint: "…ests" },
       });
-    s.store.modelProviders.setModels("lab", [
+    await s.store.modelProviders.setModels("lab", [
       { id: "wide-model", price: { input: 3, cached_input: 0.3, output: 15 } },
       { id: "small-model" },
     ]);
-    s.store.modelProviders.setModels("sub", [{ id: "opus-5.5" }]);
+    await s.store.modelProviders.setModels("sub", [{ id: "opus-5.5" }]);
     const post = (body: unknown, token = TOKENS.admin) =>
       s.api.request("/v1/model-prices", {
         method: "POST",
@@ -318,7 +318,7 @@ describe("model usage cost on control (goal 075)", () => {
 
   test("each call at its model's price: the provider's list's, else the owner's; a subscription's on its plan; else no price", async () => {
     const s = await priced();
-    const r1 = modelUsage(s.store, { run: "r-1" });
+    const r1 = await modelUsage(s.store, { run: "r-1" });
     // wide-model: 400 in, 600 cached, 100 out; then 1000 in and 100 out. small-model: no price.
     assert.deepEqual(r1.total.cost, {
       usd: 0.00738,
@@ -344,11 +344,11 @@ describe("model usage cost on control (goal 075)", () => {
       String(((await set.json()) as { said: string }).said),
       /^small-model of lab costs 1 USD per million tokens in and 2 USD out\./,
     );
-    const again = modelUsage(s.store, { run: "r-1" }).total.cost;
+    const again = (await modelUsage(s.store, { run: "r-1" })).total.cost;
     assert.equal(again.usd, 0.00798);
     assert.equal(again.no_price, 0);
     // Claude Code's calls are on a subscription's plan: no price, counted apart.
-    const gemv = modelUsage(s.store, { campaign: "gemv" }).total.cost;
+    const gemv = (await modelUsage(s.store, { campaign: "gemv" })).total.cost;
     assert.deepEqual([gemv.usd, gemv.on_plan, gemv.no_price], [null, 1, 0]);
     const prices = (await (
       await s.api.request("/v1/model-prices", {
@@ -406,7 +406,7 @@ describe("model usage cost on control (goal 075)", () => {
     );
     const cleared = await s.post({ provider: "lab", model: "small-model", clear: true });
     assert.equal(cleared.status, 200);
-    assert.equal(modelUsage(s.store, { run: "r-1" }).total.cost.no_price, 1);
+    assert.equal((await modelUsage(s.store, { run: "r-1" })).total.cost.no_price, 1);
     // A cache write's price goes in with the rest, and is said.
     const written = await s.post({
       provider: "lab",
@@ -422,7 +422,7 @@ describe("model usage cost on control (goal 075)", () => {
       answer.said,
       /^small-model of lab costs 1 USD per million tokens in, 0\.5 USD a cache write and 2 USD out\./,
     );
-    const withWrite = modelUsage(s.store, { run: "r-1" }).total.cost;
+    const withWrite = (await modelUsage(s.store, { run: "r-1" })).total.cost;
     // The planner's call reports no cache write: its 500 tokens are priced at input, and counted.
     assert.equal(withWrite.priced_as_not_written, 500);
     // The one call that reports a write priced it at its model's input price, which the list gives.
@@ -431,7 +431,7 @@ describe("model usage cost on control (goal 075)", () => {
 
   test("a pod's spend goes to the run its rig was running when control counted it; idle spend to the system only", async () => {
     const s = await priced();
-    s.store.runpod.addRig({
+    await s.store.runpod.addRig({
       rig: "rig-a",
       cloud: "rp",
       pod: "p-1",
@@ -439,10 +439,10 @@ describe("model usage cost on control (goal 075)", () => {
       by: "t",
     });
     // r-1 is the run at work on rig-a.
-    saveRunpodRig(s.store, "rig-a", { spent_usd: 0.5 }, true);
+    await saveRunpodRig(s.store, "rig-a", { spent_usd: 0.5 }, true);
     // Paused (the stack gave rig-a five events): the pod's spend belongs to no run.
     await ingest(s.store, "rig-a", "ledger-a", [["run_status", "r-1", { status: "paused" }]], 6);
-    saveRunpodRig(s.store, "rig-a", { spent_usd: 0.8 }, true);
+    await saveRunpodRig(s.store, "rig-a", { spent_usd: 0.8 }, true);
     // Two runs running: the spend is split between them.
     await ingest(
       s.store,
@@ -454,11 +454,11 @@ describe("model usage cost on control (goal 075)", () => {
       ],
       7,
     );
-    saveRunpodRig(s.store, "rig-a", { spent_usd: 1.0 }, true);
+    await saveRunpodRig(s.store, "rig-a", { spent_usd: 1.0 }, true);
     // A save that adds nothing counts nothing.
-    saveRunpodRig(s.store, "rig-a", { spent_usd: 1.0 }, true);
-    assert.equal(modelUsage(s.store, { run: "r-1" }).total.cost.pod_usd, 0.6);
-    const c = modelUsage(s.store, { campaign: "matmul" });
+    await saveRunpodRig(s.store, "rig-a", { spent_usd: 1.0 }, true);
+    assert.equal((await modelUsage(s.store, { run: "r-1" })).total.cost.pod_usd, 0.6);
+    const c = await modelUsage(s.store, { campaign: "matmul" });
     assert.equal(c.total.cost.pod_usd, 0.7);
     assert.deepEqual(
       c.by_run?.map((x) => [x.run, x.cost.pod_usd]),
@@ -468,7 +468,7 @@ describe("model usage cost on control (goal 075)", () => {
         ["r-4", 0.1],
       ],
     );
-    assert.equal(modelUsage(s.store, {}).total.cost.pod_usd, 1);
+    assert.equal((await modelUsage(s.store, {})).total.cost.pod_usd, 1);
   });
 
   test("MCP: an operator sets a price with set_model_price; providers lists the prices in use", async () => {

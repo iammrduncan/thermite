@@ -70,8 +70,8 @@ const money = (usd: number) => `$${usd.toFixed(2)}`;
 const isStopped = (status: string) => status === "EXITED";
 
 /** The harness of this rig has sent control a signed report: only then can it hold results. */
-export function harnessReported(store: ControlStore, rig: string): boolean {
-  const u = store.reportedRigs.list({ withRetired: true }).find((x) => x.id === rig);
+export async function harnessReported(store: ControlStore, rig: string): Promise<boolean> {
+  const u = (await store.reportedRigs.list({ withRetired: true })).find((x) => x.id === rig);
   return Boolean(u && Date.parse(u.last_seen) > 0);
 }
 
@@ -79,8 +79,11 @@ export function harnessReported(store: ControlStore, rig: string): boolean {
  * Why a full reset of this RunPod rig can't start now, or undefined when it can (or when the rig
  * is not on RunPod). The reset needs the pod running, to send its results out and take the wipe.
  */
-export function runpodResetRefusal(store: ControlStore, rig: string): string | undefined {
-  const r = store.runpod.rig(rig);
+export async function runpodResetRefusal(
+  store: ControlStore,
+  rig: string,
+): Promise<string | undefined> {
+  const r = await store.runpod.rig(rig);
   if (!r) return undefined;
   const s = r.state as RigState;
   if (!r.active) return `${rig}'s pod is gone: there is nothing to reset`;
@@ -126,32 +129,34 @@ export class RunpodLifecycle {
     return new Date(this.now()).toISOString();
   }
 
-  private history(rig: string, step: string, ok: boolean, detail?: string): void {
-    this.store.rigHistory.add(rig, step, ok, detail);
+  private async history(rig: string, step: string, ok: boolean, detail?: string): Promise<void> {
+    await this.store.rigHistory.add(rig, step, ok, detail);
   }
 
   /** A signed command to the rig, as `by`. Throws, in words, when control can't sign here. */
-  private issue(
+  private async issue(
     rig: string,
     kind: "pause_run" | "resume_run" | "export_now",
     payload: unknown,
     by: string,
     ttlMinutes = 30,
-  ): string {
+  ): Promise<string> {
     if (!this.privateKeyPem)
       throw new Error("control has no command-signing key here, so it can't pause runs or export");
-    return issueCommand(this.store, this.privateKeyPem, {
-      rig,
-      kind,
-      payload,
-      ttlMinutes,
-      issuedBy: by,
-    }).id;
+    return (
+      await issueCommand(this.store, this.privateKeyPem, {
+        rig,
+        kind,
+        payload,
+        ttlMinutes,
+        issuedBy: by,
+      })
+    ).id;
   }
 
   /** The runs running on the rig now, as its signed reports say. */
-  private runningRuns(rig: string): string[] {
-    const v = rigView(this.store, rig, { staleAfterMs: this.staleAfterMs, now: this.now() });
+  private async runningRuns(rig: string): Promise<string[]> {
+    const v = await rigView(this.store, rig, { staleAfterMs: this.staleAfterMs, now: this.now() });
     return (v?.runs ?? []).filter((x) => x.status === "running").map((x) => x.id);
   }
 
@@ -159,11 +164,15 @@ export class RunpodLifecycle {
    * Why a new change can't start on this rig now, or undefined. A limit's stop goes ahead during
    * a full reset: the owner's limit comes first, and the reset waits for the pod or fails.
    */
-  private busy(r: StoredRunpodRig, s: RigState, duringReset = false): string | undefined {
+  private async busy(
+    r: StoredRunpodRig,
+    s: RigState,
+    duringReset = false,
+  ): Promise<string | undefined> {
     if (!r.active) return `${r.rig}'s pod is gone: RunPod no longer has it`;
     if (s.op) return `${OP_WORDS[s.op.kind]} of ${r.rig} is under way: wait until it ends`;
     if (duringReset) return undefined;
-    const reset = this.store.fullResets.open(r.rig);
+    const reset = await this.store.fullResets.open(r.rig);
     if (reset)
       return `a full reset of ${r.rig} is under way (${String(reset.state)}): cancel it, or wait until it ends`;
     return undefined;
@@ -185,9 +194,9 @@ export class RunpodLifecycle {
   }
 
   /** Pauses the rig's running runs, with the reason; the ids it paused. */
-  private pauseRuns(rig: string, by: string, reason: string): string[] {
-    const runs = this.runningRuns(rig);
-    for (const run of runs) this.issue(rig, "pause_run", { run, reason }, by);
+  private async pauseRuns(rig: string, by: string, reason: string): Promise<string[]> {
+    const runs = await this.runningRuns(rig);
+    for (const run of runs) await this.issue(rig, "pause_run", { run, reason }, by);
     return runs;
   }
 
@@ -198,7 +207,7 @@ export class RunpodLifecycle {
    * never reported (it holds no result), stops the pod at once. Throws, in words, when it can't.
    */
   async beginStop(r: StoredRunpodRig, s: RigState, key: string, by: string, why: StopWhy) {
-    const refused = this.busy(r, s, why !== "owner");
+    const refused = await this.busy(r, s, why !== "owner");
     if (refused) throw new Error(refused);
     if (isStopped(s.status)) throw new Error(`${r.rig}'s pod is stopped already`);
     this.begin(s);
@@ -208,9 +217,10 @@ export class RunpodLifecycle {
         : why === "spend_limit"
           ? `it had cost ${money(spentBy(s, this.now()))}, which reached the spend limit you set (${money(s.spend_limit_usd ?? 0)})`
           : `no run was at work on it for ${s.idle_stop_minutes} minutes, the idle stop you set`;
-    if (why === "owner") this.store.auditLog.add(by, "runpod_rig_stop", { rig: r.rig, pod: r.pod });
-    if (!harnessReported(this.store, r.rig)) {
-      this.history(
+    if (why === "owner")
+      await this.store.auditLog.add(by, "runpod_rig_stop", { rig: r.rig, pod: r.pod });
+    if (!(await harnessReported(this.store, r.rig))) {
+      await this.history(
         r.rig,
         "runpod_stopping",
         true,
@@ -220,15 +230,15 @@ export class RunpodLifecycle {
       return;
     }
     const op = this.newOp("stop", by, why, "exporting");
-    op.paused = this.pauseRuns(
+    op.paused = await this.pauseRuns(
       r.rig,
       by,
       why === "owner" ? "the owner stops the rig's pod" : `control stops the rig's pod: ${words}`,
     );
     // Each run not closed is exported first, as the owner chose (goal 180); its volume stays.
-    op.command = this.issue(r.rig, "export_now", { open_runs: true }, by);
+    op.command = await this.issue(r.rig, "export_now", { open_runs: true }, by);
     s.op = op;
-    this.history(
+    await this.history(
       r.rig,
       "runpod_stopping",
       true,
@@ -248,7 +258,7 @@ export class RunpodLifecycle {
     by: string,
     note?: string,
   ): Promise<void> {
-    const refused = this.busy(r, s);
+    const refused = await this.busy(r, s);
     if (refused) throw new Error(refused);
     if (!isStopped(s.status))
       throw new Error(`${r.rig}'s pod is not stopped: RunPod says it is ${s.status}`);
@@ -258,7 +268,7 @@ export class RunpodLifecycle {
         `${r.rig} has cost ${money(spent)}, which is at its spend limit (${money(s.spend_limit_usd)}): raise or clear the limit first`,
       );
     this.begin(s);
-    this.store.auditLog.add(by, "runpod_rig_start", {
+    await this.store.auditLog.add(by, "runpod_rig_start", {
       rig: r.rig,
       pod: r.pod,
       ...(note ? { note } : {}),
@@ -270,17 +280,17 @@ export class RunpodLifecycle {
 
   /** Restarts the pod: a stop with no export (its volume stays), then a start. */
   async restart(r: StoredRunpodRig, s: RigState, key: string, by: string): Promise<void> {
-    const refused = this.busy(r, s);
+    const refused = await this.busy(r, s);
     if (refused) throw new Error(refused);
     if (isStopped(s.status))
       throw new Error(`${r.rig}'s pod is stopped: start it instead of restarting it`);
     this.begin(s);
-    this.store.auditLog.add(by, "runpod_rig_restart", { rig: r.rig, pod: r.pod });
+    await this.store.auditLog.add(by, "runpod_rig_restart", { rig: r.rig, pod: r.pod });
     await podAction(key, r.pod, "stop", this.fetchImpl);
     this.billStop(s);
     s.status = "EXITED";
     s.op = this.newOp("restart", by, null, "stopping");
-    this.history(r.rig, "runpod_restarting", true, `asked by ${by}; RunPod stops the pod`);
+    await this.history(r.rig, "runpod_restarting", true, `asked by ${by}; RunPod stops the pod`);
   }
 
   /**
@@ -289,12 +299,12 @@ export class RunpodLifecycle {
    * stopped. Throws, in words, when it can't begin.
    */
   async beginTerminate(r: StoredRunpodRig, s: RigState, key: string, by: string) {
-    const refused = this.busy(r, s);
+    const refused = await this.busy(r, s);
     if (refused) throw new Error(refused);
     this.begin(s);
-    this.store.auditLog.add(by, "runpod_rig_terminate", { rig: r.rig, pod: r.pod });
-    if (!harnessReported(this.store, r.rig)) {
-      this.history(
+    await this.store.auditLog.add(by, "runpod_rig_terminate", { rig: r.rig, pod: r.pod });
+    if (!(await harnessReported(this.store, r.rig))) {
+      await this.history(
         r.rig,
         "runpod_terminating",
         true,
@@ -305,20 +315,20 @@ export class RunpodLifecycle {
     if (isStopped(s.status)) {
       const left =
         s.last_export && s.last_export_left
-          ? resultsLeft(this.store, r.rig, { export: s.last_export })
+          ? await resultsLeft(this.store, r.rig, { export: s.last_export })
           : undefined;
       if (!left?.left)
         throw new Error(
           `${r.rig}'s pod is stopped, and results may wait on its volume${left ? ` (${left.why})` : " (they did not all leave when it stopped)"}: start it, so they can leave, then terminate it`,
         );
-      this.history(r.rig, "runpod_terminating", true, `asked by ${by}; ${left.why}`);
+      await this.history(r.rig, "runpod_terminating", true, `asked by ${by}; ${left.why}`);
       return this.terminate(r, s, key, by, left.why);
     }
     const op = this.newOp("terminate", by, null, "quiescing");
-    op.paused = this.pauseRuns(r.rig, by, "the owner terminates the rig's pod");
+    op.paused = await this.pauseRuns(r.rig, by, "the owner terminates the rig's pod");
     s.op = op;
     s.paused_runs = [...new Set([...(s.paused_runs ?? []), ...op.paused])];
-    this.history(
+    await this.history(
       r.rig,
       "runpod_terminating",
       true,
@@ -345,16 +355,16 @@ export class RunpodLifecycle {
         return true;
       }
       case "starting": {
-        if (pod.status === "RUNNING") this.running(r, s, pod, op);
+        if (pod.status === "RUNNING") await this.running(r, s, pod, op);
         else if (isStopped(pod.status) || pod.status === "ERROR") {
           s.op = null;
-          this.history(
+          await this.history(
             r.rig,
             "runpod_start_refused",
             false,
             `RunPod says the pod is ${pod.status} after the start`,
           );
-          this.store.auditLog.add("control", "runpod_rig_start_refused", {
+          await this.store.auditLog.add("control", "runpod_rig_start_refused", {
             rig: r.rig,
             pod: r.pod,
             why: `the pod is ${pod.status}`,
@@ -363,25 +373,25 @@ export class RunpodLifecycle {
         return true;
       }
       case "quiescing": {
-        const v = rigView(this.store, r.rig, { staleAfterMs: this.staleAfterMs, now: nowMs });
+        const v = await rigView(this.store, r.rig, { staleAfterMs: this.staleAfterMs, now: nowMs });
         // The runs it paused keep their queued jobs, which never start: only those it will take.
         const busy = judgeBusy(v);
-        const pending = this.store.commands.pending(r.rig).length;
+        const pending = (await this.store.commands.pending(r.rig)).length;
         if (busy > 0 || pending > 0) {
           if (waited > (TERMINATE_WAIT_MS.quiescing ?? 0))
-            this.refuseTerminate(
+            await this.refuseTerminate(
               r,
               s,
               `after ${Math.round(waited / 60_000)} minutes, ${busy} judge job(s) and ${pending} command(s) still wait on the rig`,
             );
           return true;
         }
-        op.command = this.issue(r.rig, "export_now", { full: true }, op.by);
+        op.command = await this.issue(r.rig, "export_now", { full: true }, op.by);
         this.phase(op, "exporting");
         return true;
       }
       case "exporting": {
-        const c = op.command ? this.store.commands.get(op.command) : undefined;
+        const c = op.command ? await this.store.commands.get(op.command) : undefined;
         const done = c && c.status !== "pending" && harnessConfirmed(c.outcome);
         const result = done
           ? (c.outcome as { result?: { export?: string | null; exports?: unknown } } | null)?.result
@@ -410,9 +420,13 @@ export class RunpodLifecycle {
               op.by,
               `${failed ?? "no export within 15 minutes"}: what it had not sent out stays on its volume`,
             );
-        } else if (failed) this.refuseTerminate(r, s, failed);
+        } else if (failed) await this.refuseTerminate(r, s, failed);
         else if (waited > (TERMINATE_WAIT_MS.exporting ?? 0))
-          this.refuseTerminate(r, s, `no export within ${Math.round(waited / 60_000)} minutes`);
+          await this.refuseTerminate(
+            r,
+            s,
+            `no export within ${Math.round(waited / 60_000)} minutes`,
+          );
         return true;
       }
       case "leaving":
@@ -424,8 +438,8 @@ export class RunpodLifecycle {
   private async leave(r: StoredRunpodRig, s: RigState, key: string, op: RigOp): Promise<boolean> {
     // A stop with every run closed asked for no export (goal 180): it waits only for what waits.
     const name = op.export ?? undefined;
-    const all = resultsLeft(this.store, r.rig, { export: name });
-    const never = name !== undefined && exportLeft(this.store, r.rig, name).never;
+    const all = await resultsLeft(this.store, r.rig, { export: name });
+    const never = name !== undefined && (await exportLeft(this.store, r.rig, name)).never;
     const nowMs = this.now();
     if (op.kind === "stop") {
       if (all.left) {
@@ -445,9 +459,9 @@ export class RunpodLifecycle {
       return true;
     }
     if (all.left) return this.terminate(r, s, key, op.by, all.why);
-    if (never) this.refuseTerminate(r, s, all.why);
+    if (never) await this.refuseTerminate(r, s, all.why);
     else if (nowMs - Date.parse(op.phase_at) > (TERMINATE_WAIT_MS.leaving ?? 0))
-      this.refuseTerminate(
+      await this.refuseTerminate(
         r,
         s,
         `${all.why}, still after ${Math.round((nowMs - Date.parse(op.phase_at)) / 60_000)} minutes`,
@@ -483,8 +497,8 @@ export class RunpodLifecycle {
       s.notes.push(
         `Stopped by control: no run was at work on it for ${s.idle_stop_minutes} minutes, the idle stop you set. Its volume stays.`,
       );
-    this.history(r.rig, "runpod_stopped", true, results);
-    this.store.auditLog.add(why === "owner" ? by : "control", "runpod_rig_stopped", {
+    await this.history(r.rig, "runpod_stopped", true, results);
+    await this.store.auditLog.add(why === "owner" ? by : "control", "runpod_rig_stopped", {
       rig: r.rig,
       pod: r.pod,
       why,
@@ -506,8 +520,8 @@ export class RunpodLifecycle {
         s.stopped_at = this.iso();
         s.stopped_by = "owner";
       }
-      this.history(r.rig, "runpod_start_refused", false, why);
-      this.store.auditLog.add("control", "runpod_rig_start_refused", {
+      await this.history(r.rig, "runpod_start_refused", false, why);
+      await this.store.auditLog.add("control", "runpod_rig_start_refused", {
         rig: r.rig,
         pod: r.pod,
         why,
@@ -521,7 +535,7 @@ export class RunpodLifecycle {
     s.stopped_by = null;
     this.phase(op, "starting");
     s.op = op;
-    this.history(
+    await this.history(
       r.rig,
       "runpod_starting",
       true,
@@ -542,12 +556,12 @@ export class RunpodLifecycle {
     });
     if (pod) {
       s.status = pod.status;
-      if (pod.status === "RUNNING") this.running(r, s, pod, op);
+      if (pod.status === "RUNNING") await this.running(r, s, pod, op);
     }
   }
 
   /** The pod runs again: the start is done, and the runs the last stop paused are resumed. */
-  private running(r: StoredRunpodRig, s: RigState, pod: RunpodPod, op: RigOp): void {
+  private async running(r: StoredRunpodRig, s: RigState, pod: RunpodPod, op: RigOp): Promise<void> {
     s.op = null;
     s.running_since = this.iso();
     const said: string[] = [`with ${pod.gpus} GPU${pod.gpus === 1 ? "" : "s"}`];
@@ -556,7 +570,7 @@ export class RunpodLifecycle {
     for (const run of s.paused_runs ?? []) {
       try {
         // A day to deliver: the rig's harness starts again first.
-        this.issue(r.rig, "resume_run", { run }, op.by, 24 * 60);
+        await this.issue(r.rig, "resume_run", { run }, op.by, 24 * 60);
         resumed.push(run);
       } catch (err) {
         failed.push(`${run} (${errorText(err)})`);
@@ -570,8 +584,8 @@ export class RunpodLifecycle {
       said.push(
         `not the ${s.gpu_count} it was launched with: RunPod had no more free for it. Stop it and start it again later, or terminate it`,
       );
-    this.history(r.rig, "runpod_running", !short && !failed.length, said.join("; "));
-    this.store.auditLog.add("control", "runpod_rig_started", {
+    await this.history(r.rig, "runpod_running", !short && !failed.length, said.join("; "));
+    await this.store.auditLog.add("control", "runpod_rig_started", {
       rig: r.rig,
       pod: r.pod,
       gpus: pod.gpus,
@@ -595,14 +609,14 @@ export class RunpodLifecycle {
     s.running_since = null;
     s.op = null;
     s.notes.push(`Terminated by ${by}: ${results}.`);
-    this.history(r.rig, "runpod_terminated", true, results);
-    this.store.auditLog.add(by, "runpod_rig_terminated", {
+    await this.history(r.rig, "runpod_terminated", true, results);
+    await this.store.auditLog.add(by, "runpod_rig_terminated", {
       rig: r.rig,
       pod: r.pod,
       spend_usd: Math.round(spent * 100) / 100,
     });
     // Nothing reaches the pod any more: control stops connecting to it, and its records stay.
-    if (!this.store.retired.get(r.rig)) this.store.retired.add(r.rig, by);
+    if (!(await this.store.retired.get(r.rig))) await this.store.retired.add(r.rig, by);
     return false;
   }
 
@@ -610,15 +624,15 @@ export class RunpodLifecycle {
    * A terminate that can't go on: the pod keeps running, with its runs paused. The refusal stays
    * on the rig until the owner's next change to the pod, or a newer step in its history.
    */
-  private refuseTerminate(r: StoredRunpodRig, s: RigState, why: string): void {
+  private async refuseTerminate(r: StoredRunpodRig, s: RigState, why: string): Promise<void> {
     s.op = null;
     const words = `${why}. The pod keeps running, with its runs paused: resume them, or fix what keeps the results on the pod and terminate it again`;
-    this.history(r.rig, "runpod_terminate_refused", false, words);
+    await this.history(r.rig, "runpod_terminate_refused", false, words);
     s.refusal = {
       words: `Not terminated: ${words}`,
-      steps: this.store.rigHistory.list(r.rig).length,
+      steps: (await this.store.rigHistory.list(r.rig)).length,
     };
-    this.store.auditLog.add("control", "runpod_rig_terminate_refused", {
+    await this.store.auditLog.add("control", "runpod_rig_terminate_refused", {
       rig: r.rig,
       pod: r.pod,
       why,

@@ -10,7 +10,7 @@ import type { Need, NeedsContext } from "./index.ts";
  */
 
 /** A rig's report key as control holds it: the pinned one, and one that waits for the owner. */
-type RigKey = ReturnType<ControlStore["reportedRigs"]["key"]>;
+type RigKey = Awaited<ReturnType<ControlStore["reportedRigs"]["key"]>>;
 
 /** A rig's report key that waits for the owner: a new rig's first, or a changed one. */
 export function keyNeeds(c: NeedsContext, u: RigView, key: RigKey): Need[] {
@@ -158,10 +158,16 @@ export function staleNeeds(c: NeedsContext, u: RigView, key: RigKey): Need[] {
 }
 
 /** Each full reset that waits for the owner to confirm its wipe. */
-export function resetNeeds(c: NeedsContext, store: ControlStore, vs: RigView[]): Need[] {
+export async function resetNeeds(
+  c: NeedsContext,
+  store: ControlStore,
+  vs: RigView[],
+): Promise<Need[]> {
   const { f, now } = c;
   const out: Need[] = [];
-  for (const rs of store.fullResets.list(20).filter((x) => String(x.state) === "awaiting_owner")) {
+  for (const rs of (await store.fullResets.list(20)).filter(
+    (x) => String(x.state) === "awaiting_owner",
+  )) {
     const u = vs.find((x) => x.id === String(rs.rig));
     if (!u) continue;
     out.push({

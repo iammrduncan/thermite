@@ -17,7 +17,7 @@ const AGENT = "agent-token-abcdef";
 type Answer = Progress & { follow?: string };
 
 async function stack() {
-  const { env, store, control, relay } = controlStack({
+  const { env, store, control, relay } = await controlStack({
     tokens: { operator: OPERATOR, agent: AGENT },
   });
   const { cookie, page } = await signIn(control);
@@ -96,7 +96,7 @@ describe("Close run on a run's page (goal 087)", () => {
     const plain = await s.post({ rig: "rig-a", kind: "close_run", run: "js-1", reason: "done" });
     assert.equal(plain.status, 400);
     assert.equal(await plain.text(), "refused: type close js-1 to confirm");
-    assert.equal(s.store.commands.list(10).filter((c) => c.kind === "close_run").length, 0);
+    assert.equal((await s.store.commands.list(10)).filter((c) => c.kind === "close_run").length, 0);
 
     // Sent, taken by the rig, then done once its report came, as every command's button.
     const why = "another run finished the work";
@@ -111,7 +111,7 @@ describe("Close run on a run's page (goal 087)", () => {
     assert.equal(sent.status, 200);
     assert.equal(sent.answer.state, "sent");
     assert.match(sent.answer.follow ?? "", /^\/ui\/commands\/[0-9a-f-]+\.json$/);
-    const cmd = s.store.commands.list(10).find((c) => c.kind === "close_run");
+    const cmd = (await s.store.commands.list(10)).find((c) => c.kind === "close_run");
     assert.equal(cmd?.issued_by, "owner:ui");
     await s.relay();
     assert.equal(s.env.ledger.runs.get("js-1")?.status, "closed");
@@ -196,7 +196,7 @@ describe("close_run over REST and MCP (goal 087)", () => {
       assert.equal(await issue(client, { run: "js-1", reason: "x" }), undefined, token);
       await client.close();
     }
-    assert.equal(s.store.commands.list(10).filter((c) => c.kind === "close_run").length, 0);
+    assert.equal((await s.store.commands.list(10)).filter((c) => c.kind === "close_run").length, 0);
     const owner = await mcpClient(s.control, ADMIN);
     const tool = (await owner.listTools()).tools.find((t) => t.name === "issue_command");
     assert.match(String(tool?.description), /close_run \{run, reason\} \(the owner's token only/);
@@ -218,7 +218,10 @@ describe("close_run over REST and MCP (goal 087)", () => {
     assert.equal(again.status, 201);
     const { id } = (await again.json()) as { id: string };
     await s.relay();
-    const c = s.store.commands.get(id) as { status: string; outcome?: { result?: unknown } };
+    const c = (await s.store.commands.get(id)) as {
+      status: string;
+      outcome?: { result?: unknown };
+    };
     assert.equal(c.status, "failed");
     assert.match(JSON.stringify(c), /run js-1 is already closed \(closed over MCP\)/);
   });

@@ -57,7 +57,7 @@ async function removeNow(
   p: RetentionPolicy,
   now: Date,
 ): Promise<{ gone: RetentionItem[]; error?: string | undefined }> {
-  const r = wouldRemove(p, itemsOf(store, p).items, now);
+  const r = wouldRemove(p, (await itemsOf(store, p)).items, now);
   try {
     if (p.kind === "events") {
       // Whole days of a subject, oldest first, by the server's purge (events/days.ts).
@@ -71,11 +71,11 @@ async function removeNow(
         const [item, version] = x.id.split(":").map(Number) as [number, number];
         return { item, version };
       });
-      store.kb().removeOlderVersions(versions);
+      await store.kb().removeOlderVersions(versions);
       return { gone: r.items };
     }
     if (p.kind === "audit") {
-      store.auditLog.removeEntries(r.items.map((x) => Number(x.id)));
+      await store.auditLog.removeEntries(r.items.map((x) => Number(x.id)));
       return { gone: r.items };
     }
     const gone: RetentionItem[] = [];
@@ -116,8 +116,8 @@ async function removeOnControl(
     error,
   );
   const rigs = new Set(gone.flatMap((x) => (x.rig ? [x.rig] : []))).size;
-  store.tx(() => {
-    store.retention.addRemoval({
+  await store.tx(async () => {
+    await store.retention.addRemoval({
       at: now.toISOString(),
       policy: p.id,
       name: p.name,
@@ -130,7 +130,7 @@ async function removeOnControl(
       newest: removed.newest,
       error: removed.error ?? null,
     });
-    store.auditLog.add(by, RETENTION_REMOVED_ACTION, { ...removed, on: "control" });
+    await store.auditLog.add(by, RETENTION_REMOVED_ACTION, { ...removed, on: "control" });
   });
   const said = removed.count
     ? `“${p.name}” removed ${removeWords(p.kind, { ...removed, rigs })} from control.`
@@ -147,19 +147,19 @@ async function removeOnControl(
 }
 
 /** Sends each rig a policy covers its signed command, and says which got it. */
-function sendToRigs(
+async function sendToRigs(
   d: RetentionDeps,
   p: RetentionPolicy,
   how: "schedule" | "hand",
   by: string,
-): PolicyRun {
-  const rigs = rigsOf(d.store, p);
+): Promise<PolicyRun> {
+  const rigs = await rigsOf(d.store, p);
   const sent: { rig: string; command: string }[] = [];
   const failed: { rig: string; error: string }[] = [];
   const issuedBy = how === "schedule" ? "owner:retention" : by;
   for (const rig of rigs) {
     try {
-      const { id } = issueCommand(d.store, d.privateKeyPem, {
+      const { id } = await issueCommand(d.store, d.privateKeyPem, {
         rig,
         kind: "retention_run",
         payload: { policy: p.id, name: p.name, rule: ruleOf(p), by: how },
@@ -171,7 +171,7 @@ function sendToRigs(
       failed.push({ rig, error: errorText(err) });
     }
   }
-  d.store.auditLog.add(by, "retention_run_sent", {
+  await d.store.auditLog.add(by, "retention_run_sent", {
     policy: p.id,
     name: p.name,
     kind: p.kind,
@@ -203,8 +203,10 @@ export async function runPolicy(
   by: string,
   now = new Date(),
 ): Promise<PolicyRun> {
-  const p = policyOf(d.store, id);
-  return onRigs(p.kind) ? sendToRigs(d, p, how, by) : removeOnControl(d.store, p, how, by, now);
+  const p = await policyOf(d.store, id);
+  return onRigs(p.kind)
+    ? await sendToRigs(d, p, how, by)
+    : removeOnControl(d.store, p, how, by, now);
 }
 
 /** Policies running now on control, so one never runs twice at once. */
@@ -218,12 +220,12 @@ const RUNNING = new Set<number>();
  */
 export async function retentionTick(d: RetentionDeps, now = new Date()): Promise<number> {
   let ran = 0;
-  for (const p of d.store.retention.list()) {
+  for (const p of await d.store.retention.list()) {
     const due = dueNow(p, now);
     if (!due || RUNNING.has(p.id)) continue;
     RUNNING.add(p.id);
     try {
-      d.store.retention.setLastDue(p.id, due.toISOString());
+      await d.store.retention.setLastDue(p.id, due.toISOString());
       await runPolicy(d, p.id, "schedule", "control:retention", now);
       ran++;
     } catch (err) {
@@ -244,11 +246,11 @@ export const RETENTION_LOOK_MS = 60_000;
  * what a policy removed there, in the history and the audit log. A body this build does not read
  * is left out, in control's log.
  */
-export function takeRigRemoval(
+export async function takeRigRemoval(
   store: ControlStore,
   rig: string,
   e: { id: number; at: string; actor: string; body: unknown },
-): void {
+): Promise<void> {
   const read = RetentionRemovedSchema.safeParse(e.body);
   if (!read.success) {
     const what = { rig, event: e.id, error: read.error.message.slice(0, 300) };
@@ -256,7 +258,7 @@ export function takeRigRemoval(
     return;
   }
   const b = read.data;
-  store.retention.addRemoval({
+  await store.retention.addRemoval({
     at: e.at,
     policy: b.policy,
     name: b.name,
@@ -269,5 +271,9 @@ export function takeRigRemoval(
     newest: b.newest,
     error: b.error ?? null,
   });
-  store.auditLog.add(`rig:${rig}`, RETENTION_REMOVED_ACTION, { ...b, on: rig, actor: e.actor });
+  await store.auditLog.add(`rig:${rig}`, RETENTION_REMOVED_ACTION, {
+    ...b,
+    on: rig,
+    actor: e.actor,
+  });
 }

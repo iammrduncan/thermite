@@ -1,3 +1,4 @@
+import { flatMapInTurn } from "../../common/in-turn.ts";
 import { clockUtc, commandProgress } from "../command-progress.ts";
 import type { ControlStore } from "../store/index.ts";
 import { type RigView, type RunView, workOf } from "../views/index.ts";
@@ -79,18 +80,18 @@ function replyParts(r: NonNullable<AtWork["reply"]>): string {
 }
 
 /** Each stuck trial of a running run as a card under Needs you. */
-export function stuckNeeds(
+export async function stuckNeeds(
   store: ControlStore,
   u: RigView,
   r: RunView,
   f: Forms,
   now: number,
   back: string,
-): Need[] {
+): Promise<Need[]> {
   const open = workOf(u.summary)?.open ?? [];
-  const stops = store.commands.latest(u.id, "stop_trial", 20);
-  return stuckTrials(u, r, now).flatMap((s): Need[] => {
-    if (store.liveLines.trialLeft(u.id, s.trial, s.kind) === s.since) return [];
+  const stops = await store.commands.latest(u.id, "stop_trial", 20);
+  return flatMapInTurn(stuckTrials(u, r, now), async (s): Promise<Need[]> => {
+    if ((await store.liveLines.trialLeft(u.id, s.trial, s.kind)) === s.since) return [];
     // A stop sent for it: the card leaves at once, and comes back with the reason if refused.
     const stop = stops.find((c) => c.payload.trial === s.trial);
     const progress = stop ? commandProgress(stop, now) : undefined;
@@ -109,7 +110,7 @@ export function stuckNeeds(
     const reply = s.w.reply;
     const quiet = s.kind === "quiet";
     const counters = open.find((t) => t.trial === s.trial);
-    const last = lastDone({ store, rig: u.id, now }, s);
+    const last = await lastDone({ store, rig: u.id, now }, s);
     const facts = [
       ["Running for", `${esc(span(s.w.since, now))}, since ${esc(clockUtc(s.w.since))}`],
       ["Last did something", last.at ? last.html : "nothing in Live from it yet"],

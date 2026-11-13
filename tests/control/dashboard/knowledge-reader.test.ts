@@ -27,7 +27,7 @@ import { tinyPdf } from "../../helpers/pdf.ts";
 async function withFiles() {
   const dir = mkdtempSync(join(tmpdir(), "thermite-kb-files-"));
   let files: KbFiles | undefined;
-  const { store, control } = controlOnly({
+  const { store, control } = await controlOnly({
     tokens: { rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" } },
     options: (s) => {
       files = new KbFiles(dir, s);
@@ -256,7 +256,7 @@ describe("the reader", () => {
     const s = await withFiles();
     const pdf = tinyPdf(["The <b>osprey</b> dives", "for fish"]);
     const sha256 = createHash("sha256").update(pdf).digest("hex");
-    const refused = s.store.kb().write(
+    const refused = await s.store.kb().write(
       { ...KB_RIG, run: "gs-1", event: 5000, at: "2026-10-30T12:00:00.000Z" },
       {
         slot: "worker-1",
@@ -271,7 +271,7 @@ describe("the reader", () => {
     assert.equal(refused, undefined);
     mkdirSync(dirname(s.files.path(sha256)), { recursive: true });
     writeFileSync(s.files.path(sha256), pdf);
-    s.store.kb().files.kept(sha256, pdf.length);
+    await s.store.kb().files.kept(sha256, pdf.length);
     const address = "gemv/gs-1/worker-1/reference:7";
     const before = pane((await s.page(`/ui/knowledge/gemv?item=${q(address)}`)).html);
     assert.match(before, /PDF · [^<]+ · its text not extracted yet<\/span>/);

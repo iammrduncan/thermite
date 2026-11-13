@@ -51,32 +51,34 @@ export const updateFollowUrl = (rig: string) => `/ui/rigs/${encodeURIComponent(r
  */
 export function rigHelpers(dash: Dashboard) {
   const { csrf, opts, page, parts, store, updates } = dash;
-  const setupSteps = (rig: string) =>
-    store.rigHistory
-      .list(rig)
+  const setupSteps = async (rig: string) =>
+    (await store.rigHistory.list(rig))
       .map(
         (e) =>
           `<div class="tl-row"><span class="muted small">${esc(ago(e.at, Date.now()))} ago</span><span class="${e.ok ? "ok" : "bad"}">${e.ok ? "✓" : "✕"}</span><span>${esc(STEP_WORDS[e.step] ?? e.step)}${e.detail ? ` <span class="muted small">· ${esc(e.detail)}</span>` : ""}</span></div>`,
       )
       .join("");
-  const placeProgress = (rig: string): Progress => {
-    const status = store.clusters.rig(rig)?.status ?? store.machines.rig(rig)?.status ?? "removed";
+  const placeProgress = async (rig: string): Promise<Progress> => {
+    const status =
+      (await store.clusters.rig(rig))?.status ??
+      (await store.machines.rig(rig))?.status ??
+      "removed";
     return {
-      state: `${status}:${store.rigHistory.list(rig).length}`,
+      state: `${status}:${(await store.rigHistory.list(rig)).length}`,
       final: !PLACE_BUSY.has(status),
       said: "",
       tone: "",
     };
   };
-  const mintJoin = (rig: string): string => {
+  const mintJoin = async (rig: string): Promise<string> => {
     const t = newToken();
     const expires = Date.now() + JOIN_HOURS * 3_600_000;
-    store.joinedRigs.setToken(rig, t.sha256, new Date(expires).toISOString(), "owner:ui");
-    store.rigHistory.add(rig, "join_made", true, `works once, until ${hhmm(expires)} UTC`);
+    await store.joinedRigs.setToken(rig, t.sha256, new Date(expires).toISOString(), "owner:ui");
+    await store.rigHistory.add(rig, "join_made", true, `works once, until ${hhmm(expires)} UTC`);
     return t.token;
   };
   /** A rig you join yourself: where, the join command, and the commands control can't run. */
-  const joinedBlock = (r: JoinedRig, t: string, token?: string, reporting = false) => {
+  const joinedBlock = async (r: JoinedRig, t: string, token?: string, reporting = false) => {
     const rName = encodeURIComponent(r.rig);
     const act = (action: string, label: string, extra = "", cls = "sm") =>
       `<form class="inline" method="post" action="/ui/rigs/${rName}/join/${action}"><input type="hidden" name="csrf" value="${t}">${extra}<button class="${cls}">${label}</button></form>`;
@@ -126,10 +128,10 @@ export function rigHelpers(dash: Dashboard) {
         ? ""
         : `<details style="margin-top:8px"><summary class="small">Retire it</summary><div class="small muted" style="margin:6px 0">Its token stops working at once, so it can't report or take commands, and any join command stops working. Its files stay there until you remove them with the command above.</div>${act("retire", "Retire the rig", `<input name="confirm" placeholder="type: retire ${esc(r.rig)}" style="margin-right:6px">`, "sm danger")}</details>`;
     return `<div class="block"><div class="head"><h2>You run it yourself</h2><span class="right">${esc(JOIN_STATUS[status] ?? status)}</span></div><div class="card"><dl class="facts"><dt>Where</dt><dd>${machine ? "a machine you set it up on" : `the namespace ${esc(s.namespace)}, applied by you`}</dd><dt>GPUs</dt><dd>${gpus}</dd>${machine ? "" : `<dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd>`}<dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>${joinCard}
-<div class="tl" style="margin-top:10px">${setupSteps(r.rig) || `<div class="muted small">No step yet.</div>`}</div>${status === "waiting" ? needs : ""}${yours}${retire}</div></div>`;
+<div class="tl" style="margin-top:10px">${(await setupSteps(r.rig)) || `<div class="muted small">No step yet.</div>`}</div>${status === "waiting" ? needs : ""}${yours}${retire}</div></div>`;
   };
   /** The page of a joined rig that has not reported yet. */
-  const joinedPage = (c: Ctx, r: JoinedRig, flash: string, token?: string) =>
+  const joinedPage = async (c: Ctx, r: JoinedRig, flash: string, token?: string) =>
     page(
       c,
       {
@@ -145,14 +147,14 @@ export function rigHelpers(dash: Dashboard) {
           : r.join_used_at
             ? `${esc(r.rig)} fetched its files from control ${esc(ago(r.join_used_at, Date.now()))} ago. Its page fills in once it reports for the first time.`
             : `Run the join command ${r.form === "machine" ? "on the machine" : "against the cluster"}. It fetches the rig's ${r.form === "machine" ? "files and services" : "objects"} from control and starts it; the page fills in once the rig reports for the first time.`
-      }</p>${flash}${joinedBlock(r, csrf(c), token)}`,
+      }</p>${flash}${await joinedBlock(r, csrf(c), token)}`,
     );
   /** Where a rig runs, and what control can do there: update it, check it, restart it. */
-  const placeOf = (rig: string): RigPlace => {
+  const placeOf = async (rig: string): Promise<RigPlace> => {
     const r = encodeURIComponent(rig);
-    const m = store.machines.rig(rig);
+    const m = await store.machines.rig(rig);
     if (m && m.status !== "removed") {
-      const known = store.machines.get(m.machine);
+      const known = await store.machines.get(m.machine);
       const images = machineRigImages(parts, known?.facts as MachineFacts | null, m.gpus, m.images);
       const noUpdate = !known
         ? `The machine ${m.machine} is no longer in Settings › Machines, so control can't reach it.`
@@ -173,9 +175,9 @@ export function rigHelpers(dash: Dashboard) {
         restart: known ? `/ui/rigs/${r}/machine/restart` : null,
       };
     }
-    const k = store.clusters.rig(rig);
+    const k = await store.clusters.rig(rig);
     if (k && k.status !== "removed") {
-      const known = store.clusters.get(k.cluster);
+      const known = await store.clusters.get(k.cluster);
       const images = controlImages(parts, k.spec.gpus, k.spec.cuda);
       const noUpdate = !known
         ? `The cluster ${k.cluster} is no longer in Settings › Machines, so control can't reach it.`
@@ -196,7 +198,7 @@ export function rigHelpers(dash: Dashboard) {
         restart: known ? `/ui/rigs/${r}/cluster/restart` : null,
       };
     }
-    const pod = opts.runpodRigs?.view(rig);
+    const pod = await opts.runpodRigs?.view(rig);
     if (pod)
       return {
         kind: "runpod",
@@ -206,7 +208,7 @@ export function rigHelpers(dash: Dashboard) {
         checkWhat: "its pod",
         restart: pod.active && podRuns(pod) ? `/ui/rigs/${r}/runpod/restart` : null,
       };
-    if (store.joinedRigs.get(rig))
+    if (await store.joinedRigs.get(rig))
       return {
         kind: "joined",
         words: "a place you set it up on yourself",
@@ -228,9 +230,9 @@ export function rigHelpers(dash: Dashboard) {
    * How an update stands, for the page's script (goal 080): a new state with each step, so the
    * rig's page draws its steps as they come; final once it ended.
    */
-  const updateProgress = (rig: string): Progress => {
-    const waiting = updates.waiting(rig);
-    const steps = store.rigHistory.list(rig);
+  const updateProgress = async (rig: string): Promise<Progress> => {
+    const waiting = await updates.waiting(rig);
+    const steps = await store.rigHistory.list(rig);
     const from = steps.map((s) => s.step).lastIndexOf("update_started");
     const n = from < 0 ? 0 : steps.length - from;
     return { state: `${n}:${waiting ?? "ended"}`, final: !waiting, said: "", tone: "" };
