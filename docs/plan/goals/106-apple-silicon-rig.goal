@@ -12,7 +12,7 @@ updated: 2026-11-13
 
 **Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Tracked in:** [GitHub issue 87](https://github.com/iammrduncan/thermite/issues/87), the source of truth for this work. This file keeps its context.
 
-Built on 2026-11-13 and proven on one Mac. It waits for the owner's hands-on look. To pick the work up, on this machine or another, read [Handoff](#handoff) first.
+Built on 2026-11-13 and proven on one Mac. It waits for the owner's hands-on look. **"The handoff" is this goal's [Handoff](#handoff) section:** to pick the work up, on this machine or another, start there.
 
 ## What
 
@@ -81,6 +81,23 @@ Settled on 2026-11-13: a container with Vulkan through the virtual machine was w
 ## Handoff
 
 Written on 2026-11-13, at the owner's word, so that the work can go on from another machine. Everything needed is on the branch `v0.3.0`; this section says where the work stands and how to get a rig on a Mac's GPU running again.
+
+### If you were asked to pick up the handoff
+
+"The handoff" is this section. Whoever is asked to pick it up, a person or an agent in a new session, on any machine, does this:
+
+1. **Be on the right code.** Check out the branch `v0.3.0` and pull. This file on that branch is the newest state: read its Done when, Decisions and the last entries of Progress.
+2. **Say where things stand,** in a few lines, from "Where it stands" below, and ask the owner which machine this is: a Mac with Apple silicon, where the rig can run on the GPU, or another machine, where only the code and its tests can be worked on.
+3. **On such a Mac, get the test Thermite running** by "Get it running on a Mac with Apple silicon" below, and tell the owner its address and where its token is (never print the token).
+4. **Go on with "What is left, in order".** The first two items are the owner's own look and a first campaign with agents, so they are done with the owner, not alone. What the owner wants changed is changed in this goal, with its tests and its pages, and recorded in Progress.
+5. **Close the goal only at the owner's word.**
+
+What a new session may not know, and must keep to:
+
+- **v0.3.0 runs on a local-only test Thermite,** on the owner's own machine. It is not put on a live control until the owner says so ([v0.3.0, step by step](../v030_release_plan.md)).
+- **Nothing here starts a campaign, installs a program or changes a machine without the owner's yes.** The steps below install krunkit and make a Podman machine: ask first, and say that the Podman machine that runs must stop.
+- **The record says what the owner decided in the writer's own words,** with the date, in goal files, issues, pull requests and commit messages. It does not quote the owner.
+- **One goal at a time.** This goal is finished, with the owner, before another is started.
 
 ### Where it stands
 
