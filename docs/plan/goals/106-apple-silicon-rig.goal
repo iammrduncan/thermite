@@ -64,7 +64,26 @@ The owner, 2026-10-23, on the one-machine install: "If they have just mac it wil
   - **What MLX needs:** a runner on macOS itself, as What says. That is the larger piece, with the wall as its open question, and is one question with goal 277.
   - **"10 GB of its GPU":** no page read gives a setting that caps the GPU's memory for a libkrun guest. Its makers state one limit: the guest's memory and the GPU's together are at most 64 GB. So the cap would be the runner's own: the target says how much it may use, and refuses a model and context that need more. To be measured in a proof.
   - **A limit found:** Podman runs one machine at a time, and a machine's provider is chosen when it is made. So a local Thermite and its GPU runner live in one libkrun machine, and a machine of the other provider can't run beside it.
-  - **Next, at the owner's word:** a proof on one Mac: a libkrun machine, a container that sees the GPU as a Vulkan device, a small model on llama.cpp's Vulkan back end, its speed beside Metal's, and how much memory it can be held to. It installs krunkit and makes a second Podman machine, so it waits for the owner's yes.
+- 2026-11-13: **The proof, on one Mac, at the owner's yes** ("Run the proof now"). An M4 Pro with 24 GB, macOS 26.5, Podman 5.8.2 from Homebrew. Nothing of Thermite's code changed.
+  - **Set up:** krunkit 1.3.2 with libkrun 1.19.8 and MoltenVK 1.4.2, from the libkrun makers' Homebrew tap; a second Podman machine made with the libkrun provider (6 CPUs, 10 GiB); a Fedora 44 image with the makers' patched Mesa (25.3.6) and llama.cpp built in it with its Vulkan back end.
+  - **The GPU is there:** the machine has `/dev/dri`, and a container given `--device /dev/dri` lists `Virtio-GPU Venus (Apple M4 Pro)`, Vulkan 1.2, driver `venus`.
+  - **Speed,** one 0.5B model (Qwen2.5-0.5B-Instruct, Q4_K_M, 463 MiB), llama.cpp at one commit, `llama-bench` with 512 prompt tokens and 128 generated, 3 runs each:
+
+    | Where | Prompt, tokens a second | Generation, tokens a second |
+    | --- | --- | --- |
+    | On macOS itself, Metal | 7,117 | 276 |
+    | In the container, the GPU through Vulkan | 5,378 | 213 |
+    | In the container, no GPU given, 6 CPUs | 531 | 232 |
+
+    The container's GPU runs at 76% of Metal for the prompt and 77% for generation, as its makers measured. A model this small generates as fast on the CPU; the GPU's gain shows in the prompt, ten times the CPU's.
+  - **Memory:** the Vulkan device reports one heap of 24 GiB, the Mac's whole memory, whatever the machine's own size (10 GiB here), and gives no figures of what is in use. So nothing below holds the work to 10 GB: the runner must keep the budget itself, by what it loads.
+  - **One machine at a time, as read:** the default machine had to stop while the libkrun one ran, and the local Thermite with it. Its containers did not come back by themselves when the default machine started again; `compose up -d` brought them back.
+  - **What is left to build, for a runner that uses a Mac's GPU this way:**
+    1. A target class for a Vulkan GPU beside `cuda-gpu` and `cpu`: its identity, its readiness for timing and its memory budget, with no `nvidia-smi` to ask.
+    2. A harness image with the Vulkan loader and the patched Mesa, and the rig's GPU setup for a device that is `/dev/dri` and not NVIDIA's.
+    3. The one-machine install on a Mac: Thermite's own machine made on libkrun, since one machine runs at a time, and `local init` and `thermite doctor` saying so.
+    4. A smoke kit whose engine has a Vulkan back end.
+    5. MLX stays apart: it needs a runner on macOS itself.
 
 ---
 
