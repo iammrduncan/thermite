@@ -1,0 +1,79 @@
+---
+id: "278"
+title: "A goal campaign works one goal at a time: each experiment aimed at one goal, its verdict on that goal and the goals already met, and the other goals handed out by lane"
+status: PROPOSED
+version: "later"
+depends_on: []
+created: 2026-11-13
+updated: 2026-11-13
+---
+
+# 278 · A goal campaign works one goal at a time: each experiment aimed at one goal, its verdict on that goal and the goals already met, and the other goals handed out by lane
+
+**Status:** `PROPOSED` · **Version:** [Later](../roadmap.md#later), until the owner gives it one · **Tracked in:** [GitHub issue 85](https://github.com/iammrduncan/thermite/issues/85), the source of truth for this work. This file keeps its context.
+
+A proposal, from the owner's direction. Nothing of it is built.
+
+## What
+
+The owner, 2026-11-13: "I think the bigger issue is a lane trying to solve all 10 goals at once instead of picking one goal and submitting an experiment against it. Then you can distribute the goals and tasks needed and they can build on top of each other. In this case it should be trying to get at least one working, and the others kind of fall into place after that. Goals should be broken down and worked, not all done at once."
+
+### What Thermite does today
+
+- The planner gives each lane an experiment by direction: a mechanism to look into. An experiment names no goal, and neither do its trial and its attempt.
+- An attempt's evaluate job checks every goal on its public cells, one after another, on the one judge device it holds for the whole job ([goals.ts](../../../src/harness/judge/goals.ts), [pools.ts](../../../src/harness/judge/pools.ts)).
+- The verdict is "no progress" unless a whole goal is newly met. A change that makes one of a goal's cells pass, while another of its cells still fails, shows nothing.
+- A kit can already order the judge's work: a verifier's `requires` names its gates, and a verifier whose gate did not pass runs none of its cells ([kit.ts](../../../src/core/kit.ts), [Kit manifest](../../_site/src/content/docs/reference/kit-manifest.md)). That order is fixed in the kit for the whole run, and nothing tells the planner or the lanes about it.
+
+### What was seen
+
+A lab's goal campaign in November 2026: a survey of ten quantized files of one model on one 16 GB GPU, one goal for each file, with two lanes and two judge cards.
+
+- One long-prompt bug failed every goal. Two other bugs blocked about half of the goals.
+- Each verdict checked all ten goals, one after another on one card: about 90 minutes, after a 15-minute build. Each lane waited for its verdict before its next trial.
+- A change that removed the crash behind one of the two other bugs was judged "no progress", because the long-prompt bug still failed each goal. Nothing queued it again.
+
+### What this goal delivers
+
+1. **A target goal on each experiment.** The planner breaks the contract's goals into an order and into tasks: first the goal most likely to be met, or the one whose blocker the most goals share. Each lane gets an experiment aimed at one goal, or at one named part of it, such as a failing cell. The experiment, its trial and its attempt carry the target goal, and the lane's brief shows the goal, its cells' last values and their reasons.
+2. **A verdict on the target.** An attempt's evaluate job checks its target goal's cells first, then the goals already met, so that no met goal is lost unseen. The other goals are checked in the champion's validation, which tells the planner what to hand out next. The verdict shows a gain on the target's cells (a cell that failed and now passes) as progress, not as "no progress".
+3. **The other goals handed out by lane.** After a champion, the planner gives the unmet goals to the lanes, so that lanes work on different goals of the same champion and build on each other's champions.
+4. **Another try on a new champion.** An attempt judged "no progress" whose target's cells gained, or whose target was blocked by another goal, goes back to the queue for the next champion.
+
+### Open questions
+
+- Is a verdict on the target goal and the goals already met enough to promote? Proposal: yes, and the champion's validation still checks every goal.
+- What counts as a gain on a code verifier's goal (a cell that passes) and on a threshold goal (a value nearer its threshold)?
+- How the planner picks the first goal: the contract's priorities, the kit's gates, or the champion's report (the goal with the fewest failing cells).
+- Whether a verdict's cells are also spread over the free judge devices. Today a job holds one device for its whole length. That may be a goal of its own.
+
+## Why
+
+- The owner's words above.
+- A verdict that checks every goal costs the sum of all goals' cells for each attempt. A verdict on one target costs that goal's cells and the met goals' cells.
+- Progress stays hidden today: a fix to a part of a goal scores nothing while another part still fails, and the lanes and the owner do not see it.
+
+## Constraints
+
+- **Agents never judge.** The planner chooses targets. The judge measures and decides, and a target never lets an attempt skip the check of a goal already met.
+- **No default caps.**
+- A contract and a kit that set no order keep working as they do today.
+- The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold.
+
+## Done when
+
+- [ ] A design for the owner's yes: an answer to each open question, the parts and their order.
+- [ ] Experiments, trials and attempts carry a target goal. The planner sets it, and the lane's brief shows it.
+- [ ] An attempt's evaluate job checks its target goal and the goals already met. The champion's validation checks every goal. Tests cover both.
+- [ ] The verdict shows a gain on the target goal's cells.
+- [ ] After a champion, the planner hands the unmet goals out by lane, and puts back in the queue an attempt whose target gained.
+- [ ] The pages that describe goal mode, the planner and verdicts match the code: [Campaign modes](../../_site/src/content/docs/explanation/campaign-modes.md), [Agents, lanes and the planner](../../_site/src/content/docs/explanation/agents-lanes-planner.md) and [Verdicts](../../_site/src/content/docs/reference/verdicts.md).
+- [ ] The agents acceptance check runs a goal campaign with two goals, aimed one at a time.
+
+## Decisions
+
+- 2026-11-13, the owner: a goal campaign breaks its goals down and works them one at a time, not all at once. The work is tracked in GitHub issue 85.
+
+## Progress
+
+- 2026-11-13: proposed from the lab campaign above. For that campaign, its kit now makes the first goal a gate for the other nine (`requires`), and the planner was told by message to work on that goal first.

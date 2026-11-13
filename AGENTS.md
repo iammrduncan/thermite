@@ -62,7 +62,7 @@ The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md
 - Keep evidence, hypotheses, proposals and owner decisions distinct. Report gaps plainly. Never invent commands, results, citations or architecture.
 - Record as you go, as [How Thermite is planned](docs/plan/README.md) says:
   - a decision goes in the goal it affects, and in [decisions.md](docs/plan/decisions.md) if it shapes the whole product;
-  - a new idea becomes a new goal, slotted into the roadmap by priority;
+  - a new idea becomes a GitHub issue, the source of truth for what to build, and a goal file that links it and keeps its context, slotted into the roadmap by priority ([decisions](docs/plan/decisions.md#releases-and-planning), 2026-11-13);
   - progress goes in the goal;
   - a goal that is verified moves to `docs/plan/goals/_completed/` in the same commit, with every link to it fixed.
 

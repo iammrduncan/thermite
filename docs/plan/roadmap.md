@@ -405,6 +405,7 @@ The fixes after them, one version each, in the order to take them:
 
 **Not scheduled.** Ideas with a clear source and no version yet. Proposed.
 
+- [278](goals/278-one-goal-at-a-time.goal) A goal campaign works one goal at a time: each experiment aimed at one goal, its verdict on that goal and the goals already met, and the other goals handed out by lane ([issue 85](https://github.com/iammrduncan/thermite/issues/85)) · `PROPOSED`
 - [260](goals/260-fxbot-and-thermite.goal) fxbot and Thermite as two sides of one platform: fxbot's agent core as the harness, and bots that run the science · `PROPOSED`
 - [051](goals/051-pareto-and-population.goal) Pareto champions and population search · `PROPOSED`
 - [052](goals/052-more-target-drivers.goal) More target drivers · `PROPOSED`

@@ -39,9 +39,12 @@ A goal is one deliverable that can be checked.
 
 ### Add an idea
 
-1. Write a new goal with the next free number and the status `PROPOSED`.
-2. Add one line for it to the roadmap, in the place its priority puts it.
-3. The owner accepts it into a version (`READY`) or drops it.
+GitHub issues are the source of truth for what to build, the features and the fixes (the owner, 2026-11-13). A goal file keeps an issue's context, for agents to read.
+
+1. File a GitHub issue: what happened or what is wanted, and why. It follows the public rules of [AGENTS.md](../../AGENTS.md#public-repository-rules).
+2. Write a new goal with the next free number and the status `PROPOSED`, with a link to its issue under its title, and link the goal from the issue.
+3. Add one line for it to the roadmap, in the place its priority puts it, with its issue.
+4. The owner accepts it into a version (`READY`, and the issue's milestone) or drops it (and closes the issue).
 
 ### Record a decision
 
