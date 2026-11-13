@@ -1137,7 +1137,7 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 
 ### `local init`
 
-`thermite local init DIR [--engine docker|podman]` makes `DIR`, the `.dev` folder that the local compose stack reads, and keeps every file that is there already. Then it says what the local rig gets, and on a machine with NVIDIA GPUs the rig can have, or on a Mac whose Podman machine gives containers the GPU, it writes `compose.gpu.yaml` next to `DIR`. A release's compose file runs it in its `init` service as `thermite local init /work/.dev`, with the folder of `compose.yaml` mounted at `/work`. In a checkout of the source code, `npm run dev:init` makes the same folder without a build, and says nothing about the machine. It needs no network.
+`thermite local init DIR [--engine docker|podman]` makes `DIR`, the `.dev` folder that the local compose stack reads, and keeps every file that is there already. Then it says what the local rig gets, and on a machine with NVIDIA GPUs the rig can have, or on a Mac whose Podman machine gives containers the GPU, it writes `compose.gpu.yaml` next to `DIR`. A release's compose file runs it in its `init` service as `thermite local init /work/.dev`, with the folder of `compose.yaml` mounted at `/work`. In a checkout of the source code, `npm run dev:init` runs the same command from the source, without a build: it makes `.dev` there, says what the rig gets, and writes `compose.gpu.yaml` in the same cases. It needs no network.
 
 | What | Mode | Made |
 | --- | --- | --- |

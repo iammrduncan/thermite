@@ -12,7 +12,7 @@ updated: 2026-11-13
 
 **Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Tracked in:** [GitHub issue 87](https://github.com/iammrduncan/thermite/issues/87), the source of truth for this work. This file keeps its context.
 
-Built on 2026-11-13 and proven on one Mac. It waits for the owner's hands-on look.
+Built on 2026-11-13 and proven on one Mac. It waits for the owner's hands-on look. To pick the work up, on this machine or another, read [Handoff](#handoff) first.
 
 ## What
 
@@ -77,6 +77,82 @@ Not in this goal:
 - Whether the checks can cover this path without a Mac. Today they hold the parts (the driver on real `vulkaninfo` text, the device nodes and the fence's rule, the compose file, the kit's shape); the GPU itself needs a libkrun machine, which no CI runner has.
 
 Settled on 2026-11-13: a container with Vulkan through the virtual machine was worth the look, and it is what was built; the wall on macOS itself, and whether that is one piece of work with goal [277](277-runner-without-a-container-engine.goal), moved to goal 279.
+
+## Handoff
+
+Written on 2026-11-13, at the owner's word, so that the work can go on from another machine. Everything needed is on the branch `v0.3.0`; this section says where the work stands and how to get a rig on a Mac's GPU running again.
+
+### Where it stands
+
+| Part | State |
+| --- | --- |
+| The target `vulkan-gpu`, the Vulkan base of the harness, the fence's rule for `/dev/dri`, `thermite doctor` and `local init` on a Mac, the kit `smoke-vulkan`, the pages | Built, pushed, with tests |
+| The judge on the Mac's GPU | Proven by hand: the isolation check and the judge's smoke check, on the pushed build |
+| The agents on the Mac's GPU | Not tried. No model provider was set on the test control, so no lane has done a development run on this GPU, and no campaign with agents has run there |
+| The steps for a release's `compose.yaml` on the install page | Not tried from end to end: no release has this code yet. Compose resolves the file both ways |
+| The owner's hands-on look | Open. It is the last item of Done when |
+
+### What is left, in order
+
+1. **The owner's look.** On a control whose rig is on a Mac's GPU: the rig's page (the GPU under **What it runs on**), its **Isolation** and **Judge smoke** checks, and `thermite doctor` on the Mac.
+2. **A provider, then a small campaign with agents.** This is the first time the lanes' development runs share the GPU with the judge on this target. Watch for a development run that can't open the GPU, and for a verdict that is noisy while a lane works. Fix what shows here, in this goal.
+3. **Close the goal** when the owner says so: tick the last item, set `VERIFIED`, move this file to `_completed/` with every link to it fixed, and close issue 87.
+4. Then, each its own goal: the released image ([280](280-released-vulkan-harness-image.goal)) and the runner on macOS itself for MLX ([279](279-runner-on-macos-for-mlx.goal)).
+
+### Get it running on a Mac with Apple silicon
+
+The page [Install on one machine](../../_site/src/content/docs/how-to/install/one-machine.md), under "Use a Mac's GPU", has every step with its reasons. From a checkout of this branch, in short:
+
+```sh
+# Once on the Mac: krunkit, and a Podman machine on libkrun. Podman runs one machine at a
+# time, so stop the one that runs first. Keep the provider set for every later command.
+brew tap slp/krun && brew install krunkit
+podman machine stop
+export CONTAINERS_MACHINE_PROVIDER=libkrun
+podman machine init --now --cpus 8 --memory 12288
+
+# In the checkout: the packages, the .dev folder, and compose.gpu.yaml for the Mac's GPU.
+npm ci
+npm run dev:init          # prints "rig:" lines; with the GPU there, "wrote compose.gpu.yaml"
+THERMITE_COMMIT=$(git rev-parse HEAD) podman compose -f compose.yaml -f compose.gpu.yaml up -d --build
+```
+
+- Control is then at `http://127.0.0.1:8800`, and its owner's token is in `.dev/secrets/control-admin-token`. `.env` next to `compose.yaml` can set another port (`THERMITE_CONTROL_PORT`) and another project name (`COMPOSE_PROJECT_NAME`), to keep a test stack apart from the checkout's own.
+- If `dev:init` says the rig can't have the GPU, its `rig: Fix:` line says what to do. `npx thermite doctor`, after `npm run build`, says the same with every other check of the machine.
+- Start with both files every time. Without `compose.gpu.yaml` the rig is back on the CPU.
+- The first build takes the longest: it fetches the Ubuntu base and builds the harness on it.
+- Where `podman compose` runs Docker Desktop's compose program and hangs at its start, give it a Docker configuration with no credential helper: `DOCKER_CONFIG=<a folder whose config.json is {}>` before the command.
+- To see it work: on the rig's page, run **Isolation** (about a second; it must say `devices: shared (fence: landlock)`) and **Judge smoke** (about 13 minutes on an M4 Pro; four candidates, each as expected).
+- A model server on the Mac itself is reached from the rig at `http://host.containers.internal:PORT/v1`. The harness has OpenCode and the Codex CLI. It has Claude Code only when the image is built with `CLAUDE_CODE_VERSION`.
+
+### On a machine that is not such a Mac
+
+The GPU path can't run there: it needs a Podman machine on libkrun. The rest can be worked on and checked:
+
+```sh
+npm ci && npm run web:install
+node scripts/test.mjs tests/harness/targets/vulkan.test.ts tests/harness/broker/devices.test.ts \
+  tests/harness/hardware.test.ts tests/harness/smoke-check.test.ts tests/cli/machine.test.ts tests/cli/doctor.test.ts
+```
+
+The Vulkan harness has been built only for arm64, in a Podman machine on a Mac. Its build elsewhere (`--target harness --build-arg BASE_IMAGE=vulkan-base`) is not tried, and neither is a rig on it: there it would see Mesa's software device, which the target refuses, or a GPU of the machine that Mesa drives.
+
+### Where the code is
+
+| What | Where |
+| --- | --- |
+| The target's driver | [`src/harness/targets/vulkan.ts`](../../../src/harness/targets/vulkan.ts); chosen in [`controller/targets.ts`](../../../src/harness/controller/targets.ts) |
+| The device nodes and the fence's argument | [`src/harness/broker/devices.ts`](../../../src/harness/broker/devices.ts), [`containers/harness/devfence.c`](../../../containers/harness/devfence.c) |
+| The Vulkan base | The stage `vulkan-base` of [`containers/Containerfile`](../../../containers/Containerfile) |
+| What a Mac's machine gives, and `compose.gpu.yaml` | [`src/cli/machine.ts`](../../../src/cli/machine.ts) (`macGpu`, `rigReport`, `vulkanOverride`) |
+| The smoke kit and its project | [`kits/smoke-vulkan`](../../../kits/smoke-vulkan/kit.json), [`examples/smoke-vulkan-project`](../../../examples/smoke-vulkan-project/README.md) |
+| The tests | `tests/harness/targets/vulkan.test.ts`, and the other files of the command above |
+
+### Things seen and not looked into
+
+- After an update for commits that changed only documents, the harness image carried the new commit and control's and the supervisor's kept the earlier one, from the build's cache. Control still showed the versions as current.
+- `podman machine list` shows only the machines of the provider that is set, so a machine of the other provider looks gone when it is only stopped.
+- The device reports the Mac's whole memory and no use, so nothing warns before a large model crowds the Mac. See Open questions.
 
 ## Progress
 
