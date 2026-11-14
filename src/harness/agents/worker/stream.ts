@@ -18,6 +18,19 @@ export function watchedStream(
   return (model, context, options) => models.streamSimple(model, context, { ...options, fetch });
 }
 
+/** The agent's conversation messages, excluding its internal messages. */
+function conversationMessages(messages: AgentMessage[]): Message[] {
+  return messages.filter(
+    (m) =>
+      m.role === "system" || m.role === "user" || m.role === "assistant" || m.role === "toolResult",
+  ) as Message[];
+}
+
+/** Responses needs its earlier reasoning items when a tool result continues the conversation. */
+export function conversationForModel(api: string): (messages: AgentMessage[]) => Message[] {
+  return api === "openai-responses" ? conversationMessages : withoutPastThinking;
+}
+
 /**
  * What is sent to the model: the conversation with every earlier reply's thinking left out (the
  * replies' text, tool calls and their results stay). Qwen-family chat templates keep earlier
@@ -25,18 +38,10 @@ export function watchedStream(
  * thinking so far and, whenever a nudge or warning is appended, changes the prompt's prefix, which
  * forces a shared model server to read the whole conversation again.
  */
-export function withoutPastThinking(messages: AgentMessage[]): Message[] {
-  return messages
-    .filter(
-      (m) =>
-        m.role === "system" ||
-        m.role === "user" ||
-        m.role === "assistant" ||
-        m.role === "toolResult",
-    )
-    .map((m) =>
-      m.role === "assistant" && Array.isArray(m.content)
-        ? { ...m, content: m.content.filter((b) => (b as { type?: string }).type !== "thinking") }
-        : m,
-    ) as Message[];
+function withoutPastThinking(messages: AgentMessage[]): Message[] {
+  return conversationMessages(messages).map((m) =>
+    m.role === "assistant" && Array.isArray(m.content)
+      ? { ...m, content: m.content.filter((b) => (b as { type?: string }).type !== "thinking") }
+      : m,
+  ) as Message[];
 }

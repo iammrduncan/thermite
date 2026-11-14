@@ -45,7 +45,7 @@ import {
 } from "../tools/index.ts";
 import { TrialClock } from "../trial-clock.ts";
 import type { CompactionLink, McpForAgent, ProviderWait, TrialResult } from "../worker/index.ts";
-import { keepGoing, PI_TRIAL, watchedStream, withoutPastThinking } from "../worker/index.ts";
+import { conversationForModel, keepGoing, PI_TRIAL, watchedStream } from "../worker/index.ts";
 
 /**
  * A research trial in Pi: a fresh agent session with the research tools and file tools over its
@@ -213,6 +213,7 @@ export async function runResearchTrial(
   ];
 
   const { models, model, thinkingLevel } = buildModel(deps.model);
+  const convertConversation = conversationForModel(model.api);
   // Each model call's usage, the compaction summaries' included (goal 075).
   const meter = deps.modelUsage ? new PiMeter(deps.modelUsage) : undefined;
   // The provider's error answers, for a rate limit's time (goal 079).
@@ -238,7 +239,7 @@ export async function runResearchTrial(
     // the session headers, so the provider keeps its calls where their cache is.
     sessionId: randomUUID(),
     streamFn: watchedStream(models, watch, meter),
-    convertToLlm: withoutPastThinking,
+    convertToLlm: convertConversation,
     // One tool call at a time: each is a request to the harness, in the order the model chose.
     toolExecution: "sequential",
     // Every later turn that waits goes in before its next model call: the owner's words typed into
@@ -254,7 +255,7 @@ export async function runResearchTrial(
   const compactor = new Compactor({
     window: deps.model.contextWindow,
     at: deps.model.compactAt,
-    convert: withoutPastThinking,
+    convert: convertConversation,
     summarize: summarizer(deps.model, meter),
     keep: async (n, markdown) => {
       if (!deps.compaction) throw new Error("this trial has no place to keep it");

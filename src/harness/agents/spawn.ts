@@ -5,6 +5,7 @@ import {
   MODEL_ENV_NAMES,
   type ModelConfig,
   modelEnv,
+  needsOpenAIResponses,
   STALL_SETTING,
 } from "../../agents/model/index.ts";
 import { PI_PROCESS_RSS, type PiConsole, runInView } from "../../agents/pi-view/index.ts";
@@ -38,6 +39,7 @@ export function piRoute(model: ModelConfig, apiPort: number, credential: string)
   if (model.api !== "chatgpt" && model.apiKey) return model;
   return {
     ...model,
+    ...(needsOpenAIResponses(model) ? { responses: true } : {}),
     baseUrl: `http://127.0.0.1:${apiPort}/v1/model-proxy`,
     apiKey: credential,
     keyNow: undefined,

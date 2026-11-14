@@ -28,7 +28,7 @@ import { guardRepeats } from "../repeats.ts";
 import { TrialClock } from "../trial-clock.ts";
 import { keepGoing } from "./keep-going.ts";
 import type { TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
-import { watchedStream, withoutPastThinking } from "./stream.ts";
+import { conversationForModel, watchedStream } from "./stream.ts";
 import { trialTools } from "./tools.ts";
 
 export type { McpForAgent } from "../../../agents/mcp/index.ts";
@@ -46,7 +46,7 @@ export type {
   TrialSpec,
 } from "./spec.ts";
 export { TrialResult } from "./spec.ts";
-export { watchedStream, withoutPastThinking } from "./stream.ts";
+export { conversationForModel, watchedStream } from "./stream.ts";
 
 /**
  * One worker trial: a fresh agent session (Pi) with Thermite's tools, in the lane's own
@@ -131,6 +131,7 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
   };
 
   const { models, model, thinkingLevel } = buildModel(deps.model);
+  const convertConversation = conversationForModel(model.api);
   // Each model call's usage, the compaction summaries' included (goal 075).
   const meter = deps.modelUsage ? new PiMeter(deps.modelUsage) : undefined;
   // The provider's error answers, for a rate limit's time (goal 079).
@@ -146,7 +147,7 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     // the session headers, so the provider keeps its calls where their cache is.
     sessionId: randomUUID(),
     streamFn: watchedStream(models, watch, meter),
-    convertToLlm: withoutPastThinking,
+    convertToLlm: convertConversation,
     // One tool call at a time: lane processes are killed by user when a tool finishes, so parallel
     // calls would kill each other, and a submission must end the trial before anything else runs.
     toolExecution: "sequential",
@@ -162,7 +163,7 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
   const compactor = new Compactor({
     window: deps.model.contextWindow,
     at: deps.model.compactAt,
-    convert: withoutPastThinking,
+    convert: convertConversation,
     summarize: summarizer(deps.model, meter),
     keep: async (n, markdown) => {
       if (!deps.compaction) throw new Error("this trial has no place to keep it");

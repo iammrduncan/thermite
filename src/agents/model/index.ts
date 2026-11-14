@@ -64,6 +64,8 @@ export interface ModelConfig {
    * Responses API; apiKey is then a one-hour access token that control renews).
    */
   api?: ProviderType | undefined;
+  /** The route was identified as needing Responses before a proxy hid its original URL. */
+  responses?: boolean | undefined;
   /**
    * The harness the agents run in: Pi, in-process (the default), OpenCode v2, Claude Code or the
    * Codex CLI (OpenAI's Responses API only: a ChatGPT sign-in or an OpenAI-compatible route).
@@ -145,6 +147,7 @@ export const MODEL_SETTINGS = {
   maxTokens: "THERMITE_MODEL_MAX_TOKENS",
   reasoning: "THERMITE_MODEL_REASONING_EFFORT",
   api: "THERMITE_MODEL_API",
+  responses: "THERMITE_MODEL_RESPONSES",
   harness: "THERMITE_AGENT_HARNESS",
 } as const;
 
@@ -168,6 +171,9 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
     throw new Error(
       `THERMITE_MODEL_API must be openai, anthropic, opencode, claude or chatgpt, not ${rawApi}`,
     );
+  const responses = setting(env, MODEL_SETTINGS.responses);
+  if (responses !== undefined && responses !== "1")
+    throw new Error("THERMITE_MODEL_RESPONSES must be 1 or unset");
   const rawHarness = setting(env, MODEL_SETTINGS.harness);
   const harness = HARNESSES.find((h) => h === rawHarness);
   if (rawHarness !== undefined && !harness)
@@ -189,6 +195,7 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
   return {
     // An OpenAI-compatible route and Pi are the defaults, left unnamed.
     api: api === "openai" ? undefined : api,
+    ...(responses === "1" ? { responses: true } : {}),
     harness: harness === "pi" ? undefined : harness,
     baseUrl: baseUrl.replace(/\/$/, ""),
     model,
@@ -208,6 +215,7 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
 export function modelEnv(cfg: ModelConfig): Record<string, string> {
   return {
     ...(cfg.api && cfg.api !== "openai" ? { THERMITE_MODEL_API: cfg.api } : {}),
+    ...(cfg.responses ? { THERMITE_MODEL_RESPONSES: "1" } : {}),
     ...(cfg.harness && cfg.harness !== "pi" ? { THERMITE_AGENT_HARNESS: cfg.harness } : {}),
     THERMITE_MODEL_BASE_URL: cfg.baseUrl,
     THERMITE_MODEL: cfg.model,
@@ -293,6 +301,29 @@ export function buildModel(cfg: ModelConfig) {
   return { ...built, models: stallGuarded(built.models) };
 }
 
+/** OpenAI requires Responses for tools on these models. Other providers keep their own API. */
+export function needsOpenAIResponses(
+  cfg: Pick<ModelConfig, "api" | "baseUrl" | "model" | "responses">,
+): boolean {
+  if (cfg.api && cfg.api !== "openai") return false;
+  if (cfg.responses) return true;
+  try {
+    const u = new URL(cfg.baseUrl);
+    return (
+      u.protocol === "https:" &&
+      u.host === "api.openai.com" &&
+      u.pathname.replace(/\/$/, "") === "/v1" &&
+      !u.username &&
+      !u.password &&
+      !u.search &&
+      !u.hash &&
+      ["gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra"].includes(cfg.model)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * An OpenAI-compatible route's key as Pi sends it. A provider with no key, such as a local server
  * that takes none: Pi and OpenAI's client each need a key to start, so they get this word, and
@@ -307,6 +338,7 @@ function openAIAuth(apiKey: string): { apiKey: string; headers?: { authorization
 function buildUnguarded(cfg: ModelConfig) {
   if (cfg.api === "anthropic") return buildAnthropic(cfg);
   if (cfg.api === "chatgpt") return buildChatGPT(cfg);
+  if (needsOpenAIResponses(cfg)) return buildResponses(cfg);
   const provider = "thermite-openai";
   const model: Model<"openai-completions"> = {
     id: cfg.model,
@@ -349,6 +381,47 @@ function buildUnguarded(cfg: ModelConfig) {
   if (!resolved) throw new Error(`model ${cfg.model} did not register`);
   // The agents' thinking level: "off" sends reasoning_effort "none" when reasoning is configured.
   // With no known reply limit, none is sent (goal 079).
+  return {
+    models: cfg.maxTokens ? models : uncapped(models),
+    model: resolved,
+    thinkingLevel: cfg.reasoning ?? ("off" as const),
+  };
+}
+
+/** An OpenAI API-key route whose model needs Responses for function tools. */
+function buildResponses(cfg: ModelConfig) {
+  const provider = "thermite-openai";
+  const model: Model<"openai-responses"> = {
+    id: cfg.model,
+    name: cfg.model,
+    api: "openai-responses",
+    provider,
+    baseUrl: cfg.baseUrl,
+    reasoning: true,
+    thinkingLevelMap: { off: cfg.reasoning === "off" ? "none" : null },
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: cfg.contextWindow,
+    maxTokens: cfg.maxTokens || NOT_SENT,
+  };
+  const models = createModels();
+  models.setProvider(
+    createProvider({
+      id: provider,
+      name: "Harness model route",
+      baseUrl: cfg.baseUrl,
+      auth: {
+        apiKey: {
+          name: "Model route key",
+          resolve: async () => ({ auth: openAIAuth(cfg.apiKey) }),
+        },
+      },
+      models: [model],
+      api: openAIResponsesApi(),
+    }),
+  );
+  const resolved = models.getModel(provider, cfg.model);
+  if (!resolved) throw new Error(`model ${cfg.model} did not register`);
   return {
     models: cfg.maxTokens ? models : uncapped(models),
     model: resolved,

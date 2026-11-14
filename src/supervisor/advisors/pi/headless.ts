@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { z } from "zod";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
-import type { ModelConfig } from "../../../agents/model/index.ts";
+import { type ModelConfig, needsOpenAIResponses } from "../../../agents/model/index.ts";
 import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorResult, AdvisorUsage } from "../call.ts";
 import { type AdvisorRuntime, advisorRoute, keylessRoute } from "../config.ts";
@@ -22,6 +22,9 @@ export function piModel(rt: PiRuntime, at: { baseUrl: string; apiKey: string }):
   return {
     api: rt.api === "anthropic" || rt.api === "chatgpt" ? rt.api : undefined,
     baseUrl: at.baseUrl,
+    ...(needsOpenAIResponses({ api: rt.api, baseUrl: rt.base_url, model: rt.model })
+      ? { responses: true }
+      : {}),
     model: rt.model,
     apiKey: at.apiKey,
     contextWindow: rt.context_window,

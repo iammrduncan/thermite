@@ -8,7 +8,7 @@ import {
   opencodeEnded,
 } from "../../compaction/index.ts";
 import { type McpAccess, opencodeMcp } from "../../mcp/index.ts";
-import type { ModelConfig } from "../../model/index.ts";
+import { type ModelConfig, needsOpenAIResponses } from "../../model/index.ts";
 import { agentPath } from "../path.ts";
 
 export { newTally, type OpencodeTally, readNew, readOpencodeEvents } from "./events.ts";
@@ -104,7 +104,7 @@ export function opencodeConfig(
         // route refuses, such as max_output_tokens).
         package: anthropic
           ? "@opencode/ai/providers/anthropic"
-          : m.api === "chatgpt"
+          : m.api === "chatgpt" || needsOpenAIResponses(m)
             ? "@opencode/ai/providers/openai"
             : "@opencode/ai/providers/openai-compatible",
         // Anthropic's client posts to {base}/messages; its API is at /v1/messages.
