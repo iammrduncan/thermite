@@ -2,7 +2,7 @@
 id: "260"
 title: "OpenCode Go's model list and conversation sessions"
 status: IN_PROGRESS
-version: "0.2.x"
+version: "0.2.6"
 depends_on: []
 created: 2026-11-14
 updated: 2026-11-14
@@ -10,7 +10,7 @@ updated: 2026-11-14
 
 # 260 · OpenCode Go's model list and conversation sessions
 
-**Status:** `IN_PROGRESS` · **Version:** a patch to be assigned ([roadmap](../roadmap.md))
+**Status:** `IN_PROGRESS` · **Version:** proposed v0.2.6, if v0.2.5 ships first ([roadmap](../roadmap.md)).
 
 ## What
 
@@ -37,6 +37,7 @@ OpenCode Go requires a session ID per conversation. Thermite's model proxy dropp
 - 2026-11-14: A live Pi model check against the Go inference endpoint returned the expected tool call with `deepseek-v4.1-flash`. A trial and the request's billing source remain to be checked. Agents, Codex, Claude Code, steering and control acceptance passed with stand-in providers; the steering check's optional engine-socket lifecycle run was not performed. The control and steering checks needed a test-environment connection workaround.
 - 2026-11-14: A new Pi trial on the Go inference route made model and tool calls with `deepseek-v4.1-flash`; the owner confirmed that the Console showed the calls under the Go allowance. The live test did not exercise the OpenCode v2 or Codex harness on Go. OpenCode v2's session forwarding was checked with the real client against a stand-in; Codex's general acceptance passed with a stand-in provider.
 - 2026-11-14: [Issue 102](https://github.com/iammrduncan/thermite/issues/102) reports the affected paths and asks how to sequence this change with the proposed v0.2.5 fix.
+- 2026-11-14: v0.2.6 is proposed for review, conditional on v0.2.5 shipping first; the patch number and release order remain to be confirmed.
 
 ---
 

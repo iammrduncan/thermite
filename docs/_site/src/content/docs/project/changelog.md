@@ -10,6 +10,14 @@ sidebar:
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](../reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [0.2.6] Unreleased: OpenCode Go model lists and sessions
+
+v0.2.6 is a proposed fix release, to follow v0.2.5 if that fix ships first.
+
+### Fixes
+
+- **OpenCode Go models can be listed and given to a rig.** An OpenAI-compatible provider at Go's documented inference base reads Go's separate model catalog, including context and output limits. OpenCode v2 already sends its conversation session; Thermite's model proxy now forwards it. Pi's model check and compaction summaries get their own sessions, and a Pi advisor's local proxy keeps the provider identity Pi needs to send the header. Codex's native session headers were already forwarded. Add a Go provider as [Connect a model provider](../how-to/models/connect-a-provider.md) says. ([issue 102](https://github.com/iammrduncan/thermite/issues/102))
+
 ## [0.2.4] 2026-11-14: a change the owner declined no longer stops its run
 
 v0.2.4 is a fix release of v0.2.3: a lane whose newest change the owner declined starts its next trial, and its run's rounds go on, from an outside contributor's [pull request 95](https://github.com/iammrduncan/thermite/pull/95). A v0.1.1 to v0.2.3 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.2.4), as [Stop, start and update](../how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. The fix is in the rig: a run that stopped this way goes on by itself once its rig runs v0.2.4. Nothing in control's store, a rig's ledger, the settings or the secrets changes.
