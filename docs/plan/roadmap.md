@@ -263,7 +263,7 @@ The fixes after them, one version each, in the order to take them:
 - [243](goals/_completed/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `VERIFIED`
 - [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first, by the ten steps of its agreed [design](goal-258-design.md); the screens start after step 8
   - [267](goals/267-store-behind-an-interface.goal) Step 1: Control's store behind an interface whose calls can wait, still on SQLite · `IN_PROGRESS`
-  - [268](goals/268-postgresql-beside-sqlite.goal) Step 2: PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore · `READY`
+  - [268](goals/268-postgresql-beside-sqlite.goal) Step 2: PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore · `IN_PROGRESS`
   - [269](goals/269-knowledge-search-on-postgresql.goal) Step 3: The knowledge base's search on PostgreSQL's own text search · `READY`
   - [270](goals/270-move-to-postgresql.goal) Step 4: The move to PostgreSQL: the copy at an upgrade, the SQLite file kept as the way back · `READY`
   - [271](goals/271-a-runs-tables.goal) Step 5: A run's tables: views with fixed names and columns, filled from events, read through a role that can only read · `READY`

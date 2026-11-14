@@ -1,16 +1,16 @@
 ---
 id: "268"
 title: "PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore"
-status: READY
+status: IN_PROGRESS
 version: "0.3.0"
 depends_on: ["267", "258"]
 created: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # 268 · PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [267](267-store-behind-an-interface.goal), [258](258-runs-own-their-resources.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [267](267-store-behind-an-interface.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
@@ -59,16 +59,16 @@ The design's size for this step is L: a week or more, by the readers' first esti
 
 - 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): "postgres". Control's store moves from SQLite to PostgreSQL.
 - 2026-11-12, the owner: [the design](../goal-258-design.md) is agreed, with this step as its second.
-- Not yet answered by the owner, and kept as the design's proposal: the fast tests need a PostgreSQL to run on.
+- 2026-11-14, the owner ran this step's command ([v0.3.0, step by step](../v030_release_plan.md), step 4), and answered its two questions:
+  - **The fast tests run on PostgreSQL inside the test process,** with no server to start: PGlite, which is PostgreSQL itself compiled to WebAssembly. So `npm run check` needs no container engine, as today. **CI and the acceptance checks also run the store's tests on a real, pinned PostgreSQL server,** which shows what one connection cannot: two callers at once. PGlite calls itself alpha; a difference between it and a real server shows in CI.
+  - **A deployment may use a PostgreSQL server it already has.** The install brings a pinned PostgreSQL service by default; a setting with a server's address takes its place. Control checks the server's version at its start and refuses one that is too old, in words.
 
 ## Open questions
 
-- **A PostgreSQL for the fast tests** (the design's proposal; the owner has not yet said). A server for each run of the tests, or a stand-in in memory. The reading names slower fast checks as the risk. Where the tests of a contributor's own machine and of CI get their server.
 - What a control on PostgreSQL does for the knowledge base's search before step 3: the knowledge base stays on SQLite beside it, or steps 2 and 3 land together.
 - What the copy command does when its target already holds data.
 - The copy command's name, and whether a person runs it or control runs it at its start. Step 4 decides the second.
 - Which versions of PostgreSQL are supported, and which package reaches it.
-- Whether a deployment may use a PostgreSQL server it already has, in place of the service the install brings.
 - The reading found more triggers in the store's source than a fresh store holds, and did not trace why. The copy must know which are in use.
 - Acceptance scripts open control's store file themselves (`scripts/acceptance/lib/control-bus.mjs` and others). Whether they read through control, or through the store's interface.
 - From goal [267](267-store-behind-an-interface.goal): 58 test files outside the store's own tests reach the database itself, through `sqliteBehind` (`src/control/store/behind.ts`), to make a store as an older version left it or to read a table that no call gives. On PostgreSQL they do not run as they are. Which become calls of the interface, and which stay tests of the SQLite store alone.
@@ -78,6 +78,7 @@ The design's size for this step is L: a week or more, by the readers' first esti
 ## Progress
 
 - 2026-11-12: Written from goal 258's design, which the owner agreed.
+- 2026-11-14: `IN_PROGRESS`. The owner answered the step's two questions (Decisions).
 
 ---
 

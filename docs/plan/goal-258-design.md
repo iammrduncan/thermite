@@ -85,7 +85,7 @@ A run asks for a device **whole, in turns,** or **shared,** beside other runs. T
 3. The knowledge base's search moves to PostgreSQL's own text search. The order of results changes, since its ranking is another, and the "exact" search loses SQLite's own syntax.
 4. The move: a command copies a control's data at the upgrade, checks the counts, and keeps the SQLite file as the way back. The 37 migrations end there, and PostgreSQL starts its own list.
 
-What it costs: the one-machine install gains a service; backup becomes a dump taken before the bus's snapshot; the fast tests need a PostgreSQL to run on (a proposal; the owner has not yet said). One settled decision changes: a rig's log lines were to be searched with SQLite's text search (goal [257](goals/257-find-the-fault.goal)), and will use PostgreSQL's.
+What it costs: the one-machine install gains a service; backup becomes a dump taken before the bus's snapshot; the fast tests need a PostgreSQL to run on (the owner, 2026-11-14: PostgreSQL inside the test process for the fast tests, a real server in CI and the acceptance checks). One settled decision changes: a rig's log lines were to be searched with SQLite's text search (goal [257](goals/257-find-the-fault.goal)), and will use PostgreSQL's.
 
 ### Which tables a run's query may read
 
@@ -135,4 +135,4 @@ The acceptance checks follow the steps: about 13 of them assume a rig as a core 
 3. **The agents work in the control plane:** their loops and the writing of code, Claude Code in its own zone among them. A machine runs only what needs the machine. The control plane gets its own sandboxes. This took the place of the design's first proposal, which kept a worker's workspace and Claude Code on the machine.
 4. **Each step is a goal of its own,** on the roadmap in this order.
 
-Not yet answered, and kept as proposals: a run's tables as views filled from events first; a PostgreSQL for the fast tests.
+Not yet answered, and kept as a proposal: a run's tables as views filled from events first. The PostgreSQL for the fast tests was answered on 2026-11-14 (goal [268](goals/268-postgresql-beside-sqlite.goal)).
