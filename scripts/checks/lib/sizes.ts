@@ -24,7 +24,7 @@ export const LOWER_COMMAND = "npm run check:sizes -- --lower";
 export const DUE_COMMAND = "npm run check:sizes -- --due";
 
 /** The folders in scope: every handwritten file Thermite builds or runs. */
-const SCOPE = ["src/", "tests/", "scripts/", "containers/", "kits/", "web/"];
+const SCOPE = ["src/", "tests/", "scripts/", "containers/", "kits/", "web/", "packages/"];
 /** The files in scope: code and scripts. A kit's target code (C, CUDA) is the target's, not ours. */
 const CODE = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|sh|py)$/;
 

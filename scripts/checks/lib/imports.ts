@@ -123,9 +123,20 @@ export type Rule =
   | "order"
   | "app-out"
   | "app-browser"
-  | "app-in";
+  | "app-in"
+  | "design-door"
+  | "design-own"
+  | "design-out";
 /** The rules no exception excuses. */
-const NEVER_EXCUSED: readonly Rule[] = ["folder", "app-out", "app-browser", "app-in"];
+const NEVER_EXCUSED: readonly Rule[] = [
+  "folder",
+  "app-out",
+  "app-browser",
+  "app-in",
+  "design-door",
+  "design-own",
+  "design-out",
+];
 export interface Broken {
   file: string;
   /** The file imported, from the repository's root, or a module name such as node:fs. */
@@ -143,14 +154,37 @@ const APP = "web/";
 const APP_SOURCE = "web/src/";
 /** The contracts, which the app's `@core/` imports name. */
 const CONTRACTS = "src/core/";
+/** The design system, which the app takes its look from: a package of its own. */
+const DESIGN = "packages/design-system/";
+/** Where the design system's code is, which `@ds/` imports name. */
+const DESIGN_SOURCE = "packages/design-system/src/";
+/** The design system's door, which `@ds` names: the one file of it the app's screens import. */
+const DESIGN_DOOR = "packages/design-system/src/index.ts";
+/**
+ * The packages a look is made with. They are the design system's: the app imports none of them,
+ * so every component and every class list is made there.
+ */
+const LOOK_PACKAGES: readonly string[] = [
+  "radix-ui",
+  "class-variance-authority",
+  "cn",
+  "clsx",
+  "tailwind-merge",
+  "tw-animate-css",
+  // The page's nonce for a style added at run time: the design system's takePageNonce.
+  "get-nonce",
+];
 /** The packages a contract the app loads may import: they run in a browser. */
 const BROWSER_PACKAGES: readonly string[] = ["zod"];
 
 /**
- * The file of the repository one of the app's imports names, from the repository's root: its
- * aliases (web/vite.config.ts) and relative paths. None for a package.
+ * The file of the repository one of the app's or the design system's imports names, from the
+ * repository's root: the aliases (web/vite.config.ts, packages/design-system/vite.config.ts) and
+ * relative paths. None for a package.
  */
 export function appTarget(file: string, spec: string): string | null {
+  if (spec === "@ds") return DESIGN_DOOR;
+  if (spec.startsWith("@ds/")) return DESIGN_SOURCE + spec.slice("@ds/".length);
   if (spec.startsWith("@core/")) return CONTRACTS + spec.slice("@core/".length);
   if (spec.startsWith("@/")) return APP_SOURCE + spec.slice("@/".length);
   return spec.startsWith(".") ? resolve(file, spec) : null;
@@ -282,10 +316,24 @@ export function broken(
   spec: string,
   indexed: ReadonlySet<string> = new Set(),
 ): Broken | null {
-  if (file.startsWith(APP)) {
-    // The app: its own files, its packages, and of the repository the contracts alone.
+  if (file.startsWith(DESIGN)) {
+    // The design system: its own files and its packages, and nothing of Thermite.
     const target = appTarget(file, spec);
-    return !target || target.startsWith(APP) || target.startsWith(CONTRACTS)
+    return !target || target.startsWith(DESIGN) ? null : { file, target, rule: "design-out" };
+  }
+  if (file.startsWith(APP)) {
+    // The app: its own files, its packages, the contracts, and the design system by its door.
+    const target = appTarget(file, spec);
+    if (!target)
+      return LOOK_PACKAGES.some((p) => spec === p || spec.startsWith(`${p}/`))
+        ? { file, target: spec, rule: "design-own" }
+        : null;
+    if (target.startsWith(DESIGN))
+      // The app's build settings read the design system's build step; its screens, the door.
+      return file.startsWith(APP_SOURCE) && target !== DESIGN_DOOR
+        ? { file, target, rule: "design-door" }
+        : null;
+    return target.startsWith(APP) || target.startsWith(CONTRACTS)
       ? null
       : { file, target, rule: "app-out" };
   }
@@ -299,7 +347,7 @@ export function broken(
   const target = resolve(file, spec);
   if (target.startsWith("tests/") || target.startsWith("scripts/"))
     return { file, target, rule: "tests" };
-  if (target.startsWith(APP)) return { file, target, rule: "app-in" };
+  if (target.startsWith(APP) || target.startsWith(DESIGN)) return { file, target, rule: "app-in" };
   const to = partOf(target);
   if (to && to !== from && !(SHARED[from] ?? FOR_PARTS).includes(to))
     return { file, target, rule: "part" };
@@ -445,7 +493,13 @@ const RULE_WORDS: Record<Rule, string> = {
   "app-browser":
     "a contract the dashboard's app loads must run in a browser: it imports no Node module and no package but zod. Keep what needs it in a file the app does not load",
   "app-in":
-    "production code imports the dashboard's app. Control serves the app's built files; it never imports its source",
+    "production code imports the dashboard's app or the design system. Control serves their built files; it never imports their source",
+  "design-door":
+    "the app reaches into the design system past its door. Import the part from @ds, and export it in packages/design-system/src/index.ts if it is not there",
+  "design-own":
+    "the app imports a package that a look is made with. Every component and every class list is made in the design system (packages/design-system): make the part there, with its example on the site, and import it from @ds",
+  "design-out":
+    "the design system imports code of Thermite. It is a package of its own, which other apps can import: what a part shows comes in as its properties",
 };
 
 /** One broken import in words, with what to do. */
@@ -460,6 +514,8 @@ export function brokenText(b: Broken): string {
     const words = (n: string) => (n === TOP_LEVEL ? `${part}'s top-level files` : `${part}/${n}`);
     return `${b.file} imports ${b.target}: ${RULE_WORDS.order}. ${words(to)} comes after ${words(from)} in the order, so ${words(from)} may not import it. Move what this file needs down, to a folder before both; or hand it in from above, as an argument; or move this code up to where it is used (CONVENTIONS.md, "The order inside a part").`;
   }
+  if (b.rule === "design-door" || b.rule === "design-own" || b.rule === "design-out")
+    return `${b.file} imports ${b.target}: ${RULE_WORDS[b.rule]} (CONVENTIONS.md, "The design system").`;
   if (b.rule === "app-out" || b.rule === "app-browser" || b.rule === "app-in")
     return `${b.file} imports ${b.target}${b.via ? ` (the app loads it through ${b.via})` : ""}: ${RULE_WORDS[b.rule]} (CONVENTIONS.md, "The dashboard").`;
   return `${b.file} imports ${b.target}: ${RULE_WORDS[b.rule]} (CONVENTIONS.md, "The parts and how they import").`;

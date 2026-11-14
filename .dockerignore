@@ -10,3 +10,5 @@ coverage
 *.log
 docs/_site/node_modules
 docs/_site/.astro
+packages/design-system/node_modules
+packages/design-system/dist

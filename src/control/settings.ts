@@ -47,6 +47,9 @@ export function notReadWords(env: Record<string, string | undefined>): string | 
   return env[RIG_TOKENS_SETTING] ? RIG_TOKENS_NOT_READ : undefined;
 }
 
+/** `0`: control does not serve the design system's site at /design. It serves it otherwise. */
+export const DESIGN_SITE_SETTING = "THERMITE_CONTROL_DESIGN_SITE";
+
 /** Control's address as rigs and the machines it sets rigs up on reach it. */
 export const PUBLIC_URL_SETTING = "THERMITE_CONTROL_PUBLIC_URL";
 /** `1`: control may give rigs a plain `http://` address on another host, as on a home network. */

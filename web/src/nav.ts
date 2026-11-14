@@ -20,3 +20,7 @@ export function follow(event: MouseEvent<HTMLAnchorElement>) {
   event.preventDefault();
   go(event.currentTarget.pathname + event.currentTarget.search);
 }
+
+/** A run's own address in the app. */
+export const runPath = (r: { campaign: string | null; run: string | null }) =>
+  to(`/campaigns/${encodeURIComponent(r.campaign ?? "")}/runs/${encodeURIComponent(r.run ?? "")}`);

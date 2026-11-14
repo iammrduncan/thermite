@@ -1,8 +1,6 @@
 import type { HomeAnswer } from "@core/api/control/dashboard.ts";
+import { Failure, Loading, Nothing, Screen, Section, Stat, Stats } from "@ds";
 import { EventRows, NeedRows, RunCard } from "@/parts/rows.tsx";
-import { Screen, Section } from "@/parts/screen.tsx";
-import { Stat, Stats } from "@/parts/stat.tsx";
-import { Failure, Loading, Nothing } from "@/parts/states.tsx";
 
 /**
  * Home: what needs the owner, then what is at work, then what happened. One scan, top to bottom.

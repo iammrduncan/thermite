@@ -8,3 +8,7 @@ coverage/
 .dev/
 docs/_site/.astro/
 compose.gpu.yaml
+
+# The design system: its link to the app's packages (scripts/design-system/link.mjs), and its built site
+packages/design-system/node_modules
+packages/design-system/dist/

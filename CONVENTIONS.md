@@ -121,13 +121,22 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 - Frontend complexity grows faster than backend complexity, so resist it. The app:
   - imports `core`'s contracts alone (as `@core/…`), and reaches control only through its API, with one client (`web/src/api.ts`). `npm run check:imports` holds it, with no exceptions: of this repository the app imports only `src/core/`, each contract it loads runs in a browser (no Node.js module, no package but zod), and nothing in `src/` imports the app;
   - holds no rule of the product, and no words for states, verdicts or events: control checks, refuses and words, and the app shows;
-  - uses shadcn's components as its tool makes them (`web/src/components/ui/`, never edited by hand), with few parts of its own (`web/src/parts/`), which are the brand's: a screen is made of them and of no others, and a part that is missing is added there and to the gallery;
-  - takes its look from one theme (`web/src/index.css`), where each colour has a use and changes by its use between light and dark: a screen sets no colour, size or corner of its own;
-  - names each screen's kind, and keeps its first view within that kind's budget, which the browser check holds (`scripts/acceptance/lib/browser-budget.mjs`);
+  - has no components and no look of its own: it takes both from the design system ([below](#the-design-system));
   - sets no inline style in markup: the page's Content Security Policy allows none, so a look is a class;
   - adds no router, data, state or form library before its second real use.
 - Every screen follows [the rules for screens](docs/plan/ui-refresh-guide.md#4-the-rules-for-screens), and is chosen from a mockup.
+  - It names its kind, and keeps its first view within that kind's budget, which the browser check holds (`scripts/acceptance/lib/browser-budget.mjs`).
 - Until the new dashboard covers every screen, the pages drawn on the server (`src/control/ui/` and `src/control/dashboard/`) are the dashboard in use. The new dashboard's build started with goal 243, so they take fixes only. A browser script there stays a string in its page module; server constants go into it with `JSON.stringify`, and a lint and a parse test cover it.
+
+### The design system
+
+- The design system is a package of its own in this repository, `packages/design-system` (the owner, 2026-11-14): one theme, shadcn/ui's components as its tool makes them (`src/ui/`, never edited by hand), and the brand's parts (`src/parts/`). Its site shows every part with its states, its rule and its code, and control serves it at `/design`.
+- **A component and a look are made in the design system, never in an app.** This holds for every screen and every later change:
+  - a new part is made there, exported from its door (`src/index.ts`), and given an example on the site, in the same change;
+  - a change to a look is made in the part or in the theme (`src/theme.css`), where each colour has a use and changes by its use between light and dark, so it shows on every screen;
+  - a screen writes no class and no style, and changes no look in place. What it needs and no part gives is a new part, or a new property of one.
+- The app imports the design system by its door alone (`@ds`), and none of the packages a look is made with. The design system imports nothing of Thermite: what a part shows comes in as its properties, so another app can import the same package.
+- Checks hold all of this, with no exceptions but the screens of the app's first build, whose list may only shrink: `npm run check:imports`, `tests/web/design-system.test.ts`, `tests/web/brand.test.ts`, and the browser check's part for the site.
 
 ### New tools and patterns
 

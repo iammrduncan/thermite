@@ -21,6 +21,10 @@ import { SIGN_IN_FAILURES } from "./session.ts";
  * The dashboard's app (goal 243): its built files, served at /next; the owner's session, which
  * the app shares with the pages at /ui; and the stream that tells an open screen to read again.
  * The app is a client of the API alone, so everything else it needs is a route of /v1.
+ *
+ * Beside the app, and apart from it, the design system's site at /design: the parts the app is
+ * made of, each with its states, its rule and its code. It holds no data of control's, so it
+ * needs no sign-in. It is served unless THERMITE_CONTROL_DESIGN_SITE is `0`.
  */
 
 /**
@@ -29,7 +33,18 @@ import { SIGN_IN_FAILURES } from "./session.ts";
  */
 const WEB_DIST = fileURLToPath(new URL("../../../web/dist/", import.meta.url));
 
-/** What the app's index.html holds in place of the nonce (web/vite.config.ts). */
+/** Where the design system's site is served: its own address, beside the app's. */
+export const DESIGN_PATH = "/design";
+
+/**
+ * Where the site's built files are: `packages/design-system/dist` at the repository's root, and
+ * in control's image. Vite builds them (`npm run design:build`).
+ */
+const DESIGN_DIST = fileURLToPath(
+  new URL("../../../packages/design-system/dist/", import.meta.url),
+);
+
+/** What a built index.html holds in place of the nonce (web/vite.config.ts, and the site's). */
 const NONCE_PLACEHOLDER = "__CSP_NONCE__";
 
 /**
@@ -60,7 +75,6 @@ const STREAM_LOOK_MS = 2_000;
 
 export function webRoutes(app: Hono, api: ApiContext): void {
   const { store, admin, sessions, control, opts } = api;
-  const dist = resolve(opts.webDir ?? WEB_DIST);
 
   // ---------------------------------------------------------------- the session
   const sessionAnswer = (sid: string | undefined) => ({
@@ -131,50 +145,64 @@ export function webRoutes(app: Hono, api: ApiContext): void {
     });
   });
 
-  // ---------------------------------------------------------------- the app's files
+  // ---------------------------------------------------------------- the built files
   const headers = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
-  /** One of the app's files, by its path under /next; undefined for none, or a path outside. */
-  const file = async (name: string): Promise<Uint8Array<ArrayBuffer> | undefined> => {
-    const path = resolve(dist, name);
-    if (path !== dist && !path.startsWith(dist + sep)) return undefined;
-    try {
-      return new Uint8Array(await readFile(path));
-    } catch {
-      // No such file: the caller answers for it.
-      return undefined;
-    }
-  };
-  const page = async (c: Context) => {
-    const html = await file("index.html");
-    if (!html)
-      return c.text(
-        "The dashboard's app is not built here. Build it with `npm run web:build`, or open /ui.",
-        503,
-        headers,
-      );
-    const nonce = randomBytes(18).toString("base64");
-    return c.body(new TextDecoder().decode(html).replaceAll(NONCE_PLACEHOLDER, nonce), 200, {
-      ...headers,
-      ...noStore,
-      "content-type": "text/html; charset=utf-8",
-      "content-security-policy": appPolicy(nonce),
+  /**
+   * Serves a set of built files at an address: its page for the address itself and for every
+   * path that is no file's (the page's own script answers for it), and each file by its name.
+   */
+  const serveBuilt = (at: string, dir: string, notBuilt: string) => {
+    const dist = resolve(dir);
+    /** One of the files, by its path under the address; undefined for none, or a path outside. */
+    const file = async (name: string): Promise<Uint8Array<ArrayBuffer> | undefined> => {
+      const path = resolve(dist, name);
+      if (path !== dist && !path.startsWith(dist + sep)) return undefined;
+      try {
+        return new Uint8Array(await readFile(path));
+      } catch {
+        // No such file: the caller answers for it.
+        return undefined;
+      }
+    };
+    const page = async (c: Context) => {
+      const html = await file("index.html");
+      if (!html) return c.text(notBuilt, 503, headers);
+      const nonce = randomBytes(18).toString("base64");
+      return c.body(new TextDecoder().decode(html).replaceAll(NONCE_PLACEHOLDER, nonce), 200, {
+        ...headers,
+        ...noStore,
+        "content-type": "text/html; charset=utf-8",
+        "content-security-policy": appPolicy(nonce),
+      });
+    };
+    app.get(at, page);
+    app.get(`${at}/*`, async (c) => {
+      const name = decodeURIComponent(c.req.path.slice(at.length + 1));
+      const type = TYPES[extname(name)];
+      // An address of a screen has no file's ending: the page answers for it.
+      if (!type || name === "index.html") return page(c);
+      const bytes = await file(name);
+      if (!bytes) return c.text("not found", 404, headers);
+      return c.body(bytes, 200, {
+        ...headers,
+        "content-type": type,
+        // Vite names each built file by its content, so one name never changes.
+        "cache-control": name.startsWith("assets/")
+          ? "public, max-age=31536000, immutable"
+          : "no-cache",
+      });
     });
   };
-  app.get(APP_PATH, page);
-  app.get(`${APP_PATH}/*`, async (c) => {
-    const name = decodeURIComponent(c.req.path.slice(APP_PATH.length + 1));
-    const type = TYPES[extname(name)];
-    // An address of a screen has no file's ending: the app answers for it.
-    if (!type || name === "index.html") return page(c);
-    const bytes = await file(name);
-    if (!bytes) return c.text("not found", 404, headers);
-    return c.body(bytes, 200, {
-      ...headers,
-      "content-type": type,
-      // Vite names each built file by its content, so one name never changes.
-      "cache-control": name.startsWith("assets/")
-        ? "public, max-age=31536000, immutable"
-        : "no-cache",
-    });
-  });
+
+  serveBuilt(
+    APP_PATH,
+    opts.webDir ?? WEB_DIST,
+    "The dashboard's app is not built here. Build it with `npm run web:build`, or open /ui.",
+  );
+  if (opts.designSite !== false)
+    serveBuilt(
+      DESIGN_PATH,
+      opts.designDir ?? DESIGN_DIST,
+      "The design system's site is not built here. Build it with `npm run design:build`.",
+    );
 }

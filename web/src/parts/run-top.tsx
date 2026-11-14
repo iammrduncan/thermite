@@ -1,8 +1,6 @@
+import { Act, Menu, type MenuLine, type Tab, Tabs } from "@ds";
 import { EllipsisIcon, EyeIcon, PauseIcon, PlayIcon, SendIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Act } from "./act.tsx";
-import { Menu, type MenuLine } from "./opens.tsx";
-import { type Tab, Tabs } from "./tabs.tsx";
 
 /**
  * A run's top, the same on every screen of a run: its five tabs, and its four buttons with the

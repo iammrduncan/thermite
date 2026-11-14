@@ -1,31 +1,22 @@
+import { Act, Chip, Confirm, Nothing, Screen, Section, TextLink, Undo } from "@ds";
 import { CircleXIcon, ClockIcon, DownloadIcon, RefreshCwIcon, UsersIcon } from "lucide-react";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
-import { Act, TextLink } from "@/parts/act.tsx";
-import { Chip } from "@/parts/chip.tsx";
-import { Confirm, Undo } from "@/parts/opens.tsx";
 import { RunActs, type RunTab, RunTabs } from "@/parts/run-top.tsx";
-import { Screen, Section } from "@/parts/screen.tsx";
-import { Nothing } from "@/parts/states.tsx";
 import { Home } from "@/screens/home.tsx";
 import { RunScreen } from "@/screens/run.tsx";
 import { Settings } from "@/screens/settings.tsx";
 import { SignIn } from "@/screens/sign-in.tsx";
 import { Frame } from "@/shell.tsx";
 import { homeEmpty, homeFull, runs, session } from "./fixtures.ts";
-import { DataGallery } from "./gallery-data.tsx";
-import { PartsGallery } from "./gallery-parts.tsx";
 
 /**
- * The gallery: the frame, each screen and each part on made-up answers, with a switch for each
- * state. It is where the brand is looked at beside the brand guide's boards, and where a screen
- * is built with no control behind it. It is in a development build only (`npm run web:dev`, then
- * /next/dev).
+ * The gallery of the app's screens: the frame and each screen on made-up answers, with a switch
+ * for each state, so a screen is built with no control behind it. It is in a development build
+ * only (`npm run web:dev`, then /next/dev). The parts themselves are on the design system's site
+ * (packages/design-system/site, which control serves at /design).
  */
 
 const SCREENS = [
-  { id: "parts", label: "Components" },
-  { id: "data", label: "Data" },
   { id: "top", label: "A run's top" },
   { id: "sign-in", label: "Sign in" },
   { id: "home", label: "Home" },
@@ -62,12 +53,7 @@ function Switch<T extends string>({
           type="button"
           aria-pressed={c.id === chosen}
           onClick={() => choose(c.id)}
-          className={cn(
-            "inline-flex h-7 items-center rounded-md px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            c.id === chosen
-              ? "bg-chosen font-semibold text-foreground"
-              : "text-quiet hover:bg-chosen",
-          )}
+          className={`inline-flex h-7 items-center rounded-md px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring ${c.id === chosen ? "bg-chosen font-semibold text-foreground" : "text-quiet hover:bg-chosen"}`}
         >
           {c.label}
         </button>
@@ -82,7 +68,7 @@ const STREAM = [
 ] as const;
 
 export default function Gallery() {
-  const [screen, setScreen] = useState<ScreenId>("parts");
+  const [screen, setScreen] = useState<ScreenId>("home");
   const [state, setState] = useState<State>("full");
   const [stream, setStream] = useState<(typeof STREAM)[number]["id"]>("alive");
   const error = state === "error" ? FAILED : "";
@@ -116,8 +102,6 @@ export default function Gallery() {
         reload={again}
       />
     );
-  else if (screen === "parts") shown = <PartsGallery />;
-  else if (screen === "data") shown = <DataGallery />;
   else if (screen === "top") shown = <RunTop />;
   else if (screen === "settings")
     shown = <Settings tab="about" session={session} signOut={() => {}} />;

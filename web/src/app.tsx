@@ -1,10 +1,8 @@
 import { HOME, SESSION, SESSION_END, type SessionAnswer } from "@core/api/control/dashboard.ts";
+import { Alone, Failure, Screen, TextLink } from "@ds";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import { type ApiError, call, setSessionToken, useAlive, useRead, whenSignedOut } from "@/api.ts";
 import { follow, here, to } from "@/nav.ts";
-import { TextLink } from "@/parts/act.tsx";
-import { Screen } from "@/parts/screen.tsx";
-import { Failure } from "@/parts/states.tsx";
 import { Home } from "@/screens/home.tsx";
 import { Run } from "@/screens/run.tsx";
 import { Settings } from "@/screens/settings.tsx";
@@ -62,9 +60,9 @@ function Owner({ path }: { path: string }) {
   }, [load]);
   if (!session)
     return error ? (
-      <main className="mx-auto grid min-h-dvh max-w-[480px] content-center px-4">
+      <Alone>
         <Failure said={error} again={load} />
-      </main>
+      </Alone>
     ) : null;
   if (!session.signed_in) return <SignIn days={session.session_days} onSignedIn={took} />;
   const signOut = () => {

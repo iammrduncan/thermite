@@ -28,6 +28,7 @@ Control listens on `THERMITE_CONTROL_LISTEN`, by default `0.0.0.0:8800`. The loc
 | `/mcp` | The [MCP server](mcp-tools.md) |
 | `/ui` | The dashboard. `GET /` redirects to `/ui` |
 | `/next` | The dashboard's new screens, a web app that is built up to take the place of `/ui` ([The dashboard's session and screens](#the-dashboards-session-and-screens)). Control serves its built files, each with `X-Content-Type-Options: nosniff`. The page comes with a Content Security Policy that takes scripts, styles, fonts and images from control alone and allows no inline script or style: a style a component adds while it runs carries the answer's nonce |
+| `/design` | The design system's site: the parts the dashboard's app is made of, each with its states, its rule and its code ([Contributing](../project/contributing.md#the-design-system)). Control serves its built files as it serves the app's, under the same Content Security Policy, with no sign-in: the site holds none of control's data. With [`THERMITE_CONTROL_DESIGN_SITE`](settings.md#control) at `0`, control does not serve it, and `/design` answers 404. A control whose site is not built answers 503 in words: the site is not built here, and `npm run design:build` builds it |
 
 ## Tokens
 

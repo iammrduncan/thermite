@@ -1,15 +1,10 @@
 import { RUN_OVERVIEW, type RunOverviewAnswer } from "@core/api/control/dashboard.ts";
+import { Chip, CopyId, Facts, Failure, Loading, Nothing, Screen, Section, toneText } from "@ds";
 import { ArrowUpRightIcon } from "lucide-react";
 import { useRead } from "@/api.ts";
-import { Chip } from "@/parts/chip.tsx";
-import { CopyId } from "@/parts/copy-id.tsx";
 import { GoalBar, StepChart } from "@/parts/figure.tsx";
-import { Facts } from "@/parts/lists.tsx";
 import { EventRows, NeedRows, NowLines } from "@/parts/rows.tsx";
 import { RunActs, type RunTab, RunTabs } from "@/parts/run-top.tsx";
-import { Screen, Section } from "@/parts/screen.tsx";
-import { Failure, Loading, Nothing } from "@/parts/states.tsx";
-import { toneText } from "@/parts/tone.ts";
 
 /** A run's Summary: how it stands, what needs the owner, its result, what its agents do now. */
 export function Run({ run }: { run: string }) {

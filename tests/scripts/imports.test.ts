@@ -155,6 +155,47 @@ describe("the dashboard's app imports only contracts that run in a browser", () 
   });
   test("production code never imports the app", () => {
     assert.equal(rule("src/control/api/web.ts", "../../../web/src/nav.ts"), "app-in");
+    assert.equal(
+      rule("src/control/api/web.ts", "../../../packages/design-system/src/index.ts"),
+      "app-in",
+    );
+  });
+  test("the app takes its look from the design system, by its door alone", () => {
+    assert.equal(rule("web/src/shell.tsx", "@ds"), null);
+    assert.equal(rule("web/src/shell.tsx", "lucide-react"), null);
+    // Past the door: a part's own file, a stock component, by alias or by path.
+    assert.equal(rule("web/src/shell.tsx", "@ds/parts/act.tsx"), "design-door");
+    assert.equal(rule("web/src/shell.tsx", "@ds/ui/button"), "design-door");
+    assert.equal(
+      rule("web/src/screens/home.tsx", "../../../packages/design-system/src/ui/dialog.tsx"),
+      "design-door",
+    );
+    // The app's build settings read the design system's build step.
+    assert.equal(rule("web/vite.config.ts", "../packages/design-system/build/licenses.ts"), null);
+    // A package a look is made with is the design system's.
+    assert.equal(rule("web/src/parts/own.tsx", "radix-ui"), "design-own");
+    assert.equal(rule("web/src/parts/own.tsx", "class-variance-authority"), "design-own");
+    assert.equal(rule("web/src/parts/own.tsx", "cn"), "design-own");
+    const bad = found({ "web/src/parts/own.tsx": 'import { Dialog } from "radix-ui";' });
+    assert.deepEqual(
+      bad.map((b) => [b.file, b.target, b.rule]),
+      [["web/src/parts/own.tsx", "radix-ui", "design-own"]],
+    );
+    assert.match(brokenText(bad[0] as (typeof bad)[number]), /made in the design system/);
+    assert.equal(compare(bad, {}).added.length, 1);
+  });
+  test("the design system imports nothing of Thermite", () => {
+    const part = "packages/design-system/src/parts/act.tsx";
+    assert.equal(rule(part, "../ui/button.tsx"), null);
+    assert.equal(rule(part, "@ds/ui/button"), null);
+    assert.equal(rule(part, "radix-ui"), null);
+    assert.equal(rule(part, "@core/api/control/dashboard.ts"), "design-out");
+    assert.equal(rule(part, "../../../../web/src/nav.ts"), "design-out");
+    assert.equal(rule("packages/design-system/site/site.tsx", "@ds"), null);
+    assert.equal(
+      rule("packages/design-system/site/site.tsx", "../../../src/core/names.ts"),
+      "design-out",
+    );
   });
   test("no exception excuses these rules, and none is listed for them", () => {
     const bad = found({ "web/src/bad.tsx": 'import "../../src/control/pages.ts";' });

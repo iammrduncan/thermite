@@ -18,12 +18,17 @@
 //    change that shows with no reload, and every screen at 1440, 820 and 390 pixels wide, in light
 //    and in dark.
 //
-// It writes report.json, the screenshots, index.html (every page's screenshots side by side) and
-// app.html (every screen of the app) to .dev/acceptance/browser/. Chrome is the installed Google Chrome, or THERMITE_BROWSER_CHROME,
+// 4. The design system's site at /design (lib/browser-design.mjs): built from
+//    packages/design-system, then every page of it at the same widths, in light and in dark, an
+//    example's code, and the one dialog within its budget.
+//
+// It writes report.json, the screenshots, index.html (every page's screenshots side by side),
+// app.html (every screen of the app) and design.html (every page of the design system's site) to
+// .dev/acceptance/browser/. Chrome is the installed Google Chrome, or THERMITE_BROWSER_CHROME,
 // the path of a Chrome or Chromium executable. Nothing is downloaded, and the browser reaches
 // nothing but control.
 //
-// Usage: node scripts/acceptance/browser.mjs [--only flows|pages|app] [--widths 1440,820]
+// Usage: node scripts/acceptance/browser.mjs [--only flows|pages|app|design] [--widths 1440,820]
 //          [--max-pages N] [--headed]
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -31,6 +36,7 @@ import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { launchChrome, signedInPage, startControl } from "./lib/browser.mjs";
 import { appCheck, buildApp } from "./lib/browser-app.mjs";
+import { buildSite, designCheck } from "./lib/browser-design.mjs";
 import { pageSweep } from "./lib/browser-pages.mjs";
 import { acceptanceChecks } from "./lib/checks.mjs";
 
@@ -42,8 +48,8 @@ const { values } = parseArgs({
     headed: { type: "boolean", default: false },
   },
 });
-if (values.only && !["flows", "pages", "app"].includes(values.only)) {
-  console.error(`browser.mjs: --only is flows, pages or app, not ${values.only}`);
+if (values.only && !["flows", "pages", "app", "design"].includes(values.only)) {
+  console.error(`browser.mjs: --only is flows, pages, app or design, not ${values.only}`);
   process.exit(2);
 }
 /**
@@ -326,6 +332,16 @@ if (part("app")) {
     built.ok ? `script ${built.script} bytes, styles ${built.styles} bytes` : built.why,
   );
 }
+// So is the design system's site: control serves what is in packages/design-system/dist.
+let design = false;
+if (part("design")) {
+  const built = buildSite();
+  design = check(
+    "the design system's site builds from packages/design-system",
+    built.ok,
+    built.ok ? undefined : built.why,
+  );
+}
 const control = await startControl(OUT);
 let browser;
 try {
@@ -333,6 +349,7 @@ try {
   console.log(`Chrome ${browser.version()}, control at ${control.url}`);
   if (part("flows")) await newCampaignFlows(browser, control);
   if (app) await appCheck(browser, control, { out: OUT, check });
+  if (design) await designCheck(browser, control, { out: OUT, check });
   if (part("pages"))
     await pageSweep(browser, control, {
       widths: WIDTHS,

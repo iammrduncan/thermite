@@ -4,16 +4,24 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 
 /**
- * The app's brand (goal 243) is one theme, web/src/index.css: each colour has a use and changes
- * by its use between light and dark. So no screen and no part sets a colour, a size of text or a
- * weight of its own. The stock components are shadcn's, as its tool makes them, and Thermy's
- * drawing keeps its own colours.
+ * The brand (goal 243) is one theme, packages/design-system/src/theme.css: each colour has a use
+ * and changes by its use between light and dark. So no screen of the app and no part of the
+ * design system sets a colour, a size of text or a weight of its own. The stock components are
+ * shadcn's, as its tool makes them, and Thermy's drawing keeps its own colours.
  */
-const SRC = join(import.meta.dirname, "..", "..", "web", "src");
-const NOT_HELD = [join("components", "ui"), join("parts", "thermy.tsx")];
+const ROOT = join(import.meta.dirname, "..", "..");
+const THEME = join(ROOT, "packages", "design-system", "src", "theme.css");
+/** The folders whose files wear the brand, and what in them is not held. */
+const HELD = [join("web", "src"), join("packages", "design-system")];
+const NOT_HELD = [
+  join("packages", "design-system", "src", "ui"),
+  join("packages", "design-system", "src", "brand", "thermy.tsx"),
+  join("packages", "design-system", "node_modules"),
+  join("packages", "design-system", "dist"),
+];
 
 function files(dir: string): string[] {
-  return readdirSync(join(SRC, dir), { withFileTypes: true }).flatMap((entry) => {
+  return readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (NOT_HELD.includes(path)) return [];
     if (entry.isDirectory()) return files(path);
@@ -40,25 +48,29 @@ const OWN: { what: string; found: RegExp }[] = [
   { what: "a shadow of its own", found: /\bshadow-\[/ },
 ];
 
-describe("the app's brand", () => {
+describe("the brand", () => {
   test("no screen or part sets a colour, a size of text, a weight or a shadow of its own", () => {
     const found: string[] = [];
-    const all = files("");
-    assert.ok(all.length > 20, "the app's own files are read");
+    const all = HELD.flatMap(files);
+    assert.ok(all.length > 50, "the app's and the design system's files are read");
     for (const file of all) {
-      readFileSync(join(SRC, file), "utf8")
+      readFileSync(join(ROOT, file), "utf8")
         .split("\n")
         .forEach((line, i) => {
           for (const own of OWN)
             if (own.found.test(line))
-              found.push(`web/src/${file}:${i + 1}: ${own.what}: ${line.trim().slice(0, 90)}`);
+              found.push(`${file}:${i + 1}: ${own.what}: ${line.trim().slice(0, 90)}`);
         });
     }
-    assert.deepEqual(found, [], "give the look a use in web/src/index.css, and use its class");
+    assert.deepEqual(
+      found,
+      [],
+      "give the look a use in the theme (packages/design-system/src/theme.css), and use its class",
+    );
   });
 
   test("the theme gives every use a value in light, and the ones that change one in dark", () => {
-    const css = readFileSync(join(SRC, "index.css"), "utf8");
+    const css = readFileSync(THEME, "utf8");
     const night = css.indexOf("@media (prefers-color-scheme: dark) {");
     const theme = css.slice(css.indexOf("@theme inline {"), css.indexOf(":root {"));
     const light = css.slice(css.indexOf(":root {"), night);

@@ -18,6 +18,8 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@ds": ["../packages/design-system/src/index.ts"],
+      "@ds/*": ["../packages/design-system/src/*"],
       "@core/*": ["../src/core/*"],
       "zod": ["./node_modules/zod"]
     }

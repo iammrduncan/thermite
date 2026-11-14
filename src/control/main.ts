@@ -55,7 +55,12 @@ import { RETENTION_LOOK_MS, retentionTick } from "./retention/index.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
 import { moveSecretsKey, SecretBox } from "./secrets.ts";
-import { CONTROL_NUMBERS, controlPublicUrl, notReadWords } from "./settings.ts";
+import {
+  CONTROL_NUMBERS,
+  controlPublicUrl,
+  DESIGN_SITE_SETTING,
+  notReadWords,
+} from "./settings.ts";
 import { openControlStore } from "./store/index.ts";
 
 /** Control service entry point. Generates its signing key on first start. */
@@ -243,6 +248,8 @@ async function main(): Promise<void> {
     driver,
     requireKeyAcceptance,
     sessionDays: readNumber(env, CONTROL_NUMBERS.sessionDays),
+    // The design system's site, beside the app: served unless the setting says 0.
+    designSite: env[DESIGN_SITE_SETTING] !== "0",
     parts,
     // The dashboard's pages.
     pages: mountDashboard,

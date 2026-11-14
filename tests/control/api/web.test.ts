@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { DESIGN_PATH } from "../../../src/control/api/web.ts";
 import {
   HOME,
   RUN_OVERVIEW,
@@ -18,8 +19,9 @@ import { seedDemo } from "../../helpers/demo/index.ts";
 
 /**
  * The dashboard's app as control serves it (goal 243): the owner's session on /v1, with its
- * token on every change; the app's files at /next under a policy with no inline style; and the
- * reads of Home and of a run's Overview, each as its contract says.
+ * token on every change; the app's files at /next under a policy with no inline style; the
+ * design system's site at /design beside it; and the reads of Home and of a run's Overview, each
+ * as its contract says.
  */
 
 const JSON_TYPE = { "content-type": "application/json" };
@@ -200,6 +202,72 @@ describe("the app's files at /next", () => {
     const res = await control.request("/next");
     assert.equal(res.status, 503);
     assert.match(await res.text(), /not built here/);
+  });
+});
+
+describe("the design system's site at /design", () => {
+  /** Control with a folder of the site's built files, and whatever else the case sets. */
+  const withSite = async (options: { designSite?: boolean; designDir?: string } = {}) => {
+    const store = controlStore();
+    const { control } = await controlOnly({
+      store,
+      options: { designDir: builtApp(), ...options },
+    });
+    return control;
+  };
+
+  test("it is served with no sign-in, under the app's policy, with a fresh nonce", async () => {
+    const control = await withSite();
+    const page = await control.request(DESIGN_PATH);
+    assert.equal(page.status, 200);
+    const policy = page.headers.get("content-security-policy") ?? "";
+    assert.match(policy, /script-src 'self';/);
+    assert.doesNotMatch(policy, /unsafe-inline/);
+    const nonce = /style-src 'self' 'nonce-([^']+)'/.exec(policy)?.[1];
+    assert.ok(nonce, "the policy names a nonce");
+    assert.ok((await page.text()).includes(`nonce="${nonce}"`), "the page carries the same nonce");
+    // A page of the site has no file's ending: the site's own script answers for it.
+    const inner = await control.request(`${DESIGN_PATH}/buttons`);
+    assert.equal(inner.status, 200);
+    assert.match(inner.headers.get("content-type") ?? "", /text\/html/);
+  });
+
+  test("a built file is served as what it is, and nothing outside the folder", async () => {
+    const control = await withSite();
+    const script = await control.request(`${DESIGN_PATH}/assets/app-abc.js`);
+    assert.equal(script.status, 200);
+    assert.match(script.headers.get("content-type") ?? "", /text\/javascript/);
+    assert.match(script.headers.get("cache-control") ?? "", /immutable/);
+    assert.equal((await control.request(`${DESIGN_PATH}/assets/none.js`)).status, 404);
+    assert.equal((await control.request(`${DESIGN_PATH}/..%2F..%2Fpackage.json`)).status, 404);
+  });
+
+  test("it is on unless control is told not to serve it", async () => {
+    assert.equal((await (await withSite()).request(DESIGN_PATH)).status, 200);
+    const off = await withSite({ designSite: false });
+    assert.equal((await off.request(DESIGN_PATH)).status, 404);
+    assert.equal((await off.request(`${DESIGN_PATH}/buttons`)).status, 404);
+    // The app beside it is served all the same.
+    assert.notEqual((await off.request("/next")).status, 404);
+  });
+
+  test("a control with no built site says so", async () => {
+    const control = await withSite({ designDir: mkdtempSync(join(tmpdir(), "thermite-design-")) });
+    const res = await control.request(DESIGN_PATH);
+    assert.equal(res.status, 503);
+    assert.match(await res.text(), /npm run design:build/);
+  });
+
+  test("the site is built for the address control serves it at", () => {
+    const root = join(import.meta.dirname, "..", "..", "..", "packages", "design-system");
+    assert.ok(
+      readFileSync(join(root, "vite.config.ts"), "utf8").includes(`base: "${DESIGN_PATH}/"`),
+      "the site's build has control's address as its base",
+    );
+    assert.ok(
+      readFileSync(join(root, "site", "nav.ts"), "utf8").includes(`const BASE = "${DESIGN_PATH}";`),
+      "the site's links start at control's address",
+    );
   });
 });
 

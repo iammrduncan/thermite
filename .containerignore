@@ -12,3 +12,5 @@ docs/_site/node_modules
 docs/_site/.astro
 web/node_modules
 web/dist
+packages/design-system/node_modules
+packages/design-system/dist

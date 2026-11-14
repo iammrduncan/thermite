@@ -45,7 +45,7 @@ const PATTERN_NEXT = /^[*<{$]/;
 /** The files whose comments are read for paths. */
 export function codeFile(f: string): boolean {
   return (
-    /^(?:src|tests|scripts|containers|kits|web|\.github)\/.*\.(?:ts|tsx|mts|mjs|js|cjs|sh|ya?ml|py)$/.test(
+    /^(?:src|tests|scripts|containers|kits|web|packages|\.github)\/.*\.(?:ts|tsx|mts|mjs|js|cjs|sh|ya?ml|py)$/.test(
       f,
     ) || /(?:^|\/)Containerfile$/.test(f)
   );
@@ -63,12 +63,18 @@ export function pageFile(f: string): boolean {
 }
 
 /**
- * The files whose exports must be named elsewhere: production TypeScript, and the dashboard's
- * app. The app's stock components (web/src/components/ui/, written by the shadcn tool) are kept
- * as the tool writes them, with every export.
+ * The files whose exports must be named elsewhere: production TypeScript, the dashboard's app,
+ * and the design system, whose site names each part it gives. The design system's stock
+ * components (packages/design-system/src/ui/, written by the shadcn tool) are kept as the tool
+ * writes them, with every export; the site's examples are loaded by their folder, and a test
+ * holds that each is on a page (tests/web/design-system.test.ts).
  */
 export function productionFile(f: string): boolean {
-  return /^src\/.*\.ts$/.test(f) || /^web\/src\/(?!components\/ui\/).*\.tsx?$/.test(f);
+  return (
+    /^src\/.*\.ts$/.test(f) ||
+    /^web\/src\/.*\.tsx?$/.test(f) ||
+    /^packages\/design-system\/(?:src\/(?!ui\/)|site\/(?!examples\/)).*\.tsx?$/.test(f)
+  );
 }
 
 /** `export { a } from "./a.ts"` and `export * from …`: they pass names on, and use none. */

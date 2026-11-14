@@ -44,6 +44,8 @@ services:
       # "1": the owner accepts each rig's first report key on the dashboard.
       THERMITE_CONTROL_REQUIRE_KEY_ACCEPT: "${THERMITE_CONTROL_REQUIRE_KEY_ACCEPT:-}"
       THERMITE_CONTROL_SESSION_DAYS: "${THERMITE_CONTROL_SESSION_DAYS:-}"
+      # 0: control does not serve the design system's site at /design. It serves it otherwise.
+      THERMITE_CONTROL_DESIGN_SITE: "${THERMITE_CONTROL_DESIGN_SITE:-}"
       # Restarts through the container engine: see compose.lifecycle.yaml (off by default).
       THERMITE_LIFECYCLE: "${THERMITE_LIFECYCLE:-}"
       THERMITE_COMPOSE_PROJECT: thermite

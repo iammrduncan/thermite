@@ -53,14 +53,24 @@ RUN npm run build && npm prune --omit=dev --no-fund --no-audit \
 # with control. Only the built files go on to control's image, with the licences of the packages
 # in them (licenses.md for the script, licenses-styles.md for the fonts and styles); the app's
 # packages stay in this stage. No package's install script runs.
+#
+# The app takes its look from the design system (packages/design-system), whose own site control
+# serves at /design. The design system has no packages of its own: it builds with the app's,
+# through the link that scripts/design-system/link.mjs makes on a checkout, made here by hand.
 FROM ${NODE_IMAGE} AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-fund --no-audit --ignore-scripts
 COPY web/ ./
 COPY src/core /src/src/core
-RUN npm run build && test -s dist/index.html && test -s dist/licenses.md \
- && test -s dist/licenses-styles.md
+COPY packages/design-system /src/packages/design-system
+RUN ln -sfn ../../web/node_modules /src/packages/design-system/node_modules \
+ && npm run build && test -s dist/index.html && test -s dist/licenses.md \
+ && test -s dist/licenses-styles.md \
+ && npm --prefix /src/packages/design-system run build \
+ && test -s /src/packages/design-system/dist/index.html \
+ && test -s /src/packages/design-system/dist/licenses.md \
+ && test -s /src/packages/design-system/dist/licenses-styles.md
 
 # Control's packages: without node-pty, the one optional dependency, and what it alone needs.
 # node-pty is the terminal host's (goal 169), which control does not run.
@@ -186,6 +196,8 @@ COPY --from=control-modules /src/node_modules ./node_modules
 COPY --from=build /src/dist ./dist
 # The dashboard's app, built: control serves these files at /next (src/control/api/web.ts).
 COPY --from=web /src/web/dist ./web/dist
+# The design system's site, built: control serves these files at /design.
+COPY --from=web /src/packages/design-system/dist ./packages/design-system/dist
 # Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
 COPY LICENSE NOTICE /usr/local/share/doc/thermite/
 # xterm.js, which draws a trial's terminal on Live (goal 169): the copy kept in the repository, with

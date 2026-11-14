@@ -169,39 +169,82 @@ To work on a screen, leave the demo running and start the app's development serv
 npm run web:dev
 ```
 
-`http://127.0.0.1:5173/next/dev` is the gallery: the brand's parts as two boards (**Components** and **Data**), a run's top, the sign-in screen and every other screen, on made-up answers, with a switch for each state (full, empty, loading, a failure) and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
+`http://127.0.0.1:5173/next/dev` is the gallery of the app's screens: the sign-in, a run's top and every other screen, on made-up answers, with a switch for each state (full, empty, loading, a failure) and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
 
 | Folder | What it holds |
 | --- | --- |
 | `web/src/app.tsx` | The owner's session, and the table from an address to its screen. The app has no router library: a screen's address is its path under `/next`, and links are plain links (`web/src/nav.ts`) |
-| `web/src/shell.tsx` | The frame every screen is in: the sidebar at the left, and on a phone a top bar whose button opens it as a menu |
+| `web/src/shell.tsx` | Thermite's frame: the design system's frame, with Thermite's places in its sidebar |
 | `web/src/api.ts` | The one client: `call(route)` for a route of `src/core/api/control/`, and `useRead(route)`, which reads again each time control's stream says something changed |
 | `web/src/screens/` | One file for each screen |
-| `web/src/parts/` | Thermite's own parts, as the brand has them ([below](#the-brand-and-its-parts)) |
-| `web/src/index.css` | The theme: every colour by its use, in light and in dark, the sizes of text, the corners and the shadows |
-| `web/src/components/ui/` | Stock shadcn/ui components and their style file, as shadcn's tool writes them, with its licence: `npx shadcn@latest add <component>` in `web/` downloads one from shadcn's registry (the tool is not one of the app's packages). Change the look in `web/src/index.css`, not here |
-| `web/src/dev/` | The gallery and its made-up answers |
+| `web/src/parts/` | What is Thermite's own in a screen and has no look of its own, such as a run's five tabs and four buttons (`run-top.tsx`), and the rows of the app's first screens, which go when those screens are rebuilt |
+| `web/src/index.css` | One line: it takes the design system's theme |
+| `web/src/dev/` | The gallery of screens and its made-up answers |
+
+The app has no components of its own and no look of its own: it takes both from the design system.
+
+### The design system
+
+The design system is a package of its own in this repository, `packages/design-system`: one theme, the stock shadcn/ui components it is built on, and the brand's parts. The app imports its look from it and from nowhere else, so a change to a part changes every screen. It imports nothing of Thermite, so another app can import the same package.
+
+Its site shows every part with its states, its rule and its code. Control serves the site at `/design`, beside the app, with no sign-in ([`THERMITE_CONTROL_DESIGN_SITE`](../reference/settings.md#control) turns it off). To work on it:
+
+```sh
+npm run web:install      # once: the app's packages, which the design system builds with
+npm run design:dev       # the site at http://127.0.0.1:5174/design/, drawn again as you save
+npm run design:build     # writes packages/design-system/dist, which control serves at /design
+npm run design:typecheck
+```
+
+The design system has no packages of its own while it lives here. It names what it needs as peer dependencies, and uses the app's through a link that `npm run web:install` makes (`packages/design-system/node_modules`, which git ignores).
+
+| Folder in `packages/design-system/` | What it holds |
+| --- | --- |
+| `src/index.ts` | The door: everything an app imports, as `@ds` |
+| `src/theme.css` | The theme: every colour by its use, in light and in dark, the sizes of text, the corners and the shadows |
+| `src/parts/` | The brand's parts ([below](#the-brand-and-its-parts)) |
+| `src/brand/` | The mark, and Thermy's face |
+| `src/ui/` | Stock shadcn/ui components and their style file, as shadcn's tool writes them, with its licence: `npx shadcn@latest add <component>` in `packages/design-system/` downloads one from shadcn's registry (the tool is not one of the packages). Change the look in `src/theme.css`, not here |
+| `site/` | The site: `pages.ts` lists its pages, and `examples/` holds one file for each example, which the site draws and shows as code |
+
+**The rule, for every screen and every later change:** a component and a look are made in the design system, never in the app.
+
+- **A new part** goes in `packages/design-system/src/parts/`, is exported from `src/index.ts`, and gets an example in `site/examples/` on a page of `site/pages.ts`, with its rule. The app then imports it from `@ds`.
+- **A change to a look** is made in the part or in the theme, so it shows on every screen. A screen never changes a look in place.
+- **A screen writes no class and no style.** It is made of parts. What it needs and no part gives is a new part, or a new property of one.
+
+Checks hold the rule, so it does not rest on care:
+
+| What is held | By |
+| --- | --- |
+| No file of the app writes a class or a style. Home, a run's screen and Setup, with their own rows, are listed as not yet rebuilt; the list may only shrink | `tests/web/design-system.test.ts` |
+| The app imports the design system by its door alone, and none of the packages a look is made with (Radix, the class helpers) | `npm run check:imports` |
+| The design system imports nothing of Thermite | `npm run check:imports` |
+| Every part the design system gives has an example, and every example is on a page | `tests/web/design-system.test.ts` |
+| No part and no screen sets a colour, a size of text, a weight or a shadow of its own | `tests/web/brand.test.ts` |
+| Every page of the site opens at three widths, in light and in dark, with no fault | `npm run acceptance:browser -- --only design` |
 
 #### The brand and its parts
 
-The app's look is one brand: warm greys, one accent (the flame) and a colour for every state. `web/src/index.css` holds it. A colour is named for its use, and changes by its use between light and dark, which follow the operating system. A screen never sets a colour of its own.
+The look is one brand: warm greys, one accent (the flame) and a colour for every state. `packages/design-system/src/theme.css` holds it. A colour is named for its use, and changes by its use between light and dark, which follow the operating system. A screen never sets a colour of its own.
 
 | What | The rule |
 | --- | --- |
 | The greys | Ink for names, numbers and text (`text-foreground`); `text-soft` for text beside a name; `text-quiet` for labels and times, and no text is lighter. `border-line` between rows and around cards, `border-edge` around a control, `bg-chosen` for what is chosen or under the pointer |
 | The flame | The one main button of a screen, links, and what is chosen (`text-flame` on `bg-flame-tint`) |
-| The states | `good`, `working`, `needs`, `wrong` and `none`, which control picks. Each is a text colour and a tint behind it (`web/src/parts/tone.ts`). A state always has a word or a shape beside its colour |
+| The states | `good`, `working`, `needs`, `wrong` and `none`, which control picks. Each is a text colour and a tint behind it (`src/parts/tone.ts`). A state always has a word or a shape beside its colour |
 | Text | Four sizes: 22 px for a screen's one sentence (`text-sentence`), 16 px for a block's title (`text-base`), 14 px for text (`text-sm`) and 12 px for quiet facts (`text-xs`). Two weights: 400 and 600. Geist Mono for what a person may copy |
 | Space | Gaps of 4, 8, 16, 24 and 40 px |
 | Corners | 8 px for a control and a row, 16 px for a card and a dialog, round for a chip |
 | Icons | Lucide, 16 px, in the colour of their text. Every line of the sidebar and of a tree has one |
 
-A screen is made of these parts and no others. Each is on the gallery with its states:
+The parts, each with its example on the site:
 
-| Part | File in `web/src/parts/` |
+| Part | File in `packages/design-system/src/parts/` |
 | --- | --- |
+| The frame: the sidebar and its lines, a menu on a phone | `frame.tsx` |
 | A screen: where it is, its name and state, its buttons, its tabs, its one sentence, then its blocks | `screen.tsx` |
-| A run's top: five tabs, and four buttons with the main one last | `run-top.tsx` |
+| A page with one thing on it, such as the sign-in, and a form's layout | `lone.tsx` |
 | Buttons (main, plain, red, text, an icon alone) and a link | `act.tsx` |
 | A state's chip, a dot alone, a count that waits for you, a picture's legend | `chip.tsx` |
 | A change of a number, with its arrow: green when better, red when worse | `change.tsx` |
@@ -214,9 +257,7 @@ A screen is made of these parts and no others. Each is on the gallery with its s
 | What opens: a menu, the one dialog, and one line with Undo | `opens.tsx` |
 | Tabs | `tabs.tsx` |
 | Loading, something wrong now, an empty list, nothing | `states.tsx` |
-| The mark, and Thermy's face | `mark.tsx`, `thermy.tsx` |
-
-A part that a screen needs and the list lacks is added to the parts and to the gallery, never written inside a screen.
+| An ID a person may copy | `copy-id.tsx` |
 
 #### A screen's budget
 
@@ -239,12 +280,12 @@ Home, a run's screen and Setup are still the screens of the app's first build, i
 #### Add a screen
 
 1. Give the screen's data a route with its contract in `src/core/api/control/`: a `Route` whose `answer` is a zod schema. Control registers the route and makes every word the screen shows. The app reads the answer with the same schema, so the two cannot disagree.
-2. Write the screen in `web/src/screens/`, as one `Screen` with its kind, from the parts in `web/src/parts/`. Under its name it has one sentence of at most 20 words that says the thing's state, in control's words. Split the screen as the run's is: one component that reads (`useRead`) and one that draws what was read, so the gallery can draw it without a control.
+2. Write the screen in `web/src/screens/`, as one `Screen` with its kind, from the design system's parts (`import { … } from "@ds"`), with no class of its own. Under its name it has one sentence of at most 20 words that says the thing's state, in control's words. Where it needs a part the design system lacks, add the part there first, with its example. Split the screen as the run's is: one component that reads (`useRead`) and one that draws what was read, so the gallery can draw it without a control.
 3. Add its address to the table in `web/src/app.tsx`, and its line to the sidebar in `web/src/shell.tsx` if it has one.
 4. Add made-up answers for each of its states to `web/src/dev/fixtures.ts`, and the screen to the gallery.
 5. Add the screen to the browser check's list (`scripts/acceptance/lib/browser-app.mjs`), run `npm run acceptance:browser -- --only app`, and look at its screenshots in `.dev/acceptance/browser/app.html`, at each width, in light and in dark.
 
-The page's Content Security Policy allows no inline style: set no `style` attribute in markup, and give a look a class. The licences of the packages in the built app go out with it, as `/next/licenses.md` and `/next/licenses-styles.md`.
+The page's Content Security Policy allows no inline style: set no `style` attribute in markup. The licences of the packages in the built app go out with it, as `/next/licenses.md` and `/next/licenses-styles.md`; the site's go out the same way under `/design`.
 
 ## Keep the repository public-safe
 

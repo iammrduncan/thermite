@@ -38,7 +38,7 @@ const listFile = join(root, EXCEPTIONS_PATH);
 
 const files = execFileSync(
   "git",
-  ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "src", "web"],
+  ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "src", "web", "packages"],
   { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 )
   .split("\0")

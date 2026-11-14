@@ -92,6 +92,10 @@ export interface ControlOptions {
   exportsDir?: string | undefined;
   /** Where the dashboard app's built files are (default: `web/dist` beside the code). */
   webDir?: string | undefined;
+  /** Whether control serves the design system's site at /design (default: it does). */
+  designSite?: boolean | undefined;
+  /** Where the site's built files are (default: `packages/design-system/dist` beside the code). */
+  designDir?: string | undefined;
   /** The knowledge base's files in control's state, which the owner downloads (none: none are served). */
   kbFiles?: KbFiles | undefined;
   /** How the new-campaign page reads a project's repository (tests give their own). */

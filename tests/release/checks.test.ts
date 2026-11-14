@@ -252,6 +252,8 @@ const COPIES: Record<"control" | "harness" | "supervisor", string[]> = {
     "COPY --from=build /src/dist ./dist",
     // The dashboard's app, built in a stage of its own (goal 243).
     "COPY --from=web /src/web/dist ./web/dist",
+    // The design system's site, built in the same stage, which control serves at /design.
+    "COPY --from=web /src/packages/design-system/dist ./packages/design-system/dist",
     "COPY --from=kubectl /kubectl /usr/local/bin/kubectl",
   ],
   harness: [

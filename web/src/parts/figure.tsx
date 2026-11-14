@@ -1,6 +1,6 @@
 import type { Figure } from "@core/api/control/dashboard.ts";
+import { toneMark } from "@ds";
 import { useEffect, useRef, useState } from "react";
-import { toneMark } from "./tone.ts";
 
 /** A percentage as a gain is written: "+11.0%". */
 export const percent = (gain: number) => `${gain >= 0 ? "+" : ""}${(gain * 100).toFixed(1)}%`;

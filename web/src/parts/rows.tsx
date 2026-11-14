@@ -1,14 +1,9 @@
 import type { EventRow, NeedRow, NowLine, RunRow } from "@core/api/control/dashboard.ts";
+import { Chip, toneMark, toneText } from "@ds";
 import { ArrowUpRightIcon } from "lucide-react";
-import { follow, to } from "@/nav.ts";
-import { Chip } from "./chip.tsx";
+import { follow, runPath } from "@/nav.ts";
 import { RunFigure } from "./figure.tsx";
 import { Since } from "./time.tsx";
-import { toneMark, toneText } from "./tone.ts";
-
-/** A run's own address in the app. */
-export const runPath = (r: { campaign: string | null; run: string | null }) =>
-  to(`/campaigns/${encodeURIComponent(r.campaign ?? "")}/runs/${encodeURIComponent(r.run ?? "")}`);
 
 /** Where a thing is, as one line: its campaign and run, its rig, its lane. */
 function Where({ where }: { where: NeedRow["where"] }) {

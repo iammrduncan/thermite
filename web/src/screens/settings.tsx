@@ -1,4 +1,5 @@
 import type { SessionAnswer } from "@core/api/control/dashboard.ts";
+import { Act, CopyId, Facts, Screen, Section, TextLink } from "@ds";
 import {
   ActivityIcon,
   ArrowUpRightIcon,
@@ -17,12 +18,7 @@ import {
   ServerIcon,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
 import { follow, to } from "@/nav.ts";
-import { Act, TextLink } from "@/parts/act.tsx";
-import { CopyId } from "@/parts/copy-id.tsx";
-import { Facts } from "@/parts/lists.tsx";
-import { Screen, Section } from "@/parts/screen.tsx";
 
 /**
  * Setup (Settings until the refresh): its parts are links, each with its own address, in a column beside the content on a
@@ -164,12 +160,9 @@ export function Settings({
               href={to(t === TABS[0] ? "/settings" : `/settings/${t.id}`)}
               onClick={follow}
               aria-current={t === tab ? "page" : undefined}
-              className={cn(
-                "flex h-9 shrink-0 items-center gap-2 rounded-md px-2 text-sm outline-none hover:bg-chosen focus-visible:ring-2 focus-visible:ring-ring",
-                t === tab && "bg-flame-tint font-semibold text-flame hover:bg-flame-tint",
-              )}
+              className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-2 text-sm outline-none hover:bg-chosen focus-visible:ring-2 focus-visible:ring-ring ${t === tab ? "bg-flame-tint font-semibold text-flame hover:bg-flame-tint" : ""}`}
             >
-              <t.icon className={cn("size-4", t === tab ? "text-flame" : "text-quiet")} /> {t.label}
+              <t.icon className={t === tab ? "size-4 text-flame" : "size-4 text-quiet"} /> {t.label}
             </a>
           ))}
         </nav>

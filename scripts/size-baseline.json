@@ -1,6 +1,7 @@
 {
   "files": {},
   "split_due": [
+    "packages/design-system/src/ui/sidebar.tsx",
     "scripts/acceptance/agents.mjs",
     "src/agents/cli/terminal.ts",
     "src/cli/doctor/index.ts",
@@ -38,7 +39,6 @@
     "tests/harness/selftest.test.ts",
     "tests/harness/service.test.ts",
     "tests/helpers/demo/decisions.ts",
-    "tests/supervisor/advisors.test.ts",
-    "web/src/components/ui/sidebar.tsx"
+    "tests/supervisor/advisors.test.ts"
   ]
 }
