@@ -113,7 +113,7 @@ The owner, 2026-11-10: "I want to utilize the UI/UX system I started for fxbot".
   - **On a phone, the bar is the brand guide's:** 56 px, the menu's button at the left, then the mark and the name. The board of Home on a phone draws another bar; the brand guide is where the look is agreed.
   - **What no board draws:** a control in focus has a ring in the flame; a line or a button under the pointer has the grey of what is chosen; the main button under the pointer is a little paler; a control that can't be pressed is at half strength. In dark, a menu and a dialog are the page's colour with a control's edge, and the Undo line is light with dark text. The red button and the red banner have one edge colour (the boards differ by one step).
   - **Two parts the boards do not draw are built from the rules:** a file in the tree (the board has folders only), and a group of settings (a title, one line, its settings).
-  - **A run's top on the run's screen leads to the current dashboard** until goal [247](247-campaigns-and-runs.goal): its four buttons and its tabs but Summary open the run's page at `/ui`, each marked with an arrow. On the gallery the same top works in place, as its board draws it: Pause is done at once and offers Undo, More is a menu, and its red line asks first.
+  - **A run's top on the run's screen leads to the current dashboard** until goal [247](247-campaigns-and-runs.goal): its four buttons and its tabs but Summary open the run's page at `/ui`, each marked with an arrow. On the gallery the same top works in place, as its board draws it: Pause is done at once and offers Undo, More is a menu, and its red line asks first. On the run's screen the second button says Pause on a paused run too: the app has only control's word for the run's state until goal 247 gives it the run's acts.
   - **Home, a run's screen and Setup keep their content** and take the brand's parts, as What (11) says. They name no kind, so they have no budget until goals 246, 247 and 252. A campaign's two letters for its mode are gone: the brand has no such mark.
   - **The budget counts a screen's body:** the sidebar, a screen's top and a run's top are frame. The height is held at 1,440 pixels wide only. The same count fails text in a size or a weight the brand does not have.
   - **What a stock component calls "medium" is the brand's 600,** set in the theme, so no stock component is edited. Four stock components that nothing used are removed (badge, empty, table, tabs).
@@ -137,7 +137,7 @@ The built app, 2026-11-14, as Vite writes it (`npm run web:build`):
 | File | Size | Compressed (gzip) |
 | --- | --- | --- |
 | The script, one file | 490 kB | 155 kB |
-| The styles, one file | 81 kB | 14 kB |
+| The styles, one file | 72 kB | 13 kB |
 | Geist, Latin | 29 kB | a font file is compressed already |
 | Geist Mono, Latin | 23 kB | the same |
 
