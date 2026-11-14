@@ -6,6 +6,7 @@ import {
   SearchIcon,
   UserIcon,
 } from "lucide-react";
+import { type KeyboardEvent, useRef, useState } from "react";
 import { cn } from "../lib/utils.ts";
 import { Segmented } from "./field.tsx";
 import { type Tone, toneBar } from "./tone.ts";
@@ -172,28 +173,84 @@ const STACK: Tone[] = ["good", "none", "wrong", "needs", "working"];
 /**
  * The records over time, stacked by outcome, with the time that is looked at shaded. It is as
  * wide as the screen gives it.
+ *
+ * With `onSpan`, the time is picked on the band itself: a drag across it picks the slots it
+ * crosses, the arrow keys move the picked time by a slot (with Shift, its end), and Escape looks
+ * at all of it again.
  */
 export function Band({
   slots,
   labels,
   span,
+  onSpan,
 }: {
   slots: BandSlot[];
   /** A word under a slot: a day. */
   labels: { slot: number; text: string }[];
   /** The slots that are looked at: the first and the one after the last. */
   span?: [number, number];
+  /** Takes the time a person picks; none when they look at all of it again. */
+  onSpan?: (span: [number, number] | undefined) => void;
 }) {
   const W = 960;
-  const step = W / Math.max(1, slots.length);
+  const count = Math.max(1, slots.length);
+  const step = W / count;
   const total = (s: BandSlot) => STACK.reduce((n, t) => n + (s[t] ?? 0), 0);
   const unit = 92 / Math.max(1, ...slots.map(total));
+  const picture = useRef<SVGSVGElement>(null);
+  // The slot a drag began on, and the one it is over now.
+  const [drag, setDrag] = useState<[number, number]>();
+  const slotAt = (x: number) => {
+    const box = picture.current?.getBoundingClientRect();
+    if (!box?.width) return 0;
+    return Math.min(count - 1, Math.max(0, Math.floor(((x - box.left) / box.width) * count)));
+  };
+  const shown: [number, number] | undefined = drag
+    ? [Math.min(...drag), Math.max(...drag) + 1]
+    : span;
+  const keys = (event: KeyboardEvent<SVGSVGElement>) => {
+    if (!onSpan) return;
+    if (event.key === "Escape") return onSpan(undefined);
+    const by = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (!by) return;
+    event.preventDefault();
+    const [from, to] = span ?? [count - 1, count];
+    // With Shift the end moves alone; without, the whole time moves and keeps its length.
+    const next: [number, number] = event.shiftKey
+      ? [from, Math.min(count, Math.max(from + 1, to + by))]
+      : [from + by, to + by];
+    if (next[0] >= 0 && next[1] <= count) onSpan(next);
+  };
   return (
     <svg
+      ref={picture}
       role="img"
-      aria-label="Records over time"
+      aria-label={
+        onSpan ? "Records over time. Drag across it to pick a time." : "Records over time"
+      }
       viewBox={`0 0 ${W} 114`}
-      className="block h-auto w-full"
+      // The picture takes the keys that move the picked time.
+      tabIndex={onSpan ? 0 : undefined}
+      onKeyDown={keys}
+      onPointerDown={(event) => {
+        if (!onSpan || event.button) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const at = slotAt(event.clientX);
+        setDrag([at, at]);
+      }}
+      onPointerMove={(event) => {
+        if (drag) setDrag([drag[0], slotAt(event.clientX)]);
+      }}
+      onPointerUp={() => {
+        if (!drag) return;
+        onSpan?.([Math.min(...drag), Math.max(...drag) + 1]);
+        setDrag(undefined);
+      }}
+      onPointerCancel={() => setDrag(undefined)}
+      className={cn(
+        "block h-auto w-full rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        onSpan && "cursor-crosshair touch-none select-none",
+      )}
     >
       <line x1={0} x2={W} y1={96} y2={96} className="stroke-line" />
       {slots.map((s, i) => {
@@ -214,18 +271,18 @@ export function Band({
           );
         });
       })}
-      {span && (
-        <g className="fill-working stroke-working">
+      {shown && (
+        <g data-span={`${shown[0]}-${shown[1]}`} className="fill-working stroke-working">
           <rect
-            x={span[0] * step}
+            x={shown[0] * step}
             y={0}
-            width={(span[1] - span[0]) * step}
+            width={(shown[1] - shown[0]) * step}
             height={96}
             fillOpacity={0.08}
             stroke="none"
           />
-          <line x1={span[0] * step} x2={span[0] * step} y1={0} y2={96} strokeWidth={2} />
-          <line x1={span[1] * step - 1} x2={span[1] * step - 1} y1={0} y2={96} strokeWidth={2} />
+          <line x1={shown[0] * step} x2={shown[0] * step} y1={0} y2={96} strokeWidth={2} />
+          <line x1={shown[1] * step - 1} x2={shown[1] * step - 1} y1={0} y2={96} strokeWidth={2} />
         </g>
       )}
       {labels.map((l) => (

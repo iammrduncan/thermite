@@ -180,7 +180,7 @@ export const PAGES: Page[] = [
       {
         file: "explorer",
         title: "Views, fields, the band and dense rows",
-        rule: "Saved views are quieter than tabs. The fields shown as columns come first; one field may be open with its most common values. The band shows the records over time, stacked by outcome.",
+        rule: "Saved views are quieter than tabs. The fields shown as columns come first; one field may be open with its most common values. The band shows the records over time, stacked by outcome: a drag across it picks the time to look at, the arrow keys move it, and Escape looks at all of it again.",
       },
     ],
   },

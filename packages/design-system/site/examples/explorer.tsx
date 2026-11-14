@@ -8,6 +8,7 @@ import {
   Grid,
   Legend,
   Mono,
+  Nothing,
   type QueryHow,
   Split,
   Views,
@@ -49,6 +50,9 @@ export default function Explorer() {
   const [field, setField] = useState<string | undefined>("idea");
   const [view, setView] = useState("Kept");
   const [how, setHow] = useState<QueryHow>("filters");
+  // The time looked at, as the band's slots: six a day, from Nov 2.
+  const [span, setSpan] = useState<[number, number] | undefined>([43, 50]);
+  const day = (slot: number) => `Nov ${2 + Math.floor(slot / 6)}`;
   return (
     <div className="flex flex-col gap-4">
       <Views
@@ -80,8 +84,14 @@ export default function Explorer() {
         <Band
           slots={SLOTS}
           labels={[0, 12, 24, 36, 48].map((slot, i) => ({ slot, text: `Nov ${2 + i * 2}` }))}
-          span={[43, 50]}
+          span={span}
+          onSpan={setSpan}
         />
+        <Nothing>
+          {span
+            ? `Looking at ${day(span[0])} to ${day(span[1] - 1)}. Drag across the band to pick another time.`
+            : "Looking at all of it. Drag across the band to pick a time."}
+        </Nothing>
         <Grid
           dense
           label="Changes"

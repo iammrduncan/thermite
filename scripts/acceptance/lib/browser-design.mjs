@@ -10,7 +10,8 @@
 //    the window, controls on top of each other, text cut off and images that don't load. It
 //    keeps a screenshot of each whole page;
 // 3. uses the parts as a person does: an example's code opens and is written from the design
-//    system's door, and the one dialog opens within a dialog's budget and closes.
+//    system's door, the one dialog opens within a dialog's budget and closes, and a drag across
+//    the explorer's band picks the time looked at.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -109,6 +110,33 @@ export async function designCheck(browser, c, { out, check }) {
       "the dialog's first button keeps things, and closes it",
       (await page.locator('[role="alertdialog"]').count()) === 0,
     );
+    // The explorer's band takes a drag: the time looked at becomes what the drag crossed.
+    const explorer = pages.find((p) => p.endsWith("/explorer")) ?? "";
+    await page.goto(`${c.url}${explorer}`);
+    const band = page.locator('svg[aria-label^="Records over time"]');
+    await band.waitFor();
+    const spanOf = () => band.locator("[data-span]").getAttribute("data-span");
+    const before = await spanOf();
+    const box = (await band.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+    // From the 6th of the band's 50 slots to its 16th.
+    await page.mouse.move(box.x + box.width * 0.11, box.y + box.height * 0.4);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.4, { steps: 4 });
+    await page.mouse.move(box.x + box.width * 0.31, box.y + box.height * 0.4, { steps: 4 });
+    await page.mouse.up();
+    const dragged = await spanOf();
+    // The arrow keys move the picked time by a slot, and Escape looks at all of it again.
+    await band.focus();
+    await page.keyboard.press("ArrowRight");
+    const moved = await spanOf();
+    await page.keyboard.press("Escape");
+    const cleared = await band.locator("[data-span]").count();
+    check(
+      "a drag across the explorer's band picks the time looked at; the arrow keys move it, and Escape clears it",
+      before === "43-50" && dragged === "5-16" && moved === "6-17" && cleared === 0,
+      { before, dragged, moved, cleared },
+    );
+
     const p = tab.take();
     check(
       "the site, used: no console error and no failed request",
