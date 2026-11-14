@@ -62,11 +62,16 @@ The design's size for this step is L: a week or more, by the readers' first esti
 - 2026-11-14, the owner ran this step's command ([v0.3.0, step by step](../v030_release_plan.md), step 4), and answered its two questions:
   - **The fast tests run on PostgreSQL inside the test process,** with no server to start: PGlite, which is PostgreSQL itself compiled to WebAssembly. So `npm run check` needs no container engine, as today. **CI and the acceptance checks also run the store's tests on a real, pinned PostgreSQL server,** which shows what one connection cannot: two callers at once. PGlite calls itself alpha; a difference between it and a real server shows in CI.
   - **A deployment may use a PostgreSQL server it already has.** The install brings a pinned PostgreSQL service by default; a setting with a server's address takes its place. Control checks the server's version at its start and refuses one that is too old, in words.
+- The builder's choices, 2026-11-14, from a reading of the store's code before the build. Each can be changed:
+  - **A PostgreSQL class beside each SQLite class.** The store has an interface for each of its 41 parts and a SQLite class behind it (goal 267). Each part gets a PostgreSQL class behind the same interface, in `src/control/store/postgres/`. A script makes each one from its SQLite class once; from then on it is code of its own. The SQLite classes are not changed, so a control on SQLite stays as it is.
+  - **One connection, and one call at a time, as on SQLite.** Control is the one process that writes, until the move (goal [270](270-move-to-postgresql.goal)) and the steps after it. So a transaction still holds every other caller, and each call of a part is whole. What holds a read and the write that relies on it when more than one service writes is that later step's question.
+  - **The packages:** `pg` (node-postgres) reaches a server, in control's image. PGlite is in the tests only.
+  - **The knowledge base's ordinary tables move with the rest.** Control applies an event to its tables, to the knowledge base and to its position in the stream in one transaction, so they are in one database. Only the search index stays for goal [269](269-knowledge-search-on-postgresql.goal): until then, a control on PostgreSQL answers a search with a plain match of the words, with no ranking of its own.
+  - **A person runs the copy command,** `thermite store copy`. It refuses a target that already holds a store.
+  - **The tests that reach the SQLite database itself stay tests of the SQLite store.** The store's own tests, which call the interface, run on both.
 
 ## Open questions
 
-- What a control on PostgreSQL does for the knowledge base's search before step 3: the knowledge base stays on SQLite beside it, or steps 2 and 3 land together.
-- What the copy command does when its target already holds data.
 - The copy command's name, and whether a person runs it or control runs it at its start. Step 4 decides the second.
 - Which versions of PostgreSQL are supported, and which package reaches it.
 - The reading found more triggers in the store's source than a fresh store holds, and did not trace why. The copy must know which are in use.
