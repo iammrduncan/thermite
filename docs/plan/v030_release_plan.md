@@ -1,6 +1,6 @@
 # v0.3.0, step by step
 
-**Status:** written on 2026-11-12 for the owner, who asked for it: one command for each step, and what the owner looks at between them. The build started on 2026-11-12, when the owner ran step 1. Steps 1 and 2 are built and wait for the owner's look.
+**Status:** written on 2026-11-12 for the owner, who asked for it: one command for each step, and what the owner looks at between them. The build started on 2026-11-12, when the owner ran step 1. Where each step stands is in the column **State** of [The whole way](#the-whole-way).
 
 [The release plan](release-v0.3.0.md) says what v0.3.0 is and why. [The app's build plan](app-build-plan.md) and [goal 258's design](goal-258-design.md) say how it is built. This page is the run sheet: 35 steps in one line, one goal at a time, from today to the tag.
 
@@ -15,6 +15,21 @@
 7. **You say done.** The goal is `VERIFIED` and moves to `goals/_completed/`. Then the next command.
 
 A step that changes a running deployment in a way that is hard to undo, or that spends money, waits for your yes at that point. The steps that do are marked.
+
+### The state of each step
+
+The table [The whole way](#the-whole-way) says where every step stands, in its column **State**. It is the one place to read what is done and what comes next (the owner's decision, 2026-11-14).
+
+| State | It means |
+| --- | --- |
+| Not started | Nobody has run the step's command |
+| Building | The step's work has started |
+| Built, waits for your look | Every item a check can prove is done, and the hands-on is open |
+| Done | The owner said done |
+
+- **It changes with the goal, in the same commit.** Whoever changes a step's goal (its status, its last "Done when" item, its move to `goals/_completed/`) changes the step's state here in that commit, with the date. The goal keeps the detail: what was built, the checks and the decisions.
+- **A session reads it first.** A session that starts work on v0.3.0 reads this column before it builds, and says so when the column and a goal disagree.
+- **A test holds it** (`tests/docs/run-sheet.test.ts`): every step has one of the four states; a step that names a whole goal is **Done** exactly when that goal is `VERIFIED` in `goals/_completed/`; and a step that is **Building** or **Built** names a goal that is `IN_PROGRESS`. A step that is a part of a goal is held by the first rule only.
 
 ### What to look at after every step
 
@@ -31,48 +46,48 @@ Most commands name a whole goal. A few name a part of one, by its items; that go
 
 ## The whole way
 
-| Step | What is built | Goal | What you can see after |
-| --- | --- | --- | --- |
-| **A. The ground** | | | |
-| 1 | The cheap guards | parts of 254 and 256 | Five new checks |
-| 2 | Control's store behind an interface | 267 | Nothing: that is the test |
-| 3 | The brand in the app | 243 | The app in the brand, and every part on a gallery |
-| 4 | PostgreSQL beside SQLite | 268 | A trial control on PostgreSQL |
-| 5 | The knowledge base's search on PostgreSQL | 269 | What changed in the order of results |
-| 6 | The move to PostgreSQL | 270 | Your control on PostgreSQL |
-| 7 | Sign in as a person | 261 | A user name and a password |
-| 8 | One door for each action | part of 244 | The list of everything the API does |
-| 9 | One record for each setting, command and event | 254 | Reference pages made from the code |
-| 10 | A run's tables | 271 | A select over a real run |
-| 11 | The door apart from the record | 272 | A restart of the dashboard stops nothing |
-| 12 | A run owns its agents | 273 | A model changed on a run at work |
-| 13 | Machines as a pool | 274 | Your machines and devices at the API, with no rig |
-| **B. The daily work** | | | |
-| 14 | Home and what needs you | 246 | Home, and an attempt's page |
-| 15 | Campaigns and a run | 247 | A run's five tabs, on real runs |
-| 16 | Watch and Live | 248 | A run's lines and a worker's terminal |
-| 17 | The explorer | 262 | Explore on every kind of record, and SQL |
-| 18 | A release candidate | this page | The daily work in the app, for testers |
-| **C. The rest of the app** | | | |
-| 19 | Providers, and Set up Thermite | 245 | Add a provider as a catalogue |
-| 20 | New campaign | 249 | A campaign started from the new form |
-| 21 | Compute | 250 | Machines and devices as a pool |
-| 22 | Knowledge | 251 | The knowledge base as a tree |
-| 23 | The rest of Setup | 252 | Spend, Storage, Logs and System |
-| 24 | Search | 263 | ⌘K over everything |
-| 25 | Plain names | 264 | A plain name on each idea and change |
-| 26 | The agents ask the owner | 265 | An agent's question as a need |
-| 27 | The door, closed | 244 | A campaign run over MCP alone |
-| **D. The agents move** | | | |
-| 28 | Find the fault | 257 | A machine's logs searched on control |
-| 29 | One way to run an agent program | 255 | Nothing: that is the test |
-| 30 | Layers and splits | 256 | Nothing: that is the test |
-| 31 | The agents in the control plane | 275, in parts | A run with no machine; two runs on one machine |
-| 32 | Thermy, its first step | step 1 of 266 | Thermy in the corner of every screen |
-| **E. The end** | | | |
-| 33 | The switch | 253 | The new dashboard alone, at `/` |
-| 34 | The rig goes | 276 | No rig anywhere |
-| 35 | The release | the release plan | v0.3.0 |
+| Step | What is built | Goal | What you can see after | State |
+| --- | --- | --- | --- | --- |
+| **A. The ground** | | | | |
+| 1 | The cheap guards | parts of 254 and 256 | Five new checks | Built, waits for your look, 2026-11-12 |
+| 2 | Control's store behind an interface | 267 | Nothing: that is the test | Built, waits for your look, 2026-11-13 |
+| 3 | The brand in the app | 243 | The app in the brand, and every part on a gallery | Building, 2026-11-10 |
+| 4 | PostgreSQL beside SQLite | 268 | A trial control on PostgreSQL | Not started |
+| 5 | The knowledge base's search on PostgreSQL | 269 | What changed in the order of results | Not started |
+| 6 | The move to PostgreSQL | 270 | Your control on PostgreSQL | Not started |
+| 7 | Sign in as a person | 261 | A user name and a password | Not started |
+| 8 | One door for each action | part of 244 | The list of everything the API does | Not started |
+| 9 | One record for each setting, command and event | 254 | Reference pages made from the code | Not started |
+| 10 | A run's tables | 271 | A select over a real run | Not started |
+| 11 | The door apart from the record | 272 | A restart of the dashboard stops nothing | Not started |
+| 12 | A run owns its agents | 273 | A model changed on a run at work | Not started |
+| 13 | Machines as a pool | 274 | Your machines and devices at the API, with no rig | Not started |
+| **B. The daily work** | | | | |
+| 14 | Home and what needs you | 246 | Home, and an attempt's page | Not started |
+| 15 | Campaigns and a run | 247 | A run's five tabs, on real runs | Not started |
+| 16 | Watch and Live | 248 | A run's lines and a worker's terminal | Not started |
+| 17 | The explorer | 262 | Explore on every kind of record, and SQL | Not started |
+| 18 | A release candidate | this page | The daily work in the app, for testers | Not started |
+| **C. The rest of the app** | | | | |
+| 19 | Providers, and Set up Thermite | 245 | Add a provider as a catalogue | Not started |
+| 20 | New campaign | 249 | A campaign started from the new form | Not started |
+| 21 | Compute | 250 | Machines and devices as a pool | Not started |
+| 22 | Knowledge | 251 | The knowledge base as a tree | Not started |
+| 23 | The rest of Setup | 252 | Spend, Storage, Logs and System | Not started |
+| 24 | Search | 263 | ⌘K over everything | Not started |
+| 25 | Plain names | 264 | A plain name on each idea and change | Not started |
+| 26 | The agents ask the owner | 265 | An agent's question as a need | Not started |
+| 27 | The door, closed | 244 | A campaign run over MCP alone | Not started |
+| **D. The agents move** | | | | |
+| 28 | Find the fault | 257 | A machine's logs searched on control | Not started |
+| 29 | One way to run an agent program | 255 | Nothing: that is the test | Not started |
+| 30 | Layers and splits | 256 | Nothing: that is the test | Not started |
+| 31 | The agents in the control plane | 275, in parts | A run with no machine; two runs on one machine | Not started |
+| 32 | Thermy, its first step | step 1 of 266 | Thermy in the corner of every screen | Not started |
+| **E. The end** | | | | |
+| 33 | The switch | 253 | The new dashboard alone, at `/` | Not started |
+| 34 | The rig goes | 276 | No rig anywhere | Not started |
+| 35 | The release | the release plan | v0.3.0 | Not started |
 
 The sizes below are the plans' first estimates of a person's time: S is under a day, M a few days, L a week or more, XL several weeks.
 
