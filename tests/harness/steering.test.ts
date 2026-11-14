@@ -491,6 +491,45 @@ describe("propagation", () => {
     assert.equal((again.result as { identical?: boolean }).identical, true);
     assert.ok(readFileSync(staged).length > 0);
   });
+
+  test("another rig's champion that waits for the owner stays open, and is settled as rejected once the owner declines it", async () => {
+    const env = makeJudgeEnv({ promotion: "owner_approval" });
+    await env.service.applyCommand(env.assign);
+    const win = await submit(env, FAST_KERNEL);
+    await env.drain();
+    assert.equal(String(env.ledger.attempts.get(win)?.lifecycle), "awaiting_approval");
+    // As receivePropagation records a champion that arrived and is judged here as `win`.
+    env.ledger.propagations.add({
+      attempt: win,
+      run: "js-1",
+      sourceRig: "rig-b",
+      sourceRun: "js-1",
+      sourceSeq: 2,
+      tree: "0".repeat(40),
+      at: new Date().toISOString(),
+    });
+    const { settlePropagations } = await import("../../src/harness/propagation.ts");
+    const rejected = () =>
+      env.ledger.eventsAfter(0, 10_000).events.filter((e) => e.kind === "propagation_rejected");
+    // The owner may still make it the champion: its outcome is not known yet.
+    assert.equal(settlePropagations(env.ledger, "t"), 0);
+    const no = await env.service.applyCommand(
+      env.sign("decline_promotion", { run: "js-1", attempt: win }),
+    );
+    assert.ok(no.status === "applied" && no.accepted, JSON.stringify(no));
+    // The owner's no is the last word on it. Before, it stayed open for good.
+    assert.equal(settlePropagations(env.ledger, "t"), 1);
+    assert.deepEqual(
+      rejected().map((e) => {
+        const b = e.body as Record<string, unknown>;
+        return { attempt: b.attempt, rig: b.source_rig, seq: b.source_seq, verdict: b.verdict };
+      }),
+      [{ attempt: win, rig: "rig-b", seq: 2, verdict: "win_confirmed" }],
+    );
+    // Settled once: a later pass records nothing more.
+    assert.equal(settlePropagations(env.ledger, "t"), 0);
+    assert.equal(rejected().length, 1);
+  });
 });
 
 describe("goal reviews and conclusions", () => {

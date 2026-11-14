@@ -11,6 +11,7 @@ import { keepsWorking } from "../../../../src/harness/agents/coordinator.ts";
 import { Scheduler } from "../../../../src/harness/agents/scheduler/index.ts";
 import { runTrial } from "../../../../src/harness/agents/worker/index.ts";
 import { LocalRunner } from "../../../../src/harness/broker/runner.ts";
+import { declinePromotion } from "../../../../src/harness/service/champion.ts";
 import { startFakeModel } from "../../../helpers/fake-model.ts";
 import { FAST_KERNEL, makeJudgeEnv, WRONG_KERNEL } from "../../../helpers/judge-env.ts";
 
@@ -218,6 +219,91 @@ describe("agent scheduler", () => {
     );
     assert.ok(await scheduler.tick());
     await scheduler.idle();
+    await fake.close();
+  });
+
+  test("a change the owner declined is settled: its lane's next trial starts, and its round can end", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 2 } });
+    await env.start();
+    const fake = await startFakeModel(({ messages, tools }) => {
+      if (tools.some((t) => t.function.name === "submit_plan")) {
+        return {
+          toolCalls: [
+            {
+              name: "submit_plan",
+              args: {
+                new_directions: [{ id: "loops", description: "simplify the inner loop" }],
+                assignments: [
+                  { lane: "lane-1", direction: "loops", focus: "remove waste", parent: "champion" },
+                ],
+              },
+            },
+          ],
+        };
+      }
+      // Each trial writes a change of its own, so none is a duplicate.
+      const content = `${FAST_KERNEL}\n// ${Math.random()}\n`;
+      const steps = [
+        { name: "write_file", args: { path: "src/kernel/work.mjs", content } },
+        { name: "submit_experiment", args: { hypothesis: "drop waste" } },
+      ];
+      const done = messages.filter((m) => m.role === "tool").length;
+      return steps[done] ? { toolCalls: [steps[done]] } : { text: "done" };
+    });
+    const runner = new LocalRunner(env.paths.scratchDir);
+    const model = {
+      baseUrl: fake.url,
+      model: "m",
+      apiKey: "k",
+      contextWindow: 32000,
+      maxTokens: 2000,
+    };
+    const scheduler = new Scheduler({
+      service: env.service,
+      runner,
+      model,
+      owner: "scheduler-test",
+      runTrial: (spec) =>
+        runTrial(spec, {
+          runner,
+          laneTool,
+          model,
+          submit: (req) => env.service.submitForTrial(String(spec.token), req) as never,
+          status: async (id) => env.service.attemptStatus(id),
+        }),
+    });
+    const attempts = () =>
+      env.ledger.db
+        .prepare(
+          "select a.id, a.lifecycle from trial t join attempt a on a.id = t.attempt order by t.rowid",
+        )
+        .all()
+        .map((r) => ({ id: String(r.id), lifecycle: String(r.lifecycle) }));
+    assert.ok(await scheduler.tick()); // round 1 planned, trial 1 starts
+    await scheduler.idle();
+    const first = attempts()[0];
+    assert.ok(first);
+    // The audit blocks the change, so it waits for the owner. The judge is done with it, and the
+    // lane's next trial starts.
+    env.ledger.attempts.setLifecycle(first.id, "audit_blocked", "scheduler-test");
+    assert.ok(await scheduler.tick(), "an audit-blocked change is settled");
+    await scheduler.idle();
+    const second = attempts()[1];
+    assert.ok(second);
+    env.ledger.attempts.setLifecycle(second.id, "audit_blocked", "scheduler-test");
+    declinePromotion(env.ledger, { run: "js-1", attempt: second.id }, "control:owner");
+    assert.equal(attempts()[1]?.lifecycle, "declined");
+    // Once the owner declines it, it is still settled: round 1's trials have ended, so the round
+    // ends and round 2 starts a trial. Before, the lane waited for a verdict on it that never
+    // came, and the round never ended.
+    await scheduler.tick();
+    assert.ok(await scheduler.tick(), "round 2 starts a trial");
+    await scheduler.idle();
+    const epochs = env.ledger.db.prepare("select n from epoch order by n").all();
+    assert.deepEqual(
+      epochs.map((e) => e.n),
+      [1, 2],
+    );
     await fake.close();
   });
 
