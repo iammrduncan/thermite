@@ -62,6 +62,8 @@ jobs:
       - run: npm run web:install
       - run: npm run typecheck
       - run: npm run web:typecheck
+      # The design system builds with the app's packages (web:install links them).
+      - run: npm run design:typecheck
       - run: npm run lint
       # Every test file but the judge's and the broker's, side by side: they run in the next job.
       - run: node scripts/test.mjs --part parallel
@@ -271,12 +273,14 @@ jobs:
           # becomes when it splits (`^src/core/paths(\.ts$|/)`), so a split or a move into a
           # folder keeps the job running (tests/release/workflows.test.ts holds it).
           #
-          # The containers and compose files, the dashboard's app that control's image builds,
+          # The containers and compose files, the dashboard's app and the design system's site
+          # (packages/), which control's image builds,
           # the APIs, the relay and the message bus it goes over, the advisors' runner, and the
           # smoke test.
           COMPOSE: |
             ^containers/
             ^web/
+            ^packages/
             ^compose[^/]*\.yaml$
             ^package(-lock)?\.json$
             ^kits/smoke-cpu/
@@ -334,6 +338,7 @@ jobs:
           QUICK_START: |
             ^containers/
             ^web/
+            ^packages/
             ^compose[^/]*\.yaml$
             ^scripts/release/bundle(\.ts$|/)
             ^src/release/

@@ -35,6 +35,7 @@ on:
       - .github/workflows/release.yml
       - containers/**
       - web/**
+      - packages/**
       - scripts/release/**
       - src/release/**
       - tests/release/**
