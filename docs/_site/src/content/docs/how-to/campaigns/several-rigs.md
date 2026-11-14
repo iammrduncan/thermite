@@ -51,7 +51,7 @@ You can also send it with the owner's token over the REST API, `POST /v1/propaga
 
 The receiving rig rebuilds the champion from its patch, checks that it matches what the source rig published, and its own judge measures it against its own champion, like any other change. The receiving run's **History** shows `Champion #3 arrived from local-1 to be judged here.`, then `Another rig's champion held up here too.` or `Another rig's champion did not hold up here (…).` with the verdict.
 
-A confirmed change goes on there as any other change would: it becomes the champion unless the auditor blocks it or the run asks you about it, which puts it under **Needs you** on **Overview** as **Your decision**. `Another rig's champion held up here too.` comes once it becomes the champion there, by itself or when you press **Make it the champion**. See [Decide what waits for you](decide-what-waits.md).
+A confirmed change goes on there as any other change would: it becomes the champion unless the auditor blocks it or the run asks you about it, which puts it under **Needs you** on **Overview** as **Your decision**. `Another rig's champion held up here too.` comes once it becomes the champion there, by itself or when you press **Make it the champion**. If you press **Reject it**, it never becomes the champion there, and the source run is not cross-verified: **History** says `Another rig's champion did not hold up here (win confirmed).`, and its **Result here** is `rejected (win_confirmed)`, with the judge's verdict as it stands. See [Decide what waits for you](decide-what-waits.md).
 
 When it holds up and becomes the receiving run's champion, the source run is cross-verified by the receiving rig. To see it:
 
