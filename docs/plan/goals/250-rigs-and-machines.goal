@@ -10,11 +10,11 @@ updated: 2026-11-12
 
 # 250 · Compute: machines and their devices as a pool, a machine's page, and Add a machine
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 5 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Rigs and machines"; it is **Compute**, a place in the navigation. It is built on the model of goal [258](258-runs-own-their-resources.goal): machines and their devices are a pool that runs share, and no screen shows a rig. What a rig's pages held went three ways: a run's agents and devices to the run's Setup (goal [247](247-campaigns-and-runs.goal)), the agents a new run starts with to Setup › Agents (goal [245](245-providers-and-set-up.goal)), and the machine itself to the screens below.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 5 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Rigs and machines"; it is **Compute**, a place in the navigation. It is built on the model of goal [258](258-runs-own-their-resources.goal): machines and their devices are a pool that runs share, and no screen shows a rig. What a rig's pages held went three ways: a run's agents and devices to the run's Setup (goal [247](247-campaigns-and-runs.goal)), the agents a new run starts with to Setup › Agents (goal [245](245-providers-and-set-up.goal)), and the machine itself to the screens below.
 
 **The screens**
 

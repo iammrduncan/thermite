@@ -10,11 +10,11 @@ updated: 2026-11-12
 
 # 248 · Watch and Live: a run's lines and its terminal, and every run at work
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 2 of [the app's build plan](../app-build-plan.md#4-the-order), with a run's other screens (goal [247](247-campaigns-and-runs.goal)). The lines are a run's, so the screens are built on the model of goal [258](258-runs-own-their-resources.goal): no screen shows a rig's Live.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 2 of [the app's build plan](../app-build-plan.md#4-the-order), with a run's other screens (goal [247](247-campaigns-and-runs.goal)). The lines are a run's, so the screens are built on the model of goal [258](258-runs-own-their-resources.goal): no screen shows a rig's Live.
 
 **The screens**
 

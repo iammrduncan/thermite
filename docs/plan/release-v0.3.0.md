@@ -66,7 +66,7 @@ From the mockup the owner agreed on 2026-11-12 and [the app's build plan](app-bu
 
 | Goal | Depends on | Takes in |
 | --- | --- | --- |
-| [243 · The new dashboard's base](goals/243-web-app-base.goal) | 242 | [177](goals/177-dashboard-styles-in-its-stylesheet.goal); [094](goals/094-copy-id.goal) |
+| [243 · The new dashboard's base](goals/_completed/243-web-app-base.goal) | 242 | [177](goals/177-dashboard-styles-in-its-stylesheet.goal); [094](goals/094-copy-id.goal) |
 | [258 · A run owns its agents and its share of compute](goals/258-runs-own-their-resources.goal) | 242 | — |
 | [261 · Sign in as a person](goals/261-sign-in-as-a-person.goal) | 243 | — |
 | [244 · One door for each action and each read](goals/244-one-door.goal) | 242 | What is left of [029](goals/029-api-mcp-coverage.goal) |

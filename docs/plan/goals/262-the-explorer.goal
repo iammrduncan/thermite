@@ -10,7 +10,7 @@ updated: 2026-11-12
 
 # 262 · The explorer: a run's Explore as one full explorer of its records, with saved views and the query as SQL
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal)
 
 ## What
 
@@ -82,7 +82,7 @@ A run's Usage tab is built in the same stage of the build plan, and is goal [247
 ## Decisions
 
 - 2026-11-10, the owner (goal [258](258-runs-own-their-resources.goal)): the dashboard's query of a run is plain SQL, a select and nothing else, over a small set of tables for each run. Thermite writes no query language of its own.
-- 2026-11-10, the owner (goal [243](243-web-app-base.goal)): no caps and no pagers.
+- 2026-11-10, the owner (goal [243](_completed/243-web-app-base.goal)): no caps and no pagers.
 - 2026-11-12, the owner, on the run's rows of the mockup: "So the explore tab of a run lost its actual grafana/loki/elastic like exploration with saved views and stuff and timeline banding bar etc... That is one page that should follow good design patterns from other log systems for exploring logs/metrics. usage metrics should be in a usage tab still. Good to have that separate." Explore is the app's one power tool, with a query line, saved views, a band that is dragged across to pick a time, the results, a record that opens beside them, and the same query as SQL.
 - 2026-11-12, the owner, of two drawings: "Full explorer". The records' fields are beside the results, each with how many values it has, as Elastic's Discover has them; the band is taller; the rows are dense, twenty to a first view.
 - 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0 with the plan. Saved views are in v0.3.0. A run's records asked in SQL come with goal 258.

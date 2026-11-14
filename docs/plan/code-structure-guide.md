@@ -122,7 +122,7 @@ Each has its goal. Sizes are in files. "The fast checks" means `npm run check`.
 
 - **What and why.** Page code is 38.8% of control and in 76% of its commits. With the [UI refresh](ui-refresh-guide.md#3-how-thermite-uses-it-two-designs), the screens become a web app that knows control only through its API.
 - **Shape.** `web/` beside `src/`, importing `core`'s contracts alone. `src/control/ui/` and `src/control/dashboard/` go at the end.
-- **Goals.** [243](goals/243-web-app-base.goal) to [253](goals/253-the-switch.goal).
+- **Goals.** [243](goals/_completed/243-web-app-base.goal) to [253](goals/253-the-switch.goal).
 
 ### S2. One door for each action and each read
 

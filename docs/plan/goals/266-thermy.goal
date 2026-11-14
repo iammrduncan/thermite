@@ -10,7 +10,7 @@ updated: 2026-11-12
 
 # 266 · Thermy, Thermite's one scientist: a chat on every page and a screen of its own, in three steps
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [260](260-fxbot-and-thermite.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal), [260](260-fxbot-and-thermite.goal)
 
 `READY` is for step 1 alone, which ships in v0.3.0 after the app's screens. Steps 2 and 3 are for later versions; no version has taken them.
 
@@ -95,7 +95,7 @@ This goal is verified for v0.3.0 when step 1's items have evidence. Steps 2 and 
 
 ## Decisions
 
-Carried over from goal [260](260-fxbot-and-thermite.goal), with the two from goal [243](243-web-app-base.goal) and the build plan.
+Carried over from goal [260](260-fxbot-and-thermite.goal), with the two from goal [243](_completed/243-web-app-base.goal) and the build plan.
 
 - 2026-11-11, the owner, on the idea: "need to think of how fxbot could get embedded into thermite to give you ai scientist that help you run from ideation -> research -> goals -> hillclimb as autoscientist not just autoresearch."
 - 2026-11-11, the owner: a run's agents use fxbot's agent core as a library in Thermite, not a running fxbot that Thermite asks for turns. Thermite works with no fxbot running. Thermy stands on the same library (the answers of 2026-11-12, below).

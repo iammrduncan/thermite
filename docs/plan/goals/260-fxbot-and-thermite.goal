@@ -181,7 +181,7 @@ This goal is done when the owner has chosen, and each part that goes on has a go
   - **The app's tools.** Thermy works through Thermite's MCP tools.
   - **A git repo.** Thermy works against a repo of the owner's, so plans, kits and contracts are files with a history. A skill makes a blank repo ready the first time.
   - **Its face** is a clay flame in orange and red, in the theme of fxbot's avatars: it shows feeling, its eyes follow the pointer, and it reacts to what the owner does.
-  - The dashboard's mockups draw Thermy on the brand guide (goal [243](243-web-app-base.goal)): its face and moods, its corner on every page, the chat open over a page, its own screen, and the first set-up of a repo. They take the place of the three boards of "the scientist" drawn before, once the owner agrees.
+  - The dashboard's mockups draw Thermy on the brand guide (goal [243](_completed/243-web-app-base.goal)): its face and moods, its corner on every page, the chat open over a page, its own screen, and the first set-up of a repo. They take the place of the three boards of "the scientist" drawn before, once the owner agrees.
 
 - 2026-11-12, the owner, from the brand guide's drawing of Thermy: "Good, keep it." And two answers:
   - **Thermy runs inside Thermite,** on the shared agent core, with its own threads, memory and repo. No fxbot needs to run. So the scientist is not a bot of fxbot's that operates Thermite from outside, as the proposal above had it; the proposal's steps for a `thermite` plugin in fxbot are no longer the way to Thermy.

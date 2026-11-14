@@ -10,11 +10,11 @@ updated: 2026-11-12
 
 # 251 · Knowledge: the knowledge base as a tree, with a folder, a search, an item and its settings
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 6 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Library", one place for knowledge, reports and exports. It is **Knowledge**, a place in the navigation, and it holds the knowledge base alone. Reports are Campaigns › Results (goal [247](247-campaigns-and-runs.goal)). Exports are under Setup › Storage (goal [252](252-usage-logs-settings.goal)), with downloads on a run and on a campaign (goal 247).
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 6 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Library", one place for knowledge, reports and exports. It is **Knowledge**, a place in the navigation, and it holds the knowledge base alone. Reports are Campaigns › Results (goal [247](247-campaigns-and-runs.goal)). Exports are under Setup › Storage (goal [252](252-usage-logs-settings.goal)), with downloads on a run and on a campaign (goal 247).
 
 **The screens**
 

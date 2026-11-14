@@ -2,7 +2,7 @@
 
 **Status:** agreed by the owner on 2026-11-12, with the answers in section 7. No screen code is written until the owner says start.
 
-The owner agreed the mockup of the whole app on 2026-11-12 (goal [243](goals/243-web-app-base.goal)). This plan says how the app in `web/` is built from it: what the mockup needs that Thermite does not have, the choices that set the order, the order, and what changes in the plans of [v0.3.0](release-v0.3.0.md) when the owner says yes.
+The owner agreed the mockup of the whole app on 2026-11-12 (goal [243](goals/_completed/243-web-app-base.goal)). This plan says how the app in `web/` is built from it: what the mockup needs that Thermite does not have, the choices that set the order, the order, and what changes in the plans of [v0.3.0](release-v0.3.0.md) when the owner says yes.
 
 ## 1. What is agreed
 

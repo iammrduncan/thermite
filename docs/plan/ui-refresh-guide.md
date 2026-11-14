@@ -1,6 +1,6 @@
 # The UI refresh guide
 
-This guide is for the refresh of the dashboard in v0.3.0, goals [243](goals/243-web-app-base.goal) to [253](goals/253-the-switch.goal). It is one result of goal [242](goals/_completed/242-v030-review.goal), the review of 2026-11-10. Its partner, the [code structure guide](code-structure-guide.md), covers the code behind the screens. The [release plan](release-v0.3.0.md) puts both in one order.
+This guide is for the refresh of the dashboard in v0.3.0, goals [243](goals/_completed/243-web-app-base.goal) to [253](goals/253-the-switch.goal). It is one result of goal [242](goals/_completed/242-v030-review.goal), the review of 2026-11-10. Its partner, the [code structure guide](code-structure-guide.md), covers the code behind the screens. The [release plan](release-v0.3.0.md) puts both in one order.
 
 - **What it describes:** the dashboard of v0.2.0, as the browser check drew it on 2026-11-08 (159 pages, each at 1440 and 820 pixels wide, on the demo's data), and the UI of [fxbot](https://github.com/iammrduncan/fxbot) at its `release/0.8.0` branch (commit `ff53429`, read on 2026-11-10).
 - **Where it comes from:** six reviewers on 2026-11-10, each with one area: fxbot's UI system and its provider set-up; every screen of the dashboard; how the dashboard is built; providers in Thermite; control's code; the rig's code. Their reports, with every count, screen and line number, are kept in the maintainers' private notes.
@@ -408,7 +408,7 @@ Settings
 | Agents (no entry) | Settings › Agents | 252 |
 | Settings › Providers | Settings › Providers, as a catalogue; Settings › Git access | [245](goals/245-providers-and-set-up.goal) |
 | Settings › MCP servers, Addresses, Knowledge base | Settings › MCP servers, Network, Knowledge base | 252 |
-| Sign in | Sign in | [243](goals/243-web-app-base.goal) |
+| Sign in | Sign in | [243](goals/_completed/243-web-app-base.goal) |
 | (none) | Set up Thermite, on a new control | 245 |
 
 ## 7. Providers and first-run set-up
@@ -486,7 +486,7 @@ A new control opens on a set-up page with no navigation around it, as fxbot does
 
 ## 8. How the web app is built
 
-Goal [243](goals/243-web-app-base.goal) builds this base.
+Goal [243](goals/_completed/243-web-app-base.goal) builds this base.
 
 ### Where it lives, and what it may import
 

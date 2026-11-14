@@ -52,7 +52,7 @@ Today an idea and a change have only the names the agents gave them. An idea's n
 
 ## Decisions
 
-- 2026-11-12, the owner (goal [243](243-web-app-base.goal)): a thing's plain name comes from the planner. An idea and a change have a plain name beside the agents' own. The owner's choice was "A plain name from the planner".
+- 2026-11-12, the owner (goal [243](_completed/243-web-app-base.goal)): a thing's plain name comes from the planner. An idea and a change have a plain name beside the agents' own. The owner's choice was "A plain name from the planner".
 - 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0 with the plan. Until it lands, a screen shows the agents' own name.
 
 ## Open questions

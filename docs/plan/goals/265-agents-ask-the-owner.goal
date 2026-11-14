@@ -60,7 +60,7 @@ What this goal adds, as the agreed mockup draws it:
 
 ## Decisions
 
-- 2026-11-12, the owner (goal [243](243-web-app-base.goal)): the whole-app mockup is agreed. It draws the agents' question as a need, and an answer to a note.
+- 2026-11-12, the owner (goal [243](_completed/243-web-app-base.goal)): the whole-app mockup is agreed. It draws the agents' question as a need, and an answer to a note.
 - 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): in v0.3.0. The plan left this row for the owner to place.
 
 ## Open questions

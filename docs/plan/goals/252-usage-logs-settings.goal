@@ -10,11 +10,11 @@ updated: 2026-11-12
 
 # 252 · The rest of Setup: its first screen, Spend, Storage with Exports and Backup, Logs and System
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 6 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Usage, Logs and the rest of Settings". It is the rest of **Setup**, the place at the foot of the navigation: what Setup holds beside the models, agents, tools and access of goal [245](245-providers-and-set-up.goal) and the account of goal [261](261-sign-in-as-a-person.goal).
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 6 of [the app's build plan](../app-build-plan.md#4-the-order). The area was "Usage, Logs and the rest of Settings". It is the rest of **Setup**, the place at the foot of the navigation: what Setup holds beside the models, agents, tools and access of goal [245](245-providers-and-set-up.goal) and the account of goal [261](261-sign-in-as-a-person.goal).
 
 **The screens**
 

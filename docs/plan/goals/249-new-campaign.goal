@@ -14,7 +14,7 @@ updated: 2026-11-12
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 4 of [the app's build plan](../app-build-plan.md#4-the-order). A new run's agents and devices are the run's own, so the forms are built on the model of goal [258](258-runs-own-their-resources.goal).
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 4 of [the app's build plan](../app-build-plan.md#4-the-order). A new run's agents and devices are the run's own, so the forms are built on the model of goal [258](258-runs-own-their-resources.goal).
 
 **The screens**
 

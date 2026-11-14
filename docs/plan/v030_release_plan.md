@@ -51,7 +51,7 @@ Most commands name a whole goal. A few name a part of one, by its items; that go
 | **A. The ground** | | | | |
 | 1 | The cheap guards | parts of 254 and 256 | Five new checks | Built, waits for your look, 2026-11-12 |
 | 2 | Control's store behind an interface | 267 | Nothing: that is the test | Built, waits for your look, 2026-11-13 |
-| 3 | The brand in the app, and the design system | 243 | The app in the brand, and every part on the design system's site at `/design` | Built, waits for your look, 2026-11-14 |
+| 3 | The brand in the app, and the design system | 243 | The app in the brand, and every part on the design system's site at `/design` | Done, 2026-11-14 |
 | 4 | PostgreSQL beside SQLite | 268 | A trial control on PostgreSQL | Not started |
 | 5 | The knowledge base's search on PostgreSQL | 269 | What changed in the order of results | Not started |
 | 6 | The move to PostgreSQL | 270 | Your control on PostgreSQL | Not started |
@@ -129,7 +129,7 @@ Nothing here is a matter of taste. The hands-on is short unless something change
 ### 3 · The brand in the app, and the design system (goal 243) · M
 
 ```text
-/goal complete docs/plan/goals/243-web-app-base.goal. rereview/reread before wrapping up
+/goal complete docs/plan/goals/_completed/243-web-app-base.goal. rereview/reread before wrapping up
 ```
 
 The agreed brand, in code: the theme in light and in dark, the parts every screen is made of, the frame with its sidebar and a run's top, the sign-in screen, and the rules' budgets in the browser check, so a screen that is too heavy fails. The parts are a design system, a package of its own that the app imports (the owner, 2026-11-14), with a site of its own at `/design`.

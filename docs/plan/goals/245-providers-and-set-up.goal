@@ -10,11 +10,11 @@ updated: 2026-11-12
 
 # 245 · Providers as a catalogue, and Set up Thermite: fxbot's provider set-up, with a key checked when it is added and its first model asked when it connects
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)); the [UI refresh guide's section 7](../ui-refresh-guide.md#7-providers-and-first-run-set-up) stays as the record of the review. The screens are stage 4 of [the app's build plan](../app-build-plan.md#4-the-order). The catalogue's back end (items 1 to 3) is built beside goal [258](258-runs-own-their-resources.goal), before the screens.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)); the [UI refresh guide's section 7](../ui-refresh-guide.md#7-providers-and-first-run-set-up) stays as the record of the review. The screens are stage 4 of [the app's build plan](../app-build-plan.md#4-the-order). The catalogue's back end (items 1 to 3) is built beside goal [258](258-runs-own-their-resources.goal), before the screens.
 
 **What control must do**
 
@@ -95,7 +95,7 @@ A plan only; nothing of it is built. The design is the agreed mockup (goal [243]
   - **Add a provider is fxbot's own page, and a provider's card is fxbot's own card.** One search over every provider; the providers as tiles in groups, sign-ins first (Sign in, Use a key, Clouds, On your machine); a tile opens the provider's card with its way in: a device code with its link as a QR, a key walked through in numbered steps, a server on the machine with its address filled in when it is found, or a custom server. Once a provider is connected, the page asks for its first model. The same card signs a provider in again or replaces its key.
   - **A Claude plan signs in through Claude Code's long-lived sign-in,** so Thermite can use the plan without a person at a terminal each time. Whether Thermite runs that sign-in on its own server or takes what Claude Code gives on the owner's computer is to be found when it is built.
   - **Model providers and tool servers (MCP) are apart.** Setup has Models for the providers and Tools for the tool servers, each a part of its own; Access keeps the Git logins and the tokens for programs.
-  The mockups' boards Models, Add a provider, the provider's card, Tools and Access are drawn this way (goal [243](243-web-app-base.goal)).
+  The mockups' boards Models, Add a provider, the provider's card, Tools and Access are drawn this way (goal [243](_completed/243-web-app-base.goal)).
 - 2026-11-12, the owner: the mockup of the whole app and [the app's build plan](../app-build-plan.md) are agreed, and this goal's plan is rewritten to them. What changed here: no step gives a model to a rig, since a provider's first model is asked for when it connects and a run's agents are the run's own; the set-up pages gave way to Home with three steps; a model is checked with no machine, and a provider in use can be removed (the owner: both in v0.3.0); the agents' defaults, Tools and Access are screens of this goal; the catalogue's back end is built beside goal 258. The mockup answered where Git access lives: Setup › Access.
 
 ## Open questions

@@ -14,7 +14,7 @@ updated: 2026-11-12
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 2 of [the app's build plan](../app-build-plan.md#4-the-order). A run's screens are built on the model of goal [258](258-runs-own-their-resources.goal): a run owns its agents and its devices, and no screen shows a rig.
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 2 of [the app's build plan](../app-build-plan.md#4-the-order). A run's screens are built on the model of goal [258](258-runs-own-their-resources.goal): a run owns its agents and its devices, and no screen shows a rig.
 
 **Campaigns**
 

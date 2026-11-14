@@ -10,7 +10,7 @@ updated: 2026-11-12
 
 # 263 · Search over everything: one box, opened with ⌘K from any screen
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal)
 
 ## What
 
@@ -47,7 +47,7 @@ A plan only; nothing of it is built. The agreed mockup draws the box; the [app's
 
 ## Decisions
 
-- 2026-11-11, the owner, on the first round of the mockup: search stays. "I love having a search, it really is something missing today!" (goal [243](243-web-app-base.goal)).
+- 2026-11-11, the owner, on the first round of the mockup: search stays. "I love having a search, it really is something missing today!" (goal [243](_completed/243-web-app-base.goal)).
 - 2026-11-12, the owner, on the [app's build plan](../app-build-plan.md): accepted into v0.3.0 with the plan.
 
 ## Open questions

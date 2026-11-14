@@ -10,11 +10,11 @@ updated: 2026-11-12
 
 # 246 · Home and what needs you: one list of needs, each decided in its row
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal), [261](261-sign-in-as-a-person.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal), [244](244-one-door.goal), [258](258-runs-own-their-resources.goal), [261](261-sign-in-as-a-person.goal)
 
 ## What
 
-A plan only; nothing of it is built. The design is the agreed mockup (goal [243](243-web-app-base.goal)). This is stage 1 of [the app's build plan](../app-build-plan.md#4-the-order), after the sign-in of goal [261](261-sign-in-as-a-person.goal). Home shows runs and machines, so it is built on the model of goal [258](258-runs-own-their-resources.goal).
+A plan only; nothing of it is built. The design is the agreed mockup (goal [243](_completed/243-web-app-base.goal)). This is stage 1 of [the app's build plan](../app-build-plan.md#4-the-order), after the sign-in of goal [261](261-sign-in-as-a-person.goal). Home shows runs and machines, so it is built on the model of goal [258](258-runs-own-their-resources.goal).
 
 **The screens**
 

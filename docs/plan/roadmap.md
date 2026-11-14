@@ -260,7 +260,7 @@ The fixes after them, one version each, in the order to take them:
 
 **The dashboard.** The owner agreed a mockup of the whole app and [its build plan](app-build-plan.md) on 2026-11-12. Goal 258 is first; beside it go the base, the sign-in and the provider catalogue's back end. The screens follow in the plan's stages, with goal 244 one area ahead.
 
-- [243](goals/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `IN_PROGRESS`
+- [243](goals/_completed/243-web-app-base.goal) The new dashboard's base: fxbot's UI system as a web app in control, with its shell, sign-in and checks · `VERIFIED`
 - [258](goals/258-runs-own-their-resources.goal) A run owns its agents and its share of compute: the control plane runs the loops, a light runner does the work · `READY` · first, by the ten steps of its agreed [design](goal-258-design.md); the screens start after step 8
   - [267](goals/267-store-behind-an-interface.goal) Step 1: Control's store behind an interface whose calls can wait, still on SQLite · `IN_PROGRESS`
   - [268](goals/268-postgresql-beside-sqlite.goal) Step 2: PostgreSQL beside SQLite: the same interface, the tests on both, the copy command, backup and restore · `READY`

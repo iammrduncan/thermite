@@ -10,7 +10,7 @@ updated: 2026-11-12
 
 # 261 · Sign in as a person: a user and a password, in place of the owner's token typed into a box
 
-**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](243-web-app-base.goal)
+**Status:** `READY` · **Version:** [v0.3.0](../roadmap.md#v030) · **Depends on:** [243](_completed/243-web-app-base.goal)
 
 A proposal from the owner's comment on the dashboard's mockups. Nothing of it is built or decided beyond the comment.
 

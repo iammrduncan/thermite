@@ -47,7 +47,7 @@ The design's size for this step is L: a week or more, by the readers' first esti
 - **A restart of one service stops no run** (goal 258's Constraints).
 - **A running campaign keeps its screens:** while the record is away the door still answers, and what it shows lags.
 - **Keys stay where they are safe.** A key that signs a command or opens a secret is held by one service, and the goal records which.
-- **Sign-in holds across both:** one session for the pages, the app and the owner's routes, as today (goals [243](243-web-app-base.goal) and [261](261-sign-in-as-a-person.goal)).
+- **Sign-in holds across both:** one session for the pages, the app and the owner's routes, as today (goals [243](_completed/243-web-app-base.goal) and [261](261-sign-in-as-a-person.goal)).
 - **The one-machine install stays one command.**
 - The public rules of [AGENTS.md](../../../AGENTS.md#public-repository-rules) hold, and the step ends with the system working.
 
