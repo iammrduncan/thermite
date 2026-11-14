@@ -1,0 +1,38 @@
+---
+id: "261"
+title: "OpenAI's GPT-6 models call tools over Responses"
+status: IN_PROGRESS
+version: "0.2.5"
+depends_on: []
+created: 2026-11-14
+updated: 2026-11-14
+---
+
+# 261 · OpenAI's GPT-6 models call tools over Responses
+
+**Status:** `IN_PROGRESS` · **Version:** proposed v0.2.5.
+
+## What
+
+A model check for `gpt-6.1-terra` on an OpenAI-compatible route failed when its Chat Completions request combined reasoning and function tools. OpenAI's [GPT-6 guide](https://developers.openai.com/api/docs/guides/latest-model) says `gpt-6-astra`, `gpt-6.1-sol` and `gpt-6.1-terra` use Responses for tool calls. When these model names are used on OpenAI's own API, Pi and OpenCode must use Responses; other compatible providers keep their existing protocol. Codex already uses Responses.
+
+## Why
+
+Agents need tool calls, and a route that cannot make them cannot pass the model check or start a trial.
+
+## Done when
+
+- [x] A scripted Responses provider sees function tools and the selected reasoning effort and answers the model check with a tool call.
+- [x] Pi and OpenCode use Responses for the three named models on OpenAI's own endpoint, including through local proxies; other providers keep Chat Completions, and Codex remains on Responses. Pi workers carry Responses reasoning items into the next tool call.
+- [x] Relevant tests and required checks pass, and the provider page and settings reference describe the behavior.
+- [ ] The patch version and changelog section match the release sequence when the pull request merges.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-14: The request's 400 and OpenAI's model documentation identify the protocol mismatch. Work is in progress; the exact deployed provider and harness have not been established, and no live model call has been made.
+- 2026-11-14: A scripted two-call Pi exchange checks that a Responses reasoning item and tool result go back together, and the model check exercises Responses tool calls. v0.2.5 and an unreleased changelog section are proposed; the patch number is subject to the release sequence. Container acceptance and a live model call are not yet run.
+- 2026-11-14: The affected worker, Pi-view, Codex and Responses tests passed on Linux with Node.js 22.22.1: 51 tests, including the Responses continuation at both explicit and provider-default effort. Agents, Codex and steering acceptance passed with Docker and scripted models; steering's optional engine-socket lifecycle restart was not run. A separate offline check ran the real OpenCode client through the model proxy: three Responses calls, a tool call and its continuation, and no Chat Completions calls. A live model call has not been made.

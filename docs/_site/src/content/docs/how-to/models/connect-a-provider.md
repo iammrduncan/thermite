@@ -45,6 +45,8 @@ This guide covers providers reached with an API key, or with no key: OpenCode's 
 
    When the server's model list names no longest reply for the model, Thermite sends no reply limit, and the server's own default applies: it may cut replies short. To set the server's limits yourself, give the rig the model from [its own settings](#use-the-rigs-own-settings-instead), with `THERMITE_MODEL_MAX_TOKENS` and `THERMITE_MODEL_CONTEXT_WINDOW`.
 
+   For OpenAI's own API at `https://api.openai.com/v1`, Thermite uses the Responses API for `gpt-6-astra`, `gpt-6.1-sol` and `gpt-6.1-terra`, whose tool calls need it. Pi keeps the Responses reasoning items with the tool results in the conversation. Other OpenAI-compatible servers keep their existing API; Codex uses Responses for every OpenAI-compatible server.
+
 4. Press **Add and list its models**.
 
    Control seals the key, if you gave one, and reads the provider's model list at once. The page shows `"my-litellm" is saved and lists 12 models. Give one to a rig on its Edit rig.` with your name and count.

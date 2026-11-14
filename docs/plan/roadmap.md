@@ -237,6 +237,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **v0.2.4** (the owner, 2026-11-14) takes an outside contributor's fix: a change the owner declined counts as settled, so its lane starts its next trial and its run's rounds go on ([pull request 95](https://github.com/iammrduncan/thermite/pull/95)), with its review's two findings.
 
+- [261](goals/261-openai-responses-tools.goal) OpenAI's GPT-6 models call tools over Responses · `IN_PROGRESS`; proposed v0.2.5.
+
 The fixes after them, one version each, in the order to take them:
 
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `IN_PROGRESS`: item 4 shipped in v0.2.0, items 1 to 3 are the fix

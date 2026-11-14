@@ -1,6 +1,6 @@
 {
   "name": "thermite-docs",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "Thermite's documentation site, built with Astro Starlight.",
   "license": "Apache-2.0",
