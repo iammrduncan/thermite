@@ -5,7 +5,7 @@ status: IN_PROGRESS
 version: "0.3.0"
 depends_on: []
 created: 2026-10-23
-updated: 2026-11-13
+updated: 2026-11-14
 ---
 
 # 106 · A rig on Apple silicon that uses its GPU
@@ -236,6 +236,7 @@ The Vulkan harness has been built only for arm64, in a Podman machine on a Mac. 
   - **Changed on the Mac, outside Thermite:** Homebrew installed krunkit, libkrun and MoltenVK; Podman's provider there is libkrun now, and its machine of the default provider is stopped and kept.
   - **Checks run:** the whole test suite (3,044 of 3,048 side by side with 4 skipped, 214 of 215 alone with 1 skipped, none failed), the types, the lint, the public, size, import and loose-ends checks, the image pins, and the documentation's build and check. The compose form of the Mac's file for a release was resolved by compose both ways: with the image named, and without, where compose stops with the file's own words. Not run: the heavy acceptance checks. None of them reaches this target, and the path they share (the CPU and CUDA rigs) is held by the tests.
 - 2026-11-13: **The pushed build, a8436656, on the local-only Thermite.** The stack was rebuilt from the branch as pushed, with `compose.gpu.yaml`. The rig reports the GPU, the isolation check holds with the same words, and the judge's smoke check passed again in 13 minutes: "smoke on smoke-vulkan: all 4 candidates were judged as expected".
+- 2026-11-14: **The handoff was picked up on a Linux machine with no GPU** (x86_64, Podman 5.4). The six test files of "On a machine that is not such a Mac" pass there, 70 of 70. The owner then chose to go on with v0.3.0's test Thermite on that machine, not on the Mac. It runs there from this branch at 86bdf3d6 with a CPU rig, whose isolation check and judge's smoke check passed (`smoke-cpu`, all 13 candidates as expected). Nothing of this goal ran there: the owner's look at a rig on a Mac's GPU, and the first campaign with agents on that GPU, are still open and still need the Mac.
 - **For the owner's look:** the rig's page on the local-only Thermite (its hardware, and its **Isolation** and **Judge smoke** checks), `npx thermite doctor` on the Mac, the page [Install on one machine](../../_site/src/content/docs/how-to/install/one-machine.md) under "Use a Mac's GPU", and the choices in Decisions.
 
 ---
