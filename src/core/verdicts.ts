@@ -43,7 +43,11 @@ export const BROKEN_VERDICTS: readonly string[] = ["invalid", "rejected_v0", "cr
 /** No answer about the change itself: the rig failed, the noise was too high, or its evidence went. */
 export const UNCLEAR_VERDICTS: readonly string[] = ["crash_infra", "inconclusive", "invalidated"];
 
-/** An attempt's lifecycles in which its outcome is known for good. */
+/**
+ * An attempt's lifecycles in which its outcome is known for good. `declined` is the owner's no to
+ * a change that waited for them (awaiting_approval, awaiting_audit or audit_blocked): it never
+ * changes again, so it is as settled as the lifecycle it came from.
+ */
 export const FINAL_LIFECYCLES: ReadonlySet<string> = new Set([
   "promoted",
   "judged",
@@ -51,6 +55,7 @@ export const FINAL_LIFECYCLES: ReadonlySet<string> = new Set([
   "duplicate",
   "errored",
   "audit_blocked",
+  "declined",
   "not_judged",
 ]);
 

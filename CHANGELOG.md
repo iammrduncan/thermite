@@ -2,6 +2,12 @@
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]
+
+### Fixes
+
+- **A change the owner declined no longer stops its lane, and its run's rounds.** A lane's next trial waits until the judge has settled the change from its last trial, and a round ends only when no lane waits. `declined` was missing from the lifecycles that count as settled, though `audit_blocked`, `awaiting_approval` and `awaiting_audit`, the lifecycles a change is declined from, all count. So once the owner declined the newest change of a lane, the lane waited for a verdict that never came: it started no trial, its round never ended, and the run's other lanes, their trials for the round used, started none either. The run looked healthy, with nothing in the logs and only its teachers still at work, until the owner turned on a `keep_working` rule. A declined change is now settled, as the lifecycle it came from was, so the lane goes on and the round ends. The same fix lets the owner send a declined change's experiment back to **Up next**, which was refused with `is still with the judge (declined)`, and settles a propagated change the owner declined, as `propagation_rejected`, which stayed open for good.
+
 ## [0.2.3] 2026-11-10: an OpenAI-compatible provider with no key
 
 v0.2.3 is a fix release of v0.2.2: a model server that takes no key, such as a local llama.cpp or Ollama, is added with none, from an outside contributor's [pull request 80](https://github.com/iammrduncan/thermite/pull/80). A v0.1.1 to v0.2.2 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.2.3), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. A rig older than v0.2.3 can't call a provider with no key. Nothing in control's store, a rig's ledger, the settings or the secrets changes.

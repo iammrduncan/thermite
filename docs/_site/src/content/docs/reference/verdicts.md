@@ -218,7 +218,7 @@ On the **Knowledge** page, the attempt's item has a warning mark in the table an
 | `errored` | Infrastructure failed twice, or its judge job was blocked. Not counted against the research | "failed in the judge" |
 | `not_judged` | Its run closed while it waited in the queue. A closed run is never resumed, so its job is cancelled and it gets no verdict | "not judged: its run closed first" |
 
-A lane's next trial starts only once its last attempt is **settled**: `judged`, `promoted`, `rejected_v0`, `duplicate`, `errored`, `not_judged`, `awaiting_approval`, `awaiting_audit` or `audit_blocked`. A run that keeps working while the judge works (the contract's `lanes.keep_working`, or a `keep_working` rule) starts it once its last trial ends instead, and ends a round when its trials end. Attempts in `queued`, `building`, `screening`, `confirming`, `verifying`, `awaiting_audit` or `awaiting_approval` count as **open** against the contract's `budget.max_open_attempts`: while the run has that many, no trial starts.
+A lane's next trial starts only once its last attempt is **settled**: `judged`, `promoted`, `rejected_v0`, `duplicate`, `errored`, `not_judged`, `awaiting_approval`, `awaiting_audit`, `audit_blocked` or `declined`. A run that keeps working while the judge works (the contract's `lanes.keep_working`, or a `keep_working` rule) starts it once its last trial ends instead, and ends a round when its trials end. Attempts in `queued`, `building`, `screening`, `confirming`, `verifying`, `awaiting_audit` or `awaiting_approval` count as **open** against the contract's `budget.max_open_attempts`: while the run has that many, no trial starts.
 
 ### Why a change was refused
 
