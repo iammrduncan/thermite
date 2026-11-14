@@ -10,6 +10,7 @@ import { SPACE_KINDS, SPACE_LOOK_MS, spaceOf, spaceTotal } from "../../src/contr
 import { openControlStore } from "../../src/control/store/index.ts";
 import { esc } from "../../src/control/ui/components/index.ts";
 import { controlStack, signIn } from "../helpers/control-stack.ts";
+import { ON_POSTGRES } from "../helpers/store-kind.ts";
 import { report } from "../helpers/view-events.ts";
 
 /** The space each kind of what control keeps takes (goal 125, T12): Settings › Space, /metrics. */
@@ -59,7 +60,8 @@ describe("the space control's kinds take", () => {
         advisor_records: 0,
       },
     );
-    assert.ok(Number(was.store) > 0, "the store's file");
+    // A store on PostgreSQL is on its server, and takes nothing of control's state.
+    if (!ON_POSTGRES) assert.ok(Number(was.store) > 0, "the store's file");
     put(join(dir, "exports", "rig-a", "later.bin"), 500);
     assert.equal(of(await spaceOf(store, undefined, now + SPACE_LOOK_MS - 1)).exports, 1000);
     assert.equal(of(await spaceOf(store, undefined, now + SPACE_LOOK_MS)).exports, 1500);

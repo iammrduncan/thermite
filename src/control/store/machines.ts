@@ -25,7 +25,7 @@ export interface Machine {
   created_at: string;
 }
 
-const machineOf = (r: Row): Machine => ({
+export const machineOf = (r: Row): Machine => ({
   name: String(r.name),
   address: String(r.address),
   port: Number(r.port),
@@ -77,7 +77,7 @@ export interface MachineRig {
   created_by: string;
 }
 
-const machineRigOf = (r: Row): MachineRig => ({
+export const machineRigOf = (r: Row): MachineRig => ({
   rig: String(r.rig),
   machine: String(r.machine),
   gpus: JSON.parse(String(r.gpus)) as number[],

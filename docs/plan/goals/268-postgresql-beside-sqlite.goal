@@ -73,17 +73,26 @@ The design's size for this step is L: a week or more, by the readers' first esti
 ## Open questions
 
 - The copy command's name, and whether a person runs it or control runs it at its start. Step 4 decides the second.
-- Which versions of PostgreSQL are supported, and which package reaches it.
-- The reading found more triggers in the store's source than a fresh store holds, and did not trace why. The copy must know which are in use.
+- ~~Which versions of PostgreSQL are supported, and which package reaches it.~~ Answered (2026-11-14): PostgreSQL 16 or newer, reached with `pg` (node-postgres).
+- ~~The reading found more triggers in the store's source than a fresh store holds, and did not trace why.~~ Answered (2026-11-14): a fresh SQLite store holds two, both on the knowledge base's versions (a version is never changed; an item's newest version is never removed). The others are in migrations that later migrations take out again: the first words index's three, and the first form of the rule on removing versions. The PostgreSQL schema has the two.
 - Acceptance scripts open control's store file themselves (`scripts/acceptance/lib/control-bus.mjs` and others). Whether they read through control, or through the store's interface.
-- From goal [267](267-store-behind-an-interface.goal): 58 test files outside the store's own tests reach the database itself, through `sqliteBehind` (`src/control/store/behind.ts`), to make a store as an older version left it or to read a table that no call gives. On PostgreSQL they do not run as they are. Which become calls of the interface, and which stay tests of the SQLite store alone.
-- From goal 267: three files read the size of the store's file and of its copies by `store.path` (`src/control/space.ts`, `src/control/retention/items.ts`, `src/control/system/local.ts`). What they read on PostgreSQL.
+- ~~From goal 267: 58 test files outside the store's own tests reach the database itself, through `sqliteBehind`. Which become calls of the interface, and which stay tests of the SQLite store alone.~~ Answered (2026-11-14): a test that reads or writes a table with a statement both stores read the same way now does it with `rowsBehind` and `writeBehind` (`src/control/store/behind.ts`), and runs on both. A test that makes a store as an older version left it, or reads SQLite's own tables, stays a test of the SQLite store: on PostgreSQL it is left out, and counted as such.
+- ~~From goal 267: three files read the size of the store's file and of its copies by `store.path`. What they read on PostgreSQL.~~ Answered (2026-11-14): a store on PostgreSQL is on its server, so it takes nothing of control's state folder and has no copies there. Its `path` is where its file would be, so the three files read the folder as before, and find no store file and no copies. The database's own size is on Metrics' Storage tab, from the server's counters (`src/control/store/postgres/size.ts`).
 - From goal 267: a transaction on SQLite holds every other caller of the store, since SQLite has one connection. What holds a read and the write that relies on it on PostgreSQL, where other callers go on: the isolation level, or a lock on the rows read. The 36 transactions outside the store are listed by their tests (`tests/control/together/`).
 
 ## Progress
 
 - 2026-11-12: Written from goal 258's design, which the owner agreed.
 - 2026-11-14: `IN_PROGRESS`. The owner answered the step's two questions (Decisions).
+- 2026-11-14: **The store on PostgreSQL is built, behind the same interface.** What is there:
+  - A PostgreSQL class for each of the store's parts (`src/control/store/postgres/`, and the knowledge base's in `src/control/store/kb/postgres/`), made from the SQLite classes by a script once and then finished by hand. The SQLite classes do what they did; what reaches no database is written once and both use it.
+  - Its schema (`src/control/store/postgres/schema/`): every ordinary table of the SQLite store, with the same columns, and its own list of migrations, which starts at one. A test holds the two stores' tables and columns together.
+  - The order of its calls (`order.ts`): one call at a time, and a transaction holds every other caller, as on SQLite. The tests of the interface's transactions pass on both stores.
+  - The events' reading into the knowledge base answers at once, and PostgreSQL answers later. It runs as a replay (`kb/postgres/replay.ts`): the reading is not changed, and a test reads the same events on both stores and compares what they hold.
+  - A search of the knowledge base is a plain match until goal 269: an item matches when its title, text or context holds a word; the newest change comes first; an exact search is refused in words.
+  - The settings: `THERMITE_CONTROL_STORE`, `THERMITE_CONTROL_POSTGRES_URL` and `THERMITE_CONTROL_POSTGRES_PASSWORD_FILE` (the settings reference). Control checks the server's version at its start, and refuses one older than PostgreSQL 16 in words.
+  - The tests run on both stores: `node scripts/test.mjs --store postgres`, which `npm run check` runs (`npm run test:postgres`). Of the tests that open control's store, 1,248 pass on PostgreSQL and 106 are left out: they reach the SQLite database itself (its file, its copies, its migrations from older versions), or they test the words index. 89 reads of the SQLite database in the tests now read either store (`rowsBehind`, `writeBehind`).
+  - Not built yet: the copy command, backup and restore on PostgreSQL, the compose service, the acceptance checks on PostgreSQL, and CI's run on a real server.
 
 ---
 

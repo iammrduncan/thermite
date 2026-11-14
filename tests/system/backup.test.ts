@@ -34,6 +34,7 @@ import {
 } from "../helpers/control-store.ts";
 import { FakeBackupBus } from "../helpers/fake-backup-bus.ts";
 import { FakeBus } from "../helpers/fake-bus.ts";
+import { sqliteOnly } from "../helpers/store-kind.ts";
 
 /**
  * Backup and restore of control (goal 173), in a layout as the compose stack's: control's state
@@ -107,7 +108,7 @@ async function placeIn(dir: string): Promise<number> {
   }
 }
 
-describe("backup and restore of control (goal 173)", () => {
+describe("backup and restore of control (goal 173)", sqliteOnly, () => {
   test("a backup holds control's state and EVENTS, the store first, with a manifest", async () => {
     const { dir, bus } = await controlState(120);
     const into = fresh("backups");

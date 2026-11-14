@@ -13,7 +13,7 @@ import { startCampaign } from "../../src/control/campaigns/new.ts";
 import { cancelCommand } from "../../src/control/issue/index.ts";
 import { KitRepos } from "../../src/control/kits/repos.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind } from "../../src/control/store/behind.ts";
 import { gitAccessFrom, RigConfig } from "../../src/supervisor/config/index.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
 import { controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
@@ -246,7 +246,7 @@ describe("Git access for private repositories", () => {
     const r = await start(draftOf("gitlab-token"));
     assert.ok(r.ok, JSON.stringify(!r.ok && r.errors));
     // The signed command names the access, never its secret.
-    const signed = sqliteBehind(s.store).db.prepare("select id, signed from command").get() as {
+    const signed = (await rowsBehind(s.store, "select id, signed from command"))[0] as {
       id: string;
       signed: string;
     };

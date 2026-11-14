@@ -16,7 +16,7 @@ import { keepVersion } from "./items.ts";
 import { ORIGIN_KINDS, originTarget } from "./journal.ts";
 import { scrubbedKept } from "./kept.ts";
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 /**
  * The reading's version, and the kinds each reading read anew: a store built by an earlier
@@ -27,9 +27,9 @@ type Row = Record<string, unknown>;
  * item the lane and the trial its events name, as fields (goal 176): the events of ORIGIN_KINDS
  * that no earlier reading reads anew are read again for that alone (journal.ts, originTarget).
  */
-const READING = "4";
-const READ_FOR_ORIGIN = "4";
-const READ_ANEW: Record<string, string[]> = {
+export const READING = "4";
+export const READ_FOR_ORIGIN = "4";
+export const READ_ANEW: Record<string, string[]> = {
   "2": [
     "run_created",
     "run_status",

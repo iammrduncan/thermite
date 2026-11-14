@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { saveRunpodRig } from "../../../src/control/runpod/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { PRICE_CORE_JS } from "../../../src/control/ui/providers/client.ts";
 import { bars, dayEdges, PRICE_WORDS } from "../../../src/control/ui/usage.ts";
@@ -656,9 +656,10 @@ describe("model use on the screens (goal 075)", () => {
     assert.match(r.to, /ok=saved/);
     assert.deepEqual(await s.store.usage.prices(), []);
     // Each change is in the audit log, as the owner's on the dashboard.
-    const audit = sqliteBehind(s.store)
-      .db.prepare("select actor, action from audit where action like 'model_price%' order by id")
-      .all() as { actor: string; action: string }[];
+    const audit = (await rowsBehind(
+      s.store,
+      "select actor, action from audit where action like 'model_price%' order by id",
+    )) as { actor: string; action: string }[];
     assert.deepEqual(
       audit.map((a) => [a.actor, a.action]),
       [

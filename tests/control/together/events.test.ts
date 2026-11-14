@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { readKnowledgeAgain } from "../../../src/control/events/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, writeBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { EVENT_STREAM } from "../../../src/core/link/events.ts";
 import { assigned } from "../../helpers/assignments.ts";
@@ -55,8 +55,8 @@ const note = (id: number, n: number, text: string, more: Record<string, unknown>
 });
 
 /** The knowledge base's items whose text has `word`, as the database has them now. */
-const itemsWith = (store: ControlStore, word: string) =>
-  rowsOf(store, "kb_item").filter((r) => String(r.body).includes(word)).length;
+const itemsWith = async (store: ControlStore, word: string) =>
+  (await rowsOf(store, "kb_item")).filter((r) => String(r.body).includes(word)).length;
 
 type Index = ReturnType<ControlStore["kb"]>["index"];
 
@@ -65,13 +65,16 @@ type Index = ReturnType<ControlStore["kb"]>["index"];
  * writes the event's items, and then fails. Gives how many of those events were written before
  * they failed, and the function that puts the store's call back.
  */
-function indexInPart(store: ControlStore, fails: (e: { id?: number }) => boolean) {
+function indexInPart(
+  store: ControlStore,
+  fails: (e: { id?: number }) => boolean | Promise<boolean>,
+) {
   const kb = store.kb();
   const own = kb.index;
   const seen = { written: 0 };
   (kb as { index: Index }).index = async (src, e, o) => {
     await own(src, e, o);
-    if (!fails(e as { id?: number })) return;
+    if (!(await fails(e as { id?: number }))) return;
     seen.written++;
     throw new Error(WRITE_FAILED);
   };
@@ -90,9 +93,9 @@ describe("an event's items in the knowledge base, inside its page's transaction"
     await page(store, [{ id: 1, kind: "run_created", body: { campaign: "gemv" } }]);
     // The second event's note is written, and then its indexing fails.
     let there = 0;
-    const part = indexInPart(store, (e) => {
+    const part = indexInPart(store, async (e) => {
       if (e.id !== 2) return false;
-      there = itemsWith(store, "zanzibarite");
+      there = await itemsWith(store, "zanzibarite");
       return true;
     });
     await page(store, [
@@ -102,10 +105,10 @@ describe("an event's items in the knowledge base, inside its page's transaction"
     part.putBack();
     assert.equal(part.seen.written, 1);
     assert.equal(there, 1, "the note was in the store when its indexing failed");
-    assert.equal(itemsWith(store, "zanzibarite"), 0, "the event's own writes were dropped");
+    assert.equal(await itemsWith(store, "zanzibarite"), 0, "the event's own writes were dropped");
     assert.deepEqual(await store.kb().search("zanzibarite", ["gemv"]), []);
     // The page itself is kept: the event after it, the stream's place and the ledger's cursor.
-    assert.equal(itemsWith(store, "quokkaite"), 1);
+    assert.equal(await itemsWith(store, "quokkaite"), 1);
     assert.equal((await store.kb().search("quokkaite", ["gemv"])).length, 1);
     assert.equal(await store.busPositions.of(EVENT_STREAM), 3);
     assert.equal(await store.reportedRigs.heldCursor("rig-a", "l-1"), 3);
@@ -117,7 +120,7 @@ describe("an event's items in the knowledge base, inside its page's transaction"
 
     // With the store's own call back, an event's items are kept with its page.
     await page(store, [note(4, 3, "wombatite prefetch helps")]);
-    assert.equal(itemsWith(store, "wombatite"), 1);
+    assert.equal(await itemsWith(store, "wombatite"), 1);
     assert.equal(await store.busPositions.of(EVENT_STREAM), 4);
     assert.equal((await store.auditLog.list(10, { action: "kb_failed" })).length, 1);
   });
@@ -132,7 +135,7 @@ describe("an event's items in the knowledge base, inside its page's transaction"
     let there = 0;
     (kb as { write: typeof own }).write = async (src, b) => {
       const refused = await own(src, b);
-      there = itemsWith(store, "zanzibarite");
+      there = await itemsWith(store, "zanzibarite");
       throw new Error(`${WRITE_FAILED}${refused ? `: ${refused}` : ""}`);
     };
     await page(store, [
@@ -154,8 +157,8 @@ describe("an event's items in the knowledge base, inside its page's transaction"
     ]);
     (kb as { write: typeof own }).write = own;
     assert.equal(there, 1, "the finding was in the store when its write failed");
-    assert.equal(itemsWith(store, "zanzibarite"), 0, "the event's own writes were dropped");
-    assert.equal(itemsWith(store, "quokkaite"), 1, "the event after it is kept");
+    assert.equal(await itemsWith(store, "zanzibarite"), 0, "the event's own writes were dropped");
+    assert.equal(await itemsWith(store, "quokkaite"), 1, "the event after it is kept");
     assert.equal(await store.busPositions.of(EVENT_STREAM), 3);
     assert.deepEqual(
       (await store.auditLog.list(10, { action: "kb_failed" })).map((a) => a.body),
@@ -165,22 +168,26 @@ describe("an event's items in the knowledge base, inside its page's transaction"
 });
 
 /** The fields the knowledge base keeps apart for an item of rig-a's run. */
-const meta = (store: ControlStore, kind: string, ref: string) =>
+const meta = async (store: ControlStore, kind: string, ref: string) =>
   JSON.parse(
     String(
-      (
-        sqliteBehind(store)
-          .db.prepare("select meta from kb_item where kind = ? and ref = ?")
-          .get(kind, ref) as { meta: string }
-      ).meta,
+      (await rowsBehind(store, "select meta from kb_item where kind = ? and ref = ?", kind, ref))[0]
+        ?.meta,
     ),
   ) as Record<string, string>;
 
 /** The store as an earlier reading left it: no lane or trial in any item's fields. */
-function asReadingBefore(store: ControlStore): void {
-  const { db } = sqliteBehind(store);
-  db.exec("update kb_item set meta = json_remove(meta, '$.lane', '$.trial')");
-  db.exec("update kb_meta set value = '3' where key = 'reading'");
+async function asReadingBefore(store: ControlStore): Promise<void> {
+  for (const r of await rowsBehind(store, "select id, meta from kb_item")) {
+    const { lane: _lane, trial: _trial, ...kept } = JSON.parse(String(r.meta));
+    await writeBehind(
+      store,
+      "update kb_item set meta = ? where id = ?",
+      JSON.stringify(kept),
+      r.id,
+    );
+  }
+  await writeBehind(store, "update kb_meta set value = '3' where key = 'reading'");
 }
 
 describe("the events read again for a new reading of the knowledge base", () => {
@@ -198,16 +205,16 @@ describe("the events read again for a new reading of the knowledge base", () => 
       note(3, 1, "zanzibarite loads help", { lane: "lane-1", trial: "t-1" }),
       note(4, 2, "quokkaite stores do not", { lane: "lane-1", trial: "t-1" }),
     ]);
-    assert.equal(meta(store, "note", "1").lane, "lane-1");
-    asReadingBefore(store);
-    assert.equal(meta(store, "note", "1").lane, undefined);
-    assert.equal(meta(store, "trial", "t-1").lane, undefined);
+    assert.equal((await meta(store, "note", "1")).lane, "lane-1");
+    await asReadingBefore(store);
+    assert.equal((await meta(store, "note", "1")).lane, undefined);
+    assert.equal((await meta(store, "trial", "t-1")).lane, undefined);
 
     // The first note is read again, its fields written, and then its indexing fails.
     let there: string | undefined;
-    const part = indexInPart(store, (e) => {
+    const part = indexInPart(store, async (e) => {
       if (e.id !== 3) return false;
-      there = meta(store, "note", "1").lane;
+      there = (await meta(store, "note", "1")).lane;
       return true;
     });
     const read = await watched(store, () => readKnowledgeAgain(store, busOf(store).bus));
@@ -215,21 +222,21 @@ describe("the events read again for a new reading of the knowledge base", () => 
     assert.equal(read.threw, undefined, "an event that fails is passed over");
     assert.equal(part.seen.written, 1);
     assert.equal(there, "lane-1", "the note had its fields when its indexing failed");
-    assert.equal(meta(store, "note", "1").lane, undefined, "its own writes were dropped");
+    assert.equal((await meta(store, "note", "1")).lane, undefined, "its own writes were dropped");
     // One transaction held the page: the other events' fields are kept with it.
     assert.equal(read.txs.length, 1);
     assert.equal(read.txs[0]?.failed, false);
     assert.ok(read.txs[0]?.changed.includes("kb_item"), String(read.txs[0]?.changed));
-    assert.equal(meta(store, "trial", "t-1").lane, "lane-1");
-    assert.equal(meta(store, "note", "2").lane, "lane-1");
+    assert.equal((await meta(store, "trial", "t-1")).lane, "lane-1");
+    assert.equal((await meta(store, "note", "2")).lane, "lane-1");
     assert.equal(read.out, 2, "the trial and the second note");
 
     // With the store's own call back, the same event read again is kept.
-    asReadingBefore(store);
+    await asReadingBefore(store);
     const again = await watched(store, () => readKnowledgeAgain(store, busOf(store).bus));
     assert.equal(again.out, 3);
     assert.equal(again.txs.length, 1);
-    assert.equal(meta(store, "note", "1").lane, "lane-1");
-    assert.equal(meta(store, "note", "1").trial, "t-1");
+    assert.equal((await meta(store, "note", "1")).lane, "lane-1");
+    assert.equal((await meta(store, "note", "1")).trial, "t-1");
   });
 });

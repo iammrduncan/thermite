@@ -26,7 +26,7 @@ export const GIT_HOST =
 export const GIT_HOST_WORDS =
   "Name the host the Git access is for, such as github.com: the server's name alone, with no https://, user, port or path.";
 
-function gitAccessOf(r: Row): GitAccess {
+export function gitAccessOf(r: Row): GitAccess {
   const opt = (v: unknown) => (v === null || v === undefined ? null : String(v));
   return {
     name: String(r.name),

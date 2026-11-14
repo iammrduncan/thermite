@@ -11,7 +11,7 @@ import {
   joinNamespaceManifest,
 } from "../../src/control/join.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { writeBehind } from "../../src/control/store/behind.ts";
 import { controlOnly, signIn } from "../helpers/control-stack.ts";
 
 const SECRETS = { controlToken: "rig-token-123", harnessSupervisorToken: "hs-token-456" };
@@ -300,9 +300,12 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     assert.equal((await s.fetchJoin("/v1/join/box-b/manifest", token)).status, 401);
     // Expired: likewise.
     const late = s.tokenOf(await (await s.post("/ui/rigs/box-b/join/new", {})).text());
-    sqliteBehind(s.store)
-      .db.prepare("update joined_rig set join_expires_at = ? where rig = ?")
-      .run("2000-01-01T00:00:00.000Z", "box-b");
+    await writeBehind(
+      s.store,
+      "update joined_rig set join_expires_at = ? where rig = ?",
+      "2000-01-01T00:00:00.000Z",
+      "box-b",
+    );
     assert.equal((await s.fetchJoin("/v1/join/box-b/manifest", late)).status, 401);
     const ok = s.tokenOf(await (await s.post("/ui/rigs/box-b/join/new", {})).text());
     const got = await s.fetchJoin("/v1/join/box-b/manifest", ok);

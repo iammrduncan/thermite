@@ -9,7 +9,7 @@ import type { RunpodRigView } from "../../../src/control/runpod/rig-view.ts";
 import { DEFAULT_IDLE_STOP_MINUTES, RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { writeBehind } from "../../../src/control/store/behind.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { assigned } from "../../helpers/assignments.ts";
 import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
@@ -368,9 +368,12 @@ describe("a RunPod rig's page", () => {
     await s.advance();
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
     // Stopped is not offline, whenever it last reported.
-    sqliteBehind(s.store)
-      .db.prepare("update rig set last_seen = ? where id = ?")
-      .run(new Date(Date.now() - 3_600_000).toISOString(), "rp-test-1");
+    await writeBehind(
+      s.store,
+      "update rig set last_seen = ? where id = ?",
+      new Date(Date.now() - 3_600_000).toISOString(),
+      "rp-test-1",
+    );
     page = await s.page("/ui/rigs/rp-test-1");
     assert.match(page, /data-pod-state>Stopped</);
     assert.match(page, /<span class="muted">stopped<\/span> · RunPod/);
@@ -601,9 +604,12 @@ describe("a stopped RunPod pod elsewhere on the dashboard", () => {
     await s.advance();
     await s.advance();
     assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
-    sqliteBehind(s.store)
-      .db.prepare("update rig set last_seen = ? where id = ?")
-      .run(new Date(Date.now() - 3_600_000).toISOString(), "rp-test-1");
+    await writeBehind(
+      s.store,
+      "update rig set last_seen = ? where id = ?",
+      new Date(Date.now() - 3_600_000).toISOString(),
+      "rp-test-1",
+    );
     return s;
   }
 

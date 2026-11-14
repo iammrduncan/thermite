@@ -17,10 +17,10 @@ import { type ItemPlace, keepVersion } from "./items.ts";
  */
 
 /** The field of a version whose text Thermite's code scrubbed by shape, and its words. */
-const SCRUBBED = "scrubbed";
+export const SCRUBBED = "scrubbed";
 const SCRUBBED_NOTE = "Thermite's code scrubbed this text by shape";
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 /** Where a records item is, as far as this needs: its slot, kind and id. */
 type KeptPlace = Pick<ItemPlace, "slot" | "kind" | "ref">;

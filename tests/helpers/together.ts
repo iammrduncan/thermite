@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, tablesBehind } from "../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { type StoreWaits, setStoreWaits } from "../../src/control/store/waits.ts";
 
@@ -17,17 +17,16 @@ export type Rows = Record<string, unknown[]>;
  * Every row of every table, read behind the interface: a dropped transaction leaves the whole
  * store as it was, not only the rows a test thought of.
  */
-function everyRow(store: ControlStore): Rows {
-  const { db } = sqliteBehind(store);
-  const tables = db
-    .prepare("select name from sqlite_master where type = 'table' order by name")
-    .all() as { name: string }[];
+async function everyRow(store: ControlStore): Promise<Rows> {
   const out: Rows = {};
-  for (const { name } of tables)
-    out[name] = db
-      .prepare(`select * from "${name}"`)
-      .all()
-      .map((r) => ({ ...r }));
+  const text = (row: unknown) =>
+    JSON.stringify(row, (_, v) => (typeof v === "bigint" ? String(v) : v));
+  // In an order of their own: a store gives a table's rows in no order that a write keeps.
+  for (const name of await tablesBehind(store))
+    out[name] = (await rowsBehind(store, `select * from "${name}"`))
+      .map((row) => ({ row, as: text(row) }))
+      .sort((a, b) => (a.as < b.as ? -1 : a.as > b.as ? 1 : 0))
+      .map((r) => r.row);
   return out;
 }
 
@@ -47,11 +46,8 @@ function changedTables(before: Rows, after: Rows): string[] {
 }
 
 /** The rows of one table now, behind the interface, for a table no call of the store gives. */
-export function rowsOf(store: ControlStore, table: string): Record<string, unknown>[] {
-  return sqliteBehind(store)
-    .db.prepare(`select * from "${table}"`)
-    .all()
-    .map((r) => ({ ...r }));
+export function rowsOf(store: ControlStore, table: string): Promise<Record<string, unknown>[]> {
+  return rowsBehind(store, `select * from "${table}"`);
 }
 
 /** The failure the tests put in a write's place: what a store that cannot write says. */
@@ -126,7 +122,7 @@ export async function watched<T>(store: ControlStore, code: () => Promise<T>): P
     if (inside.getStore()?.open) return ownTx(fn);
     const mine: Followed = { open: true };
     return ownTx(async () => {
-      const before = everyRow(store);
+      const before = await everyRow(store);
       let failed = false;
       try {
         return await ownTx(() => inside.run(mine, fn));
@@ -135,7 +131,7 @@ export async function watched<T>(store: ControlStore, code: () => Promise<T>): P
         throw err;
       } finally {
         mine.open = false;
-        const after = everyRow(store);
+        const after = await everyRow(store);
         txs.push({ before, after, changed: changedTables(before, after), failed });
       }
     });

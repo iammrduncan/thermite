@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../../src/control/store/index.ts";
 import type { KbItemBody } from "../../../../src/core/kb/index.ts";
 
@@ -110,14 +110,8 @@ describe("the knowledge base's items, versions, links and words", () => {
     );
     // No version is ever changed, and an item's newest is never removed (a retention policy may
     // remove the older ones: tests/control/retention.test.ts).
-    assert.throws(
-      () => sqliteBehind(store).db.prepare("update kb_version set body = 'x'").run(),
-      /never changed/,
-    );
-    assert.throws(
-      () => sqliteBehind(store).db.prepare("delete from kb_version").run(),
-      /never removed/,
-    );
+    await assert.rejects(writeBehind(store, "update kb_version set body = 'x'"), /never changed/);
+    await assert.rejects(writeBehind(store, "delete from kb_version"), /never removed/);
     // Another writer's slot holds its own item 1; a file item; the records slot's own ids.
     assert.equal(
       await write(
@@ -144,9 +138,10 @@ describe("the knowledge base's items, versions, links and words", () => {
       await write(store, body({ slot: "records", kind: "note", title: "From code" })),
       undefined,
     );
-    const refs = sqliteBehind(store)
-      .db.prepare("select slot, ref, kind, file_sha256 from kb_item order by id")
-      .all();
+    const refs = await rowsBehind(
+      store,
+      "select slot, ref, kind, file_sha256 from kb_item order by id",
+    );
     assert.deepEqual(
       refs.map((r) => ({ ...r })),
       [
@@ -182,9 +177,8 @@ describe("the knowledge base's items, versions, links and words", () => {
     const none = await store.kb().write({ ...RIG, run: "nowhere", event: 1, at: "x" }, body());
     assert.match(String(none), /run nowhere has no collection/);
     assert.equal(
-      sqliteBehind(store)
-        .db.prepare("select count(*) as n from kb_version where event is not null")
-        .get()?.n,
+      (await rowsBehind(store, "select count(*) as n from kb_version where event is not null"))[0]
+        ?.n,
       1,
     );
   });
@@ -202,9 +196,7 @@ describe("the knowledge base's items, versions, links and words", () => {
     await note("The L2 is 4 MB");
     await note("The L2 is 6 MB, not 4");
     const id = (
-      sqliteBehind(store)
-        .db.prepare("select id from kb_item where kind = 'note' and ref = '4'")
-        .get() as {
+      (await rowsBehind(store, "select id from kb_item where kind = 'note' and ref = '4'"))[0] as {
         id: number;
       }
     ).id;
@@ -226,15 +218,12 @@ describe("the knowledge base's items, versions, links and words", () => {
     );
     assert.deepEqual(words(store, "tiling"), []);
     assert.equal(
-      sqliteBehind(store)
-        .db.prepare("select count(*) as n from kb_item where slot = 'worker-1'")
-        .get()?.n,
+      (await rowsBehind(store, "select count(*) as n from kb_item where slot = 'worker-1'"))[0]?.n,
       0,
     );
     assert.equal(
-      sqliteBehind(store)
-        .db.prepare("select count(*) as n from kb_version where event is not null")
-        .get()?.n,
+      (await rowsBehind(store, "select count(*) as n from kb_version where event is not null"))[0]
+        ?.n,
       0,
     );
     // Written: found by its words, stemmed; a new version's words replace the old ones'.

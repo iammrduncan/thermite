@@ -7,7 +7,7 @@ import { describe, test } from "node:test";
 import type { Outgoing } from "../../src/common/bus/index.ts";
 import { copiesOf } from "../../src/common/db-copy.ts";
 import { MOVE_CHECK_SAMPLE } from "../../src/control/events/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../src/control/store/behind.ts";
 import { openControlStore, STORE_VERSION } from "../../src/control/store/index.ts";
 import { sentence } from "../../src/control/ui/words/index.ts";
 import { keepFolds } from "../../src/control/views/index.ts";
@@ -31,6 +31,7 @@ import {
 import { asMessage, FakeBus } from "../helpers/fake-bus.ts";
 import { itemsBySeq } from "../helpers/kb-items.ts";
 import { keepOldRows, type OldRow, withEventsTable } from "../helpers/old-store.ts";
+import { sqliteOnly } from "../helpers/store-kind.ts";
 
 /**
  * The move of a store's events table to the message bus's `EVENTS` stream (goal 168, step 4,
@@ -227,63 +228,67 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(keptCopies(path).length, 1);
   });
 
-  test("from v0.1.0: migrated, its registry made from the table, moved, checked and dropped", async () => {
-    const path = fresh();
-    const old = new DatabaseSync(path);
-    old.exec(V010);
-    keepOldRows(old, [
-      {
-        rig: "rig-a",
-        ledger: "l-1",
-        id: 1,
-        kind: "run_created",
-        subject: "gemv-1",
-        body: { campaign: "gemv" },
-      },
-      {
-        rig: "rig-a",
-        ledger: "l-1",
-        id: 2,
-        kind: "instance_created",
-        subject: "gemv-0",
-        body: { campaign: "gemv" },
-      },
-      ...notes("rig-a", "l-1", 3, 3),
-    ]);
-    old.close();
-    const store = controlStore(path);
-    await applied(store);
-    // Migrated from version 0, which a copy in the rotation keeps; moved; then dropped, which the
-    // kept copy keeps.
-    assert.deepEqual(
-      copiesOf(path).map((c) => c.version),
-      [0],
-    );
-    assert.equal(keptCopies(path).length, 1);
-    assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v37\..*\.kept$/);
-    assert.equal(hasTable(sqliteBehind(store).db), false);
-    assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
-    const kept = onStream(busOf(store).bus);
-    assert.deepEqual(
-      kept.map((k) => [k.headers[EVENT_HEADERS.seq], k.subject]),
-      [
-        ["1", "thermite.rig.rig-a.ev.run_created"],
-        ["2", "thermite.rig.rig-a.ev.instance_created"],
-        ["3", "thermite.rig.rig-a.ev.journal_note"],
-        ["4", "thermite.rig.rig-a.ev.journal_note"],
-        ["5", "thermite.rig.rig-a.ev.journal_note"],
-      ],
-      "no run of v0.1.0's: each on the rig's subject",
-    );
-    // The migrations that read the table ran on it before it went: the registry has both runs,
-    // the one named before the rename too.
-    assert.equal((await store.runRegistry.createdOn("gemv-1", "rig-a"))?.campaign, "gemv");
-    assert.equal((await store.runRegistry.createdOn("gemv-0", "rig-a"))?.campaign, "gemv");
-    const folder = sqliteBehind(store).db.prepare("select name from campaign_folder").get() as {
-      name: string;
-    };
-    assert.equal(folder.name, "speed", "and keeps what v0.1.0 kept");
-  });
+  test(
+    "from v0.1.0: migrated, its registry made from the table, moved, checked and dropped",
+    sqliteOnly,
+    async () => {
+      const path = fresh();
+      const old = new DatabaseSync(path);
+      old.exec(V010);
+      keepOldRows(old, [
+        {
+          rig: "rig-a",
+          ledger: "l-1",
+          id: 1,
+          kind: "run_created",
+          subject: "gemv-1",
+          body: { campaign: "gemv" },
+        },
+        {
+          rig: "rig-a",
+          ledger: "l-1",
+          id: 2,
+          kind: "instance_created",
+          subject: "gemv-0",
+          body: { campaign: "gemv" },
+        },
+        ...notes("rig-a", "l-1", 3, 3),
+      ]);
+      old.close();
+      const store = controlStore(path);
+      await applied(store);
+      // Migrated from version 0, which a copy in the rotation keeps; moved; then dropped, which the
+      // kept copy keeps.
+      assert.deepEqual(
+        copiesOf(path).map((c) => c.version),
+        [0],
+      );
+      assert.equal(keptCopies(path).length, 1);
+      assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v37\..*\.kept$/);
+      assert.equal(hasTable(sqliteBehind(store).db), false);
+      assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
+      const kept = onStream(busOf(store).bus);
+      assert.deepEqual(
+        kept.map((k) => [k.headers[EVENT_HEADERS.seq], k.subject]),
+        [
+          ["1", "thermite.rig.rig-a.ev.run_created"],
+          ["2", "thermite.rig.rig-a.ev.instance_created"],
+          ["3", "thermite.rig.rig-a.ev.journal_note"],
+          ["4", "thermite.rig.rig-a.ev.journal_note"],
+          ["5", "thermite.rig.rig-a.ev.journal_note"],
+        ],
+        "no run of v0.1.0's: each on the rig's subject",
+      );
+      // The migrations that read the table ran on it before it went: the registry has both runs,
+      // the one named before the rename too.
+      assert.equal((await store.runRegistry.createdOn("gemv-1", "rig-a"))?.campaign, "gemv");
+      assert.equal((await store.runRegistry.createdOn("gemv-0", "rig-a"))?.campaign, "gemv");
+      const folder = (await rowsBehind(store, "select name from campaign_folder"))[0] as {
+        name: string;
+      };
+      assert.equal(folder.name, "speed", "and keeps what v0.1.0 kept");
+    },
+  );
 
   test("stopped part way, then started again: every row once, in order", async () => {
     const rows = notes("rig-a", "l-1", 1, 2500);
@@ -381,7 +386,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
         { at: "2026-10-29T07:00:00.000Z", actor: "harness", subject: "gs-1", ...e },
       );
     sqliteBehind(s).db.exec("update kb_cursor set seq = 13");
-    const before = itemsBySeq(s, ["gemv"]).map((x) => [x.seq, x.ref]);
+    const before = (await itemsBySeq(s, ["gemv"])).map((x) => [x.seq, x.ref]);
     assert.deepEqual(before, [
       [1, "gs-1"],
       [2, "2"],
@@ -401,7 +406,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       ],
     );
     assert.deepEqual(
-      itemsBySeq(store, ["gemv"]).map((x) => [x.seq, x.ref]),
+      (await itemsBySeq(store, ["gemv"])).map((x) => [x.seq, x.ref]),
       [...before, [4, "4"]],
       "the third lesson alone is new",
     );

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { copiesOf } from "../../../src/common/db-copy.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
 import { withEventsTable } from "../../helpers/old-store.ts";
 
@@ -19,9 +19,7 @@ describe("the message bus's keys in control's store", () => {
     sqliteBehind(six).db.exec("drop table rig_bus_key; drop table bus_identity");
     await six.close();
     const store = openControlStore(path);
-    const v = sqliteBehind(store)
-      .db.prepare("select max(version) as v from schema_migrations")
-      .get();
+    const v = (await rowsBehind(store, "select max(version) as v from schema_migrations"))[0];
     assert.equal(v?.v, STORE_VERSION);
     assert.deepEqual(await store.busKeys.rigKeys(), []);
     await store.close();

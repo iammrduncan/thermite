@@ -6,7 +6,7 @@ import { checkRigPlace, type PlaceParts } from "../../../src/control/rigs/place.
 import { RigUpdates } from "../../../src/control/rigs/update.ts";
 import { checkQuietRigs } from "../../../src/control/rigs/watch.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { sqliteBehind, writeBehind } from "../../../src/control/store/behind.ts";
 import { rigView } from "../../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import type { BuildInfo } from "../../../src/core/version.ts";
@@ -658,9 +658,12 @@ describe("control looks where a quiet rig runs", () => {
     );
     // 14 minutes later, it is offline: checked once more.
     s.lastSeen("gpu-1", 20 * MIN);
-    sqliteBehind(s.store)
-      .db.prepare("update rig_setup_event set at = ? where rig = ? and step = 'check'")
-      .run(new Date(Date.now() - 14 * MIN).toISOString(), "gpu-1");
+    await writeBehind(
+      s.store,
+      "update rig_setup_event set at = ? where rig = ? and step = 'check'",
+      new Date(Date.now() - 14 * MIN).toISOString(),
+      "gpu-1",
+    );
     assert.deepEqual(await quiet(), ["gpu-1"]);
     assert.deepEqual(await quiet(), []);
     // A refused rig is quiet because control refuses it: not checked.

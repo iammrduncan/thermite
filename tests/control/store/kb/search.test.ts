@@ -4,6 +4,7 @@ import { itemsMatching, searchTerms } from "../../../../src/common/search/index.
 import { sqliteBehind } from "../../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../../src/control/store/index.ts";
 import { KB_WORDS } from "../../../../src/control/store/kb/words.ts";
+import { wordsIndex } from "../../../helpers/store-kind.ts";
 
 /**
  * Search by words in control's knowledge base (goal 175): the words index read with BM25, each hit
@@ -69,35 +70,41 @@ async function store(): Promise<ControlStore> {
 }
 
 describe("search by words in the knowledge base", () => {
-  test("which approaches failed to improve speed: the failed experiments, ranked by BM25, with excerpts and why", async () => {
-    const s = await store();
-    const r = await s.kb().find("which approaches failed to improve speed", [{ campaign: "gemv" }]);
-    const refs = r.hits.map((x) => `${x.run}/${x.kind}:${x.ref}`);
-    // The two failed experiments first ("failed" also finds "slower", Thermite's own word); the win
-    // and the other campaign's item are not found; the note on rebuilds has one word only, and
-    // comes after them.
-    assert.deepEqual(refs.slice(0, 2).sort(), ["gs-1/experiment:x-1", "gs-2/experiment:x-3"]);
-    assert.ok(!refs.includes("gs-1/experiment:x-2"), "the win has none of the words");
-    assert.ok(
-      refs.every((x) => !x.startsWith("other-1/")),
-      "another collection is not searched",
-    );
-    assert.equal(r.matched, r.hits.length);
-    const x3 = r.hits.find((x) => x.ref === "x-3");
-    const x1 = r.hits.find((x) => x.ref === "x-1");
-    assert.match(x3?.excerpt ?? "", /\*\*failed\*\* to \*\*improve\*\* \*\*speed\*\*/);
-    assert.match(x3?.why ?? "", /the text has failed, improve, speed/);
-    assert.match(x1?.excerpt ?? "", /\*\*failed\*\*: no \*\*speed\*\* gain, 3% \*\*slower\*\*/);
-    assert.equal(x3?.slot, "records");
-    assert.equal(x3?.passage, null, "a short text is one passage");
-    // How many items of the scope hold each word, and where they land.
-    assert.deepEqual(
-      r.words.map((w) => w.word),
-      ["approaches", "failed", "improve", "speed"],
-    );
-    assert.equal(r.words.find((w) => w.word === "approaches")?.items, 0);
-    assert.equal(r.counts.kind.experiment, 2);
-  });
+  test(
+    "which approaches failed to improve speed: the failed experiments, ranked by BM25, with excerpts and why",
+    wordsIndex,
+    async () => {
+      const s = await store();
+      const r = await s
+        .kb()
+        .find("which approaches failed to improve speed", [{ campaign: "gemv" }]);
+      const refs = r.hits.map((x) => `${x.run}/${x.kind}:${x.ref}`);
+      // The two failed experiments first ("failed" also finds "slower", Thermite's own word); the win
+      // and the other campaign's item are not found; the note on rebuilds has one word only, and
+      // comes after them.
+      assert.deepEqual(refs.slice(0, 2).sort(), ["gs-1/experiment:x-1", "gs-2/experiment:x-3"]);
+      assert.ok(!refs.includes("gs-1/experiment:x-2"), "the win has none of the words");
+      assert.ok(
+        refs.every((x) => !x.startsWith("other-1/")),
+        "another collection is not searched",
+      );
+      assert.equal(r.matched, r.hits.length);
+      const x3 = r.hits.find((x) => x.ref === "x-3");
+      const x1 = r.hits.find((x) => x.ref === "x-1");
+      assert.match(x3?.excerpt ?? "", /\*\*failed\*\* to \*\*improve\*\* \*\*speed\*\*/);
+      assert.match(x3?.why ?? "", /the text has failed, improve, speed/);
+      assert.match(x1?.excerpt ?? "", /\*\*failed\*\*: no \*\*speed\*\* gain, 3% \*\*slower\*\*/);
+      assert.equal(x3?.slot, "records");
+      assert.equal(x3?.passage, null, "a short text is one passage");
+      // How many items of the scope hold each word, and where they land.
+      assert.deepEqual(
+        r.words.map((w) => w.word),
+        ["approaches", "failed", "improve", "speed"],
+      );
+      assert.equal(r.words.find((w) => w.word === "approaches")?.items, 0);
+      assert.equal(r.counts.kind.experiment, 2);
+    },
+  );
 
   test("a search reads only where it is told: a run of a collection, or several collections", async () => {
     const s = await store();
@@ -241,37 +248,48 @@ describe("an agent's probes of the knowledge base", () => {
     assert.deepEqual((await kb.find("faster", gemv, { mode: "exact" })).hits, []);
   });
 
-  test("the exact mode takes FTS5's syntax; a query it can't read is answered in words", async () => {
-    const kb = (await probed()).kb();
-    const refs = async (q: string) =>
-      (await kb.find(q, gemv, { mode: "exact" })).hits.map((h) => h.ref).sort();
-    assert.deepEqual(await refs('"bank conflicts" NOT "12%"'), ["2", "3"]);
-    assert.deepEqual(await refs("unrol*"), ["a-x-2", "x-2"]);
-    assert.deepEqual(await refs("context: dropped"), ["x-4"]);
-    assert.deepEqual(await refs("NEAR(vector weights, 4)"), ["a-x-1", "x-1"]);
-    const bad = await kb.find('"vector AND (', gemv, { mode: "exact" });
-    assert.match(bad.refused ?? "", /^the exact search is not FTS5's query syntax.*SQLite said: /);
-    assert.deepEqual(bad.hits, []);
-    assert.match(
-      (await kb.find("nowhere: x", gemv, { mode: "exact" })).refused ?? "",
-      /no such column/,
-    );
-    // The forgiving mode reads the same as words.
-    assert.equal((await kb.find('"vector AND (', gemv)).refused, undefined);
-  });
+  test(
+    "the exact mode takes FTS5's syntax; a query it can't read is answered in words",
+    wordsIndex,
+    async () => {
+      const kb = (await probed()).kb();
+      const refs = async (q: string) =>
+        (await kb.find(q, gemv, { mode: "exact" })).hits.map((h) => h.ref).sort();
+      assert.deepEqual(await refs('"bank conflicts" NOT "12%"'), ["2", "3"]);
+      assert.deepEqual(await refs("unrol*"), ["a-x-2", "x-2"]);
+      assert.deepEqual(await refs("context: dropped"), ["x-4"]);
+      assert.deepEqual(await refs("NEAR(vector weights, 4)"), ["a-x-1", "x-1"]);
+      const bad = await kb.find('"vector AND (', gemv, { mode: "exact" });
+      assert.match(
+        bad.refused ?? "",
+        /^the exact search is not FTS5's query syntax.*SQLite said: /,
+      );
+      assert.deepEqual(bad.hits, []);
+      assert.match(
+        (await kb.find("nowhere: x", gemv, { mode: "exact" })).refused ?? "",
+        /no such column/,
+      );
+      // The forgiving mode reads the same as words.
+      assert.equal((await kb.find('"vector AND (', gemv)).refused, undefined);
+    },
+  );
 
-  test("a long page is searched by passages: the hit names the one that matched, and its excerpt is there", async () => {
-    const kb = (await probed()).kb();
-    const [hit] = (await kb.find("L2 cache", gemv)).hits;
-    assert.equal(hit?.ref, "s-1");
-    assert.ok(
-      hit?.passage && hit.passage.of >= 3 && hit.passage.n > 1,
-      JSON.stringify(hit?.passage),
-    );
-    assert.match(hit?.excerpt ?? "", /\*\*L2\*\* \*\*cache\*\* holds 50 MB/);
-    const text = (await kb.at("gemv/gs-2/records/source:s-1"))?.body ?? "";
-    assert.match(text.slice(hit?.passage?.from, hit?.passage?.to), /L2 cache holds 50 MB/);
-  });
+  test(
+    "a long page is searched by passages: the hit names the one that matched, and its excerpt is there",
+    wordsIndex,
+    async () => {
+      const kb = (await probed()).kb();
+      const [hit] = (await kb.find("L2 cache", gemv)).hits;
+      assert.equal(hit?.ref, "s-1");
+      assert.ok(
+        hit?.passage && hit.passage.of >= 3 && hit.passage.n > 1,
+        JSON.stringify(hit?.passage),
+      );
+      assert.match(hit?.excerpt ?? "", /\*\*L2\*\* \*\*cache\*\* holds 50 MB/);
+      const text = (await kb.at("gemv/gs-2/records/source:s-1"))?.body ?? "";
+      assert.match(text.slice(hit?.passage?.from, hit?.passage?.to), /L2 cache holds 50 MB/);
+    },
+  );
 
   test("pages: how many matched, and where the next page starts", async () => {
     const kb = (await probed()).kb();
@@ -310,23 +328,27 @@ describe("an agent's probes of the knowledge base", () => {
     );
   });
 
-  test("how many items hold each word, and words close to one none holds, from the scope alone", async () => {
-    const kb = (await probed()).kb();
-    const r = await kb.find("vectr conflicts", gemv);
-    assert.deepEqual(r.words, [
-      { word: "vectr", items: 0 },
-      { word: "conflicts", items: 3 },
-    ]);
-    assert.deepEqual(r.did_you_mean, [{ word: "vectr", try: [{ word: "vector", items: 2 }] }]);
-    // A word's items are counted up to a limit, so a common word costs no more than a rare one.
-    const s = await probed();
-    const gemvOnly = { sql: "i.campaign = ?", args: ["gemv"] };
-    assert.equal(itemsMatching(sqliteBehind(s).db, KB_WORDS, '"conflicts"', gemvOnly), 3);
-    assert.equal(itemsMatching(sqliteBehind(s).db, KB_WORDS, '"conflicts"', gemvOnly, 2), 2);
-    // A word only another collection holds is never offered.
-    assert.deepEqual((await kb.find("quantisation", gemv)).did_you_mean, []);
-    assert.deepEqual((await kb.find("quantisation", [{ campaign: "hidden" }])).did_you_mean, [
-      { word: "quantisation", try: [{ word: "quantization", items: 1 }] },
-    ]);
-  });
+  test(
+    "how many items hold each word, and words close to one none holds, from the scope alone",
+    wordsIndex,
+    async () => {
+      const kb = (await probed()).kb();
+      const r = await kb.find("vectr conflicts", gemv);
+      assert.deepEqual(r.words, [
+        { word: "vectr", items: 0 },
+        { word: "conflicts", items: 3 },
+      ]);
+      assert.deepEqual(r.did_you_mean, [{ word: "vectr", try: [{ word: "vector", items: 2 }] }]);
+      // A word's items are counted up to a limit, so a common word costs no more than a rare one.
+      const s = await probed();
+      const gemvOnly = { sql: "i.campaign = ?", args: ["gemv"] };
+      assert.equal(itemsMatching(sqliteBehind(s).db, KB_WORDS, '"conflicts"', gemvOnly), 3);
+      assert.equal(itemsMatching(sqliteBehind(s).db, KB_WORDS, '"conflicts"', gemvOnly, 2), 2);
+      // A word only another collection holds is never offered.
+      assert.deepEqual((await kb.find("quantisation", gemv)).did_you_mean, []);
+      assert.deepEqual((await kb.find("quantisation", [{ campaign: "hidden" }])).did_you_mean, [
+        { word: "quantisation", try: [{ word: "quantization", items: 1 }] },
+      ]);
+    },
+  );
 });

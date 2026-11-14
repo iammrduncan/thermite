@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { controlBusUrl } from "../../src/control/bus/index.ts";
-import { controlPublicUrl } from "../../src/control/settings.ts";
+import { controlPublicUrl, storeSetting } from "../../src/control/settings.ts";
 
 /**
  * Control needs its message bus (goal 168, step 4): it keeps every rig's events in the bus's
@@ -18,6 +18,42 @@ import { controlPublicUrl } from "../../src/control/settings.ts";
 
 const WORDS =
   "control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, and its rigs reach it only on the bus";
+
+describe("where control's store is", () => {
+  test("SQLite unless the setting says PostgreSQL, whose address holds no password", () => {
+    assert.deepEqual(storeSetting({}), { kind: "sqlite" });
+    assert.deepEqual(storeSetting({ THERMITE_CONTROL_STORE: " sqlite " }), { kind: "sqlite" });
+    assert.deepEqual(
+      storeSetting({
+        THERMITE_CONTROL_STORE: "postgres",
+        THERMITE_CONTROL_POSTGRES_URL: " postgres://thermite@postgres:5432/thermite ",
+      }),
+      { kind: "postgres", url: "postgres://thermite@postgres:5432/thermite" },
+    );
+    assert.throws(
+      () => storeSetting({ THERMITE_CONTROL_STORE: "mysql" }),
+      /^Error: THERMITE_CONTROL_STORE is sqlite or postgres, not "mysql"$/,
+    );
+    assert.throws(
+      () => storeSetting({ THERMITE_CONTROL_STORE: "postgres" }),
+      /^Error: THERMITE_CONTROL_STORE is postgres, and THERMITE_CONTROL_POSTGRES_URL is not set: it takes the database's address, such as postgres:\/\/thermite@postgres:5432\/thermite$/,
+    );
+    for (const url of ["postgres:5432/thermite", "https://postgres/thermite"])
+      assert.throws(
+        () =>
+          storeSetting({ THERMITE_CONTROL_STORE: "postgres", THERMITE_CONTROL_POSTGRES_URL: url }),
+        /^Error: THERMITE_CONTROL_POSTGRES_URL takes a database's address, such as postgres:/,
+      );
+    assert.throws(
+      () =>
+        storeSetting({
+          THERMITE_CONTROL_STORE: "postgres",
+          THERMITE_CONTROL_POSTGRES_URL: "postgres://thermite:hunter2@postgres:5432/thermite",
+        }),
+      /^Error: THERMITE_CONTROL_POSTGRES_URL holds a password: take it out of the address, and put it in a file that THERMITE_CONTROL_POSTGRES_PASSWORD_FILE names$/,
+    );
+  });
+});
 
 describe("control and its bus", () => {
   test("the bus's address is required, and a bad one is refused", () => {

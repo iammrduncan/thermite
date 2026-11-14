@@ -7,7 +7,7 @@ import {
   setPolicyOn,
   updatePolicy,
 } from "../../../src/control/retention/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { writeBehind } from "../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { DROPPED, seen, WRITE_FAILED, watched, withWriteFailing } from "../../helpers/together.ts";
 
@@ -31,10 +31,13 @@ const audits = async (store: ControlStore, action: string) =>
   (await store.auditLog.list(500)).filter((a) => a.action === action);
 
 /** An audit entry `days` old. */
-function oldEntry(store: ControlStore, action: string, days: number) {
-  sqliteBehind(store)
-    .db.prepare("insert into audit (at, actor, action, body) values (?, 'owner:api', ?, '{}')")
-    .run(new Date(Date.now() - days * DAY).toISOString(), action);
+async function oldEntry(store: ControlStore, action: string, days: number) {
+  await writeBehind(
+    store,
+    "insert into audit (at, actor, action, body) values (?, 'owner:api', ?, '{}')",
+    new Date(Date.now() - days * DAY).toISOString(),
+    action,
+  );
 }
 
 describe("a retention policy's change and its audit entry", () => {
@@ -50,9 +53,7 @@ describe("a retention policy's change and its audit entry", () => {
 
     const kept = await watched(store, () => createPolicy(store, design(), true, "owner:ui"));
     assert.equal(kept.threw, undefined);
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "retention_policy", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "retention_policy"] }]);
     const policies = await store.retention.list();
     assert.deepEqual(
       policies.map((p) => [p.name, p.on]),
@@ -75,9 +76,7 @@ describe("a retention policy's change and its audit entry", () => {
     assert.deepEqual(await audits(store, "retention_policy_changed"), []);
 
     const kept = await watched(store, change);
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "retention_policy", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "retention_policy"] }]);
     const now = await store.retention.get(p.id);
     assert.equal(now?.on, true);
     assert.equal((now as unknown as { older_n: number }).older_n, 90);
@@ -101,9 +100,7 @@ describe("a retention policy's change and its audit entry", () => {
     assert.deepEqual(await audits(store, "retention_policy_on"), []);
 
     const kept = await watched(store, () => setPolicyOn(store, p.id, true, "owner:ui"));
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "retention_policy", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "retention_policy"] }]);
     assert.equal((await store.retention.get(p.id))?.on, true);
     assert.equal((await audits(store, "retention_policy_on")).length, 1);
     await store.close();
@@ -121,9 +118,7 @@ describe("a retention policy's change and its audit entry", () => {
     assert.deepEqual(await audits(store, "retention_policy_deleted"), []);
 
     const kept = await watched(store, () => deletePolicy(store, p.id, "owner:ui"));
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "retention_policy", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "retention_policy"] }]);
     assert.equal(await store.retention.get(p.id), undefined);
     assert.equal((await audits(store, "retention_policy_deleted")).length, 1);
     await store.close();
@@ -134,8 +129,8 @@ describe("what a policy removed on control", () => {
   test("removeOnControl (runPolicy): the removal's line in the history and its audit entry", async () => {
     const store = openControlStore(":memory:");
     const p = await createPolicy(store, design(), false, "owner:ui");
-    oldEntry(store, "old_thing", 40);
-    oldEntry(store, "old_thing", 50);
+    await oldEntry(store, "old_thing", 40);
+    await oldEntry(store, "old_thing", 50);
     const run = () => runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
     const dropped = await withWriteFailing(store, store.auditLog, "add", run);
     assert.equal(dropped.threw?.message, WRITE_FAILED);
@@ -145,11 +140,9 @@ describe("what a policy removed on control", () => {
     // The entries themselves went before the transaction, outside it: that removal is kept.
     assert.deepEqual(await audits(store, "old_thing"), []);
 
-    oldEntry(store, "old_thing", 60);
+    await oldEntry(store, "old_thing", 60);
     const kept = await watched(store, run);
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "retention_removal", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "retention_removal"] }]);
     const removals = await store.retention.removals(10);
     assert.deepEqual(
       removals.map((r) => [r.policy, r.rig, r.by, r.count]),

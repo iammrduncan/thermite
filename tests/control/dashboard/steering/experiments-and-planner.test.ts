@@ -557,7 +557,7 @@ describe("the run page's Experiments and Planner tabs", () => {
     const started = await s.submit(go);
     const next = /\/runs\/([^/?&]+)/.exec(started)?.[1] ?? "";
     assert.ok(next && next !== "js-1", started);
-    const copied = s.signed("assign_campaign").at(-1);
+    const copied = (await s.signed("assign_campaign")).at(-1);
     assert.equal(copied?.run, next);
     assert.deepEqual(copied?.queue, [
       {

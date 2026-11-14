@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind } from "../../src/control/store/behind.ts";
 import type { DirectionView } from "../../src/control/views/index.ts";
 import { ADMIN, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { ingestReport } from "../helpers/control-store.ts";
@@ -32,9 +32,9 @@ async function stack() {
   /** The newest signed command's payload and what the rig answered. */
   const last = async () => {
     const c = (await store.commands.list(1))[0];
-    const row = sqliteBehind(store)
-      .db.prepare("select signed from command where id = ?")
-      .get(c?.id ?? "") as {
+    const row = (
+      await rowsBehind(store, "select signed from command where id = ?", c?.id ?? "")
+    )[0] as {
       signed: string;
     };
     return {

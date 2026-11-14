@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../../src/control/store/behind.ts";
 import type { RigView } from "../../../../src/control/views/index.ts";
 import type { HarnessService } from "../../../../src/harness/service/index.ts";
 import { ask } from "../../../../src/supervisor/ask.ts";
@@ -79,13 +79,9 @@ export async function stack(env: { service: HarnessService; keys: { privateKeyPe
     });
   };
   /** The payloads of the commands control signed of one kind, oldest first. */
-  const signed = (kind: string) =>
-    (
-      sqliteBehind(store)
-        .db.prepare("select signed from command where kind = ? order by rowid")
-        .all(kind) as {
-        signed: string;
-      }[]
-    ).map((x) => JSON.parse(x.signed).envelope.payload as Record<string, unknown>);
+  const signed = async (kind: string) =>
+    (await rowsBehind(store, "select signed from command where kind = ? order by rowid", kind)).map(
+      (x) => JSON.parse(String(x.signed)).envelope.payload as Record<string, unknown>,
+    );
   return { store, sync, get, post, submit, api, run, toHarness, advisorsSetUp, signed };
 }

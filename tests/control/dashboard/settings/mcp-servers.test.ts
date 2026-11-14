@@ -8,7 +8,7 @@ import { mcpUrlProblem } from "../../../../src/common/mcp-client.ts";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../../src/control/store/behind.ts";
 import {
   KIT_MCP_CORE_JS,
   NEW_CAMPAIGN_JS,
@@ -274,9 +274,9 @@ describe("New campaign › MCP servers for the agents", () => {
       (await s.store.campaigns.versions("matmul-speed"))[0]?.sources.mcp_servers,
       uses,
     );
-    const cmd = sqliteBehind(s.store)
-      .db.prepare("select signed from command where kind = 'assign_campaign'")
-      .get() as { signed: string };
+    const cmd = (
+      await rowsBehind(s.store, "select signed from command where kind = 'assign_campaign'")
+    )[0] as { signed: string };
     assert.deepEqual(JSON.parse(cmd.signed).envelope.payload.mcp_servers, uses);
   });
 

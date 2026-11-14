@@ -10,7 +10,7 @@ import { type Row, StorePart } from "./part.ts";
  */
 
 /** A line of Live: when it came, and its words. */
-interface LiveSaid {
+export interface LiveSaid {
   at: string;
   text: string;
 }
@@ -19,11 +19,11 @@ interface LiveSaid {
 export const OPEN_TRIAL_LINES = 400;
 
 /** How many stuck trials left running control remembers (goal 143); a trial ends in hours. */
-const TRIALS_LEFT_MAX = 1000;
+export const TRIALS_LEFT_MAX = 1000;
 
 /** One run's lines on its rig: its own, and the judge's and the supervisor's that name no run. */
 /** A stored line as Live reads it. */
-const entryOf = (r: Row): LiveEntry & { id: number; signed: boolean } => ({
+export const entryOf = (r: Row): LiveEntry & { id: number; signed: boolean } => ({
   id: Number(r.id),
   seq: Number(r.seq),
   at: String(r.at),
@@ -35,7 +35,7 @@ const entryOf = (r: Row): LiveEntry & { id: number; signed: boolean } => ({
   signed: Number(r.signed) === 1,
 });
 
-const OF_RUN = "(run = ? or (run is null and source in ('judge', 'supervisor')))";
+export const OF_RUN = "(run = ? or (run is null and source in ('judge', 'supervisor')))";
 
 export interface LiveLines {
   /** Tells `fn` each time a rig has new lines, until the function it returns is called. */

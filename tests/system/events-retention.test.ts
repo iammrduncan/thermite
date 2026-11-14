@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { eventDaysOf } from "../../src/control/events/index.ts";
 import { createPolicy, previewOf, runPolicy } from "../../src/control/retention/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { writeBehind } from "../../src/control/store/behind.ts";
 import { openControlStore } from "../../src/control/store/index.ts";
 import { EVENT_HEADERS, EVENT_STREAM } from "../../src/core/link/events.ts";
 import { RetentionSpec } from "../../src/core/retention/index.ts";
@@ -182,7 +182,7 @@ describe("a retention policy of control's copy of the rigs' events", () => {
     assert.deepEqual(onBus(bus), [6]);
     assert.equal(await store.retention.floor("rig-a", "ledger-a"), 5);
     // As after a restore of an older store: the held cursor is back at 0, and the floor stays.
-    sqliteBehind(store).db.prepare("update rig_ledger set through_event = 0").run();
+    await writeBehind(store, "update rig_ledger set through_event = 0");
     assert.equal(await store.reportedRigs.heldCursor("rig-a", "ledger-a"), 0);
     // The report check asks the rig to go on after the floor, not from 0: a gap goes back there.
     const at = new Date().toISOString();

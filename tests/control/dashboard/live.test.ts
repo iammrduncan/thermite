@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { runMessages } from "../../../src/control/views/index.ts";
 import { figuresCall } from "../../helpers/control-store.ts";
 import { pushedOf, readPushed } from "../../helpers/sse.ts";
@@ -405,9 +405,10 @@ describe("control dashboard", () => {
       await where(send("lane-1", "  keep it simple  ")),
       "/ui/campaigns/js-sum/runs/js-1/live",
     );
-    const sent = sqliteBehind(s.store)
-      .db.prepare("select signed from command where kind = 'message_agent'")
-      .all() as { signed: string }[];
+    const sent = (await rowsBehind(
+      s.store,
+      "select signed from command where kind = 'message_agent'",
+    )) as { signed: string }[];
     assert.deepEqual(
       sent.map((x) => JSON.parse(x.signed).envelope.payload.text),
       ["keep it simple"],

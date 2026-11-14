@@ -59,14 +59,14 @@ export interface KbListed {
   items: KbItem[];
 }
 
-type Sql = { sql: string; args: string[] };
-type Row = Record<string, unknown>;
+export type Sql = { sql: string; args: string[] };
+export type Row = Record<string, unknown>;
 
 /** An item's type in SQL, as kbItemType (core/kb/items.ts) says it. */
-const TYPE_SQL =
+export const TYPE_SQL =
   "(case when file_sha256 is not null then 'file' when slot = 'records' then 'record' else 'blurb' end)";
 /** Each filter's column, by its name in the counts. */
-const FILTERS: Record<keyof KbListCounts, string> = {
+export const FILTERS: Record<keyof KbListCounts, string> = {
   kind: "kind",
   outcome: "outcome",
   type: TYPE_SQL,

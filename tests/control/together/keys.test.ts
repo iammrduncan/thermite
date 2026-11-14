@@ -73,7 +73,7 @@ describe("a rig's key on the bus, its audit entry and its step in the history", 
     const kept = await watched(store, () => takeRigBusKey(store, "rig-a", first));
     assert.equal(kept.out, "new");
     assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "rig_bus_key", "rig_setup_event", "sqlite_sequence"] },
+      { failed: false, changed: ["audit", "rig_bus_key", "rig_setup_event"] },
     ]);
     assert.equal(await store.busKeys.rigKey("rig-a"), first);
     const fp = userKeyFingerprint(first);
@@ -117,7 +117,7 @@ describe("a rig's key on the bus, its audit entry and its step in the history", 
     const kept = await watched(store, () => takeRigSealKey(store, "rig-a", first));
     assert.equal(kept.out, "new");
     assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "rig_bus_key", "rig_setup_event", "sqlite_sequence"] },
+      { failed: false, changed: ["audit", "rig_bus_key", "rig_setup_event"] },
     ]);
     assert.equal(await store.busKeys.rigSealKey("rig-a"), first);
     const fp = sealKeyFingerprint(first);
@@ -168,9 +168,9 @@ describe("a supervisor's registration of its keys", () => {
     assert.deepEqual(seen(kept), [
       {
         failed: false,
-        changed: ["audit", "rig", "rig_bus_key", "rig_setup_event", "sqlite_sequence"],
+        changed: ["audit", "rig", "rig_bus_key", "rig_setup_event"],
       },
-      { failed: false, changed: ["audit", "rig_bus_key", "rig_setup_event", "sqlite_sequence"] },
+      { failed: false, changed: ["audit", "rig_bus_key", "rig_setup_event"] },
     ]);
     assert.ok(await store.reportedRigs.supervisor("rig-a"), "the figures");
     assert.equal((await steps(store, "rig-a", "bus_registered")).length, 1);

@@ -8,7 +8,7 @@ import { startCampaign } from "../../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../../src/control/store/behind.ts";
 import { controlOnly, signIn } from "../../../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../../../helpers/control-store.ts";
 
@@ -314,9 +314,10 @@ describe("Copy on a campaign's page (goal 069)", () => {
       decodeURIComponent(run.headers.get("location") ?? ""),
       /\/ui\/campaigns\/matmul-speed-b\/runs\/matmul-speed-b-try-1$/,
     );
-    const signed = sqliteBehind(s.store)
-      .db.prepare("select signed from command where kind = 'assign_campaign'")
-      .all() as { signed: string }[];
+    const signed = (await rowsBehind(
+      s.store,
+      "select signed from command where kind = 'assign_campaign'",
+    )) as { signed: string }[];
     const payload = JSON.parse(signed.at(-1)?.signed ?? "{}").envelope.payload;
     assert.equal(payload.contract.campaign, "matmul-speed-b");
     assert.equal(payload.contract_sha, copy.sha);

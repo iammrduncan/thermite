@@ -9,16 +9,31 @@
 // after the others, one at a time, with the machine to themselves. CI runs the two parts as
 // separate jobs, on separate machines, at the same time.
 //
-// Usage: node scripts/test.mjs [--part parallel|alone] [--store-waits turn] [files or globs]; with
+// Usage: node scripts/test.mjs [--part parallel|alone] [--store-waits turn] [--store postgres]
+// [files or globs]; with
 // no files, every tests/**/*.test.ts. THERMITE_TEST_JOBS sets how many files run side by side.
 //
 // --store-waits turn: every call of control's store takes a turn of the event loop, as a store on
 // a server does (tests/helpers/store-turns.ts). Without it a call's answer is there at once, as
 // SQLite gives it.
+//
+// --store postgres: every store a test opens is on PostgreSQL (tests/helpers/store-postgres.ts):
+// PGlite inside the test's process, or the server THERMITE_TEST_POSTGRES_URL names. A test that
+// reaches the SQLite database itself is left out. With no files, it runs the test files that
+// open control's store, straight or through what they import. Without it the stores are on
+// SQLite.
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 /** The files that run alone, one at a time. */
 const ALONE = /^tests\/harness\/(judge|broker)\//;
@@ -34,6 +49,12 @@ const waitsAt = args.indexOf("--store-waits");
 const storeWaits = waitsAt >= 0 ? args.splice(waitsAt, 2)[1] : "none";
 if (!["none", "turn"].includes(storeWaits)) {
   console.error(`test.mjs: --store-waits is turn, not ${storeWaits}`);
+  process.exit(2);
+}
+const storeAt = args.indexOf("--store");
+const storeKind = storeAt >= 0 ? args.splice(storeAt, 2)[1] : "sqlite";
+if (!["sqlite", "postgres"].includes(storeKind)) {
+  console.error(`test.mjs: --store is sqlite or postgres, not ${storeKind}`);
   process.exit(2);
 }
 
@@ -57,11 +78,49 @@ const globRe = (g) =>
       .replace(/\*/g, "[^/]*")
       .replace(/\0/g, "(?:.*/)?")}$`,
   );
+/**
+ * The test files that open control's store, straight or through what they import: the files a
+ * run on PostgreSQL is for. The others would run as they do on SQLite.
+ */
+function onControlStore(tests) {
+  const STORE = "src/control/store/index.ts";
+  /** Each file's own imports of this repository's files, read once. */
+  const imports = new Map();
+  const importsOf = (file) => {
+    if (!imports.has(file)) {
+      let text = "";
+      try {
+        text = readFileSync(file, "utf8");
+      } catch {
+        // A path that names no file imports nothing.
+      }
+      const found = [];
+      for (const m of text.matchAll(/(?:from|import)\s+"(\.[^"]+)"/g))
+        found.push(join(dirname(file), m[1]).split("\\").join("/"));
+      imports.set(file, found);
+    }
+    return imports.get(file);
+  };
+  /** Whether a file reaches the store: undefined while it is being asked, for a circle. */
+  const reaches = new Map();
+  const reachesStore = (file) => {
+    if (file === STORE) return true;
+    if (reaches.has(file)) return reaches.get(file) === true;
+    reaches.set(file, undefined);
+    const yes = importsOf(file).some(reachesStore);
+    reaches.set(file, yes);
+    return yes;
+  };
+  return tests.filter(reachesStore);
+}
+
 const files = args.length
   ? args.flatMap((a) =>
       a.includes("*") ? every.filter((f) => globRe(a.replace(/^\.\//, "")).test(f)) : [a],
     )
-  : every;
+  : storeKind === "postgres"
+    ? onControlStore(every)
+    : every;
 for (const f of files)
   if (!existsSync(f)) {
     console.error(`test.mjs: no file ${f}`);
@@ -92,12 +151,22 @@ for (const g of groups) {
       "--experimental-strip-types",
       "--disable-warning=ExperimentalWarning",
       ...(storeWaits === "turn" ? ["--import", "./tests/helpers/store-turns.ts"] : []),
+      ...(storeKind === "postgres" ? ["--import", "./tests/helpers/store-postgres.ts"] : []),
       "--test",
       `--test-concurrency=${g.jobs}`,
       "--test-force-exit",
       ...g.files,
     ],
-    { stdio: "inherit", env: { ...process.env, TMPDIR: root, TMP: root, TEMP: root } },
+    {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        TMPDIR: root,
+        TMP: root,
+        TEMP: root,
+        ...(storeKind === "postgres" ? { THERMITE_TEST_STORE: "postgres" } : {}),
+      },
+    },
   );
   // Every group runs, so one run shows every failure.
   if (r.status !== 0) status = r.status ?? 1;

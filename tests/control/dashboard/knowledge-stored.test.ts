@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { KB_REFUSED_PAGE, kbStored } from "../../../src/control/kb/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { sizeWords } from "../../../src/control/ui/exports.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { KB_RIG } from "../../helpers/kb-places.ts";
@@ -61,8 +61,7 @@ describe("What's stored", () => {
     const kb = s.store.kb();
     const all = await kb.totals({});
     const items = Number(
-      (sqliteBehind(s.store).db.prepare("select count(*) as n from kb_item").get() as { n: number })
-        .n,
+      ((await rowsBehind(s.store, "select count(*) as n from kb_item"))[0] as { n: number }).n,
     );
     const r = await s.rest("/v1/kb/stored");
     assert.equal(r.status, 200);
@@ -85,9 +84,7 @@ describe("What's stored", () => {
     // The words index holds every item; meaning is not installed.
     const words = Number(
       (
-        sqliteBehind(s.store)
-          .db.prepare("select count(distinct item) as n from kb_passage")
-          .get() as {
+        (await rowsBehind(s.store, "select count(distinct item) as n from kb_passage"))[0] as {
           n: number;
         }
       ).n,

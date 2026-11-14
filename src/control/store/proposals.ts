@@ -67,7 +67,7 @@ export function campaignProposalGrants(db: DatabaseSync): void {
   db.exec("alter table campaign_proposal_18 rename to campaign_proposal");
 }
 
-const proposalOf = (r: Row): CampaignProposal => ({
+export const proposalOf = (r: Row): CampaignProposal => ({
   id: Number(r.id),
   campaign: String(r.campaign),
   field: PROPOSED_FIELDS.find((f) => f === r.field) ?? "role_additions",

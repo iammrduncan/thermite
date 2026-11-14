@@ -25,7 +25,7 @@ export function reachableAddressTable(db: DatabaseSync): void {
 )`);
 }
 
-const entryOf = (r: Row): ReachableAddress => ({
+export const entryOf = (r: Row): ReachableAddress => ({
   address: String(r.address),
   ports: JSON.parse(String(r.ports)) as number[],
   note: String(r.note),

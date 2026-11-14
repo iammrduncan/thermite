@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { localEnroll } from "../../../src/cli/local/index.ts";
 import { controlClient } from "../../../src/common/api/control.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { ADMIN, controlOnly } from "../../helpers/control-stack.ts";
 
 const run = promisify(execFile);
@@ -48,9 +48,7 @@ describe("thermite local enroll: the compose stack's enroll step", () => {
     assert.ok(token.length >= 32);
     assert.ok(await s.store.enrollments.tokenMatches("local-1", token));
     assert.ok(
-      !JSON.stringify(sqliteBehind(s.store).db.prepare("select * from rig_token").all()).includes(
-        token,
-      ),
+      !JSON.stringify(await rowsBehind(s.store, "select * from rig_token")).includes(token),
     );
     // Written in place, the file the supervisor's container mounts, readable by its user.
     assert.equal(statSync(s.tokenFile).mode & 0o777, 0o644 & ~process.umask());

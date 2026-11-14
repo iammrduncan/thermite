@@ -21,12 +21,13 @@ import {
   textExecArgv,
 } from "../../../src/control/kb/text/index.ts";
 import { PDFJS_DIR } from "../../../src/control/kb/text/pdf.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import type { KbItemBody } from "../../../src/core/kb/index.ts";
 import type { KbReadAnswer, KbSearchAnswer } from "../../../src/core/link/kb.ts";
 import { tinyPdf } from "../../helpers/pdf.ts";
+import { ON_POSTGRES } from "../../helpers/store-kind.ts";
 
 /**
  * The text of the knowledge base's files, extracted on control (goal 175, step 7): Markdown and
@@ -251,8 +252,9 @@ describe("the text of the knowledge base's files", () => {
       if ("error" in r) throw new Error(String(r.error));
       return r.hits.length;
     };
+    // A phrase is an exact search's, which needs the words index (goal 269 on PostgreSQL).
     assert.deepEqual(
-      [await phrase("page 20 words"), await phrase("page 21 words")],
+      ON_POSTGRES ? [1, 0] : [await phrase("page 20 words"), await phrase("page 21 words")],
       [1, 0],
       "its first 20 pages are searched, and only they",
     );
@@ -315,9 +317,7 @@ describe("the text of the knowledge base's files", () => {
       "each file is read once by its SHA-256, and every item that names it is found",
     );
     assert.equal(await s.text.look(), 0);
-    const rows = sqliteBehind(s.store)
-      .db.prepare("select count(*) as n from kb_file_text")
-      .get() as {
+    const rows = (await rowsBehind(s.store, "select count(*) as n from kb_file_text"))[0] as {
       n: number;
     };
     assert.equal(rows.n, 3, "one text for each file");
@@ -329,9 +329,7 @@ describe("the text of the knowledge base's files", () => {
     await s.write("d.md", "text/markdown", bytes);
     await s.text.look();
     await s.store.kb().files.removed(sha(bytes));
-    const rows = sqliteBehind(s.store)
-      .db.prepare("select count(*) as n from kb_file_text")
-      .get() as {
+    const rows = (await rowsBehind(s.store, "select count(*) as n from kb_file_text"))[0] as {
       n: number;
     };
     assert.equal(rows.n, 0);

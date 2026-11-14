@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { ControlTunnels, tunnelRouteAllowed } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore, RIG_ID } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, type KeyPairPem } from "../../../src/core/commands.ts";
 import {
@@ -315,9 +315,7 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       );
       assert.equal((await s.store.tunnels.get(s.rig))?.code_expires_at, null);
       // Control's database holds the code, the path and its own box key only sealed.
-      const dump = JSON.stringify(
-        sqliteBehind(s.store).db.prepare("select * from tunnel_rig").all(),
-      );
+      const dump = JSON.stringify(await rowsBehind(s.store, "select * from tunnel_rig"));
       assert.ok(!dump.includes(s.minted.env.THERMITE_TUNNEL_ENROLL_CODE));
       assert.ok(!dump.includes(s.minted.env.THERMITE_TUNNEL_PREFIX));
       assert.ok(!dump.includes("PRIVATE"));

@@ -36,7 +36,7 @@ describe("a command issued inside a transaction, with commands on the bus", () =
       (_id, fields) => (fields as { state: string }).state === "wiping",
     );
     assert.deepEqual(seen(dropped).slice(0, 1), DROPPED);
-    assert.deepEqual(rowsOf(store, "command"), [], "control's store has no command");
+    assert.deepEqual(await rowsOf(store, "command"), [], "control's store has no command");
     // The publish waits its turn for the bus: give it the time to be made.
     await new Promise((r) => setTimeout(r, 50));
     const sent = bus.kept

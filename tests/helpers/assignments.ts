@@ -1,4 +1,4 @@
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { writeBehind } from "../../src/control/store/behind.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 
 /**
@@ -17,11 +17,16 @@ export async function assigned(
   const at = new Date().toISOString();
   const payload = { run, contract: { campaign }, ...extra };
   // The run and the campaign in their columns too, as the store's enqueue writes them.
-  sqliteBehind(store)
-    .db.prepare(
-      "insert into command (id, rig, kind, signed, issued_by, issued_at, status, run, campaign) values (?, ?, 'assign_campaign', ?, 'owner:ui', ?, 'delivered', ?, ?)",
-    )
-    .run(id, rig, JSON.stringify({ envelope: { payload } }), at, run, campaign);
+  await writeBehind(
+    store,
+    "insert into command (id, rig, kind, signed, issued_by, issued_at, status, run, campaign) values (?, ?, 'assign_campaign', ?, 'owner:ui', ?, 'delivered', ?, ?)",
+    id,
+    rig,
+    JSON.stringify({ envelope: { payload } }),
+    at,
+    run,
+    campaign,
+  );
   await store.runRegistry.registerAssignment({
     id,
     rig,

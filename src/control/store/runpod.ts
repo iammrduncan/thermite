@@ -18,7 +18,7 @@ export interface StoredRunpodRig {
   created_by: string;
 }
 
-const runpodRigOf = (r: Row): StoredRunpodRig => ({
+export const runpodRigOf = (r: Row): StoredRunpodRig => ({
   rig: String(r.rig),
   cloud: String(r.cloud),
   pod: String(r.pod),
@@ -38,7 +38,7 @@ export interface StoredRunpodTest {
   created_by: string;
 }
 
-const runpodTestOf = (r: Row): StoredRunpodTest => ({
+export const runpodTestOf = (r: Row): StoredRunpodTest => ({
   id: String(r.id),
   cloud: String(r.cloud),
   active: Number(r.active) === 1,

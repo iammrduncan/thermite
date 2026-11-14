@@ -7,7 +7,7 @@ import {
   str,
   writtenRef,
 } from "../../../core/kb/index.ts";
-import { JOURNAL_KINDS, type KbCollection, type KbFound, type KbItem } from "../../kb/index.ts";
+import type { KbCollection, KbFound, KbItem } from "../../kb/index.ts";
 import { keepFileText, knowledgeFiles, SqliteKbFileRows, SqliteKbSettingRows } from "./files.ts";
 import {
   itemOf,
@@ -19,7 +19,7 @@ import {
   versionsOf,
   writtenFields,
 } from "./items.ts";
-import { fieldNotesOf, runCountsOf } from "./journal.ts";
+import { fieldNotesOf, journalCount, runCountsOf } from "./journal.ts";
 import { agentsReadFrom, scrubKeptPage } from "./kept.ts";
 import {
   type KbFolderRow,
@@ -58,6 +58,11 @@ export type {
   KbTotals,
 } from "./list.ts";
 export type { OlderVersion } from "./older.ts";
+export {
+  PostgresKbFileRows,
+  PostgresKbSettingRows,
+  PostgresKnowledgeBase,
+} from "./postgres/index.ts";
 export { knowledgePublicNames } from "./public-names.ts";
 export type { KbSearchMode } from "./query.ts";
 export { knowledgeHierarchy, knowledgeSlotNames } from "./schema.ts";
@@ -80,7 +85,7 @@ export type KbFindAnswer = Omit<KbFindResult, "found"> & { hits: KbFound[] };
  * the writer's own slot. What the knowledge base is, and its items' shape, are in control/kb/.
  */
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 /** KnowledgeBase on SQLite: each call answers at once (the store behind the interface, sqlite.ts). */
 export class SqliteKnowledgeBase {
@@ -278,10 +283,10 @@ export class SqliteKnowledgeBase {
     const rows = this.db
       .prepare(
         `select campaign, kind, count(*) as n, max(updated_at) as at,
-           sum(case when kind = 'note' and sub in (${JOURNAL_KINDS.map(() => "?").join(", ")}) then 1 else 0 end) as journal
+           ${journalCount().sql} as journal
          from kb_item group by campaign, kind`,
       )
-      .all(...JOURNAL_KINDS) as Row[];
+      .all(...journalCount().args) as Row[];
     type Sum = Pick<KbCollection, "counts" | "items" | "journal" | "updated_at">;
     const by = new Map<string, Sum>();
     const empty = (): Sum => ({ counts: {}, items: 0, journal: 0, updated_at: "" });

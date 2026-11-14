@@ -105,7 +105,7 @@ describe("Live's message box", () => {
       await send(advisors.page, { to: "review_panel", text: "Judge it strictly." }),
       /&msgerror=This run has no goal the review panel reviews, so nothing would read it\.$/,
     );
-    assert.deepEqual(s.signed("message_agent"), [
+    assert.deepEqual(await s.signed("message_agent"), [
       { run: "js-1", to: "all", text: "Keep the public API unchanged.", keep: true },
       { run: "js-1", to: "lane-2", text: "Look at the cache misses first." },
       { run: "js-1", to: "planner", text: "Spread the lanes wider." },
@@ -313,7 +313,7 @@ describe("Live's message box", () => {
           `?msgerror=${why}`,
         ),
       );
-    assert.deepEqual(s.signed("message_agent"), []);
+    assert.deepEqual(await s.signed("message_agent"), []);
     await s.submit(form(live, "Send"), { text: "Prefer primary sources.", keep: "1" });
     await s.sync();
 

@@ -144,7 +144,8 @@ describe("the supervisor asks control for the agents", () => {
         found.hits[0]?.excerpt ?? "",
         /\*\*Vector\*\* loads need \*\*aligned\*\* pointers/,
       );
-      assert.match(found.hits[0]?.why ?? "", /the text has vector, aligned/);
+      // The words index says them in the text's order; a plain match (PostgreSQL) in the query's.
+      assert.match(found.hits[0]?.why ?? "", /the text has (vector, aligned|aligned, vector)/);
     } finally {
       stopping = true;
       await relaying;

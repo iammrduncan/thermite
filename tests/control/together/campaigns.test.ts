@@ -80,9 +80,7 @@ describe("a campaign's new version", () => {
 
     const kept = await watched(store, set);
     assert.equal(kept.out?.state, "saved");
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "campaign_version", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "campaign_version"] }]);
     assert.deepEqual(await versions(store), [2, 1]);
     assert.deepEqual((await newest(store)).role_additions, ADDITIONS);
     assert.deepEqual(
@@ -133,9 +131,7 @@ describe("the owner's decision on a proposal", () => {
 
     const kept = await watched(store, decline);
     assert.equal(kept.out?.state, "declined");
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "campaign_proposal", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "campaign_proposal"] }]);
     assert.equal((await store.proposals.get(id))?.decision, "declined");
     assert.equal((await audits(store, "campaign_setting_declined")).length, 1);
     assert.deepEqual(await versions(store), [1]);
@@ -165,7 +161,7 @@ describe("the owner's decision on a proposal", () => {
     assert.deepEqual(seen(kept), [
       {
         failed: false,
-        changed: ["audit", "campaign_proposal", "campaign_version", "sqlite_sequence"],
+        changed: ["audit", "campaign_proposal", "campaign_version"],
       },
     ]);
     assert.deepEqual(await versions(store), [2, 1]);

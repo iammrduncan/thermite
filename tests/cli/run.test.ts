@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { runStartBody, runStartSaid } from "../../src/cli/run.ts";
 import { issueCommand } from "../../src/control/issue/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind } from "../../src/control/store/behind.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { controlOnly } from "../helpers/control-stack.ts";
 import { enrollRigs, ingestReport } from "../helpers/control-store.ts";
@@ -130,9 +130,13 @@ describe("thermite run start (goal 029)", () => {
         started.stderr,
         "sort-speed-1 is at work on rig-a, and pauses when this run starts (a rig runs one run at a time).\n",
       );
-      const signed = sqliteBehind(store)
-        .db.prepare("select issued_by, signed from command where id = ?")
-        .get(String(out.command)) as { issued_by: string; signed: string };
+      const signed = (
+        await rowsBehind(
+          store,
+          "select issued_by, signed from command where id = ?",
+          String(out.command),
+        )
+      )[0] as { issued_by: string; signed: string };
       assert.equal(signed.issued_by, "owner:api");
       const payload = (
         JSON.parse(signed.signed) as {

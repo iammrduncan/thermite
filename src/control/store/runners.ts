@@ -24,7 +24,7 @@ export interface RigRunner {
   created_by: string;
 }
 
-interface RigRunnerSpec {
+export interface RigRunnerSpec {
   /** Its GPUs: none (the node's CPUs) or one. */
   gpus: number;
   /** On a machine: its GPU's index there, and whether control logs in as root. */
@@ -64,9 +64,9 @@ export function rigRunnerTable(db: DatabaseSync): void {
 )`);
 }
 
-type Row = Omit<RigRunner, "spec"> & { spec: string };
+export type Row = Omit<RigRunner, "spec"> & { spec: string };
 
-const read = (r: Row): RigRunner => ({ ...r, spec: JSON.parse(r.spec) as RigRunnerSpec });
+export const read = (r: Row): RigRunner => ({ ...r, spec: JSON.parse(r.spec) as RigRunnerSpec });
 
 export interface RigRunners {
   /** A rig's runner processes control set up, removed ones too. */

@@ -87,9 +87,7 @@ describe("the knowledge base's transactions on control", () => {
 
     const kept = await watched(store, set);
     assert.equal(kept.threw, undefined);
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "kb_setting", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "kb_setting"] }]);
     const now = await kbSettingsOf(store, 48);
     assert.deepEqual([now.max_file_mib, now.orphan_hours], [64, 24]);
     assert.deepEqual(
@@ -141,9 +139,7 @@ describe("the knowledge base's transactions on control", () => {
 
     const kept = await watched(store, () => files.removeOrphans(24, now));
     assert.equal(kept.out, 2);
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "kb_file", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "kb_file"] }]);
     assert.deepEqual(await held(), [false, false]);
     assert.equal(await removedEntries(), 2);
     await store.close();

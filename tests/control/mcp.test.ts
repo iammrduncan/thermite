@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Credential } from "../../src/control/credential.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, writeBehind } from "../../src/control/store/behind.ts";
 import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { figuresCall } from "../helpers/control-store.ts";
 
@@ -86,9 +86,9 @@ describe("control over MCP", () => {
         },
       }),
     );
-    const signed = sqliteBehind(store)
-      .db.prepare("select signed from command where kind = 'assign_campaign'")
-      .get() as { signed: string };
+    const signed = (
+      await rowsBehind(store, "select signed from command where kind = 'assign_campaign'")
+    )[0] as { signed: string };
     const copied = (
       JSON.parse(signed.signed) as {
         envelope: { payload: { queue: { by: string; title: string }[] } };
@@ -394,11 +394,14 @@ describe("control over MCP", () => {
     const { store, control } = await controlOnly({
       tokens: { operator: "operator-token-abcdef", rigs: {} },
     });
-    sqliteBehind(store)
-      .db.prepare(
-        "insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at) values (?, ?, ?, null, '{}', ?)",
-      )
-      .run("cpu-1", new Date().toISOString(), new Date().toISOString(), new Date().toISOString());
+    await writeBehind(
+      store,
+      "insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at) values (?, ?, ?, null, '{}', ?)",
+      "cpu-1",
+      new Date().toISOString(),
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
     await store.modelProviders.put({
       name: "zen",
       type: "opencode",

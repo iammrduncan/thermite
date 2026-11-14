@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { writeBehind } from "../../../src/control/store/behind.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
 
 /**
@@ -23,11 +23,11 @@ describe("thermite retention", () => {
   test("create, list, preview, update, on, run, removals and delete, with the owner's token", async () => {
     const root = mkdtempSync(join(tmpdir(), "thermite-cli-retention-"));
     const { control: api, store } = await controlOnly({ tokens: { admin: OWNER } });
-    sqliteBehind(store)
-      .db.prepare(
-        "insert into audit (at, actor, action, body) values (?, 'owner:api', 'old_thing', '{}')",
-      )
-      .run(new Date(Date.now() - 100 * 86_400_000).toISOString());
+    await writeBehind(
+      store,
+      "insert into audit (at, actor, action, body) values (?, 'owner:api', 'old_thing', '{}')",
+      new Date(Date.now() - 100 * 86_400_000).toISOString(),
+    );
     const server = serve({ fetch: api.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
     const control = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

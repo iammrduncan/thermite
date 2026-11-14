@@ -31,7 +31,7 @@ describe("control's own settings", () => {
     assert.equal(kept.out?.ok, true);
     assert.deepEqual(
       kept.txs.map((t) => [t.failed, t.changed]),
-      [[false, ["audit", "control_setting", "sqlite_sequence"]]],
+      [[false, ["audit", "control_setting"]]],
     );
     assert.equal((await store.ownSettings.get("log_level"))?.value, "debug");
     assert.deepEqual(

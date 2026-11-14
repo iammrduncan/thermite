@@ -13,12 +13,13 @@ import {
   runPolicy,
   setPolicyOn,
 } from "../../src/control/retention/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { copiesPolicyOn } from "../../src/control/store/retention.ts";
 import { packItems, type RetentionItem } from "../../src/core/retention/index.ts";
 import { controlOnly, mcpClient } from "../helpers/control-stack.ts";
 import { applied, controlStore } from "../helpers/control-store.ts";
+import { sqliteOnly } from "../helpers/store-kind.ts";
 import { report } from "../helpers/view-events.ts";
 
 /**
@@ -220,7 +221,7 @@ describe("retention policies on control", () => {
     assert.equal((await previewOf(store, p)).count, 1);
     await runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
     const id = (
-      sqliteBehind(store).db.prepare("select id from kb_item where slot = 'worker-1'").get() as {
+      (await rowsBehind(store, "select id from kb_item where slot = 'worker-1'"))[0] as {
         id: number;
       }
     ).id;
@@ -240,13 +241,13 @@ describe("retention policies on control", () => {
       [3],
       "the newest stays",
     );
-    assert.throws(
-      () => sqliteBehind(store).db.prepare("delete from kb_version").run(),
+    await assert.rejects(
+      writeBehind(store, "delete from kb_version"),
       /newest version of an item is never removed/,
     );
   });
 
-  test("copies of control's store: removed beside it, the newest kept", async () => {
+  test("copies of control's store: removed beside it, the newest kept", sqliteOnly, async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-retention-copies-"));
     const path = join(dir, "control.db");
     const store = openControlStore(path);
@@ -305,9 +306,12 @@ describe("retention policies on control", () => {
       0,
       "off: it removes nothing",
     );
-    sqliteBehind(store)
-      .db.prepare("update retention_policy set enabled = 1, on_since = ? where id = ?")
-      .run("2030-01-01T00:00:00Z", p.id);
+    await writeBehind(
+      store,
+      "update retention_policy set enabled = 1, on_since = ? where id = ?",
+      "2030-01-01T00:00:00Z",
+      p.id,
+    );
     assert.equal(
       await retentionTick(deps, at("2030-01-02T02:59:00Z")),
       1,

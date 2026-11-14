@@ -10,7 +10,7 @@ import { serve } from "@hono/node-server";
 import { RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { parseContract } from "../../../src/core/contract.ts";
@@ -210,9 +210,13 @@ describe("thermite assign --queue-from (goal 067)", () => {
       // Sent: the signed command carries the same queue.
       const sent = await cli(...base, ...at, "--rig", "rig-a", "--queue-from", past);
       assert.equal(sent.code, 0, sent.stderr);
-      const signed = sqliteBehind(store)
-        .db.prepare("select signed from command where id = ?")
-        .get(JSON.parse(sent.stdout).id) as {
+      const signed = (
+        await rowsBehind(
+          store,
+          "select signed from command where id = ?",
+          JSON.parse(sent.stdout).id,
+        )
+      )[0] as {
         signed: string;
       };
       const payload = (JSON.parse(signed.signed) as { envelope: { payload: { queue: unknown[] } } })

@@ -7,6 +7,7 @@ import { Loops } from "../../../src/common/health.ts";
 import { type BusFigures, ControlLook, storageFigures } from "../../../src/control/system/index.ts";
 import { buildOf } from "../../../src/core/version.ts";
 import { controlStore } from "../../helpers/control-store.ts";
+import { ON_POSTGRES, sqliteOnly } from "../../helpers/store-kind.ts";
 
 /**
  * Control itself on Metrics (goal 179): its process with its loops, and where its state sits, in
@@ -29,23 +30,27 @@ test("control's process: its use, Node's memory, the event loop since the first 
   look.close();
 });
 
-test("control.db: its file and log, its pages, each table's bytes and rows, each index's table", async () => {
-  const path = join(mkdtempSync(join(tmpdir(), "thermite-db-figures-")), "control.db");
-  const store = controlStore(path);
-  await store.auditLog.add("owner", "test", { a: 1 });
-  await store.auditLog.add("owner", "test", { a: 2 });
-  const f = await store.size.measure();
-  assert.ok(f.file_bytes > 0);
-  assert.equal(f.file_bytes % f.page_size, 0);
-  assert.ok(f.schema_version && f.schema_version >= 28);
-  const audit = f.tables.find((t) => t.name === "audit");
-  assert.equal(audit?.kind, "table");
-  assert.ok((audit?.rows ?? 0) >= 2);
-  const index = f.tables.find((t) => t.kind === "index");
-  assert.ok(index?.of, "an index names its table");
-  assert.equal(index?.rows, null);
-  assert.ok(f.cache_bytes > 0);
-});
+test(
+  "control.db: its file and log, its pages, each table's bytes and rows, each index's table",
+  sqliteOnly,
+  async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "thermite-db-figures-")), "control.db");
+    const store = controlStore(path);
+    await store.auditLog.add("owner", "test", { a: 1 });
+    await store.auditLog.add("owner", "test", { a: 2 });
+    const f = await store.size.measure();
+    assert.ok(f.file_bytes > 0);
+    assert.equal(f.file_bytes % f.page_size, 0);
+    assert.ok(f.schema_version && f.schema_version >= 28);
+    const audit = f.tables.find((t) => t.name === "audit");
+    assert.equal(audit?.kind, "table");
+    assert.ok((audit?.rows ?? 0) >= 2);
+    const index = f.tables.find((t) => t.kind === "index");
+    assert.ok(index?.of, "an index names its table");
+    assert.equal(index?.rows, null);
+    assert.ok(f.cache_bytes > 0);
+  },
+);
 
 test("storage: memory and disk, each place with what it uses and what it may still take", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "thermite-storage-")), "control.db");
@@ -90,6 +95,7 @@ test("storage: memory and disk, each place with what it uses and what it may sti
     },
   );
   assert.deepEqual(f.streams, [{ name: "EVENTS", bytes: 800 * MIB }]);
-  assert.ok(f.kinds.some((k) => k.kind === "store" && (k.bytes ?? 0) > 0));
+  // A store on PostgreSQL is on its server, and takes nothing of control's state.
+  if (!ON_POSTGRES) assert.ok(f.kinds.some((k) => k.kind === "store" && (k.bytes ?? 0) > 0));
   assert.ok(f.db && f.db.tables.length > 0);
 });

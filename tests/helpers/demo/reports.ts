@@ -1,4 +1,4 @@
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { writeBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { ingestReport } from "../control-store.ts";
 import { iso, Rig } from "./shared.ts";
@@ -81,9 +81,7 @@ export async function reportRigs(
   );
   await report(c1, { done: 0 }, hardware([], 8, 16_384));
   await report(g4, {}, hardware([card("judge", 5), card("dev", 6)], 16, 65_536));
-  sqliteBehind(store)
-    .db.prepare("update rig set last_seen = ? where id = ?")
-    .run(iso(2.3), "gpu-4");
+  await writeBehind(store, "update rig set last_seen = ? where id = ?", iso(2.3), "gpu-4");
   for (const [u, usd] of [
     ["gpu-1", 4.2],
     ["gpu-2", 3.1],

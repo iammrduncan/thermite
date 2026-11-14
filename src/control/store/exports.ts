@@ -23,7 +23,7 @@ export interface RigExport {
   complete_at: string | null;
 }
 
-function rigExportOf(r: Row): RigExport {
+export function rigExportOf(r: Row): RigExport {
   return {
     rig: String(r.rig),
     name: String(r.name),

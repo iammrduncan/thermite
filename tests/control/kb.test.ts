@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { readKnowledgeAgain } from "../../src/control/events/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../src/control/store/behind.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { rigView } from "../../src/control/views/index.ts";
 import { assigned } from "../helpers/assignments.ts";
@@ -201,7 +201,9 @@ test("the knowledge base carries on after a restart of control: its cursor and s
   const first = controlStore(path);
   await twoCampaigns(first);
   const before = await first.kb().collections();
-  const top = Math.max(...itemsBySeq(first, ["gemv-speed", "survey-study"]).map((x) => x.seq));
+  const top = Math.max(
+    ...(await itemsBySeq(first, ["gemv-speed", "survey-study"])).map((x) => x.seq),
+  );
   // Control restarts: a new store on the same file, on the same bus, goes on from the stream's
   // place it applied, and indexes nothing twice.
   closeBus(first);
@@ -571,17 +573,18 @@ test("a store built by an earlier reading rebuilds its experiments and attempts 
   const [exp] = await kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   const whole = exp?.body;
   // As reading 2 left an item whose details held "Result: ": cut, and its state in its text.
-  sqliteBehind(store)
-    .db.prepare("update kb_item set body = 'cut', meta = '{}' where kind = 'experiment'")
-    .run();
-  sqliteBehind(store).db.prepare("update kb_meta set value = '2' where key = 'reading'").run();
+  await writeBehind(
+    store,
+    "update kb_item set body = 'cut', meta = '{}' where kind = 'experiment'",
+  );
+  await writeBehind(store, "update kb_meta set value = '2' where key = 'reading'");
   await readKnowledgeAgain(store, busOf(store).bus);
   const [again] = await kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   assert.equal(again?.body, whole);
   assert.equal(again?.meta.result, "Result: attempt a-1 (submitted)");
-  const reading = sqliteBehind(store)
-    .db.prepare("select value from kb_meta where key = 'reading'")
-    .get() as {
+  const reading = (
+    await rowsBehind(store, "select value from kb_meta where key = 'reading'")
+  )[0] as {
     value: string;
   };
   assert.equal(reading.value, "4");

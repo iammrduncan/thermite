@@ -16,7 +16,7 @@ import {
 } from "../../../src/control/bus/users.ts";
 import { STEP_WORDS } from "../../../src/control/rigs/setup/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { newSealKey, sealKeyFingerprint } from "../../../src/core/link/config.ts";
 import {
@@ -421,9 +421,7 @@ describe("each rig's key on the message bus", () => {
     const first = await setup({ secrets, store: openControlStore(path) });
     await first.users.sync();
     const control = fromSeed(first.users.controlSeed).getPublicKey();
-    const rows = sqliteBehind(first.store)
-      .db.prepare("select * from bus_identity order by name")
-      .all();
+    const rows = await rowsBehind(first.store, "select * from bus_identity order by name");
     assert.deepEqual(
       rows.map((r) => r.name),
       ["control", "system"],

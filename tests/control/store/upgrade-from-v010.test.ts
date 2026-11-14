@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { applyControlLogLevel } from "../../../src/control/log-level.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore } from "../../../src/control/store/index.ts";
 import { keepOldRows } from "../../helpers/old-store.ts";
 
@@ -52,7 +52,7 @@ test("a store v0.1.0 ran opens with every table control's start reads, its event
   // The events table and its migration wait for the move.
   assert.ok(have.has("rig_event"), "the events table stays until the move");
   assert.equal(
-    sqliteBehind(store).db.prepare("select 1 from schema_migrations where version = 12").get(),
+    (await rowsBehind(store, "select 1 from schema_migrations where version = 12"))[0],
     undefined,
     "the drop waits",
   );

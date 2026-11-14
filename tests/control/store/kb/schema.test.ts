@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../../../src/control/store/behind.ts";
 import { openControlStore, STORE_VERSION } from "../../../../src/control/store/index.ts";
 import { withKnowledgeBaseBefore175 } from "../../../helpers/old-store.ts";
 
@@ -84,15 +84,14 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     await old.close();
 
     const store = openControlStore(path);
-    const v = sqliteBehind(store)
-      .db.prepare("select max(version) as v from schema_migrations")
-      .get() as {
+    const v = (await rowsBehind(store, "select max(version) as v from schema_migrations"))[0] as {
       v: number;
     };
     assert.equal(v.v, STORE_VERSION);
-    const rows = sqliteBehind(store)
-      .db.prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
-      .all() as Record<string, unknown>[];
+    const rows = (await rowsBehind(
+      store,
+      "select id, seq, slot, version, kind, ref from kb_item order by id",
+    )) as Record<string, unknown>[];
     assert.deepEqual(
       rows.map((r) => ({ ...r })),
       [
@@ -102,9 +101,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
       ],
     );
     // Each item's version 1 is kept, and the cursors count on from where they were.
-    const versions = sqliteBehind(store)
-      .db.prepare("select item, version from kb_version order by item")
-      .all();
+    const versions = await rowsBehind(store, "select item, version from kb_version order by item");
     assert.deepEqual(
       versions.map((r) => ({ ...r })),
       [
@@ -113,22 +110,20 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
         { item: 7, version: 1 },
       ],
     );
-    const cursor = sqliteBehind(store).db.prepare("select seq, item_seq from kb_cursor").get() as {
+    const cursor = (await rowsBehind(store, "select seq, item_seq from kb_cursor"))[0] as {
       item_seq: number;
     };
     assert.equal(cursor.item_seq, 15);
     // The rig's runs are known as before.
-    sqliteBehind(store)
-      .db.prepare(
-        "insert into rig (id, first_seen, last_seen, ledger_id, summary) values ('rig-a', 'x', 'x', 'ledger-a', '{}')",
-      )
-      .run();
+    await writeBehind(
+      store,
+      "insert into rig (id, first_seen, last_seen, ledger_id, summary) values ('rig-a', 'x', 'x', 'ledger-a', '{}')",
+    );
     assert.equal(await store.kb().runCampaign("rig-a", "other-run"), undefined);
-    sqliteBehind(store)
-      .db.prepare(
-        "insert into kb_run (rig, ledger, run, campaign) values ('rig-a', 'ledger-a', 'gs-2', 'gemv')",
-      )
-      .run();
+    await writeBehind(
+      store,
+      "insert into kb_run (rig, ledger, run, campaign) values ('rig-a', 'ledger-a', 'gs-2', 'gemv')",
+    );
     assert.equal(await store.kb().runCampaign("rig-a", "gs-2"), "gemv");
     // Every campaign control knows has its collection: one saved, ones with runs or items.
     assert.deepEqual((await store.kb().collections()).map((c) => c.campaign).sort(), [
@@ -159,9 +154,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
         body: { id: 3, by: "lane-1", kind: "surprise", text: "Faster than the guide" },
       },
     );
-    const added = sqliteBehind(store)
-      .db.prepare("select id, seq from kb_item where ref = '3'")
-      .get() as {
+    const added = (await rowsBehind(store, "select id, seq from kb_item where ref = '3'"))[0] as {
       id: number;
       seq: number;
     };

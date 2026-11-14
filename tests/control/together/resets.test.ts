@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { advanceResets, cancelReset, confirmReset } from "../../../src/control/lifecycle.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { writeBehind } from "../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { enrollRigs } from "../../helpers/control-store.ts";
@@ -74,11 +74,11 @@ describe("a full reset's transactions", () => {
     assert.equal(dropped.threw, undefined, "the step notes its own failure");
     assert.deepEqual(seen(dropped)[0], { failed: true, changed: [] });
     assert.deepEqual(await wipes(store), [], "no wipe is asked for that no reset records");
-    assert.deepEqual(rowsOf(store, "command"), []);
+    assert.deepEqual(await rowsOf(store, "command"), []);
     // The step then notes the failure on the reset, in a transaction of its own, which is kept.
     assert.deepEqual(seen(dropped)[1], {
       failed: false,
-      changed: ["audit", "reset", "sqlite_sequence"],
+      changed: ["audit", "reset"],
     });
     assert.equal(dropped.txs.length, 2);
     const failed = await resetOf(store, id);
@@ -123,9 +123,12 @@ describe("a full reset's transactions", () => {
   test("advanceResets, a step's failure: the failed reset and its step in a RunPod rig's history", async () => {
     const { store, advance, id } = await setup("quiescing", { runpod: true });
     // Two hours in a step that may take one.
-    sqliteBehind(store)
-      .db.prepare("update reset set updated_at = ? where id = ?")
-      .run(new Date(Date.now() - 2 * 3_600_000).toISOString(), id);
+    await writeBehind(
+      store,
+      "update reset set updated_at = ? where id = ?",
+      new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      id,
+    );
     const dropped = await withWriteFailing(store, store.rigHistory, "add", advance);
     assert.equal(dropped.threw?.message, WRITE_FAILED);
     assert.deepEqual(seen(dropped), DROPPED);
@@ -135,7 +138,7 @@ describe("a full reset's transactions", () => {
     const kept = await watched(store, advance);
     assert.equal(kept.threw, undefined);
     assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "reset", "rig_setup_event", "sqlite_sequence"] },
+      { failed: false, changed: ["audit", "reset", "rig_setup_event"] },
     ]);
     assert.equal(await stateOf(store, id), "failed");
     assert.match(String((await resetOf(store, id))?.detail), /^timed out while quiescing/);
@@ -177,7 +180,7 @@ describe("a full reset's transactions", () => {
     const kept = await watched(store, cancel);
     assert.equal(kept.threw, undefined);
     assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "reset", "rig_setup_event", "sqlite_sequence"] },
+      { failed: false, changed: ["audit", "reset", "rig_setup_event"] },
     ]);
     assert.equal(await stateOf(store, id), "cancelled");
     assert.deepEqual(await steps(store), [["reset_cancelled", true]]);

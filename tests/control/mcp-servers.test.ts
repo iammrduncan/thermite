@@ -8,7 +8,7 @@ import {
   signInFetch,
 } from "../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { assigned } from "../helpers/assignments.ts";
@@ -350,7 +350,7 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
     const signed = JSON.parse(
       String(
         (
-          sqliteBehind(store).db.prepare("select signed from command where id = ?").get(id) as {
+          (await rowsBehind(store, "select signed from command where id = ?", id))[0] as {
             signed: string;
           }
         ).signed,
@@ -414,9 +414,10 @@ describe("what a rig gets", () => {
     assert.deepEqual(b.servers, []);
     // Audited once for what changed, never with the key.
     await ask("rig-a");
-    const audits = sqliteBehind(store)
-      .db.prepare("select body from audit where action = 'mcp_servers_handed'")
-      .all() as { body: string }[];
+    const audits = (await rowsBehind(
+      store,
+      "select body from audit where action = 'mcp_servers_handed'",
+    )) as { body: string }[];
     // rig-a's servers once; rig-b got none, which is what it had: nothing to audit.
     assert.equal(audits.length, 1);
     assert.deepEqual(JSON.parse(audits[0]?.body ?? "{}"), {
@@ -445,9 +446,7 @@ describe("what a rig gets", () => {
     // An assignment that failed gives nothing either.
     await assigned(store, "rig-a", "pn-2", "pn", uses);
     assert.deepEqual(await given(), ["gbrain"]);
-    sqliteBehind(store)
-      .db.prepare("update command set status = 'failed' where id = ?")
-      .run("cmd-rig-a-pn-2");
+    await writeBehind(store, "update command set status = 'failed' where id = ?", "cmd-rig-a-pn-2");
     assert.deepEqual(await given(), []);
   });
 

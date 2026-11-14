@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import { setStoreWaits } from "../../../src/control/store/waits.ts";
+import { sqliteOnly } from "../../helpers/store-kind.ts";
 
 /**
  * The store's interface (goal 267): each call gives its answer later, SQLite stays behind it, and
@@ -18,13 +19,14 @@ function gate(): { open: () => void; opened: Promise<void> } {
   return { open, opened };
 }
 
-/** The setting `key` as the database has it now, read behind the interface: no turn is waited for. */
-const kept = (store: ControlStore, key: string): string | undefined =>
-  (
-    sqliteBehind(store).db.prepare("select value from control_setting where key = ?").get(key) as
-      | { value: string }
-      | undefined
-  )?.value;
+/**
+ * The setting `key` as the database has it now, read behind the interface: it takes no turn among
+ * the store's callers, so it reads while a transaction is open.
+ */
+const kept = async (store: ControlStore, key: string): Promise<string | undefined> => {
+  const rows = await rowsBehind(store, "select value from control_setting where key = ?", key);
+  return rows[0] === undefined ? undefined : String(rows[0].value);
+};
 
 describe("the store's interface", () => {
   test("every sub-store of the SQLite store is on the interface, and each of its calls waits", async () => {
@@ -164,7 +166,7 @@ describe("a transaction on the store", () => {
       .then(() => order.push("the second transaction ended"));
     for (let i = 0; i < 5; i++) await new Promise((turn) => setImmediate(turn));
     assert.deepEqual(order, ["the transaction wrote"], "nothing else ran while it was open");
-    assert.equal(kept(store, "other"), undefined);
+    assert.equal(await kept(store, "other"), undefined);
     hold.open();
     await Promise.all([first, write, read, second]);
     // The others ran once it ended, in the order they asked: the read saw none of its writes.
@@ -177,9 +179,13 @@ describe("a transaction on the store", () => {
       "the transaction wrote",
     ]);
     assert.equal(order.at(-1), "the second transaction ended");
-    assert.equal(kept(store, "mine"), undefined, "the transaction's writes were dropped");
-    assert.equal(kept(store, "other"), "1", "the other caller's write was not dropped with it");
-    assert.equal(kept(store, "second"), "1");
+    assert.equal(await kept(store, "mine"), undefined, "the transaction's writes were dropped");
+    assert.equal(
+      await kept(store, "other"),
+      "1",
+      "the other caller's write was not dropped with it",
+    );
+    assert.equal(await kept(store, "second"), "1");
     await store.close();
   });
 
@@ -201,9 +207,9 @@ describe("a transaction on the store", () => {
       );
       assert.equal((await store.ownSettings.get("c"))?.value, "1");
     });
-    assert.equal(kept(store, "a"), "1");
-    assert.equal(kept(store, "b"), "1");
-    assert.equal(kept(store, "c"), "1");
+    assert.equal(await kept(store, "a"), "1");
+    assert.equal(await kept(store, "b"), "1");
+    assert.equal(await kept(store, "c"), "1");
     assert.equal((await store.liveLines.tail("rig-a", 10)).length, 1);
     await store.close();
   });
@@ -220,10 +226,14 @@ describe("a transaction on the store", () => {
       await store.ownSettings.set("b", "1", "test");
       hold.open();
       for (let i = 0; i < 3; i++) await store.ownSettings.get("b");
-      assert.equal(kept(store, "late"), undefined, "it waits for the transaction that is open");
+      assert.equal(
+        await kept(store, "late"),
+        undefined,
+        "it waits for the transaction that is open",
+      );
     });
     await Promise.all([next, ...started]);
-    assert.equal(kept(store, "late"), "1");
+    assert.equal(await kept(store, "late"), "1");
     await store.close();
   });
 });
@@ -232,17 +242,23 @@ describe("what is done once a transaction is kept", () => {
   test("is done at once outside a transaction, and when the outermost one is kept inside one", async () => {
     const store = openControlStore(":memory:");
     const done: string[] = [];
+    const reads: Promise<string | undefined>[] = [];
     store.onceKept(() => done.push("outside"));
     assert.deepEqual(done, ["outside"], "no transaction holds it: at once");
     await store.tx(async () => {
       await store.ownSettings.set("a", "1", "test");
-      store.onceKept(() => done.push(`kept, with a = ${kept(store, "a")}`));
+      store.onceKept(() => {
+        done.push("kept");
+        // Read at once, as it is done: the outermost transaction is kept by then.
+        reads.push(kept(store, "a"));
+      });
       await store.tx(async () => {
         store.onceKept(() => done.push("the savepoint's"));
       });
       assert.deepEqual(done, ["outside"], "not before the outermost one is kept");
     });
-    assert.deepEqual(done, ["outside", "kept, with a = 1", "the savepoint's"]);
+    assert.deepEqual(done, ["outside", "kept", "the savepoint's"]);
+    assert.deepEqual(await Promise.all(reads), ["1"], "its writes were kept when it was done");
     await store.close();
   });
 
@@ -281,14 +297,14 @@ describe("what is done once a transaction is kept", () => {
       });
       store.onceKept(() => done.push("the next one"));
     });
-    assert.equal(kept(store, "a"), "1");
+    assert.equal(await kept(store, "a"), "1");
     assert.deepEqual(done, ["the next one"]);
     await store.close();
   });
 });
 
 describe("a store whose calls take a turn of the event loop", () => {
-  test("answers a call only after everything else that was due", async () => {
+  test("answers a call only after everything else that was due", sqliteOnly, async () => {
     const turnsBefore = async (store: ControlStore): Promise<number> => {
       let turns = 0;
       let going = true;

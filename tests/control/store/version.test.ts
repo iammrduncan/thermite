@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
+import { sqliteOnly } from "../../helpers/store-kind.ts";
 
 /**
  * The store's version is written once (goal 254, item 1): STORE_VERSION, which is how many
@@ -41,11 +42,9 @@ function breaches(text: string, version: number): { line: number; text: string }
 }
 
 describe("the store's version is written once", () => {
-  test("a new store is at STORE_VERSION", async () => {
+  test("a new store is at STORE_VERSION", sqliteOnly, async () => {
     const store = openControlStore(":memory:");
-    const row = sqliteBehind(store)
-      .db.prepare("select max(version) as v from schema_migrations")
-      .get() as {
+    const row = (await rowsBehind(store, "select max(version) as v from schema_migrations"))[0] as {
       v: number;
     };
     assert.equal(row.v, STORE_VERSION);

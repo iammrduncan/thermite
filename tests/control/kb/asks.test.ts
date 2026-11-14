@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { BusRequest } from "../../../src/common/bus/index.ts";
 import { answerKbAsk, KbAskLimit, serveKbAsks } from "../../../src/control/kb/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { writeBehind } from "../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 import type { KbReadAnswer, KbSearchAnswer } from "../../../src/core/link/kb.ts";
@@ -64,7 +64,7 @@ async function setup(): Promise<ControlStore> {
   }
   await s.kb().grant("gemv", "survey", "owner:ui");
   // Granted before control assigned the runs.
-  sqliteBehind(s).db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
+  await writeBehind(s, "update kb_read set granted_at = '2026-01-01T00:00:00.000Z'");
   return s;
 }
 
@@ -109,13 +109,13 @@ describe("control's answers to a rig's searches and reads", () => {
     assert.equal(await s.kb().grant("gemv", "survey", "owner:ui"), true);
     assert.deepEqual(runs(await search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
     // gs-2 left survey out as it started: it stays out while that grant stands.
-    sqliteBehind(s).db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
+    await writeBehind(s, "update kb_read set granted_at = '2026-01-01T00:00:00.000Z'");
     await s.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui");
     assert.deepEqual(runs(await search(s, "gs-2")), ["gs-1", "gs-2"]);
     // Removed and given again since gs-2 started, it joins gs-2's search too.
     await s.kb().revoke("gemv", "survey");
     await s.kb().grant("gemv", "survey", "owner:ui");
-    sqliteBehind(s).db.prepare("update kb_read set granted_at = '2099-01-01T00:00:00.000Z'").run();
+    await writeBehind(s, "update kb_read set granted_at = '2099-01-01T00:00:00.000Z'");
     assert.deepEqual(runs(await search(s, "gs-2")), ["gs-1", "gs-2", "survey-1"]);
     // Removed again, it leaves at once.
     await s.kb().revoke("gemv", "survey");

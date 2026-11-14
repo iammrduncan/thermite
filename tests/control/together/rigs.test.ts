@@ -87,8 +87,8 @@ describe("a rig's report", () => {
     );
     assert.equal(dropped.threw?.message, WRITE_FAILED);
     assert.deepEqual(seen(dropped), DROPPED);
-    assert.deepEqual(rowsOf(store, "run_registry"), [], "no run of the report is registered");
-    assert.deepEqual(rowsOf(store, "rig_ledger"), [], "the rig did not enter the ledger");
+    assert.deepEqual(await rowsOf(store, "run_registry"), [], "no run of the report is registered");
+    assert.deepEqual(await rowsOf(store, "rig_ledger"), [], "the rig did not enter the ledger");
     assert.deepEqual(await store.reportedRigs.list(), []);
 
     const kept = await watched(store, () => ingestReport(store, page));
@@ -216,13 +216,13 @@ describe("control's work on a rig", () => {
       assert.deepEqual(held.order, HELD);
       assert.equal(second, "An update of rig-a is under way: wait until its steps end.");
       assert.deepEqual(
-        rowsOf(store, "rig_update").map((r) => [r.rig, r.requested_by]),
+        (await rowsOf(store, "rig_update")).map((r) => [r.rig, r.requested_by]),
         [["rig-a", "owner:ui"]],
         "one update is under way, the first one's",
       );
       fail();
       await held.out.ended;
-      assert.deepEqual(rowsOf(store, "rig_update"), []);
+      assert.deepEqual(await rowsOf(store, "rig_update"), []);
       await store.close();
     });
   });

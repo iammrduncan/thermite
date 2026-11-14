@@ -54,7 +54,7 @@ export interface TunnelSecrets {
   code_sealed: string;
 }
 
-const tunnelRigOf = (r: Row): TunnelRig & TunnelSecrets => {
+export const tunnelRigOf = (r: Row): TunnelRig & TunnelSecrets => {
   const opt = (v: unknown) => (v === null || v === undefined ? null : String(v));
   return {
     rig: String(r.rig),

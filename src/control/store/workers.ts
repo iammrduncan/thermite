@@ -8,7 +8,7 @@ import { type Row, StorePart } from "./part.ts";
  * not. The rig's history says how each give went.
  */
 
-interface ChosenWorkers {
+export interface ChosenWorkers {
   rig: string;
   lanes: number;
   chosen_by: string;
@@ -28,7 +28,7 @@ export function rigWorkersTable(db: DatabaseSync): void {
 )`);
 }
 
-const read = (r: Row): ChosenWorkers => ({
+export const read = (r: Row): ChosenWorkers => ({
   rig: String(r.rig),
   lanes: Number(r.lanes),
   chosen_by: String(r.chosen_by),

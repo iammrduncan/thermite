@@ -182,7 +182,7 @@ describe("a cluster rig's drain", () => {
     assert.deepEqual(seen(kept), [
       {
         failed: false,
-        changed: ["audit", "cluster_rig", "command", "rig_setup_event", "sqlite_sequence"],
+        changed: ["audit", "cluster_rig", "command", "rig_setup_event"],
       },
     ]);
     assert.equal(await statusOf(store), "draining");
@@ -209,7 +209,7 @@ describe("a cluster rig's drain", () => {
     assert.deepEqual(seen(kept), [
       {
         failed: false,
-        changed: ["audit", "cluster_rig", "command", "rig_setup_event", "sqlite_sequence"],
+        changed: ["audit", "cluster_rig", "command", "rig_setup_event"],
       },
     ]);
     assert.equal(await statusOf(store), "running");
@@ -254,7 +254,7 @@ describe("a cluster rig's drain", () => {
 
     const kept = await twoRounds();
     assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "command", "rig_setup_event", "sqlite_sequence"] },
+      { failed: false, changed: ["audit", "command", "rig_setup_event"] },
     ]);
     assert.deepEqual(await drains(store), [
       [true, "delivered"],
@@ -272,15 +272,16 @@ describe("a cluster rig's setup", () => {
     const { store, parts } = await slotRig();
     // Its setup failed before it ever reported.
     await store.clusters.setRigStatus("gpu-1", "failed");
-    const token = () => rowsOf(store, "rig_token").find((r) => r.rig === "gpu-1")?.token_sha256;
-    const before = token();
+    const token = async () =>
+      (await rowsOf(store, "rig_token")).find((r) => r.rig === "gpu-1")?.token_sha256;
+    const before = await token();
     assert.ok(before, "the rig has a token");
     const again = () => setClusterRigUpAgain(parts, "gpu-1", undefined, "owner:ui");
     const dropped = await withWriteFailing(store, store.auditLog, "add", again);
     assert.equal(dropped.threw?.message, WRITE_FAILED);
     assert.deepEqual(seen(dropped), DROPPED);
     assert.equal(await statusOf(store), "failed", "not being set up");
-    assert.equal(token(), before, "its token is the one it had");
+    assert.equal(await token(), before, "its token is the one it had");
     assert.deepEqual(await steps(store, "set_up_again"), []);
 
     const kept = await watched(store, again);
@@ -289,7 +290,7 @@ describe("a cluster rig's setup", () => {
     assert.equal(kept.txs[0]?.failed, false);
     for (const table of ["audit", "cluster_rig", "rig_setup_event", "rig_token"])
       assert.ok(kept.txs[0]?.changed.includes(table), `${table}: ${kept.txs[0]?.changed}`);
-    assert.notEqual(token(), before, "a new token");
+    assert.notEqual(await token(), before, "a new token");
     assert.deepEqual(await steps(store, "set_up_again"), ["on any node with room"]);
     assert.equal((await store.auditLog.list(5, { action: "cluster_rig_set_up_again" })).length, 1);
   });

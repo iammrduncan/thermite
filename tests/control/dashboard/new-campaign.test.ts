@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../../src/control/store/behind.ts";
 import { controlStack, signIn } from "../../helpers/control-stack.ts";
 import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 
@@ -144,7 +144,7 @@ describe("the new-campaign page", () => {
     assert.equal(cmd?.rig, "rig-a");
     assert.equal(cmd?.issued_by, "owner:ui");
     assert.ok(
-      JSON.stringify(sqliteBehind(s.store).db.prepare("select action from audit").all()).includes(
+      JSON.stringify(await rowsBehind(s.store, "select action from audit")).includes(
         "campaign_version_created",
       ),
     );

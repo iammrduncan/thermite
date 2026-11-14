@@ -16,7 +16,7 @@ import {
 } from "../../../src/control/bus/leaf.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import {
@@ -67,7 +67,7 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
     for (const name of Object.values(LEAF_ENV)) assert.ok(minted.env[name], name);
     const kept = await store.tunnels.get("rp-1");
     assert.ok(kept?.leaf_ca && kept.leaf_address === null);
-    const dump = JSON.stringify(sqliteBehind(store).db.prepare("select * from tunnel_rig").all());
+    const dump = JSON.stringify(await rowsBehind(store, "select * from tunnel_rig"));
     assert.ok(!dump.includes("PRIVATE KEY") && !dump.includes(minted.env[LEAF_ENV.key] ?? "?"));
     // Without control's authority, no pod: it could not join the bus.
     const plain = new ControlTunnels(store, SecretBox.ephemeral(), keys.privateKeyPem);

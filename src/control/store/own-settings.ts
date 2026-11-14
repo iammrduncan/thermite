@@ -8,7 +8,7 @@ import { type Row, StorePart } from "./part.ts";
  */
 
 /** A setting as the store keeps it. */
-interface OwnSetting {
+export interface OwnSetting {
   value: string;
   set_by: string;
   set_at: string;

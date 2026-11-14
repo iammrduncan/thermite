@@ -1,6 +1,13 @@
 import { Credential } from "../credential.ts";
 import { type Row, StorePart } from "./part.ts";
 
+/** A token's SHA-256 as the store keeps it: its hex digits, in lower case. */
+export const tokenHashHex = (sha256: string): string => Credential.ofHash(sha256).hex;
+
+/** Whether `token` is the token whose SHA-256 the store keeps, compared in constant time. */
+export const tokenMatches = (sha256: string, token: string): boolean =>
+  Credential.ofHash(sha256).matches(token);
+
 /** Rigs enrolled through control (goal 125, T6), their tokens only as hashes. */
 
 /** A rig enrolled through control. */
@@ -12,7 +19,7 @@ export interface EnrolledRig {
   retired_at: string | null;
 }
 
-function enrolledOf(r: Row): EnrolledRig {
+export function enrolledOf(r: Row): EnrolledRig {
   const opt = (v: unknown) => (v === null || v === undefined ? null : String(v));
   return {
     rig: String(r.rig),
@@ -65,7 +72,7 @@ export class SqliteEnrollments extends StorePart {
     const r = this.db
       .prepare("select token_sha256 from rig_token where rig = ? and retired_at is null")
       .get(rig) as { token_sha256: string } | undefined;
-    return r ? Credential.ofHash(r.token_sha256).matches(token) : false;
+    return r ? tokenMatches(r.token_sha256, token) : false;
   }
 
   /** Enrolls a rig with a token's SHA-256. A retired rig may be enrolled again. */
@@ -78,7 +85,7 @@ export class SqliteEnrollments extends StorePart {
            created_at = excluded.created_at, created_by = excluded.created_by,
            rotated_at = null, retired_at = null`,
       )
-      .run(rig, Credential.ofHash(tokenSha256).hex, new Date().toISOString(), by);
+      .run(rig, tokenHashHex(tokenSha256), new Date().toISOString(), by);
     // Enrolled again under a retired name: it is back.
     this.store.retired.remove(rig);
     this.store.auditLog.add(by, "rig_enrolled", { rig });
@@ -90,7 +97,7 @@ export class SqliteEnrollments extends StorePart {
       .prepare(
         "update rig_token set token_sha256 = ?, rotated_at = ? where rig = ? and retired_at is null",
       )
-      .run(Credential.ofHash(tokenSha256).hex, new Date().toISOString(), rig);
+      .run(tokenHashHex(tokenSha256), new Date().toISOString(), rig);
     if (Number(r.changes) === 0) throw new Error(`rig ${rig} is not enrolled`);
     this.store.auditLog.add(by, "rig_token_rotated", { rig });
   }

@@ -7,6 +7,7 @@ import { log, optionalSecretFromFile, parseListen } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { every } from "../common/health.ts";
 import { logWarn, startLogging } from "../common/log.ts";
+import { connectPostgres } from "../common/postgres.ts";
 import { readNumber } from "../common/settings.ts";
 import { CONTROL_STATE } from "../core/backup.ts";
 import { generateSigningKeys } from "../core/commands.ts";
@@ -60,8 +61,10 @@ import {
   controlPublicUrl,
   DESIGN_SITE_SETTING,
   notReadWords,
+  POSTGRES_PASSWORD_FILE_SETTING,
+  storeSetting,
 } from "./settings.ts";
-import { openControlStore } from "./store/index.ts";
+import { openControlStore, openPostgresStore } from "./store/index.ts";
 
 /** Control service entry point. Generates its signing key on first start. */
 async function main(): Promise<void> {
@@ -119,7 +122,21 @@ async function main(): Promise<void> {
   // set is not read: said at start, in words, and control starts.
   const notRead = notReadWords(env);
   if (notRead) logWarn("control", notRead);
-  const store = openControlStore(join(dir, CONTROL_STATE.db));
+  // Its store: a file in its state folder, or a PostgreSQL database for trial (goal 268). The
+  // store on PostgreSQL checks its server and brings its schema further at its first call, which
+  // is the next line: a server that can't be reached, or is too old, stops control here.
+  const kept = storeSetting(env);
+  const store =
+    kept.kind === "postgres"
+      ? openPostgresStore(
+          connectPostgres(kept.url, {
+            password: optionalSecretFromFile(POSTGRES_PASSWORD_FILE_SETTING, env),
+          }),
+          join(dir, CONTROL_STATE.db),
+        )
+      : openControlStore(join(dir, CONTROL_STATE.db));
+  if (kept.kind === "postgres")
+    log("control", "the store is on PostgreSQL, for trial: a release supports the store on SQLite");
   // The log level the owner set on control, over THERMITE_LOG_LEVEL's (control/log-level.ts).
   await applyControlLogLevel(store);
   const { host, port } = parseListen(env.THERMITE_CONTROL_LISTEN ?? "0.0.0.0:8800");

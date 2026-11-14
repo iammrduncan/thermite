@@ -18,7 +18,7 @@ export interface JoinedRig {
   created_by: string;
 }
 
-const joinedRigOf = (r: Row): JoinedRig => ({
+export const joinedRigOf = (r: Row): JoinedRig => ({
   rig: String(r.rig),
   form: String(r.form) as JoinForm,
   spec: JSON.parse(String(r.spec)) as JoinedSpec,

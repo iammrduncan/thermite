@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { KB_TEXT_TYPES, kbAddress } from "../../../core/kb/index.ts";
 import { itemOf } from "./items.ts";
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 /**
  * What the knowledge base stores, from its own tables (goal 176, What's stored): each collection's
@@ -65,11 +65,11 @@ export const KB_STORED_FILES = 10;
 /** Whether an item's file is of a type control reads text from, in SQL. */
 const READ_SQL = `lower(i.file_type) in (${KB_TEXT_TYPES.map((t) => `'${t}'`).join(", ")})`;
 /** What became of an item's file's text, in SQL, as KbTextState says it (t: its kb_file_text). */
-const TEXT_STATE_SQL = `(case when t.state = 'searched' then 'searched'
+export const TEXT_STATE_SQL = `(case when t.state = 'searched' then 'searched'
   when t.state is null and ${READ_SQL} then 'waiting' else 'kept whole' end)`;
 
 /** An item's type in SQL, as kbItemType (core/kb/items.ts) says it. */
-const TYPE_SQL =
+export const TYPE_SQL =
   "(case when i.file_sha256 is not null then 'file' when i.slot = 'records' then 'record' else 'blurb' end)";
 
 export function storedFigures(db: DatabaseSync): KbStoredFigures {

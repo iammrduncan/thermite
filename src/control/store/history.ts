@@ -40,14 +40,14 @@ export class SqliteRigHistory extends StorePart {
 }
 
 /** One step of a rig's history: when, which, whether it went well, and its detail. */
-interface RigStep {
+export interface RigStep {
   at: string;
   step: string;
   ok: boolean;
   detail: string | null;
 }
 
-const stepOf = (r: Row): RigStep => ({
+export const stepOf = (r: Row): RigStep => ({
   at: String(r.at),
   step: String(r.step),
   ok: Number(r.ok) === 1,

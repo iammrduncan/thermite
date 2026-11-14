@@ -17,6 +17,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "node scripts/test.mjs",
+    "test:postgres": "node scripts/test.mjs --store postgres",
     "check:public": "node scripts/checks/public.mjs",
     "check:sizes": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/checks/sizes.ts",
     "check:imports": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/checks/imports.ts",
@@ -36,7 +37,7 @@
     "docs:credits": "node scripts/docs/credits-page.mjs",
     "docs:changelog": "node scripts/docs/changelog-page.mjs",
     "docs:agents": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/docs/agents-page.mjs",
-    "check": "npm run typecheck && npm run web:typecheck && npm run design:typecheck && npm run lint && npm test && npm run check:public && npm run check:sizes && npm run check:imports && npm run check:loose-ends",
+    "check": "npm run typecheck && npm run web:typecheck && npm run design:typecheck && npm run lint && npm test && npm run test:postgres && npm run check:public && npm run check:sizes && npm run check:imports && npm run check:loose-ends",
     "dev:init": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli/thermite/main.ts local init .dev",
     "smoke:compose": "node scripts/acceptance/compose-smoke.mjs",
     "acceptance:agents": "node scripts/acceptance/agents.mjs",
@@ -75,6 +76,7 @@
     "@xterm/addon-serialize": "0.14.0",
     "@xterm/headless": "6.0.0",
     "hono": "4.13.16",
+    "pg": "8.23.1",
     "typebox": "1.3.27",
     "zod": "4.6.7"
   },
@@ -83,7 +85,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
+    "@electric-sql/pglite": "0.5.16",
     "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
     "playwright-core": "1.65.0",
     "typescript": "7.0.2"
   }

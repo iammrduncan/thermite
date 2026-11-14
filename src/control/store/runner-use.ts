@@ -10,9 +10,9 @@ import { type Row, StorePart } from "./part.ts";
  */
 
 /** How long control keeps the samples: a day's window, and a run of a week. */
-const RUNNER_USE_DAYS = 8;
+export const RUNNER_USE_DAYS = 8;
 /** At most one sample of a rig in this time. */
-const SAMPLE_EVERY_MS = 60_000;
+export const SAMPLE_EVERY_MS = 60_000;
 
 /** One sample: the rig's report's runners, their totals alone. */
 export interface RunnerUseSample {
@@ -35,7 +35,7 @@ export function runnerUseTable(db: DatabaseSync): void {
 }
 
 /** A report's runners as a sample, or undefined: a core that reports no totals (older). */
-function sampleOf(summary: unknown, at: string): RunnerUseSample | undefined {
+export function sampleOf(summary: unknown, at: string): RunnerUseSample | undefined {
   const r = (summary as { runners?: Record<string, unknown> } | undefined)?.runners;
   const processes = Array.isArray(r?.processes) ? (r.processes as Record<string, unknown>[]) : [];
   const runners: RunnerUseSample["runners"] = {};

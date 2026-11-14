@@ -7,7 +7,7 @@ import type { CampaignDraft } from "../../../src/control/campaigns/builder.ts";
 import { startCampaign, startRun } from "../../../src/control/campaigns/new.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, verifyCommand } from "../../../src/core/commands.ts";
 import { enrollRigs } from "../../helpers/control-store.ts";
@@ -62,9 +62,9 @@ describe("starting a campaign from the page", () => {
     assert.deepEqual(contract.target, target);
     assert.equal(contract.project.kit.commit, head);
     // The assignment is signed by control, and names where each source comes from.
-    const row = sqliteBehind(store)
-      .db.prepare("select signed from command where id = ?")
-      .get(String(r.command)) as {
+    const row = (
+      await rowsBehind(store, "select signed from command where id = ?", String(r.command))
+    )[0] as {
       signed: string;
     };
     const cmd = JSON.parse(row.signed);
@@ -223,9 +223,9 @@ describe("starting a campaign from the page", () => {
     if (!r.ok) return;
     // Numbered across every rig: rig-a's cli-made-1 is taken (goal 170).
     assert.equal(r.run, "cli-made-2");
-    const row = sqliteBehind(store)
-      .db.prepare("select rig, signed from command where id = ?")
-      .get(r.command) as {
+    const row = (
+      await rowsBehind(store, "select rig, signed from command where id = ?", r.command)
+    )[0] as {
       rig: string;
       signed: string;
     };
@@ -266,9 +266,7 @@ describe("starting a campaign from the page", () => {
     const qp = (
       JSON.parse(
         (
-          sqliteBehind(store)
-            .db.prepare("select signed from command where id = ?")
-            .get(q.command) as {
+          (await rowsBehind(store, "select signed from command where id = ?", q.command))[0] as {
             signed: string;
           }
         ).signed,
@@ -288,9 +286,7 @@ describe("starting a campaign from the page", () => {
     const tp = (
       JSON.parse(
         (
-          sqliteBehind(store)
-            .db.prepare("select signed from command where id = ?")
-            .get(t.command) as {
+          (await rowsBehind(store, "select signed from command where id = ?", t.command))[0] as {
             signed: string;
           }
         ).signed,

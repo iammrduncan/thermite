@@ -115,7 +115,7 @@ export function cursorOf(raw: string | undefined): number | undefined {
 }
 
 /** What a page reads of each entry; an entry that came once has no last time of its own. */
-const COLUMNS = "id, at, actor, action, body, count, coalesce(last_at, at) as last_at";
+export const COLUMNS = "id, at, actor, action, body, count, coalesce(last_at, at) as last_at";
 
 /** The action of a retention policy's removal: no policy removes its entry. */
 export const RETENTION_REMOVED_ACTION = "retention_removed";

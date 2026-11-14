@@ -242,22 +242,9 @@
       "PUBLIC_URL_SETTING",
       "PLAIN_HTTP_SETTING"
     ],
-    "src/control/store/audit.ts": ["AuditFilter"],
-    "src/control/store/enrollments.ts": ["EnrolledRig"],
-    "src/control/store/gpu-clouds.ts": ["GpuCloud"],
-    "src/control/store/kb/files.ts": [
-      "KbFileRow",
-      "KbFileText",
-      "KbTextDue",
-      "KbSettingKey",
-      "KbSettingRow"
-    ],
-    "src/control/store/kb/items.ts": ["VersionFields"],
-    "src/control/store/kb/search.ts": ["KbFindOptions"],
     "src/control/store/kb/stored.ts": ["KbStoredCollection", "KbStoredFile"],
-    "src/control/store/kb/words.ts": ["WORDS_INDEX", "WordsPlace"],
+    "src/control/store/kb/words.ts": ["WORDS_INDEX"],
     "src/control/store/proposals.ts": ["PROPOSED_FIELDS"],
-    "src/control/store/tunnels.ts": ["TunnelSecrets"],
     "src/control/ui/campaigns/additions.ts": ["additionField", "additionFields"],
     "src/control/ui/campaigns/context/index.ts": ["windowHtml", "pointHtml", "rigRow"],
     "src/control/ui/campaigns/copy/index.ts": ["CopyPanel"],

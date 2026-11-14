@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import type { Folded } from "../../src/control/ingest.ts";
 import { publishCommand } from "../../src/control/issue/bus.ts";
 import { issueCommand } from "../../src/control/issue/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind } from "../../src/control/store/behind.ts";
 import { fingerprint } from "../../src/control/store/index.ts";
 import { generateSigningKeys, signEnvelope } from "../../src/core/commands.ts";
 import { REPORT_STREAM_CONFIG } from "../../src/core/link/report.ts";
@@ -67,9 +67,10 @@ describe("supervisor relay between control and harness, on the message bus", () 
     await store.commands.enqueue(forged);
     publishCommand(store, forged);
     await relay();
-    const statuses = sqliteBehind(store)
-      .db.prepare("select kind, status from command order by issued_at")
-      .all() as { kind: string; status: string }[];
+    const statuses = (await rowsBehind(
+      store,
+      "select kind, status from command order by issued_at",
+    )) as { kind: string; status: string }[];
     assert.deepEqual(
       statuses.map((s) => s.status),
       ["delivered", "rejected"],

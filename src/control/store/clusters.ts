@@ -108,7 +108,7 @@ export interface ClusterRigResize extends ClusterRigSize {
   by: string;
 }
 
-const clusterOf = (r: Row): Cluster => ({
+export const clusterOf = (r: Row): Cluster => ({
   name: String(r.name),
   context: String(r.context),
   placement: String(r.placement) as Cluster["placement"],
@@ -121,7 +121,7 @@ const clusterOf = (r: Row): Cluster => ({
   unchecked: r.unchecked ? (JSON.parse(String(r.unchecked)) as Cluster["unchecked"]) : null,
 });
 
-const clusterRigOf = (r: Row): ClusterRig => ({
+export const clusterRigOf = (r: Row): ClusterRig => ({
   rig: String(r.rig),
   cluster: String(r.cluster),
   namespace: String(r.namespace),

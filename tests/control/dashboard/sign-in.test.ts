@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import { Credential } from "../../../src/control/credential.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, writeBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { ADMIN, controlOnly, controlStack, signIn } from "../../helpers/control-stack.ts";
@@ -98,7 +98,7 @@ describe("control dashboard", () => {
     const set = login.headers.get("set-cookie") ?? "";
     assert.match(set, /Max-Age=2592000/);
     // Only a hash of the session id is stored.
-    const rows = sqliteBehind(store).db.prepare("select id_hash from ui_session").all() as {
+    const rows = (await rowsBehind(store, "select id_hash from ui_session")) as {
       id_hash: string;
     }[];
     assert.equal(rows.length, 1);
@@ -122,12 +122,10 @@ describe("control dashboard", () => {
     ).control;
     assert.equal(await formToken(hashed), before);
     // A session older than a day is renewed when used.
-    sqliteBehind(store)
-      .db.prepare("update ui_session set expires_at = ?")
-      .run(Date.now() + 3_600_000);
+    await writeBehind(store, "update ui_session set expires_at = ?", Date.now() + 3_600_000);
     const used = await restarted.request("/ui", { headers: { cookie } });
     assert.match(used.headers.get("set-cookie") ?? "", /Max-Age=2592000/);
-    const row = sqliteBehind(store).db.prepare("select expires_at from ui_session").get() as {
+    const row = (await rowsBehind(store, "select expires_at from ui_session"))[0] as {
       expires_at: number;
     };
     assert.ok(row.expires_at > Date.now() + 29 * 24 * 3_600_000);

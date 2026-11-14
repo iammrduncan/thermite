@@ -99,7 +99,7 @@ create table if not exists event_floor (
 }
 
 /** A rig ledger's floor: its last event removed on purpose, and the place before which. */
-interface EventFloor {
+export interface EventFloor {
   rig: string;
   ledger: string;
   through_event: number;
@@ -126,7 +126,7 @@ export interface RetentionRemovalRow {
 
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
 
-function policyOf(r: Row): RetentionPolicy {
+export function policyOf(r: Row): RetentionPolicy {
   const spec = RetentionSpecSchema.parse(JSON.parse(String(r.spec)));
   return {
     ...spec,
@@ -141,7 +141,7 @@ function policyOf(r: Row): RetentionPolicy {
   };
 }
 
-function removalOf(r: Row): RetentionRemovalRow {
+export function removalOf(r: Row): RetentionRemovalRow {
   return {
     id: Number(r.id),
     at: String(r.at),

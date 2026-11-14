@@ -55,7 +55,7 @@ export interface RegisteredRun {
 const CREATED = `select run, rig, campaign, ledger_id, created_at from run_registry
   where ledger_id is not null`;
 
-const registered = (r: Record<string, unknown>): RegisteredRun => ({
+export const registered = (r: Record<string, unknown>): RegisteredRun => ({
   run: String(r.run),
   rig: String(r.rig),
   campaign: r.campaign === null ? null : String(r.campaign),

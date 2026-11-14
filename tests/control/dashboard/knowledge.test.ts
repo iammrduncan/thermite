@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueCommand } from "../../../src/control/issue/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
@@ -419,9 +419,7 @@ test("Start a run from past research: the search reads only granted collections;
   assert.equal(started.status, 303, s.where(started));
   assert.match(s.where(started), /\/ui\/campaigns\/gemv-speed\/runs\/gemv-speed-1$/);
   const payload = (
-    sqliteBehind(s.store)
-      .db.prepare("select signed from command where kind = 'assign_campaign'")
-      .all() as {
+    (await rowsBehind(s.store, "select signed from command where kind = 'assign_campaign'")) as {
       signed: string;
     }[]
   )
@@ -664,7 +662,7 @@ test("MCP: a briefing takes the knowledge base's own words; an item not found or
     return (
       JSON.parse(
         (
-          sqliteBehind(s.store).db.prepare("select signed from command where id = ?").get(r.id) as {
+          (await rowsBehind(s.store, "select signed from command where id = ?", r.id))[0] as {
             signed: string;
           }
         ).signed,
@@ -730,7 +728,7 @@ test("MCP: a copied experiment takes control's record only from a folder the run
     return (
       JSON.parse(
         (
-          sqliteBehind(s.store).db.prepare("select signed from command where id = ?").get(r.id) as {
+          (await rowsBehind(s.store, "select signed from command where id = ?", r.id))[0] as {
             signed: string;
           }
         ).signed,

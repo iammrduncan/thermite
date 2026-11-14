@@ -3,7 +3,7 @@ import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { ModelSource } from "../../../src/harness/agents/model/source.ts";
 import { handModelRoute } from "../../../src/supervisor/model-route.ts";
 import { heldEvents } from "../../helpers/control-store.ts";
@@ -88,8 +88,8 @@ describe("control dashboard", () => {
     // The key is in no page, row or audit entry: only sealed, and as its last four characters.
     const everything = JSON.stringify([
       page,
-      sqliteBehind(s.store).db.prepare("select * from model_provider").all(),
-      sqliteBehind(s.store).db.prepare("select * from audit").all(),
+      await rowsBehind(s.store, "select * from model_provider"),
+      await rowsBehind(s.store, "select * from audit"),
     ]);
     assert.ok(!everything.includes(key));
     // Only the rig given one of its models receives the key, in its config on the bus.
@@ -136,7 +136,7 @@ describe("control dashboard", () => {
     // Nothing the rig reports or records carries the key: its row, its events on control's bus.
     assert.ok(
       !JSON.stringify([
-        sqliteBehind(s.store).db.prepare("select * from rig").all(),
+        await rowsBehind(s.store, "select * from rig"),
         await heldEvents(s.store, "rig-a"),
         s.env.service.ledger.db.prepare("select * from event").all(),
       ]).includes(key),

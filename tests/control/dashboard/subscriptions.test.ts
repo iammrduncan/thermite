@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { ModelSource } from "../../../src/harness/agents/model/source.ts";
 import { handModelRoute } from "../../../src/supervisor/model-route.ts";
 import { stack } from "./stack.ts";
@@ -59,8 +59,8 @@ describe("control dashboard", () => {
     assert.ok(
       !JSON.stringify([
         page,
-        sqliteBehind(s.store).db.prepare("select * from model_provider").all(),
-        sqliteBehind(s.store).db.prepare("select * from audit").all(),
+        await rowsBehind(s.store, "select * from model_provider"),
+        await rowsBehind(s.store, "select * from audit"),
       ]).includes(token),
     );
     // Its model goes to a rig in Claude Code, whatever harness the form named.

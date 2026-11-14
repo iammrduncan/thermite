@@ -358,7 +358,7 @@ describe("a run's export holds its journal, its source notes and its briefing", 
       events,
       summary: {},
     });
-    const filed = itemsBySeq(store, [String(s.ledger.runs.get(RUN)?.campaign)]).map(
+    const filed = (await itemsBySeq(store, [String(s.ledger.runs.get(RUN)?.campaign)])).map(
       ({ campaign, rig, run, kind, ref, title, body, by, url, sub, file, at, updated_at }) => ({
         campaign,
         rig,

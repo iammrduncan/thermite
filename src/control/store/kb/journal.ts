@@ -4,7 +4,17 @@ import { type KbIndexTarget, metaOf, str } from "../../../core/kb/index.ts";
 import { JOURNAL_KINDS, type KbItem } from "../../kb/index.ts";
 import { itemOf } from "./items.ts";
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
+
+/**
+ * How many of a group's items are field notes, in SQL with its values: the notes of a journal's
+ * kinds. Both stores count them so. It is asked for when a statement is made, not when this file
+ * is read: the kinds come from a folder that reads this one.
+ */
+export const journalCount = () => ({
+  sql: `sum(case when kind = 'note' and sub in (${JOURNAL_KINDS.map(() => "?").join(", ")}) then 1 else 0 end)`,
+  args: JOURNAL_KINDS,
+});
 
 /**
  * The kinds of event that name a lane or a trial, under their names now (core/kb/records.ts gives
@@ -27,7 +37,7 @@ export const ORIGIN_KINDS = [
 ];
 
 /** The fields reading 4 gives the items kept before it: where each came from, and what a field note is about. */
-const ORIGIN_FIELDS = ["lane", "trial", "about_type", "about_id"];
+export const ORIGIN_FIELDS = ["lane", "trial", "about_type", "about_id"];
 
 /**
  * Where an event read again puts nothing new but the lane and the trial it names (and what a field
@@ -85,11 +95,10 @@ export function runCountsOf(
   const out: Partial<Record<KbKind, number>> & { journal: number } = { journal: 0 };
   for (const r of db
     .prepare(
-      `select kind, count(*) as n,
-         sum(case when kind = 'note' and sub in (${JOURNAL_KINDS.map(() => "?").join(", ")}) then 1 else 0 end) as journal
+      `select kind, count(*) as n, ${journalCount().sql} as journal
        from kb_item where rig = ? and ledger = ? and run = ? group by kind`,
     )
-    .all(...JOURNAL_KINDS, rig, ledger, run) as Row[]) {
+    .all(...journalCount().args, rig, ledger, run) as Row[]) {
     out[str(r.kind) as KbKind] = Number(r.n);
     out.journal += Number(r.journal);
   }

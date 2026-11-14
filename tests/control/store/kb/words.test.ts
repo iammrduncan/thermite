@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { passagesOf } from "../../../../src/common/search/index.ts";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../../../src/control/store/index.ts";
 import { knowledgeSearch } from "../../../../src/control/store/kb/index.ts";
 import type { SignedCommand } from "../../../../src/core/commands.ts";
@@ -180,7 +180,7 @@ describe("the knowledge base's words index", () => {
     knowledgeSearch(sqliteBehind(s).db);
     assert.equal(row(s, "experiment", "x-1").outcome, "won");
     assert.match(row(s, "source", "s-1").context, /^source records gs-1 gemv$/);
-    const passages = sqliteBehind(s).db.prepare("select count(*) as n from kb_passage").get() as {
+    const passages = (await rowsBehind(s, "select count(*) as n from kb_passage"))[0] as {
       n: number;
     };
     assert.ok(passages.n > 5, `${passages.n} passages`);
@@ -189,7 +189,7 @@ describe("the knowledge base's words index", () => {
     assert.ok((hit?.passage?.of ?? 0) > 3);
     // Again: nothing changes.
     knowledgeSearch(sqliteBehind(s).db);
-    const again = sqliteBehind(s).db.prepare("select count(*) as n from kb_passage").get() as {
+    const again = (await rowsBehind(s, "select count(*) as n from kb_passage"))[0] as {
       n: number;
     };
     assert.equal(again.n, passages.n);

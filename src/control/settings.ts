@@ -47,6 +47,53 @@ export function notReadWords(env: Record<string, string | undefined>): string | 
   return env[RIG_TOKENS_SETTING] ? RIG_TOKENS_NOT_READ : undefined;
 }
 
+/**
+ * Where control's store is (goal 268): `sqlite`, the default and the store a release supports, a
+ * file in control's state folder; or `postgres`, a PostgreSQL database, for trial until the move
+ * (goal 270).
+ */
+const STORE_SETTING = "THERMITE_CONTROL_STORE";
+/**
+ * The PostgreSQL database of control's store, without its password:
+ * `postgres://user@host:5432/database`.
+ */
+const POSTGRES_URL_SETTING = "THERMITE_CONTROL_POSTGRES_URL";
+/** The file that holds the password of the store's PostgreSQL user. */
+export const POSTGRES_PASSWORD_FILE_SETTING = "THERMITE_CONTROL_POSTGRES_PASSWORD_FILE";
+
+/** Where control's store is, as its settings say: SQLite, or a PostgreSQL database's address. */
+type StoreSetting = { kind: "sqlite" } | { kind: "postgres"; url: string };
+
+/**
+ * Where control's store is, from its settings. Throws in words that name the setting, so control
+ * stops at its start, on a store it does not know, on PostgreSQL with no address, and on an
+ * address that holds a password: the password is a secret, and goes in its file.
+ */
+export function storeSetting(env: Record<string, string | undefined>): StoreSetting {
+  const kind = env[STORE_SETTING]?.trim() || "sqlite";
+  if (kind === "sqlite") return { kind };
+  if (kind !== "postgres") throw new Error(`${STORE_SETTING} is sqlite or postgres, not "${kind}"`);
+  const raw = env[POSTGRES_URL_SETTING]?.trim();
+  const example = "postgres://thermite@postgres:5432/thermite";
+  if (!raw)
+    throw new Error(
+      `${STORE_SETTING} is postgres, and ${POSTGRES_URL_SETTING} is not set: it takes the database's address, such as ${example}`,
+    );
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${POSTGRES_URL_SETTING} takes a database's address, such as ${example}`);
+  }
+  if ((url.protocol !== "postgres:" && url.protocol !== "postgresql:") || !url.hostname)
+    throw new Error(`${POSTGRES_URL_SETTING} takes a database's address, such as ${example}`);
+  if (url.password)
+    throw new Error(
+      `${POSTGRES_URL_SETTING} holds a password: take it out of the address, and put it in a file that ${POSTGRES_PASSWORD_FILE_SETTING} names`,
+    );
+  return { kind, url: raw };
+}
+
 /** `0`: control does not serve the design system's site at /design. It serves it otherwise. */
 export const DESIGN_SITE_SETTING = "THERMITE_CONTROL_DESIGN_SITE";
 

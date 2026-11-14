@@ -35,7 +35,7 @@ export interface ModelProvider {
   models_error: string | null;
 }
 
-function providerOf(r: Row): ModelProvider {
+export function providerOf(r: Row): ModelProvider {
   let models: ProviderModel[] = [];
   try {
     models = JSON.parse(String(r.models ?? "[]")) as ProviderModel[];

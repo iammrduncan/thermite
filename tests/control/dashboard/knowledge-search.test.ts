@@ -5,6 +5,7 @@ import { KB_SEARCH_MAX } from "../../../src/core/link/kb.ts";
 import { assigned } from "../../helpers/assignments.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { fillReader } from "../../helpers/kb-reader.ts";
+import { ON_POSTGRES } from "../../helpers/store-kind.ts";
 
 /**
  * The Knowledge page's search (goal 176, step 4): in the open folder or everything, as the owner
@@ -162,10 +163,12 @@ describe("the Knowledge page's search", () => {
     );
     // A word no item holds: one line above the table, which searches the word suggested.
     const typo = await s.html("/ui/knowledge?q=bandwidht");
-    assert.match(
-      typo,
-      /<div class="kx-dym">Did you mean <a href="\/ui\/knowledge\?q=bandwidth">bandwidth<\/a>\?<\/div>/,
-    );
+    // A suggestion comes from the words index, which a store on PostgreSQL gets with goal 269.
+    if (!ON_POSTGRES)
+      assert.match(
+        typo,
+        /<div class="kx-dym">Did you mean <a href="\/ui\/knowledge\?q=bandwidth">bandwidth<\/a>\?<\/div>/,
+      );
     assert.doesNotMatch(page, /class="kx-dym"/);
   });
 

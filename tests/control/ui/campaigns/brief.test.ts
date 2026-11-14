@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { KitRepos } from "../../../../src/control/kits/repos.ts";
-import { sqliteBehind } from "../../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../../src/control/store/behind.ts";
 import {
   BRIEF_CORE_JS,
   briefPane,
@@ -304,9 +304,9 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       "https://docs.example.com/fastmat/design",
     ]);
     // The signed assignment carries the same contract to the rig.
-    const signed = sqliteBehind(s.store)
-      .db.prepare("select signed from command where kind = 'assign_campaign'")
-      .get() as { signed: string };
+    const signed = (
+      await rowsBehind(s.store, "select signed from command where kind = 'assign_campaign'")
+    )[0] as { signed: string };
     const payload = (
       JSON.parse(signed.signed) as { envelope: { payload: { contract: Record<string, unknown> } } }
     ).envelope.payload;
@@ -446,9 +446,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     assert.deepEqual(c?.hypotheses, source?.hypotheses);
     // Control's audit log names the parts the copy has of its own; their text is in its contract.
     const audits = (
-      sqliteBehind(s.store)
-        .db.prepare("select body from audit where action = 'campaign_copied'")
-        .all() as {
+      (await rowsBehind(s.store, "select body from audit where action = 'campaign_copied'")) as {
         body: string;
       }[]
     ).map((r) => JSON.parse(r.body) as { campaign: string; own_brief?: string[] });

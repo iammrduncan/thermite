@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../../src/control/store/behind.ts";
 import {
   type ControlStore,
   openControlStore,
@@ -147,9 +147,13 @@ async function enqueueAll(
   for (const [c, status, ago] of rows) {
     if (typeof c === "string") continue;
     await store.commands.enqueue(c);
-    sqliteBehind(store)
-      .db.prepare("update command set status = ?, acked_at = ? where id = ?")
-      .run(status, ago === undefined ? null : minutes(-ago), c.envelope.id);
+    await writeBehind(
+      store,
+      "update command set status = ?, acked_at = ? where id = ?",
+      status,
+      ago === undefined ? null : minutes(-ago),
+      c.envelope.id,
+    );
   }
 }
 
@@ -229,13 +233,13 @@ const byJson = {
     const out: { rig: string; run: string; kind: string }[] = [];
     const assigned = new Map<string, Map<string, string>>();
     const since = new Date(now - 10 * 60_000).toISOString();
-    for (const r of sqliteBehind(store)
-      .db.prepare(
-        `select rig, kind, status, signed from command where kind in ('assign_campaign', 'resume_run')
+    for (const r of (await rowsBehind(
+      store,
+      `select rig, kind, status, signed from command where kind in ('assign_campaign', 'resume_run')
            and (status = 'pending' or (status = 'delivered' and kind = 'assign_campaign' and acked_at > ?))
          order by issued_at`,
-      )
-      .all(since) as Record<string, string>[]) {
+      since,
+    )) as Record<string, string>[]) {
       let env: {
         expires_at?: string;
         payload?: { run?: unknown; contract?: { campaign?: unknown } };
@@ -275,9 +279,10 @@ describe("each command's run and campaign, in columns of their own", () => {
 
     const store = openControlStore(path);
     assert.equal(version(store), STORE_VERSION);
-    const kept = sqliteBehind(store)
-      .db.prepare("select id, signed, run, campaign from command order by issued_at")
-      .all() as { id: string; signed: string; run: string | null; campaign: string | null }[];
+    const kept = (await rowsBehind(
+      store,
+      "select id, signed, run, campaign from command order by issued_at",
+    )) as { id: string; signed: string; run: string | null; campaign: string | null }[];
     assert.equal(kept.length, rows.length);
     for (const r of kept)
       assert.deepEqual({ run: r.run, campaign: r.campaign }, namedInJson(r.signed), r.signed);
@@ -303,9 +308,7 @@ describe("each command's run and campaign, in columns of their own", () => {
   test("enqueue writes them, as the migration reads them", async () => {
     const store = openControlStore(":memory:");
     await enqueueAll(store, commands());
-    const kept = sqliteBehind(store)
-      .db.prepare("select signed, run, campaign from command")
-      .all() as {
+    const kept = (await rowsBehind(store, "select signed, run, campaign from command")) as {
       signed: string;
       run: string | null;
       campaign: string | null;

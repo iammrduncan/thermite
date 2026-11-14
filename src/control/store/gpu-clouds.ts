@@ -16,7 +16,7 @@ export interface GpuCloud {
   created_at: string;
 }
 
-const gpuCloudOf = (r: Row): GpuCloud => ({
+export const gpuCloudOf = (r: Row): GpuCloud => ({
   name: String(r.name),
   kind: String(r.kind) as GpuCloud["kind"],
   key_hint: String(r.key_hint),

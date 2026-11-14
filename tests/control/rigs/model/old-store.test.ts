@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import { openControlStore } from "../../../../src/control/store/index.ts";
+import { sqliteOnly } from "../../../helpers/store-kind.ts";
 
 /**
  * A store from before goal 074, with the advisors' roles under their old names: from before
@@ -13,7 +14,7 @@ import { openControlStore } from "../../../../src/control/store/index.ts";
  */
 
 describe("a store from before goal 074", () => {
-  test("is refused in words, and kept as it is", () => {
+  test("is refused in words, and kept as it is", sqliteOnly, () => {
     const path = join(mkdtempSync(join(tmpdir(), "thermite-roles-")), "control.db");
     const old = new DatabaseSync(path);
     old.exec(`create table rig_role_model (

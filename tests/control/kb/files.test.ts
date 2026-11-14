@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { ControlDisk } from "../../../src/control/disk.ts";
 import { followKbFiles, KbFiles } from "../../../src/control/kb/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, writeBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore } from "../../../src/control/store/index.ts";
 import {
   KB_FILE_CHUNK_BYTES,
@@ -83,7 +83,7 @@ describe("control's files of the knowledge base", () => {
     await s.putAll("rig-a", bytes);
     await s.take();
     assert.equal(s.files.kept, 1);
-    const rows = sqliteBehind(s.store).db.prepare("select sha256, bytes from kb_file").all();
+    const rows = await rowsBehind(s.store, "select sha256, bytes from kb_file");
     assert.deepEqual(
       rows.map((r) => ({ ...r })),
       [{ sha256: sha(bytes), bytes: bytes.length }],
@@ -136,7 +136,7 @@ describe("control's files of the knowledge base", () => {
     const bytes = Buffer.from("kept, then control stopped");
     await s.putAll("rig-a", bytes);
     await s.take();
-    sqliteBehind(s.store).db.prepare("delete from kb_file").run();
+    await writeBehind(s.store, "delete from kb_file");
     await s.putAll("rig-a", bytes);
     await s.take();
     assert.equal(await s.store.kb().files.has(sha(bytes)), true);

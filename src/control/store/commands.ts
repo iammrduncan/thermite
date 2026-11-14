@@ -17,7 +17,7 @@ import { type Row, StorePart } from "./part.ts";
  * contract's `campaign`; null where it names none. Kept in their own columns, so that a reader by
  * run or campaign reads no command's JSON.
  */
-function namedIn(payload: unknown): { run: string | null; campaign: string | null } {
+export function namedIn(payload: unknown): { run: string | null; campaign: string | null } {
   const p = payload as { run?: unknown; contract?: { campaign?: unknown } } | null;
   const run = typeof p?.run === "string" ? p.run : null;
   const campaign = typeof p?.contract?.campaign === "string" ? p.contract.campaign : null;
@@ -79,7 +79,7 @@ export interface CommandRow {
   payload: Record<string, unknown>;
 }
 
-function commandRowOf(r: Row): CommandRow {
+export function commandRowOf(r: Row): CommandRow {
   let envelope: { expires_at?: unknown; payload?: unknown } = {};
   try {
     envelope = (JSON.parse(String(r.signed)) as { envelope?: typeof envelope }).envelope ?? {};

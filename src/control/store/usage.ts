@@ -21,7 +21,7 @@ export interface RunningRun {
 }
 
 /** A model_call row as the usage sums read it (goal 075). */
-function usageRowOf(r: Row): UsageRow {
+export function usageRowOf(r: Row): UsageRow {
   const num = (x: SQLInputValue | undefined) => (x === null || x === undefined ? null : Number(x));
   return {
     rig: String(r.rig),

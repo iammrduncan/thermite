@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { notReadWords } from "../../src/control/settings.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind } from "../../src/control/store/behind.ts";
 import { fingerprint } from "../../src/control/store/index.ts";
 import { ADMIN, controlOnly } from "../helpers/control-stack.ts";
 
@@ -42,7 +42,7 @@ describe("rig enrollment through control", () => {
     assert.equal((await asRig("gpu-host-1-0", "wrong-token")).status, 401);
     assert.ok(await store.enrollments.knownRig("gpu-host-1-0"));
     // Control's database holds the hash, never the token.
-    const dump = JSON.stringify(sqliteBehind(store).db.prepare("select * from rig_token").all());
+    const dump = JSON.stringify(await rowsBehind(store, "select * from rig_token"));
     assert.ok(!dump.includes(out.token));
     // The rigs list shows it.
     const list = (await (await control.request("/v1/rigs", { headers: owner })).json()) as {
@@ -96,7 +96,7 @@ describe("rig enrollment through control", () => {
     assert.equal((await asRig("cpu-1", second)).status, 401);
     assert.equal((await asRig("cpu-1", third)).status, 404);
     // Every change is audited.
-    const audit = JSON.stringify(sqliteBehind(store).db.prepare("select action from audit").all());
+    const audit = JSON.stringify(await rowsBehind(store, "select action from audit"));
     for (const a of ["rig_enrolled", "rig_token_rotated", "rig_retired"])
       assert.ok(audit.includes(a), a);
   });

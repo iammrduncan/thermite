@@ -134,7 +134,10 @@ export { EFFORTS, type Effort, fingerprint, HARNESSES, type Harness, type Provid
  * too, since the call may fail.
  */
 export interface ControlStore {
-  /** The store's file, or `:memory:`. */
+  /**
+   * The store's file, or `:memory:`. A store on PostgreSQL has no file: this is where its file
+   * would be, in control's state folder.
+   */
   readonly path: string;
   /** The rigs as they report: their rows, report-signing keys and supervisors' figures. */
   readonly reportedRigs: ReportedRigs;
@@ -217,11 +220,32 @@ export interface ControlStore {
   close(): Promise<void>;
 }
 
+/** What opens the stores in place of SQLite, when the tests run on PostgreSQL. */
+let opener: ((path: string) => ControlStore) | undefined;
+
+/**
+ * Has `open` open every store from now on, in place of SQLite's own opener: the tests run on
+ * PostgreSQL so (`--store postgres`, tests/helpers/store-postgres.ts). Control itself opens its
+ * store by its setting (main.ts).
+ */
+export function setStoreOpener(open: (path: string) => ControlStore): void {
+  opener = open;
+}
+
 /**
  * Opens control's store at `path` (`:memory:` for one in memory) and brings it to this code's
- * version (schema.ts).
+ * version (schema.ts): on SQLite, unless the tests run on PostgreSQL (setStoreOpener).
  */
 export function openControlStore(path: string): ControlStore {
+  return opener ? opener(path) : openSqliteStore(path);
+}
+
+/**
+ * Opens control's store on SQLite at `path` (`:memory:` for one in memory) and brings it to this
+ * code's version (schema.ts), whatever store the tests run on: what reads a SQLite store as
+ * such, as the copy to PostgreSQL does, opens it so.
+ */
+export function openSqliteStore(path: string): ControlStore {
   const sqlite = new SqliteStore(path);
   const turns = new Turns();
   // Made at its first call, in that call's turn: making it writes to the store.
@@ -285,4 +309,5 @@ export function openControlStore(path: string): ControlStore {
   return store;
 }
 
+export { openPostgresStore } from "./postgres/index.ts";
 export type { KnowledgeBase, McpServerRows };

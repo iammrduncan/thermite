@@ -77,12 +77,12 @@ export type KbPassage = FoundPassage;
 export type KbFindResult = WordsFound & { counts: KbCounts };
 
 /** What the knowledge base's context holds, for why. */
-const CONTEXT_WORDS = "its context (kind, outcome, slot, run, campaign)";
+export const CONTEXT_WORDS = "its context (kind, outcome, slot, run, campaign)";
 /** How many runs and slots the counts name at most: the rest are summed under "other". */
 const COUNTED_MAX = 20;
 
 /** An item's type in SQL on `i`, as kbItemType (core/kb/items.ts) says it. */
-const ITEM_TYPE =
+export const ITEM_TYPE =
   "(case when i.file_sha256 is not null then 'file' when i.slot = 'records' then 'record' else 'blurb' end)";
 
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(", ");
@@ -133,7 +133,7 @@ function passes(o: KbFindOptions, r: Record<string, unknown>): boolean {
 }
 
 /** The counts from rows grouped by campaign, run, slot, kind and outcome, each with its items. */
-function countsOf(rows: Record<string, unknown>[]): KbCounts {
+export function countsOf(rows: Record<string, unknown>[]): KbCounts {
   const out: KbCounts = { kind: {}, outcome: {}, run: {}, slot: {}, collection: {} };
   const add = (m: Record<string, number>, k: unknown, n: number) => {
     const key = String(k ?? "");

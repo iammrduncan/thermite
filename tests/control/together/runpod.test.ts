@@ -63,9 +63,7 @@ describe("control's pods on RunPod", () => {
 
     const kept = await watched(store, end);
     assert.equal(kept.threw, undefined);
-    assert.deepEqual(seen(kept), [
-      { failed: false, changed: ["audit", "runpod_test", "sqlite_sequence"] },
-    ]);
+    assert.deepEqual(seen(kept), [{ failed: false, changed: ["audit", "runpod_test"] }]);
     const after = kept.txs[0]?.after.runpod_test as { id: string; state: string }[];
     const saved = JSON.parse(String(after.find((r) => r.id === started.id)?.state)) as {
       phase: string;

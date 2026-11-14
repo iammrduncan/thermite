@@ -6,10 +6,11 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import { copiesOf } from "../../../src/common/db-copy.ts";
 import { mapInTurn } from "../../../src/common/in-turn.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind, writeBehind } from "../../../src/control/store/behind.ts";
 import { openControlStore, STORE_VERSION } from "../../../src/control/store/index.ts";
 import { campaignProposalTable } from "../../../src/control/store/proposals.ts";
 import { keepOldRows, withEventsTable } from "../../helpers/old-store.ts";
+import { sqliteOnly } from "../../helpers/store-kind.ts";
 
 const V010 = readFileSync(
   join(import.meta.dirname, "..", "..", "helpers", "data", "control-v0.1.0.sql"),
@@ -103,7 +104,7 @@ describe("control's store migrations", () => {
 
     const store = openControlStore(path);
     assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
-    const folder = sqliteBehind(store).db.prepare("select name from campaign_folder").get() as {
+    const folder = (await rowsBehind(store, "select name from campaign_folder"))[0] as {
       name: string;
     };
     assert.equal(folder.name, "speed");
@@ -154,39 +155,43 @@ describe("control's store migrations", () => {
     await upgraded.close();
   });
 
-  test("a store from before v0.1.0 is refused in words, and kept as it is, with no copy", () => {
-    const cases: [string, string][] = [
-      ["create table unit (id text primary key)", "it has the table unit"],
-      [
-        "create table model_route (name text primary key, model text not null)",
-        "it has the table model_route",
-      ],
-      [
-        "create table rig (id text primary key, first_seen text not null, last_seen text not null, last_cursor integer not null default 0, ledger_id text, summary text not null default '{}')",
-        "its table rig has no column pubkey",
-      ],
-    ];
-    for (const [sql, why] of cases) {
-      const path = fresh();
-      const old = new DatabaseSync(path);
-      old.exec(sql);
-      old.close();
-      assert.throws(
-        () => openControlStore(path),
-        (e: Error) =>
-          e.message ===
-          `this control store is from before v0.1.0 (${why}): start Thermite v0.1.0 on it once, which brings it to v0.1.0's tables, then this version. The store is kept as it is: ${path}`,
-      );
-      const kept = new DatabaseSync(path, { readOnly: true });
-      assert.deepEqual(
-        kept.prepare("select name from sqlite_master where type = 'table'").all().length,
-        1,
-        why,
-      );
-      kept.close();
-      assert.deepEqual(copiesOf(path), [], why);
-    }
-  });
+  test(
+    "a store from before v0.1.0 is refused in words, and kept as it is, with no copy",
+    sqliteOnly,
+    () => {
+      const cases: [string, string][] = [
+        ["create table unit (id text primary key)", "it has the table unit"],
+        [
+          "create table model_route (name text primary key, model text not null)",
+          "it has the table model_route",
+        ],
+        [
+          "create table rig (id text primary key, first_seen text not null, last_seen text not null, last_cursor integer not null default 0, ledger_id text, summary text not null default '{}')",
+          "its table rig has no column pubkey",
+        ],
+      ];
+      for (const [sql, why] of cases) {
+        const path = fresh();
+        const old = new DatabaseSync(path);
+        old.exec(sql);
+        old.close();
+        assert.throws(
+          () => openControlStore(path),
+          (e: Error) =>
+            e.message ===
+            `this control store is from before v0.1.0 (${why}): start Thermite v0.1.0 on it once, which brings it to v0.1.0's tables, then this version. The store is kept as it is: ${path}`,
+        );
+        const kept = new DatabaseSync(path, { readOnly: true });
+        assert.deepEqual(
+          kept.prepare("select name from sqlite_master where type = 'table'").all().length,
+          1,
+          why,
+        );
+        kept.close();
+        assert.deepEqual(copiesOf(path), [], why);
+      }
+    },
+  );
 
   test("a new store is not copied", async () => {
     const path = fresh();
@@ -231,9 +236,7 @@ describe("control's store migrations", () => {
     await three.close();
     const store = openControlStore(path);
     assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
-    const agents = sqliteBehind(store)
-      .db.prepare("select agent from model_call order by event_id")
-      .all();
+    const agents = await rowsBehind(store, "select agent from model_call order by event_id");
     assert.deepEqual(
       agents.map((r) => r.agent),
       ["merged_by", "review_panel", "workers"],
@@ -334,10 +337,9 @@ describe("control's store migrations", () => {
       [0, 0],
     );
     // The ledgers keep what they had.
-    const left = sqliteBehind(store)
-      .db.prepare("select ledger_id, superseded_at from rig_ledger order by ledger_id")
-      .all()
-      .map((r) => ({ ...r }));
+    const left = (
+      await rowsBehind(store, "select ledger_id, superseded_at from rig_ledger order by ledger_id")
+    ).map((r) => ({ ...r }));
     assert.deepEqual(left, [
       { ledger_id: "l-1", superseded_at: "2026-10-29" },
       { ledger_id: "l-2", superseded_at: null },
@@ -509,9 +511,14 @@ describe("control's store migrations", () => {
       alter table audit drop column repeat; delete from schema_migrations where version >= 19`);
     const refused = { path: "/v1/commands", why: "no rig rig-9" };
     for (let i = 0; i < 2; i++)
-      sqliteBehind(old)
-        .db.prepare("insert into audit (at, actor, action, body) values (?, ?, ?, ?)")
-        .run("2026-10-29T00:00:00.000Z", "owner:api", "refused", JSON.stringify(refused));
+      await writeBehind(
+        old,
+        "insert into audit (at, actor, action, body) values (?, ?, ?, ?)",
+        "2026-10-29T00:00:00.000Z",
+        "owner:api",
+        "refused",
+        JSON.stringify(refused),
+      );
     await old.close();
     const store = openControlStore(path);
     assert.equal(version(sqliteBehind(store).db), STORE_VERSION);
@@ -530,20 +537,24 @@ describe("control's store migrations", () => {
     await store.close();
   });
 
-  test("a store newer than this code is refused, naming the copy to restore", async () => {
-    const path = fresh();
-    const old = new DatabaseSync(path);
-    old.exec(V010);
-    old.close();
-    const store = openControlStore(path);
-    const newer = STORE_VERSION + 1;
-    sqliteBehind(store).db.prepare("insert into schema_migrations (version) values (?)").run(newer);
-    await store.close();
-    assert.throws(
-      () => openControlStore(path),
-      new RegExp(
-        `control store is at schema version ${newer}, newer than this code's ${STORE_VERSION}: .*the copy made then: .*control\\.db\\.v0\\..*\\.copy`,
-      ),
-    );
-  });
+  test(
+    "a store newer than this code is refused, naming the copy to restore",
+    sqliteOnly,
+    async () => {
+      const path = fresh();
+      const old = new DatabaseSync(path);
+      old.exec(V010);
+      old.close();
+      const store = openControlStore(path);
+      const newer = STORE_VERSION + 1;
+      await writeBehind(store, "insert into schema_migrations (version) values (?)", newer);
+      await store.close();
+      assert.throws(
+        () => openControlStore(path),
+        new RegExp(
+          `control store is at schema version ${newer}, newer than this code's ${STORE_VERSION}: .*the copy made then: .*control\\.db\\.v0\\..*\\.copy`,
+        ),
+      );
+    },
+  );
 });

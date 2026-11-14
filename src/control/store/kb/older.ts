@@ -9,7 +9,7 @@ import { transaction } from "../../../common/sqlite.ts";
  * settings say (control/kb/files.ts).
  */
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 /** One older version: its item and number, run and rig, when it was written, about its bytes. */
 export interface OlderVersion {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { EventsApply } from "../../src/control/events/index.ts";
-import { sqliteBehind } from "../../src/control/store/behind.ts";
+import { rowsBehind, sqliteBehind } from "../../src/control/store/behind.ts";
 import { type ControlStore, openControlStore } from "../../src/control/store/index.ts";
 import { EVENT_STREAM } from "../../src/core/link/events.ts";
 import { callUsage } from "../../src/core/usage.ts";
@@ -306,8 +306,8 @@ describe("control's records, applied from the events stream", () => {
     // The same page again, and the next: each event once.
     await page(store, "rig-a", "l-1", [note(2, "first lesson"), note(3, "second lesson")]);
     await page(store, "rig-a", "l-1", [note(4, "third lesson")]);
-    const items = () => itemsBySeq(store, ["gemv"]).map((x) => [x.seq, x.ref]);
-    assert.deepEqual(items(), [
+    const items = async () => (await itemsBySeq(store, ["gemv"])).map((x) => [x.seq, x.ref]);
+    assert.deepEqual(await items(), [
       [1, "gs-1"],
       [2, "2"],
       [3, "3"],
@@ -352,10 +352,9 @@ describe("control's records, applied from the events stream", () => {
     const last = Math.max(...kept.map((k) => k.seq));
     assert.equal(await s.store.busPositions.of(EVENT_STREAM), last, "and applied to its end");
     assert.equal((await s.store.runRegistry.createdOn("gs-9", "rig-a"))?.campaign, "gemv");
-    const calls = sqliteBehind(s.store)
-      .db.prepare("select run, campaign from model_call")
-      .all()
-      .map((r) => ({ ...r }));
+    const calls = (await rowsBehind(s.store, "select run, campaign from model_call")).map((r) => ({
+      ...r,
+    }));
     assert.deepEqual(calls, [{ run: "gs-9", campaign: "gemv" }]);
   });
 });

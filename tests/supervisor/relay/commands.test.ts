@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import { heldCommands, publishHeld } from "../../../src/control/issue/bus.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
-import { sqliteBehind } from "../../../src/control/store/behind.ts";
+import { rowsBehind } from "../../../src/control/store/behind.ts";
 import { canonicalJson } from "../../../src/core/canonical.ts";
 import { signEnvelope } from "../../../src/core/commands.ts";
 import { commandSubject } from "../../../src/core/link/commands.ts";
@@ -80,9 +80,9 @@ describe("the supervisor's commands from the message bus", () => {
 
     // The bus hands it once more, after its duplicate window: acked, and not delivered again.
     r.bus.forgetIds();
-    const signed = sqliteBehind(r.store)
-      .db.prepare("select signed from command where id = ?")
-      .get(id) as {
+    const signed = (
+      await rowsBehind(r.store, "select signed from command where id = ?", id)
+    )[0] as {
       signed: string;
     };
     await r.bus.publish(SUBJECT, signed.signed, { id });
