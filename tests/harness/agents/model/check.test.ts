@@ -12,6 +12,32 @@ const route = (url: string) => ({
 });
 
 describe("the model route check", () => {
+  test("OpenCode Go receives a distinct session for each model check", async () => {
+    const fake = await startFakeModel(({ messages }) => {
+      const word = /the word (\S+)\./.exec(JSON.stringify(messages))?.[1] ?? "";
+      return { toolCalls: [{ name: "echo", args: { word } }] };
+    });
+    const realFetch = globalThis.fetch;
+    const sessions: (string | null)[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      sessions.push(request.headers.get("x-opencode-session"));
+      return realFetch(new Request(`${fake.url}/chat/completions`, request));
+    }) as typeof fetch;
+    try {
+      const go = route("https://opencode.ai/inference/go/openai/v1");
+      assert.equal((await checkModel(go)).ok, true);
+      assert.equal((await checkModel(go)).ok, true);
+      assert.equal(sessions.length, 2);
+      assert.ok(sessions[0]);
+      assert.ok(sessions[1]);
+      assert.notEqual(sessions[0], sessions[1]);
+    } finally {
+      globalThis.fetch = realFetch;
+      await fake.close();
+    }
+  });
+
   test("a correct tool call passes, and the report says how the reply looked", async () => {
     const fake = await startFakeModel(({ messages, tools }) => {
       if (messages.some((m) => m.role === "tool")) return { text: "done" };

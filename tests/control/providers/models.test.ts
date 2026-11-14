@@ -10,6 +10,39 @@ const answer =
   };
 
 describe("a provider's model list", () => {
+  test("OpenCode Go uses its model catalog rather than the inference API's base", async () => {
+    const seen: { url: string; headers: Headers }[] = [];
+    const models = await listModels(
+      "openai",
+      "https://opencode.ai/inference/go/openai/v1",
+      "test-key",
+      answer(
+        200,
+        { data: [{ id: "test-model", limit: { context: 128000, output: 32000 } }] },
+        seen,
+      ) as typeof fetch,
+    );
+    assert.deepEqual(models, [{ id: "test-model", context_window: 128000, max_output: 32000 }]);
+    assert.equal(seen[0]?.url, "https://opencode.ai/inference/go/v1/models");
+    assert.equal(seen[0]?.headers.get("authorization"), "Bearer test-key");
+  });
+
+  test("Go's pasted inference endpoint is normalized before listing, and invalid limits are ignored", async () => {
+    const seen: { url: string; headers: Headers }[] = [];
+    const models = await listModels(
+      "openai",
+      "https://opencode.ai/inference/go/openai/v1/chat/completions/",
+      "test-key",
+      answer(
+        200,
+        { data: [{ id: "test-model", limit: { context: -1, output: 10000001 } }] },
+        seen,
+      ) as typeof fetch,
+    );
+    assert.deepEqual(models, [{ id: "test-model", context_window: undefined }]);
+    assert.equal(seen[0]?.url, "https://opencode.ai/inference/go/v1/models");
+  });
+
   test("an OpenAI-compatible provider's /models, with the key as a bearer and its context sizes", async () => {
     const seen: { url: string; headers: Headers }[] = [];
     const models = await listModels(

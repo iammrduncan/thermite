@@ -40,6 +40,29 @@ async function oneReply(turn: ScriptedTurn): Promise<CallUsage[]> {
 }
 
 describe("model usage in Pi", () => {
+  test("OpenCode Go receives a distinct session for each compaction summary", async () => {
+    const fake = await startFakeModel(() => ({ text: "the summary" }));
+    const realFetch = globalThis.fetch;
+    const sessions: (string | null)[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      sessions.push(request.headers.get("x-opencode-session"));
+      return realFetch(new Request(`${fake.url}/chat/completions`, request));
+    }) as typeof fetch;
+    try {
+      const summarize = summarizer(config("https://opencode.ai/inference/go/openai/v1"));
+      assert.equal(await summarize("one conversation"), "the summary");
+      assert.equal(await summarize("another conversation"), "the summary");
+      assert.equal(sessions.length, 2);
+      assert.ok(sessions[0]);
+      assert.ok(sessions[1]);
+      assert.notEqual(sessions[0], sessions[1]);
+    } finally {
+      globalThis.fetch = realFetch;
+      await fake.close();
+    }
+  });
+
   test("a provider that names no cache or reasoning: those are not reported, never 0", async () => {
     const before = Date.now();
     const [u, ...more] = await oneReply({

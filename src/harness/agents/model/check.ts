@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Agent } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { buildModel, type ModelConfig } from "../../../agents/model/index.ts";
@@ -52,6 +53,7 @@ export async function checkModel(cfg: ModelConfig, timeoutMs = 120_000): Promise
         },
       ],
     },
+    sessionId: randomUUID(),
     streamFn: models.streamSimple.bind(models),
   });
   const started = Date.now();

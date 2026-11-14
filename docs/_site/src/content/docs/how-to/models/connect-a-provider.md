@@ -33,6 +33,8 @@ This guide covers providers reached with an API key, or with no key: OpenCode's 
 
    The list's other groups hold subscriptions, Git access and the places where rigs run. MCP servers, such as GBrain, have a page of their own, **Settings › MCP servers**: see [Give agents MCP tools](../campaigns/give-agents-mcp-tools.md).
 
+   For OpenCode Go, choose **OpenAI-compatible**, enter `https://opencode.ai/inference/go/openai/v1` as the **Base URL**, and enter a key from a workspace with a Go subscription. Control reads Go's model list. **OpenCode (its own models)** with an empty base URL uses the separate pay-as-you-go service, not Go: a provider's name does not select the subscription. Check the model route on the rig before starting a campaign. Go's model availability and usage limits are on [OpenCode's Go page](https://opencode.ai/docs/console/go/); if Extra Usage is enabled there, usage beyond the subscription's limits can be charged to the workspace's balance.
+
 3. Fill in the fields. Each label has an ⓘ icon; hover over it to read its description:
 
    | Field | Its ⓘ says | Example |

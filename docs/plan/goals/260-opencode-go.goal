@@ -1,0 +1,44 @@
+---
+id: "260"
+title: "OpenCode Go's model list and conversation sessions"
+status: IN_PROGRESS
+version: "0.2.6"
+depends_on: []
+created: 2026-11-14
+updated: 2026-11-14
+---
+
+# 260 · OpenCode Go's model list and conversation sessions
+
+**Status:** `IN_PROGRESS` · **Version:** proposed v0.2.6, if v0.2.5 ships first ([roadmap](../roadmap.md)).
+
+## What
+
+A user can add OpenCode Go as an OpenAI-compatible provider, list its models and use one for a rig's agents. The model list comes from Go's catalog, with each model's context and output limits. Each conversation has a session ID, including Pi's model check and compaction summary; the model proxy passes OpenCode's session header on to the provider.
+
+## Why
+
+OpenCode Go requires a session ID per conversation. Thermite's model proxy dropped OpenCode's session header, and Pi's model check and compaction summary gave the client no session. Go's documented model-list address also differs from its inference base.
+
+## Done when
+
+- [x] The catalog, session forwarding and Pi's auxiliary calls are covered by tests, and the affected acceptance checks pass.
+- [x] A Go model is checked through Thermite with a Go subscription, without exposing the key. Record what was tested and any limits.
+- [ ] Connect a model provider and the changelog describe the fix; its patch version is assigned.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-14: The public Go catalog was read without a key: 30 models, each with a context and output limit. The proposed fix reads it from the documented catalog address, passes `x-opencode-session` through the proxy, and gives Pi's model check and compaction summary each their own session. The four affected test files pass (19 tests), and typecheck passes. The provider page and Credits are updated. A live Go model request and the affected acceptance checks are not yet run.
+- 2026-11-14: A Pi advisor's proxy retains OpenCode's identity for session headers. A stand-in test checks two turns, separate conversations, both OpenAI-compatible and Anthropic routes, and an unrelated provider. In an isolated check, the real OpenCode client sent one session across three requests; the proxy dropped it before the change and forwarded it with the new allowlist. The agents acceptance now checks session forwarding across OpenCode conversations. A request against a Go subscription is still needed.
+- 2026-11-14: A live Pi model check against the Go inference endpoint returned the expected tool call with `deepseek-v4.1-flash`. A trial and the request's billing source remain to be checked. Agents, Codex, Claude Code, steering and control acceptance passed with stand-in providers; the steering check's optional engine-socket lifecycle run was not performed. The control and steering checks needed a test-environment connection workaround.
+- 2026-11-14: A new Pi trial on the Go inference route made model and tool calls with `deepseek-v4.1-flash`; the owner confirmed that the Console showed the calls under the Go allowance. The live test did not exercise the OpenCode v2 or Codex harness on Go. OpenCode v2's session forwarding was checked with the real client against a stand-in; Codex's general acceptance passed with a stand-in provider.
+- 2026-11-14: [Issue 102](https://github.com/iammrduncan/thermite/issues/102) reports the affected paths and asks how to sequence this change with the proposed v0.2.5 fix.
+- 2026-11-14: v0.2.6 is proposed for review, conditional on v0.2.5 shipping first; the patch number and release order remain to be confirmed.
+
+---
+
+Run with `/goal Complete docs/plan/goals/260-opencode-go.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
