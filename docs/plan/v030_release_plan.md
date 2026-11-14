@@ -51,7 +51,7 @@ Most commands name a whole goal. A few name a part of one, by its items; that go
 | **A. The ground** | | | | |
 | 1 | The cheap guards | parts of 254 and 256 | Five new checks | Built, waits for your look, 2026-11-12 |
 | 2 | Control's store behind an interface | 267 | Nothing: that is the test | Built, waits for your look, 2026-11-13 |
-| 3 | The brand in the app | 243 | The app in the brand, and every part on a gallery | Built, waits for your look, 2026-11-14 |
+| 3 | The brand in the app, and the design system | 243 | The app in the brand, and every part on the design system's site at `/design` | Building, 2026-11-14 |
 | 4 | PostgreSQL beside SQLite | 268 | A trial control on PostgreSQL | Not started |
 | 5 | The knowledge base's search on PostgreSQL | 269 | What changed in the order of results | Not started |
 | 6 | The move to PostgreSQL | 270 | Your control on PostgreSQL | Not started |
@@ -126,18 +126,18 @@ Every call into control's store can wait for its answer. Still SQLite, the same 
 
 Nothing here is a matter of taste. The hands-on is short unless something changed.
 
-### 3 · The brand in the app (goal 243) · M
+### 3 · The brand in the app, and the design system (goal 243) · M
 
 ```text
 /goal complete docs/plan/goals/243-web-app-base.goal. rereview/reread before wrapping up
 ```
 
-The agreed brand, in code: the theme in light and in dark, the parts every screen is made of, the frame with its sidebar and a run's top, the sign-in screen, and the rules' budgets in the browser check, so a screen that is too heavy fails.
+The agreed brand, in code: the theme in light and in dark, the parts every screen is made of, the frame with its sidebar and a run's top, the sign-in screen, and the rules' budgets in the browser check, so a screen that is too heavy fails. The parts are a design system, a package of its own that the app imports (the owner, 2026-11-14), with a site of its own at `/design`.
 
 **Look at:**
 
 - **The sign-in and the frame on your control,** in light and in dark, at a desk and on a phone.
-- **The gallery:** `npm run web:dev`, then `http://127.0.0.1:5173/next/dev`. Every part with a switch for each state, beside the brand guide's five boards of parts: the state chips, the tiles with their history, the tree, the explorer's fields and results, a form's "i", a dialog, a menu, Undo.
+- **The design system's site:** `/design` on your control. Every part with its states, its rule and its code, beside the brand guide's five boards of parts: the state chips, the tiles with their history, the tree, the explorer's fields and results, a form's "i", a dialog, a menu, Undo.
 
 **Iterate on:** the brand in real pixels. Spacing, weights, the dark values, how a part moves and takes focus. Every screen is built from these parts, so a change is cheapest now: change the part here, never a screen later.
 
