@@ -111,14 +111,25 @@ function liteConnection(schema: string): PgConnection {
 
 // ------------------------------------------------------------------ a server, for CI
 
-/** A connection to the server at `url`, in a schema of its own. */
+/** How long a store's session on the server stays open with nothing to do: the tests open many stores. */
+const IDLE_MS = 500;
+
+/**
+ * A connection to the server at `url`, in a schema of its own, as control's own connection is
+ * made (connectPostgres). The schema is made before its first statement.
+ */
 function serverConnection(to: string, schema: string): PgConnection {
-  const conn = connectPostgres(to, { schema });
+  const conn = connectPostgres(to, { schema, idleMs: IDLE_MS });
   let ready: Promise<void> | undefined;
   const made = () => {
-    ready ??= connectPostgres(to)
-      .exec(`create schema if not exists "${schema}"`)
-      .then(() => {});
+    ready ??= (async () => {
+      const maker = connectPostgres(to, { idleMs: IDLE_MS });
+      try {
+        await maker.exec(`create schema if not exists "${schema}"`);
+      } finally {
+        await maker.close();
+      }
+    })();
     return ready;
   };
   return {
@@ -137,6 +148,14 @@ function serverConnection(to: string, schema: string): PgConnection {
     release: () => conn.release(),
     close: () => conn.close(),
   };
+}
+
+/**
+ * Gives the store at `path` an empty database: the next connection for the path is to a new
+ * schema, as an owner makes a new database for a restore. The one it had stays as it is.
+ */
+export function emptyDatabase(path: string): void {
+  schemas.delete(path);
 }
 
 /** A connection to the tests' PostgreSQL, in the schema of the store at `path`. */

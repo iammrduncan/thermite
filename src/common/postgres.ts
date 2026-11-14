@@ -73,17 +73,23 @@ const types = {
 
 /**
  * A connection to the PostgreSQL server at `url` (`postgres://user@host:port/database`), with the
- * user's password `o.password` when the address holds none, in the schema `o.schema` when given. It opens when its first statement runs. It keeps one session, so its statements run in order;
+ * user's password `o.password` when the address holds none, in the schema `o.schema` when given.
+ * `o.idleMs` closes its session once it was idle that long, for the tests, which open many. It opens when its first statement runs. It keeps one session, so its statements run in order;
  * a session that the server ended is made again for the next statement.
  */
 export function connectPostgres(
   url: string,
-  o: { password?: string | undefined; schema?: string | undefined } = {},
+  o: { password?: string | undefined; schema?: string | undefined; idleMs?: number } = {},
 ): PgConnection {
+  // The password goes into the address the driver reads: it takes an address's own fields over
+  // any given beside it.
+  const address = new URL(url);
+  if (o.password !== undefined) address.password = o.password;
   const pool = new pg.Pool({
-    connectionString: url,
-    ...(o.password === undefined ? {} : { password: o.password }),
+    connectionString: address.toString(),
     max: 1,
+    // The one session stays open while its owner runs, unless `o.idleMs` closes an idle one.
+    idleTimeoutMillis: o.idleMs ?? 0,
     types,
     // The schema its tables are in, when not the database's own.
     ...(o.schema ? { options: `-c search_path=${o.schema}` } : {}),
@@ -121,6 +127,67 @@ export async function postgresVersion(conn: PgConnection): Promise<number> {
   return Math.floor(Number(rows[0]?.n) / 10_000);
 }
 
+// ------------------------------------------------------------------ settings
+//
+// Control reads them at its start; the command line reads them where it backs control's store up
+// and copies it.
+
+/**
+ * Where control's store is (goal 268): `sqlite`, the default and the store a release supports, a
+ * file in control's state folder; or `postgres`, a PostgreSQL database, for trial until the move
+ * (goal 270).
+ */
+export const STORE_SETTING = "THERMITE_CONTROL_STORE";
+/**
+ * The PostgreSQL database of control's store, without its password:
+ * `postgres://user@host:5432/database`.
+ */
+const POSTGRES_URL_SETTING = "THERMITE_CONTROL_POSTGRES_URL";
+/** The file that holds the password of the store's PostgreSQL user. */
+export const POSTGRES_PASSWORD_FILE_SETTING = "THERMITE_CONTROL_POSTGRES_PASSWORD_FILE";
+
+/** Where control's store is, as its settings say: SQLite, or a PostgreSQL database's address. */
+export type StoreSetting = { kind: "sqlite" } | { kind: "postgres"; url: string };
+
+/**
+ * Where control's store is, from its settings. Throws in words that name the setting, so control
+ * stops at its start, on a store it does not know and on a PostgreSQL address that is refused
+ * (postgresAddress).
+ */
+export function storeSetting(env: Record<string, string | undefined>): StoreSetting {
+  const kind = env[STORE_SETTING]?.trim() || "sqlite";
+  if (kind === "sqlite") return { kind };
+  if (kind !== "postgres") throw new Error(`${STORE_SETTING} is sqlite or postgres, not "${kind}"`);
+  return { kind, url: postgresAddress(env) };
+}
+
+/**
+ * The address of the store's PostgreSQL database, from control's settings. Throws in words that
+ * name the setting when it is not set, when it is no such address, and when it holds a password:
+ * the password is a secret, and goes in its file.
+ */
+export function postgresAddress(env: Record<string, string | undefined>): string {
+  const raw = env[POSTGRES_URL_SETTING]?.trim();
+  const example = "postgres://thermite@postgres:5432/thermite";
+  if (!raw)
+    throw new Error(
+      `${POSTGRES_URL_SETTING} is not set: it takes the address of the store's PostgreSQL database, such as ${example}`,
+    );
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${POSTGRES_URL_SETTING} takes a database's address, such as ${example}`);
+  }
+  if ((url.protocol !== "postgres:" && url.protocol !== "postgresql:") || !url.hostname)
+    throw new Error(`${POSTGRES_URL_SETTING} takes a database's address, such as ${example}`);
+  if (url.password)
+    throw new Error(
+      `${POSTGRES_URL_SETTING} holds a password: take it out of the address, and put it in a file that ${POSTGRES_PASSWORD_FILE_SETTING} names`,
+    );
+  return raw;
+}
+
 // ------------------------------------------------------------------ statements
 //
 // How a store on PostgreSQL runs its statements: each is written with `?` for its values, as the
@@ -155,8 +222,8 @@ export const jsonPart = (column: string, ...path: string[]): string =>
   `(${column}::json #> '{${path.join(",")}}')::text`;
 
 /**
- * A text with each NUL character as the symbol for it, ␀. PostgreSQL's text holds no NUL, where
- * SQLite's does: a value with one would be refused whole.
+ * A text with each NUL character as the symbol for it, ␀. PostgreSQL's text holds no NUL, and a
+ * value with one would be refused whole; the SQLite store reads such a text back only up to it.
  */
 const withoutNul = (text: string): string => text.replaceAll("\u0000", "\u2400");
 

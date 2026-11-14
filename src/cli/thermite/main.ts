@@ -25,6 +25,7 @@ import { thermiteRetention } from "./retention.ts";
 import { thermiteRig } from "./rigs.ts";
 import { thermiteRunpod } from "./runpod.ts";
 import { fail } from "./shared.ts";
+import { thermiteStore } from "./store.ts";
 import { USAGE } from "./usage.ts";
 
 /**
@@ -87,6 +88,8 @@ async function main(argv: string[]): Promise<void> {
       return thermiteLocal(rest);
     case "selftest":
       return thermiteSelftest(rest);
+    case "store":
+      return thermiteStore(rest);
     case "backup":
       return thermiteBackup(rest);
     case "restore":

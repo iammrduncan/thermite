@@ -139,7 +139,7 @@ describe("thermite local init", () => {
     const keptGid = statSync(join(root, "secrets/control-admin-token")).gid;
     assert.notEqual(keptGid, other);
     const { made } = localInit(root, { uid, gid: other });
-    assert.equal(made.length, 14);
+    assert.equal(made.length, 15);
     for (const rel of made) assert.equal(statSync(join(root, rel)).gid, other, rel);
     assert.equal(statSync(join(root, "secrets/control-admin-token")).gid, keptGid);
   });
@@ -151,12 +151,12 @@ describe("thermite local init", () => {
     const first = await cli("local", "init", root);
     assert.match(first.stdout, /^made \.dev\nmade \.dev\/secrets\n/);
     assert.match(first.stdout, /made \.dev\/secrets\/control-admin-token\n/);
-    assert.match(first.stdout, /local init: \.dev ready \(17 made, 0 kept\)\n$/);
+    assert.match(first.stdout, /local init: \.dev ready \(18 made, 0 kept\)\n$/);
     for (const name of LOCAL_TOKEN_FILES) assert.ok(!first.stdout.includes(secret(root, name)));
     const second = await cli("local", "init", root);
     // Before its last line, it says what the rig gets on the machine that runs the test.
     const lines = second.stdout.trimEnd().split("\n");
-    assert.equal(lines.at(-1), "local init: .dev ready (0 made, 9 kept)");
+    assert.equal(lines.at(-1), "local init: .dev ready (0 made, 10 kept)");
     assert.ok(lines.length >= 2, "it says what the rig gets");
     for (const line of lines.slice(0, -1))
       assert.match(line, new RegExp(`^(rig: [A-Z]|wrote ${GPU_OVERRIDE}: start Thermite with )`));

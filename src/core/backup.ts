@@ -21,6 +21,12 @@ export const BACKUP_VERSION = 1;
 export const CONTROL_STATE = {
   /** The store: copied first, whole and consistent while control writes (`vacuum into`). */
   db: "control.db",
+  /**
+   * The rows of a store on PostgreSQL, dumped first as the store stood at one moment (goal 268):
+   * what a backup holds in the place of `control.db`. A restore puts it in the state folder, and
+   * control loads it into its empty database as it starts, then removes it.
+   */
+  storeDump: "store.dump",
   /** Signs every command to the rigs; the rigs pin its public half. */
   signingKey: "control-signing.key",
   signingPub: "control-signing.pub",
@@ -148,8 +154,15 @@ export const BackupManifest = z.object({
   made_at: z.string(),
   /** The Thermite that made it. */
   thermite: z.object({ version: z.string(), commit: z.string().nullable() }),
-  /** Control's store: its schema version, and its place in each stream it applies. */
-  store: z.object({ schema: Count, positions: z.record(z.string(), Count) }),
+  /**
+   * Control's store: where it was (a backup from before the store on PostgreSQL names none: its
+   * SQLite file), its schema version there, and its place in each stream it applies.
+   */
+  store: z.object({
+    kind: z.enum(["sqlite", "postgres"]).default("sqlite"),
+    schema: Count,
+    positions: z.record(z.string(), Count),
+  }),
   files: z.array(BackupFile),
   streams: z.array(BackupStream),
   /** The streams left out, with why. */

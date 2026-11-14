@@ -13,7 +13,10 @@
 // recorded after the backup must come back from the rig.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/backup.mjs (or "docker compose", or
-// "podman-compose"). KEEP=1 leaves the stack up.
+// "podman-compose"). KEEP=1 leaves the stack up. THERMITE_CONTROL_STORE=postgres runs it for a
+// control whose store is on PostgreSQL (goal 268), with the stack's postgres service: the backup
+// then holds the store's rows in a dump, each restore goes into an empty database, with the one
+// it replaces set aside, and control loads the dump as it starts.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -24,9 +27,13 @@ import {
   compose,
   control,
   dc,
+  dcLogs,
   events,
   latestVerdicts,
   prepare,
+  STORE,
+  storeAsAsked,
+  storeProfile,
   submit,
   until,
 } from "./lib/smoke-env.mjs";
@@ -54,7 +61,16 @@ function backupFails(...args) {
   try {
     execFileSync(
       /** @type {string} */ (compose[0]),
-      [...compose.slice(1), "--profile", "backup", "run", "--rm", "backup", ...args],
+      [
+        ...compose.slice(1),
+        ...storeProfile,
+        "--profile",
+        "backup",
+        "run",
+        "--rm",
+        "backup",
+        ...args,
+      ],
       {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -111,6 +127,40 @@ async function judged(env, dir, why) {
   );
 }
 
+/**
+ * With the store on PostgreSQL, a restore goes into an empty database: the one that is there is
+ * set aside under another name, and an empty one made in its place, as the page says. Control is
+ * stopped. The name the old database has now.
+ */
+let aside = 0;
+function emptyDatabase() {
+  aside++;
+  const name = `thermite_replaced_${aside}`;
+  stack(
+    "exec",
+    "-T",
+    "postgres",
+    "psql",
+    "-U",
+    "thermite",
+    "-d",
+    "postgres",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `alter database thermite rename to ${name}`,
+    "-c",
+    "create database thermite",
+  );
+  console.log(`the store's database: set aside as ${name}, and an empty one made`);
+  return name;
+}
+
+/** How many times control's log says that it loaded its store from a restored backup's dump. */
+const loads = () =>
+  dcLogs(composeEnv, "control").split("the store was loaded from the restored backup's dump")
+    .length - 1;
+
 const env = prepare();
 const made = [];
 console.log("compose: build and start");
@@ -120,6 +170,7 @@ stack("up", "-d", "--build");
 stack("--profile", "backup", "build", "backup");
 try {
   await healthy();
+  storeAsAsked(composeEnv);
   await assign(env, "smoke-1");
   const first = await judged(env, "kits/smoke-cpu/candidates/noop", "rename the accumulator");
   console.log("the rig's first attempt judged:", first);
@@ -135,6 +186,13 @@ try {
   if (!stream?.messages) throw new Error("the backup holds no EVENTS stream");
   const place = manifest.store.positions.EVENTS ?? 0;
   if (place > stream.last_seq) throw new Error(`control's place ${place} is past the stream's end`);
+  // The store itself: the SQLite file, or the rows of a store on PostgreSQL in a dump.
+  const holds = STORE === "postgres" ? "state/store.dump" : "state/control.db";
+  if (
+    (manifest.store.kind ?? "sqlite") !== STORE ||
+    !manifest.files.some((/** @type {{ path: string }} */ f) => f.path === holds)
+  )
+    throw new Error(`the backup of a control on ${STORE} does not hold ${holds}`);
   // Control keeps its secrets key on a volume of its own, and a backup never holds it.
   if (
     manifest.files.some((/** @type {{ path: string }} */ f) => f.path.endsWith("secrets.key")) ||
@@ -154,6 +212,13 @@ try {
 
   // A restore onto the bus that ran on keeps its stream, and control applies the newer events.
   stack("stop", "control");
+  if (STORE === "postgres") {
+    // Refused while the database still holds the store, and nothing is changed.
+    const held = backupFails("thermite", "restore", `/backups/${name}`);
+    if (held.status !== 1 || !/the store's database holds \d+ tables already/.test(held.output))
+      throw new Error(`a restore over a store was not refused: ${held.status} ${held.output}`);
+    emptyDatabase();
+  }
   const onBus = backup(
     "thermite",
     "restore",
@@ -189,6 +254,8 @@ try {
   );
   if (caughtUp.apply?.stopped !== null)
     throw new Error(`control's apply stopped: ${caughtUp.apply?.stopped}`);
+  if (STORE === "postgres" && loads() !== 1)
+    throw new Error("control did not load its store from the restored backup's dump");
   console.log("kept the bus:", JSON.stringify(caughtUp.apply));
 
   // A second backup, newer than the first, to be refused on a bus restored from the first.
@@ -199,6 +266,7 @@ try {
 
   // The page's steps.
   stack("stop", "control", "nats");
+  if (STORE === "postgres") emptyDatabase();
   console.log(
     backup("thermite", "restore", "--bus-store", "/bus-store", `/backups/${name}`).trim(),
   );
@@ -250,6 +318,26 @@ try {
     "after the restore:",
     JSON.stringify({ apply: caught.apply, stream: eventsStream() }),
   );
+  if (STORE === "postgres") {
+    // Loaded once more, and each database a restore replaced is still there.
+    if (loads() !== 2)
+      throw new Error("control did not load its store from the second restore's dump");
+    const kept = stack(
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "thermite",
+      "-d",
+      "postgres",
+      "-Atc",
+      "select datname from pg_database where datname like 'thermite_replaced_%' order by 1",
+    );
+    if (kept.trim().split("\n").length !== aside)
+      throw new Error(`the databases the restores replaced were not all kept: ${kept}`);
+    console.log("the databases set aside are kept:", kept.trim().split("\n").join(", "));
+  }
   console.log("backup acceptance: OK");
 } finally {
   if (process.env.KEEP !== "1") {

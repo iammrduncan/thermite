@@ -46,6 +46,13 @@ services:
       THERMITE_CONTROL_SESSION_DAYS: "${THERMITE_CONTROL_SESSION_DAYS:-}"
       # 0: control does not serve the design system's site at /design. It serves it otherwise.
       THERMITE_CONTROL_DESIGN_SITE: "${THERMITE_CONTROL_DESIGN_SITE:-}"
+      # Where control's store is (goal 268). Empty or `sqlite`: the file control.db in its state,
+      # the store a release supports. `postgres`, for trial: a PostgreSQL database, the postgres
+      # service's below (`--profile postgres`) unless THERMITE_CONTROL_POSTGRES_URL names
+      # another, with its user's password in .dev/secrets/postgres-password.
+      THERMITE_CONTROL_STORE: "${THERMITE_CONTROL_STORE:-}"
+      THERMITE_CONTROL_POSTGRES_URL: "${THERMITE_CONTROL_POSTGRES_URL:-postgres://thermite@postgres:5432/thermite}"
+      THERMITE_CONTROL_POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
       # Restarts through the container engine: see compose.lifecycle.yaml (off by default).
       THERMITE_LIFECYCLE: "${THERMITE_LIFECYCLE:-}"
       THERMITE_COMPOSE_PROJECT: thermite
@@ -70,7 +77,7 @@ services:
       - control-secrets:/var/lib/thermite-control-secrets
       - control-pub:/keys
       - nats-config:/nats-config
-    secrets: [control-admin-token, control-operator-token]
+    secrets: [control-admin-token, control-operator-token, postgres-password]
     # The bus's folder is control's (nats-init) before control first writes into it.
     depends_on:
       nats-init: { condition: service_completed_successfully }
@@ -184,6 +191,38 @@ services:
     restart: "no"
     logging: *logging
 
+  # Control's store on PostgreSQL, for trial (goal 268): PostgreSQL beside control, started only
+  # with `--profile postgres`, for a control whose THERMITE_CONTROL_STORE is `postgres`. Control
+  # is its only client, and waits for it at its start. Its data is on a volume of its own, and
+  # its user's password is the file .dev/secrets/postgres-password, which `thermite local init`
+  # makes. Its port is published nowhere. A deployment with a PostgreSQL server of its own leaves
+  # the profile out, and names its database in THERMITE_CONTROL_POSTGRES_URL. It starts as root,
+  # gives its data folder to its own user and goes on as that user, with only the capabilities
+  # for that.
+  postgres:
+    profiles: [postgres]
+    image: docker.io/library/postgres:18.7-alpine@sha256:75dcac3dfb1cd01ca3536910bbc84128759362f8b118bf8c55b38a94f68f3b73
+    environment:
+      POSTGRES_USER: thermite
+      POSTGRES_DB: thermite
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    secrets: [postgres-password]
+    networks: [control]
+    # The server's shared memory, which its sessions work in: an engine gives a container 64 MB.
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "thermite", "-d", "thermite"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    logging: *logging
+
   # Backups of control's state and of every rig's events, and their restore (goal 173), with
   # control's image: never started by `up`. It mounts control's state, the bus's store (to set it
   # aside before a restore) and .dev/backups, reaches the bus as control does, and runs as root
@@ -197,11 +236,17 @@ services:
     environment:
       THERMITE_CONTROL_DIR: /var/lib/thermite-control
       THERMITE_NATS_URL: nats://nats:4222
+      # Control's store, as control has it: the backup dumps a store on PostgreSQL, and the copy
+      # from SQLite writes it there (thermite store copy).
+      THERMITE_CONTROL_STORE: "${THERMITE_CONTROL_STORE:-}"
+      THERMITE_CONTROL_POSTGRES_URL: "${THERMITE_CONTROL_POSTGRES_URL:-postgres://thermite@postgres:5432/thermite}"
+      THERMITE_CONTROL_POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
     user: "0:0"
     volumes:
       - control-state:/var/lib/thermite-control
       - nats-data:/bus-store
       - ./.dev/backups:/backups
+    secrets: [postgres-password]
     networks: [control]
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
@@ -481,10 +526,13 @@ volumes:
   supervisor2-home: {}
   results: {}
   nats-data: {}
+  postgres-data: {}
   nats-config: {}
 
 secrets:
   control-admin-token: { file: ./.dev/secrets/control-admin-token }
+  # The password of control's store's user on PostgreSQL (the postgres service, for trial).
+  postgres-password: { file: ./.dev/secrets/postgres-password }
   control-operator-token: { file: ./.dev/secrets/control-operator-token }
   control-rig-token: { file: ./.dev/secrets/control-rig-token }
   harness-supervisor-token: { file: ./.dev/secrets/harness-supervisor-token }

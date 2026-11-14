@@ -26,6 +26,7 @@ import {
   prepare,
   secret,
   sleep,
+  storeAsAsked,
   submit,
   until,
 } from "./lib/smoke-env.mjs";
@@ -166,6 +167,8 @@ dcp("up", "-d", "--build");
 let failed = false;
 try {
   await until("control health", async () => (await fetch(`${control}/v1/health`)).ok);
+  // SQLite, or PostgreSQL with THERMITE_CONTROL_STORE=postgres (goal 268).
+  storeAsAsked(composeEnv);
   await assign(env, "smoke-1", "local-1");
   await assign(env, "smoke-2", "local-2");
   await until(

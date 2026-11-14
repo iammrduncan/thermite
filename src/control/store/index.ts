@@ -309,5 +309,5 @@ export function openSqliteStore(path: string): ControlStore {
   return store;
 }
 
-export { openPostgresStore } from "./postgres/index.ts";
+export { CopyRefused, copyStore, LoadDiffers, openPostgresStore } from "./postgres/index.ts";
 export type { KnowledgeBase, McpServerRows };

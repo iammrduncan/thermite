@@ -329,7 +329,9 @@ export const USAGE = `usage: thermite <command> [options]
                                       SHA-256 and each stream's count and last place. --state:
                                       control's state folder (THERMITE_CONTROL_DIR, or
                                       /var/lib/thermite-control); --bus: the bus
-                                      (THERMITE_NATS_URL)
+                                      (THERMITE_NATS_URL). A control whose store is on PostgreSQL
+                                      (THERMITE_CONTROL_STORE, for trial): its rows, as they
+                                      stood at one moment, in store.dump, in control.db's place
   restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]
                                       with control stopped: check the backup against its
                                       manifest, restore each stream the bus does not have and
@@ -341,5 +343,23 @@ export const USAGE = `usage: thermite <command> [options]
                                       changes. --control: refused while control answers there.
                                       --bus-store DIR, with the bus stopped: only move the
                                       bus's store aside into a dated folder in DIR, so that
-                                      the bus starts empty
+                                      the bus starts empty. A backup of a store on PostgreSQL
+                                      (for trial) goes to a control whose store is there, with
+                                      its database empty: its rows are put in control's state
+                                      folder, and control loads them as it starts
+  store copy [--state DIR]            with control stopped, where its state folder is mounted
+                                      (compose: the backup service): copy control's store from
+                                      its SQLite file, control.db, into the empty PostgreSQL
+                                      database that THERMITE_CONTROL_POSTGRES_URL names, with
+                                      its password in the file
+                                      THERMITE_CONTROL_POSTGRES_PASSWORD_FILE names. For trial:
+                                      a release supports the store on SQLite. It copies every
+                                      table, in one transaction, and prints each table's rows
+                                      on both sides: a difference fails, and nothing is kept.
+                                      The SQLite file is only read. Control's place in the
+                                      bus's streams is carried as it is; the knowledge base's
+                                      words index is not copied. Refused when the database
+                                      holds tables already, or the store is not at this
+                                      version's schema. Then set THERMITE_CONTROL_STORE to
+                                      postgres, and start control
 `;

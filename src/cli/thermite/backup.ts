@@ -13,7 +13,14 @@ import {
 } from "../../common/backup/index.ts";
 import { buildInfo } from "../../common/build-info.ts";
 import { busUrl } from "../../common/bus/index.ts";
+import { optionalSecretFromFile } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
+import {
+  connectPostgres,
+  POSTGRES_PASSWORD_FILE_SETTING,
+  type StoreSetting,
+  storeSetting,
+} from "../../common/postgres.ts";
 import { CONTROL_STATE } from "../../core/backup.ts";
 import { fail } from "./shared.ts";
 import { USAGE } from "./usage.ts";
@@ -32,11 +39,32 @@ const ANSWERS_TIMEOUT_MS = 5_000;
 
 const say = (line: string) => process.stdout.write(`${line}\n`);
 
-/** Control's state folder and the bus, from the options and control's own settings. */
+/**
+ * Control's state folder, the bus, and where control's store is, from the options and control's
+ * own settings. A store on PostgreSQL is reached as control reaches it (THERMITE_CONTROL_STORE,
+ * THERMITE_CONTROL_POSTGRES_URL and THERMITE_CONTROL_POSTGRES_PASSWORD_FILE).
+ */
 function placesOf(values: { state?: string | undefined; bus?: string | undefined }) {
   const stateDir = resolve(values.state ?? process.env.THERMITE_CONTROL_DIR ?? DEFAULT_STATE);
-  if (!existsSync(join(stateDir, CONTROL_STATE.db)))
-    fail(`${stateDir} holds no ${CONTROL_STATE.db}: give control's state folder with --state`);
+  let kept: StoreSetting;
+  try {
+    kept = storeSetting(process.env);
+  } catch (err) {
+    fail(errorText(err));
+  }
+  // A store on PostgreSQL leaves no file in the folder: control's signing key says it is the one.
+  const marks = kept.kind === "postgres" ? CONTROL_STATE.signingKey : CONTROL_STATE.db;
+  if (!existsSync(join(stateDir, marks)))
+    fail(`${stateDir} holds no ${marks}: give control's state folder with --state`);
+  const store =
+    kept.kind === "postgres"
+      ? {
+          kind: kept.kind,
+          conn: connectPostgres(kept.url, {
+            password: optionalSecretFromFile(POSTGRES_PASSWORD_FILE_SETTING),
+          }),
+        }
+      : { kind: kept.kind };
   let url: string | undefined;
   try {
     url = values.bus ?? busUrl(process.env);
@@ -44,7 +72,7 @@ function placesOf(values: { state?: string | undefined; bus?: string | undefined
     fail(errorText(err));
   }
   if (!url) fail("give the bus's address with --bus, or THERMITE_NATS_URL, as control has it");
-  return { stateDir, url };
+  return { stateDir, url, store };
 }
 
 /** The bus as the backup's user: its seed and control's authority, from control's state folder. */
@@ -82,7 +110,7 @@ export async function thermiteBackup(rest: string[]): Promise<void> {
   const [into, ...extra] = positionals;
   if (!into || extra.length) fail(USAGE);
   if (!existsSync(into)) fail(`no folder ${into}: make it first`);
-  const { stateDir, url } = placesOf(values);
+  const { stateDir, url, store } = placesOf(values);
   const bus = backupBusOf(stateDir, url);
   try {
     const { folder, manifest } = await backupControl({
@@ -92,10 +120,12 @@ export async function thermiteBackup(rest: string[]): Promise<void> {
       build: buildInfo(),
       say,
       owner: ownerFor(into),
+      postgres: store.kind === "postgres" ? store.conn : undefined,
     });
     say(`backup: ${folder} (${manifest.files.length} files, ${manifest.streams.length} streams)`);
   } finally {
     await bus.close();
+    if (store.kind === "postgres") await store.conn.close();
   }
 }
 
@@ -116,7 +146,7 @@ export async function thermiteRestore(rest: string[]): Promise<void> {
   });
   const [from, ...extra] = positionals;
   if (!from || extra.length) fail(USAGE);
-  const { stateDir, url } = placesOf(values);
+  const { stateDir, url, store: kept } = placesOf(values);
   const refused = (err: unknown) => {
     if (!(err instanceof RestoreRefused)) throw err;
     process.stderr.write(`restore refused: ${err.message}\n`);
@@ -153,11 +183,12 @@ export async function thermiteRestore(rest: string[]): Promise<void> {
   }
   const bus = backupBusOf(stateDir, url);
   try {
-    await restoreControl({ from: resolve(from), stateDir, bus, say });
+    await restoreControl({ from: resolve(from), stateDir, bus, say, store: kept });
     say("restored: start control, and it applies the events from its place in the stream");
   } catch (err) {
     refused(err);
   } finally {
     await bus.close();
+    if (kept.kind === "postgres") await kept.conn.close();
   }
 }

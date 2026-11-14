@@ -72,6 +72,13 @@ describe("statements on a connection", () => {
     assert.equal(await q.get("select 1 from n where id = 9"), undefined);
   });
 
+  test("a text with a NUL character is kept with the symbol for it, and nothing is null", async () => {
+    const q = new Sql(postgresConnection());
+    await q.exec("create table t (a text, b text)");
+    await q.run("insert into t (a, b) values (?, ?)", "de\u0000bug", undefined);
+    assert.deepEqual({ ...(await q.get("select a, b from t")) }, { a: "de␀bug", b: null });
+  });
+
   test("a transaction keeps all of its statements or none, and one inside it is dropped alone", async () => {
     const q = new Sql(postgresConnection());
     await q.exec("create table t (k text primary key)");

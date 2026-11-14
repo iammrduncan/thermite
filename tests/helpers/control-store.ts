@@ -58,8 +58,10 @@ export function controlStore(path = ":memory:", bus = new FakeBus()): ControlSto
  */
 export function storeOnBus(store: ControlStore, bus: FakeBus): ControlStore {
   const apply = new EventsApply({ store, bus, retryMs: 5 });
-  // Long enough for a store whose every call takes a turn of the event loop (--store-waits turn).
-  const writer = new EventsWriter({ store, bus, apply, applyWaitMs: 20_000 });
+  // Long enough for a store whose every call takes a turn of the event loop (--store-waits turn),
+  // and for one on a server, where each statement of a report of thousands of events is a trip
+  // there and back (--store postgres with THERMITE_TEST_POSTGRES_URL).
+  const writer = new EventsWriter({ store, bus, apply, applyWaitMs: 120_000 });
   const move = new EventsMove({ store, bus, retryMs: 5, published: () => void apply.nudge() });
   const started = bus
     .makeStream(EVENT_STREAM_CONFIG)

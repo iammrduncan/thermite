@@ -10,6 +10,8 @@ import {
   STATE_FOLDERS,
 } from "../../core/backup.ts";
 import { errorText } from "../errors.ts";
+import type { PgConnection } from "../postgres.ts";
+import { tablesOf } from "../postgres-dump.ts";
 import { copyHashed, giveTo, hashFile, moveAside, ownerFor } from "./files.ts";
 import { readManifest } from "./make.ts";
 import type { BackupBus, StreamEnd } from "./streams.ts";
@@ -37,6 +39,7 @@ export const replacedName = (at: Date) => `replaced-${at.toISOString().replace(/
 /** The entries of control's state folder a restore replaces: all a backup holds, with the store's own files. */
 const STATE_ENTRIES = [
   CONTROL_STATE.db,
+  CONTROL_STATE.storeDump,
   `${CONTROL_STATE.db}-wal`,
   `${CONTROL_STATE.db}-shm`,
   ...STATE_FILES,
@@ -150,6 +153,40 @@ export interface RestoreOptions {
   now?: Date | undefined;
   /** Each step, in words, as it is done. */
   say?: ((line: string) => void) | undefined;
+  /**
+   * Where control's settings say its store is (THERMITE_CONTROL_STORE), with the database of a
+   * store on PostgreSQL. A backup is restored to a control whose store is where the backup's
+   * was.
+   */
+  store?: { kind: "sqlite" } | { kind: "postgres"; conn: PgConnection } | undefined;
+}
+
+/** A store's kind in words. */
+const KIND = { sqlite: "SQLite", postgres: "PostgreSQL" } as const;
+
+/**
+ * Why a backup can't be restored to the store control's settings name, in words; undefined when
+ * it can. A backup of a store on PostgreSQL goes into an empty database: control loads its rows
+ * there as it starts, and never over a store.
+ */
+async function storeRefusal(
+  manifest: BackupManifest,
+  store: NonNullable<RestoreOptions["store"]>,
+  stateDir: string,
+): Promise<string | undefined> {
+  const kind = manifest.store.kind;
+  if (kind !== store.kind)
+    return `the backup is of a control whose store is on ${KIND[kind]}, and control's settings say ${KIND[store.kind]} (THERMITE_CONTROL_STORE): restore it to a control whose store is on ${KIND[kind]}. Nothing was changed.`;
+  if (store.kind !== "postgres") return undefined;
+  // Restored already, with its dump still waiting for control's start: nothing is in the way.
+  const dump = manifest.files.find(
+    (f) => f.path === `${BACKUP_LAYOUT.state}/${CONTROL_STATE.storeDump}`,
+  );
+  const waiting = join(stateDir, CONTROL_STATE.storeDump);
+  const tables = await tablesOf(store.conn);
+  if (!tables.length) return undefined;
+  const same = dump && existsSync(waiting) && (await hashFile(waiting)).sha256 === dump.sha256;
+  return `the store's database holds ${tables.length} tables already${same ? ", and the backup's rows wait in control's state folder" : ""}: a backup of a store on PostgreSQL is restored into an empty database, where control loads its rows as it starts, and never over a store. Give control an empty database (a new one, or this one with its tables dropped once you have kept what you need of it), then run the restore again. Nothing was changed.`;
 }
 
 /**
@@ -164,6 +201,14 @@ export async function restoreControl(o: RestoreOptions): Promise<{ replaced: str
   say(
     `the backup of ${manifest.made_at} is whole: ${manifest.files.length} files and ${manifest.streams.length} streams as its manifest says`,
   );
+  if (o.store) {
+    const why = await storeRefusal(manifest, o.store, o.stateDir);
+    if (why) throw new RestoreRefused(why);
+  }
+  const loads =
+    manifest.store.kind === "postgres"
+      ? `control's store: its rows are in ${CONTROL_STATE.storeDump} in control's state folder; control loads them into its empty database as it starts, checks their counts, and removes the file`
+      : undefined;
 
   for (const s of manifest.streams) {
     const before = await o.bus.state(s.name);
@@ -208,6 +253,7 @@ export async function restoreControl(o: RestoreOptions): Promise<{ replaced: str
   );
   if (same.every(Boolean)) {
     say("control's state is the backup's already: nothing moved");
+    if (loads) say(loads);
     return { replaced: undefined };
   }
   const owner = ownerFor(o.stateDir);
@@ -225,5 +271,6 @@ export async function restoreControl(o: RestoreOptions): Promise<{ replaced: str
       ? `control's state: ${moved.join(", ")} moved aside to ${aside}, and the backup's put back`
       : "control's state: the backup's put back",
   );
+  if (loads) say(loads);
   return { replaced: moved.length ? aside : undefined };
 }

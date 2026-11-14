@@ -6,8 +6,9 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { storeSetting } from "../../src/common/postgres.ts";
 import { controlBusUrl } from "../../src/control/bus/index.ts";
-import { controlPublicUrl, storeSetting } from "../../src/control/settings.ts";
+import { controlPublicUrl } from "../../src/control/settings.ts";
 
 /**
  * Control needs its message bus (goal 168, step 4): it keeps every rig's events in the bus's
@@ -36,7 +37,7 @@ describe("where control's store is", () => {
     );
     assert.throws(
       () => storeSetting({ THERMITE_CONTROL_STORE: "postgres" }),
-      /^Error: THERMITE_CONTROL_STORE is postgres, and THERMITE_CONTROL_POSTGRES_URL is not set: it takes the database's address, such as postgres:\/\/thermite@postgres:5432\/thermite$/,
+      /^Error: THERMITE_CONTROL_POSTGRES_URL is not set: it takes the address of the store's PostgreSQL database, such as postgres:\/\/thermite@postgres:5432\/thermite$/,
     );
     for (const url of ["postgres:5432/thermite", "https://postgres/thermite"])
       assert.throws(

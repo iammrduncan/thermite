@@ -188,6 +188,64 @@ restore refused: EVENTS on the bus is not the backup's: it holds 356,496 message
 
 Go back to step 1 and give the bus more memory at step 3. The stream that was refused is kept, set aside with the store. [Troubleshoot](troubleshoot.md#a-restore-is-refused) lists the other refusals.
 
+## A control whose store is on PostgreSQL
+
+A control can keep its store in a PostgreSQL database in the place of `control.db` ([`THERMITE_CONTROL_STORE`](../../reference/settings.md#address-and-state)). It is for trial until control moves to PostgreSQL: a release supports the store on SQLite. The commands are the same, with two differences.
+
+**The backup holds the store's rows, not a file.** `thermite backup` reads the database as control does, and writes every table's rows into `state/store.dump`, as they stood at one moment while control writes. Control may go on running. The rest of the backup is the same: the keys, the kits, the exports, the knowledge base's files and the `EVENTS` stream, taken after the store.
+
+```sh
+docker compose --profile backup run --rm backup thermite backup /backups
+```
+
+```text
+dumped the store on PostgreSQL to store.dump: schema 1, 4862113 bytes
+```
+
+**The restore goes into an empty database.** A store is never loaded over another: the database it replaces is set aside first, under another name, and stays until you remove it.
+
+1. Stop control. With the bus's store lost, or its stream refused, also do steps 1 to 3 of [Restore a backup](#restore-a-backup) for the bus.
+
+   ```sh
+   docker compose stop control   # or: podman compose stop control
+   ```
+
+2. Set the database aside, and make an empty one in its place. With the compose stack's `postgres` service:
+
+   ```sh
+   docker compose --profile postgres exec postgres psql --username=thermite --dbname=postgres \
+     -c 'alter database "thermite" rename to "thermite_replaced_20261114"' \
+     -c 'create database "thermite"'
+   ```
+
+   With a server of your own, do the same there, or name a new, empty database in `THERMITE_CONTROL_POSTGRES_URL`.
+3. Restore the backup:
+
+   ```sh
+   docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/thermite-backup-2026-11-14T10-00-00-000Z
+   ```
+
+   It puts the stream back, or keeps the one the bus holds, as for a control on SQLite. Then it puts control's state back, with `store.dump` in it, and says:
+
+   ```text
+   control's store: its rows are in store.dump in control's state folder; control loads them into its empty database as it starts, checks their counts, and removes the file
+   ```
+
+   A database that still holds tables is refused before anything changes: `the store's database holds 71 tables already: …`. So is a backup of a control on SQLite, and a backup of a store on PostgreSQL where `THERMITE_CONTROL_STORE` is not `postgres`.
+4. Start control. It makes its tables at the backup's schema version, loads the rows in one transaction, counts each table's rows against the dump's, and goes on from its place in the stream.
+
+   ```sh
+   docker compose up -d control   # or: podman compose up -d control
+   ```
+
+To tell that it worked: control's log says `the store was loaded from the restored backup's dump`, with its tables and rows, and then `control's records go on from the events stream's place`, as after any restore. `store.dump` is gone from control's state folder; the backup still holds it. When the counts differ, control keeps nothing of the load and does not start: its log says which table differs. When you are sure of the restored control, remove the database that was set aside:
+
+```sh
+docker compose --profile postgres exec postgres psql --username=thermite --dbname=postgres -c 'drop database "thermite_replaced_20261114"'
+```
+
+To move a control from SQLite to PostgreSQL, for a trial, copy its store with [`thermite store copy`](../../reference/command-line.md#store-copy).
+
 ## Other placements of control
 
 Thermite ships control in the compose stack. A control you run another way needs the same for `thermite backup` and `thermite restore`: control's image, which holds `thermite`; control's state folder mounted, named by `THERMITE_CONTROL_DIR` or `--state`; the bus at `THERMITE_NATS_URL` or `--bus`, reached as control reaches it, since its certificate names control's address for it; and, for `--bus-store`, the bus's store mounted, with the bus stopped. On a machine, run a container of control's image with those volumes on control's network. On Kubernetes, run a Job or a pod of control's image with control's volume claim, in control's namespace; for a restore, scale control's and the bus's Deployments to 0 first, and mount the bus's claim for `--bus-store`.

@@ -7,7 +7,7 @@
  * backup holds is core/backup.ts.
  */
 
-export { ownerFor } from "./files.ts";
+export { ownerFor, sidecarsToOwner } from "./files.ts";
 export { backupControl, readManifest } from "./make.ts";
 export { checkBackup, RestoreRefused, restoreControl, setBusStoreAside } from "./restore.ts";
 export {

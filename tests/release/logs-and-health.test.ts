@@ -53,7 +53,7 @@ describe("compose's logs and health checks (goal 173)", () => {
       const long = [...all].filter(([, s]) => !runsOnce(s));
       assert.deepEqual(
         long.map(([name]) => name),
-        ["control", "nats", "harness", "supervisor", "harness-2", "supervisor-2"],
+        ["control", "nats", "postgres", "harness", "supervisor", "harness-2", "supervisor-2"],
       );
       for (const [name, s] of long) {
         assert.match(s, /^ {4}restart: unless-stopped$/m, name);
@@ -62,7 +62,10 @@ describe("compose's logs and health checks (goal 173)", () => {
         const route = ROUTES[name];
         const check = route
           ? `test: ["CMD", "node", "-e", ${JSON.stringify(healthProbe(route))}]`
-          : `test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]`;
+          : name === "postgres"
+            ? // The store's PostgreSQL, for trial (the postgres profile): its own readiness check.
+              'test: ["CMD", "pg_isready", "-U", "thermite", "-d", "thermite"]'
+            : `test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]`;
         assert.ok(s.includes(`\n      ${check}\n`), `${name}: ${check}`);
       }
     });

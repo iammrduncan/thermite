@@ -107,7 +107,7 @@ describe("the release bundle", () => {
     const files = [...compose.matchAll(/\{ file: \.\/\.dev\/secrets\/([a-z0-9.-]+) \}/g)].map(
       (m) => m[1],
     );
-    assert.equal(files.length, 9);
+    assert.equal(files.length, 10);
     for (const name of files) assert.ok(made.includes(name ?? ""), `${name} is made by init`);
     for (const [rig, file] of Object.entries(LOCAL_RIGS)) {
       const service = rig === "local-1" ? "enroll" : "enroll-2";

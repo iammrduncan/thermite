@@ -7,7 +7,11 @@ import { log, optionalSecretFromFile, parseListen } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { every } from "../common/health.ts";
 import { logWarn, startLogging } from "../common/log.ts";
-import { connectPostgres } from "../common/postgres.ts";
+import {
+  connectPostgres,
+  POSTGRES_PASSWORD_FILE_SETTING,
+  storeSetting,
+} from "../common/postgres.ts";
 import { readNumber } from "../common/settings.ts";
 import { CONTROL_STATE } from "../core/backup.ts";
 import { generateSigningKeys } from "../core/commands.ts";
@@ -61,8 +65,6 @@ import {
   controlPublicUrl,
   DESIGN_SITE_SETTING,
   notReadWords,
-  POSTGRES_PASSWORD_FILE_SETTING,
-  storeSetting,
 } from "./settings.ts";
 import { openControlStore, openPostgresStore } from "./store/index.ts";
 

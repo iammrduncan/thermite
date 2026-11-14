@@ -359,7 +359,9 @@ usage: thermite <command> [options]
                                       SHA-256 and each stream's count and last place. --state:
                                       control's state folder (THERMITE_CONTROL_DIR, or
                                       /var/lib/thermite-control); --bus: the bus
-                                      (THERMITE_NATS_URL)
+                                      (THERMITE_NATS_URL). A control whose store is on PostgreSQL
+                                      (THERMITE_CONTROL_STORE, for trial): its rows, as they
+                                      stood at one moment, in store.dump, in control.db's place
   restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]
                                       with control stopped: check the backup against its
                                       manifest, restore each stream the bus does not have and
@@ -371,7 +373,25 @@ usage: thermite <command> [options]
                                       changes. --control: refused while control answers there.
                                       --bus-store DIR, with the bus stopped: only move the
                                       bus's store aside into a dated folder in DIR, so that
-                                      the bus starts empty
+                                      the bus starts empty. A backup of a store on PostgreSQL
+                                      (for trial) goes to a control whose store is there, with
+                                      its database empty: its rows are put in control's state
+                                      folder, and control loads them as it starts
+  store copy [--state DIR]            with control stopped, where its state folder is mounted
+                                      (compose: the backup service): copy control's store from
+                                      its SQLite file, control.db, into the empty PostgreSQL
+                                      database that THERMITE_CONTROL_POSTGRES_URL names, with
+                                      its password in the file
+                                      THERMITE_CONTROL_POSTGRES_PASSWORD_FILE names. For trial:
+                                      a release supports the store on SQLite. It copies every
+                                      table, in one transaction, and prints each table's rows
+                                      on both sides: a difference fails, and nothing is kept.
+                                      The SQLite file is only read. Control's place in the
+                                      bus's streams is carried as it is; the knowledge base's
+                                      words index is not copied. Refused when the database
+                                      holds tables already, or the store is not at this
+                                      version's schema. Then set THERMITE_CONTROL_STORE to
+                                      postgres, and start control
 ```
 
 ## Rules for every command
@@ -1144,7 +1164,7 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 | `DIR` itself | 0700, set again at every run | When missing. Only its owner may open it, so no other user of the computer reaches the tokens, the inbox or the advisors' keys. The containers mount the folders and files in it, which their own users reach as the modes below say |
 | `secrets/`, `outbox/`, `advisors/`, `backups/` | 0755 | When missing. The compose stack's `backup` service writes [backups](../how-to/operate/backup-and-restore.md) into `backups/` |
 | `inbox/`, `inbox/repos/`, `inbox/models/` | 0777, set again at every run | When missing. The supervisor writes into the inbox as its own user |
-| `secrets/control-admin-token`, `control-operator-token`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644, so that control's and the supervisors' users in their containers can read them | When missing: 24 random bytes each, base64url-encoded |
+| `secrets/control-admin-token`, `control-operator-token`, `postgres-password`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644, so that control's and the supervisors' users in their containers can read them | When missing: 24 random bytes each, base64url-encoded |
 | `secrets/control-rig-token`, `control-rig-token-2` | 0644 | When missing: empty. [`local enroll`](#local-enroll) writes each rig's token, which control makes, at each `up` |
 | `secrets/model-api-key` | 0644 | When missing: `local-placeholder` |
 
@@ -1234,6 +1254,7 @@ It makes a new folder in `FOLDER`, named for the time, such as `thermite-backup-
 | In the backup | What |
 | --- | --- |
 | `state/control.db` | Control's store, copied first, whole and consistent while control writes to it (`vacuum into`) |
+| `state/store.dump` | In `control.db`'s place, for a control whose [store is on PostgreSQL](settings.md#address-and-state) (`THERMITE_CONTROL_STORE=postgres`, for trial): the rows of every table of the store, as they stood at one moment while control writes, read in one transaction. It is a file of lines of JSON: the schema's version, then each table's name, columns, rows and row count, and a last line that says the dump is whole. The backup reaches the database as control does, by `THERMITE_CONTROL_POSTGRES_URL` and `THERMITE_CONTROL_POSTGRES_PASSWORD_FILE` |
 | `state/control-signing.key`, `control-signing.pub`, `bus-ca.pem`, `bus-ca.key`, `bus-backup.seed` | Control's keys, each as it is in the state folder, with its mode. The secrets key is never in it, wherever control keeps it: `thermite backup` says `left out secrets.key` when it is in the state folder ([Keep the secrets key](../how-to/operate/backup-and-restore.md#keep-the-secrets-key)) |
 | `state/kits/`, `state/exports/`, `state/kb-files/` | The kits control keeps, the exports of rigs without a results repository and the knowledge base's files, file by file |
 | `streams/EVENTS.snapshot` | The bus's `EVENTS` stream, every rig's events, as the server's snapshot API gives it, taken after the store |
@@ -1243,7 +1264,7 @@ It leaves out the `REPORTS`, `COMMANDS`, `LIVE`, `CONFIG` and `KB_FILES` streams
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--state DIR` | `THERMITE_CONTROL_DIR`, else `/var/lib/thermite-control` | Control's state folder. One without `control.db`: `<dir> holds no control.db: give control's state folder with --state`, exit 2 |
+| `--state DIR` | `THERMITE_CONTROL_DIR`, else `/var/lib/thermite-control` | Control's state folder. One without `control.db`: `<dir> holds no control.db: give control's state folder with --state`, exit 2. With the store on PostgreSQL the folder holds no `control.db`, and is known by `control-signing.key` |
 | `--bus URL` | `THERMITE_NATS_URL` | The bus, as control reaches it. It signs in as the backup's own user, with the seed in `bus-backup.seed`, and trusts the server through `bus-ca.pem`, both in the state folder. Control makes the seed as it starts; without it: `<file> is not there: control makes the backup's key on the bus as it starts. Start control once, then run this again`, exit 2 |
 
 A failure, such as the bus away or `FOLDER` missing, says why and exits 2, leaving the `.partial` folder.
@@ -1264,6 +1285,12 @@ In order, it:
 3. For each stream in the backup: where the bus has none of that name, restores it through the server's restore API, printing the memory the server needs for it (about 1 KiB a message, over 128 MiB), then checks the stream it finds against the manifest. Where the bus has one already, it checks that one the same way, and leaves it as it is. The check keeps a stream that holds the backup's events unchanged, with or without newer ones after them: its first place is the backup's, its last place is the backup's or after, it holds one message more than the backup for each place more (the stream deletes none, so every place holds one), and its message at the backup's last place has the SHA-256 the manifest gives. For a stream with newer events, as on a bus that ran on since the backup, it prints `EVENTS on the bus holds the backup's events and <n> newer ones after them, to <last>: control applies them from its place, <place>, as it starts`; control, started on the restored store, applies them from its place in the backup. Any other stream is refused, naming what differs: `EVENTS on the bus is not the backup's: <what differs>. …`, such as `it holds <n> messages to <n>, and the backup holds <m> to <m>`, which a server stopped part way through a restore leaves, `its message at <m>, the backup's last place, is not the one the backup recorded`, `its first place is <f>, and the backup's is <g>`, or `…: a place holds no message, and this stream deletes none`.
 4. Puts control's state back: each of control's files and folders that is there now (`control.db` with its `-wal` and `-shm`, the keys, `kits/`, `exports/`, `kb-files/`) is moved into `replaced-<time>/` in the state folder, and the backup's are copied in, given to the state folder's owner when it runs as root. Nothing is deleted, and files that are not control's stay. A state folder that holds the backup's files already is left as it is.
 
+A backup of a control whose store is on PostgreSQL (for trial) is restored to a control whose store is there, with its database empty:
+
+- Before step 3, it reads `THERMITE_CONTROL_STORE` and, for PostgreSQL, looks at the database. A backup of a store on PostgreSQL with `THERMITE_CONTROL_STORE` not `postgres`, or a backup of a store on SQLite with it `postgres`: `the backup is of a control whose store is on PostgreSQL, and control's settings say SQLite (THERMITE_CONTROL_STORE): restore it to a control whose store is on PostgreSQL. Nothing was changed.` A database that holds tables: `the store's database holds <n> tables already: a backup of a store on PostgreSQL is restored into an empty database, where control loads its rows as it starts, and never over a store. Give control an empty database (a new one, or this one with its tables dropped once you have kept what you need of it), then run the restore again. Nothing was changed.`
+- Step 4 puts `store.dump` in the state folder with the rest, and prints `control's store: its rows are in store.dump in control's state folder; control loads them into its empty database as it starts, checks their counts, and removes the file`.
+- Control, at its next start, makes its tables at the dump's schema version, loads the rows in one transaction, brings each key that counts up past its rows, and counts each table's rows against the dump's. Counts that differ keep nothing, and control does not start. With `store.dump` in its state folder and a database that holds tables, control does not start either, and says which of the two to move away. The dump and the database are both kept.
+
 A refusal at any step changes no file of control's, prints `restore refused: <why>` on standard error, and exits 1. It ends with `restored: start control, and it applies the events from its place in the stream`.
 
 | Option | Default | Meaning |
@@ -1271,6 +1298,32 @@ A refusal at any step changes no file of control's, prints `restore refused: <wh
 | `--state DIR`, `--bus URL` | As for `backup` | Control's state folder, and the bus. It signs in with the backup's seed in the state folder before it puts anything back, which the bus's server knows |
 | `--control URL` | None: not asked | Control's address, such as `http://control:8800` in the compose stack: the restore refuses while control answers there |
 | `--bus-store DIR` | None | The bus's store, mounted (`/bus-store` in the `backup` service), with the bus stopped: it checks the backup, then only moves everything in `DIR` into `DIR/replaced-<time>/`, so that the bus starts with an empty store, and says to run the restore again without it. The bus answering at its address: `the bus answers at <host>: stop it first, then set its store aside`, exit 1 |
+
+### `store copy`
+
+`thermite store copy [--state DIR]` copies control's store from its SQLite file into a PostgreSQL database, with control stopped. It is for trial: a release supports the store on SQLite. It runs where control's state folder is mounted and the database is reached as control reaches it; under compose, in the `backup` service.
+
+```sh
+docker compose stop control
+docker compose --profile postgres up -d postgres
+docker compose --profile backup run --rm backup thermite store copy
+```
+
+It reads `control.db` in the state folder, and never writes to it: the file is opened to read alone. It writes the database that `THERMITE_CONTROL_POSTGRES_URL` names, signing in with the password in the file `THERMITE_CONTROL_POSTGRES_PASSWORD_FILE` names ([Settings](settings.md#address-and-state)). In order, it:
+
+1. Refuses a store that is not at this version's schema: `copy refused: the store is at schema version <n>, and this Thermite copies a store at <m>: start this version's control on it once, on SQLite, so that it brings the store to its version, then stop it and copy`.
+2. Refuses a database that holds tables: `copy refused: the database holds <n> tables already (...): a store is loaded into an empty database, and never over one. Give an empty database; the one that is there is kept as it is`.
+3. Makes the store's tables in the database, and copies every table's rows in the order they came in, all in one transaction. It prints `copied <table>: <n> rows` for each. The tables of the knowledge base's words index are not copied.
+4. Brings each key that counts up past its rows, then counts each table's rows in the database against the rows it read.
+5. Prints each table with its rows on both sides, then control's place in each of the bus's streams, such as `control's place in EVENTS: 229, carried as it is`, and `copied: <n> tables, <n> rows, the same on both sides. The SQLite store is as it was`.
+
+A table whose two counts differ is marked `differs` in the list, the copy says `copy failed: the rows loaded are not the rows given: ...`, and nothing is kept: the database is as it was, empty. Any other failure keeps nothing either. Then set `THERMITE_CONTROL_STORE=postgres` and start control: it goes on from its place in the bus's streams, so no event is applied twice and none is skipped. The SQLite file stays where it is, and control no longer reads it. A search of the knowledge base on PostgreSQL is a plain match of its words until its words index is built there.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--state DIR` | `THERMITE_CONTROL_DIR`, else `/var/lib/thermite-control` | Control's state folder. One without `control.db`: `<dir> holds no control.db: give control's state folder with --state`, exit 2 |
+
+It exits 0 when the copy is whole, 1 when it was refused or failed, and 2 on a missing folder or a database address that is not set or not valid.
 
 ## `thermite-trial`
 

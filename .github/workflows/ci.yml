@@ -110,6 +110,43 @@ jobs:
       - run: npm ci
       - run: node scripts/test.mjs --part parallel --store-waits turn
 
+  # The tests that open control's store, with every store on PostgreSQL (goal 268): a test that
+  # passes on SQLite alone fails here. First on PostgreSQL inside the test's process (PGlite), as
+  # `npm run check` runs them; then on a server of the image the compose file pins, reached as
+  # control reaches its own. The server keeps nothing to disk in a hurry: it is the tests' alone.
+  store-postgres:
+    name: tests on a store on PostgreSQL
+    needs: approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: docker.io/library/postgres:18.7-alpine@sha256:75dcac3dfb1cd01ca3536910bbc84128759362f8b118bf8c55b38a94f68f3b73
+        env:
+          POSTGRES_USER: thermite
+          POSTGRES_DB: thermite
+          # The tests' own server, on the runner's loopback: it asks for no password.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: "-c fsync=off -c synchronous_commit=off -c max_connections=400"
+        ports: ["127.0.0.1:5432:5432"]
+        options: >-
+          --shm-size=1g
+          --health-cmd "pg_isready -U thermite -d thermite"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test.mjs --store postgres
+      - run: node scripts/test.mjs --store postgres
+        env:
+          THERMITE_TEST_POSTGRES_URL: postgres://thermite@127.0.0.1:5432/thermite
+
   docs:
     name: docs site
     needs: approval

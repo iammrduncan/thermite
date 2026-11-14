@@ -19,6 +19,7 @@ import {
   events,
   latestVerdicts,
   prepare,
+  storeAsAsked,
   submit,
   until,
 } from "./lib/smoke-env.mjs";
@@ -93,6 +94,8 @@ console.log("compose: build and start (the rig reports over the message bus)");
 stack("up", "-d", "--build");
 try {
   await until("control health", async () => (await fetch(`${control}/v1/health`)).ok);
+  // SQLite, or PostgreSQL with THERMITE_CONTROL_STORE=postgres (goal 268).
+  storeAsAsked(composeEnv);
   // Control's health says how it holds its bus: connected once the server took control's files.
   const health = await until(
     "control's health says the bus is connected",

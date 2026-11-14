@@ -143,11 +143,13 @@ describe("a transaction on the store", () => {
   test("holds every other caller until it ends: their work is not kept or dropped with it", async () => {
     const store = openControlStore(":memory:");
     const hold = gate();
+    const wrote = gate();
     const order: string[] = [];
     const first = store
       .tx(async () => {
         await store.ownSettings.set("mine", "1", "test");
         order.push("the transaction wrote");
+        wrote.open();
         // A test alone waits for something else inside a transaction: to hold it open.
         await hold.opened;
         await store.ownSettings.set("mine", "2", "test");
@@ -164,6 +166,8 @@ describe("a transaction on the store", () => {
         await store.ownSettings.set("second", "1", "test");
       })
       .then(() => order.push("the second transaction ended"));
+    // Once it has written, and the others have had their turns to run, if anything let them.
+    await wrote.opened;
     for (let i = 0; i < 5; i++) await new Promise((turn) => setImmediate(turn));
     assert.deepEqual(order, ["the transaction wrote"], "nothing else ran while it was open");
     assert.equal(await kept(store, "other"), undefined);

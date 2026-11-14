@@ -16,6 +16,8 @@ import {
   snapshotFile,
 } from "../../core/backup.ts";
 import { writeAtomic } from "../fs.ts";
+import type { PgConnection } from "../postgres.ts";
+import { dumpPostgres } from "../postgres-dump.ts";
 import { copyHashed, filesUnder, giveTo, hashFile, type Owner, sidecarsToOwner } from "./files.ts";
 import type { BackupBus } from "./streams.ts";
 
@@ -41,6 +43,32 @@ export interface BackupOptions {
   say?: ((line: string) => void) | undefined;
   /** Who gets what it writes, when it runs as root (files.ts ownerFor). */
   owner?: Owner | undefined;
+  /**
+   * The database of a control whose store is on PostgreSQL (goal 268): its rows are dumped where
+   * the SQLite file is copied. None: the store is the SQLite file in the state folder.
+   */
+  postgres?: PgConnection | undefined;
+}
+
+/** Dumps a store on PostgreSQL to `file`, as it stood at one moment; what the store says of itself. */
+async function dumpStore(conn: PgConnection, file: string): Promise<BackupManifest["store"]> {
+  const { head } = await dumpPostgres(conn, file, {
+    schema: async (c) =>
+      Number((await c.query("select max(version) as v from schema_migrations")).rows[0]?.v ?? 0),
+    notes: async (c) => ({
+      positions: Object.fromEntries(
+        (await c.query("select stream, seq from bus_position")).rows.map((r) => [
+          String(r.stream),
+          Number(r.seq),
+        ]),
+      ),
+    }),
+  });
+  return {
+    kind: "postgres",
+    schema: head.schema,
+    positions: head.notes.positions as Record<string, number>,
+  };
 }
 
 /** What control's store says of itself, read from its copy. */
@@ -63,6 +91,7 @@ function storeFacts(copy: string): BackupManifest["store"] {
         }[])
       : [];
     return {
+      kind: "sqlite",
       schema: Number(v?.v ?? 0),
       positions: Object.fromEntries(rows.map((r) => [r.stream, Number(r.seq)])),
     };
@@ -78,7 +107,7 @@ export async function backupControl(
   const say = o.say ?? (() => {});
   const now = o.now ?? new Date();
   const db = join(o.stateDir, CONTROL_STATE.db);
-  if (!existsSync(db))
+  if (!o.postgres && !existsSync(db))
     throw new Error(`${o.stateDir} holds no ${CONTROL_STATE.db}: is it control's state folder?`);
   const folder = join(o.into, backupName(now));
   const partial = `${folder}.partial`;
@@ -92,18 +121,28 @@ export async function backupControl(
     files.push({ path: `${BACKUP_LAYOUT.state}/${rel}`, ...h });
 
   // The store, whole and consistent while control writes to it.
-  const copy = join(state, CONTROL_STATE.db);
-  const live = new DatabaseSync(db, { readOnly: true });
-  try {
-    live.exec("pragma busy_timeout = 5000");
-    live.prepare("vacuum into ?").run(copy);
-  } finally {
-    live.close();
-    sidecarsToOwner(db);
+  let store: BackupManifest["store"];
+  if (o.postgres) {
+    const dump = join(state, CONTROL_STATE.storeDump);
+    store = await dumpStore(o.postgres, dump);
+    add(CONTROL_STATE.storeDump, await hashFile(dump));
+    say(
+      `dumped the store on PostgreSQL to ${CONTROL_STATE.storeDump}: schema ${store.schema}, ${statSync(dump).size} bytes`,
+    );
+  } else {
+    const copy = join(state, CONTROL_STATE.db);
+    const live = new DatabaseSync(db, { readOnly: true });
+    try {
+      live.exec("pragma busy_timeout = 5000");
+      live.prepare("vacuum into ?").run(copy);
+    } finally {
+      live.close();
+      sidecarsToOwner(db);
+    }
+    add(CONTROL_STATE.db, await hashFile(copy));
+    store = storeFacts(copy);
+    say(`copied ${CONTROL_STATE.db}: schema ${store.schema}, ${statSync(copy).size} bytes`);
   }
-  add(CONTROL_STATE.db, await hashFile(copy));
-  const store = storeFacts(copy);
-  say(`copied ${CONTROL_STATE.db}: schema ${store.schema}, ${statSync(copy).size} bytes`);
 
   for (const name of STATE_FILES) {
     const from = join(o.stateDir, name);

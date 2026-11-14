@@ -48,7 +48,17 @@ export const imageTarget = (/** @type {string} */ target) => [
 // THERMITE_PROJECT and THERMITE_CONTROL_PORT let a second stack (a long run) run beside the usual
 // one, with THERMITE_NATS_PUBLISH for its message bus's port (such as 127.0.0.1:4223).
 export const control = `http://127.0.0.1:${process.env.THERMITE_CONTROL_PORT ?? "8800"}`;
-const project = process.env.THERMITE_PROJECT ? ["-p", process.env.THERMITE_PROJECT] : [];
+/**
+ * Where control's store is in this check: SQLite, or PostgreSQL with THERMITE_CONTROL_STORE=postgres
+ * (goal 268), which compose hands to control. The stack then has the postgres service too.
+ */
+export const STORE = process.env.THERMITE_CONTROL_STORE === "postgres" ? "postgres" : "sqlite";
+/** The compose options that start the store's own service with the stack: its profile. */
+export const storeProfile = STORE === "postgres" ? ["--profile", "postgres"] : [];
+const project = [
+  ...(process.env.THERMITE_PROJECT ? ["-p", process.env.THERMITE_PROJECT] : []),
+  ...storeProfile,
+];
 /** @type {(ms: number) => Promise<void>} */
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -96,6 +106,20 @@ export function dcLogs(env, service, files = []) {
     },
   );
   return `${r.stdout ?? ""}${r.stderr ?? ""}`;
+}
+
+/**
+ * Fails unless control runs on the store this check was asked for: a control on PostgreSQL says
+ * so as it starts.
+ * @param {ComposeEnv} env
+ */
+export function storeAsAsked(env) {
+  const says = /the store is on PostgreSQL/.test(dcLogs(env, "control"));
+  if (says !== (STORE === "postgres"))
+    throw new Error(
+      `control's store was to be on ${STORE}, and its log says ${says ? "PostgreSQL" : "nothing of PostgreSQL"}`,
+    );
+  console.log(`control's store: ${STORE === "postgres" ? "PostgreSQL" : "SQLite"}`);
 }
 
 /**

@@ -28,6 +28,9 @@ export const LOCAL_TOKEN_FILES = [
   "control-admin-token",
   // An operating agent's token for control's MCP (it may steer and message agents, never approve).
   "control-operator-token",
+  // The password of control's store's user on PostgreSQL: the compose stack's postgres service
+  // and control read the same file (goal 268; only with the store on PostgreSQL, for trial).
+  "postgres-password",
   "harness-supervisor-token",
   "harness-proposer-token",
   "harness2-supervisor-token",
