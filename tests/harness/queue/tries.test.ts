@@ -167,6 +167,26 @@ describe("an experiment's tries", () => {
     assert.equal(s.events("experiment_retried").length, 1);
   });
 
+  test("a change the owner declined ends its tries, and the owner may send its experiment back", async () => {
+    const s = await setup();
+    const { q } = s;
+    const x = q.add(RUN, { title: "declined", by: "owner", tries: 2 }, "control:owner:ui");
+    q.assign(RUN, x.id, { lane: "lane-1", trial: "t-1", by: "planner" }, "planner");
+    const a = attempt(s, "a-0000000000000003");
+    q.finish("t-1", { result: "submitted", attempt: a }, "harness");
+    judge(s, a, "win_confirmed", "audit_blocked");
+    s.env.service.ledger.attempts.setLifecycle(a, "declined", "control:owner");
+    // The owner decided it: no try goes back by itself.
+    assert.deepEqual(q.retrySettled(RUN, "harness"), []);
+    assert.equal(q.get(x.id)?.state, "done");
+    // The judge is done with it, so the owner may send it back. Before, the send-back was refused
+    // as `still with the judge (declined)`, a wait with no end.
+    const sent = await s.command("queue_retry", { run: RUN, id: x.id, why: "try it once more" });
+    assert.ok(sent.accepted, JSON.stringify(sent));
+    assert.equal(q.get(x.id)?.state, "queued");
+    assert.equal(body(s.events("experiment_retried").at(-1)).verdict, "win_confirmed");
+  });
+
   test("the owner sets tries on queue_add and queue_edit, within 1 to 10 and above the tries used", async () => {
     const s = await setup();
     const { q } = s;
