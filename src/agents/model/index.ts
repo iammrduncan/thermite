@@ -64,6 +64,8 @@ export interface ModelConfig {
    * Responses API; apiKey is then a one-hour access token that control renews).
    */
   api?: ProviderType | undefined;
+  /** OpenCode needs a session header even when a local proxy hides the provider's URL. */
+  opencodeSession?: boolean | undefined;
   /**
    * The harness the agents run in: Pi, in-process (the default), OpenCode v2, Claude Code or the
    * Codex CLI (OpenAI's Responses API only: a ChatGPT sign-in or an OpenAI-compatible route).
@@ -145,6 +147,7 @@ export const MODEL_SETTINGS = {
   maxTokens: "THERMITE_MODEL_MAX_TOKENS",
   reasoning: "THERMITE_MODEL_REASONING_EFFORT",
   api: "THERMITE_MODEL_API",
+  opencodeSession: "THERMITE_MODEL_OPENCODE_SESSION",
   harness: "THERMITE_AGENT_HARNESS",
 } as const;
 
@@ -168,6 +171,9 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
     throw new Error(
       `THERMITE_MODEL_API must be openai, anthropic, opencode, claude or chatgpt, not ${rawApi}`,
     );
+  const opencodeSession = setting(env, MODEL_SETTINGS.opencodeSession);
+  if (opencodeSession !== undefined && opencodeSession !== "1")
+    throw new Error("THERMITE_MODEL_OPENCODE_SESSION must be 1 or unset");
   const rawHarness = setting(env, MODEL_SETTINGS.harness);
   const harness = HARNESSES.find((h) => h === rawHarness);
   if (rawHarness !== undefined && !harness)
@@ -189,6 +195,7 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
   return {
     // An OpenAI-compatible route and Pi are the defaults, left unnamed.
     api: api === "openai" ? undefined : api,
+    ...(opencodeSession === "1" ? { opencodeSession: true } : {}),
     harness: harness === "pi" ? undefined : harness,
     baseUrl: baseUrl.replace(/\/$/, ""),
     model,
@@ -208,6 +215,7 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
 export function modelEnv(cfg: ModelConfig): Record<string, string> {
   return {
     ...(cfg.api && cfg.api !== "openai" ? { THERMITE_MODEL_API: cfg.api } : {}),
+    ...(cfg.opencodeSession ? { THERMITE_MODEL_OPENCODE_SESSION: "1" } : {}),
     ...(cfg.harness && cfg.harness !== "pi" ? { THERMITE_AGENT_HARNESS: cfg.harness } : {}),
     THERMITE_MODEL_BASE_URL: cfg.baseUrl,
     THERMITE_MODEL: cfg.model,
@@ -307,7 +315,9 @@ function openAIAuth(apiKey: string): { apiKey: string; headers?: { authorization
 function buildUnguarded(cfg: ModelConfig) {
   if (cfg.api === "anthropic") return buildAnthropic(cfg);
   if (cfg.api === "chatgpt") return buildChatGPT(cfg);
-  const provider = "thermite-openai";
+  // pi-ai uses the provider's identity to add OpenCode's per-conversation session header. A
+  // local proxy hides its host, so preserve that identity when the original route is OpenCode.
+  const provider = cfg.opencodeSession ? "opencode" : "thermite-openai";
   const model: Model<"openai-completions"> = {
     id: cfg.model,
     name: cfg.model,
@@ -358,7 +368,7 @@ function buildUnguarded(cfg: ModelConfig) {
 
 /** An Anthropic route: the Messages API; its base URL has no /v1 (the client adds it). */
 function buildAnthropic(cfg: ModelConfig) {
-  const provider = "thermite-anthropic";
+  const provider = cfg.opencodeSession ? "opencode" : "thermite-anthropic";
   const model: Model<"anthropic-messages"> = {
     id: cfg.model,
     name: cfg.model,

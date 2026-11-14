@@ -57,7 +57,7 @@ export interface ForwardCall {
  * and features, and the conversation's session (goal 222), by which a provider keeps a
  * conversation's calls where its prompt cache is: the Codex CLI's `session_id` and
  * `conversation_id`, pi-ai's `session_id`, `x-client-request-id` and `x-session-affinity`, and
- * OpenRouter's `x-session-id`; and `x-codex-turn-state`, the token for sticky routing that an
+ * OpenRouter's `x-session-id` and OpenCode's `x-opencode-session`; and `x-codex-turn-state`, the token for sticky routing that an
  * answer gives the Codex CLI (goal 220) and the CLI sends back on the turn's later calls. Never
  * one that carries a credential: the proxy adds the key.
  */
@@ -73,6 +73,7 @@ export const FORWARDED_HEADERS = [
   "x-client-request-id",
   "x-session-affinity",
   "x-session-id",
+  "x-opencode-session",
   "x-codex-turn-state",
 ] as const;
 

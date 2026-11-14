@@ -239,6 +239,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 The fixes after them, one version each, in the order to take them:
 
+- [260](goals/260-opencode-go.goal) OpenCode Go's model list and conversation sessions · `IN_PROGRESS`: patch version to be assigned
 - [227](goals/227-runners-ride-through-restart.goal) A rig's runners ride through control's restart · `IN_PROGRESS`: item 4 shipped in v0.2.0, items 1 to 3 are the fix
 - [224](goals/224-update-across-control-restart.goal) A rig's update that a control restart cuts off goes on, or says so · `PROPOSED`
 - [225](goals/225-drain-waits-for-advisors.goal) A drain waits for the supervisor's advisors too · `PROPOSED`

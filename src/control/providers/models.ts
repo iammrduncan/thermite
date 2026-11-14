@@ -176,6 +176,7 @@ export async function listModels(
   if (type === "claude")
     return CLAUDE_MODELS.map((m) => ({ id: m.id, context_window: m.context_window }));
   const root = providerBase(type, base);
+  const opencodeGo = type === "openai" && root === "https://opencode.ai/inference/go/openai/v1";
   // OpenCode's own list needs no key (its free models need none).
   const headers: Record<string, string> =
     type === "anthropic"
@@ -190,7 +191,9 @@ export async function listModels(
     const url =
       type === "anthropic"
         ? `${root}/v1/models?limit=1000${after ? `&after_id=${encodeURIComponent(after)}` : ""}`
-        : `${root}/models`;
+        : opencodeGo
+          ? "https://opencode.ai/inference/go/v1/models"
+          : `${root}/models`;
     let res: Response;
     try {
       res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(15_000) });
@@ -218,10 +221,25 @@ export async function listModels(
     for (const m of body.data as Record<string, unknown>[]) {
       if (typeof m?.id !== "string" || !m.id || m.id.length > 200) continue;
       const price = listedPrice(m);
-      const output = outputOf(m, type);
+      const limits =
+        opencodeGo && m.limit && typeof m.limit === "object"
+          ? (m.limit as Record<string, unknown>)
+          : undefined;
+      const context = limits?.context;
+      const maxOutput = limits?.output;
+      const output =
+        typeof maxOutput === "number" &&
+        Number.isInteger(maxOutput) &&
+        maxOutput > 0 &&
+        maxOutput <= 10_000_000
+          ? maxOutput
+          : outputOf(m, type);
       out.push({
         id: m.id,
-        context_window: contextOf(m),
+        context_window:
+          typeof context === "number" && Number.isInteger(context) && context > 0
+            ? context
+            : contextOf(m),
         ...(price ? { price } : {}),
         ...(output ? { max_output: output } : {}),
       });

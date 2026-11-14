@@ -205,6 +205,7 @@ A model chosen for the rig on control (**Settings › Providers**, or **Edit rig
 | Variable | Type | Default | Secret | Meaning |
 | --- | --- | --- | --- | --- |
 | `THERMITE_MODEL_BASE_URL` | URL | not set | no | The provider's endpoint. For `openai`, an OpenAI-compatible endpoint with tool calling: the address before `/chat/completions`, usually ending in `/v1`. For `anthropic`, the address without `/v1` |
+| `THERMITE_MODEL_OPENCODE_SESSION` | `1` or unset | unset | no | An internal marker set for a Pi advisor whose OpenCode route passes through a local proxy. It preserves OpenCode's per-conversation session header; other values stop the process |
 | `THERMITE_MODEL` | string | not set | no | The model's name at that endpoint |
 | `THERMITE_MODEL_API_KEY_FILE` | path | not set | path to a secret | The endpoint's key. For `THERMITE_MODEL_API=claude`, the subscription's token |
 | `THERMITE_MODEL_CONTEXT_WINDOW` | tokens: an integer, 0 or more | `0`: unknown | no | The model's context per request. When it is known, the agents' conversations are compacted near it, and, when a reply limit is known too (`THERMITE_MODEL_MAX_TOKENS`, or the model's maximum output from control's route), each reply is limited to the room left |

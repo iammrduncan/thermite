@@ -19,8 +19,14 @@ export function piKey(rt: PiRuntime): string {
 
 /** The advisor's model route, with `apiKey` as its key (the route's own, or its call's proxy's). */
 export function piModel(rt: PiRuntime, at: { baseUrl: string; apiKey: string }): ModelConfig {
+  // The terminal advisor talks through a local proxy, so pi-ai cannot see the original host.
+  // Retain that identity for OpenCode's conversation header, without changing other providers.
+  const opencodeSession =
+    new URL(rt.base_url).hostname === "opencode.ai" &&
+    new URL(at.baseUrl).hostname !== "opencode.ai";
   return {
     api: rt.api === "anthropic" || rt.api === "chatgpt" ? rt.api : undefined,
+    ...(opencodeSession ? { opencodeSession: true } : {}),
     baseUrl: at.baseUrl,
     model: rt.model,
     apiKey: at.apiKey,

@@ -14,6 +14,50 @@ import { stack } from "./stack.ts";
  */
 
 describe("control dashboard", () => {
+  test("an OpenCode Go provider lists Go's catalog and gives its inference route to the rig", async () => {
+    const requests: { url: string; authorization: string | null }[] = [];
+    const providerFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({
+        url: String(input),
+        authorization: new Headers(init?.headers).get("authorization"),
+      });
+      if (String(input) !== "https://opencode.ai/inference/go/v1/models")
+        return new Response("not found", { status: 404 });
+      return Response.json({
+        data: [{ id: "go-model", limit: { context: 128000, output: 32000 } }],
+      });
+    }) as typeof fetch;
+    const s = await stack("owner_approval", { providerFetch });
+    await s.relay();
+    const csrf = s.csrfFrom(await (await s.get("/ui/settings")).text());
+    const added = await s.post("/ui/settings/providers", {
+      csrf,
+      name: "go",
+      type: "openai",
+      base_url: "https://opencode.ai/inference/go/openai/v1",
+      api_key: "test-go-key",
+    });
+    assert.match(decodeURIComponent(added.headers.get("location") ?? ""), /lists 1 model/);
+    assert.deepEqual(requests, [
+      { url: "https://opencode.ai/inference/go/v1/models", authorization: "Bearer test-go-key" },
+    ]);
+    await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "go|go-model", harness: "pi" });
+    const given = (await s.rigConfig("model-route")) as unknown as {
+      route: {
+        type: string;
+        base_url: string;
+        model: string;
+        context_window: number;
+        max_tokens: number;
+      };
+    };
+    assert.equal(given.route.type, "openai");
+    assert.equal(given.route.base_url, "https://opencode.ai/inference/go/openai/v1");
+    assert.equal(given.route.model, "go-model");
+    assert.equal(given.route.context_window, 128000);
+    assert.equal(given.route.max_tokens, 32000);
+  });
+
   test("a provider's key goes in once on the settings page, sealed; its models are listed; only its rig's harness gets the key", async () => {
     // A fake provider: an OpenAI-compatible one that takes only its key, and Anthropic's API.
     const key = "test-key-never-shown-0001";

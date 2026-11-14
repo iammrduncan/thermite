@@ -20,6 +20,8 @@
 //     thermite-trial; then, the rig set to headless over REST, a research run's trial runs
 //     headless (headless stays an advanced choice, so both modes keep a trial here) and runs the
 //     research tools as `thermite-trial research` commands;
+//   - OpenCode's calls through the proxy keep each conversation's session header, with one ID
+//     across its turns and a different ID for another conversation;
 //   - that trial reads and searches its run's research folder, is refused changing the harness's
 //     part of it, and the file it writes in its working area is saved when it ends;
 //   - the Pi view (goal 169): the workers of the first epoch, in Pi on a rig nobody set, run in
@@ -288,11 +290,21 @@ function script(messages, tools) {
 /** Whether the OpenCode trial's memory hog came back killed (the lane's memory limit). */
 /** @type {{ killed?: boolean }} */
 const hogSeen = {};
+/** How many proxied OpenCode calls carry each conversation's session; none are logged. */
+/** @type {Map<string, number>} */
+const opencodeSessions = new Map();
+let opencodeMissingSession = 0;
 const model = await scriptedModel(script, {
   // Anything else but a model call: the research fetch reached this machine, which the
   // harness's fetcher must refuse before it connects.
   other: (req) => {
     researchSeen.reachedPrivate = `${req.method} ${req.url}`;
+  },
+  observeRequest: (req) => {
+    if (!String(req.headers["user-agent"] ?? "").startsWith("opencode/")) return;
+    const session = req.headers["x-opencode-session"];
+    if (typeof session !== "string" || !session) opencodeMissingSession++;
+    else opencodeSessions.set(session, (opencodeSessions.get(session) ?? 0) + 1);
   },
   observe: (messages) => {
     for (const m of messages) {
@@ -515,6 +527,8 @@ try {
   // Cleared before the planner's scene: OpenCode's trial may run, and ask with its key, while the
   // scene waits for the planner's next round.
   keysSeen.clear();
+  opencodeSessions.clear();
+  opencodeMissingSession = 0;
   await opencodePlannerScene(check);
   const ocCheck = await until(
     "OpenCode's model check (run when the rig took the route)",
@@ -571,6 +585,18 @@ try {
       turns: ocTrial?.body.turns,
       memory_hog_killed: hogSeen.killed ?? false,
       keys: [...keysSeen].map((k) => k.slice(0, 16)),
+    },
+  );
+  const sessionCounts = [...opencodeSessions.values()];
+  check(
+    "OpenCode's proxy keeps session IDs across calls and gives different conversations different IDs",
+    opencodeMissingSession === 0 &&
+      sessionCounts.length >= 2 &&
+      sessionCounts.some((count) => count >= 2),
+    {
+      conversations: sessionCounts.length,
+      callsByConversation: sessionCounts,
+      missing: opencodeMissingSession,
     },
   );
   // A research run under OpenCode: a research trial follows the agents' harness. Its worker keeps

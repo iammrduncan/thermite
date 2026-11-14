@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   Agent,
   AgentMessage,
@@ -535,6 +536,7 @@ export function summarizer(cfg: ModelConfig, meter?: PiMeter | undefined) {
         messages: [{ role: "user", content: messageText(sent), timestamp: Date.now() }],
       },
       {
+        sessionId: randomUUID(),
         // The model's own reply limit, or (none known) none sent (goal 079).
         ...(cfg.maxTokens ? { maxTokens: cfg.maxTokens } : {}),
         ...(signal ? { signal } : {}),

@@ -13,15 +13,16 @@ import { createServer } from "node:http";
 /**
  * Starts the server. `script(messages, tools)` returns `{ text }` or `{ toolCalls: [{ name,
  * args }] }` for each request, or a promise of one (a turn that takes its time). `observe(messages)`, when given, sees every request's messages
- * first. `other(req)`, when given, sees each request that is neither a chat completion nor the
- * model list, which gets a 404. `keys` holds the Authorization header of every request.
+ * first. `observeRequest(req)`, when given, sees each chat request's headers. `other(req)`, when
+ * given, sees each request that is neither a chat completion nor the model list, which gets a
+ * 404. `keys` holds the Authorization header of every request.
  *
  * The messages and tools are the request's, as the agent program sent them: read loosely (`any`),
  * since each script looks only at what its turn needs.
  * @param {(messages: any[], tools: any[]) => ScriptedTurn | Promise<ScriptedTurn>} script
- * @param {{ observe?: (messages: any[]) => void, other?: (req: import("node:http").IncomingMessage) => void }} [options]
+ * @param {{ observe?: (messages: any[]) => void, observeRequest?: (req: import("node:http").IncomingMessage) => void, other?: (req: import("node:http").IncomingMessage) => void }} [options]
  */
-export async function scriptedModel(script, { observe, other } = {}) {
+export async function scriptedModel(script, { observe, observeRequest, other } = {}) {
   const keys = new Set();
   let requests = 0;
   const server = createServer((req, res) => {
@@ -44,6 +45,7 @@ export async function scriptedModel(script, { observe, other } = {}) {
         return;
       }
       requests++;
+      observeRequest?.(req);
       const p = JSON.parse(body);
       observe?.(p.messages ?? []);
       const turn = await script(p.messages ?? [], p.tools ?? []);
