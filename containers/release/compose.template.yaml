@@ -225,12 +225,16 @@ services:
   # is its only client, and waits for it at its start. Its data is on a volume of its own, and
   # its user's password is the file .dev/secrets/postgres-password, which `thermite local init`
   # makes. Its port is published nowhere. A deployment with a PostgreSQL server of its own leaves
-  # the profile out, and names its database in THERMITE_CONTROL_POSTGRES_URL. It starts as root,
-  # gives its data folder to its own user and goes on as that user, with only the capabilities
-  # for that.
+  # the profile out, and names its database in THERMITE_CONTROL_POSTGRES_URL. It runs as the
+  # image's own user, postgres (70), from its start, with no capability: a new volume takes that
+  # user from the image's folder. It is the one service without no-new-privileges: the server's
+  # processes signal each other, and with that option AppArmor on some hosts refuses a signal
+  # between two processes of one container, so the server never finishes its start. As a user
+  # that is not root, with every capability dropped, it has no privilege to gain.
   postgres:
     profiles: [postgres]
     image: docker.io/library/postgres:18.7-alpine@sha256:75dcac3dfb1cd01ca3536910bbc84128759362f8b118bf8c55b38a94f68f3b73
+    user: "70:70"
     environment:
       POSTGRES_USER: thermite
       POSTGRES_DB: thermite
@@ -246,9 +250,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 60s
     cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
-    security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
     logging: *logging
 

@@ -85,8 +85,43 @@ async function sqliteStore(): Promise<{ path: string; tables: string[] }> {
   const tables = (await tablesBehind(s)).filter(
     (t) => !t.startsWith("kb_words") && t !== "schema_migrations",
   );
+  await fillEmptyTables(s, tables);
   await s.close();
   return { path, tables };
+}
+
+/**
+ * A row in each table that holds none, made from the table's own columns, so that the copy is
+ * tested on every table: a value its `check` allows where it has one, else one of the column's
+ * type. The rows mean nothing to control; the copy takes rows as they are.
+ */
+async function fillEmptyTables(s: ControlStore, tables: readonly string[]): Promise<void> {
+  for (const table of tables) {
+    const held = (await rowsBehind(s, `select count(*) as n from "${table}"`))[0]?.n;
+    if (Number(held) > 0) continue;
+    const made = String(
+      (await rowsBehind(s, "select sql from sqlite_master where name = ?", table))[0]?.sql,
+    );
+    const columns = await rowsBehind(s, "select name, type from pragma_table_info(?)", table);
+    const values = columns.map((c) => {
+      const name = String(c.name);
+      // check (kind in ('ssh', 'token')): the first value it allows.
+      const allowed = new RegExp(`\\b${name} in \\(([^)]*)\\)`).exec(made)?.[1];
+      const first = allowed?.split(",")[0]?.trim();
+      if (first) return first.startsWith("'") ? first.slice(1, -1) : Number(first);
+      const type = String(c.type).toLowerCase();
+      if (type === "integer") return 7;
+      if (type === "real") return 1.5;
+      if (type === "blob") return Buffer.from([0, 1, 254, 255]);
+      return `${table}.${name}`;
+    });
+    await writeBehind(
+      s,
+      `insert into "${table}" (${columns.map((c) => `"${String(c.name)}"`).join(", ")})
+         values (${columns.map(() => "?").join(", ")})`,
+      ...values,
+    );
+  }
 }
 
 /** Every row of a table, in an order of its own, as text: the same on both stores for the same rows. */
@@ -115,9 +150,12 @@ describe("the copy of control's store from SQLite to PostgreSQL", () => {
     assert.equal(sha256(path), before, "the SQLite file is unchanged");
     assert.deepEqual(report.tables.map((t) => t.table).sort(), [...tables].sort());
     for (const t of report.tables) assert.equal(t.postgres, t.sqlite, t.table);
-    const held = report.tables.filter((t) => t.sqlite > 0).map((t) => t.table);
-    for (const table of ["audit", "command", "kb_item", "kb_version", "rig_live", "rig_token"])
-      assert.ok(held.includes(table), `${table} holds rows: ${held}`);
+    assert.deepEqual(
+      report.tables.filter((t) => t.sqlite === 0).map((t) => t.table),
+      [],
+      "every table of the store holds rows",
+    );
+    assert.ok(report.tables.length >= 69, `${report.tables.length} tables`);
     assert.equal(said.filter((l) => /^copied \w+: \d+ rows$/.test(l)).length, tables.length);
 
     // The same rows, read from both stores.
