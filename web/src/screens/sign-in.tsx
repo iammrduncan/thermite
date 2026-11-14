@@ -1,10 +1,16 @@
 import { SESSION_START, type SessionAnswer } from "@core/api/control/dashboard.ts";
 import { type FormEvent, useState } from "react";
 import { type ApiError, call } from "@/api.ts";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Act } from "@/parts/act.tsx";
+import { Field, TextInput } from "@/parts/field.tsx";
+import { Mark } from "@/parts/mark.tsx";
+import { Thermy } from "@/parts/thermy.tsx";
 
-/** Sign in with the owner's token: one field, on a page with nothing around it. */
+/**
+ * Sign in, from its board: one card on the sidebar's paper, with Thermy, the mark, the sentence,
+ * and the form. The board asks for a user name and a password, which control does not have yet
+ * (goal 261); until then the one field is the owner's token.
+ */
 export function SignIn({
   days,
   onSignedIn,
@@ -25,32 +31,47 @@ export function SignIn({
     });
   };
   return (
-    <main className="mx-auto grid min-h-dvh w-full max-w-sm content-center gap-6 px-4 py-10">
-      <h1 className="text-xl font-medium">Sign in to Thermite</h1>
-      <form className="grid gap-4" onSubmit={submit}>
-        <label className="grid gap-1.5 text-sm font-medium">
-          The owner's token
-          <Input
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
-          <span className="font-normal text-muted-foreground">
-            This browser stays signed in while you use it. A session left unused for {days} days
-            ends.
-          </span>
-        </label>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <Button type="submit" className="justify-self-start" disabled={busy || !token}>
-          {busy ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
+    <main className="flex min-h-dvh items-center justify-center bg-sidebar px-6 py-10">
+      <div
+        data-screen="form"
+        className="flex w-full max-w-[400px] flex-col gap-6 rounded-xl border bg-card p-6 shadow-page sm:p-10"
+      >
+        <div className="flex flex-col items-center gap-4">
+          <Thermy className="size-24" />
+          <div className="flex items-center gap-2 text-base font-semibold">
+            <Mark />
+            Thermite
+          </div>
+        </div>
+        <h1 className="text-center text-sentence">Sign in to Thermite.</h1>
+        <form className="flex flex-col gap-6" onSubmit={submit}>
+          <Field
+            label="The owner's token"
+            htmlFor="token"
+            help={`Thermite keeps this browser signed in while you use it. A session left unused for ${days} days ends.`}
+          >
+            <TextInput
+              id="token"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              aria-invalid={error ? true : undefined}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+          </Field>
+          {error && (
+            <p role="alert" className="font-semibold text-wrong">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-4">
+            <Act look="main" type="submit" disabled={busy || !token}>
+              {busy ? "Signing in…" : "Sign in"}
+            </Act>
+          </div>
+        </form>
+      </div>
     </main>
   );
 }

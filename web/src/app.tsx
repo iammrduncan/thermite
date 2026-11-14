@@ -2,8 +2,9 @@ import { HOME, SESSION, SESSION_END, type SessionAnswer } from "@core/api/contro
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import { type ApiError, call, setSessionToken, useAlive, useRead, whenSignedOut } from "@/api.ts";
 import { follow, here, to } from "@/nav.ts";
-import { Body, Header } from "@/parts/header.tsx";
-import { Failure, Nothing } from "@/parts/states.tsx";
+import { TextLink } from "@/parts/act.tsx";
+import { Screen } from "@/parts/screen.tsx";
+import { Failure } from "@/parts/states.tsx";
 import { Home } from "@/screens/home.tsx";
 import { Run } from "@/screens/run.tsx";
 import { Settings } from "@/screens/settings.tsx";
@@ -61,7 +62,7 @@ function Owner({ path }: { path: string }) {
   }, [load]);
   if (!session)
     return error ? (
-      <main className="mx-auto grid min-h-dvh max-w-sm content-center px-4">
+      <main className="mx-auto grid min-h-dvh max-w-[480px] content-center px-4">
         <Failure said={error} again={load} />
       </main>
     ) : null;
@@ -92,20 +93,16 @@ function Screens({
   else if (settings) screen = <Settings tab={settings[1]} session={session} signOut={signOut} />;
   else
     screen = (
-      <>
-        <Header title="Not found" />
-        <Body width="form">
-          <Nothing>
-            The dashboard has no screen at this address.{" "}
-            <a href={to("/")} onClick={follow} className="underline underline-offset-4">
-              Home
-            </a>
-          </Nothing>
-        </Body>
-      </>
+      <Screen kind="detail" title="Not found" sentence="Thermite has no screen at this address.">
+        <p>
+          <TextLink href={to("/")} onClick={follow}>
+            Home
+          </TextLink>
+        </p>
+      </Screen>
     );
   return (
-    <Frame home={home.data} path={path} alive={alive}>
+    <Frame home={home.data} path={path} alive={alive} signOut={signOut}>
       {screen}
     </Frame>
   );

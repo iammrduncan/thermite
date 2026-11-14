@@ -2,6 +2,7 @@ import type { SessionAnswer } from "@core/api/control/dashboard.ts";
 import {
   ActivityIcon,
   ArrowUpRightIcon,
+  BarChart3Icon,
   BookOpenIcon,
   BotIcon,
   GitBranchIcon,
@@ -11,16 +12,20 @@ import {
   type LucideIcon,
   NetworkIcon,
   PlugIcon,
+  RadioIcon,
+  ScrollTextIcon,
   ServerIcon,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { follow, to } from "@/nav.ts";
+import { Act, TextLink } from "@/parts/act.tsx";
 import { CopyId } from "@/parts/copy-id.tsx";
-import { Header } from "@/parts/header.tsx";
+import { Facts } from "@/parts/lists.tsx";
+import { Screen, Section } from "@/parts/screen.tsx";
 
 /**
- * Settings: its tabs are links, each with its own address, in a column beside the content on a
+ * Setup (Settings until the refresh): its parts are links, each with its own address, in a column beside the content on a
  * wide window and in a row above it on a narrow one (the frame of fxbot's Settings). A tab whose
  * screens are not built here yet says where they are today.
  */
@@ -100,6 +105,27 @@ const TABS: Tab[] = [
     page: "/ui/metrics?tab=control",
   },
   {
+    id: "usage",
+    label: "Usage",
+    icon: BarChart3Icon,
+    about: "What the agents' models used, by run, by agent and by model.",
+    page: "/ui/metrics",
+  },
+  {
+    id: "logs",
+    label: "Logs",
+    icon: ScrollTextIcon,
+    about: "Who changed what on control, and what control refused.",
+    page: "/ui/audit",
+  },
+  {
+    id: "live",
+    label: "Live",
+    icon: RadioIcon,
+    about: "What every run's agents and judge do now.",
+    page: "/ui/live",
+  },
+  {
     id: "about",
     label: "About",
     icon: InfoIcon,
@@ -125,12 +151,11 @@ export function Settings({
     current.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [id]);
   return (
-    <>
-      <Header title="Settings" />
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+    <Screen title="Setup" sentence={tab?.about}>
+      <div className="flex flex-col gap-6 lg:flex-row">
         <nav
-          aria-label="Settings"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b px-3 pb-2 [scrollbar-width:none] lg:w-48 lg:flex-col lg:overflow-visible lg:border-b-0 lg:py-6"
+          aria-label="Setup"
+          className="flex shrink-0 gap-1 overflow-x-auto [scrollbar-width:none] lg:w-48 lg:flex-col lg:overflow-visible"
         >
           {TABS.map((t) => (
             <a
@@ -139,94 +164,80 @@ export function Settings({
               href={to(t === TABS[0] ? "/settings" : `/settings/${t.id}`)}
               onClick={follow}
               aria-current={t === tab ? "page" : undefined}
-              className={buttonVariants({
-                variant: "ghost",
-                size: "sm",
-                className:
-                  "shrink-0 justify-start rounded-full text-muted-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground lg:rounded-md",
-              })}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-2 rounded-md px-2 text-sm outline-none hover:bg-chosen focus-visible:ring-2 focus-visible:ring-ring",
+                t === tab && "bg-flame-tint font-semibold text-flame hover:bg-flame-tint",
+              )}
             >
-              <t.icon /> {t.label}
+              <t.icon className={cn("size-4", t === tab ? "text-flame" : "text-quiet")} /> {t.label}
             </a>
           ))}
         </nav>
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6">
-          <div className="mx-auto grid max-w-xl gap-5">
-            {!tab ? (
-              <p className="text-sm text-muted-foreground">Settings has no such tab.</p>
-            ) : tab.id === "about" ? (
-              <About session={session} signOut={signOut} />
-            ) : (
-              <Elsewhere tab={tab} />
-            )}
-          </div>
-        </main>
+        <div className="flex min-w-0 max-w-[720px] flex-1 flex-col gap-6">
+          {!tab ? (
+            <p className="text-quiet">Setup has no such part.</p>
+          ) : tab.id === "about" ? (
+            <About session={session} signOut={signOut} />
+          ) : (
+            <Elsewhere tab={tab} />
+          )}
+        </div>
       </div>
-    </>
+    </Screen>
   );
 }
 
-/** A tab whose screens are still on the dashboard at /ui: what it holds, and the way there. */
+/** A part whose screens are still on the dashboard at /ui: the way there. */
 function Elsewhere({ tab }: { tab: Tab }) {
   return (
-    <section className="grid gap-3" aria-label={tab.label}>
-      <h2 className="font-medium">{tab.label}</h2>
-      <p className="text-sm text-muted-foreground">{tab.about}</p>
-      <div className="flex items-center gap-3 rounded-xl border p-3 text-sm">
-        <span className="min-w-0 flex-1">
+    <Section title={tab.label}>
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border p-4">
+        <span className="min-w-0 flex-1 text-soft">
           {tab.label} is still on the current dashboard. It moves here in a later step of the
           refresh.
         </span>
-        <Button variant="outline" asChild>
-          <a href={tab.page}>
-            Open it <ArrowUpRightIcon />
-          </a>
-        </Button>
+        <Act href={tab.page ?? "/ui"}>
+          Open it <ArrowUpRightIcon className="text-quiet" />
+        </Act>
       </div>
-    </section>
+    </Section>
   );
 }
 
 function About({ session, signOut }: { session: SessionAnswer; signOut: () => void }) {
   return (
     <>
-      <section className="grid gap-3" aria-label="This control">
-        <h2 className="font-medium">This control</h2>
-        <dl className="grid grid-cols-[8rem_1fr] items-center gap-x-3 gap-y-1 rounded-xl border p-3 text-sm">
-          <dt className="text-muted-foreground">Version</dt>
-          <dd>{session.control.version}</dd>
-          <dt className="text-muted-foreground">Commit</dt>
-          <dd>
-            {session.control.commit ? (
-              <CopyId id={session.control.commit} label="the commit" />
-            ) : (
-              <span className="text-muted-foreground">not given</span>
-            )}
-          </dd>
-        </dl>
-      </section>
-      <p className="text-sm text-muted-foreground">
-        This dashboard is built from open-source packages. Their licences:{" "}
-        <a href={to("/licenses.md")} className="underline underline-offset-4">
-          the script's
-        </a>
-        ,{" "}
-        <a href={to("/licenses-styles.md")} className="underline underline-offset-4">
-          the fonts', styles' and stock components'
-        </a>
-        .
-      </p>
-      <section className="grid gap-3" aria-label="This browser">
-        <h2 className="font-medium">This browser</h2>
-        <div className="flex items-center gap-3 rounded-xl border p-3 text-sm">
-          <span className="min-w-0 flex-1">
+      <Section title="This control">
+        <Facts
+          facts={[
+            { label: "Version", value: session.control.version },
+            {
+              label: "Commit",
+              value: session.control.commit ? (
+                <CopyId id={session.control.commit} label="the commit" />
+              ) : (
+                <span className="text-quiet">not given</span>
+              ),
+            },
+          ]}
+        />
+        <p className="text-soft">
+          This dashboard is built from open-source packages. Their licences:{" "}
+          <TextLink href={to("/licenses.md")}>the script's</TextLink>,{" "}
+          <TextLink href={to("/licenses-styles.md")}>
+            the fonts', styles' and stock components'
+          </TextLink>
+          .
+        </p>
+      </Section>
+      <Section title="This browser">
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border p-4">
+          <span className="min-w-0 flex-1 text-soft">
             Signed in as the owner. A session left unused for {session.session_days} days ends.
           </span>
-          <Button variant="outline" onClick={signOut}>
-            Sign out
-          </Button>
+          <Act onClick={signOut}>Sign out</Act>
         </div>
-      </section>
+      </Section>
     </>
   );
 }

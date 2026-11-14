@@ -39,7 +39,7 @@ export function CopyId({ id, label }: { id: string; label: string }) {
       type="button"
       title={`Copy ${label}`}
       aria-label={`Copy ${label} ${id}`}
-      className="inline-flex max-w-full items-center gap-1 rounded-md px-1 font-mono text-xs text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex max-w-full items-center gap-1 rounded-md px-1 font-mono text-xs text-quiet outline-none hover:bg-chosen hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => {
         void copy(id).then((done) => {
           if (done) {

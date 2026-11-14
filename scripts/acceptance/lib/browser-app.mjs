@@ -12,13 +12,16 @@
 //    navigation's sheet on the phone, and checks each as the sweep checks a page: errors in its
 //    console (a style or script the page's Content Security Policy refuses is one), requests
 //    that fail, anything loaded from another site, a screen wider than the window, controls on
-//    top of each other, text cut off and images that don't load. It keeps a screenshot of each
-//    whole screen;
+//    top of each other, text cut off and images that don't load. A screen that names its kind
+//    is held to that kind's budget for a first view, and to the brand's four sizes and two
+//    weights of text (browser-budget.mjs); a made-up screen over its budget must fail. It keeps a
+//    screenshot of each whole screen;
 // 4. signs out, and control must then refuse the session.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { watchedPage } from "./browser.mjs";
+import { countScreen, OVER_BUDGET_PAGE, overBudget } from "./browser-budget.mjs";
 import { fullHeight, inspect, TALLEST } from "./browser-pages.mjs";
 
 /** The widths the app is checked at: a desktop, a tablet, a phone. */
@@ -28,7 +31,13 @@ const WIDTHS = [
   { name: "390px", width: 390, height: 844 },
 ];
 const SCHEMES = /** @type {const} */ (["light", "dark"]);
-/** The folder the check makes on control, to see the open screen take a change. */
+/**
+ * The screens of 2026-11-10, which name no kind and have no budget until they are built from
+ * their boards: Home (goal 246), a run (goal 247) and Setup (goal 252). Every other screen must
+ * name its kind.
+ */
+const NOT_YET_FROM_A_BOARD = /^(home|run-.*|settings.*)$/;
+/** The group the check makes on control, to see the open screen take a change. */
 const FOLDER = "Browser check";
 
 /** How many times the page was loaded: one, while nothing reloads it. Runs in the page. */
@@ -148,7 +157,7 @@ export async function appCheck(browser, c, { out, check }) {
     }
     check("the demo has a run of each mode to open", screens.length === 4, screens.length);
     screens.push(
-      { name: "settings", path: "/next/settings", ready: 'nav[aria-label="Settings"]' },
+      { name: "settings", path: "/next/settings", ready: 'nav[aria-label="Setup"]' },
       {
         name: "settings-about",
         path: "/next/settings/about",
@@ -179,7 +188,8 @@ export async function appCheck(browser, c, { out, check }) {
       check("a run's ID is copied with one click", copied, id);
     }
 
-    // A change made elsewhere shows on the open screen, with no reload.
+    // A change made elsewhere shows on the open screen, with no reload: a campaign moved into a
+    // group says so on its line of the navigation, under a pointer.
     await page.goto(`${c.url}/next`);
     await page.waitForSelector('section[aria-label="What happened"]');
     const loads = await page.evaluate(navigations);
@@ -189,12 +199,10 @@ export async function appCheck(browser, c, { out, check }) {
       await change(`/v1/campaigns/${encodeURIComponent(moved)}/folder`, { folder: FOLDER }),
     ];
     const shown = await page
-      .waitForFunction(
-        // biome-ignore lint/performance/useDomNodeTextContent: the words a person sees, not hidden ones
-        (name) => /** @type {any} */ (globalThis).document.body.innerText.includes(name),
-        FOLDER,
-        { timeout: 15_000 },
-      )
+      .waitForSelector(`[data-sidebar="sidebar"] a[title*="${FOLDER}"]`, {
+        state: "attached",
+        timeout: 15_000,
+      })
       .then(
         () => true,
         () => false,
@@ -217,6 +225,29 @@ export async function appCheck(browser, c, { out, check }) {
     await page.waitForSelector('input[type="password"]');
     const after = await page.evaluate(async () => (await fetch("/v1/home")).status);
     check("Sign out ends the session: control then refuses it", after === 401, after);
+    await tab.context.close();
+  }
+
+  // ------------------------------------------------------------------ the budget itself
+  {
+    const tab = await watchedPage(browser, c, WIDTHS[0] ?? { width: 1440, height: 900 });
+    await tab.page.goto(`${c.url}/next`);
+    await tab.page.evaluate((html) => {
+      const doc = /** @type {any} */ (globalThis).document;
+      doc.body.replaceChildren(
+        new /** @type {any} */ (globalThis).DOMParser().parseFromString(html, "text/html").body
+          .firstElementChild,
+      );
+    }, OVER_BUDGET_PAGE);
+    const made = await tab.page.evaluate(countScreen);
+    const over = made ? overBudget(made.kind, made.counts) : [];
+    check(
+      "a made-up screen with too many words and fields is over a form's budget",
+      made?.kind === "form" &&
+        over.some((x) => /words/.test(x)) &&
+        over.some((x) => /form controls/.test(x)),
+      { made, over },
+    );
     await tab.context.close();
   }
 
@@ -243,8 +274,8 @@ export async function appCheck(browser, c, { out, check }) {
     for (const w of WIDTHS) {
       const look = `${w.width}-${scheme}`;
       const at = `at ${w.name} in ${scheme}`;
-      /** @type {{ wider: string[], overlaps: string[], clipped: string[], images: string[] }} */
-      const l = { wider: [], overlaps: [], clipped: [], images: [] };
+      /** @type {{ wider: string[], overlaps: string[], clipped: string[], images: string[], budget: string[], type: string[] }} */
+      const l = { wider: [], overlaps: [], clipped: [], images: [], budget: [], type: [] };
       const tab = await watchedPage(browser, c, w, { colorScheme: scheme });
       const page = tab.page;
       /** Draws the whole screen at once, checks it and keeps its screenshot. */
@@ -257,6 +288,16 @@ export async function appCheck(browser, c, { out, check }) {
           await page.waitForTimeout(150);
         }
         const here = await page.evaluate(inspect);
+        // The first view against its kind's budget; the height only at a desk's width, since a
+        // narrow window makes every screen taller.
+        const first = await page.evaluate(countScreen);
+        if (first) {
+          for (const x of overBudget(first.kind, first.counts, { height: w.width >= 1440 }))
+            l.budget.push(`${name}: ${x}`);
+          for (const x of first.type) l.type.push(`${name}: ${x}`);
+        } else if (!NOT_YET_FROM_A_BOARD.test(name)) {
+          l.budget.push(`${name}: names no kind of screen, so it has no budget`);
+        }
         const file = `app/${name}@${look}.jpg`;
         await page.screenshot({ path: join(out, file), type: "jpeg", quality: 75 });
         if (height > w.height) await page.setViewportSize({ width: w.width, height: w.height });
@@ -289,7 +330,7 @@ export async function appCheck(browser, c, { out, check }) {
           await page.keyboard.press("Escape");
           await page.waitForTimeout(300);
         }
-        const missing = ["Home", "Live", "Rigs", "Library", "Usage", "Logs", "Settings"].filter(
+        const missing = ["Home", "Compute", "Knowledge", "Campaigns", "Setup"].filter(
           (n) => !names.some((x) => x.startsWith(n)),
         );
         if (missing.length)
@@ -309,7 +350,7 @@ export async function appCheck(browser, c, { out, check }) {
           await tab.page.waitForSelector(s.ready);
           await keep(s.name);
         }
-        // Back on Home, the navigation: every place by its name, the icons at its foot too.
+        // Back on Home, the navigation: every place by its name, Setup at its foot too.
         await page.goto(`${c.url}/next`);
         await page.waitForSelector('section[aria-label="What happened"]');
         await places("navigation");
@@ -328,6 +369,16 @@ export async function appCheck(browser, c, { out, check }) {
       );
       check(`the app ${at}: no text is cut off`, l.clipped.length === 0, l.clipped);
       check(`the app ${at}: every image loads`, l.images.length === 0, l.images);
+      check(
+        `the app ${at}: every screen is within its kind's budget for a first view`,
+        l.budget.length === 0,
+        l.budget,
+      );
+      check(
+        `the app ${at}: text is in the brand's four sizes and two weights`,
+        l.type.length === 0,
+        l.type,
+      );
       await tab.context.close();
     }
   check(

@@ -1,12 +1,15 @@
 import type { HomeAnswer } from "@core/api/control/dashboard.ts";
-import { Body, Header, Section } from "@/parts/header.tsx";
 import { EventRows, NeedRows, RunCard } from "@/parts/rows.tsx";
+import { Screen, Section } from "@/parts/screen.tsx";
+import { Stat, Stats } from "@/parts/stat.tsx";
 import { Failure, Loading, Nothing } from "@/parts/states.tsx";
-import { Tile, Tiles } from "@/parts/tile.tsx";
 
 /**
  * Home: what needs the owner, then what is at work, then what happened. One scan, top to bottom.
  * Its data is read once for the whole app (app.tsx), since the navigation shows part of it.
+ *
+ * It is the screen of 2026-11-10 in the brand's parts; goal 246 builds Home from its board, and
+ * gives it its budget.
  */
 export function Home({
   home,
@@ -18,14 +21,11 @@ export function Home({
   reload: () => void;
 }) {
   return (
-    <>
-      <Header title="Home" />
-      <Body>
-        {error && <Failure said={error} again={reload} />}
-        {!home && !error && <Loading what="Loading Home" />}
-        {home && <HomeBody home={home} />}
-      </Body>
-    </>
+    <Screen title="Home">
+      {error && <Failure said={error} again={reload} />}
+      {!home && !error && <Loading what="Loading Home" />}
+      {home && <HomeBody home={home} />}
+    </Screen>
   );
 }
 
@@ -33,26 +33,18 @@ function HomeBody({ home }: { home: HomeAnswer }) {
   const { counts } = home;
   return (
     <>
-      <Tiles>
-        <Tile
-          figure={String(counts.needs)}
-          label={counts.needs === 1 ? "needs you" : "need you"}
-          tone={counts.needs ? "needs" : "none"}
-        />
-        <Tile
-          figure={String(counts.running)}
+      <Stats>
+        <Stat label={counts.needs === 1 ? "needs you" : "need you"} number={String(counts.needs)} />
+        <Stat
           label={counts.running === 1 ? "run at work" : "runs at work"}
+          number={String(counts.running)}
         />
-        <Tile
-          figure={String(counts.judging)}
+        <Stat
           label={`judge${counts.judging === 1 ? "" : "s"} measuring${counts.queued ? ` · ${counts.queued} queued` : ""}`}
+          number={String(counts.judging)}
         />
-        <Tile
-          figure={`${counts.rigs - counts.offline}/${counts.rigs}`}
-          label="rigs online"
-          tone={counts.offline ? "wrong" : "none"}
-        />
-      </Tiles>
+        <Stat label="rigs online" number={`${counts.rigs - counts.offline}/${counts.rigs}`} />
+      </Stats>
       <Section title="Needs you" count={home.needs.length}>
         {home.needs.length ? (
           <NeedRows needs={home.needs} />
@@ -62,7 +54,7 @@ function HomeBody({ home }: { home: HomeAnswer }) {
       </Section>
       <Section title="At work" count={home.at_work.length}>
         {home.at_work.length ? (
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             {home.at_work.map((run) => (
               <RunCard key={`${run.rig}:${run.run}`} run={run} />
             ))}

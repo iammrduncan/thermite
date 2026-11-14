@@ -155,7 +155,7 @@ One of the demo's runs has a made-up experiment queue: experiments tried, in pro
 
 ### The dashboard's app
 
-The dashboard is being built again as a web app in `web/`: React, shadcn/ui components on Radix, Tailwind CSS and Vite, with the Geist fonts. Control serves its built files at `/next`, beside the pages at `/ui`, until the app has every screen. The app is a client of [control's API](../reference/rest-api.md#the-dashboards-session-and-screens) and of nothing else: every word of a state, a verdict or an event comes from control.
+The dashboard is being built again as a web app in `web/`: React, shadcn/ui components on Radix, Tailwind CSS and Vite, with the Geist fonts. Control serves its built files at `/next`, beside the pages at `/ui`, until the app has every screen. A place of the sidebar whose screens are not in the app yet opens its page at `/ui`, and its line is marked with an arrow. The app is a client of [control's API](../reference/rest-api.md#the-dashboards-session-and-screens) and of nothing else: every word of a state, a verdict or an event comes from control.
 
 ```sh
 npm run web:install    # once: the app's own packages
@@ -169,27 +169,82 @@ To work on a screen, leave the demo running and start the app's development serv
 npm run web:dev
 ```
 
-`http://127.0.0.1:5173/next/dev` is the gallery: every screen and every part on made-up answers, with a switch for each state (full, empty, loading, a failure) and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
+`http://127.0.0.1:5173/next/dev` is the gallery: the brand's parts as two boards (**Components** and **Data**), a run's top, the sign-in screen and every other screen, on made-up answers, with a switch for each state (full, empty, loading, a failure) and for a control that stops answering. It needs no control, and it is in the development server only: a built app does not have it.
 
 | Folder | What it holds |
 | --- | --- |
 | `web/src/app.tsx` | The owner's session, and the table from an address to its screen. The app has no router library: a screen's address is its path under `/next`, and links are plain links (`web/src/nav.ts`) |
-| `web/src/shell.tsx` | The frame every screen is in: the navigation at the left, a sheet on a phone |
+| `web/src/shell.tsx` | The frame every screen is in: the sidebar at the left, and on a phone a top bar whose button opens it as a menu |
 | `web/src/api.ts` | The one client: `call(route)` for a route of `src/core/api/control/`, and `useRead(route)`, which reads again each time control's stream says something changed |
 | `web/src/screens/` | One file for each screen |
-| `web/src/parts/` | Thermite's own parts: the state badge, the list toolbar, tiles, rows, the chart, the states of loading, nothing and a failure, the dialog a thing is added in |
+| `web/src/parts/` | Thermite's own parts, as the brand has them ([below](#the-brand-and-its-parts)) |
+| `web/src/index.css` | The theme: every colour by its use, in light and in dark, the sizes of text, the corners and the shadows |
 | `web/src/components/ui/` | Stock shadcn/ui components and their style file, as shadcn's tool writes them, with its licence: `npx shadcn@latest add <component>` in `web/` downloads one from shadcn's registry (the tool is not one of the app's packages). Change the look in `web/src/index.css`, not here |
 | `web/src/dev/` | The gallery and its made-up answers |
 
-To add a screen:
+#### The brand and its parts
+
+The app's look is one brand: warm greys, one accent (the flame) and a colour for every state. `web/src/index.css` holds it. A colour is named for its use, and changes by its use between light and dark, which follow the operating system. A screen never sets a colour of its own.
+
+| What | The rule |
+| --- | --- |
+| The greys | Ink for names, numbers and text (`text-foreground`); `text-soft` for text beside a name; `text-quiet` for labels and times, and no text is lighter. `border-line` between rows and around cards, `border-edge` around a control, `bg-chosen` for what is chosen or under the pointer |
+| The flame | The one main button of a screen, links, and what is chosen (`text-flame` on `bg-flame-tint`) |
+| The states | `good`, `working`, `needs`, `wrong` and `none`, which control picks. Each is a text colour and a tint behind it (`web/src/parts/tone.ts`). A state always has a word or a shape beside its colour |
+| Text | Four sizes: 22 px for a screen's one sentence (`text-sentence`), 16 px for a block's title (`text-base`), 14 px for text (`text-sm`) and 12 px for quiet facts (`text-xs`). Two weights: 400 and 600. Geist Mono for what a person may copy |
+| Space | Gaps of 4, 8, 16, 24 and 40 px |
+| Corners | 8 px for a control and a row, 16 px for a card and a dialog, round for a chip |
+| Icons | Lucide, 16 px, in the colour of their text. Every line of the sidebar and of a tree has one |
+
+A screen is made of these parts and no others. Each is on the gallery with its states:
+
+| Part | File in `web/src/parts/` |
+| --- | --- |
+| A screen: where it is, its name and state, its buttons, its tabs, its one sentence, then its blocks | `screen.tsx` |
+| A run's top: five tabs, and four buttons with the main one last | `run-top.tsx` |
+| Buttons (main, plain, red, text, an icon alone) and a link | `act.tsx` |
+| A state's chip, a dot alone, a count that waits for you, a picture's legend | `chip.tsx` |
+| A change of a number, with its arrow: green when better, red when worse | `change.tsx` |
+| A number as a tile, with its history as a sparkline or a share bar | `stat.tsx` |
+| Up to four things as rows, facts, and a table from five rows | `lists.tsx` |
+| The card of something that waits for you | `need-card.tsx` |
+| The tree of folders and files, and the split of a tool | `tree.tsx` |
+| The explorer's fields, saved views and band of records over time | `explorer.tsx` |
+| A form's field with its label and "i", the controls, a choice of a few, the Advanced fold, a group of settings | `field.tsx` |
+| What opens: a menu, the one dialog, and one line with Undo | `opens.tsx` |
+| Tabs | `tabs.tsx` |
+| Loading, something wrong now, an empty list, nothing | `states.tsx` |
+| The mark, and Thermy's face | `mark.tsx`, `thermy.tsx` |
+
+A part that a screen needs and the list lacks is added to the parts and to the gallery, never written inside a screen.
+
+#### A screen's budget
+
+A screen names its kind (`<Screen kind="detail" …>`), and the browser check holds its first view, as it loads with nothing opened, to that kind's budget. The top of a screen (where it is, its buttons, its tabs, its sentence) and the sidebar are not counted.
+
+| Kind of screen | Height in pixels | Words | Blocks | Tables | Form controls | Buttons | Links |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `home` | 900 | 250 | 3 | 1 | 1 | 3 | 15 |
+| `list` | 900 | 250 | 1 | 1 | 3 | 2 | 12 |
+| `detail` | 1,300 | 400 | 5 | 1 | 1 | 4 | 20 |
+| `form` | 900 | 200 | 2 | 0 | 7 | 3 | 3 |
+| `dialog` | 400 | 60 | 1 | 0 | 2 | 2 | 1 |
+| `explore`, the full explorer | 1,600 | 560 | 2 | 1 | 6 | 2 | 90 |
+| `tool`, such as the knowledge base | 1,200 | 450 | 4 | 1 | 4 | 4 | 60 |
+
+The height is held at 1,440 pixels wide only, since a narrow window makes every screen taller. The check also fails such a screen when its text is in a size or a weight the brand does not have. A finding says the screen and the count, such as `home: 310 words, and a home screen may have 250`. The budgets and the counting are in `scripts/acceptance/lib/browser-budget.mjs`.
+
+Home, a run's screen and Setup are still the screens of the app's first build, in the brand's parts. They name no kind and have no budget until each is built from its mockup.
+
+#### Add a screen
 
 1. Give the screen's data a route with its contract in `src/core/api/control/`: a `Route` whose `answer` is a zod schema. Control registers the route and makes every word the screen shows. The app reads the answer with the same schema, so the two cannot disagree.
-2. Write the screen in `web/src/screens/`, from the parts in `web/src/parts/`. Split it as the run's Overview is: one component that reads (`useRead`) and one that draws what was read, so the gallery can draw it without a control.
-3. Add its address to the table in `web/src/app.tsx`, and its row to the navigation in `web/src/shell.tsx` if it has one.
+2. Write the screen in `web/src/screens/`, as one `Screen` with its kind, from the parts in `web/src/parts/`. Under its name it has one sentence of at most 20 words that says the thing's state, in control's words. Split the screen as the run's is: one component that reads (`useRead`) and one that draws what was read, so the gallery can draw it without a control.
+3. Add its address to the table in `web/src/app.tsx`, and its line to the sidebar in `web/src/shell.tsx` if it has one.
 4. Add made-up answers for each of its states to `web/src/dev/fixtures.ts`, and the screen to the gallery.
 5. Add the screen to the browser check's list (`scripts/acceptance/lib/browser-app.mjs`), run `npm run acceptance:browser -- --only app`, and look at its screenshots in `.dev/acceptance/browser/app.html`, at each width, in light and in dark.
 
-A screen takes its meaning from four colours and grey (`good`, `needs`, `wrong`, `working`, `none`: `web/src/parts/tone.ts`), which control picks. The page's Content Security Policy allows no inline style: set no `style` attribute in markup, and give a look a class. The licences of the packages in the built app go out with it, as `/next/licenses.md` and `/next/licenses-styles.md`.
+The page's Content Security Policy allows no inline style: set no `style` attribute in markup, and give a look a class. The licences of the packages in the built app go out with it, as `/next/licenses.md` and `/next/licenses-styles.md`.
 
 ## Keep the repository public-safe
 

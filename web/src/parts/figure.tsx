@@ -1,6 +1,6 @@
 import type { Figure } from "@core/api/control/dashboard.ts";
 import { useEffect, useRef, useState } from "react";
-import { toneDot } from "./tone.ts";
+import { toneMark } from "./tone.ts";
 
 /** A percentage as a gain is written: "+11.0%". */
 export const percent = (gain: number) => `${gain >= 0 ? "+" : ""}${(gain * 100).toFixed(1)}%`;
@@ -58,13 +58,8 @@ function Steps({
     >
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} className="stroke-border" />
-          <text
-            x={pad.l - 8}
-            y={y(t) + 4}
-            textAnchor="end"
-            className="fill-muted-foreground text-xs"
-          >
+          <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} className="stroke-grid" />
+          <text x={pad.l - 8} y={y(t) + 4} textAnchor="end" className="fill-quiet text-xs">
             {percent(t)}
           </text>
         </g>
@@ -114,7 +109,7 @@ export function GoalBar({ goals }: { goals: Figure["goals"] }) {
         <span
           key={g.goal}
           title={`${g.goal}: ${g.state.word}`}
-          className={`h-2 w-3 rounded-sm ${toneDot[g.state.tone]}`}
+          className={`h-2 w-3 rounded-sm ${toneMark[g.state.tone]}`}
         />
       ))}
     </span>
@@ -127,7 +122,7 @@ export function RunFigure({ figure }: { figure: Figure }) {
     <span className="flex shrink-0 items-center gap-2">
       {figure.steps.length > 1 && <Steps steps={figure.steps} w={90} h={22} scale={false} />}
       <GoalBar goals={figure.goals} />
-      {figure.text && <span className="font-medium tabular-nums">{figure.text}</span>}
+      {figure.text && <span className="font-semibold tabular-nums">{figure.text}</span>}
     </span>
   );
 }

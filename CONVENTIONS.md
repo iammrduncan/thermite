@@ -121,7 +121,9 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 - Frontend complexity grows faster than backend complexity, so resist it. The app:
   - imports `core`'s contracts alone (as `@core/…`), and reaches control only through its API, with one client (`web/src/api.ts`). `npm run check:imports` holds it, with no exceptions: of this repository the app imports only `src/core/`, each contract it loads runs in a browser (no Node.js module, no package but zod), and nothing in `src/` imports the app;
   - holds no rule of the product, and no words for states, verdicts or events: control checks, refuses and words, and the app shows;
-  - uses shadcn's components as its tool makes them (`web/src/components/ui/`, never edited by hand), with few parts of its own (`web/src/parts/`), each used on more than one screen;
+  - uses shadcn's components as its tool makes them (`web/src/components/ui/`, never edited by hand), with few parts of its own (`web/src/parts/`), which are the brand's: a screen is made of them and of no others, and a part that is missing is added there and to the gallery;
+  - takes its look from one theme (`web/src/index.css`), where each colour has a use and changes by its use between light and dark: a screen sets no colour, size or corner of its own;
+  - names each screen's kind, and keeps its first view within that kind's budget, which the browser check holds (`scripts/acceptance/lib/browser-budget.mjs`);
   - sets no inline style in markup: the page's Content Security Policy allows none, so a look is a class;
   - adds no router, data, state or form library before its second real use.
 - Every screen follows [the rules for screens](docs/plan/ui-refresh-guide.md#4-the-rules-for-screens), and is chosen from a mockup.

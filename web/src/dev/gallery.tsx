@@ -1,34 +1,38 @@
-import type { Tone } from "@core/api/control/dashboard.ts";
-import { PlusIcon } from "lucide-react";
+import { CircleXIcon, ClockIcon, DownloadIcon, RefreshCwIcon, UsersIcon } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { AddDialog } from "@/parts/add-dialog.tsx";
-import { CopyId } from "@/parts/copy-id.tsx";
-import { Body, Header, Section } from "@/parts/header.tsx";
-import { Failure, Loading, Nothing } from "@/parts/states.tsx";
-import { StatusBadge } from "@/parts/status-badge.tsx";
-import { Tile, Tiles } from "@/parts/tile.tsx";
-import { type Facet, Toolbar } from "@/parts/toolbar.tsx";
+import { cn } from "@/lib/utils";
+import { Act, TextLink } from "@/parts/act.tsx";
+import { Chip } from "@/parts/chip.tsx";
+import { Confirm, Undo } from "@/parts/opens.tsx";
+import { RunActs, type RunTab, RunTabs } from "@/parts/run-top.tsx";
+import { Screen, Section } from "@/parts/screen.tsx";
+import { Nothing } from "@/parts/states.tsx";
 import { Home } from "@/screens/home.tsx";
 import { RunScreen } from "@/screens/run.tsx";
 import { Settings } from "@/screens/settings.tsx";
+import { SignIn } from "@/screens/sign-in.tsx";
 import { Frame } from "@/shell.tsx";
 import { homeEmpty, homeFull, runs, session } from "./fixtures.ts";
+import { DataGallery } from "./gallery-data.tsx";
+import { PartsGallery } from "./gallery-parts.tsx";
 
 /**
  * The gallery: the frame, each screen and each part on made-up answers, with a switch for each
- * state. It is for building a screen with no control behind it, and it is in a development build
- * only (`npm run web:dev`, then /next/dev).
+ * state. It is where the brand is looked at beside the brand guide's boards, and where a screen
+ * is built with no control behind it. It is in a development build only (`npm run web:dev`, then
+ * /next/dev).
  */
 
 const SCREENS = [
+  { id: "parts", label: "Components" },
+  { id: "data", label: "Data" },
+  { id: "top", label: "A run's top" },
+  { id: "sign-in", label: "Sign in" },
   { id: "home", label: "Home" },
   { id: "hill", label: "Run: hill climb" },
   { id: "goal", label: "Run: goal" },
   { id: "research", label: "Run: research" },
-  { id: "settings", label: "Settings" },
-  { id: "parts", label: "Parts" },
+  { id: "settings", label: "Setup" },
 ] as const;
 type ScreenId = (typeof SCREENS)[number]["id"];
 
@@ -51,17 +55,22 @@ function Switch<T extends string>({
 }) {
   return (
     <fieldset className="flex flex-wrap items-center gap-1">
-      <legend className="float-left mr-2 text-xs text-muted-foreground">{name}</legend>
+      <legend className="float-left mr-2 w-28 text-xs text-quiet">{name}</legend>
       {choices.map((c) => (
-        <Button
+        <button
           key={c.id}
-          size="sm"
-          variant={c.id === chosen ? "default" : "outline"}
+          type="button"
           aria-pressed={c.id === chosen}
           onClick={() => choose(c.id)}
+          className={cn(
+            "inline-flex h-7 items-center rounded-md px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            c.id === chosen
+              ? "bg-chosen font-semibold text-foreground"
+              : "text-quiet hover:bg-chosen",
+          )}
         >
           {c.label}
-        </Button>
+        </button>
       ))}
     </fieldset>
   );
@@ -73,11 +82,31 @@ const STREAM = [
 ] as const;
 
 export default function Gallery() {
-  const [screen, setScreen] = useState<ScreenId>("home");
+  const [screen, setScreen] = useState<ScreenId>("parts");
   const [state, setState] = useState<State>("full");
   const [stream, setStream] = useState<(typeof STREAM)[number]["id"]>("alive");
   const error = state === "error" ? FAILED : "";
   const again = () => setState("full");
+  const switches = (
+    <div className="grid flex-none gap-1 border-b bg-sidebar px-4 py-2">
+      <Switch name="Screen" choices={SCREENS} chosen={screen} choose={setScreen} />
+      <Switch
+        name="State"
+        choices={STATES.map((id) => ({ id, label: id }))}
+        chosen={state}
+        choose={setState}
+      />
+      <Switch name="Control's stream" choices={STREAM} chosen={stream} choose={setStream} />
+    </div>
+  );
+  // The sign-in page has nothing around it: no frame.
+  if (screen === "sign-in")
+    return (
+      <>
+        {switches}
+        <SignIn days={30} onSignedIn={() => setScreen("home")} />
+      </>
+    );
   let shown: React.ReactNode;
   if (screen === "home")
     shown = (
@@ -87,7 +116,9 @@ export default function Gallery() {
         reload={again}
       />
     );
-  else if (screen === "parts") shown = <Parts />;
+  else if (screen === "parts") shown = <PartsGallery />;
+  else if (screen === "data") shown = <DataGallery />;
+  else if (screen === "top") shown = <RunTop />;
   else if (screen === "settings")
     shown = <Settings tab="about" session={session} signOut={() => {}} />;
   else
@@ -104,121 +135,101 @@ export default function Gallery() {
       home={state === "full" ? homeFull : state === "empty" ? homeEmpty : undefined}
       path={screen === "home" ? "/" : screen === "settings" ? "/settings" : "/dev"}
       alive={stream === "alive"}
+      signOut={() => setScreen("sign-in")}
     >
-      <div className="grid gap-2 border-b bg-muted/40 px-4 py-2">
-        <Switch name="Screen" choices={SCREENS} chosen={screen} choose={setScreen} />
-        <Switch
-          name="State"
-          choices={STATES.map((id) => ({ id, label: id }))}
-          chosen={state}
-          choose={setState}
-        />
-        <Switch name="Control's stream" choices={STREAM} chosen={stream} choose={setStream} />
-      </div>
+      {switches}
       {shown}
     </Frame>
   );
 }
 
-const TONES: { tone: Tone; word: string }[] = [
-  { tone: "good", word: "met" },
-  { tone: "needs", word: "waits for you" },
-  { tone: "wrong", word: "failed" },
-  { tone: "working", word: "running" },
-  { tone: "none", word: "stopped" },
-];
-
-const MODES = [
-  { value: "hill_climb", label: "hill climb", count: 2 },
-  { value: "goal", label: "goal", count: 1 },
-  { value: "research", label: "research", count: 1 },
-];
-
-/** Thermite's own parts, each as a screen uses it. */
-function Parts() {
-  const [search, setSearch] = useState("");
-  const [modes, setModes] = useState<string[]>(["goal"]);
-  const [states, setStates] = useState<string[]>([]);
-  const [open, setOpen] = useState(false);
-  const facets: Facet[] = [
-    { name: "Mode", choices: MODES, chosen: modes, choose: setModes },
-    {
-      name: "State",
-      choices: [
-        { value: "running", label: "running", count: 3 },
-        { value: "done", label: "done", count: 1 },
-      ],
-      chosen: states,
-      choose: setStates,
-    },
-  ];
+/**
+ * A run's top as its board draws it, with its buttons working in place: Pause is done at once
+ * and offers Undo, More is a menu whose red line asks first, and each tab is chosen in place.
+ */
+function RunTop() {
+  const [tab, setTab] = useState<RunTab>("summary");
+  const [paused, setPaused] = useState(false);
+  const [said, setSaid] = useState("");
+  const [closing, setClosing] = useState(false);
+  const pause = () => {
+    setPaused(!paused);
+    setSaid(paused ? "" : "pn-prefill-2 is paused. Its 2 trials stopped.");
+  };
   return (
-    <>
-      <Header title="Parts">
-        <Button onClick={() => setOpen(true)}>
-          <PlusIcon /> Add a thing
-        </Button>
-      </Header>
-      <Body>
-        <Section title="State badge" hint="four colours and grey">
-          <p className="flex flex-wrap gap-2">
-            {TONES.map((t) => (
-              <StatusBadge key={t.tone} state={t} />
-            ))}
-          </p>
-        </Section>
-        <Section title="Tiles">
-          <Tiles>
-            <Tile figure="3" label="need you" tone="needs" />
-            <Tile figure="2" label="runs at work" />
-            <Tile figure="+23.7%" label="over the starting point" tone="good" />
-            <Tile figure="2/3" label="rigs online" tone="wrong" />
-          </Tiles>
-        </Section>
-        <Section title="List toolbar" hint="search, then each filter as a dropdown">
-          <Toolbar
-            search={search}
-            onSearch={setSearch}
-            placeholder="Search campaigns"
-            facets={facets}
+    <Screen
+      kind="detail"
+      title="pn-prefill-2"
+      crumbs={[{ label: "pn-prefill", href: "#" }]}
+      state={
+        <>
+          <Chip
+            state={paused ? { word: "Paused", tone: "none" } : { word: "At work", tone: "working" }}
           />
-        </Section>
-        <Section title="Loading, nothing and a failure">
-          <Loading what="Loading the campaigns" />
-          <Nothing>No campaign yet. Make one with New campaign.</Nothing>
-          <Failure said={FAILED} again={() => {}} />
-        </Section>
-        <Section title="An ID to copy">
-          <p>
-            <CopyId id="run-0007" label="the run's ID" />
-          </p>
-        </Section>
-      </Body>
-      <AddDialog
-        open={open}
-        onOpenChange={setOpen}
-        title="Add a thing"
-        description="A thing is added in a dialog like this one, and on a phone it takes the whole screen."
-      >
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setOpen(false);
+          {paused && (
+            <TextLink href="#" className="text-xs">
+              Add a reason
+            </TextLink>
+          )}
+        </>
+      }
+      actions={
+        <RunActs
+          paused={paused}
+          watch={{ onClick: () => setSaid("") }}
+          pause={{ onClick: pause }}
+          more={{
+            lines: [
+              { label: "Add hours", icon: ClockIcon, onChoose: () => {} },
+              { label: "Restart the workers", icon: RefreshCwIcon, onChoose: () => {} },
+              { label: "Ask the teachers", icon: UsersIcon, onChoose: () => {} },
+              { label: "Export now", icon: DownloadIcon, onChoose: () => {} },
+              {
+                label: "Close the run",
+                icon: CircleXIcon,
+                red: true,
+                onChoose: () => setClosing(true),
+              },
+            ],
           }}
-        >
-          <label className="grid gap-1.5 text-sm font-medium">
-            Name
-            <Input placeholder="sorting-speed" />
-            <span className="font-normal text-muted-foreground">
-              One hint under a field says what it takes.
-            </span>
-          </label>
-          <Button type="submit" className="justify-self-start">
-            Add
-          </Button>
-        </form>
-      </AddDialog>
-    </>
+          tell={{ onClick: () => setSaid("") }}
+        />
+      }
+      tabs={<RunTabs chosen={tab} onChoose={setTab} />}
+      sentence="57% faster than its start, and still winning."
+    >
+      {said && (
+        <div>
+          <Undo
+            onUndo={() => {
+              setPaused(false);
+              setSaid("");
+            }}
+          >
+            {said}
+          </Undo>
+        </div>
+      )}
+      <Section title={tab === "summary" ? "Summary" : `The run's ${tab}`}>
+        <Nothing>
+          The top is the same on every screen of a run: where it is, its name and state, four
+          buttons with the flame one last, five tabs, then its one sentence.
+        </Nothing>
+        <p>
+          <Act onClick={() => setClosing(true)} look="red">
+            Close the run
+          </Act>
+        </p>
+      </Section>
+      <Confirm
+        open={closing}
+        onOpenChange={setClosing}
+        title="Close pn-prefill-2?"
+        text="Its workers stop now, and the 2 changes the judge measures are dropped. Its results and its best change stay."
+        keep="Keep it running"
+        lose="Close the run"
+        onLose={() => setSaid("")}
+      />
+    </Screen>
   );
 }
