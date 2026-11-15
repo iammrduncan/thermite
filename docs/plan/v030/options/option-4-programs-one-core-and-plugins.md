@@ -2,13 +2,55 @@
 
 The tree I would suggest. It is [option 1](option-1-the-tree-as-drawn.md) after the rules of options [2](option-2-fxbots-shape.md) and [3](option-3-small-core-and-plugins.md) are applied to it, and after the owner's steer of 2026-11-15: no SDK, since nobody embeds Thermite in another product; core or plugin; and a control plane and a runner that share a common core.
 
-[option-4.html](option-4.html) draws it as a page: the packages and who imports whom, the boundaries, one machine and several machines, how the two planes use NATS, and what of today's code is core, a plugin or going. Open the file in a browser; it loads nothing from the network.
+[option-4.html](option-4.html) draws it as a page: the conventions, the packages and who imports whom, a sketch of each package's files, where a change goes, the boundaries, one machine and several machines, how the two planes use NATS, and what of today's code is core, a plugin or going. Open the file in a browser; it loads nothing from the network.
 
 ## Three rules give the tree
 
 1. **A package is a program, or what two programs share.** Thermite has five programs (the control plane, the runner, the command line, the dashboard's app, the website) and two shared things (the core, the design system). That is seven packages, and no rule is needed to say whether an eighth is due.
 2. **Every boundary between two programs has one folder in the core,** and nothing crosses a boundary that is not written there. The two planes never import each other.
 3. **Core or plugin.** What every run needs is in the packages. What an install may leave out is a plugin, and the core never names one.
+
+## The conventions
+
+They are fxbot's, taken as they are, so that both products read the same way. fxbot's conventions open with four choices, and with one more line: a smaller solution that does the job beats a rule kept from an older design.
+
+| The choice | What it does in this tree |
+| --- | --- |
+| Simplicity over complexity | Three rules place every file. A boundary is a line in a `package.json`. An action is written once |
+| Small over huge | Seven packages. A file does one job and reads in one sitting. An eighth package needs a second real consumer |
+| Light over heavy | Few dependencies, each with a reason. A plugin that is not added costs nothing: no process, no table, no code in the page |
+| Performance over other things | What a person waits on stays fast: a screen's first view, an action's answer, a job's start. A change says what it adds to those |
+
+One thing is above all four: agents propose, and code they cannot write measures and judges. No convention trades that away.
+
+For the code:
+
+| The rule | What it does in this tree |
+| --- | --- |
+| Small files, each on one job. Split one that is hard to read in one sitting | A package's `src/` is flat: a file for each thing, and a folder only when a thing needs several files |
+| Few dependencies. Node and the browser first | A `package.json` stays short enough to read. A new line in one is a decision, with its reason and its credit |
+| No abstraction before its second real use. A few repeated lines are fine | Three kinds of plugin, each with several real uses. A fourth kind, a new hook or an eighth package waits for its second use |
+| Plain TypeScript: functions and data. No classes, frameworks or wrappers unless a library needs one | An action is an entry in a list and a function. A plugin is a `plugin.json` and a file of functions |
+| Delete before adding. No hook, option or layer for a use that is not real yet | `door/` holds no rule, so nothing collects there. What a step replaces is deleted in that step |
+| Name a thing for what it is | One word for each thing, the same in a folder, the API, a screen and the docs: door, record, scheduler, judge, runner |
+| Check outside input once, at the edge that receives it | The door checks an action's input against its entry in `core/api`, and the function behind it does not check again. The runner checks a message against `core/bus` |
+| Keep what a person waits on fast | A change says what it adds to a screen's first view, an action's answer or a job's start: in requests, in work, in page weight |
+| Test behaviour that can break, on data that can be thrown away | Tests are beside their code, in each package's `tests/`. One test of an action covers REST, MCP and the command line |
+| The source runs as it is | Node runs each package's TypeScript. Only what a browser loads is built: `ui`, the design system's site, `website` |
+| Records in PostgreSQL, one statement or one transaction for each change | `control/record` is the one writer. A change to a table is a new numbered file in `migrations/`, never an edit of one that shipped |
+| A secret is sealed before it is stored, and never reaches the page | Keys stay in the control plane, sealed. `core/client` and `ui` never hold one |
+| The smallest change that does the task | A step builds what it needs, in the package that owns it, and no more |
+
+For core or plugin, the default is plugin: before a feature is built, its goal says which it is, and why. Core is only what every run needs, what plugins plug into, and what Thermite needs to run.
+
+- **What a plugin may count on.** The core never imports or names it, and which plugins a new install gets is a list, as data. Thermite's own plugins use the same API as anyone's. When a plugin cannot do what it needs, the API gets the smallest hook for it, on the day a real plugin needs one. A release that breaks the API says so in one list, and a plugin names the oldest Thermite it runs on.
+- **What the core may count on.** A plugin that is not added costs nothing. A plugin's data is its own, in tables or files that it makes and removes, never in a migration of the core. Removing a plugin leaves the core working. [What is never open to a plugin](#core-or-plugin) stays closed.
+
+Thermite goes its own way in three places, each for what it is:
+
+- **No SDK.** fxbot is put inside other products. Nothing embeds Thermite: other things talk to it, through the door.
+- **Two programs, and a bus.** fxbot is one server. Thermite has a second program, on other machines, so it has one more boundary, and NATS for it.
+- **Tests.** fxbot checks each feature by hand. A wrong rank in a statistics routine is not found by hand, so what a verdict rests on has tests.
 
 ## The tree
 
@@ -32,7 +74,8 @@ packages/
     judge/              a verdict from measurements; promotion
     agents/             the loops (workers, planner), each worker's zone, a run's tools
     advisors/           the teachers, the auditor, the review panel
-    campaigns/, knowledge/, providers/, …   one folder for each thing the record holds
+    campaigns.ts, runs.ts, knowledge.ts, …  one file for each thing the record holds,
+                        a folder once one file is not enough
   runner/               @thermite/runner: the one program on a machine
     main.ts             joins the pool, takes jobs from the bus
     jobs/               build, measure, run a worker's experiment on the device
@@ -62,6 +105,197 @@ docs/                   the plans and the goals
 ```
 
 Tests are beside their code, in `packages/<name>/tests` and `plugins/<name>/tests`.
+
+### A sketch of the files
+
+The folders above follow from the three rules. The files below show the grain, as fxbot's packages have it: each is named when its step is built. In this page `core/api` is short for `packages/core/src/api`.
+
+```text
+packages/core/            @thermite/core · what two or more programs share
+  package.json            its doors: ./api, ./events, ./campaign, ./client, ./bus, ./plugin
+  src/
+    api/                  the list of actions
+      action.ts           what an action is: its name, input, answer, role, route, tool, command and words
+      campaigns.ts        the actions on a campaign
+      runs.ts             the actions on a run: start, pause, stop, steer
+      machines.ts         the actions on the pool
+      knowledge.ts        the actions on the knowledge base
+      index.ts            the whole list
+    bus/                  NATS
+      subjects.ts         every subject, made by a function
+      messages.ts         each message's shape: a command, a job, a result, a live line, an ask
+      streams.ts          each stream, and how it keeps its messages
+      permissions.ts      who may publish and read what
+      client.ts           connect, publish, take. Node only
+    events/               the record's events
+      run.ts              a run's events
+      attempt.ts          an attempt's: built, measured, judged
+      machine.ts          a machine's: joined, lost
+      index.ts            every kind, by name
+    campaign/             what a person writes
+      contract.ts         a campaign's contract
+      kit.ts              a kit's manifest
+    plugin/               what a plugin is
+      manifest.ts         plugin.json
+      harness.ts          an agent program: start a turn, send a message, stop, give the usage
+      device.ts           a kind of device: find them, give a job its share, measure
+      compute.ts          a source of machines: find, start and stop one, put a runner on it
+      breaks.json         what each release broke for plugins
+    client.ts             the typed client of the door, made from api/. fetch alone
+    settings.ts           every setting: its name, its kind, its words
+    errors.ts             an error's code and its words
+  tests/
+
+packages/control/         @thermite/control · the control plane
+  package.json            imports core, and nothing else of Thermite
+  src/
+    main.ts               starts one service, or all four
+    door/                 transports only
+      rest.ts             a route for each action
+      mcp.ts              a tool for each action
+      stream.ts           changes, sent to the open screens
+      session.ts          sign-in and roles
+    record/               the one writer
+      schema.ts           the tables
+      migrations/         one numbered file for each change
+      apply.ts            events from the bus into the tables, each once, in order
+      queries.ts          what the actions and the screens read
+      backup.ts           backup and restore
+    scheduler/            who works where
+      pool.ts             the machines and their devices
+      place.ts            which device a run's next job gets
+      jobs.ts             a job's life: given, taken, done, lost
+    judge/                what wins
+      verdict.ts          a verdict from measurements
+      stats.ts            the statistics
+      promote.ts          a new champion
+    agents/               a run's agents
+      worker.ts           a worker's loop
+      planner.ts          the planner's
+      zone.ts             each worker's sandbox
+      tools.ts            a run's tools: submit a change, run an experiment, write a note
+      context.ts          what an agent is told, built from the record
+    advisors/             who watches a run
+      teachers.ts
+      auditor.ts
+      review-panel.ts
+    campaigns.ts          campaigns, their contracts, their kits
+    runs.ts               a run: its state, its budget, what ends it
+    knowledge.ts          the knowledge base
+    providers.ts          model providers and their keys
+    plugins.ts            finds, checks, adds and loads plugins
+    secrets.ts            sealing
+  tests/
+
+packages/runner/          @thermite/runner · the one program on a machine
+  package.json            imports core, and nothing else of Thermite
+  src/
+    main.ts               joins the pool, takes jobs from the bus
+    jobs/                 what a machine is asked to do
+      build.ts            builds a change for the device
+      measure.ts          the judge's measurement
+      experiment.ts       a worker's own experiment
+    wall/                 keeps a change from the judge's files
+      users.ts            a user for the judge, a user for each worker
+      limits.ts           what a job may use
+      check.ts            proves the wall holds, before the first job
+    device.ts             loads the device plugin of its image
+    report.ts             what happened, onto the bus
+  tests/
+
+packages/cli/             @thermite/cli · the thermite command
+  package.json            imports core
+  src/
+    main.ts               a command for each action, made from core/api
+    local.ts              sets Thermite up on this machine
+    doctor.ts             checks the machine
+  tests/
+
+packages/ui/              @thermite/ui · the dashboard's app
+  package.json            imports core and design-system
+  index.html
+  vite.config.ts
+  src/
+    main.tsx              the entry
+    app.tsx               the routes and the shell
+    client.ts             the page's one client, from core/client
+    screens/              one file for each screen, made of the design system's parts
+
+packages/design-system/   the look, for Thermite and later for fxbot
+  package.json            imports nothing of Thermite
+  src/
+    theme.css             every colour by its use, in light and in dark
+    ui/                   the stock components
+    parts/                the brand's parts
+    index.ts              its door
+  site/                   every part, with its states and its code
+
+packages/website/         the public site and the documentation
+  package.json            imports design-system
+  src/
+    content/docs/         the documentation's pages
+    pages/                the public site
+
+plugins/                  what an install may leave out
+  harness-fx/             an agent harness
+    plugin.json           its kind, its name, the oldest Thermite it runs on
+    control.ts            implements core/plugin/harness.ts
+    README.md
+    tests/
+  harness-claude/
+  harness-pi/             the same shape
+  device-cuda/            a kind of device
+    plugin.json
+    runner.ts             implements core/plugin/device.ts
+    Containerfile.cuda12  builds the runner for this device
+    Containerfile.cuda13
+    tests/
+  device-cpu/
+  device-vulkan/          the same shape, one image file each
+  compute-runpod/         a source of machines
+    plugin.json
+    control.ts            implements core/plugin/compute.ts
+    tests/
+  compute-ssh/
+  compute-kubernetes/     the same shape
+
+beside the packages       the top of the repository
+  AGENTS.md               what Thermite is, the rules for agents, the checks
+  CONVENTIONS.md          one page: the conventions above
+  package.json            the workspaces
+  packages/AGENTS.md      the package guide: this tree, and where a change goes
+  examples/
+    kits/                 smoke-cpu, smoke-cuda, smoke-vulkan
+    campaigns/            a contract of each mode, ready to start
+  deploy/
+    compose.yaml          one machine: control, PostgreSQL, NATS, a runner
+    compose.runner.yaml   a runner alone, for another machine
+    Containerfile         the control plane's image
+  scripts-ci/
+    build/                the images, the release
+    checks/               the public check, sizes, loose ends, the acceptance checks
+  docs/
+    plan/                 the roadmap, the goals, the decisions
+```
+
+### Where a change goes
+
+| If the change is about… | It goes in… | Why |
+| --- | --- | --- |
+| What an action is called, what it takes and answers, who may call it | `core/api` | REST, MCP, the command line and the client are made from it |
+| What an action does, and when it is refused | The file of the thing it changes: `control/runs.ts`, `control/scheduler` | The rule has one place, whatever the transport |
+| A URL, a status code, a header, MCP's framing, a session | `control/door` | Transport only |
+| A table, a migration, a query | `control/record` | The record has one writer |
+| A message between the planes, a stream, who may read a subject | `core/bus` | Neither plane can send what is not written there |
+| A kind of event, or what one holds | `core/events` | Everyone who reads the record reads one shape |
+| Which device a job gets, and a job's life | `control/scheduler` | The pool is the control plane's |
+| When a change wins | `control/judge` | Never an agent's, and never a plugin's |
+| What happens beside the device: a build, a measurement, the wall | `runner` | It is the only code on the machine |
+| How a run's agents work: a loop, a tool, what an agent is told | `control/agents`, `control/advisors` | A run owns its agents |
+| How one agent program is started and read | `plugins/harness-*` | The core names no program |
+| A new kind of device, or a new place to get machines | A new folder: `plugins/device-*`, `plugins/compute-*` | It touches nothing else |
+| A screen | `ui/src/screens` | The page holds no rule of the product |
+| A component, or a look | `design-system` | Every screen gets it |
 
 ## Where the API, MCP and the NATS contracts live
 

@@ -88,6 +88,30 @@
   .grid { display: grid; gap: 10px; }
   /* Long words wrap inside a box and never widen the page. */
   .grid > *, .bound > *, .lane > * { min-width: 0; }
+  main > .grid + .grid { margin-top: 10px; }
+  .label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--quiet); margin: 24px 0 8px; }
+
+  /* the four conventions: the word that wins is large, the one that loses is quiet */
+  .over h3 { display: block; font-size: 20px; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .over h3 small { display: block; font-size: 13px; font-weight: 400; color: var(--quiet); letter-spacing: 0; }
+
+  /* a folder tree, as a file explorer shows one: a folder opens and closes */
+  ul.tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+  .tree ul { margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--line); }
+  ul.tree { margin-top: 6px; }
+  .tree .row { display: flex; gap: 9px; align-items: baseline; padding: 1.5px 0; font-size: 13px; line-height: 1.45; }
+  .tree .row code { flex: none; font-size: 12.5px; }
+  .tree .row code.dir { font-weight: 600; }
+  .tree .row .what { color: var(--quiet); min-width: 0; }
+  .tree summary { list-style: none; cursor: pointer; border-radius: 4px; }
+  .tree summary::-webkit-details-marker { display: none; }
+  .tree summary::before { content: "▾"; flex: none; width: 9px; margin-right: -3px; color: var(--quiet); font-size: 11px; }
+  .tree details:not([open]) > summary::before { content: "▸"; }
+  .tree summary:focus-visible { outline: 2px solid var(--control); outline-offset: 1px; }
+  .tree div.row { padding-left: 15px; }
+  /* A panel's title: its path, then what it is in quiet words. */
+  h3 > .quiet { font-weight: 400; font-size: 13px; }
+  .grid > .grid { align-content: start; }
   .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); }
   .g4 { grid-template-columns: repeat(4, 1fr); } .g5 { grid-template-columns: repeat(5, 1fr); }
   .arrows { display: grid; gap: 10px; text-align: center; color: var(--quiet); font-size: 12.5px; margin: 4px 0; }
@@ -126,6 +150,7 @@
 
   @media (max-width: 860px) {
     .g3, .g4, .g5 { grid-template-columns: repeat(2, 1fr); }
+    .stack { grid-template-columns: 1fr; }
     .bound, .lane { grid-template-columns: 1fr; margin: 22px 0; }
     .bound .to, .lane .dir { transform: rotate(90deg); justify-self: center; }
     .arrows { display: none; }
@@ -133,6 +158,9 @@
   @media (max-width: 520px) {
     .g2, .g3, .g4, .g5 { grid-template-columns: 1fr; }
     h1 { font-size: 25px; }
+    /* On a phone a file's words go under its name. */
+    .tree .row { flex-wrap: wrap; row-gap: 0; }
+    .tree .row .what { flex-basis: 100%; padding-left: 15px; }
   }
 </style>
 </head>
@@ -141,12 +169,15 @@
 
 <p class="tag t-plugin" style="display:inline-block">A proposal · nothing here is decided or built</p>
 <h1>Thermite v0.3.0: programs, one core, and plugins</h1>
-<p class="lede">Option 4 for how Thermite's code is laid out: what the packages are, what crosses each boundary, how it runs on one machine and on many, how the two planes talk over NATS, and what of today's code is core, a plugin, or on its way out.</p>
+<p class="lede">Option 4 for how Thermite's code is laid out: the conventions it follows, what the packages are, a sketch of their folders, what crosses each boundary, how it runs on one machine and on many, how the two planes talk over NATS, and what of today's code is core, a plugin, or on its way out.</p>
 <p class="quiet">The words are in <code>docs/plan/v030/options/</code>, beside this page. Counts of lines are of the code on 2026-11-15.</p>
 
 <nav>
+  <a href="#conventions">Conventions</a>
   <a href="#rules">The three rules</a>
   <a href="#packages">Packages</a>
+  <a href="#folders">Folders</a>
+  <a href="#owner">Where a change goes</a>
   <a href="#boundaries">Boundaries</a>
   <a href="#action">One action</a>
   <a href="#inside">Inside the control plane</a>
@@ -154,6 +185,7 @@
   <a href="#many">On several machines</a>
   <a href="#nats">How NATS works</a>
   <a href="#today">Today's code: core, plugin, or going</a>
+  <a href="#way">How it gets there</a>
   <a href="#open">Not sure yet</a>
 </nav>
 
@@ -164,6 +196,67 @@
   <span><i class="sw t-plugin"></i> a plugin</span>
   <span><i class="sw t-bus"></i> the bus (NATS)</span>
   <span><i class="sw t-gone"></i> goes away in v0.3.0</span>
+</div>
+
+<!-- ------------------------------------------------------------ conventions -->
+<h2 id="conventions">The conventions</h2>
+<p class="sub">Taken from fxbot as they are, so that both products read the same way. Its conventions open with four choices, and with one more line: a smaller solution that does the job beats a rule kept from an older design.</p>
+<div class="grid g4 over">
+  <div class="box"><h3>Simplicity <small>over complexity</small></h3>
+    <p>Three rules place every file. A boundary is a line in a <code>package.json</code>. An action is written once.</p></div>
+  <div class="box"><h3>Small <small>over huge</small></h3>
+    <p>Seven packages. A file does one job and reads in one sitting. An eighth package needs a second real consumer.</p></div>
+  <div class="box"><h3>Light <small>over heavy</small></h3>
+    <p>Few dependencies, each with a reason. A plugin that is not added costs nothing: no process, no table, no code in the page.</p></div>
+  <div class="box"><h3>Performance <small>over other things</small></h3>
+    <p>What a person waits on stays fast: a screen's first view, an action's answer, a job's start. A change says what it adds to those.</p></div>
+</div>
+<div class="between">One thing is above all four: agents propose, and code they cannot write measures and judges. No convention trades that away.</div>
+
+<p class="label">For the code</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>The rule</th><th>What it does in this tree</th></tr></thead>
+  <tbody>
+    <tr><td>Small files, each on one job. Split one that is hard to read in one sitting.</td><td>A package's <code>src/</code> is flat: a file for each thing, and a folder only when a thing needs several files.</td></tr>
+    <tr><td>Few dependencies. Node and the browser first.</td><td>A <code>package.json</code> stays short enough to read. A new line in one is a decision, with its reason and its credit.</td></tr>
+    <tr><td>No abstraction before its second real use. A few repeated lines are fine.</td><td>Three kinds of plugin, each with several real uses. A fourth kind, a new hook or an eighth package waits for its second use.</td></tr>
+    <tr><td>Plain TypeScript: functions and data. No classes, frameworks or wrappers unless a library needs one.</td><td>An action is an entry in a list and a function. A plugin is a <code>plugin.json</code> and a file of functions.</td></tr>
+    <tr><td>Delete before adding. No hook, option or layer for a use that is not real yet.</td><td><code>door/</code> holds no rule, so nothing collects there. What a step replaces is deleted in that step.</td></tr>
+    <tr><td>Name a thing for what it is.</td><td>One word for each thing, the same in a folder, the API, a screen and the docs: door, record, scheduler, judge, runner.</td></tr>
+    <tr><td>Check outside input once, at the edge that receives it.</td><td>The door checks an action's input against its entry in <code>core/api</code>, and the function behind it does not check again. The runner checks a message against <code>core/bus</code>.</td></tr>
+    <tr><td>Keep what a person waits on fast.</td><td>A change says what it adds to a screen's first view, an action's answer or a job's start: in requests, in work, in page weight.</td></tr>
+    <tr><td>Test behaviour that can break, on data that can be thrown away.</td><td>Tests are beside their code, in each package's <code>tests/</code>. One test of an action covers REST, MCP and the command line.</td></tr>
+    <tr><td>The source runs as it is.</td><td>Node runs each package's TypeScript. Only what a browser loads is built: <code>ui</code>, the design system's site, <code>website</code>.</td></tr>
+    <tr><td>Records in PostgreSQL, one statement or one transaction for each change.</td><td><code>control/record</code> is the one writer. A change to a table is a new numbered file in <code>migrations/</code>, never an edit of one that shipped.</td></tr>
+    <tr><td>A secret is sealed before it is stored, and never reaches the page.</td><td>Keys stay in the control plane, sealed. <code>core/client</code> and <code>ui</code> never hold one.</td></tr>
+    <tr><td>The smallest change that does the task.</td><td>A step builds what it needs, in the package that owns it, and no more.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="label">Core or plugin</p>
+<div class="grid g3">
+  <div class="box"><h3>The default is plugin</h3>
+    <p>Before a feature is built, ask: core, or a plugin? Its goal says which, and why.</p>
+    <p>Core is only what every run needs, what plugins plug into, and what Thermite needs to run.</p></div>
+  <div class="box t-plugin"><h3>What a plugin may count on</h3>
+    <ul><li>The core never imports or names it. Which plugins a new install gets is a list, as data.</li>
+      <li>Thermite's own plugins use the same API as anyone's.</li>
+      <li>When it cannot do what it needs, the API gets the smallest hook for it, on the day a real plugin needs one.</li>
+      <li>A release that breaks the API says so in one list, and a plugin names the oldest Thermite it runs on.</li></ul></div>
+  <div class="box t-core"><h3>What the core may count on</h3>
+    <ul><li>A plugin that is not added costs nothing.</li>
+      <li>A plugin's data is its own, in tables or files that it makes and removes. Never in a migration of the core.</li>
+      <li>Removing a plugin leaves the core working.</li>
+      <li>Never open to a plugin: measuring, verdicts, promotion, the record's writer, the wall, who may do what.</li></ul></div>
+</div>
+
+<p class="label">Where Thermite goes its own way</p>
+<div class="grid g3">
+  <div class="box"><h3>No SDK</h3><p>fxbot is put inside other products. Nothing embeds Thermite: other things talk to it, through the door.</p></div>
+  <div class="box"><h3>Two programs, and a bus</h3><p>fxbot is one server. Thermite has a second program, on other machines, so it has one more boundary, and NATS for it.</p></div>
+  <div class="box"><h3>Tests</h3><p>fxbot checks each feature by hand. A wrong rank in a statistics routine is not found by hand, so what a verdict rests on has tests.</p></div>
 </div>
 
 <!-- ------------------------------------------------------------ rules -->
@@ -208,6 +301,272 @@
 </div>
 <div class="between"><b class="c-control">control</b> and <b class="c-runner">runner</b> never import each other. Everything they say to each other is a message on NATS whose shape is in <code>core/bus</code>.</div>
 <p class="quiet"><code>design-system</code> imports nothing of Thermite, so fxbot can use the same one later with its own colours. Beside the packages: <code>examples/</code> (kits and campaigns), <code>deploy/</code> (the compose files and the control plane's image), <code>scripts-ci/</code>, <code>docs/</code>.</p>
+
+<!-- ------------------------------------------------------------ folders -->
+<h2 id="folders">The folders, as they could be</h2>
+<p class="sub">A sketch. The folders follow from the three rules. The files show the grain: each is named when its step is built. Elsewhere on this page <code>core/api</code> is short for <code>packages/core/src/api</code>. A folder closes when you press its name.</p>
+<div class="grid g2 stack">
+<div class="box t-core"><h3><code>packages/core/</code> <span class="quiet">@thermite/core · what two or more programs share</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">its doors: ./api, ./events, ./campaign, ./client, ./bus, ./plugin</span></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><details open><summary class="row"><code class="dir">api/</code><span class="what">the list of actions</span></summary>
+          <ul>
+            <li><div class="row"><code>action.ts</code><span class="what">what an action is: its name, input, answer, role, route, tool, command and words</span></div></li>
+            <li><div class="row"><code>campaigns.ts</code><span class="what">the actions on a campaign</span></div></li>
+            <li><div class="row"><code>runs.ts</code><span class="what">the actions on a run: start, pause, stop, steer</span></div></li>
+            <li><div class="row"><code>machines.ts</code><span class="what">the actions on the pool</span></div></li>
+            <li><div class="row"><code>knowledge.ts</code><span class="what">the actions on the knowledge base</span></div></li>
+            <li><div class="row"><code>index.ts</code><span class="what">the whole list</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">bus/</code><span class="what">NATS</span></summary>
+          <ul>
+            <li><div class="row"><code>subjects.ts</code><span class="what">every subject, made by a function</span></div></li>
+            <li><div class="row"><code>messages.ts</code><span class="what">each message's shape: a command, a job, a result, a live line, an ask</span></div></li>
+            <li><div class="row"><code>streams.ts</code><span class="what">each stream, and how it keeps its messages</span></div></li>
+            <li><div class="row"><code>permissions.ts</code><span class="what">who may publish and read what</span></div></li>
+            <li><div class="row"><code>client.ts</code><span class="what">connect, publish, take. Node only</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">events/</code><span class="what">the record's events</span></summary>
+          <ul>
+            <li><div class="row"><code>run.ts</code><span class="what">a run's events</span></div></li>
+            <li><div class="row"><code>attempt.ts</code><span class="what">an attempt's: built, measured, judged</span></div></li>
+            <li><div class="row"><code>machine.ts</code><span class="what">a machine's: joined, lost</span></div></li>
+            <li><div class="row"><code>index.ts</code><span class="what">every kind, by name</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">campaign/</code><span class="what">what a person writes</span></summary>
+          <ul>
+            <li><div class="row"><code>contract.ts</code><span class="what">a campaign's contract</span></div></li>
+            <li><div class="row"><code>kit.ts</code><span class="what">a kit's manifest</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">plugin/</code><span class="what">what a plugin is</span></summary>
+          <ul>
+            <li><div class="row"><code>manifest.ts</code><span class="what">plugin.json</span></div></li>
+            <li><div class="row"><code>harness.ts</code><span class="what">an agent program: start a turn, send a message, stop, give the usage</span></div></li>
+            <li><div class="row"><code>device.ts</code><span class="what">a kind of device: find them, give a job its share, measure</span></div></li>
+            <li><div class="row"><code>compute.ts</code><span class="what">a source of machines: find, start and stop one, put a runner on it</span></div></li>
+            <li><div class="row"><code>breaks.json</code><span class="what">what each release broke for plugins</span></div></li>
+          </ul></details></li>
+        <li><div class="row"><code>client.ts</code><span class="what">the typed client of the door, made from api/. fetch alone</span></div></li>
+        <li><div class="row"><code>settings.ts</code><span class="what">every setting: its name, its kind, its words</span></div></li>
+        <li><div class="row"><code>errors.ts</code><span class="what">an error's code and its words</span></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">tests/</code></div></li>
+  </ul></div>
+<div class="box t-control"><h3><code>packages/control/</code> <span class="quiet">@thermite/control · the control plane</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">imports core, and nothing else of Thermite</span></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><div class="row"><code>main.ts</code><span class="what">starts one service, or all four</span></div></li>
+        <li><details open><summary class="row"><code class="dir">door/</code><span class="what">transports only</span></summary>
+          <ul>
+            <li><div class="row"><code>rest.ts</code><span class="what">a route for each action</span></div></li>
+            <li><div class="row"><code>mcp.ts</code><span class="what">a tool for each action</span></div></li>
+            <li><div class="row"><code>stream.ts</code><span class="what">changes, sent to the open screens</span></div></li>
+            <li><div class="row"><code>session.ts</code><span class="what">sign-in and roles</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">record/</code><span class="what">the one writer</span></summary>
+          <ul>
+            <li><div class="row"><code>schema.ts</code><span class="what">the tables</span></div></li>
+            <li><div class="row"><code class="dir">migrations/</code><span class="what">one numbered file for each change</span></div></li>
+            <li><div class="row"><code>apply.ts</code><span class="what">events from the bus into the tables, each once, in order</span></div></li>
+            <li><div class="row"><code>queries.ts</code><span class="what">what the actions and the screens read</span></div></li>
+            <li><div class="row"><code>backup.ts</code><span class="what">backup and restore</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">scheduler/</code><span class="what">who works where</span></summary>
+          <ul>
+            <li><div class="row"><code>pool.ts</code><span class="what">the machines and their devices</span></div></li>
+            <li><div class="row"><code>place.ts</code><span class="what">which device a run's next job gets</span></div></li>
+            <li><div class="row"><code>jobs.ts</code><span class="what">a job's life: given, taken, done, lost</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">judge/</code><span class="what">what wins</span></summary>
+          <ul>
+            <li><div class="row"><code>verdict.ts</code><span class="what">a verdict from measurements</span></div></li>
+            <li><div class="row"><code>stats.ts</code><span class="what">the statistics</span></div></li>
+            <li><div class="row"><code>promote.ts</code><span class="what">a new champion</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">agents/</code><span class="what">a run's agents</span></summary>
+          <ul>
+            <li><div class="row"><code>worker.ts</code><span class="what">a worker's loop</span></div></li>
+            <li><div class="row"><code>planner.ts</code><span class="what">the planner's</span></div></li>
+            <li><div class="row"><code>zone.ts</code><span class="what">each worker's sandbox</span></div></li>
+            <li><div class="row"><code>tools.ts</code><span class="what">a run's tools: submit a change, run an experiment, write a note</span></div></li>
+            <li><div class="row"><code>context.ts</code><span class="what">what an agent is told, built from the record</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">advisors/</code><span class="what">who watches a run</span></summary>
+          <ul>
+            <li><div class="row"><code>teachers.ts</code></div></li>
+            <li><div class="row"><code>auditor.ts</code></div></li>
+            <li><div class="row"><code>review-panel.ts</code></div></li>
+          </ul></details></li>
+        <li><div class="row"><code>campaigns.ts</code><span class="what">campaigns, their contracts, their kits</span></div></li>
+        <li><div class="row"><code>runs.ts</code><span class="what">a run: its state, its budget, what ends it</span></div></li>
+        <li><div class="row"><code>knowledge.ts</code><span class="what">the knowledge base</span></div></li>
+        <li><div class="row"><code>providers.ts</code><span class="what">model providers and their keys</span></div></li>
+        <li><div class="row"><code>plugins.ts</code><span class="what">finds, checks, adds and loads plugins</span></div></li>
+        <li><div class="row"><code>secrets.ts</code><span class="what">sealing</span></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">tests/</code></div></li>
+  </ul></div>
+</div>
+<div class="grid g3 stack">
+<div class="box t-runner"><h3><code>packages/runner/</code> <span class="quiet">@thermite/runner · the one program on a machine</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">imports core, and nothing else of Thermite</span></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><div class="row"><code>main.ts</code><span class="what">joins the pool, takes jobs from the bus</span></div></li>
+        <li><details open><summary class="row"><code class="dir">jobs/</code><span class="what">what a machine is asked to do</span></summary>
+          <ul>
+            <li><div class="row"><code>build.ts</code><span class="what">builds a change for the device</span></div></li>
+            <li><div class="row"><code>measure.ts</code><span class="what">the judge's measurement</span></div></li>
+            <li><div class="row"><code>experiment.ts</code><span class="what">a worker's own experiment</span></div></li>
+          </ul></details></li>
+        <li><details open><summary class="row"><code class="dir">wall/</code><span class="what">keeps a change from the judge's files</span></summary>
+          <ul>
+            <li><div class="row"><code>users.ts</code><span class="what">a user for the judge, a user for each worker</span></div></li>
+            <li><div class="row"><code>limits.ts</code><span class="what">what a job may use</span></div></li>
+            <li><div class="row"><code>check.ts</code><span class="what">proves the wall holds, before the first job</span></div></li>
+          </ul></details></li>
+        <li><div class="row"><code>device.ts</code><span class="what">loads the device plugin of its image</span></div></li>
+        <li><div class="row"><code>report.ts</code><span class="what">what happened, onto the bus</span></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">tests/</code></div></li>
+  </ul></div>
+<div class="grid">
+<div class="box"><h3><code>packages/cli/</code> <span class="quiet">@thermite/cli · the thermite command</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">imports core</span></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><div class="row"><code>main.ts</code><span class="what">a command for each action, made from core/api</span></div></li>
+        <li><div class="row"><code>local.ts</code><span class="what">sets Thermite up on this machine</span></div></li>
+        <li><div class="row"><code>doctor.ts</code><span class="what">checks the machine</span></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">tests/</code></div></li>
+  </ul></div>
+<div class="box"><h3><code>packages/ui/</code> <span class="quiet">@thermite/ui · the dashboard's app</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">imports core and design-system</span></div></li>
+    <li><div class="row"><code>index.html</code></div></li>
+    <li><div class="row"><code>vite.config.ts</code></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><div class="row"><code>main.tsx</code><span class="what">the entry</span></div></li>
+        <li><div class="row"><code>app.tsx</code><span class="what">the routes and the shell</span></div></li>
+        <li><div class="row"><code>client.ts</code><span class="what">the page's one client, from core/client</span></div></li>
+        <li><div class="row"><code class="dir">screens/</code><span class="what">one file for each screen, made of the design system's parts</span></div></li>
+      </ul></details></li>
+  </ul></div>
+</div>
+<div class="grid">
+<div class="box"><h3><code>packages/design-system/</code> <span class="quiet">the look, for Thermite and later for fxbot</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">imports nothing of Thermite</span></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><div class="row"><code>theme.css</code><span class="what">every colour by its use, in light and in dark</span></div></li>
+        <li><div class="row"><code class="dir">ui/</code><span class="what">the stock components</span></div></li>
+        <li><div class="row"><code class="dir">parts/</code><span class="what">the brand's parts</span></div></li>
+        <li><div class="row"><code>index.ts</code><span class="what">its door</span></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">site/</code><span class="what">every part, with its states and its code</span></div></li>
+  </ul></div>
+<div class="box"><h3><code>packages/website/</code> <span class="quiet">the public site and the documentation</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>package.json</code><span class="what">imports design-system</span></div></li>
+    <li><details open><summary class="row"><code class="dir">src/</code></summary>
+      <ul>
+        <li><div class="row"><code class="dir">content/docs/</code><span class="what">the documentation's pages</span></div></li>
+        <li><div class="row"><code class="dir">pages/</code><span class="what">the public site</span></div></li>
+      </ul></details></li>
+  </ul></div>
+</div>
+</div>
+<div class="grid g2 stack">
+<div class="box t-plugin"><h3><code>plugins/</code> <span class="quiet">what an install may leave out</span></h3>
+  <ul class="tree">
+    <li><details open><summary class="row"><code class="dir">harness-fx/</code><span class="what">an agent harness</span></summary>
+      <ul>
+        <li><div class="row"><code>plugin.json</code><span class="what">its kind, its name, the oldest Thermite it runs on</span></div></li>
+        <li><div class="row"><code>control.ts</code><span class="what">implements core/plugin/harness.ts</span></div></li>
+        <li><div class="row"><code>README.md</code></div></li>
+        <li><div class="row"><code class="dir">tests/</code></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">harness-claude/</code></div></li>
+    <li><div class="row"><code class="dir">harness-pi/</code><span class="what">the same shape</span></div></li>
+    <li><details open><summary class="row"><code class="dir">device-cuda/</code><span class="what">a kind of device</span></summary>
+      <ul>
+        <li><div class="row"><code>plugin.json</code></div></li>
+        <li><div class="row"><code>runner.ts</code><span class="what">implements core/plugin/device.ts</span></div></li>
+        <li><div class="row"><code>Containerfile.cuda12</code><span class="what">builds the runner for this device</span></div></li>
+        <li><div class="row"><code>Containerfile.cuda13</code></div></li>
+        <li><div class="row"><code class="dir">tests/</code></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">device-cpu/</code></div></li>
+    <li><div class="row"><code class="dir">device-vulkan/</code><span class="what">the same shape, one image file each</span></div></li>
+    <li><details open><summary class="row"><code class="dir">compute-runpod/</code><span class="what">a source of machines</span></summary>
+      <ul>
+        <li><div class="row"><code>plugin.json</code></div></li>
+        <li><div class="row"><code>control.ts</code><span class="what">implements core/plugin/compute.ts</span></div></li>
+        <li><div class="row"><code class="dir">tests/</code></div></li>
+      </ul></details></li>
+    <li><div class="row"><code class="dir">compute-ssh/</code></div></li>
+    <li><div class="row"><code class="dir">compute-kubernetes/</code><span class="what">the same shape</span></div></li>
+  </ul></div>
+<div class="box"><h3>Beside the packages <span class="quiet">the top of the repository</span></h3>
+  <ul class="tree">
+    <li><div class="row"><code>AGENTS.md</code><span class="what">what Thermite is, the rules for agents, the checks</span></div></li>
+    <li><div class="row"><code>CONVENTIONS.md</code><span class="what">one page: the conventions above</span></div></li>
+    <li><div class="row"><code>package.json</code><span class="what">the workspaces</span></div></li>
+    <li><div class="row"><code>packages/AGENTS.md</code><span class="what">the package guide: this tree, and where a change goes</span></div></li>
+    <li><details open><summary class="row"><code class="dir">examples/</code></summary>
+      <ul>
+        <li><div class="row"><code class="dir">kits/</code><span class="what">smoke-cpu, smoke-cuda, smoke-vulkan</span></div></li>
+        <li><div class="row"><code class="dir">campaigns/</code><span class="what">a contract of each mode, ready to start</span></div></li>
+      </ul></details></li>
+    <li><details open><summary class="row"><code class="dir">deploy/</code></summary>
+      <ul>
+        <li><div class="row"><code>compose.yaml</code><span class="what">one machine: control, PostgreSQL, NATS, a runner</span></div></li>
+        <li><div class="row"><code>compose.runner.yaml</code><span class="what">a runner alone, for another machine</span></div></li>
+        <li><div class="row"><code>Containerfile</code><span class="what">the control plane's image</span></div></li>
+      </ul></details></li>
+    <li><details open><summary class="row"><code class="dir">scripts-ci/</code></summary>
+      <ul>
+        <li><div class="row"><code class="dir">build/</code><span class="what">the images, the release</span></div></li>
+        <li><div class="row"><code class="dir">checks/</code><span class="what">the public check, sizes, loose ends, the acceptance checks</span></div></li>
+      </ul></details></li>
+    <li><details open><summary class="row"><code class="dir">docs/</code></summary>
+      <ul>
+        <li><div class="row"><code class="dir">plan/</code><span class="what">the roadmap, the goals, the decisions</span></div></li>
+      </ul></details></li>
+  </ul></div>
+</div>
+
+<p class="label" id="owner">Where a change goes</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>If the change is about…</th><th>It goes in…</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>What an action is called, what it takes and answers, who may call it</td><td><code>core/api</code></td><td>REST, MCP, the command line and the client are made from it.</td></tr>
+    <tr><td>What an action does, and when it is refused</td><td>The file of the thing it changes: <code>control/runs.ts</code>, <code>control/scheduler</code></td><td>The rule has one place, whatever the transport.</td></tr>
+    <tr><td>A URL, a status code, a header, MCP's framing, a session</td><td><code>control/door</code></td><td>Transport only.</td></tr>
+    <tr><td>A table, a migration, a query</td><td><code>control/record</code></td><td>The record has one writer.</td></tr>
+    <tr><td>A message between the planes, a stream, who may read a subject</td><td><code>core/bus</code></td><td>Neither plane can send what is not written there.</td></tr>
+    <tr><td>A kind of event, or what one holds</td><td><code>core/events</code></td><td>Everyone who reads the record reads one shape.</td></tr>
+    <tr><td>Which device a job gets, and a job's life</td><td><code>control/scheduler</code></td><td>The pool is the control plane's.</td></tr>
+    <tr><td>When a change wins</td><td><code>control/judge</code></td><td>Never an agent's, and never a plugin's.</td></tr>
+    <tr><td>What happens beside the device: a build, a measurement, the wall</td><td><code>runner</code></td><td>It is the only code on the machine.</td></tr>
+    <tr><td>How a run's agents work: a loop, a tool, what an agent is told</td><td><code>control/agents</code>, <code>control/advisors</code></td><td>A run owns its agents.</td></tr>
+    <tr><td>How one agent program is started and read</td><td><code>plugins/harness-*</code></td><td>The core names no program.</td></tr>
+    <tr><td>A new kind of device, or a new place to get machines</td><td>A new folder: <code>plugins/device-*</code>, <code>plugins/compute-*</code></td><td>It touches nothing else.</td></tr>
+    <tr><td>A screen</td><td><code>ui/src/screens</code></td><td>The page holds no rule of the product.</td></tr>
+    <tr><td>A component, or a look</td><td><code>design-system</code></td><td>Every screen gets it.</td></tr>
+  </tbody>
+</table>
+</div>
 
 <!-- ------------------------------------------------------------ boundaries -->
 <h2 id="boundaries">Five boundaries, each with one contract</h2>
@@ -273,7 +632,7 @@
     <div class="box"><h3>The scheduler</h3><p><code>scheduler/</code> <code>judge/</code></p><p>The pool of machines and devices, placing a run, the jobs, a verdict from measurements, promotion.</p><p class="quiet">Its restart places no new job. A measurement in flight ends on its machine.</p></div>
     <div class="box"><h3>The agents</h3><p><code>agents/</code> <code>advisors/</code></p><p>The workers' and the planner's loops, each worker's zone in a sandbox, the teachers, the auditor, the review panel.</p><p class="quiet">Its restart stops turns in flight. They go on from the record.</p></div>
   </div>
-  <div class="chips"><span class="chip">campaigns/</span><span class="chip">knowledge/</span><span class="chip">providers/</span><span class="chip">retention/</span><span class="chip">backup/</span><span class="chip quiet">one folder for each thing the record holds; the services use them</span></div>
+  <div class="chips"><span class="chip">campaigns.ts</span><span class="chip">runs.ts</span><span class="chip">knowledge.ts</span><span class="chip">providers.ts</span><span class="chip quiet">a file for each thing the record holds, a folder once one file is not enough; the services use them</span></div>
 </div>
 
 <!-- ------------------------------------------------------------ one machine -->
