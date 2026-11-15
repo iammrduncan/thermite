@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Thermite v0.3.0 structure: option 4</title>
+<title>Thermite structure option 4</title>
 <style>
+  /* One column of sections, each a drawing made of boxes; a colour says which kind of thing a box is. */
   :root {
     --bg: #fbfaf8; --panel: #ffffff; --ink: #1c1917; --quiet: #6b645d; --line: #e4dfd8;
     --control: #1d4ed8; --control-bg: #eef3ff;
@@ -14,8 +15,9 @@
     --gone: #78716c; --gone-bg: #f3f1ee;
     --bus: #b45309; --bus-bg: #fef6e0;
   }
+  /* The dark values are given twice: for a dark system with no choice made, and for a choice of dark. */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #151312; --panel: #1d1a18; --ink: #f2eeea; --quiet: #a8a099; --line: #36312d;
       --control: #93b4ff; --control-bg: #18233f;
       --runner: #5eead4; --runner-bg: #10302c;
@@ -23,14 +25,26 @@
       --plugin: #fdba74; --plugin-bg: #3b2313;
       --gone: #a8a29e; --gone-bg: #26221f;
       --bus: #fcd34d; --bus-bg: #33270d;
+      color-scheme: dark;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #151312; --panel: #1d1a18; --ink: #f2eeea; --quiet: #a8a099; --line: #36312d;
+    --control: #93b4ff; --control-bg: #18233f;
+    --runner: #5eead4; --runner-bg: #10302c;
+    --core: #c4b5fd; --core-bg: #261d42;
+    --plugin: #fdba74; --plugin-bg: #3b2313;
+    --gone: #a8a29e; --gone-bg: #26221f;
+    --bus: #fcd34d; --bus-bg: #33270d;
+    color-scheme: dark;
+  }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.55 "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   code, .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
-  main { max-width: 1120px; margin: 0 auto; padding: 28px 20px 80px; }
+  main { max-width: 1120px; margin: 0 auto; padding-block: 28px 80px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   h1 { font-size: 30px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.02em; }
   h2 { font-size: 21px; margin: 56px 0 6px; letter-spacing: -0.01em; scroll-margin-top: 16px; }
   h3 { font-size: 15px; margin: 0 0 6px; }
@@ -43,6 +57,7 @@
   nav a { text-decoration: none; color: var(--ink); border: 1px solid var(--line); background: var(--panel);
     border-radius: 999px; padding: 3px 11px; font-size: 13px; }
   nav a:hover { border-color: var(--quiet); }
+  nav a:focus-visible { outline: 2px solid var(--control); outline-offset: 2px; }
 
   /* the pieces */
   .box { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 12px; }
@@ -71,6 +86,8 @@
   .sw.t-plugin { background: var(--plugin); } .sw.t-bus { background: var(--bus); } .sw.t-gone { background: var(--gone-bg); }
 
   .grid { display: grid; gap: 10px; }
+  /* Long words wrap inside a box and never widen the page. */
+  .grid > *, .bound > *, .lane > * { min-width: 0; }
   .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); }
   .g4 { grid-template-columns: repeat(4, 1fr); } .g5 { grid-template-columns: repeat(5, 1fr); }
   .arrows { display: grid; gap: 10px; text-align: center; color: var(--quiet); font-size: 12.5px; margin: 4px 0; }
