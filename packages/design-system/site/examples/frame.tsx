@@ -17,7 +17,7 @@ export default function SidebarLines() {
         <NavItem href="#" tone="none" label="pn-quality" word="paused" />
       </NavList>
       <NavLine href="#" icon={SettingsIcon} label="Setup" />
-      <NavAccount name="shannon" onSignOut={() => {}} />
+      <NavAccount name="ada" onSignOut={() => {}} />
     </div>
   );
 }

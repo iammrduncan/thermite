@@ -6,7 +6,7 @@ export default function ALonePage() {
     <Lone art={<Thermy size="large" />} name="Thermite" sentence="Sign in to Thermite.">
       <Form onSubmit={(event) => event.preventDefault()}>
         <Field label="User name" htmlFor="ex-user" help="The name of your user.">
-          <TextInput id="ex-user" defaultValue="shannon" />
+          <TextInput id="ex-user" defaultValue="ada" />
         </Field>
         <FormError>That is not a user of this app.</FormError>
         <Acts>
