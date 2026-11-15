@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Contribution"
+  short_description: "Audit an outside pull request, build it our way, credit its author"
+  default_prompt: "Use $review-contribution audit on this pull request."

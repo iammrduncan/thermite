@@ -1,0 +1,4 @@
+interface:
+  display_name: "Naive Panel"
+  short_description: "Test what words and first impressions make people think"
+  default_prompt: "Use $naive-review-panel to test what people will think this headline means."

@@ -1,35 +1,47 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "anti-slop": {
       "source": "iammrduncan/skills",
       "sourceType": "github",
       "skillPath": "skills/general/anti-slop/SKILL.md",
-      "computedHash": "d6b037fc34203dab45d19849d354cc9cfae7623b8c34000c34fb691fa69b07c6"
+      "computedHash": "36c61b920689d599841eff05ed8f5311630c74d717388dea39c72c06089816c8"
     },
     "antislop-ui": {
       "source": "miqdadbadjuber/anti-slop",
       "sourceType": "github",
       "skillPath": "skills/antislop-ui/SKILL.md",
-      "computedHash": "b0e61085d4e70e29b1652d1af873de752509fd006c7ca0acac4a1f4c2f94177f"
+      "computedHash": "588c3a726f2054c0aa3335f61cea6a3a9e53b2821cafda40d25ebf8d1c37e59e"
     },
     "engineering": {
       "source": "iammrduncan/skills",
       "sourceType": "github",
       "skillPath": "skills/general/engineering/SKILL.md",
-      "computedHash": "27689658116da589b4e8814c525fb1de426db82476e9f6eabf62550d48635bd1"
+      "computedHash": ""
+    },
+    "naive-review-panel": {
+      "source": "iammrduncan/skills",
+      "sourceType": "github",
+      "skillPath": "skills/naive-review-panel/SKILL.md",
+      "computedHash": "4a0250482632db2f7f84cc445ceb87afa3183d017147dc3387263aefb6b803dc"
+    },
+    "review-contribution": {
+      "source": "iammrduncan/skills",
+      "sourceType": "github",
+      "skillPath": "skills/review-contribution/SKILL.md",
+      "computedHash": "d8e6e4b93b6987827d06be25d0357b771787cdecf26c80cb72c773f579589335"
     },
     "show-me": {
       "source": "iammrduncan/skills",
       "sourceType": "github",
       "skillPath": "skills/general/show-me/SKILL.md",
-      "computedHash": "5fdc4ce9e29836e0e4ee1f27cc01ec5bac0760c11bd0e31688f1a04d8df78e57"
+      "computedHash": "ca702eb24be6af1c992e005d0f65063db8a438f5bb3186e99d8d448d240f0ff3"
     },
     "write-docs": {
       "source": "iammrduncan/skills",
       "sourceType": "github",
       "skillPath": "skills/general/write-docs/SKILL.md",
-      "computedHash": "f209688b01ee1b8d49d8ebd2086f2066e90ec905d28121d84587ca25054fb449"
+      "computedHash": "048b9d9382d857179d65d793c5d0f78fd93e5c34e1ad416d67061843ff4643f5"
     }
   }
 }
