@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermite v0.3.0 structure: option 4</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --panel: #ffffff; --ink: #1c1917; --quiet: #6b645d; --line: #e4dfd8;
+    --control: #1d4ed8; --control-bg: #eef3ff;
+    --runner: #0f766e; --runner-bg: #e9f7f4;
+    --core: #6d28d9; --core-bg: #f3effe;
+    --plugin: #c2410c; --plugin-bg: #fff1e7;
+    --gone: #78716c; --gone-bg: #f3f1ee;
+    --bus: #b45309; --bus-bg: #fef6e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151312; --panel: #1d1a18; --ink: #f2eeea; --quiet: #a8a099; --line: #36312d;
+      --control: #93b4ff; --control-bg: #18233f;
+      --runner: #5eead4; --runner-bg: #10302c;
+      --core: #c4b5fd; --core-bg: #261d42;
+      --plugin: #fdba74; --plugin-bg: #3b2313;
+      --gone: #a8a29e; --gone-bg: #26221f;
+      --bus: #fcd34d; --bus-bg: #33270d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  code, .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+  main { max-width: 1120px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 21px; margin: 56px 0 6px; letter-spacing: -0.01em; scroll-margin-top: 16px; }
+  h3 { font-size: 15px; margin: 0 0 6px; }
+  p { margin: 8px 0; }
+  .lede { font-size: 17px; color: var(--quiet); max-width: 760px; }
+  .sub { color: var(--quiet); max-width: 800px; margin-bottom: 16px; }
+  .note { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 14px; margin: 14px 0; }
+  .note b { font-weight: 600; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 0; }
+  nav a { text-decoration: none; color: var(--ink); border: 1px solid var(--line); background: var(--panel);
+    border-radius: 999px; padding: 3px 11px; font-size: 13px; }
+  nav a:hover { border-color: var(--quiet); }
+
+  /* the pieces */
+  .box { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 12px; }
+  .box h3 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .box p, .box li { font-size: 13.5px; }
+  .box ul { margin: 4px 0 0; padding-left: 17px; }
+  .tag { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+  .t-control { border-color: var(--control); background: var(--control-bg); } .t-control > h3, .c-control { color: var(--control); }
+  .t-runner { border-color: var(--runner); background: var(--runner-bg); } .t-runner > h3, .c-runner { color: var(--runner); }
+  .t-core { border-color: var(--core); background: var(--core-bg); } .t-core > h3, .c-core { color: var(--core); }
+  .t-plugin { border-color: var(--plugin); background: var(--plugin-bg); } .t-plugin > h3, .c-plugin { color: var(--plugin); }
+  .t-gone { border-color: var(--gone); background: var(--gone-bg); border-style: dashed; } .t-gone > h3, .c-gone { color: var(--gone); }
+  .t-bus { border-color: var(--bus); background: var(--bus-bg); } .t-bus > h3, .c-bus { color: var(--bus); }
+  .tag.t-control, .tag.t-runner, .tag.t-core, .tag.t-plugin, .tag.t-gone, .tag.t-bus { border: 1px solid; }
+  .tag.t-control { color: var(--control); } .tag.t-runner { color: var(--runner); } .tag.t-core { color: var(--core); }
+  .tag.t-plugin { color: var(--plugin); } .tag.t-gone { color: var(--gone); } .tag.t-bus { color: var(--bus); }
+  .quiet { color: var(--quiet); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 1px 7px; font-size: 12.5px; }
+  .chip small { color: var(--quiet); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 14px 0 4px; font-size: 13px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid; display: inline-block; }
+  .sw.t-control { background: var(--control); } .sw.t-runner { background: var(--runner); } .sw.t-core { background: var(--core); }
+  .sw.t-plugin { background: var(--plugin); } .sw.t-bus { background: var(--bus); } .sw.t-gone { background: var(--gone-bg); }
+
+  .grid { display: grid; gap: 10px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); } .g5 { grid-template-columns: repeat(5, 1fr); }
+  .arrows { display: grid; gap: 10px; text-align: center; color: var(--quiet); font-size: 12.5px; margin: 4px 0; }
+  .arrows b { display: block; font-size: 18px; line-height: 1; color: var(--ink); font-weight: 400; }
+  .between { text-align: center; font-size: 12.5px; color: var(--quiet); border: 1px dashed var(--line);
+    border-radius: 8px; padding: 6px 10px; margin: 8px 0; }
+
+  /* a boundary: caller, contract, server */
+  .bound { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: 8px; align-items: stretch; margin: 8px 0; }
+  .bound .to { align-self: center; color: var(--quiet); font-size: 18px; }
+
+  /* machines */
+  .machine { border: 2px solid var(--ink); border-radius: 14px; padding: 12px; background: var(--panel); }
+  .machine > .name { font-weight: 600; margin-bottom: 8px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .machine > .name small { font-weight: 400; color: var(--quiet); }
+  .busbar { border: 1px solid var(--bus); background: repeating-linear-gradient(90deg, var(--bus-bg) 0 14px, transparent 14px 18px), var(--bus-bg);
+    border-radius: 8px; padding: 7px 12px; text-align: center; font-size: 13px; color: var(--bus); font-weight: 600; margin: 10px 0; }
+  .busbar small { font-weight: 400; display: block; color: var(--ink); opacity: 0.8; }
+  .people { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 4px; }
+  .person { border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; background: var(--panel); font-size: 13px; }
+
+  /* lanes on the bus */
+  .lane { display: grid; grid-template-columns: 1fr 26px 1.25fr 26px 1fr; gap: 6px; align-items: center; margin: 7px 0; }
+  .lane .dir { text-align: center; font-size: 17px; color: var(--quiet); }
+  .lane .box { padding: 7px 10px; }
+  .lane .box p { margin: 2px 0 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 10px 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-top: 1px solid var(--line); }
+  thead th { border-top: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--quiet); }
+  .scroll { overflow-x: auto; }
+  pre { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    overflow-x: auto; font-size: 12.5px; line-height: 1.5; }
+  footer { margin-top: 60px; color: var(--quiet); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+
+  @media (max-width: 860px) {
+    .g3, .g4, .g5 { grid-template-columns: repeat(2, 1fr); }
+    .bound, .lane { grid-template-columns: 1fr; margin: 22px 0; }
+    .bound .to, .lane .dir { transform: rotate(90deg); justify-self: center; }
+    .arrows { display: none; }
+  }
+  @media (max-width: 520px) {
+    .g2, .g3, .g4, .g5 { grid-template-columns: 1fr; }
+    h1 { font-size: 25px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<p class="tag t-plugin" style="display:inline-block">A proposal · nothing here is decided or built</p>
+<h1>Thermite v0.3.0: programs, one core, and plugins</h1>
+<p class="lede">Option 4 for how Thermite's code is laid out: what the packages are, what crosses each boundary, how it runs on one machine and on many, how the two planes talk over NATS, and what of today's code is core, a plugin, or on its way out.</p>
+<p class="quiet">The words are in <code>docs/plan/v030/options/</code>, beside this page. Counts of lines are of the code on 2026-11-15.</p>
+
+<nav>
+  <a href="#rules">The three rules</a>
+  <a href="#packages">Packages</a>
+  <a href="#boundaries">Boundaries</a>
+  <a href="#action">One action</a>
+  <a href="#inside">Inside the control plane</a>
+  <a href="#one">On one machine</a>
+  <a href="#many">On several machines</a>
+  <a href="#nats">How NATS works</a>
+  <a href="#today">Today's code: core, plugin, or going</a>
+  <a href="#open">Not sure yet</a>
+</nav>
+
+<div class="legend">
+  <span><i class="sw t-control"></i> the control plane</span>
+  <span><i class="sw t-runner"></i> the runner plane</span>
+  <span><i class="sw t-core"></i> the core, shared by programs</span>
+  <span><i class="sw t-plugin"></i> a plugin</span>
+  <span><i class="sw t-bus"></i> the bus (NATS)</span>
+  <span><i class="sw t-gone"></i> goes away in v0.3.0</span>
+</div>
+
+<!-- ------------------------------------------------------------ rules -->
+<h2 id="rules">The three rules</h2>
+<p class="sub">The whole tree follows from these. No fourth rule is needed to say where a new file goes.</p>
+<div class="grid g3">
+  <div class="box"><h3>1. A package is a program, or what two programs share</h3>
+    <p>Five programs: the control plane, the runner, the command line, the dashboard's app, the website. Two shared things: the core and the design system. Seven packages.</p></div>
+  <div class="box"><h3>2. Each boundary has one folder in the core</h3>
+    <p>What two programs say to each other is written once, in <code>core</code>. The control plane and the runner never import each other.</p></div>
+  <div class="box"><h3>3. Core or plugin</h3>
+    <p>What every run needs is in the packages. What an install may leave out is a plugin. The core never names a plugin.</p></div>
+</div>
+
+<!-- ------------------------------------------------------------ packages -->
+<h2 id="packages">The packages, and who imports whom</h2>
+<p class="sub">An arrow is a line in a <code>package.json</code>. A package that is not named there cannot be imported, so most of today's import check is not needed.</p>
+
+<div class="grid g5">
+  <div class="box"><h3>ui</h3><p>The dashboard's app. Screens made from the design system's parts.</p><p class="quiet">imports <code>core/client</code>, <code>design-system</code></p></div>
+  <div class="box"><h3>cli</h3><p>The <code>thermite</code> command.</p><p class="quiet">imports <code>core/client</code>, <code>core/campaign</code></p></div>
+  <div class="box t-control"><h3>control</h3><p>The control plane: the door, the record, the scheduler, the judge, the agents, the advisors.</p><p class="quiet">imports <code>core</code></p></div>
+  <div class="box t-runner"><h3>runner</h3><p>The one program on a machine: builds, measurements, a worker's experiments on a device.</p><p class="quiet">imports <code>core</code></p></div>
+  <div class="box"><h3>website</h3><p>The public site and the documentation.</p><p class="quiet">imports <code>design-system</code></p></div>
+</div>
+<div class="arrows g5"><span><b>↓</b>the client</span><span><b>↓</b>the client</span><span><b>↓</b>all of it</span><span><b>↓</b>bus, plugin, campaign</span><span></span></div>
+<div class="box t-core">
+  <h3>core <span class="tag t-core">shared</span> <span class="quiet" style="font-weight:400">only what crosses a boundary. No rule of the product lives here.</span></h3>
+  <div class="grid g5" style="margin-top:8px">
+    <div class="box"><h3><code>api/</code></h3><p>The list of actions: each one's name, input, answer, role.</p></div>
+    <div class="box"><h3><code>client.ts</code></h3><p>The typed client of the door, made from <code>api/</code>.</p></div>
+    <div class="box"><h3><code>bus/</code></h3><p>NATS: subjects, message shapes, streams, who may publish and read, the client.</p></div>
+    <div class="box"><h3><code>events/</code> <code>campaign/</code></h3><p>The record's events. A campaign's contract and a kit's manifest.</p></div>
+    <div class="box"><h3><code>plugin/</code></h3><p>The manifest, and three interfaces: <code>harness.ts</code>, <code>device.ts</code>, <code>compute.ts</code>.</p></div>
+  </div>
+</div>
+<div class="arrows g3"><span><b>↑</b>implements <code>core/plugin</code></span><span><b>↑</b>implements <code>core/plugin</code></span><span><b>↑</b>implements <code>core/plugin</code></span></div>
+<div class="grid g3">
+  <div class="box t-plugin"><h3>plugins/harness-* <span class="tag t-control">runs in control</span></h3><p>How one agent program is started, fed, stopped and read: fx, Claude Code, Pi.</p></div>
+  <div class="box t-plugin"><h3>plugins/device-* <span class="tag t-runner">runs in the runner</span></h3><p>One kind of device: its driver, and the image file that builds the runner for it. CPU, CUDA, Vulkan.</p></div>
+  <div class="box t-plugin"><h3>plugins/compute-* <span class="tag t-control">runs in control</span></h3><p>One source of machines: find, start and stop one, and put a runner on it. SSH, Kubernetes, RunPod.</p></div>
+</div>
+<div class="between"><b class="c-control">control</b> and <b class="c-runner">runner</b> never import each other. Everything they say to each other is a message on NATS whose shape is in <code>core/bus</code>.</div>
+<p class="quiet"><code>design-system</code> imports nothing of Thermite, so fxbot can use the same one later with its own colours. Beside the packages: <code>examples/</code> (kits and campaigns), <code>deploy/</code> (the compose files and the control plane's image), <code>scripts-ci/</code>, <code>docs/</code>.</p>
+
+<!-- ------------------------------------------------------------ boundaries -->
+<h2 id="boundaries">Five boundaries, each with one contract</h2>
+<p class="sub">This is where the API, MCP and the NATS contracts live. The contract is in the core. The code on each side is in the program that owns that side.</p>
+
+<div class="bound">
+  <div class="box"><h3>A person, a script, an outside agent</h3><p><code>ui</code> and <code>cli</code> through <code>core/client</code>; any MCP client.</p></div>
+  <div class="to">→</div>
+  <div class="box t-core"><h3><code>core/api</code></h3><p>The list of actions. REST, MCP, the command line and the client are all made from it.</p></div>
+  <div class="to">→</div>
+  <div class="box t-control"><h3><code>control/door</code></h3><p><code>rest.ts</code> and <code>mcp.ts</code>: two transports of one list. No rule of the product is here.</p></div>
+</div>
+<div class="bound">
+  <div class="box t-runner"><h3><code>runner</code></h3><p>Takes jobs, gives back what it measured and what happened.</p></div>
+  <div class="to">⇄</div>
+  <div class="box t-core"><h3><code>core/bus</code></h3><p>Every subject, message shape and stream, and who may publish and read what.</p></div>
+  <div class="to">⇄</div>
+  <div class="box t-control"><h3><code>control/scheduler</code>, <code>control/record</code></h3><p>The scheduler gives jobs. The record takes what is reported.</p></div>
+</div>
+<div class="bound">
+  <div class="box"><h3>Everyone who reads what happened</h3><p>The explorer in <code>ui</code>, a query, an export.</p></div>
+  <div class="to">←</div>
+  <div class="box t-core"><h3><code>core/events</code></h3><p>Each kind of event and its body.</p></div>
+  <div class="to">←</div>
+  <div class="box t-control"><h3><code>control/record</code></h3><p>The one writer of what happened.</p></div>
+</div>
+<div class="bound">
+  <div class="box"><h3>The owner's files</h3><p>A campaign's contract. A kit: how a change is built and measured.</p></div>
+  <div class="to">→</div>
+  <div class="box t-core"><h3><code>core/campaign</code></h3><p>The schemas of both.</p></div>
+  <div class="to">→</div>
+  <div class="box"><h3>Three readers</h3><p><code>control/campaigns</code> checks them, <code>runner</code> reads a kit to measure, <code>cli</code> checks a contract before it is sent.</p></div>
+</div>
+<div class="bound">
+  <div class="box t-plugin"><h3>A plugin</h3><p>A folder with a <code>plugin.json</code> and code for where it runs.</p></div>
+  <div class="to">→</div>
+  <div class="box t-core"><h3><code>core/plugin</code></h3><p>The manifest and the three interfaces. Nothing else of Thermite is open to a plugin.</p></div>
+  <div class="to">→</div>
+  <div class="box"><h3>Who loads it</h3><p><code>control</code> loads harnesses and sources of compute. <code>runner</code> loads the device of its image.</p></div>
+</div>
+
+<!-- ------------------------------------------------------------ one action -->
+<h2 id="action">One action, written once</h2>
+<p class="sub">Take "pause a run". Today an action's route, its MCP tool, its command and its page's form are written apart. Here it is one entry and one function.</p>
+<div class="grid g3">
+  <div class="box t-core"><h3>1. The entry <span class="tag t-core">core/api</span></h3>
+    <p>Its name, its input and answer as schemas, who may call it, its words. It also names its route, its tool and its command.</p></div>
+  <div class="box t-control"><h3>2. The function <span class="tag t-control">control/scheduler</span></h3>
+    <p>The rule: what pausing does, when it is refused. It is in the folder of the thing it changes, never in the door.</p></div>
+  <div class="box"><h3>3. Made from the entry</h3>
+    <ul><li>the REST route, in <code>door/rest.ts</code></li><li>the MCP tool, in <code>door/mcp.ts</code></li><li>the <code>thermite</code> command</li><li>the client's call, for the app</li><li>its reference page</li><li>Thermy's tool</li></ul></div>
+</div>
+<p class="quiet">MCP has a second, separate use: a run's own tools, which a worker calls (submit a change, run an experiment, write a note). Those are not the door. They are in <code>control/agents</code>, and a harness plugin hands them to its program.</p>
+
+<!-- ------------------------------------------------------------ inside control -->
+<h2 id="inside">Inside the control plane</h2>
+<p class="sub">Four services, as goal 258's design has them. They are entries of one package: a small install starts them as one process, a larger one starts each alone.</p>
+<div class="box t-control">
+  <h3>control</h3>
+  <div class="grid g4" style="margin-top:8px">
+    <div class="box"><h3>The door</h3><p><code>door/</code></p><p>The dashboard, REST, MCP, the stream of changes, sign-in.</p><p class="quiet">Its restart stops nothing.</p></div>
+    <div class="box"><h3>The record</h3><p><code>record/</code></p><p>The one writer: events into tables, migrations, queries. PostgreSQL.</p><p class="quiet">Its restart makes screens lag. No work stops.</p></div>
+    <div class="box"><h3>The scheduler</h3><p><code>scheduler/</code> <code>judge/</code></p><p>The pool of machines and devices, placing a run, the jobs, a verdict from measurements, promotion.</p><p class="quiet">Its restart places no new job. A measurement in flight ends on its machine.</p></div>
+    <div class="box"><h3>The agents</h3><p><code>agents/</code> <code>advisors/</code></p><p>The workers' and the planner's loops, each worker's zone in a sandbox, the teachers, the auditor, the review panel.</p><p class="quiet">Its restart stops turns in flight. They go on from the record.</p></div>
+  </div>
+  <div class="chips"><span class="chip">campaigns/</span><span class="chip">knowledge/</span><span class="chip">providers/</span><span class="chip">retention/</span><span class="chip">backup/</span><span class="chip quiet">one folder for each thing the record holds; the services use them</span></div>
+</div>
+
+<!-- ------------------------------------------------------------ one machine -->
+<h2 id="one">On one machine</h2>
+<p class="sub">The first install, and the whole of a small lab. Four containers under compose. Today's stack has control, a bus, a harness and a supervisor; the last two become the one runner.</p>
+<div class="people"><span class="person">a browser · <code>ui</code></span><span class="person">the <code>thermite</code> command</span><span class="person">an outside agent · MCP</span></div>
+<div class="arrows" style="display:block"><b>↓</b>HTTPS to the door</div>
+<div class="machine">
+  <div class="name">One computer <small>docker compose or podman compose</small></div>
+  <div class="grid g3">
+    <div class="box t-control"><h3>control <span class="tag t-control">one process</span></h3><p>The door, the record, the scheduler and the agents together. The agents' sandboxes are here too.</p></div>
+    <div class="box"><h3>PostgreSQL</h3><p>The record's tables. Only the control plane reaches it.</p></div>
+    <div class="box t-runner"><h3>runner <span class="tag t-plugin">device-cpu or device-cuda</span></h3><p>Built from its device plugin's image file. Uses this computer's CPUs, or its GPU.</p></div>
+  </div>
+  <div class="busbar">NATS, with JetStream<small>the control plane and the runner meet here, and nowhere else</small></div>
+</div>
+<p class="quiet">The runner here joins the pool by itself, with a join token. No source of compute is needed, so no <code>compute-*</code> plugin is installed.</p>
+
+<!-- ------------------------------------------------------------ many machines -->
+<h2 id="many">On several machines</h2>
+<p class="sub">The same programs. The control plane is in one place; machines are a pool. A run owns its agents and is given devices from the pool, so several runs can share one machine and a run can use several.</p>
+<div class="people"><span class="person">browsers</span><span class="person"><code>thermite</code></span><span class="person">outside agents · MCP</span><span class="person">fxbot's bots</span></div>
+<div class="arrows" style="display:block"><b>↓</b>HTTPS to the door</div>
+<div class="machine">
+  <div class="name">The control plane <small>one machine, or a cluster</small></div>
+  <div class="grid g5">
+    <div class="box t-control"><h3>door</h3><p>Can restart alone.</p></div>
+    <div class="box t-control"><h3>record</h3><p>The one writer.</p></div>
+    <div class="box t-control"><h3>scheduler</h3><p>With <span class="c-plugin">compute-*</span> plugins.</p></div>
+    <div class="box t-control"><h3>agents</h3><p>With <span class="c-plugin">harness-*</span> plugins.</p></div>
+    <div class="box"><h3>PostgreSQL</h3><p>Its own, or one the site already runs.</p></div>
+  </div>
+  <div class="busbar">NATS, with JetStream<small>one server beside the control plane; TLS with the control plane's own certificate authority</small></div>
+</div>
+<div class="arrows" style="display:block"><b>↑</b>each runner reaches the bus over TLS, with a key of its own. Where a machine cannot dial out, as a RunPod pod today, the bus dials a small server on the machine as a leaf node.</div>
+<div class="grid g4">
+  <div class="machine"><div class="name">A workstation <small>2 GPUs</small></div>
+    <div class="box t-runner"><h3>runner</h3><p><span class="c-plugin">device-cuda</span></p><p class="quiet">Put there over SSH by <span class="c-plugin">compute-ssh</span>, or started by hand with a join token.</p></div></div>
+  <div class="machine"><div class="name">A cluster <small>Kubernetes</small></div>
+    <div class="box t-runner"><h3>runner pods</h3><p><span class="c-plugin">device-cuda</span>, <span class="c-plugin">device-cpu</span></p><p class="quiet">Made and removed by <span class="c-plugin">compute-kubernetes</span>.</p></div></div>
+  <div class="machine"><div class="name">A rented pod <small>RunPod</small></div>
+    <div class="box t-runner"><h3>runner</h3><p><span class="c-plugin">device-cuda</span></p><p class="quiet">Started, stopped and ended by <span class="c-plugin">compute-runpod</span>, which also counts its cost.</p></div></div>
+  <div class="machine"><div class="name">A Mac, a board <small>later</small></div>
+    <div class="box t-runner"><h3>runner</h3><p><span class="c-plugin">device-vulkan</span> today; <span class="c-plugin">device-metal</span>, <span class="c-plugin">device-rocm</span>, <span class="c-plugin">device-esp32</span> are each one new folder.</p></div></div>
+</div>
+<div class="grid g2" style="margin-top:10px">
+  <div class="box"><h3>What stays on a machine</h3><p>Only what needs the device: the build for it, the judge's clock and its measurement, a worker's experiment. The wall between a change and the judge's files is the runner's.</p></div>
+  <div class="box"><h3>What never leaves the control plane</h3><p>The record, the agents' conversations and their keys, the judge's decision, promotion. A machine that is lost loses a job, not a run.</p></div>
+</div>
+
+<!-- ------------------------------------------------------------ nats -->
+<h2 id="nats">How NATS works here</h2>
+<p class="sub">One server with JetStream, beside the control plane. A subject is an address; a stream keeps the messages of some subjects, each in its own way. The streams below are today's. Option 4 keeps them and puts every one of their shapes in <code>core/bus</code>.</p>
+
+<div class="lane">
+  <div class="box t-control"><h3>scheduler, door</h3><p>Publishes a command, signed with the control plane's key: start, pause, stop, a new setting.</p></div>
+  <div class="dir">→</div>
+  <div class="box t-bus"><h3>COMMANDS <span class="tag t-bus">work queue</span></h3><p>Each command is taken once, and is dropped when it is too old.</p></div>
+  <div class="dir">→</div>
+  <div class="box t-runner"><h3>runner</h3><p>Checks the signature against the key it pinned, then does it.</p></div>
+</div>
+<div class="lane">
+  <div class="box t-control"><h3>record</h3><p>Applies each event once, in order, from its place in the stream, into the tables.</p></div>
+  <div class="dir">←</div>
+  <div class="box t-bus"><h3>EVENTS <span class="tag t-bus">kept for good</span></h3><p>Every event of every run. The record of each run is applied from it, and a backup holds a snapshot of it.</p></div>
+  <div class="dir">←</div>
+  <div class="box t-runner"><h3>runner</h3><p>What happened: a build, a measurement, a job's end. Today it comes as a rig's report, and the control plane puts each event in the stream.</p></div>
+</div>
+<div class="lane">
+  <div class="box t-control"><h3>door</h3><p>Sends the lines on to the page that watches.</p></div>
+  <div class="dir">←</div>
+  <div class="box t-bus"><h3>LIVE <span class="tag t-bus">newest, for a time</span></h3><p>Output as it comes. Old lines fall away by themselves.</p></div>
+  <div class="dir">←</div>
+  <div class="box t-runner"><h3>runner</h3><p>A build's and an experiment's output, line by line.</p></div>
+</div>
+<div class="lane">
+  <div class="box t-control"><h3>control</h3><p>Writes a machine's settings, sealed to that machine's key.</p></div>
+  <div class="dir">→</div>
+  <div class="box t-bus"><h3>CONFIG <span class="tag t-bus">latest value of each key</span></h3><p>A runner that starts late still finds what it needs.</p></div>
+  <div class="dir">→</div>
+  <div class="box t-runner"><h3>runner</h3><p>Opens it with its own key. Nobody else can.</p></div>
+</div>
+<div class="lane">
+  <div class="box t-control"><h3>control</h3><p>Answers: a search of the knowledge base, a registration.</p></div>
+  <div class="dir">⇄</div>
+  <div class="box t-bus"><h3>Asks <span class="tag t-bus">request and answer</span></h3><p>No stream. One question, one answer, with a time limit.</p></div>
+  <div class="dir">⇄</div>
+  <div class="box t-runner"><h3>runner</h3><p>Asks, and waits for the answer.</p></div>
+</div>
+
+<div class="grid g3" style="margin-top:12px">
+  <div class="box"><h3>Who may say what</h3><p>Every runner signs in with a key of its own. The control plane writes the server's users: a runner may publish and read only its own subjects. That table is a contract, in <code>core/bus</code>.</p></div>
+  <div class="box"><h3>Nothing is lost when a side is away</h3><p>A measurement in flight ends on its machine while the control plane restarts, and what it reports waits on the bus. The record goes on from its place: no event twice, none skipped.</p></div>
+  <div class="box"><h3>Why not HTTP between the planes</h3><p>A machine needs no API of its own, a message outlives a restart on either side, and one place says who may reach what.</p></div>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Stream today</th><th>Subjects today</th><th>Kept</th><th>Carries</th></tr></thead>
+  <tbody>
+    <tr><td><code>EVENTS</code></td><td><code>thermite.run.*.ev.*</code>, <code>thermite.run.*.queue.*</code>, <code>thermite.rig.*.ev.*</code></td><td>For good, on disk</td><td>Every event of every run</td></tr>
+    <tr><td><code>COMMANDS</code></td><td><code>thermite.rig.*.cmd</code></td><td>Until taken; dropped when too old</td><td>Signed commands</td></tr>
+    <tr><td><code>LIVE</code></td><td><code>thermite.run.*.live.*</code>, <code>thermite.rig.*.live.*</code></td><td>The newest, for a set time</td><td>Lines as they come</td></tr>
+    <tr><td><code>CONFIG</code></td><td><code>thermite.rig.*.config.*</code></td><td>The latest value of each key</td><td>Settings, sealed to one key</td></tr>
+    <tr><td><code>REPORTS</code></td><td><code>thermite.rig.*.report</code></td><td>Until taken</td><td>A rig's pages of events on their way to control</td></tr>
+    <tr><td><code>KB_FILES</code></td><td><code>thermite.rig.*.kbfile</code></td><td>Until taken</td><td>Files for the knowledge base, in pieces</td></tr>
+    <tr><td>Asks</td><td><code>thermite.rig.*.ask.*</code>, <code>thermite.kb.search.*</code>, <code>thermite.kb.read.*</code></td><td>Not kept</td><td>A question and its answer</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="quiet">What option 4 changes on the bus is the key of a subject, not the pattern: where a subject names a rig today, it names a machine or a run once the rig is gone (step 34 of the run sheet). Two things are left to step 31's design: how the scheduler hands a job to a runner (today a rig's own core does it), and whether <code>REPORTS</code> stays once a runner can publish its events to <code>EVENTS</code> itself.</p>
+
+<!-- ------------------------------------------------------------ today -->
+<h2 id="today">Today's code: core, plugin, or going</h2>
+<p class="sub">Where each part of today's 220k lines lands. The numbers are thousands of lines today, to show weight; they are not targets.</p>
+<div class="grid g4">
+  <div class="box t-control"><h3>Core · control plane</h3>
+    <div class="chips">
+      <span class="chip">the record: store, views, events <small>29k</small></span>
+      <span class="chip">the agents' loops, research <small>21k</small></span>
+      <span class="chip">the roles, tools, compaction, model calls <small>12k</small></span>
+      <span class="chip">the advisors <small>9k</small></span>
+      <span class="chip">the judge's decisions <small>part of 6k</small></span>
+      <span class="chip">the door: REST and MCP <small>6k, to be made thin</small></span>
+      <span class="chip">campaigns, kits <small>4.5k</small></span>
+      <span class="chip">the knowledge base <small>2.6k</small></span>
+      <span class="chip">providers, tool servers <small>2.1k</small></span>
+      <span class="chip">retention, system, signing <small>2.8k</small></span>
+    </div></div>
+  <div class="box"><h3 class="c-runner">Core · runner</h3>
+    <div class="chips">
+      <span class="chip">the wall: the broker <small>5.7k</small></span>
+      <span class="chip">measuring <small>part of 6k</small></span>
+      <span class="chip">the check of the wall <small>1.4k</small></span>
+      <span class="chip">today's runner process <small>0.5k</small></span>
+    </div>
+    <h3 style="margin-top:14px" class="c-core">Core · shared</h3>
+    <div class="chips">
+      <span class="chip">the contracts <small>15k</small></span>
+      <span class="chip">the bus <small>5.5k</small></span>
+      <span class="chip">shared tools <small>4.6k</small></span>
+    </div>
+    <h3 style="margin-top:14px">Core · other programs</h3>
+    <div class="chips">
+      <span class="chip">the command line <small>5k</small></span>
+      <span class="chip">the app <small>2k, growing</small></span>
+      <span class="chip">the design system <small>4.7k</small></span>
+    </div></div>
+  <div class="box t-plugin"><h3>Becomes a plugin</h3>
+    <p class="quiet" style="margin:0">harness</p>
+    <div class="chips">
+      <span class="chip">Pi <small>built into the code today</small></span>
+      <span class="chip">Claude Code <small>1.4k</small></span>
+      <span class="chip">OpenCode <small>1.2k</small></span>
+      <span class="chip">Codex <small>0.9k</small></span>
+      <span class="chip">Pi's view <small>1.1k</small></span>
+    </div>
+    <p class="quiet" style="margin:8px 0 0">device</p>
+    <div class="chips">
+      <span class="chip">CPU, CUDA, Vulkan drivers <small>0.7k</small></span>
+      <span class="chip">their images</span>
+    </div>
+    <p class="quiet" style="margin:8px 0 0">compute</p>
+    <div class="chips">
+      <span class="chip">Kubernetes clusters <small>4.3k</small></span>
+      <span class="chip">RunPod <small>3.5k</small></span>
+      <span class="chip">machines over SSH <small>0.9k</small></span>
+    </div>
+    <p class="quiet" style="margin:8px 0 0">not built yet</p>
+    <div class="chips">
+      <span class="chip">harness-fx</span><span class="chip">device-rocm</span><span class="chip">device-metal</span><span class="chip">device-esp32</span>
+    </div></div>
+  <div class="box t-gone"><h3>Goes away</h3>
+    <div class="chips">
+      <span class="chip">the old dashboard's pages <small>34.5k · step 33</small></span>
+      <span class="chip">the rig's own service: its ledger, API, controller <small>15.3k · step 34</small></span>
+      <span class="chip">the supervisor's relay <small>2.1k · step 34</small></span>
+      <span class="chip">the store on SQLite <small>12.7k · once nobody goes back</small></span>
+      <span class="chip">most of the import check <small>0.6k</small></span>
+      <span class="chip">the build of <code>dist/</code> <small>if the source is run, as fxbot does</small></span>
+    </div>
+    <p class="quiet" style="margin-top:10px">Never open to a plugin, whatever its size: measuring, verdicts, promotion, the record's writer, the wall, who may do what.</p></div>
+</div>
+<p class="quiet">Not placed above: the top-level files of control, the harness and the supervisor (17k lines together), and what is left of the rigs' own code in control (2.7k). Each is sorted when its step of the run sheet is built.</p>
+
+<!-- ------------------------------------------------------------ the way -->
+<h2 id="way">How it gets there</h2>
+<p class="sub">The run sheet's 35 steps keep their order. One step is added first: set up the workspaces, and move what lives on unchanged. After that, each step builds into the new packages, and <code>src/</code> shrinks until it is empty.</p>
+<div class="grid g5">
+  <div class="box"><h3>New first step</h3><p>Workspaces. <code>web</code>, the site, the kits move. The contracts and the bus become <code>core</code>.</p></div>
+  <div class="box"><h3>Steps 8 to 13</h3><p><code>core/api</code> and the door; the record; a run's agents; the pool, with the first <code>compute-*</code> plugins.</p></div>
+  <div class="box"><h3>Steps 14 to 27</h3><p>The screens, in <code>ui</code>.</p></div>
+  <div class="box"><h3>Steps 29 to 31</h3><p><code>harness-*</code> plugins; the agents in the control plane; <code>runner</code> and the <code>device-*</code> plugins.</p></div>
+  <div class="box"><h3>Steps 33, 34</h3><p>The old pages and the rig are deleted. <code>src/</code> is removed.</p></div>
+</div>
+
+<!-- ------------------------------------------------------------ open -->
+<h2 id="open">What I am least sure of</h2>
+<div class="grid g3">
+  <div class="box"><h3>One core, or two</h3><p><code>core</code> holds what a browser may load and what only Node runs (the bus's client). Entries and a check keep them apart. Two packages would make the line physical, for an eighth package.</p></div>
+  <div class="box"><h3>Thermy</h3><p>By the rule it is a plugin. It needs a place in the page, a fourth kind of hook that nothing else needs yet. So: in <code>control/agents</code> first, a plugin when a second one wants a place in the page.</p></div>
+  <div class="box"><h3>The control plane as one package</h3><p>It will be the large one. Its services are entries, not packages, until one needs an image or a release of its own.</p></div>
+</div>
+
+<footer>Thermite · the structure of v0.3.0 · option 4 of four · a proposal for the owner's choice. The other options and the full reasoning are in <code>docs/plan/v030/options/</code>.</footer>
+</main>
+</body>
+</html>

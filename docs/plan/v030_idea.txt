@@ -1,0 +1,39 @@
+Idea for project structure going forward
+
+/examples
+  /kits
+    smoke-cpu
+    smoke-cuda
+    smoke-vulkan
+  /campaigns
+/runner-images
+  vulkan.xyz
+  cuda13.xyz
+  cuda12.xyz
+  cpu.xyz
+  rocm.xyz
+  metal.xyz
+  esp32.xyz
+/docs
+/packages
+  /design-system
+  /cli
+  /ui
+  /control
+    /api
+    /mcp
+    /supervisor
+  /runner
+  /sdk
+  /core
+    /harness
+      claude.ts
+      fx.ts
+      harness.ts
+    /nats
+  /website
+/plugins
+  /pi
+/scripts-ci
+  /build
+  /checks
