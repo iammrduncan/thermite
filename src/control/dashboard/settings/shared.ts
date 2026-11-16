@@ -16,7 +16,14 @@ export const TYPES: Record<ProviderType, string> = {
   opencode: "OpenCode",
   claude: "Claude subscription",
   chatgpt: "ChatGPT subscription",
+  "google-gemini-api": "Gemini API key, under its spend cap (Pi)",
 };
+/**
+ * Why a provider that rigs use is not deleted, with the rigs named, for the row that would
+ * otherwise hold its delete button and for the answer to a delete sent all the same.
+ */
+export const inUseWords = (rigs: string[]) =>
+  `In use by ${rigs.join(", ")}: give ${rigs.length === 1 ? "that rig" : "those rigs"} another model before deleting it.`;
 /** How a provider's models show in the model lists: a subscription's with its program. */
 export const modelPrefix = (type: ProviderType) =>
   type === "claude" ? "claude-code:" : type === "chatgpt" ? "chatgpt:" : "";

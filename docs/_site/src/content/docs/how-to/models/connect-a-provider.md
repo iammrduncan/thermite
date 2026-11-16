@@ -8,7 +8,7 @@ sidebar:
 
 A **model provider** is a service that runs AI models: a hosted API, a gateway, or a model server on your own computer. You add each provider once, on the dashboard's **Providers** page. Control then reads the provider's model list, and you give each [rig](../../reference/glossary.md) the model its agents use.
 
-This guide covers providers reached with an API key, or with no key: OpenCode's free models, and an OpenAI-compatible server that checks none. For subscriptions, see [Use a Claude subscription](claude-subscription.md) and [Use a ChatGPT subscription](chatgpt-subscription.md). Not sure which model to use? Start with [Choose a model](choose-a-model.md).
+This guide covers providers reached with an API key, or with no key: OpenCode's free models, and an OpenAI-compatible server that checks none. For subscriptions, see [Use a Claude subscription](claude-subscription.md) and [Use a ChatGPT subscription](chatgpt-subscription.md). A Gemini API key is added on a page of its own, under a monthly spend cap that you set: see [Use a Gemini API key under a spend cap](gemini-api-key.md). Not sure which model to use? Start with [Choose a model](choose-a-model.md).
 
 ## Before you start
 
@@ -170,7 +170,7 @@ Open the provider's row:
 
 - **Refresh models** reads the provider's list again. If the list fails, the row keeps its last list and shows the error in red.
 - To change the type, the base URL or the key, edit the fields and press **Save and list its models**. Leave **API key** empty to keep the current key.
-- **Delete this provider** removes it. A provider that a rig or an agent uses shows "In use: give its rigs another model before deleting it." instead. Give those rigs and agents another model first.
+- **Delete this provider** removes it. A provider that a rig or an agent uses names the rigs instead, for example "In use by rig-1: give that rig another model before deleting it." It names every rig that was given one of its models, also one that does not report now. Give those rigs and agents another model first.
 
 ## If something goes wrong
 

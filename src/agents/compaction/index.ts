@@ -539,7 +539,7 @@ export function summarizer(cfg: ModelConfig, meter?: PiMeter | undefined) {
         ...(cfg.maxTokens ? { maxTokens: cfg.maxTokens } : {}),
         ...(signal ? { signal } : {}),
         ...(thinkingLevel !== "off" ? { reasoning: thinkingLevel } : {}),
-        ...(meter ? { fetch: meter.fetch } : {}),
+        ...(meter ? meter.callOptions(model) : {}),
       },
     );
     meter?.reply(reply);

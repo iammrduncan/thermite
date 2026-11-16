@@ -34,11 +34,12 @@ import { creditsChip, creditsNote, usageBlock, usageChips } from "../../ui/provi
 import { modelPricesBlock } from "../../ui/usage.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { busSettingsBlock } from "./bus.ts";
+import { GEMINI_API_PAGE, geminiApiRow } from "./gemini-api.ts";
 import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
 import { draftOf, retentionBlocks } from "./retention.ts";
-import { TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
+import { inUseWords, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
 import { spaceBlock } from "./space.ts";
 
 /** Each Settings area's page title (goal 181). */
@@ -128,16 +129,11 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
       ),
     );
     const gitCount = store.gitAccess.list().length;
-    const given = store.agentModels.byRig();
-    /** The rigs whose workers or other agents use one of the provider's models. */
-    const usersOf = (name: string) =>
-      vs
-        .map((u) => u.id)
-        .filter(
-          (rig) =>
-            given[rig]?.provider === name ||
-            Object.values(store.agentModels.byRole(rig)).some((r) => r?.provider === name),
-        );
+    /**
+     * The rigs whose workers or other agents use one of the provider's models: the store's own
+     * record, which its delete checks, so a row offers Delete only when the delete will be taken.
+     */
+    const usersOf = (name: string) => store.modelProviders.users(name);
     // What a form did is said on its area's page: at the top of Providers and of Machines,
     // and in its own block on the others, which read it themselves.
     const atPrices = area === "prices";
@@ -183,7 +179,7 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
 <div class="form-end row" style="gap:8px"><button class="primary">Replace the token</button></div></form>
 ${
   rigs.length
-    ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
+    ? `<div class="muted small">${esc(inUseWords(rigs))}</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this subscription</button></form>`
 }</div></details>${creditsNote(p.name, usage.get(p.name), dismissed, t)}`;
     };
@@ -205,7 +201,7 @@ ${
 <div class="form-end row" style="gap:8px"><button class="primary">Finish the sign-in</button></div></form>
 ${
   rigs.length
-    ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
+    ? `<div class="muted small">${esc(inUseWords(rigs))}</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Sign out and delete</button></form>`
 }</div></details>`;
     };
@@ -214,6 +210,8 @@ ${
         const rigs = usersOf(p.name);
         if (p.type === "claude") return claudeRow(p, rigs);
         if (p.type === "chatgpt") return chatgptRow(p, rigs);
+        if (p.type === "google-gemini-api")
+          return geminiApiRow(p, opts.parts.geminiApi.state(p), rigs, t);
         const status = p.models_error
           ? `<span class="dq-why bad">${esc(p.models_error)}${p.models.length ? ` (keeping its last list of ${p.models.length})` : ""}</span>`
           : `<span class="dq-why">${p.models.length} model${p.models.length === 1 ? "" : "s"}${allFree(p) ? " · free, from the provider" : ""}${p.models_at ? ` · listed ${esc(ago(p.models_at, now))} ago` : ""}</span>`;
@@ -239,7 +237,7 @@ ${
 <div class="form-end row" style="gap:8px"><button class="primary">Save and list its models</button></div></form>
 ${
   rigs.length
-    ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
+    ? `<div class="muted small">${esc(inUseWords(rigs))}</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this provider</button></form>`
 }</div></details>`;
       })
@@ -301,7 +299,7 @@ ${placeBlock("GPU clouds", cloudRows(t), store.gpuClouds.list().length, "No GPU 
       area === "providers"
         ? `${intro}${note}
 <div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
-<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>`
+<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}<p class="muted small">A Gemini API key is added on its own page, under a monthly spend cap you set: <a href="${GEMINI_API_PAGE}">Gemini API key and spend</a>.</p></div></div>`
         : area === "machines"
           ? machinesBody()
           : area === "prices"

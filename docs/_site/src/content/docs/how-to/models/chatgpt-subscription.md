@@ -92,7 +92,7 @@ Open the subscription's row and press **Sign out and delete**. Control ends the 
 
 If it says instead that "OpenAI did not confirm the sign-out", disconnect Thermite yourself in ChatGPT, under **Settings › Security and login › Sign in with ChatGPT**.
 
-If a rig or an agent still uses the subscription, the row says "In use: give its rigs another model before deleting it." Give them another model first.
+If a rig or an agent still uses the subscription, the row says which, for example "In use by rig-1: give that rig another model before deleting it." Give them another model first.
 
 ## If something goes wrong
 

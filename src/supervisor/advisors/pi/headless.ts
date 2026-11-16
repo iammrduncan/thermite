@@ -20,7 +20,10 @@ export function piKey(rt: PiRuntime): string {
 /** The advisor's model route, with `apiKey` as its key (the route's own, or its call's proxy's). */
 export function piModel(rt: PiRuntime, at: { baseUrl: string; apiKey: string }): ModelConfig {
   return {
-    api: rt.api === "anthropic" || rt.api === "chatgpt" ? rt.api : undefined,
+    api:
+      rt.api === "anthropic" || rt.api === "chatgpt" || rt.api === "google-gemini-api"
+        ? rt.api
+        : undefined,
     baseUrl: at.baseUrl,
     model: rt.model,
     apiKey: at.apiKey,

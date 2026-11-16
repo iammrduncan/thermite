@@ -392,4 +392,46 @@ describe("control dashboard", () => {
     assert.equal(s.env.service.models.current()?.apiKey, "");
     assert.equal(s.env.service.models.current()?.model, "local-model");
   });
+
+  test("a provider given to a rig that does not report now is shown in use, with the rig named, and its delete is refused in the same words", async () => {
+    const s = await stack();
+    const csrf = s.csrfFrom(await (await s.get("/ui/settings")).text());
+    const where = (r: Response) => decodeURIComponent(r.headers.get("location") ?? "");
+    s.store.modelProviders.put({ name: "lab", type: "openai", base_url: "https://m.example/v1" });
+    s.store.modelProviders.setModels("lab", [{ id: "lab-model" }]);
+    const rowOf = async () => {
+      const page = await (await s.get("/ui/settings")).text();
+      const from = page.indexOf('data-k="provider-lab"');
+      return page.slice(from, page.indexOf("</details>", from));
+    };
+    // Nobody uses it: its row offers Delete.
+    assert.match(await rowOf(), /no rig uses it/);
+    assert.match(await rowOf(), /providers\/lab\/delete/);
+    // A rig that has never reported, and so is not among the rigs' views, was given its model: as
+    // the planner's here, and as the workers' on another.
+    s.store.agentModels.assignRole("rig-away", "planner", { provider: "lab", model: "lab-model" });
+    s.store.agentModels.assignRig("rig-gone", { provider: "lab", model: "lab-model" });
+    assert.deepEqual(s.store.modelProviders.users("lab"), ["rig-away", "rig-gone"]);
+    const row = await rowOf();
+    assert.match(row, /used by rig-away, rig-gone/);
+    assert.match(
+      row,
+      /In use by rig-away, rig-gone: give those rigs another model before deleting it\./,
+    );
+    // No Delete button that the store would refuse.
+    assert.doesNotMatch(row, /providers\/lab\/delete/);
+    const busy = await s.post("/ui/settings/providers/lab/delete", { csrf });
+    assert.match(
+      where(busy),
+      /error="lab" is still in use\. In use by rig-away, rig-gone: give those rigs another model/,
+    );
+    assert.ok(s.store.modelProviders.get("lab"));
+    // With one rig left, the words name that rig; with none, Delete is back and is taken.
+    s.store.agentModels.assignRig("rig-gone", null);
+    assert.match(await rowOf(), /In use by rig-away: give that rig another model/);
+    s.store.agentModels.assignRole("rig-away", "planner", null);
+    assert.match(await rowOf(), /providers\/lab\/delete/);
+    await s.post("/ui/settings/providers/lab/delete", { csrf });
+    assert.equal(s.store.modelProviders.get("lab"), undefined);
+  });
 });

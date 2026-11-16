@@ -64,7 +64,9 @@ export async function serveAdvisorModel(
     const bearer = c.req.header("authorization") ?? "";
     const given = bearer.startsWith("Bearer ")
       ? bearer.slice(7)
-      : (c.req.header("x-api-key") ?? "");
+      : ((target.api === "google-gemini-api"
+          ? c.req.header("x-goog-api-key")
+          : c.req.header("x-api-key")) ?? "");
     if (!sameSecret(given, token)) return c.json({ error: "unauthorized" }, 401);
     const rest = c.req.path.slice(`${ADVISOR_PROXY_PATH}/`.length);
     const answer = await forwardToProvider(

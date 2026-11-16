@@ -8,7 +8,7 @@ import {
   takeRigSealKey,
 } from "../../../src/control/bus/index.ts";
 import type { McpServers } from "../../../src/control/mcp-servers/index.ts";
-import { ChatGPTLogins } from "../../../src/control/providers/index.ts";
+import { ChatGPTLogins, GeminiApiKeys } from "../../../src/control/providers/index.ts";
 import { STEP_WORDS } from "../../../src/control/rigs/setup/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
@@ -56,7 +56,13 @@ function setup(
   }
   const mcp = new FakeMcp();
   const mcpServers = { forRig: mcp.forRig, handed: mcp.handed_ } as unknown as McpServers;
-  const parts = { store, secrets, chatgpt: new ChatGPTLogins(store, secrets), mcpServers };
+  const parts = {
+    store,
+    secrets,
+    chatgpt: new ChatGPTLogins(store, secrets),
+    geminiApi: new GeminiApiKeys(store, secrets, undefined),
+    mcpServers,
+  };
   const bus = new FakeBus();
   const figures = new ConfigWritten();
   const writer = new ConfigWriter({ parts, bus, figures });
@@ -190,7 +196,13 @@ describe("each rig's config on the message bus", () => {
     const mcpServers = { forRig: one.mcp.forRig, handed: one.mcp.handed_ } as unknown as McpServers;
     const writer = (box: SecretBox) =>
       new ConfigWriter({
-        parts: { store, secrets: box, chatgpt: new ChatGPTLogins(store, secrets), mcpServers },
+        parts: {
+          store,
+          secrets: box,
+          chatgpt: new ChatGPTLogins(store, secrets),
+          geminiApi: new GeminiApiKeys(store, box, undefined),
+          mcpServers,
+        },
         bus: one.bus,
         figures: new ConfigWritten(),
       });

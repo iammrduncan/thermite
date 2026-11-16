@@ -19,6 +19,8 @@ export interface KeepConfig {
   harnessUrl: string;
   harnessToken: string;
   fetchImpl?: typeof fetch | undefined;
+  /** Control's address as the harness reaches it, for a Gemini API route (model-route.ts). */
+  harnessControl?: string | undefined;
   /** The rig's config from the bus. */
   known: RigConfig;
   /** The advisors' MCP servers, which the supervisor calls for them. */

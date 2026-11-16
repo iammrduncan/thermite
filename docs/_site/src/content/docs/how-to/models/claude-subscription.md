@@ -145,7 +145,7 @@ Many agents can share one plan, and so can several rigs. On **Edit rig**, a note
 ## Replace or remove the token
 
 - **Replace it**: run `claude setup-token` again, open the subscription's row, paste the new token into **New token from claude setup-token**, and press **Replace the token**. The new token works at once. Do this before the old one's year ends.
-- **Remove the subscription**: press **Delete this subscription** in its row. If a rig or an agent still uses it, the row says "In use: give its rigs another model before deleting it." Give them another model first.
+- **Remove the subscription**: press **Delete this subscription** in its row. If a rig or an agent still uses it, the row says which, for example "In use by rig-1: give that rig another model before deleting it." Give them another model first.
 
 ## If something goes wrong
 

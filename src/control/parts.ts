@@ -9,7 +9,7 @@ import { Screens } from "./live/index.ts";
 import { type MachineSsh, openSsh, type RigBus } from "./machines/index.ts";
 import { McpServers } from "./mcp-servers/index.ts";
 import { PageNotes } from "./notes.ts";
-import { ChatGPTLogins, PlanUsageReader } from "./providers/index.ts";
+import { ChatGPTLogins, GeminiApiKeys, PlanUsageReader } from "./providers/index.ts";
 import type { RigImages } from "./rigs/index.ts";
 import { ControlTunnels, RunpodRigs, RunpodTests } from "./runpod/index.ts";
 import { SecretBox } from "./secrets.ts";
@@ -47,6 +47,8 @@ export interface ControlParts {
   kits?: KitRepos | undefined;
   /** ChatGPT subscriptions' logins: control alone renews them (the dashboard signs them in). */
   chatgpt: ChatGPTLogins;
+  /** Gemini API keys, sealed here, and the one spend ledger their calls are counted in. */
+  geminiApi: GeminiApiKeys;
   /** Subscriptions' usage windows (goal 151), on Providers and over MCP. */
   planUsage: PlanUsageReader;
   /** Test pods on GPU clouds. */
@@ -152,6 +154,7 @@ export function controlParts(
     secrets,
     kits: opts.kits,
     chatgpt,
+    geminiApi: new GeminiApiKeys(store, secrets, opts.publicUrl, opts.providerFetch),
     planUsage: new PlanUsageReader(store, (p) => chatgpt.usage(p)),
     runpodTests,
     mcpServers,

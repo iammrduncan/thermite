@@ -270,7 +270,10 @@ export async function runInPiView<S extends z.ZodType>(
   const runner = t.runner;
   try {
     proxy = await serveAdvisorModel({
-      api: rt.api === "anthropic" || rt.api === "chatgpt" ? rt.api : undefined,
+      api:
+        rt.api === "anthropic" || rt.api === "chatgpt" || rt.api === "google-gemini-api"
+          ? rt.api
+          : undefined,
       baseUrl: rt.base_url.replace(/\/$/, ""),
       key,
       keyNow: rt.keyNow,

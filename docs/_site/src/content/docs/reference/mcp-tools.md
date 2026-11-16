@@ -913,7 +913,7 @@ On **Edit rig**, section **2 · The agents**, the line **Teachers** shows the fi
 | `harness` | string | Where it runs: `pi` (the file's `openai` runtime), `claude-code`, `opencode`, `codex`, or `cli` for a command-line agent |
 | `model` | string or `null` | Its model; `null` for a command-line agent, and for a model name that holds an address |
 | `provider` | string or `null` | The provider's name, as the file gives it in `provider`; `null`: none given |
-| `api` | string or `null` | The provider's kind: `openai`, `anthropic`, `chatgpt` or `opencode`, or `claude` for Claude Code; `null` for a command-line agent |
+| `api` | string or `null` | The provider's kind: `openai`, `anthropic`, `chatgpt`, `opencode` or `google-gemini-api`, or `claude` for Claude Code; `null` for a command-line agent |
 | `context_window` | number or `null` | Its context window in tokens; `null`: none set (the program's own) |
 | `compact_at` | number or `null` | Its compaction point in percent; `null`: the default, 80 |
 

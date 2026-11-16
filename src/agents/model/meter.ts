@@ -68,8 +68,40 @@ export class PiMeter {
 
   /** pi-ai's stream function for an agent, calling the provider through this meter. */
   streamFn(models: Models): StreamFn {
-    return (model, context, options) =>
-      models.streamSimple(model, context, { ...options, fetch: this.fetch });
+    return (model, context, options) => {
+      const observed = this.callOptions(model);
+      return models.streamSimple(model, context, {
+        ...options,
+        ...observed,
+        ...(observed.onProviderStreamEvent
+          ? {
+              onProviderStreamEvent: async (raw, at) => {
+                observed.onProviderStreamEvent?.(raw);
+                await options?.onProviderStreamEvent?.(raw, at);
+              },
+            }
+          : {}),
+      });
+    };
+  }
+
+  /** Google refuses custom fetch; observe its native metadata rather than guessing absent zeros. */
+  callOptions(model: { api: string }): {
+    fetch?: typeof globalThis.fetch;
+    onProviderStreamEvent?: (raw: unknown) => void;
+  } {
+    if (model.api !== "google-generative-ai") return { fetch: this.fetch };
+    const seen: Seen = { cached: false, written: false, reasoning: false };
+    this.current = seen;
+    return {
+      onProviderStreamEvent: (raw: unknown) => {
+        const usage = (raw as { usageMetadata?: Record<string, unknown> } | null)?.usageMetadata;
+        if (!usage) return;
+        seen.cached ||= typeof usage.cachedContentTokenCount === "number";
+        seen.reasoning ||= typeof usage.thoughtsTokenCount === "number";
+        // Native Gemini does not report cache-write token counts; keep that field unreported.
+      },
+    };
   }
 
   /** Records each of the agent's replies, with its first token's time; returns the unsubscribe. */

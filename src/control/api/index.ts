@@ -21,6 +21,7 @@ import {
   clientOf,
 } from "./context.ts";
 import { editRigRoutes } from "./edit-rig.ts";
+import { googleGeminiRoutes } from "./google-gemini.ts";
 import { gpuCloudRoutes } from "./gpu-clouds.ts";
 import { kitRoutes } from "./kits.ts";
 import { lifecycleRoutes } from "./lifecycle.ts";
@@ -125,6 +126,7 @@ export function createControlApi(
   });
 
   relayRoutes(app, api);
+  googleGeminiRoutes(app, parts);
 
   // MCP servers (goal 068): the owner's routes and the OAuth callback. A rig gets its servers in
   // its config on the message bus (bus/config.ts).

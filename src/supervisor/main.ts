@@ -83,7 +83,7 @@ import { dailyReport } from "./report.ts";
 import { onRetentionTaken, sendSpace } from "./retention.ts";
 import { RunBranches } from "./run-branches.ts";
 import { carryRunnerAsks, startRunnerSupervisor } from "./runners/index.ts";
-import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
+import { controlTokenFrom, harnessControl, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
 import { modelsLeftToRunners, stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
 import { startPullMode } from "./tunnel-pod.ts";
@@ -311,7 +311,7 @@ async function main(): Promise<void> {
     const given = known.get("advisor-routes");
     // A ChatGPT sign-in's call reads the newest token at each request: one renewed during a
     // round reaches the calls already under way.
-    if (given) controlAdvisors = advisorsOf(given, () => known.get("advisor-routes"));
+    if (given) controlAdvisors = advisorsOf(given, () => known.get("advisor-routes"), controlUrl);
     advisors = mergeAdvisors(fileAdvisors, controlAdvisors);
     return advisors;
   };
@@ -612,8 +612,6 @@ async function main(): Promise<void> {
     log("supervisor", "commands from the bus stopped", { error: String(err) }, "error"),
   );
 
-  // The agents' model route, from control's settings page: checked every half minute.
-  const routeMs = supervisorMs(env, SUPERVISOR_NUMBERS.modelRoutePollSeconds);
   const pause = async (ms: number) => {
     const until = Date.now() + ms;
     while (!stopping && !wipeRequested && Date.now() < until)
@@ -627,10 +625,12 @@ async function main(): Promise<void> {
     rig,
     harnessUrl,
     harnessToken,
+    harnessControl: harnessControl(env, pull?.controlUrl),
     known,
     setAdvisorMcp: (servers: McpConnection[], unavailable: McpUnavailable[]) =>
       advisorMcp.gateway.set(servers, unavailable),
-    everyMs: routeMs,
+    // The agents' model route, from control's settings page: checked every half minute.
+    everyMs: supervisorMs(env, SUPERVISOR_NUMBERS.modelRoutePollSeconds),
     stopping: () => stopping,
     pause,
   };

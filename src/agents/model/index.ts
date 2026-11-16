@@ -1,5 +1,6 @@
 import { createModels, createProvider, type Model } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
+import { googleGenerativeAIApi } from "@earendil-works/pi-ai/api/google-generative-ai.lazy";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { readNumber } from "../../common/settings.ts";
@@ -60,8 +61,10 @@ export interface ModelConfig {
   /**
    * The provider's API: OpenAI-compatible chat completions (the default), Anthropic's Messages,
    * OpenCode's own models (only the OpenCode harness reaches those), a Claude subscription
-   * (only Claude Code may use it; apiKey is then its token), or a ChatGPT sign-in (OpenAI's
-   * Responses API; apiKey is then a one-hour access token that control renews).
+   * (only Claude Code may use it; apiKey is then its token), a ChatGPT sign-in (OpenAI's
+   * Responses API; apiKey is then a one-hour access token that control renews), or a Gemini API
+   * key kept in control (Google's native content API on control's bridge, in Pi only; apiKey is
+   * then the bridge's capability, never Google's key).
    */
   api?: ProviderType | undefined;
   /**
@@ -166,7 +169,7 @@ export function modelConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelC
   const api = PROVIDER_TYPES.find((t) => t === rawApi);
   if (rawApi !== undefined && !api)
     throw new Error(
-      `THERMITE_MODEL_API must be openai, anthropic, opencode, claude or chatgpt, not ${rawApi}`,
+      `THERMITE_MODEL_API must be openai, anthropic, opencode, claude, chatgpt or google-gemini-api, not ${rawApi}`,
     );
   const rawHarness = setting(env, MODEL_SETTINGS.harness);
   const harness = HARNESSES.find((h) => h === rawHarness);
@@ -241,6 +244,8 @@ function uncapped<T extends ReturnType<typeof createModels>>(models: T): T {
       delete o.max_tokens;
       delete o.max_completion_tokens;
       delete o.max_output_tokens;
+      if (o.config && typeof o.config === "object")
+        delete (o.config as Record<string, unknown>).maxOutputTokens;
     }
     return p;
   };
@@ -290,7 +295,12 @@ function stallGuarded<T extends ReturnType<typeof createModels>>(models: T): T {
 
 export function buildModel(cfg: ModelConfig) {
   const built = buildUnguarded(cfg);
-  return { ...built, models: stallGuarded(built.models) };
+  // Pi's native Google adapter refuses a custom fetch, which the stall guard is. Control's
+  // bridge breaks off a silent stream itself, and bounds the answer's size.
+  return {
+    ...built,
+    models: cfg.api === "google-gemini-api" ? built.models : stallGuarded(built.models),
+  };
 }
 
 /**
@@ -307,6 +317,7 @@ function openAIAuth(apiKey: string): { apiKey: string; headers?: { authorization
 function buildUnguarded(cfg: ModelConfig) {
   if (cfg.api === "anthropic") return buildAnthropic(cfg);
   if (cfg.api === "chatgpt") return buildChatGPT(cfg);
+  if (cfg.api === "google-gemini-api") return buildGoogle(cfg);
   const provider = "thermite-openai";
   const model: Model<"openai-completions"> = {
     id: cfg.model,
@@ -349,6 +360,51 @@ function buildUnguarded(cfg: ModelConfig) {
   if (!resolved) throw new Error(`model ${cfg.model} did not register`);
   // The agents' thinking level: "off" sends reasoning_effort "none" when reasoning is configured.
   // With no known reply limit, none is sent (goal 079).
+  return {
+    models: cfg.maxTokens ? models : uncapped(models),
+    model: resolved,
+    thinkingLevel: cfg.reasoning ?? ("off" as const),
+  };
+}
+
+/**
+ * A Gemini API route: Google's native content API on control's bridge, which keeps tool calls,
+ * thought signatures and usage as Google gives them. The key here is the bridge's capability.
+ */
+function buildGoogle(cfg: ModelConfig) {
+  const provider = "thermite-google-gemini-api";
+  const model: Model<"google-generative-ai"> = {
+    id: cfg.model,
+    name: cfg.model,
+    api: "google-generative-ai",
+    provider,
+    baseUrl: cfg.baseUrl,
+    reasoning: cfg.reasoning !== undefined && cfg.reasoning !== "off",
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: cfg.contextWindow,
+    maxTokens: cfg.maxTokens || NOT_SENT,
+  };
+  const models = createModels();
+  models.setProvider(
+    createProvider({
+      id: provider,
+      name: "Gemini API through control",
+      baseUrl: cfg.baseUrl,
+      auth: {
+        apiKey: {
+          name: "Bridge capability",
+          resolve: async () => ({
+            auth: { apiKey: cfg.keyNow?.() ?? cfg.apiKey },
+          }),
+        },
+      },
+      models: [model],
+      api: googleGenerativeAIApi(),
+    }),
+  );
+  const resolved = models.getModel(provider, cfg.model);
+  if (!resolved) throw new Error(`model ${cfg.model} did not register`);
   return {
     models: cfg.maxTokens ? models : uncapped(models),
     model: resolved,

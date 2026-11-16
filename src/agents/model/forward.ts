@@ -120,6 +120,17 @@ export async function forwardToProvider(
   stall: ForwardStall = { ms: modelStallMs() },
   onTokens?: ((t: AnswerTokens) => void) | undefined,
 ): Promise<Response> {
+  // A Gemini API route is control's bridge, which takes one native call (core/google-gemini.ts).
+  if (
+    target.api === "google-gemini-api" &&
+    (call.method !== "POST" ||
+      !/^models\/[a-z0-9][a-z0-9._-]{0,199}:streamGenerateContent$/u.test(call.rest) ||
+      call.search !== "?alt=sse")
+  )
+    return Response.json(
+      { error: "A Gemini API route accepts only native streaming content" },
+      { status: 403 },
+    );
   // A ChatGPT sign-in reaches only OpenAI's Responses API and the account's model list.
   const chatgpt = target.api === "chatgpt";
   if (chatgpt && !chatgptRouteAllowed(call.method, call.rest, call.webSearch))
@@ -135,7 +146,8 @@ export async function forwardToProvider(
     const v = call.header(k);
     if (v) headers[k] = v;
   }
-  if (target.api === "anthropic") headers["x-api-key"] = target.key;
+  if (target.api === "google-gemini-api") headers["x-goog-api-key"] = target.key;
+  else if (target.api === "anthropic") headers["x-api-key"] = target.key;
   // A provider with no key, such as a local server that takes none, gets no Authorization header,
   // rather than an empty bearer that some servers refuse.
   else if (target.key) headers.authorization = `Bearer ${target.key}`;
