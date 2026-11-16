@@ -27,6 +27,7 @@ import { setModelPrice } from "../../usage-report.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { mountMcpUi } from "./mcp-servers.ts";
 import {
+  inUseWords,
   machineUrl,
   newName,
   settingsHelpers,
@@ -70,6 +71,10 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     store.modelProviders.setModels(p.name, listed);
     return "error" in listed ? listed.error : null;
   };
+
+  /** Why a delete was refused: the provider's rigs, by name, from the record the delete checks. */
+  const stillInUse = (name: string) =>
+    `"${name}" is still in use. ${inUseWords(store.modelProviders.users(name))}`;
 
   /** The rule for the name of a Git access, a machine, a cluster or a GPU cloud. */
   const ACCESS_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -648,7 +653,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
             "ok",
             `"${name}" deleted.${signedOut === undefined ? "" : signedOut ? " OpenAI confirmed the sign-out." : " OpenAI did not confirm the sign-out: disconnect Thermite in ChatGPT, Settings › Security and login › Sign in with ChatGPT."}`,
           )
-        : settingsUrl("error", r === "in_use" ? `"${name}" is still in use.` : "No such provider."),
+        : settingsUrl("error", r === "in_use" ? stillInUse(name) : "No such provider."),
       303,
     );
   });

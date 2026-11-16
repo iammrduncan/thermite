@@ -170,7 +170,7 @@ Open the provider's row:
 
 - **Refresh models** reads the provider's list again. If the list fails, the row keeps its last list and shows the error in red.
 - To change the type, the base URL or the key, edit the fields and press **Save and list its models**. Leave **API key** empty to keep the current key.
-- **Delete this provider** removes it. A provider that a rig or an agent uses shows "In use: give its rigs another model before deleting it." instead. Give those rigs and agents another model first.
+- **Delete this provider** removes it. A provider that a rig or an agent uses names the rigs instead, for example "In use by rig-1: give that rig another model before deleting it." It names every rig that was given one of its models, also one that does not report now. Give those rigs and agents another model first.
 
 ## If something goes wrong
 

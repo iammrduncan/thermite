@@ -150,14 +150,24 @@ export class ModelProviders extends StorePart {
       .run(JSON.stringify([...p.models, { id, added: true }]), name);
   }
 
+  /**
+   * The rigs that use a provider: those whose workers or other agents were given one of its
+   * models, whether or not the rig reports now. A provider with any is not deleted.
+   */
+  users(name: string): string[] {
+    const rows = this.db
+      .prepare(
+        `select rig from rig_model where provider = ?
+         union select rig from rig_role_model where provider = ? order by rig`,
+      )
+      .all(name, name) as Row[];
+    return rows.map((r) => String(r.rig));
+  }
+
   /** Deletes a provider no rig uses. */
   delete(name: string): "deleted" | "in_use" | "missing" {
     if (!this.get(name)) return "missing";
-    if (
-      this.db.prepare("select 1 from rig_model where provider = ?").get(name) ||
-      this.db.prepare("select 1 from rig_role_model where provider = ?").get(name)
-    )
-      return "in_use";
+    if (this.users(name).length) return "in_use";
     this.db.prepare("delete from model_provider where name = ?").run(name);
     return "deleted";
   }

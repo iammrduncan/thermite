@@ -38,7 +38,7 @@ import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
 import { draftOf, retentionBlocks } from "./retention.ts";
-import { TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
+import { inUseWords, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
 import { spaceBlock } from "./space.ts";
 
 /** Each Settings area's page title (goal 181). */
@@ -128,16 +128,11 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
       ),
     );
     const gitCount = store.gitAccess.list().length;
-    const given = store.agentModels.byRig();
-    /** The rigs whose workers or other agents use one of the provider's models. */
-    const usersOf = (name: string) =>
-      vs
-        .map((u) => u.id)
-        .filter(
-          (rig) =>
-            given[rig]?.provider === name ||
-            Object.values(store.agentModels.byRole(rig)).some((r) => r?.provider === name),
-        );
+    /**
+     * The rigs whose workers or other agents use one of the provider's models: the store's own
+     * record, which its delete checks, so a row offers Delete only when the delete will be taken.
+     */
+    const usersOf = (name: string) => store.modelProviders.users(name);
     // What a form did is said on its area's page: at the top of Providers and of Machines,
     // and in its own block on the others, which read it themselves.
     const atPrices = area === "prices";
@@ -183,7 +178,7 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
 <div class="form-end row" style="gap:8px"><button class="primary">Replace the token</button></div></form>
 ${
   rigs.length
-    ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
+    ? `<div class="muted small">${esc(inUseWords(rigs))}</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this subscription</button></form>`
 }</div></details>${creditsNote(p.name, usage.get(p.name), dismissed, t)}`;
     };
@@ -205,7 +200,7 @@ ${
 <div class="form-end row" style="gap:8px"><button class="primary">Finish the sign-in</button></div></form>
 ${
   rigs.length
-    ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
+    ? `<div class="muted small">${esc(inUseWords(rigs))}</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Sign out and delete</button></form>`
 }</div></details>`;
     };
@@ -239,7 +234,7 @@ ${
 <div class="form-end row" style="gap:8px"><button class="primary">Save and list its models</button></div></form>
 ${
   rigs.length
-    ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
+    ? `<div class="muted small">${esc(inUseWords(rigs))}</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this provider</button></form>`
 }</div></details>`;
       })
