@@ -187,3 +187,23 @@ test("a model named as a property every object has is no model of the table", ()
     });
   }
 });
+
+test("raised cached prices and unknown token categories fit the reservation", () => {
+  const t = tariffOf("gemini-3.5-flash-lite", "2026-11-16T00:00:00Z", {
+    "gemini-3.5-flash-lite": { input: 0.3, output: 2.5, cached: 9 },
+  });
+  const bound = geminiWorstCase(t, 1000, 1);
+  const cached = geminiUsage({
+    promptTokenCount: 1000,
+    cachedContentTokenCount: 1000,
+    candidatesTokenCount: 1,
+    totalTokenCount: 1001,
+  });
+  assert.ok(cached);
+  assert.ok(bound >= geminiCost(t, cached));
+  assert.equal(
+    geminiCost(t, { prompt: 0, cached: 0, candidates: 0, thoughts: 0, toolUse: 0, total: 1 }),
+    9,
+  );
+  assert.ok(geminiWorstCase(t, 0, 1) >= 9);
+});

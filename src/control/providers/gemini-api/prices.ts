@@ -185,7 +185,12 @@ const ratesFor = (t: GeminiTariff, promptTokens: number): GeminiRates =>
  */
 export function geminiWorstCase(t: GeminiTariff, inputBound: number, outputLimit: number): number {
   const r = ratesFor(t, inputBound);
-  return micros(inputBound, r.input) + micros(outputLimit, r.output);
+  // Raised cache or input prices may exceed output: unknown output categories use the
+  // highest rate, so both reservation components must cover those raised rates too.
+  return (
+    micros(inputBound, Math.max(r.input, r.cached)) +
+    micros(outputLimit, Math.max(r.input, r.output, r.cached))
+  );
 }
 
 /** The token counts of Google's usage metadata that the cost is counted from. */
@@ -244,6 +249,7 @@ export function geminiCost(t: GeminiTariff, u: GeminiUsage): number {
   return (
     micros(u.prompt - cached + u.toolUse, r.input) +
     micros(cached, r.cached) +
-    micros(u.candidates + u.thoughts + unnamed, r.output)
+    micros(u.candidates + u.thoughts, r.output) +
+    micros(unnamed, Math.max(r.input, r.output, r.cached))
   );
 }

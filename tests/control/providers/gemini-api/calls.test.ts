@@ -645,3 +645,18 @@ test("prices last checked more than 30 days ago refuse every call, unsent, until
     await f.close();
   }
 });
+
+test("a raised cache tariff cannot admit a request beyond the monthly cap", async () => {
+  const f = await keysFixture();
+  try {
+    add(f);
+    f.keys.raisePrice(MODEL, { input: 0.3, output: 2.5, cached: 9 }, "owner:ui");
+    f.keys.setCap(0.003, "owner:ui");
+    const answer = await f.call(f.keys, { ...BODY, generationConfig: { maxOutputTokens: 1 } });
+    assert.equal(reasonOf(answer.error), "cap");
+    assert.equal(f.google.content().length, 0);
+    assert.equal(f.ledger().spent, 0);
+  } finally {
+    await f.close();
+  }
+});

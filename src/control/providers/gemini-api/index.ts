@@ -80,7 +80,6 @@ const Sealed = z.strictObject({ capability: z.string().regex(/^[A-Za-z0-9_-]{43}
 type Sealed = z.infer<typeof Sealed>;
 /** Any key a header can carry: visible ASCII, no space. */
 const ApiKey = z.string().regex(/^[\x21-\x7e]{20,512}$/u);
-const SealedKeys = z.record(GoogleName, z.string().min(1));
 
 /**
  * Where a provider's key stands:
@@ -167,18 +166,22 @@ export class GeminiApiKeys {
     }
   }
 
-  /** The sealed keys by provider name; none when what the store holds can't be read. */
-  private sealedKeys(): z.infer<typeof SealedKeys> {
+  /** The stored map, including damaged entries; never replace unreadable data with an empty map. */
+  private sealedKeys(): Record<string, unknown> | undefined {
     try {
-      return SealedKeys.parse(JSON.parse(this.store.ownSettings.get(KEYS_KEY)?.value ?? "{}"));
+      const keys: unknown = JSON.parse(this.store.ownSettings.get(KEYS_KEY)?.value ?? "{}");
+      return keys !== null && typeof keys === "object" && !Array.isArray(keys)
+        ? (keys as Record<string, unknown>)
+        : undefined;
     } catch {
-      return {};
+      return undefined;
     }
   }
 
   /** Keeps a provider's sealed key, or with null removes it. Call it inside a transaction. */
   private keepKey(name: string, sealed: string | null, by: string): void {
     const keys = this.sealedKeys();
+    if (!keys) throw new Error("The stored key map cannot be read; repair it before changing keys");
     if (sealed === null) delete keys[name];
     else keys[name] = sealed;
     this.store.ownSettings.set(
@@ -192,8 +195,8 @@ export class GeminiApiKeys {
   private keyOf(name: string): string | undefined {
     // An own entry only: a provider may be named as a property every object inherits.
     const keys = this.sealedKeys();
-    const sealed = Object.hasOwn(keys, name) ? keys[name] : undefined;
-    if (!sealed) return undefined;
+    const sealed = keys && Object.hasOwn(keys, name) ? keys[name] : undefined;
+    if (typeof sealed !== "string" || !sealed) return undefined;
     try {
       return ApiKey.parse(this.secrets.open(sealed));
     } catch {
@@ -475,7 +478,9 @@ export class GeminiApiKeys {
   /** Where a provider's key stands (GeminiKeyState). */
   state(p: ModelProvider): GeminiKeyState {
     if (this.fenced.has(p.name)) return "removal_pending";
-    const held = Object.hasOwn(this.sealedKeys(), p.name);
+    const keys = this.sealedKeys();
+    if (!keys) return "unusable";
+    const held = Object.hasOwn(keys, p.name);
     if (!p.key_sealed) return held ? "removal_pending" : "disconnected";
     return this.sealed(p) && this.keyOf(p.name) ? "connected" : "unusable";
   }
@@ -561,7 +566,10 @@ export class GeminiApiKeys {
    */
   private sweep(): void {
     this.store.tx(() => {
-      const left = Object.keys(this.sealedKeys()).filter((name) => {
+      const keys = this.sealedKeys();
+      if (!keys) return;
+      const left = Object.keys(keys).filter((name) => {
+        if (typeof keys[name] !== "string" || !GoogleName.safeParse(name).success) return false;
         const p = this.store.modelProviders.get(name);
         return p?.type !== "google-gemini-api" || !p.key_sealed;
       });

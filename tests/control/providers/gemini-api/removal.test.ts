@@ -115,13 +115,13 @@ test("Disconnect works when the capability or the key can't be opened", async ()
     assert.equal(reasonOf((await f.call()).error), "auth");
     assert.equal(f.keys.disconnect(NAME, "owner:ui").was, "unusable");
     assert.deepEqual(held(f), []);
-    // The sealed keys as a whole can't be read: no key is held, and Disconnect still ends it.
+    // A wholly unreadable map cannot be erased to pretend cleanup succeeded.
     add(f);
     f.store.ownSettings.set("gemini_api_keys", "{not json", "test");
     assert.equal(f.keys.state(f.provider()), "unusable");
-    assert.equal(f.keys.disconnect(NAME, "owner:ui").was, "unusable");
-    assert.equal(f.keys.state(f.provider()), "disconnected");
-    assert.equal(f.store.ownSettings.get("gemini_api_keys"), undefined);
+    assert.throws(() => f.keys.disconnect(NAME, "owner:ui"), /removal could not be saved/u);
+    assert.equal(f.keys.state(f.provider()), "removal_pending");
+    assert.equal(f.store.ownSettings.get("gemini_api_keys")?.value, "{not json");
     assert.equal(f.google.calls.length, 0);
   } finally {
     await f.close();
@@ -372,6 +372,26 @@ test("a key removed after a call's last chunk and before its stream's end still 
       assert.deepEqual([f.ledger().spent, f.ledger().reserved], [spent + WORST, 0]);
     }
     assert.equal(f.ledger().uncertain, 2);
+  } finally {
+    await f.close();
+  }
+});
+
+test("one damaged key-map entry cannot erase another provider's key", async () => {
+  const f = await keysFixture();
+  try {
+    add(f);
+    add(f, "second");
+    const keys = JSON.parse(f.store.ownSettings.get("gemini_api_keys")?.value ?? "{}");
+    keys.damaged = { keep: "unknown evidence" };
+    f.store.ownSettings.set("gemini_api_keys", JSON.stringify(keys), "owner:fixture");
+    assert.equal(f.keys.state(f.provider()), "connected");
+    f.keys.disconnect("second", "owner:ui");
+    const after = JSON.parse(f.store.ownSettings.get("gemini_api_keys")?.value ?? "{}");
+    assert.equal(after[NAME], keys[NAME]);
+    assert.deepEqual(after.damaged, keys.damaged);
+    assert.equal(Object.hasOwn(after, "second"), false);
+    assert.equal(f.keys.state(f.provider()), "connected");
   } finally {
     await f.close();
   }

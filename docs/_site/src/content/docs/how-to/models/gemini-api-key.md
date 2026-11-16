@@ -148,3 +148,5 @@ Thermite's cap is one of two limits. Set the other at Google:
 | `HTTP 401 … Google refused the Gemini API key` | Google refused the key | Check the key and its project's billing in Google AI Studio |
 | `HTTP 429` | Google's rate limit, or a call that waits for open calls to settle | The agents wait and try again. A rate limit from Google keeps the call's reservation |
 | `The removal could not be saved` | Control's store refused the removal; the provider's calls are stopped all the same | Press **Finish removing the key**, and look at control's disk |
+
+Raised cache or input rates can exceed the output rate. Reservations cover those higher rates as well; tokens reported without a known category count at the highest effective rate.
