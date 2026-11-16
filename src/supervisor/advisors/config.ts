@@ -25,7 +25,7 @@ const Runtime = z.discriminatedUnion("runtime", [
      * The provider's API: Anthropic's Messages, a ChatGPT sign-in (OpenAI's Responses API, with
      * a one-hour access token from control), or OpenAI-compatible (the default).
      */
-    api: z.enum(["openai", "anthropic", "chatgpt"]).optional(),
+    api: z.enum(["openai", "anthropic", "chatgpt", "google-gemini-api"]).optional(),
     base_url: z.url(),
     model: z.string().min(1),
     /** The key: a file (configured), or in memory (a route control gave the role). */

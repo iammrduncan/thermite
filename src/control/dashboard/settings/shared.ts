@@ -16,6 +16,7 @@ export const TYPES: Record<ProviderType, string> = {
   opencode: "OpenCode",
   claude: "Claude subscription",
   chatgpt: "ChatGPT subscription",
+  "google-gemini-api": "Gemini API key, under its spend cap (Pi)",
 };
 /**
  * Why a provider that rigs use is not deleted, with the rigs named, for the row that would

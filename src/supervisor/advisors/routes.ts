@@ -1,6 +1,7 @@
 import { EFFORTS } from "../../core/agents.ts";
 import { TEACHERS_MAX } from "../../core/api/control/rigs.ts";
 import { COMPACT_AT_MAX, COMPACT_AT_MIN } from "../../core/compaction.ts";
+import { rebaseGoogleRoute } from "../../core/google-gemini.ts";
 import type { AdvisorRoute, AdvisorRoutesValue } from "../../core/link/config.ts";
 import { type AdvisorRuntime, AdvisorsConfig, type RunningAdvisors } from "./config.ts";
 
@@ -135,7 +136,12 @@ function runtimeOfRoute(route: AdvisorRoute, name: string): AdvisorRuntime | und
       ...(compactAt !== undefined ? { compact_at: compactAt } : {}),
     };
   }
-  if (route.type !== "openai" && route.type !== "anthropic" && route.type !== "chatgpt")
+  if (
+    route.type !== "openai" &&
+    route.type !== "anthropic" &&
+    route.type !== "chatgpt" &&
+    route.type !== "google-gemini-api"
+  )
     return undefined;
   return {
     name,
@@ -160,12 +166,16 @@ function runtimeOfRoute(route: AdvisorRoute, name: string): AdvisorRuntime | und
  * Control's advisors' routes, from the rig's config on the message bus, as runtimes by role: each teacher's model (teacher-1 and teacher-2), the merged by model, the
  * auditor, the review panel three times (reviewer-1 to reviewer-3), the synthesizer and the final
  * writer. `now`: control's newest routes, which a ChatGPT sign-in's calls read its token from.
+ * `control`: the supervisor's own address for control, where a Gemini API route's bridge is
+ * reached (core/google-gemini.ts), as for the harness's roles.
  */
 export function advisorsOf(
   r: AdvisorRoutesValue,
   now?: () => AdvisorRoutesValue | undefined,
+  control?: string | undefined,
 ): ControlAdvisors {
-  const one = (route: AdvisorRoute, name: string) => runtimeOf(route, name, now);
+  const one = (route: AdvisorRoute, name: string) =>
+    runtimeOf(rebaseGoogleRoute(route, control), name, now);
   const many = (route: AdvisorRoute | null | undefined, base: string, n: number) => {
     if (!route) return undefined;
     const list = Array.from({ length: n }, (_, i) => one(route, `${base}-${i + 1}`)).filter(

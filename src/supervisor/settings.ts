@@ -2,6 +2,7 @@ import { DISK_FLOOR } from "../common/disk.ts";
 import { secretFromFile } from "../common/env.ts";
 import { errorText } from "../common/errors.ts";
 import { type NumberSpec, readNumber } from "../common/settings.ts";
+import { googleBridgeBase } from "../core/google-gemini.ts";
 
 /**
  * The supervisor's number settings (goal 125, T4): each one's name, what it takes and its default,
@@ -37,6 +38,32 @@ export function supervisorMs(
 ): number {
   const n = readNumber(env, spec);
   return spec.rule.unit === "seconds" ? n * 1000 : n;
+}
+
+/** Control's address as the harness reaches it, for a Gemini API route's bridge. */
+const HARNESS_CONTROL_SETTING = "THERMITE_HARNESS_CONTROL_URL";
+
+/**
+ * Where the harness reaches control's Gemini API bridge: THERMITE_HARNESS_CONTROL_URL, else
+ * in pull mode the supervisor's own address for control (one container: the harness reaches it
+ * too), else none: the address control gives, its public one. The advisors, which run here, use
+ * the supervisor's own address. A bad value stops the supervisor at start with the setting's name.
+ */
+export function harnessControl(
+  env: Record<string, string | undefined>,
+  pullControlUrl: string | undefined,
+): string | undefined {
+  const given = env[HARNESS_CONTROL_SETTING];
+  const url = given !== undefined && given !== "" ? given : pullControlUrl;
+  if (url === undefined || url === "") return undefined;
+  try {
+    googleBridgeBase(url, "check");
+  } catch (err) {
+    throw new Error(
+      `${given ? HARNESS_CONTROL_SETTING : "pull mode's address for control"}: ${errorText(err)}`,
+    );
+  }
+  return url;
 }
 
 /**

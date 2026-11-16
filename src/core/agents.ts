@@ -17,15 +17,27 @@ export type Effort = (typeof EFFORTS)[number];
 
 /**
  * A model provider's kind; "claude" is a Claude subscription (its token from `claude setup-token`),
- * "chatgpt" a ChatGPT subscription (its login from Sign in with ChatGPT, renewed by control).
+ * "chatgpt" a ChatGPT subscription (its login from Sign in with ChatGPT, renewed by control),
+ * and "google-gemini-api" a Gemini API key that stays in control, under the owner's monthly spend
+ * cap: a rig's route for it is control's bridge and a capability, never the key.
  */
-export const PROVIDER_TYPES = ["openai", "anthropic", "opencode", "claude", "chatgpt"] as const;
+export const PROVIDER_TYPES = [
+  "openai",
+  "anthropic",
+  "opencode",
+  "claude",
+  "chatgpt",
+  "google-gemini-api",
+] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
 /** Where a ChatGPT sign-in's access token is used: OpenAI's Responses API (and its model list). */
 export const CHATGPT_API = "https://api.openai.com/v1";
 
-/** The kinds reached with an API key; the others are subscriptions, reached with a sign-in. */
+/**
+ * The kinds added on Providers with an API key, and the subscriptions, reached with a sign-in. A
+ * Gemini API key is neither: it is added on its own page, with its spend cap.
+ */
 export const KEY_PROVIDER_TYPES: readonly ProviderType[] = ["openai", "anthropic", "opencode"];
 export const PLAN_PROVIDER_TYPES: readonly ProviderType[] = ["claude", "chatgpt"];
 
@@ -42,6 +54,10 @@ const ROUTES: Record<ProviderType, { programs: readonly Harness[]; proxy: boolea
   opencode: { programs: ["opencode"], proxy: false },
   claude: { programs: ["claude-code"], proxy: false },
   chatgpt: { programs: ["pi", "opencode", "codex"], proxy: true },
+  // Google's native messages, thought signatures included, through control's bridge
+  // (google-gemini.ts): control calls Google with the owner's sealed key, and Pi holds only a
+  // capability for the bridge. The harness's proxy has no key to add.
+  "google-gemini-api": { programs: ["pi"], proxy: false },
 };
 
 /** A provider's row; none named is an OpenAI-compatible one. */

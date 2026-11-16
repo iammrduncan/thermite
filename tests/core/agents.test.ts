@@ -19,8 +19,8 @@ import {
 const reachOf = (h: Harness) => PROVIDER_TYPES.filter((t) => reaches(h, t));
 
 describe("the agents' routes", () => {
-  test("each program reaches the providers it can run: a Claude subscription only Claude Code, OpenCode's own models only OpenCode", () => {
-    assert.deepEqual(reachOf("pi"), ["openai", "anthropic", "chatgpt"]);
+  test("each program reaches the providers it can run: a Claude subscription only Claude Code, OpenCode's own models only OpenCode, a Gemini API key only Pi", () => {
+    assert.deepEqual(reachOf("pi"), ["openai", "anthropic", "chatgpt", "google-gemini-api"]);
     assert.deepEqual(reachOf("opencode"), ["openai", "anthropic", "opencode", "chatgpt"]);
     assert.deepEqual(reachOf("claude-code"), ["claude"]);
     assert.deepEqual(reachOf("codex"), ["openai", "chatgpt"]);
@@ -65,6 +65,10 @@ describe("the agents' routes", () => {
       "opencode in codex": "codex",
       // OpenCode's own models in Pi: the harness takes the route (programForApi sends them on).
       "opencode in pi": "pi",
+      // A Gemini API key goes only through Pi's native Google adapter, to control's bridge.
+      "google-gemini-api in claude-code": "claude-code",
+      "google-gemini-api in codex": "codex",
+      "google-gemini-api in opencode": "opencode",
     });
   });
 });
