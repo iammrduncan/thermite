@@ -27,6 +27,7 @@ import { rigWeeklyRoutes } from "./rigs/weekly.ts";
 import { sessionRoutes } from "./session.ts";
 import { cloudRoutes } from "./settings/clouds.ts";
 import { clusterRoutes } from "./settings/clusters.ts";
+import { geminiApiPages } from "./settings/gemini-api.ts";
 import { kbSettingsRoutes } from "./settings/kb.ts";
 import { machineRoutes } from "./settings/machines.ts";
 import { settingsPageRoutes } from "./settings/page.ts";
@@ -55,6 +56,7 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   const app = new Hono();
   const dash = dashboardContext(store, opts);
   sessionRoutes(app, dash);
+  geminiApiPages(app, dash);
   overviewRoutes(app, dash);
   metricsRoutes(app, dash);
   newCampaignRoutes(app, dash);

@@ -224,7 +224,7 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
             ? "opencode"
             : "key";
     const groups: AgentModelGroup[] = providers.map((p) => ({
-      label: `${p.name}${p.type === "claude" ? " (Claude subscription: runs in Claude Code)" : p.type === "chatgpt" ? " (ChatGPT subscription)" : isOpencodeOwn(p) ? (p.key_sealed ? " (OpenCode's own: its free models in OpenCode only)" : " (OpenCode's own free models: OpenCode only)") : ""}`,
+      label: `${p.name}${p.type === "google-gemini-api" ? " (Gemini API key, under its spend cap: Pi only)" : p.type === "claude" ? " (Claude subscription: runs in Claude Code)" : p.type === "chatgpt" ? " (ChatGPT subscription)" : isOpencodeOwn(p) ? (p.key_sealed ? " (OpenCode's own: its free models in OpenCode only)" : " (OpenCode's own free models: OpenCode only)") : ""}`,
       options: p.models.map((m) => ({
         value: modelValue(p.name, m.id),
         label: `${modelPrefix(p.type)}${m.id}`,

@@ -91,7 +91,7 @@ const SealedKeys = z.record(GoogleName, z.string().min(1));
  * - `removal_pending`: a removal stopped its calls but could not be written to the store. Its
  *   calls stay refused, and the removal is finished by asking for it again.
  */
-type GeminiKeyState = "connected" | "disconnected" | "unusable" | "removal_pending";
+export type GeminiKeyState = "connected" | "disconnected" | "unusable" | "removal_pending";
 
 /** A model's prices as the page shows them, and whether the owner raised any of them. */
 interface PricedModel {
@@ -101,7 +101,7 @@ interface PricedModel {
 }
 
 /** What the key page shows: the cap, the ledger, the output limit and the prices. */
-interface GeminiApiStatus {
+export interface GeminiApiStatus {
   /** The owner's monthly cap in micro-dollars; undefined while none is set: every call is refused. */
   cap: number | undefined;
   outputLimit: number;

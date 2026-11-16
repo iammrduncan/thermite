@@ -12,7 +12,12 @@ export {
   creditsNoteShows,
   dismissCreditsNote,
 } from "./credits.ts";
-export { GeminiApiError, GeminiApiKeys } from "./gemini-api/index.ts";
+export {
+  GeminiApiError,
+  GeminiApiKeys,
+  type GeminiApiStatus,
+  type GeminiKeyState,
+} from "./gemini-api/index.ts";
 export {
   ANTHROPIC_BASE,
   CLAUDE_MODELS,

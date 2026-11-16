@@ -34,6 +34,7 @@ import { creditsChip, creditsNote, usageBlock, usageChips } from "../../ui/provi
 import { modelPricesBlock } from "../../ui/usage.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { busSettingsBlock } from "./bus.ts";
+import { GEMINI_API_PAGE, geminiApiRow } from "./gemini-api.ts";
 import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
@@ -209,6 +210,8 @@ ${
         const rigs = usersOf(p.name);
         if (p.type === "claude") return claudeRow(p, rigs);
         if (p.type === "chatgpt") return chatgptRow(p, rigs);
+        if (p.type === "google-gemini-api")
+          return geminiApiRow(p, opts.parts.geminiApi.state(p), rigs, t);
         const status = p.models_error
           ? `<span class="dq-why bad">${esc(p.models_error)}${p.models.length ? ` (keeping its last list of ${p.models.length})` : ""}</span>`
           : `<span class="dq-why">${p.models.length} model${p.models.length === 1 ? "" : "s"}${allFree(p) ? " · free, from the provider" : ""}${p.models_at ? ` · listed ${esc(ago(p.models_at, now))} ago` : ""}</span>`;
@@ -296,7 +299,7 @@ ${placeBlock("GPU clouds", cloudRows(t), store.gpuClouds.list().length, "No GPU 
       area === "providers"
         ? `${intro}${note}
 <div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
-<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>`
+<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}<p class="muted small">A Gemini API key is added on its own page, under a monthly spend cap you set: <a href="${GEMINI_API_PAGE}">Gemini API key and spend</a>.</p></div></div>`
         : area === "machines"
           ? machinesBody()
           : area === "prices"

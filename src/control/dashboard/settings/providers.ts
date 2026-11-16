@@ -54,6 +54,9 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   const MODEL_ID = /^[\w.:/@+-]{1,200}$/;
   /** Reads the provider's model list now and keeps it (or why it could not). */
   const listInto = async (p: ModelProvider): Promise<string | null> => {
+    // A Gemini API key's models are the priced ones its own page keeps (Test the key).
+    if (p.type === "google-gemini-api")
+      return "is a Gemini API key: its models are listed on its own page";
     if (p.type === "chatgpt") {
       const listed = await chatgpt.models(p);
       store.modelProviders.setModels(p.name, listed);
@@ -75,6 +78,24 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   /** Why a delete was refused: the provider's rigs, by name, from the record the delete checks. */
   const stillInUse = (name: string) =>
     `"${name}" is still in use. ${inUseWords(store.modelProviders.users(name))}`;
+
+  /**
+   * Disconnect and delete for a Gemini API key: its key, its capability and its row go together,
+   * and its calls in flight are broken off. Returns where the page goes, with what was done.
+   */
+  const deleteGeminiApi = (name: string): string => {
+    try {
+      const r = parts.geminiApi.remove(name, "owner:ui");
+      return r === "deleted"
+        ? settingsUrl(
+            "ok",
+            `"${name}" is disconnected and deleted: Thermite holds no key for it, and its calls are stopped. What it spent stays counted. Delete the key at Google too if it should not work anywhere.`,
+          )
+        : settingsUrl("error", r === "in_use" ? stillInUse(name) : "No such provider.");
+    } catch (e) {
+      return settingsUrl("error", noted(errorText(e)));
+    }
+  };
 
   /** The rule for the name of a Git access, a machine, a cluster or a GPU cloud. */
   const ACCESS_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -454,6 +475,13 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!PROVIDER_NAME.test(name))
       return fail("A provider's name is lowercase letters, digits, dots, dashes and underscores.");
     const type = String(f.type ?? "") as ProviderType;
+    // A Gemini API key is added and changed only on its page: this form could give it another
+    // address or kind, which its spend cap would not count.
+    if (
+      type === "google-gemini-api" ||
+      store.modelProviders.get(name)?.type === "google-gemini-api"
+    )
+      return fail("A Gemini API key is added and changed on the Gemini API key page.");
     if (!(type in TYPES)) return fail("A provider is OpenAI-compatible or Anthropic.");
     if (type === "claude")
       return saveClaude(c, name, String(f.claude_token ?? f.api_key ?? "").trim());
@@ -555,6 +583,11 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     const model = String(f.model ?? "").trim();
     if (!store.modelProviders.get(name))
       return c.redirect(settingsUrl("error", "No such provider."), 303);
+    if (store.modelProviders.get(name)?.type === "google-gemini-api")
+      return c.redirect(
+        settingsUrl("error", "A Gemini API key serves only the models Thermite has a price for."),
+        303,
+      );
     if (!MODEL_ID.test(model))
       return c.redirect(
         settingsUrl("error", "A model's name is its id at the provider, without spaces."),
@@ -638,6 +671,8 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/settings/providers/:name/delete", async (c) => {
     const name = c.req.param("name");
     const was = store.modelProviders.get(name);
+    // A Gemini API key is disconnected and deleted as one step, by the module that holds it.
+    if (was?.type === "google-gemini-api") return c.redirect(deleteGeminiApi(name), 303);
     const r = store.modelProviders.delete(name);
     // A ChatGPT login is ended at OpenAI too (signed out), with the login control had.
     const signedOut =
