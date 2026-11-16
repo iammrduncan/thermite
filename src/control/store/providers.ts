@@ -45,7 +45,11 @@ function providerOf(r: Row): ModelProvider {
   return {
     name: String(r.name),
     type:
-      r.type === "anthropic" || r.type === "opencode" || r.type === "claude" || r.type === "chatgpt"
+      r.type === "anthropic" ||
+      r.type === "opencode" ||
+      r.type === "claude" ||
+      r.type === "chatgpt" ||
+      r.type === "google-gemini-api"
         ? r.type
         : "openai",
     base_url: String(r.base_url),

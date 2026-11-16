@@ -172,6 +172,8 @@ export async function listModels(
 ): Promise<ProviderModel[] | { error: string }> {
   // A ChatGPT login is listed by its own code (control renews its token first).
   if (type === "chatgpt") return { error: "a ChatGPT subscription lists its models on its own" };
+  if (type === "google-gemini-api")
+    return { error: "a Gemini API key's models are listed on its own page" };
   // A Claude subscription's list is fixed: no call to Anthropic with its token.
   if (type === "claude")
     return CLAUDE_MODELS.map((m) => ({ id: m.id, context_window: m.context_window }));

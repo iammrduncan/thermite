@@ -9,13 +9,15 @@ import { z } from "zod";
  * key stays in control. The bridge takes only native streamed content generation with text and
  * declared function tools: no address, no executable tool, no key and no billing option crosses it.
  */
-const GOOGLE_GEMINI_PATH = "/v1/google-gemini";
+export const GOOGLE_GEMINI_PATH = "/v1/google-gemini";
 
 /** The largest request the bridge reads, in bytes. A larger one is refused before it is parsed. */
-const GOOGLE_BODY_BYTES = 4 * 1024 * 1024;
+export const GOOGLE_BODY_BYTES = 4 * 1024 * 1024;
 
 /** A provider's name as control keeps it, which is also its bridge's last path segment. */
-const GoogleName = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+export const GoogleName = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+/** A model's id as Google's API names it, without `models/`. */
+export const GoogleModel = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
 
 /** The path of one provider's bridge on control. */
 function googleBridgePath(provider: string): string {
@@ -144,6 +146,7 @@ export const GOOGLE_BRIDGE_FAILURES = {
   server: { status: 502, wire: "UNAVAILABLE", message: "HTTP 502: service unavailable." },
   timeout: { status: 504, wire: "DEADLINE_EXCEEDED", message: "HTTP 504: deadline exceeded." },
 } as const;
+export type GoogleBridgeFailure = keyof typeof GOOGLE_BRIDGE_FAILURES;
 
 const jsonObject = z.record(z.string(), z.json());
 const name = z.string().regex(/^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$/);

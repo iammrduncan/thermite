@@ -47,7 +47,10 @@ export const CONFIG_WRITE_MS = 5_000;
 export type ConfigBus = Pick<Bus, "makeStream" | "publish" | "last">;
 
 /** What control makes a rig's config from: its store and secrets, ChatGPT's logins, MCP servers. */
-export type ConfigParts = Pick<ControlParts, "store" | "secrets" | "chatgpt" | "mcpServers">;
+export type ConfigParts = Pick<
+  ControlParts,
+  "store" | "secrets" | "chatgpt" | "geminiApi" | "mcpServers"
+>;
 
 /** What the MCP servers' key holds: McpServers.forRig's answer. */
 type McpForRig = { servers: McpConnection[]; unavailable: McpUnavailable[] };

@@ -25,7 +25,7 @@ import { neededHarness } from "./request.ts";
  */
 
 /** What a route needs of control: its store, the box that opens keys, and ChatGPT's logins. */
-export type RouteParts = Pick<ControlParts, "store" | "secrets" | "chatgpt">;
+export type RouteParts = Pick<ControlParts, "store" | "secrets" | "chatgpt" | "geminiApi">;
 
 /**
  * A route as a rig receives it: the provider's endpoint and key (or a subscription's token, for
@@ -56,6 +56,39 @@ async function routeOf(
   // provider's own applies (goal 079).
   const maxOutput = p.models.find((m) => m.id === model)?.max_output ?? 0;
   const outputRev = maxOutput ? [`max_output ${maxOutput}`] : [];
+  // A Gemini API key stays in control: its rig's route is control's bridge and a capability for
+  // it. None while the key is removed, so the rig's agents get no route.
+  if (p.type === "google-gemini-api") {
+    const access = parts.geminiApi.route(p);
+    if (!access || harness !== "pi") return undefined;
+    return {
+      name: p.name,
+      type: "google-gemini-api",
+      harness: "pi",
+      version: p.version,
+      base_url: access.base,
+      model,
+      context_window: contextWindow,
+      ...compact,
+      max_tokens: maxOutput,
+      reasoning,
+      key_hint: p.key_hint,
+      revision: sha256Hex(
+        [
+          p.name,
+          p.version,
+          model,
+          contextWindow,
+          reasoning,
+          ...compactRev,
+          ...outputRev,
+          access.base,
+          access.key,
+        ].join("\n"),
+      ).slice(0, 16),
+      api_key: access.key,
+    };
+  }
   if (p.type === "chatgpt") {
     const access = await parts.chatgpt.access(p);
     if (typeof access !== "string") return undefined;
