@@ -8,8 +8,9 @@ import { ADMIN, controlOnly, controlStack, signIn } from "../../helpers/control-
 import { stack } from "./stack.ts";
 
 /**
- * Signing in to the dashboard: the icons without it, a wrong token, an admin token kept only as
- * its hash, and a session across restarts of control.
+ * Signing in to the dashboard: the icons without it, a wrong token and what the page says of it,
+ * a pasted token's spaces, an admin token kept only as its hash, and a session across restarts
+ * of control.
  */
 
 const sha256 = (t: string) => createHash("sha256").update(t).digest("hex");
@@ -52,6 +53,34 @@ describe("control dashboard", () => {
     assert.equal((await ui.get("/ui")).status, 303);
   });
 
+  test("a wrong token comes back to the sign-in page with a message, and a pasted token's spaces are ignored", async () => {
+    const s = await stack();
+    const plain = await (await s.control.request("/ui/login")).text();
+    assert.doesNotMatch(plain, /flash bad/);
+    const { login: bad } = await signIn(s.control, "wrong");
+    assert.equal(bad.status, 303);
+    assert.equal(bad.headers.get("location"), "/ui/login?failed=1");
+    const said = await (await s.control.request("/ui/login?failed=1")).text();
+    assert.match(
+      said,
+      /<div class="flash bad" role="alert">That token doesn't sign in\. Copy the admin token again, all of it\.<\/div>/,
+    );
+    // The note is fixed: nothing from the address reaches the page.
+    const crafted = await (await s.control.request("/ui/login?failed=%3Cb%3Ehi")).text();
+    assert.doesNotMatch(crafted, /<b>hi|&lt;b&gt;hi/);
+    // A space, a tab or a line break around the token, as a paste from a terminal brings.
+    for (const pasted of [` ${ADMIN}`, `${ADMIN} `, `\t${ADMIN}\n`, `${ADMIN}\r\n`]) {
+      const { login, cookie } = await signIn(s.control, pasted);
+      assert.equal(login.headers.get("location"), "/ui", JSON.stringify(pasted));
+      assert.equal((await s.control.request("/ui", { headers: { cookie } })).status, 200);
+    }
+    // Inside the token, a space still fails, and so does a token cut short.
+    for (const wrong of [`${ADMIN.slice(0, 4)} ${ADMIN.slice(4)}`, ADMIN.slice(0, -1), "   "]) {
+      const { login } = await signIn(s.control, wrong);
+      assert.equal(login.headers.get("location"), "/ui/login?failed=1", JSON.stringify(wrong));
+    }
+  });
+
   test("failed sign-ins are counted for each address apart: one that fails too often waits, and another still signs in", async () => {
     const { control, store } = controlStack({});
     const from = (address: string, token: string) =>
@@ -68,7 +97,13 @@ describe("control dashboard", () => {
       assert.equal((await from("192.0.2.7", "wrong")).status, 303, `failure ${i + 1}`);
     const waits = await from("192.0.2.7", ADMIN);
     assert.equal(waits.status, 429);
-    assert.equal(await waits.text(), "too many failed sign-ins; wait a minute");
+    // The wait is said on the sign-in page itself, with its form.
+    const page = await waits.text();
+    assert.match(
+      page,
+      /<div class="flash bad" role="alert">Too many failed sign-ins from this address\. Wait a minute, then try again\.<\/div>/,
+    );
+    assert.match(page, /<form class="card" method="post" action="\/ui\/login">/);
     const other = await from("198.51.100.9", ADMIN);
     assert.equal(other.status, 303);
     assert.equal(other.headers.get("location"), "/ui");
@@ -83,7 +118,7 @@ describe("control dashboard", () => {
     assert.equal(ok.headers.get("location"), "/ui");
     assert.equal((await control.request("/ui", { headers: { cookie } })).status, 200);
     const { login: hash } = await signIn(control, sha256("admin-token-abcdef"));
-    assert.equal(hash.headers.get("location"), "/ui/login");
+    assert.equal(hash.headers.get("location"), "/ui/login?failed=1");
   });
 
   test("a session survives a restart of control, renews in use, and ends with a new token", async () => {

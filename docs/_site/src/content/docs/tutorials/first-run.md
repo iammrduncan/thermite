@@ -115,7 +115,7 @@ You see the **Overview**, the first page in the sidebar. Its first line says `no
 The sidebar on the left holds the dashboard's pages: **Overview**, **Campaigns**, **Rigs**, **Metrics**, **Live** and more.
 
 :::tip
-If the sign-in page comes back with no message, the token didn't match. Copy it again, without spaces.
+If the sign-in page comes back and says `That token doesn't sign in.`, the token didn't match. Copy it again, all of it.
 :::
 
 ## 5. Meet your rig

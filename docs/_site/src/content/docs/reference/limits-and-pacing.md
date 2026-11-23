@@ -372,7 +372,7 @@ None of these ends anything. Nothing limits how many [field notes](knowledge-bas
 | An event's actor | 200 characters for control's pages: an event with a longer one is shown as one control can't read ([the rig's page](rig-page.md#blocks)) |
 | A full reset's steps | Quiescing 1 hour, exporting 30 minutes, verifying 1 hour, waiting for the owner 24 hours, wiping 30 minutes. A step that takes longer fails the reset |
 | Dashboard sessions | End after 30 days unused (`THERMITE_CONTROL_SESSION_DAYS`) |
-| Failed sign-ins | After 20 in a minute from one address: `too many failed sign-ins; wait a minute`, to that address only. Control counts at most 4,096 addresses at once, and forgets the one that failed longest ago first |
+| Failed sign-ins | After 20 in a minute from one address, the sign-in page says `Too many failed sign-ins from this address. Wait a minute, then try again.` (429), to that address only. Control counts at most 4,096 addresses at once, and forgets the one that failed longest ago first |
 | Why a dashboard form failed, in another program's words (ssh, git, kubectl, a GPU cloud, an MCP server) | Kept on control for 15 minutes, at most 500 at once, with what looks like a credential taken out; the page's address names them by an ID. Later, the page says `This message is no longer kept: do it again to see why.` |
 | A join command | Works once, within 1 hour |
 | Setting a rig up on a machine | 30 minutes for the script, then up to 10 minutes for the first report. A joined rig: up to 60 minutes. A cluster rig: up to 10 minutes |

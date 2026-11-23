@@ -195,11 +195,11 @@ podman machine ssh sudo fstrim -a  # give the freed space back to your Mac
 
 Never prune tagged images: they may belong to other projects. For more memory or CPUs, stop the VM and change it with Podman's own command, `podman machine set --memory <MiB> --cpus <n>`.
 
-### Sign-in comes back with no message
+### Sign-in says the token doesn't sign in
 
-- **You see:** after **Sign in**, the sign-in page shows again.
-- **Why:** the token is not the owner's. Only the owner's token signs in; an operator's, agent's or reader's token can't. A token with a space or a missing character fails too.
-- **Do:** copy the owner's token again: `cat .dev/secrets/control-admin-token` on the local stack, or the file of the owner's token you made yourself. After 20 failures in a minute from one address, the page says `too many failed sign-ins; wait a minute` to that address; other addresses still sign in.
+- **You see:** after **Sign in**, the sign-in page shows again and says `That token doesn't sign in. Copy the admin token again, all of it.`
+- **Why:** the token is not the owner's. Only the owner's token signs in; an operator's, agent's or reader's token can't. A token with a missing character fails too. Spaces and line breaks before or after the token don't matter: control leaves them out.
+- **Do:** copy the owner's token again: `cat .dev/secrets/control-admin-token` on the local stack, or the file of the owner's token you made yourself. After 20 failures in a minute from one address, the sign-in page says `Too many failed sign-ins from this address. Wait a minute, then try again.` to that address; other addresses still sign in.
 
 A sign-in also ends when the owner's token changes, or after 30 days without use.
 
