@@ -7,8 +7,9 @@ import type { StopAsked } from "../../service/index.ts";
  * running (paused, closed), and a trial the owner or an operator asked to stop (`stop_trial`).
  * The service records an ask as `trial_stop_asked` and tells the scheduler at once (stopAsked);
  * an ask recorded while no scheduler ran is acted on when the next one starts (stopsAskedBefore).
- * Each stop gets a `trial_stopped` event and its abort. The trial then ends as interrupted, with
- * its counters, and its experiment goes back to the top of the run's queue, as after a restart.
+ * Each stop gets a `trial_stopped` event and its abort, with why in words as the abort's reason.
+ * The trial then ends as interrupted, with its counters and that reason, and its experiment goes
+ * back to the top of the run's queue, as after a restart.
  * A run that stops running is checked every second while trials run (watch.ts): many parts of the
  * harness change a run's status.
  */
@@ -24,14 +25,30 @@ export interface Stopping {
 
 /** The running trials of each run that is no longer running stop. */
 export function stopRunsNotRunning(ledger: Ledger, o: Stopping): void {
-  const running = (id: string) => ledger.runs.get(id)?.status === "running";
   for (const [lane, ctrl] of o.aborts) {
     const run = o.laneRun.get(lane);
-    if (run && !running(run) && !ctrl.signal.aborted) {
-      ledger.appendEvent(o.owner, "trial_stopped", run, { lane, reason: "run not running" });
-      ctrl.abort();
+    const status = run ? ledger.runs.get(run)?.status : undefined;
+    if (run && status !== "running" && !ctrl.signal.aborted) {
+      const reason = notRunning(status);
+      ledger.appendEvent(o.owner, "trial_stopped", run, { lane, reason });
+      ctrl.abort(reason);
     }
   }
+}
+
+/** Why a run's trials stop when it no longer runs, in words. */
+function notRunning(status: string | undefined): string {
+  if (status === "paused") return "the run was paused";
+  if (status === "closed") return "the run closed";
+  return "the run stopped running";
+}
+
+/**
+ * Why a trial was stopped, as its abort's reason: the words its stopper gave. An abort with none
+ * says only that it was stopped.
+ */
+export function stopReason(signal: AbortSignal): string {
+  return typeof signal.reason === "string" ? signal.reason : "its trial was stopped";
 }
 
 /**
@@ -44,12 +61,13 @@ export function stopAsked(ledger: Ledger, o: Stopping, ask: StopAsked): boolean 
   const t = ledger.trials.get(ask.trial);
   const open = t?.lane === ask.lane && t.ended_at === null;
   if (!ctrl || ctrl.signal.aborted || o.laneRun.get(ask.lane) !== ask.run || !open) return false;
+  const reason = ask.reason ?? `stopped by ${ask.by}`;
   ledger.appendEvent(ask.by, "trial_stopped", ask.run, {
     lane: ask.lane,
     trial: ask.trial,
-    reason: ask.reason ?? `stopped by ${ask.by}`,
+    reason,
   });
-  ctrl.abort();
+  ctrl.abort(reason);
   return true;
 }
 

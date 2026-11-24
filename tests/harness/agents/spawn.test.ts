@@ -9,10 +9,10 @@ import { spawnTrial } from "../../../src/harness/agents/spawn.ts";
 import type { Runner, RunOutcome } from "../../../src/harness/broker/index.ts";
 
 /** A runner whose worker process prints `stdout`: what a worker running as `agent-N` could print. */
-function printing(stdout: string): Runner {
+function printing(stdout: string, stderr = ""): Runner {
   return {
     separated: true,
-    run: async () => ({ stdout, stderr: "", exitCode: 0 }) as unknown as RunOutcome,
+    run: async () => ({ stdout, stderr, exitCode: 0 }) as unknown as RunOutcome,
     handOver: async () => {},
     reclaim: async () => {},
     remove: async () => {},
@@ -71,7 +71,15 @@ test("a worker's result is read through its schema: what it is, and nothing else
   }
   const none = await run("no JSON here");
   assert.equal(none.stopped, "error");
-  assert.match(none.error ?? "", /^worker process gave no result \(0\)/);
+  // Nothing on its error output: nothing after the code, not an empty `: `.
+  assert.equal(none.error, "worker process gave no result (0)");
+  const said = await spawnTrial(
+    trial,
+    printing("no JSON here", "  TypeError: x is not a function\n"),
+    mkdtempSync(join(tmpdir(), "thermite-spawn-")),
+    9,
+  );
+  assert.equal(said.error, "worker process gave no result (0): TypeError: x is not a function");
 });
 
 test("the trials' folder may be passed through, never listed; each trial's folder is its worker's alone", async () => {

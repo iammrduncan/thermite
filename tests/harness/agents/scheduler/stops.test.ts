@@ -6,8 +6,33 @@ import { Scheduler } from "../../../../src/harness/agents/scheduler/index.ts";
 import { LocalRunner } from "../../../../src/harness/broker/runner.ts";
 import { makeJudgeEnv } from "../../../helpers/judge-env.ts";
 
+/** What the trial's worker answers when it is stopped. */
+type Answer = Awaited<ReturnType<ConstructorParameters<typeof Scheduler>[0]["runTrial"]>>;
+
+/** A worker that ends as interrupted, with its counters. */
+const interrupted: Answer = {
+  stopped: "interrupted",
+  turns: 7,
+  toolCalls: 12,
+  tokensIn: 9000,
+  tokensOut: 800,
+};
+
+/**
+ * A worker in Pi killed by the stop, as spawnTrial reads it: no result, nothing on its error
+ * output, and none of its counters.
+ */
+const killed: Answer = {
+  stopped: "error",
+  turns: 0,
+  toolCalls: 0,
+  tokensIn: 0,
+  tokensOut: 0,
+  error: "worker process gave no result (SIGKILL)",
+};
+
 /** A rig with one lane whose trial runs until it is stopped, keeping the counters it reported. */
-async function oneTrial() {
+async function oneTrial(answer: Answer = interrupted) {
   const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 3 } });
   await env.start();
   let id = "";
@@ -29,15 +54,7 @@ async function oneTrial() {
           { progress: { turns: 7, tool_calls: 12, tokens_in: 9000, tokens_out: 800 } },
         );
         id = spec.trialId;
-        signal.addEventListener("abort", () =>
-          resolve({
-            stopped: "interrupted",
-            turns: 7,
-            toolCalls: 12,
-            tokensIn: 9000,
-            tokensOut: 800,
-          }),
-        );
+        signal.addEventListener("abort", () => resolve(answer));
       }),
   });
   assert.ok(await scheduler.tick());
@@ -224,5 +241,68 @@ describe("stops and resets reach the scheduler at once (goal 125)", () => {
     assert.equal(events(env, "trial_stopped").length, 1);
     assert.equal(epochEnds(), ends);
     await third.shutdown("test over");
+  });
+});
+
+describe("a stopped trial ends with why it was stopped, not its worker's kill", () => {
+  /** How the trial ended, as control is told, and why its experiment came back. */
+  const why = (env: ReturnType<typeof makeJudgeEnv>) => {
+    const [done] = events(env, "trial_finished");
+    const [back] = events(env, "experiment_returned");
+    return [done?.stopped, done?.error, back?.cause];
+  };
+
+  for (const [status, words] of [
+    ["paused", "the run was paused"],
+    ["closed", "the run closed"],
+  ] as const) {
+    test(`a run ${status} while its trial runs: "${words}"`, async () => {
+      const { env, scheduler, ended } = await oneTrial(killed);
+      env.ledger.runs.setStatus("js-1", status, "by the test", "control:owner");
+      await ended();
+      assert.deepEqual(why(env), ["interrupted", words, words]);
+      assert.equal(events(env, "trial_stopped")[0]?.reason, words);
+      await scheduler.shutdown("test over");
+    });
+  }
+
+  test("the owner's stop: their reason", async () => {
+    const { env, scheduler, id, ended } = await oneTrial(killed);
+    await env.service.applyCommand(
+      env.sign("stop_trial", { run: "js-1", trial: id, reason: "it loops on one page" }),
+    );
+    await ended();
+    assert.deepEqual(why(env), ["interrupted", "it loops on one page", "it loops on one page"]);
+    await scheduler.shutdown("test over");
+  });
+
+  test('the lanes restarted: "the lanes were restarted"', async () => {
+    const { env, scheduler, ended } = await oneTrial(killed);
+    await env.service.applyCommand(env.sign("reset_workers", { run: "js-1" }));
+    await ended();
+    const words = "the lanes were restarted";
+    assert.deepEqual(why(env), ["interrupted", words, words]);
+    await scheduler.shutdown("test over");
+  });
+
+  test("the harness stopping: its reason, and the counters its worker last reported", async () => {
+    const { env, scheduler, trial } = await oneTrial(killed);
+    await scheduler.shutdown("the harness is stopping (SIGTERM)");
+    const words = "the harness is stopping (SIGTERM)";
+    assert.deepEqual(why(env), ["interrupted", words, words]);
+    assert.deepEqual([trial().turns, trial().tool_calls], [7, 12]);
+  });
+
+  test("a provider's error the trial ended on first keeps its words", async () => {
+    const limited: Answer = {
+      ...killed,
+      error: "429 Too Many Requests",
+      errorKind: "rate_limit",
+    };
+    const { env, scheduler, ended } = await oneTrial(limited);
+    env.ledger.runs.setStatus("js-1", "paused", "by the test", "control:owner");
+    await ended();
+    assert.deepEqual(why(env), ["interrupted", "429 Too Many Requests", "429 Too Many Requests"]);
+    await scheduler.shutdown("test over");
   });
 });
