@@ -45,9 +45,10 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
   app.get("/favicon.ico", iconRoute(FAVICON_ICO, "image/x-icon"));
   app.get("/apple-touch-icon.png", iconRoute(APPLE_TOUCH_ICON, "image/png"));
 
-  app.get("/ui/login", (c) =>
-    c.html(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  // The sign-in page, with what went wrong on the form when a sign-in failed: one of the fixed
+  // notes below, never text from the address, so a link can't make the page say anything else.
+  const loginPage = (note?: string) =>
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in · Thermite</title>${ICON_LINKS}<style>${STYLE}
 .login { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
 .login .card { width: 100%; max-width: 380px; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
@@ -55,9 +56,10 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
 </style></head><body><main class="login"><form class="card" method="post" action="/ui/login">
 <div class="brand"><span class="mark">Th</span>Thermite control</div>
 <div class="muted small">Sign in with the admin token. This browser stays signed in while you use it, and a session left unused for ${opts.sessionDays ?? SESSION_DAYS} days ends.</div>
-<label class="small">Admin token<input type="password" name="token" autocomplete="current-password" autofocus style="margin-top:6px"></label>
-<button class="primary">Sign in</button></form></main></body></html>`,
-    ),
+${note ? `<div class="flash bad" role="alert">${note}</div>\n` : ""}<label class="small">Admin token<input type="password" name="token" autocomplete="current-password" autofocus style="margin-top:6px"></label>
+<button class="primary">Sign in</button></form></main></body></html>`;
+  app.get("/ui/login", (c) =>
+    c.html(loginPage(c.req.query("failed") === undefined ? undefined : SIGN_IN_FAILED)),
   );
   // Failed sign-ins in the last minute, counted for each client apart: past 20, that client
   // waits, and every other client still signs in (the token is random, so this only slows a
@@ -67,13 +69,15 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
     const now = Date.now();
     const client = clientOf(c);
     if (failures.count(client, now) >= SIGN_IN_FAILURES)
-      return c.text("too many failed sign-ins; wait a minute", 429);
+      return c.html(loginPage(SIGN_IN_WAIT), 429);
     const form = await c.req.parseBody();
-    const token = String(form.token ?? "");
+    // A token pasted from a terminal often brings a space or a line break with it. No token ends
+    // in one: control reads a token's file trimmed, and `thermite token new` makes base64url.
+    const token = String(form.token ?? "").trim();
     if (!opts.admin.matches(token)) {
       if (failures.add(client, now) === SIGN_IN_FAILURES)
         store.auditLog.add("control", "login_throttled", {});
-      return c.redirect("/ui/login", 303);
+      return c.redirect("/ui/login?failed=1", 303);
     }
     const sid = randomBytes(24).toString("base64url");
     store.uiSessions.create(hashOf(sid), tokenFp, Date.now() + sessionMs);
@@ -141,6 +145,9 @@ export const FILE_FORM_MAX_BYTES: ReadonlyMap<string, number> = new Map([
 
 /** Failed sign-ins a client may make in a minute before it waits. */
 const SIGN_IN_FAILURES = 20;
+/** What the sign-in page says after a token that doesn't sign in, and to a client that waits. */
+const SIGN_IN_FAILED = "That token doesn't sign in. Copy the admin token again, all of it.";
+const SIGN_IN_WAIT = "Too many failed sign-ins from this address. Wait a minute, then try again.";
 /** Clients whose failures are kept at once; past it, the one that failed longest ago is dropped. */
 const FAILING_CLIENTS = 4096;
 
