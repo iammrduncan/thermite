@@ -1,5 +1,7 @@
 # Option 1: the tree as drawn
 
+> **Earlier proposal, 2026-11-15.** Not decided. The current planning is [decisions.md](../decisions.md); where this page differs from it, that page holds. [What is current](../README.md).
+
 The owner's tree, [v030_idea.txt](../../v030_idea.txt), filled in: what each folder holds, what of today's code goes into it, and the lines the tree leaves open.
 
 ## The tree

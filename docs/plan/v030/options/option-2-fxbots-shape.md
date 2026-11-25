@@ -1,5 +1,7 @@
 # Option 2: fxbot's shape
 
+> **Earlier proposal, 2026-11-15.** Not decided. The current planning is [decisions.md](../decisions.md); where this page differs from it, that page holds. [What is current](../README.md).
+
 fxbot's four packages, plus the two that Thermite needs and fxbot does not: a runner, since Thermite has a second program on other machines, and the design system, which exists. All behaviour is in one SDK. Every program is a thin shell around it.
 
 ## The tree

@@ -1,5 +1,7 @@
 # Option 4: programs, one core, and plugins
 
+> **Earlier proposal, 2026-11-15.** Not decided. The current planning is [decisions.md](../decisions.md); where this page differs from it, that page holds. [What is current](../README.md).
+
 The tree I would suggest. It is [option 1](option-1-the-tree-as-drawn.md) after the rules of options [2](option-2-fxbots-shape.md) and [3](option-3-small-core-and-plugins.md) are applied to it, and after the owner's steer of 2026-11-15: no SDK, since nobody embeds Thermite in another product; core or plugin; and a control plane and a runner that share a common core.
 
 [option-4.html](option-4.html) draws it as a page: the conventions, the packages and who imports whom, a sketch of each package's files, where a change goes, the boundaries, one machine and several machines, how the two planes use NATS, and what of today's code is core, a plugin or going. Open the file in a browser; it loads nothing from the network.
@@ -44,7 +46,7 @@ For the code:
 For core or plugin, the default is plugin: before a feature is built, its goal says which it is, and why. Core is only what every run needs, what plugins plug into, and what Thermite needs to run.
 
 - **What a plugin may count on.** The core never imports or names it, and which plugins a new install gets is a list, as data. Thermite's own plugins use the same API as anyone's. When a plugin cannot do what it needs, the API gets the smallest hook for it, on the day a real plugin needs one. A release that breaks the API says so in one list, and a plugin names the oldest Thermite it runs on.
-- **What the core may count on.** A plugin that is not added costs nothing. A plugin's data is its own, in tables or files that it makes and removes, never in a migration of the core. Removing a plugin leaves the core working. [What is never open to a plugin](#core-or-plugin) stays closed.
+- **What the core may count on.** A plugin that is not added costs nothing. A plugin's data is its own, in tables or files that it makes and removes, never in a migration of the core. Removing a plugin leaves the core working. What is closed to a plugin is open: [decision 16](../decisions.md#open-decisions).
 
 Thermite goes its own way in three places, each for what it is:
 
@@ -289,7 +291,7 @@ beside the packages       the top of the repository
 | A message between the planes, a stream, who may read a subject | `core/bus` | Neither plane can send what is not written there |
 | A kind of event, or what one holds | `core/events` | Everyone who reads the record reads one shape |
 | Which device a job gets, and a job's life | `control/scheduler` | The pool is the control plane's |
-| When a change wins | `control/judge` | Never an agent's, and never a plugin's |
+| When a change wins | `control/judge` | Never an agent's. Whether a plugin the owner adds may judge is [decision 16](../decisions.md#open-decisions) |
 | What happens beside the device: a build, a measurement, the wall | `runner` | It is the only code on the machine |
 | How a run's agents work: a loop, a tool, what an agent is told | `control/agents`, `control/advisors` | A run owns its agents |
 | How one agent program is started and read | `plugins/harness-*` | The core names no program |
@@ -344,7 +346,7 @@ What an SDK's users would have needed is still there, smaller:
 
 **Core:** a campaign and its contract, a run, the record, the pool and the scheduler, measuring, the judge's decisions and promotion, the loops of a run's agents, the advisors, the knowledge base, sign-in and roles, sealed secrets, migrations, backup and restore, the bus, and the plugin API. A machine whose runner joins by itself, with a token, is core too: it is all a one-machine install needs.
 
-**Never open to a plugin:** measurement, verdicts, completion, promotion, the record's writer, the wall, and who may do what.
+**Proposed as never open to a plugin (2026-11-15):** measurement, verdicts, completion, promotion, the record's writer, the wall, and who may do what. This list went further than the settled decision, which is only that a run's agents never judge, and it would stop anyone from adding a judge, a campaign mode, a promotion rule, an advisor or a wall of their own. It is reopened as [decision 16](../decisions.md#open-decisions), with a narrower rule proposed there.
 
 **Plugins, three kinds to begin with,** each with several real uses today:
 

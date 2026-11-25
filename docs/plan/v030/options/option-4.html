@@ -167,10 +167,10 @@
 <body>
 <main>
 
-<p class="tag t-plugin" style="display:inline-block">A proposal · nothing here is decided or built</p>
+<p class="tag t-plugin" style="display:inline-block">An earlier proposal, 2026-11-15 · nothing here is decided or built</p>
 <h1>Thermite v0.3.0: programs, one core, and plugins</h1>
 <p class="lede">Option 4 for how Thermite's code is laid out: the conventions it follows, what the packages are, a sketch of their folders, what crosses each boundary, how it runs on one machine and on many, how the two planes talk over NATS, and what of today's code is core, a plugin, or on its way out.</p>
-<p class="quiet">The words are in <code>docs/plan/v030/options/</code>, beside this page. Counts of lines are of the code on 2026-11-15.</p>
+<p class="quiet">The words are in <code>docs/plan/v030/options/</code>, beside this page. Counts of lines are of the code on 2026-11-15. The current planning is <code>docs/plan/v030/decisions.md</code>: where this page differs from it, that page holds. One difference: what is closed to a plugin is reopened there, as decision 16.</p>
 
 <nav>
   <a href="#conventions">Conventions</a>
@@ -249,7 +249,7 @@
     <ul><li>A plugin that is not added costs nothing.</li>
       <li>A plugin's data is its own, in tables or files that it makes and removes. Never in a migration of the core.</li>
       <li>Removing a plugin leaves the core working.</li>
-      <li>Never open to a plugin: measuring, verdicts, promotion, the record's writer, the wall, who may do what.</li></ul></div>
+      <li>What is closed to a plugin is open (decision 16). A run's agents never judge.</li></ul></div>
 </div>
 
 <p class="label">Where Thermite goes its own way</p>
@@ -557,7 +557,7 @@
     <tr><td>A message between the planes, a stream, who may read a subject</td><td><code>core/bus</code></td><td>Neither plane can send what is not written there.</td></tr>
     <tr><td>A kind of event, or what one holds</td><td><code>core/events</code></td><td>Everyone who reads the record reads one shape.</td></tr>
     <tr><td>Which device a job gets, and a job's life</td><td><code>control/scheduler</code></td><td>The pool is the control plane's.</td></tr>
-    <tr><td>When a change wins</td><td><code>control/judge</code></td><td>Never an agent's, and never a plugin's.</td></tr>
+    <tr><td>When a change wins</td><td><code>control/judge</code></td><td>Never an agent's. Whether a plugin the owner adds may judge is open (decision 16).</td></tr>
     <tr><td>What happens beside the device: a build, a measurement, the wall</td><td><code>runner</code></td><td>It is the only code on the machine.</td></tr>
     <tr><td>How a run's agents work: a loop, a tool, what an agent is told</td><td><code>control/agents</code>, <code>control/advisors</code></td><td>A run owns its agents.</td></tr>
     <tr><td>How one agent program is started and read</td><td><code>plugins/harness-*</code></td><td>The core names no program.</td></tr>
@@ -814,7 +814,7 @@
       <span class="chip">most of the import check <small>0.6k</small></span>
       <span class="chip">the build of <code>dist/</code> <small>if the source is run, as fxbot does</small></span>
     </div>
-    <p class="quiet" style="margin-top:10px">Never open to a plugin, whatever its size: measuring, verdicts, promotion, the record's writer, the wall, who may do what.</p></div>
+    <p class="quiet" style="margin-top:10px">Proposed on 2026-11-15 as never open to a plugin: measuring, verdicts, promotion, the record's writer, the wall, who may do what. That list is reopened as decision 16, with a narrower rule.</p></div>
 </div>
 <p class="quiet">Not placed above: the top-level files of control, the harness and the supervisor (17k lines together), and what is left of the rigs' own code in control (2.7k). Each is sorted when its step of the run sheet is built.</p>
 
@@ -837,7 +837,7 @@
   <div class="box"><h3>The control plane as one package</h3><p>It will be the large one. Its services are entries, not packages, until one needs an image or a release of its own.</p></div>
 </div>
 
-<footer>Thermite · the structure of v0.3.0 · option 4 of four · a proposal for the owner's choice. The other options and the full reasoning are in <code>docs/plan/v030/options/</code>.</footer>
+<footer>Thermite · the structure of v0.3.0 · option 4 of four · an earlier proposal for the owner's choice; the current planning is <code>docs/plan/v030/decisions.md</code>. The other options and the full reasoning are in <code>docs/plan/v030/options/</code>.</footer>
 </main>
 </body>
 </html>

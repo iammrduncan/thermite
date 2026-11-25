@@ -34,7 +34,8 @@ It has two guides. Each says what was found, what changes, in what order, and wh
 
 ## Still to choose
 
-- Nothing now. The build started on 2026-11-12, when the owner ran the first step of [v0.3.0, step by step](v030_release_plan.md): the order the owner asked for that day, one goal at a time, each with its command, and the owner's own look at each before the next.
+- **The code's structure** (asked on 2026-11-15): which tree, the way there, and the technology behind it. The open decisions, with what is recommended and the owner's call on each, are in [v030/decisions.md](v030/decisions.md); [v030/](v030/README.md) says which of v0.3.0's plans are current and which are earlier proposals.
+- Nothing else. The build started on 2026-11-12, when the owner ran the first step of [v0.3.0, step by step](v030_release_plan.md): the order the owner asked for that day, one goal at a time, each with its command, and the owner's own look at each before the next.
 
 ## What a tester gets
 

@@ -1,6 +1,6 @@
 # v0.3.0's structure: the options
 
-**Status:** proposals, written on 2026-11-15 at the owner's request. Nothing here is decided, and nothing of it is built. The owner chooses; until then [v0.3.0, step by step](../../v030_release_plan.md) stands as it is.
+**Status:** earlier proposals, written on 2026-11-15 at the owner's request. None is chosen, and nothing of them is built. The discussion goes on in [decisions.md](../decisions.md), which is the current planning: its open decisions carry on the questions at the end of this page, and where this folder differs from it, that page holds. Until the owner chooses, [v0.3.0, step by step](../../v030_release_plan.md) stands as it is. [What is current](../README.md) sorts all of v0.3.0's plans.
 
 The owner read options 1 to 3 on the same day, and steered: think what option 1 is with the rules of options 2 and 3 applied; core or plugin; a control plane and a runner with a common core; and no SDK, since Thermite is not put inside other products. [Option 4](option-4-programs-one-core-and-plugins.md) is the answer, and it is the one recommended. [option-4.html](option-4.html) draws it as a page.
 
@@ -39,7 +39,7 @@ fxbot's rules that matter most here, in short:
 - **PostgreSQL** for the record and **NATS** between the planes.
 - **`packages/design-system`** stays as it is, and is the one both products use later, each with its own colours.
 - **One image file for each kind of device** (in a `runner-images/` folder in options 1 to 3, in each device's own plugin in option 4), and **`examples/`** with the kits and the campaigns.
-- **The settled decisions hold:** agents never judge; the harness owns all research state; measurement, verdicts and promotion are code the agents cannot write.
+- **The settled decisions hold:** agents never judge; the harness owns all research state; measurement, verdicts and promotion are code the agents cannot write. Whether a plugin the owner adds may judge is not settled: [decision 16](../decisions.md#open-decisions).
 - **A word changes its meaning.** Today "the harness" is the rig's service that judges. In the owner's tree, a harness is what runs an agent (`fx.ts`, `claude.ts`). The old meaning goes with the rig (goal 276), and the options use the new one.
 
 ## The options at a glance
@@ -67,6 +67,8 @@ How to get from today's tree to any of them is one question for all three: [the 
 - **Path B** (new code goes into the new packages as each step of the run sheet is built, and the old tree shrinks until it is empty) moves no code that a later step deletes. At least 52k of today's 220k lines are such code: the old dashboard's pages, and what exists only for the rig ([the count](the-way-there.md#what-the-run-sheet-already-removes)).
 
 ## Questions for the owner
+
+These continue as rows 1 to 8 of [the open decisions](../decisions.md#open-decisions), where the owner's calls are recorded.
 
 1. **The tree:** option 4, or what to change in it. Its own page ends with [what differs from the tree as drawn](option-4-programs-one-core-and-plugins.md#what-changes-from-the-tree-as-drawn), and with the three things I am least sure of.
 2. **Every harness as a plugin,** fx and Claude Code too, with the default as a line of data. That keeps the tree from deciding [goal 260](../../goals/260-fxbot-and-thermite.goal), whose study found six things that do not fit fx yet. Agreed, or is fx in the core?

@@ -1,5 +1,7 @@
 # The way there
 
+> **Earlier proposal, 2026-11-15.** Not decided. The current planning is [decisions.md](../decisions.md); where this page differs from it, that page holds. [What is current](../README.md).
+
 How Thermite gets from one `src/` tree to any of the four options. The question is the same for all of them, and it matters more than the choice of tree: v0.3.0 is under way, with 4 of its 35 steps built, and every step must end with the system working.
 
 ## What the run sheet already removes

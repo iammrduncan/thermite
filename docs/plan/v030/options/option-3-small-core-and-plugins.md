@@ -1,5 +1,7 @@
 # Option 3: a small core and plugins
 
+> **Earlier proposal, 2026-11-15.** Not decided. The current planning is [decisions.md](../decisions.md); where this page differs from it, that page holds. [What is current](../README.md).
+
 fxbot's first rule, applied to Thermite: a small core that every install runs, and plugins for everything an install may leave out. The packages are [option 2's](option-2-fxbots-shape.md) (or [option 1's](option-1-the-tree-as-drawn.md): the plugin line does not depend on which). What changes is how much is in them.
 
 ## Core or plugin
@@ -12,7 +14,7 @@ fxbot asks of each feature: is this core, or a plugin? Its default answer is plu
 - **What plugins plug into:** the plugin API, and adding, checking and updating a plugin.
 - **What Thermite needs to run:** sign-in and roles, sealed secrets, migrations, backup and restore, the bus.
 
-**Never a plugin, whatever it costs in size:** measurement, verdicts, completion and promotion; the record's writer; the wall between a worker and the judge; who may do what. A plugin gets no hook into any of them. This is the settled decision that agents never judge, held for plugins too.
+**Proposed as never a plugin (2026-11-15):** measurement, verdicts, completion and promotion; the record's writer; the wall between a worker and the judge; who may do what. This list went further than the settled decision, which is only that a run's agents never judge, and it would stop anyone from adding a judge, a campaign mode, a promotion rule, an advisor or a wall of their own. It is reopened as [decision 16](../decisions.md#open-decisions), with a narrower rule proposed there.
 
 **Plugins, from what is built in today:**
 
