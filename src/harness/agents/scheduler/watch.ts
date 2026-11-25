@@ -43,7 +43,8 @@ export function watch(sched: SchedulerContext): void {
 
 /** The running trials of a run are killed: the start of its reset. */
 function abortRun(sched: SchedulerContext, run: string): void {
-  for (const [lane, ctrl] of sched.aborts) if (sched.laneRun.get(lane) === run) ctrl.abort();
+  for (const [lane, ctrl] of sched.aborts)
+    if (sched.laneRun.get(lane) === run) ctrl.abort("the lanes were restarted");
 }
 
 /**
@@ -92,7 +93,7 @@ export async function shutdown(sched: SchedulerContext, reason: string): Promise
     const run = sched.laneRun.get(lane);
     if (run && !ctrl.signal.aborted)
       sched.ledger.appendEvent(sched.o.owner, "trial_stopped", run, { lane, reason });
-    ctrl.abort();
+    ctrl.abort(reason);
   }
   sched.planning?.ctrl.abort();
   await idle(sched);

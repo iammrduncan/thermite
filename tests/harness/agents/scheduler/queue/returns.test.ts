@@ -33,7 +33,7 @@ describe("the planner as the queue's coordinator", () => {
     assert.equal(back?.added_by, "owner");
     assert.equal(back?.why, "big win if it works");
     assert.equal(back?.returns, 1);
-    assert.match(String(back?.cause), /stopped|interrupted/);
+    assert.equal(back?.cause, "the run was paused", "why its trial stopped");
     assert.equal(s.q.all(RUN).length, 2, "no copy");
     const returned = events(s.env, "experiment_returned");
     assert.equal(returned.length, 1);
@@ -67,7 +67,7 @@ describe("the planner as the queue's coordinator", () => {
               toolCalls: 0,
               tokensIn: 0,
               tokensOut: 0,
-              error: "worker process gave no result (SIGKILL): ",
+              error: "worker process gave no result (SIGKILL)",
             }),
           ),
         );

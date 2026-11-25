@@ -15,6 +15,7 @@ import type { TrialResult } from "../../worker/index.ts";
 import { campaignBrief, notesAndPast, withOwnerSections } from "../briefs.ts";
 import type { SchedulerContext } from "../context.ts";
 import { afterTrial } from "../provider.ts";
+import { stopReason } from "../stops.ts";
 import { finishExperiment, trialLine, withProgress } from "../trials.ts";
 import { watch } from "../watch.ts";
 
@@ -132,7 +133,13 @@ export function startResearchTrial(
     } catch (err) {
       r = { ...r, error: errorText(err) };
     } finally {
-      if (abort.signal.aborted) r = { ...r, stopped: "interrupted" };
+      // As a lane's trial in a hill climb (trials.ts): a stopped trial ends with why it stopped.
+      if (abort.signal.aborted)
+        r = {
+          ...r,
+          stopped: "interrupted",
+          error: r.errorKind ? r.error : stopReason(abort.signal),
+        };
       r = withProgress(sched, id, r);
       sched.o.service.trialEnded(id, r.turns > 0 || r.tokensIn > 0);
       sched.registry.finishTrial(id, r, sched.o.owner);

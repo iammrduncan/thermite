@@ -18,6 +18,7 @@ import { brief, withOwnerSections } from "./briefs.ts";
 import { directivesOf, type SchedulerContext } from "./context.ts";
 import { afterTrial } from "./provider.ts";
 import { heldHandouts } from "./rounds.ts";
+import { stopReason } from "./stops.ts";
 import { watch } from "./watch.ts";
 
 /**
@@ -195,7 +196,15 @@ export function startTrial(
     } catch (err) {
       r = { ...r, stopped: "error", error: errorText(err) };
     } finally {
-      if (abort.signal.aborted && r.stopped !== "submitted") r = { ...r, stopped: "interrupted" };
+      // A trial that was stopped ends with why it was stopped. Its worker's own end, killed with
+      // nothing said (`gave no result (SIGKILL)`), is not the trial's error; a provider's error
+      // it ended on first keeps its words.
+      if (abort.signal.aborted && r.stopped !== "submitted")
+        r = {
+          ...r,
+          stopped: "interrupted",
+          error: r.errorKind ? r.error : stopReason(abort.signal),
+        };
       r = withProgress(sched, id, r);
       sched.o.service.trialEnded(id, r.turns > 0 || r.tokensIn > 0);
       // Its attempt is the one the harness linked to the trial as it submitted, never the one its

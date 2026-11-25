@@ -141,7 +141,8 @@ export async function spawnTrial(
         view,
       );
       const said = readResult(dir);
-      if (!said)
+      // A worker the harness stopped (a pause, a close, a restart) leaves none: that is no fault.
+      if (!said && !signal?.aborted)
         logWarn("harness", "a worker in Pi left no result in its terminal", {
           trial: spec.trialId,
           lane: spec.lane,
@@ -185,6 +186,12 @@ export async function spawnTrial(
   }
 }
 
+/** The end of what a worker wrote on its error output, after a colon; nothing when it wrote none. */
+function tail(stderr: string): string {
+  const end = stderr.slice(-500).trim();
+  return end ? `: ${end}` : "";
+}
+
 /** A worker's result that is none: the trial ended with an error, in words. */
 const failed = (why: string): TrialResult => ({
   stopped: "error",
@@ -226,7 +233,7 @@ function resultOf(
   if (result.success) return result.data;
   return failed(
     said === undefined
-      ? `gave no result (${r.killedFor ?? r.exitCode ?? r.signal}): ${r.stderr.slice(-500)}`
+      ? `gave no result (${r.killedFor ?? r.exitCode ?? r.signal})${tail(r.stderr)}`
       : `gave a result that is not a trial's: ${result.error.issues
           .slice(0, 3)
           .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
