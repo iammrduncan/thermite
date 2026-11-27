@@ -72,6 +72,12 @@ function answers(host: string, port: number): Promise<boolean> {
   });
 }
 
+/** Whether the bus answers at its nats:// address (port 4222 when it names none). */
+function busAnswers(url: string): Promise<boolean> {
+  const at = new URL(url);
+  return answers(at.hostname.replace(/^\[(.*)\]$/, "$1"), Number(at.port || 4222));
+}
+
 /** thermite backup FOLDER: control's state and its events into a dated folder in FOLDER. */
 export async function thermiteBackup(rest: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -83,6 +89,10 @@ export async function thermiteBackup(rest: string[]): Promise<void> {
   if (!into || extra.length) fail(USAGE);
   if (!existsSync(into)) fail(`no folder ${into}: make it first`);
   const { stateDir, url } = placesOf(values);
+  // The bus first: the streams come from it after control's files, so a bus that doesn't answer
+  // would leave a .partial folder.
+  if (!(await busAnswers(url)))
+    fail(`the bus does not answer at ${new URL(url).host}: start it, then run this again`);
   const bus = backupBusOf(stateDir, url);
   try {
     const { folder, manifest } = await backupControl({
@@ -131,13 +141,11 @@ export async function thermiteRestore(rest: string[]): Promise<void> {
     if (up) refused(new RestoreRefused(`control answers at ${values.control}: stop it first`));
   }
   const store = values["bus-store"];
+  const host = new URL(url).host;
   if (store) {
-    const at = new URL(url);
-    if (await answers(at.hostname.replace(/^\[(.*)\]$/, "$1"), Number(at.port || 4222)))
+    if (await busAnswers(url))
       refused(
-        new RestoreRefused(
-          `the bus answers at ${at.host}: stop it first, then set its store aside`,
-        ),
+        new RestoreRefused(`the bus answers at ${host}: stop it first, then set its store aside`),
       );
     try {
       await checkBackup(resolve(from));
@@ -151,6 +159,12 @@ export async function thermiteRestore(rest: string[]): Promise<void> {
     }
     return;
   }
+  if (!(await busAnswers(url)))
+    refused(
+      new RestoreRefused(
+        `the bus does not answer at ${host}: start it first, with room for the restore`,
+      ),
+    );
   const bus = backupBusOf(stateDir, url);
   try {
     await restoreControl({ from: resolve(from), stateDir, bus, say });
