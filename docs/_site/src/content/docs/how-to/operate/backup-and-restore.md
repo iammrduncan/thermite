@@ -31,6 +31,7 @@ A backup holds control's signing key and the bus's certificate authority: whoeve
 ## Before you start
 
 - The stack from [Install on one machine](../install/one-machine.md), started at least once with this version: control makes the backup's key on the bus, `bus-backup.seed`, as it starts.
+- The message bus running: the backup takes every rig's events from it. With the stack stopped, start the bus alone: `docker compose up -d --no-deps nats`. Control may be running or stopped.
 - The folder `.dev/backups/` next to `compose.yaml`. `docker compose run --rm init` makes it, as at each update; in a checkout of the source code, `npm run dev:init`.
 - Room for the backup: about the size of `control.db` and its exports, and about 65 bytes for each event on the bus (500,000 events made a snapshot of 32 MB).
 - With Podman, write `podman compose` where the steps say `docker compose`.

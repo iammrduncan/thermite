@@ -2,6 +2,12 @@
 
 Each release of Thermite, newest first. A release with new work counts up the middle number, such as 0.2.0; a release of fixes alone counts up the last number, such as 0.1.4, and its fixes are in the next middle release too. From v0.2.0, each fix is a release of its own: v0.2.1, v0.2.2 and so on. Before v0.1.4, releases with new work also counted up the last number, from 0.1.1 to 0.1.3. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
+## [Unreleased]
+
+### Fixes
+
+- **A backup with the bus stopped writes nothing, and says to start the bus.** `thermite backup` copied control's files first and reached the bus only for its streams, so with the bus stopped, as with the stack down before an update, it printed `copied control.db: …`, then stopped on the bus's address, such as `getaddrinfo ENOTFOUND nats`, and left a `.partial` folder. It now checks that the bus answers before it writes anything, and stops with `the bus does not answer at nats:4222: start it, then run this again`. `thermite restore` without `--bus-store` refuses the same way, with `the bus does not answer at nats:4222: start it first, with room for the restore`, where it stopped on the bus's address the same way. [Back up and restore control](docs/_site/src/content/docs/how-to/operate/backup-and-restore.md#before-you-start) now says the bus must be running, and how to start it alone.
+
 ## [0.2.4] 2026-11-14: a change the owner declined no longer stops its run
 
 v0.2.4 is a fix release of v0.2.3: a lane whose newest change the owner declined starts its next trial, and its run's rounds go on, from an outside contributor's [pull request 95](https://github.com/iammrduncan/thermite/pull/95). A v0.1.1 to v0.2.3 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.2.4), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. The fix is in the rig: a run that stopped this way goes on by itself once its rig runs v0.2.4. Nothing in control's store, a rig's ledger, the settings or the secrets changes.
