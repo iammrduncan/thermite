@@ -1,0 +1,3450 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171412" media="(prefers-color-scheme: dark)">
+  <title>Thermite v1 — Anti-Slop Feature Process &amp; Requirements Capture</title>
+  <style>
+    /* =========================================================================
+       Thermite v1 Visual Explainer — Feature Process & Anti-Slop Governance
+       @iammrduncan/magnesium Warm-Grey + Flame · Zero CDN · Offline-ready
+       Matches docs/plan/v1/site/index.html 1:1
+       ========================================================================= */
+    :root {
+      color-scheme: light;
+      --bg: #ffffff;
+      --bg-paper: #faf9f7;
+      --surface-muted: #f3f1ee;
+      --ink: #1c1917;
+      --soft: #44403c;
+      --quiet: #6f6862;
+      --line: #e7e5e4;
+      --edge: #d6d3d1;
+      --grid: #efedea;
+
+      --primary: #c2410c;
+      --primary-fg: #ffffff;
+      --flame: #c2410c;
+      --flame-tint: #fff3ec;
+      --ember: #f2542d;
+      --ember-light: #ff8a3d;
+      --ring: #c2410c;
+
+      --good: #15803d;
+      --good-tint: #eefaf2;
+      --working: #1d4ed8;
+      --working-tint: #e8effe;
+      --needs: #b45309;
+      --needs-tint: #fdf3e2;
+      --needs-card: #fffaf0;
+      --needs-edge: #f1dcae;
+      --wrong: #b91c1c;
+      --wrong-tint: #fdecec;
+      --wrong-edge: #f3caca;
+      --idle: #57534e;
+      --idle-tint: #f1efec;
+      --idle-bar: #c9c4bf;
+
+      --toast: #1c1917;
+      --toast-fg: #ffffff;
+
+      --shadow-btn: 0 1px 0 rgb(0 0 0 / 0.08);
+      --shadow-lift: 0 8px 24px rgb(28 25 23 / 0.08);
+
+      --r-sm: 4px;
+      --r-ctrl: 8px;
+      --r-card: 16px;
+      --r-chip: 999px;
+
+      --font-sans: "Geist Variable", "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+      --max-w: 1240px;
+      --header-h: 60px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #211d1a;
+        --bg-paper: #171412;
+        --surface-muted: #2e2925;
+        --ink: #fafaf9;
+        --soft: #d6d3d1;
+        --quiet: #a8a29e;
+        --line: #34302c;
+        --edge: #4a4541;
+        --grid: #34302c;
+
+        --primary: #c2410c;
+        --primary-fg: #ffffff;
+        --flame: #fb923c;
+        --flame-tint: #3a1d10;
+        --ring: #fb923c;
+
+        --good: #4ade80;
+        --good-tint: #12281a;
+        --working: #60a5fa;
+        --working-tint: #16223b;
+        --needs: #fbbf24;
+        --needs-tint: #2e2110;
+        --needs-card: #2a1f0e;
+        --needs-edge: #4d3c18;
+        --wrong: #f87171;
+        --wrong-tint: #2f1717;
+        --wrong-edge: #4d2424;
+        --idle: #a8a29e;
+        --idle-tint: #2e2925;
+        --idle-bar: #57534e;
+
+        --toast: #fafaf9;
+        --toast-fg: #1c1917;
+        --shadow-btn: 0 1px 0 rgb(0 0 0 / 0.35);
+        --shadow-lift: 0 12px 32px rgb(0 0 0 / 0.32);
+      }
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #211d1a;
+      --bg-paper: #171412;
+      --surface-muted: #2e2925;
+      --ink: #fafaf9;
+      --soft: #d6d3d1;
+      --quiet: #a8a29e;
+      --line: #34302c;
+      --edge: #4a4541;
+      --grid: #34302c;
+
+      --primary: #c2410c;
+      --primary-fg: #ffffff;
+      --flame: #fb923c;
+      --flame-tint: #3a1d10;
+      --ring: #fb923c;
+
+      --good: #4ade80;
+      --good-tint: #12281a;
+      --working: #60a5fa;
+      --working-tint: #16223b;
+      --needs: #fbbf24;
+      --needs-tint: #2e2110;
+      --needs-card: #2a1f0e;
+      --needs-edge: #4d3c18;
+      --wrong: #f87171;
+      --wrong-tint: #2f1717;
+      --wrong-edge: #4d2424;
+      --idle: #a8a29e;
+      --idle-tint: #2e2925;
+      --idle-bar: #57534e;
+
+      --toast: #fafaf9;
+      --toast-fg: #1c1917;
+      --shadow-btn: 0 1px 0 rgb(0 0 0 / 0.35);
+      --shadow-lift: 0 12px 32px rgb(0 0 0 / 0.32);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--header-h) + 20px);
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      overflow-x: clip;
+    }
+
+    a {
+      color: var(--flame);
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+    :focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+    }
+
+    code, pre, .mono {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    code {
+      font-size: 0.9em;
+      background: var(--surface-muted);
+      color: var(--ink);
+      padding: 1px 5px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--line);
+    }
+    pre {
+      margin: 0;
+      padding: 14px 16px;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      overflow-x: auto;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: var(--ink);
+      max-width: 100%;
+    }
+    pre code {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      font-size: inherit;
+    }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: 8px;
+      z-index: 200;
+      background: var(--primary);
+      color: var(--primary-fg);
+      padding: 8px 14px;
+      border-radius: var(--r-ctrl);
+      font-weight: 600;
+    }
+    .skip-link:focus { left: 16px; }
+
+    /* =========================================================================
+       Shared Sticky Navigation & Mobile Drawer
+       ========================================================================= */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-paper);
+      border-bottom: 1px solid var(--line);
+    }
+    .header-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+      min-height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .brand:hover { text-decoration: none; }
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: linear-gradient(160deg, var(--ember-light), var(--ember));
+      color: #ffffff;
+      flex: none;
+    }
+    .brand-sub {
+      color: var(--quiet);
+      font-weight: 400;
+      font-size: 13px;
+      border-left: 1px solid var(--edge);
+      padding-left: 10px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .nav-links a {
+      color: var(--soft);
+      padding: 6px 10px;
+      border-radius: var(--r-ctrl);
+      font-size: 13.5px;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: var(--ink);
+      background: var(--surface-muted);
+      text-decoration: none;
+    }
+    .nav-links a.active {
+      font-weight: 600;
+      color: var(--flame);
+      background: var(--flame-tint);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Buttons (36px standard Thermite control height) */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 0 13px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--edge);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: var(--shadow-btn);
+    }
+    .btn:hover {
+      background: var(--surface-muted);
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg);
+    }
+    .btn-primary:hover {
+      background: #a9370a;
+      border-color: #a9370a;
+      color: var(--primary-fg);
+    }
+    .btn-sm {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 12.5px;
+    }
+    .menu-toggle { display: none; }
+
+    .mobile-drawer {
+      display: none;
+      border-top: 1px solid var(--line);
+      background: var(--bg-paper);
+      padding: 12px 20px 16px;
+    }
+    .mobile-drawer.open { display: block; }
+    .mobile-drawer-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .mobile-drawer-grid a {
+      display: flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: var(--r-ctrl);
+      color: var(--ink);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .mobile-drawer-grid a.active {
+      border-color: var(--flame);
+      background: var(--flame-tint);
+      color: var(--flame);
+      font-weight: 600;
+    }
+    .mobile-drawer-docs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    /* =========================================================================
+       Layout Rhythm & Sections
+       ========================================================================= */
+    .wrap {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .section {
+      padding: 54px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-paper { background: var(--bg-paper); }
+    .section-head {
+      max-width: 780px;
+      margin-bottom: 26px;
+    }
+    .section-head-split {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .section-head-split .section-head { margin-bottom: 0; }
+    .section-kicker {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+      margin: 0 0 6px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 3.6vw, 40px);
+      line-height: 1.15;
+      letter-spacing: -0.025em;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      line-height: 1.35;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    p { margin: 0 0 12px; color: var(--soft); }
+    p:last-child { margin-bottom: 0; }
+    .lead {
+      font-size: 15.5px;
+      line-height: 1.55;
+      color: var(--soft);
+    }
+
+    /* Semantic Chips (real state / track / category only) */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: var(--r-chip);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .chip-good { color: var(--good); background: var(--good-tint); }
+    .chip-working { color: var(--working); background: var(--working-tint); }
+    .chip-needs { color: var(--needs); background: var(--needs-tint); border-color: var(--needs-edge); }
+    .chip-wrong { color: var(--wrong); background: var(--wrong-tint); border-color: var(--wrong-edge); }
+    .chip-idle { color: var(--idle); background: var(--idle-tint); }
+    .chip-flame { color: var(--flame); background: var(--flame-tint); }
+
+    .state-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: currentColor;
+      flex: none;
+    }
+
+    /* Quick Jump Strip below Hero */
+    .jump-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .jump-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+      margin-right: 4px;
+    }
+    .jump-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+      color: var(--soft);
+      font-size: 12.5px;
+    }
+    .jump-link:hover {
+      background: var(--surface-muted);
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    /* Segmented Controls */
+    .segmented {
+      display: inline-flex;
+      background: var(--surface-muted);
+      padding: 3px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      gap: 2px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .segmented button {
+      min-height: 30px;
+      padding: 4px 12px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--soft);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .segmented button:hover { color: var(--ink); }
+    .segmented button[aria-selected="true"],
+    .segmented button[aria-pressed="true"] {
+      background: var(--bg);
+      color: var(--ink);
+      box-shadow: var(--shadow-btn);
+    }
+
+    /* Clean Tables */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      max-width: 100%;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+      background: var(--bg);
+    }
+    th {
+      background: var(--bg-paper);
+      color: var(--quiet);
+      font-weight: 600;
+      font-size: 12px;
+      line-height: 1.3;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      color: var(--soft);
+    }
+    tbody tr:last-child td { border-bottom: 0; }
+    td strong { color: var(--ink); font-weight: 600; }
+
+    /* Grid min-width safety */
+    .hero-grid > *,
+    .track-body > *,
+    .pipeline-layout > *,
+    .ia-layout > *,
+    .ia-q-grid > *,
+    .intake-two-col > *,
+    .redlines-grid > * {
+      min-width: 0;
+    }
+
+    /* =========================================================================
+       Section 1: Hero & v0.x Slop vs. v1 Discipline
+       ========================================================================= */
+    .hero-section {
+      padding: 44px 0 48px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      gap: 32px;
+      align-items: start;
+      margin-bottom: 30px;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .hero-summary-box {
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 18px 20px;
+    }
+    .hero-summary-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .hero-summary-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 9px;
+    }
+    .hero-summary-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      padding-top: 9px;
+      border-top: 1px solid var(--line);
+    }
+    .hero-summary-list li:first-child { padding-top: 0; border-top: 0; }
+    .hero-summary-list .k { color: var(--quiet); }
+    .hero-summary-list .v { color: var(--ink); font-weight: 600; text-align: right; }
+
+    /* Before/After Slop vs. Discipline Shift Cards */
+    .shift-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .shift-card {
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .shift-label {
+      font-size: 12px;
+      color: var(--quiet);
+      font-weight: 600;
+    }
+    .shift-compare {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .shift-old {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--quiet);
+      text-decoration: line-through;
+      text-decoration-color: var(--edge);
+    }
+    .shift-arrow {
+      color: var(--quiet);
+      font-size: 13px;
+    }
+    .shift-new {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.015em;
+    }
+    .shift-card[data-featured="true"] .shift-new { color: var(--flame); }
+    .shift-detail {
+      font-size: 12.5px;
+      color: var(--soft);
+      line-height: 1.45;
+    }
+
+    /* =========================================================================
+       Section 2: Interactive 4-Track Selector + Automatic Promotion Simulator
+       ========================================================================= */
+    .track-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .track-btn {
+      padding: 14px 15px;
+      border-radius: var(--r-card);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .track-btn:hover { border-color: var(--edge); background: var(--surface-muted); }
+    .track-btn[aria-selected="true"] {
+      border-color: var(--flame);
+      background: var(--flame-tint);
+    }
+    .track-btn-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+    .track-btn-name {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .track-btn[aria-selected="true"] .track-btn-name { color: var(--flame); }
+    .track-btn-sub {
+      font-size: 12px;
+      color: var(--soft);
+      line-height: 1.35;
+    }
+
+    .track-panel {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 20px 22px;
+    }
+    .promo-alert {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: var(--r-ctrl);
+      background: var(--needs-card);
+      border: 1px solid var(--needs-edge);
+      margin-bottom: 18px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .promo-alert[hidden] { display: none; }
+
+    .gate-rail {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .rail-cell {
+      padding: 10px 10px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .rail-cell[data-mode="required"] {
+      background: var(--bg);
+      border-color: var(--edge);
+    }
+    .rail-cell[data-mode="stop"] {
+      background: var(--wrong-tint);
+      border-color: var(--wrong-edge);
+    }
+    .rail-cell[data-mode="conditional"] {
+      background: var(--needs-card);
+      border-color: var(--needs-edge);
+    }
+    .rail-cell[data-mode="skip"] {
+      opacity: 0.65;
+    }
+    .rail-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--quiet);
+    }
+    .rail-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.25;
+    }
+    .rail-status {
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: auto;
+    }
+    .rail-cell[data-mode="required"] .rail-status { color: var(--good); }
+    .rail-cell[data-mode="stop"] .rail-status { color: var(--wrong); }
+    .rail-cell[data-mode="conditional"] .rail-status { color: var(--needs); }
+    .rail-cell[data-mode="skip"] .rail-status { color: var(--quiet); }
+
+    .track-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .spec-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .spec-row {
+      padding: 11px 13px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+    }
+    .spec-k {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--quiet);
+      margin-bottom: 3px;
+    }
+    .spec-v {
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.45;
+    }
+
+    .promo-box {
+      padding: 16px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+    }
+    .promo-box-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .promo-list {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+    }
+    .promo-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      cursor: pointer;
+      font-size: 12.5px;
+      color: var(--soft);
+      line-height: 1.4;
+    }
+    .promo-check:hover { border-color: var(--edge); color: var(--ink); }
+    .promo-check.is-active {
+      border-color: var(--needs);
+      background: var(--needs-card);
+      color: var(--ink);
+    }
+    .promo-check input {
+      margin: 2px 0 0;
+      accent-color: var(--primary);
+      flex: none;
+    }
+
+    /* =========================================================================
+       Section 3: Interactive 6-Gate Anti-Slop Firewall Pipeline
+       ========================================================================= */
+    .pipeline-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .diagram-frame {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 16px;
+    }
+    .diagram-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .diagram-hint {
+      font-size: 12.5px;
+      color: var(--quiet);
+    }
+    .gate-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .gate-node { cursor: pointer; }
+    .gate-node .node-box {
+      fill: var(--bg-paper);
+      stroke: var(--edge);
+      stroke-width: 1.35;
+    }
+    .gate-node:hover .node-box { stroke: var(--ink); }
+    .gate-node.is-stop .node-box {
+      fill: var(--needs-card);
+      stroke: var(--needs);
+      stroke-width: 1.6;
+    }
+    .gate-node.is-selected .node-box {
+      fill: var(--flame-tint);
+      stroke: var(--flame);
+      stroke-width: 2.25;
+    }
+    .gate-node.is-stop.is-selected .node-box {
+      fill: var(--wrong-tint);
+      stroke: var(--wrong);
+      stroke-width: 2.25;
+    }
+    .gate-node text { pointer-events: none; font-family: var(--font-sans); }
+    .gate-node .svg-num { fill: var(--quiet); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; }
+    .gate-node .svg-title { fill: var(--ink); font-size: 13px; font-weight: 600; }
+    .gate-node .svg-sub { fill: var(--soft); font-size: 11px; }
+    .gate-node.is-selected .svg-num,
+    .gate-node.is-selected .svg-title { fill: var(--flame); }
+    .gate-node.is-stop .svg-num { fill: var(--needs); }
+    .gate-node.is-stop.is-selected .svg-num,
+    .gate-node.is-stop.is-selected .svg-title { fill: var(--wrong); }
+
+    .svg-edge {
+      fill: none;
+      stroke: var(--edge);
+      stroke-width: 1.75;
+    }
+    .svg-edge.is-active {
+      stroke: var(--flame);
+      stroke-width: 2.4;
+    }
+    .svg-stop-bar {
+      fill: var(--wrong-tint);
+      stroke: var(--wrong-edge);
+      stroke-width: 1.25;
+    }
+    .svg-stop-text {
+      fill: var(--wrong);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+
+    .node-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .node-pill {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+      color: var(--soft);
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .node-pill:hover { background: var(--surface-muted); color: var(--ink); }
+    .node-pill[aria-pressed="true"] {
+      background: var(--flame-tint);
+      border-color: var(--flame);
+      color: var(--flame);
+      font-weight: 600;
+    }
+    .node-pill[data-stop="true"][aria-pressed="true"] {
+      background: var(--wrong-tint);
+      border-color: var(--wrong);
+      color: var(--wrong);
+    }
+
+    /* Sticky Inspector */
+    .inspector {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 20px;
+      position: sticky;
+      top: calc(var(--header-h) + 16px);
+      overflow-wrap: anywhere;
+    }
+    .inspector-kicker {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--flame);
+      margin-bottom: 4px;
+    }
+    .inspector-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 12px;
+    }
+    .inspector-section {
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .inspector-section h4 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+    }
+    .inspector-list {
+      margin: 0;
+      padding-left: 16px;
+      color: var(--soft);
+      font-size: 13px;
+      display: grid;
+      gap: 5px;
+    }
+    .inspector-list li strong { color: var(--ink); font-weight: 600; }
+    .inspector-callout {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      font-size: 12.5px;
+      color: var(--soft);
+    }
+    .inspector-callout.is-stop {
+      background: var(--wrong-tint);
+      border-color: var(--wrong-edge);
+      color: var(--ink);
+    }
+    .inspector-callout strong { color: var(--ink); }
+
+    .panel-box {
+      margin-top: 22px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 20px 22px;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    /* =========================================================================
+       Section 4: Interactive IA & Plugin Slot Map
+       ========================================================================= */
+    .plugin-lens-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .lens-chip {
+      min-height: 32px;
+      padding: 0 11px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--soft);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .lens-chip:hover { border-color: var(--edge); color: var(--ink); }
+    .lens-chip[aria-pressed="true"] {
+      background: var(--flame-tint);
+      border-color: var(--flame);
+      color: var(--flame);
+      font-weight: 600;
+    }
+
+    .ia-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Interactive Magnesium App Shell Wireframe */
+    .wireframe-shell {
+      border: 1px solid var(--edge);
+      border-radius: var(--r-card);
+      background: var(--bg);
+      overflow: hidden;
+    }
+    .wireframe-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-paper);
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--quiet);
+    }
+    .wireframe-grid {
+      display: grid;
+      grid-template-columns: 208px minmax(0, 1fr);
+      min-height: 410px;
+    }
+    .wf-sidebar {
+      background: var(--bg-paper);
+      border-right: 1px solid var(--line);
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .wf-group-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--quiet);
+      padding: 4px 8px 2px;
+    }
+    .wf-slot {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 12.5px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .wf-slot:hover { border-color: var(--ink); }
+    .wf-slot.is-plugin {
+      border-style: dashed;
+      border-color: var(--working);
+      background: var(--working-tint);
+      color: var(--ink);
+    }
+    .wf-slot.is-selected,
+    .wf-slot.is-matched {
+      border-style: solid;
+      border-color: var(--flame);
+      background: var(--flame-tint);
+      color: var(--flame);
+      font-weight: 600;
+    }
+    .wf-slot .wf-tag {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--quiet);
+    }
+    .wf-slot.is-selected .wf-tag,
+    .wf-slot.is-matched .wf-tag { color: var(--flame); }
+
+    .wf-sidebar-foot {
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+    }
+    .wf-lock-note {
+      font-size: 11px;
+      color: var(--quiet);
+      padding: 6px 8px;
+      border-radius: var(--r-sm);
+      background: var(--surface-muted);
+      line-height: 1.35;
+    }
+
+    .wf-canvas {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--bg);
+      position: relative;
+    }
+    .wf-zone {
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      padding: 11px 12px;
+      background: var(--bg-paper);
+    }
+    .wf-zone-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .wf-zone-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .wf-run-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 10px;
+    }
+    .wf-canvas-box {
+      padding: 10px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      font-size: 12px;
+      color: var(--soft);
+    }
+    .wf-row-slots {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .wf-corner-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 4px;
+    }
+    .wf-corner-btn {
+      width: auto;
+      padding: 7px 12px;
+    }
+
+    /* Subtraction Rule + 4 IA Questions */
+    .subtraction-card {
+      margin-top: 20px;
+      padding: 18px 20px;
+      border-radius: var(--r-card);
+      border: 1px solid var(--needs-edge);
+      background: var(--needs-card);
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+    }
+    .ia-q-grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .ia-q-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 15px 16px;
+    }
+    .ia-q-num {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--flame);
+      margin-bottom: 4px;
+    }
+
+    /* =========================================================================
+       Section 5: Interactive 12 Anti-Slop Red Lines Filter
+       ========================================================================= */
+    .redlines-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .search-input {
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--edge);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13.5px;
+      min-width: 220px;
+      flex: 0 1 300px;
+    }
+    .search-input::placeholder { color: var(--quiet); }
+
+    .redlines-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .redline-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 15px 17px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      overflow-wrap: anywhere;
+    }
+    .redline-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .redline-num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--wrong);
+    }
+    .redline-title {
+      margin: 0;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .redline-trigger {
+      font-size: 13px;
+      color: var(--soft);
+      line-height: 1.45;
+    }
+    .redline-fix {
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--quiet);
+    }
+    .redline-fix strong { color: var(--ink); }
+
+    .empty-state {
+      padding: 28px 20px;
+      text-align: center;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+    }
+
+    /* =========================================================================
+       Section 6: Requirements Intake & Phase Template Preview
+       ========================================================================= */
+    .intake-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .flow-step {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 15px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .flow-step-num {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--flame);
+    }
+    .flow-step-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .flow-step-desc {
+      font-size: 12.5px;
+      color: var(--soft);
+      line-height: 1.45;
+    }
+
+    .intake-two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 20px;
+      align-items: start;
+      margin-bottom: 22px;
+    }
+    .tree-pre {
+      padding: 12px 14px;
+      font-size: 11.8px;
+      line-height: 1.5;
+    }
+    .card-box {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 18px 20px;
+    }
+
+    .template-shell {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      overflow: hidden;
+    }
+    .template-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 18px;
+      background: var(--bg-paper);
+      border-bottom: 1px solid var(--line);
+    }
+    .template-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .template-pre {
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      max-height: 460px;
+      overflow: auto;
+      background: var(--bg);
+      padding: 16px 18px;
+      font-size: 12.2px;
+      line-height: 1.55;
+    }
+    .copy-status {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--good);
+    }
+
+    .cmd-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+    }
+    .cmd-bar code {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    /* =========================================================================
+       Footer (Compact Colophon)
+       ========================================================================= */
+    .site-footer {
+      background: var(--bg-paper);
+      padding: 32px 0 44px;
+      font-size: 13px;
+      color: var(--quiet);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+    }
+
+    /* =========================================================================
+       Responsive Breakpoints: 1080px / 860px / 540px
+       ========================================================================= */
+    @media (max-width: 1080px) {
+      .nav-links { display: none; }
+      .menu-toggle { display: inline-flex; }
+      .pipeline-layout { grid-template-columns: 1fr; }
+      .ia-layout { grid-template-columns: 1fr; }
+      .inspector { position: static; }
+      .track-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .gate-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .track-body { grid-template-columns: 1fr; }
+      .intake-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .intake-two-col { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 860px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 20px; }
+      .shift-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .wireframe-grid { grid-template-columns: 1fr; }
+      .wf-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+      .wf-run-split, .wf-row-slots { grid-template-columns: 1fr; }
+      .subtraction-card { grid-template-columns: 1fr; }
+      .ia-q-grid { grid-template-columns: 1fr; }
+      .redlines-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 540px) {
+      .wrap, .header-inner { padding-left: 16px; padding-right: 16px; }
+      .section { padding: 38px 0; }
+      .hero-section { padding: 28px 0 36px; }
+      .brand-sub { display: none; }
+      .header-doc-btn { display: none; }
+      .shift-grid { grid-template-columns: 1fr; }
+      .track-tabs { grid-template-columns: 1fr; }
+      .gate-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .intake-flow { grid-template-columns: 1fr; }
+      .search-input { width: 100%; min-width: 0; flex-basis: 100%; }
+      .track-panel, .panel-box, .card-box { padding: 15px; }
+      .wf-corner-row { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- =======================================================================
+       Shared Sticky Navigation
+       ======================================================================= -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="./index.html">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4" />
+          </svg>
+        </span>
+        <span>Thermite v1</span>
+        <span class="brand-sub">Feature Process</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Site navigation">
+        <a href="./index.html">Overview</a>
+        <a href="./process.html" class="active" aria-current="page">Process</a>
+        <a href="../mockups/index.html">UI Mockups</a>
+        <a href="../requirements.md">Requirements</a>
+        <a href="../phases/_template.md">Phase Template</a>
+      </nav>
+
+      <div class="header-actions">
+        <a class="btn btn-sm header-doc-btn" href="../process.md">process.md</a>
+        <button id="theme-toggle" class="btn btn-sm" type="button" aria-label="Switch color theme" aria-pressed="false">
+          <span id="theme-label">Dark</span>
+        </button>
+        <button id="menu-toggle" class="btn btn-sm menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-drawer">Menu</button>
+      </div>
+    </div>
+
+    <div id="mobile-drawer" class="mobile-drawer" aria-label="Mobile navigation">
+      <div class="mobile-drawer-grid">
+        <a href="./index.html">Overview</a>
+        <a href="./process.html" class="active" aria-current="page">Process</a>
+        <a href="../mockups/index.html">UI Mockups</a>
+        <a href="../requirements.md">Requirements</a>
+        <a href="../phases/_template.md">Phase Template</a>
+        <a href="../process.md">Canonical process.md</a>
+      </div>
+      <div class="mobile-drawer-docs">
+        <a class="btn btn-sm" href="#tracks">4 Tracks</a>
+        <a class="btn btn-sm" href="#gates">6-Gate Firewall</a>
+        <a class="btn btn-sm" href="#ia-slots">IA &amp; Plugin Slots</a>
+        <a class="btn btn-sm" href="#red-lines">12 Red Lines</a>
+        <a class="btn btn-sm" href="#intake">Intake &amp; Template</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- =====================================================================
+         SECTION 1: Hero & v0.x Slop vs. v1 Discipline
+         ===================================================================== -->
+    <section id="overview" class="hero-section">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div>
+            <h1>Anti-Slop Feature Process &amp; Requirements Capture</h1>
+            <p class="lead">
+              How Thermite v1 stops features from fumbling on top of each other and prevents UI from being shoved into UI.
+              Small bug fixes ship with zero ceremony; every new capability or visible surface clears six explicit gates and owner sign-off before production code starts.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#gates">Inspect 6-Gate Firewall</a>
+              <a class="btn" href="#ia-slots">IA &amp; Plugin Slots</a>
+              <a class="btn" href="../process.md">Read process.md</a>
+              <a class="btn" href="./index.html">Overview</a>
+            </div>
+            <div class="jump-strip" aria-label="On this page">
+              <span class="jump-label">Jump to:</span>
+              <a class="jump-link" href="#tracks">4 Tracks</a>
+              <a class="jump-link" href="#gates">6 Gates</a>
+              <a class="jump-link" href="#ia-slots">IA &amp; Plugin Slots</a>
+              <a class="jump-link" href="#red-lines">12 Red Lines</a>
+              <a class="jump-link" href="#intake">Intake &amp; Template</a>
+            </div>
+          </div>
+
+          <aside class="hero-summary-box" aria-label="Governance contract summary">
+            <div class="hero-summary-title">
+              <span>Active Governance Contract</span>
+              <span class="chip chip-good"><span class="state-dot" aria-hidden="true"></span>2026-11-28</span>
+            </div>
+            <ul class="hero-summary-list">
+              <li><span class="k">Proportional Tracks</span><span class="v">4 tracks · 5 auto-promotion rules</span></li>
+              <li><span class="k">Anti-Slop Firewall</span><span class="v">6 gates · Gate 5 hard stop-line</span></li>
+              <li><span class="k">Navigation &amp; UI Slots</span><span class="v">5 core nav + 6 bounded plugin slots</span></li>
+              <li><span class="k">Requirements Ledger</span><span class="v">46 REQs · 10 explicit DROP-* rules</span></li>
+              <li><span class="k">Local Check Target</span><span class="v">&lt; 2 min · zero --lower ratchets</span></li>
+              <li><span class="k">Auto-Reject Triggers</span><span class="v">12 hard red lines (process.md §4)</span></li>
+            </ul>
+          </aside>
+        </div>
+
+        <div class="shift-grid" aria-label="v0.x slop versus v1 discipline">
+          <article class="shift-card" data-featured="true">
+            <div class="shift-label">UI Shoved Into UI</div>
+            <div class="shift-compare">
+              <span class="shift-old">~45 page kinds · 9–11 run tabs</span>
+              <span class="shift-arrow" aria-hidden="true">→</span>
+              <span class="shift-new">5 core + 6 plugin slots</span>
+            </div>
+            <div class="shift-detail">
+              Replaces 9 nav items, hidden Settings, 2 orphan routes, 11 duplicate decision signals, 45-control forms, and 10 prose walls with mandatory Gate 4 subtraction + offline HTML mockups.
+            </div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Cross-Surface Parity</div>
+            <div class="shift-compare">
+              <span class="shift-old">42/90 UI-only form routes</span>
+              <span class="shift-arrow" aria-hidden="true">→</span>
+              <span class="shift-new">1 core/api ActionDef</span>
+            </div>
+            <div class="shift-detail">
+              Ends 124 store reads vs. 48 in REST/MCP and HTML-only "Needs you". REST, policy-filtered MCP, typed client, CLI, and docs derive from one declaration.
+            </div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Ceremony &amp; Goal Sprawl</div>
+            <div class="shift-compare">
+              <span class="shift-old">270+ .goal · 35-step sheet</span>
+              <span class="shift-arrow" aria-hidden="true">→</span>
+              <span class="shift-new">4 tracks + single-file phases</span>
+            </div>
+            <div class="shift-detail">
+              Deletes the 35-step serial run sheet (13 ground steps before the first screen) and lockstep <code>run-sheet.test.ts</code> in favor of living <code>REQ-NNN</code> rows + phase briefs.
+            </div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Check Ratchets &amp; CSS Bans</div>
+            <div class="shift-compare">
+              <span class="shift-old">--lower traps · 5+ min suites</span>
+              <span class="shift-arrow" aria-hidden="true">→</span>
+              <span class="shift-new">&lt; 2 min lean checks</span>
+            </div>
+            <div class="shift-detail">
+              Kills <code>size-baseline.json</code>, <code>import-exceptions.json</code>, <code>loose-ends.json</code>, forced 700/800-LOC splits, and regex <code>className=</code> bans. Uses workspace <code>exports</code> + ~25-LOC token check.
+            </div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Delegation &amp; Security Locks</div>
+            <div class="shift-compare">
+              <span class="shift-old">28 OWNER_ONLY_KINDS</span>
+              <span class="shift-arrow" aria-hidden="true">→</span>
+              <span class="shift-new">Composable PolicyGrant</span>
+            </div>
+            <div class="shift-detail">
+              Replaces hardcoded human-only locks with <code>viewer</code>, <code>operator</code>, <code>autonomous_delegate</code>, and <code>owner</code>; internal <code>run_worker</code>/<code>run_advisor</code> stay walled from Door &amp; Judge.
+            </div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Verification Craft</div>
+            <div class="shift-compare">
+              <span class="shift-old">105 HTML scrapers / 0 tests</span>
+              <span class="shift-arrow" aria-hidden="true">→</span>
+              <span class="shift-new">Sans-I/O + real pixels</span>
+            </div>
+            <div class="shift-detail">
+              Pairs millisecond Sans-I/O reducer, contract, and conformance suites with real browser inspection of changed screens at <code>1440px</code> &amp; <code>390px</code> in light and dark mode.
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 2: Interactive 4-Track Selector + Auto-Promotion Simulator
+         ===================================================================== -->
+    <section id="tracks" class="section section-paper">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-kicker">Section 2 · process.md §2</div>
+          <h2>Four Proportional Change Tracks</h2>
+          <p>
+            Match rigor to blast radius. Never bury a bug fix in feature ceremony, and never smuggle a new capability, table, hook, or UI surface through a "small change".
+            Select a track below and test the five automatic promotion triggers live.
+          </p>
+        </div>
+
+        <div class="track-tabs" role="tablist" aria-label="Change tracks">
+          <button class="track-btn" type="button" role="tab" data-track="fix" aria-selected="false">
+            <div class="track-btn-top">
+              <span class="track-btn-name">Fix</span>
+              <span class="chip chip-good">Zero ceremony</span>
+            </div>
+            <span class="track-btn-sub">Bug, crash, race condition, broken link, or visual regression.</span>
+          </button>
+
+          <button class="track-btn" type="button" role="tab" data-track="change" aria-selected="false">
+            <div class="track-btn-top">
+              <span class="track-btn-name">Change</span>
+              <span class="chip chip-working">Brief + diff</span>
+            </div>
+            <span class="track-btn-sub">Small UX, copy, CLI flag, or tweak to an existing <code>REQ-NNN</code>.</span>
+          </button>
+
+          <button class="track-btn" type="button" role="tab" data-track="feature" aria-selected="true">
+            <div class="track-btn-top">
+              <span class="track-btn-name">Feature / Plugin</span>
+              <span class="chip chip-wrong">Gate 5 Stop</span>
+            </div>
+            <span class="track-btn-sub">New capability, plugin, <code>ActionDef</code>, hook, table, setting, or UI.</span>
+          </button>
+
+          <button class="track-btn" type="button" role="tab" data-track="phase" aria-selected="false">
+            <div class="track-btn-top">
+              <span class="track-btn-name">Phase / Architecture</span>
+              <span class="chip chip-wrong">/grill-me Stop</span>
+            </div>
+            <span class="track-btn-sub">Multi-goal foundation, core redesign, or breaking <code>PluginApi</code>.</span>
+          </button>
+        </div>
+
+        <div class="track-panel" role="tabpanel" aria-live="polite">
+          <div id="promo-alert" class="promo-alert" hidden>
+            <div>
+              <strong>Auto-Promoted to Feature / Plugin:</strong>
+              <span id="promo-alert-text"></span>
+            </div>
+            <button id="promo-reset" class="btn btn-sm" type="button">Clear triggers</button>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div>
+              <h3 id="track-title" style="margin:0;">Feature / Plugin</h3>
+            </div>
+            <span id="track-badge" class="chip chip-wrong">Gate 5 Hard Stop</span>
+          </div>
+
+          <div id="track-gate-rail" class="gate-rail" aria-label="Gate applicability for selected track"></div>
+
+          <div class="track-body">
+            <div id="track-specs" class="spec-grid"></div>
+
+            <div class="promo-box">
+              <div class="promo-box-head">
+                <h3 style="font-size:14px;margin:0;">Automatic Promotion Triggers</h3>
+                <span class="chip chip-needs">Fix / Change → Feature</span>
+              </div>
+              <p style="font-size:12.5px;margin-bottom:8px;">
+                A <code>Fix</code> or <code>Change</code> promotes immediately to <strong>Feature / Plugin</strong> (requiring a phase doc and Gate 5 owner sign-off) if it adds any of these five items:
+              </p>
+              <div id="promo-triggers" class="promo-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 3: Interactive 6-Gate Anti-Slop Firewall Pipeline
+         ===================================================================== -->
+    <section id="gates" class="section">
+      <div class="wrap">
+        <div class="section-head-split">
+          <div class="section-head">
+            <div class="section-kicker">Section 3 · process.md §3</div>
+            <h2>The 6 Mandatory Gates (Anti-Slop Firewall)</h2>
+            <p>
+              Every <code>Feature / Plugin</code> and <code>Phase / Architecture</code> item walks these six gates in strict order.
+              Click any gate in the diagram or step through with Previous / Next to inspect inputs, proofs, reject triggers, and sign-off rules.
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="gate-prev" class="btn btn-sm" type="button">Previous gate</button>
+            <button id="gate-next" class="btn btn-sm" type="button">Next gate</button>
+          </div>
+        </div>
+
+        <div class="pipeline-layout">
+          <div class="diagram-frame">
+            <div class="diagram-toolbar">
+              <span class="diagram-hint">Click any gate node (or press Tab + Enter) to inspect its contract</span>
+              <span class="chip chip-wrong"><span class="state-dot" aria-hidden="true"></span>Zero code before Gate 5</span>
+            </div>
+
+            <svg class="gate-svg" viewBox="0 0 760 410" role="img" aria-label="Interactive 6-gate Anti-Slop Firewall pipeline from Gate 1 Intake to Gate 6 Lean Build with Gate 5 Hard Stop-Line">
+              <defs>
+                <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--edge)"></path>
+                </marker>
+                <marker id="arrow-flame" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--flame)"></path>
+                </marker>
+              </defs>
+
+              <!-- Edges between gates -->
+              <path class="svg-edge" data-gate-edge="1-2" d="M 355 58 L 405 58" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-gate-edge="2-3" d="M 575 96 L 575 118 L 185 118 L 185 138" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-gate-edge="3-4" d="M 355 178 L 405 178" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-gate-edge="4-5" d="M 575 216 L 575 246 L 185 246 L 185 294" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-gate-edge="5-6" d="M 355 344 L 405 344" marker-end="url(#arrow-muted)"></path>
+
+              <!-- HARD STOP-LINE BARRIER -->
+              <rect class="svg-stop-bar" x="18" y="254" width="724" height="26" rx="6"></rect>
+              <text class="svg-stop-text" x="380" y="271" text-anchor="middle">HARD STOP-LINE · ZERO PRODUCTION CODE BEFORE GATE 5 OWNER SIGN-OFF</text>
+
+              <!-- Gate 1 -->
+              <g class="gate-node" data-gate="1" tabindex="0" role="button" aria-label="Gate 1: Intake and Evidence">
+                <rect class="node-box" x="20" y="20" width="335" height="76" rx="12"></rect>
+                <text class="svg-num" x="36" y="42">GATE 1 · INTAKE</text>
+                <text class="svg-title" x="36" y="61">Intake &amp; Evidence (REQ-NNN)</text>
+                <text class="svg-sub" x="36" y="80">GitHub issue + observed friction · zero speculation</text>
+              </g>
+
+              <!-- Gate 2 -->
+              <g class="gate-node" data-gate="2" tabindex="0" role="button" aria-label="Gate 2: Research and Prior Art">
+                <rect class="node-box" x="405" y="20" width="335" height="76" rx="12"></rect>
+                <text class="svg-num" x="421" y="42">GATE 2 · RESEARCH DIRECTIVE</text>
+                <text class="svg-title" x="421" y="61">Research, Prior Art &amp; LOC Bound</text>
+                <text class="svg-sub" x="421" y="80">Inspect code · benchmark unknowns · declare cut order</text>
+              </g>
+
+              <!-- Gate 3 -->
+              <g class="gate-node" data-gate="3" tabindex="0" role="button" aria-label="Gate 3: Core-or-Plugin and Surface Parity">
+                <rect class="node-box" x="20" y="140" width="335" height="76" rx="12"></rect>
+                <text class="svg-num" x="36" y="162">GATE 3 · BOUNDARY &amp; PARITY</text>
+                <text class="svg-title" x="36" y="181">Core-or-Plugin &amp; Surface Parity</text>
+                <text class="svg-sub" x="36" y="200">Plugin default · 1 ActionDef · PolicyGrant · Wall/Judge</text>
+              </g>
+
+              <!-- Gate 4 -->
+              <g class="gate-node" data-gate="4" tabindex="0" role="button" aria-label="Gate 4: UX Discovery, 5-Slot IA and Mockup">
+                <rect class="node-box" x="405" y="140" width="335" height="76" rx="12"></rect>
+                <text class="svg-num" x="421" y="162">GATE 4 · ANTI-"UI SHOVED INTO UI"</text>
+                <text class="svg-title" x="421" y="181">UX Discovery, 5-Slot IA &amp; Mockup</text>
+                <text class="svg-sub" x="421" y="200">4 IA questions · subtraction · 1440/390 light/dark HTML</text>
+              </g>
+
+              <!-- Gate 5 (HARD STOP) -->
+              <g class="gate-node is-stop" data-gate="5" tabindex="0" role="button" aria-label="Gate 5: Owner Review and /grill-me Hard Stop-Line">
+                <rect class="node-box" x="20" y="296" width="335" height="94" rx="12"></rect>
+                <text class="svg-num" x="36" y="319">GATE 5 · HARD STOP-LINE</text>
+                <text class="svg-title" x="36" y="340">Owner Review &amp; /grill-me Sign-Off</text>
+                <text class="svg-sub" x="36" y="360">Phase doc + mockup + open calls w/ defaults</text>
+                <text class="svg-sub" x="36" y="376">Owner Sign-Off box ticked before line 1 of code</text>
+              </g>
+
+              <!-- Gate 6 -->
+              <g class="gate-node" data-gate="6" tabindex="0" role="button" aria-label="Gate 6: Lean Build, under 2 minute checks and Honest Close-Out">
+                <rect class="node-box" x="405" y="296" width="335" height="94" rx="12"></rect>
+                <text class="svg-num" x="421" y="319">GATE 6 · BUILD &amp; CLOSE-OUT</text>
+                <text class="svg-title" x="421" y="340">Lean Build, &lt; 2m Checks &amp; Close-Out</text>
+                <text class="svg-sub" x="421" y="360">Plain TS · real browser look · honest build deltas</text>
+                <text class="svg-sub" x="421" y="376">Human checks → git mv phases/_completed/</text>
+              </g>
+            </svg>
+
+            <div class="node-pills" role="group" aria-label="Select gate">
+              <button class="node-pill" type="button" data-select-gate="1" aria-pressed="false">1 · Intake</button>
+              <button class="node-pill" type="button" data-select-gate="2" aria-pressed="false">2 · Research</button>
+              <button class="node-pill" type="button" data-select-gate="3" aria-pressed="false">3 · Core/Plugin</button>
+              <button class="node-pill" type="button" data-select-gate="4" aria-pressed="false">4 · IA &amp; Mockup</button>
+              <button class="node-pill" type="button" data-select-gate="5" data-stop="true" aria-pressed="true">5 · Hard Stop</button>
+              <button class="node-pill" type="button" data-select-gate="6" aria-pressed="false">6 · Build &amp; Close</button>
+            </div>
+          </div>
+
+          <aside id="gate-inspector" class="inspector" aria-live="polite" aria-label="Selected gate details"></aside>
+        </div>
+
+        <!-- Gate 6 Verification Matrix -->
+        <div class="panel-box">
+          <div class="panel-header">
+            <div>
+              <h3 style="margin-bottom:2px;">Gate 6 Verification Matrix &amp; Schema Rules</h3>
+              <p style="font-size:13px;margin:0;">Fast local loops stay under 2 minutes; heavy real-service checks live in CI and release gates. Never report a check green unless it actually ran.</p>
+            </div>
+            <span class="chip chip-good">Target: &lt; 2 min local</span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:20%;">Scope</th>
+                  <th>Required Checks</th>
+                  <th style="width:17%;">Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Every commit (local)</strong></td>
+                  <td><code>npm run typecheck</code>, <code>npm run lint</code> (Biome + <code>noFloatingPromises</code>), <code>node scripts/checks/public.mjs --untracked</code> (<code>0</code> hits), <code>npm test</code> (Sans-I/O reducers, judge math, API/policy contracts, conformance suites)</td>
+                  <td class="mono"><strong>&lt; 2 min</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>UI / Magnesium changes</strong></td>
+                  <td><code>npm run build:ui</code>, ~25-LOC design-system boundary/token-parity check, and <strong>real browser inspection</strong> of every changed screen at <code>1440px</code> &amp; <code>390px</code> in light and dark mode (zero console errors, failed requests, clipped controls, or horizontal overflow)</td>
+                  <td class="mono">&lt; 2 min + pixels</td>
+                </tr>
+                <tr>
+                  <td><strong>Docs &amp; attribution</strong></td>
+                  <td>Regenerate REST/MCP/CLI docs from <code>core/api</code>, update affected <code>docs/_site/</code> pages, and update <code>CREDITS.md</code> in the same commit</td>
+                  <td class="mono">Same commit</td>
+                </tr>
+                <tr>
+                  <td><strong>CI / release gate</strong></td>
+                  <td>Real PostgreSQL 18 (<code>pgvector/pgvector:0.8.x-pg18-trixie</code>), live NATS JetStream, compose smoke, browser check, and <code>gitleaks</code> full-history scan</td>
+                  <td class="mono">CI / tag</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12.5px;color:var(--soft);">
+            <div><strong style="color:var(--ink);">Migrations:</strong> Every schema change is a new numbered SQL migration (<code>plugin_&lt;name&gt;</code> for plugins; never edit shipped migrations).</div>
+            <div><strong style="color:var(--ink);">Compatibility:</strong> Breaking <code>PluginApi</code> edits require <code>packages/core/src/plugin/plugin-breaks.json</code> + changelog note; additive hooks raise <code>minThermite</code>.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 4: Interactive IA & Plugin Slot Map
+         ===================================================================== -->
+    <section id="ia-slots" class="section section-paper">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-kicker">Section 4 · process.md §3 Gate 4 &amp; design-plan.md §3</div>
+          <h2>IA &amp; Plugin Slot Map (Anti-"UI Shoved Into UI")</h2>
+          <p>
+            Core navigation is locked at five slots—never a sixth. Uninstalled plugins render <code>0</code> DOM nodes and add <code>0 KB</code> to the client bundle.
+            Installed plugins mount strictly into six named slots. Click a plugin or any slot in the app shell to inspect its exact placement rules.
+          </p>
+        </div>
+
+        <div class="plugin-lens-bar" role="group" aria-label="Highlight plugin placement">
+          <span class="jump-label">Highlight plugin:</span>
+          <button class="lens-chip" type="button" data-plugin-lens="none" aria-pressed="true">All slots</button>
+          <button class="lens-chip" type="button" data-plugin-lens="git-sync" aria-pressed="false">git-sync</button>
+          <button class="lens-chip" type="button" data-plugin-lens="live-publish" aria-pressed="false">live-publish</button>
+          <button class="lens-chip" type="button" data-plugin-lens="web-pairing" aria-pressed="false">web-pairing</button>
+          <button class="lens-chip" type="button" data-plugin-lens="knowledge-semantic" aria-pressed="false">knowledge-semantic</button>
+          <button class="lens-chip" type="button" data-plugin-lens="thermy" aria-pressed="false">thermy</button>
+          <button class="lens-chip" type="button" data-plugin-lens="sql-explorer" aria-pressed="false">sql-explorer</button>
+          <button class="lens-chip" type="button" data-plugin-lens="distill-jsonl" aria-pressed="false">distill-jsonl</button>
+        </div>
+
+        <div class="ia-layout">
+          <div class="wireframe-shell" aria-label="Interactive Thermite v1 navigation and plugin slot map">
+            <div class="wireframe-bar">
+              <span><strong>Thermite v1 App Shell</strong> · Solid = 5 locked core nav slots · Dashed = 6 bounded plugin slots</span>
+              <span class="chip chip-idle">0 KB uninstalled</span>
+            </div>
+
+            <div class="wireframe-grid">
+              <!-- Sidebar: 5 Core Slots + nav.item -->
+              <div class="wf-sidebar" aria-label="Core navigation sidebar">
+                <div class="wf-group-label">Core Operational Views</div>
+                <button class="wf-slot" type="button" data-slot-id="core-home">
+                  <span>Home</span>
+                  <span class="wf-tag">Core 1/5</span>
+                </button>
+                <button class="wf-slot" type="button" data-slot-id="core-compute">
+                  <span>Compute</span>
+                  <span class="wf-tag">Core 2/5</span>
+                </button>
+                <button class="wf-slot" type="button" data-slot-id="core-knowledge">
+                  <span>Knowledge</span>
+                  <span class="wf-tag">Core 3/5</span>
+                </button>
+
+                <div class="wf-group-label" style="margin-top:4px;">Plugin Sidebar Slot</div>
+                <button class="wf-slot is-plugin" type="button" data-slot-id="slot-nav-item">
+                  <span>nav.item</span>
+                  <span class="wf-tag">≤ 1/plugin</span>
+                </button>
+
+                <div class="wf-group-label" style="margin-top:4px;">Active Research</div>
+                <button class="wf-slot" type="button" data-slot-id="core-campaigns">
+                  <span>Campaigns (+)</span>
+                  <span class="wf-tag">Core 4/5</span>
+                </button>
+
+                <div class="wf-sidebar-foot">
+                  <button class="wf-slot" type="button" data-slot-id="core-setup">
+                    <span>Setup</span>
+                    <span class="wf-tag">Core 5/5</span>
+                  </button>
+                  <div class="wf-lock-note">Core nav never adds a 6th core slot. Zero <code>rig</code> screens.</div>
+                </div>
+              </div>
+
+              <!-- Main Workspace Canvas: 5 other Plugin Slots in Context -->
+              <div class="wf-canvas" aria-label="Workspace plugin attachment zones">
+                <div class="wf-zone">
+                  <div class="wf-zone-head">
+                    <span class="wf-zone-title">Run Workspace (under Campaigns)</span>
+                    <button class="wf-slot is-plugin" style="width:auto;" type="button" data-slot-id="slot-run-header">
+                      <span>run.header.action</span>
+                      <span class="wf-tag">switch / button</span>
+                    </button>
+                  </div>
+                  <div class="wf-run-split">
+                    <div class="wf-canvas-box">
+                      <strong style="color:var(--ink);">Main Run Canvas</strong><br>
+                      Speedup step chart, champion lineage, <code>git-sync</code> status popover, attempts &amp; steer.
+                    </div>
+                    <div class="wf-canvas-box" style="display:flex;flex-direction:column;gap:8px;">
+                      <div><strong style="color:var(--ink);">BesidePanel Inspector</strong> (1 side panel max)</div>
+                      <button class="wf-slot is-plugin" type="button" data-slot-id="slot-run-tab">
+                        <span>run.inspector.tab</span>
+                        <span class="wf-tag">1 tab</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="wf-row-slots">
+                  <div class="wf-zone">
+                    <div class="wf-zone-head">
+                      <span class="wf-zone-title">Knowledge Search Bar</span>
+                    </div>
+                    <p style="font-size:12px;margin-bottom:8px;">Trailing edge compact toggle or filter chip; no extra top-level tabs.</p>
+                    <button class="wf-slot is-plugin" type="button" data-slot-id="slot-kb-toolbar">
+                      <span>knowledge.toolbar</span>
+                      <span class="wf-tag">chip / toggle</span>
+                    </button>
+                  </div>
+
+                  <div class="wf-zone">
+                    <div class="wf-zone-head">
+                      <span class="wf-zone-title">Setup (SettingsShell Rail)</span>
+                    </div>
+                    <p style="font-size:12px;margin-bottom:8px;">One dedicated tab + pane inside Setup for plugin configuration.</p>
+                    <button class="wf-slot is-plugin" type="button" data-slot-id="slot-setup-section">
+                      <span>setup.section</span>
+                      <span class="wf-tag">1 tab + pane</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="wf-corner-row">
+                  <span style="font-size:12px;color:var(--quiet);">
+                    Home never accepts custom plugin widgets above active runs—plugins surface holds as standard <code>need</code> items.
+                  </span>
+                  <button class="wf-slot is-plugin wf-corner-btn" type="button" data-slot-id="slot-shell-corner">
+                    <span>shell.corner</span>
+                    <span class="wf-tag">launcher</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside id="ia-inspector" class="inspector" aria-live="polite" aria-label="Selected slot or plugin details"></aside>
+        </div>
+
+        <!-- Mandatory Subtraction Rule & 4 IA Questions -->
+        <div class="subtraction-card">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+              <span class="chip chip-needs">Gate 4 · Mandatory Rule</span>
+              <h3 style="margin:0;">The Subtraction Rule</h3>
+            </div>
+            <p style="color:var(--ink);font-size:13.5px;margin:0;">
+              Before adding any control, row, badge, or tab to an existing screen, the phase doc must name explicitly
+              <strong>what gets removed, merged, or collapsed</strong> so the screen stays calm.
+              One primary action per screen, zero nested cards, and zero multi-sentence prose walls above data.
+            </p>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--needs-edge);border-radius:var(--r-ctrl);padding:12px 14px;font-size:12.5px;color:var(--soft);">
+            <strong style="color:var(--ink);display:block;margin-bottom:4px;">Offline Mockup Before Code</strong>
+            Verify <strong>Light &amp; Dark</strong> (<code>@iammrduncan/magnesium</code> <code>thermite.css</code>) at <code>1440px</code> &amp; <code>390px</code> with realistic long names, empty, active, and error states. Mock up two directions side-by-side when layout trade-offs are non-obvious.
+          </div>
+        </div>
+
+        <div class="ia-q-grid" aria-label="Remaining Gate 4 mandatory IA questions">
+          <article class="ia-q-card">
+            <div class="ia-q-num">IA QUESTION 1 · PLACEMENT</div>
+            <h3>Single Named Home</h3>
+            <p style="font-size:13px;">
+              Name the single core slot (<code>Home</code>, <code>Compute</code>, <code>Knowledge</code>, <code>Campaigns</code>, <code>Setup</code>) or one of the 6 plugin slots that owns the UI. Core nav never adds a 6th core slot.
+            </p>
+          </article>
+
+          <article class="ia-q-card">
+            <div class="ia-q-num">IA QUESTION 3 · ONE HOME, ONE WORD</div>
+            <h3>Single Vocabulary</h3>
+            <p style="font-size:13px;">
+              Every fact has one primary home (other screens link in one line) and uses <code>design-plan.md</code>'s exact vocabulary: <code>machine › device</code>, <code>Needs you</code>, <code>Attempt</code>, <code>Verdict</code>.
+            </p>
+          </article>
+
+          <article class="ia-q-card">
+            <div class="ia-q-num">IA QUESTION 4 · EDGE STATES</div>
+            <h3>Empty, Dense &amp; Error</h3>
+            <p style="font-size:13px;">
+              Define what a first-time user sees, what auto-hides when empty (like Home's Readiness Strip), and the exact actionable error sentence when a check fails.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 5: Interactive 12 Anti-Slop Red Lines Filter
+         ===================================================================== -->
+    <section id="red-lines" class="section">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-kicker">Section 5 · process.md §4</div>
+          <h2>12 Hard Anti-Slop Red Lines (Automatic Reject)</h2>
+          <p>
+            Any proposal, phase doc, or pull request hitting even one red line is rejected immediately—fix the change, never weaken the check.
+            Filter by discipline or search triggers below.
+          </p>
+        </div>
+
+        <div class="redlines-toolbar">
+          <div class="segmented" role="group" aria-label="Filter red lines by category">
+            <button type="button" data-rl-cat="all" aria-pressed="true">All (12)</button>
+            <button type="button" data-rl-cat="ux" aria-pressed="false">UX &amp; IA (5)</button>
+            <button type="button" data-rl-cat="arch" aria-pressed="false">Architecture &amp; Security (4)</button>
+            <button type="button" data-rl-cat="code" aria-pressed="false">Code, Tests &amp; Prose (3)</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span id="rl-count" style="font-size:12.5px;color:var(--quiet);" class="mono">12 of 12 shown</span>
+            <label for="rl-search" class="skip-link">Search red lines</label>
+            <input id="rl-search" class="search-input" type="search" placeholder="Search triggers (e.g. ActionDef, rig, catch)..." autocomplete="off">
+          </div>
+        </div>
+
+        <div id="redlines-grid" class="redlines-grid"></div>
+
+        <div id="redlines-empty" class="empty-state" hidden>
+          <h3>No red lines match this filter</h3>
+          <p style="margin-bottom:14px;">Try another keyword or clear the active category filter to view all 12 automatic-reject triggers.</p>
+          <button id="rl-reset" class="btn btn-sm" type="button">Reset filters</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 6: Requirements Intake & Phase Template Preview
+         ===================================================================== -->
+    <section id="intake" class="section section-paper">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-kicker">Section 6 · requirements.md &amp; phases/_template.md</div>
+          <h2>Requirements Intake &amp; Phase Template</h2>
+          <p>
+            Thermite v1 replaces v0.x's 272-file <code>.goal</code> graveyard with one living requirements ledger wired directly into Gate 1, temporary single-file phase briefs, and honest Gate 6 close-outs.
+          </p>
+        </div>
+
+        <div class="intake-flow" aria-label="Requirements to completed phase flow">
+          <article class="flow-step">
+            <span class="flow-step-num">STEP 1 · RAW INTAKE</span>
+            <span class="flow-step-title">Issue / PR / Field Pain</span>
+            <span class="flow-step-desc">
+              Mined from <strong>51 public issues</strong> (<code>#20</code>–<code>#116</code>), <strong>67 PRs</strong> (<code>14</code> external contributors), and multi-day field runs. Zero speculative ideas.
+            </span>
+          </article>
+
+          <article class="flow-step">
+            <span class="flow-step-num">STEP 2 · LIVING CONTRACT</span>
+            <span class="flow-step-title">REQ-NNN in requirements.md</span>
+            <span class="flow-step-desc">
+              <strong>46 active REQs</strong> (<code>45</code> Accepted, <code>1</code> Proposed) + <strong>10 DROP-*</strong> rules mapped to Waves <code>v1.0</code>–<code>v1.3</code> and Goals <code>1</code>–<code>14</code>. Never renumbered.
+            </span>
+          </article>
+
+          <article class="flow-step">
+            <span class="flow-step-num">STEP 3 · BUILD BRIEF</span>
+            <span class="flow-step-title">phases/&lt;slug&gt;.md</span>
+            <span class="flow-step-desc">
+              Copied from <code>phases/_template.md</code>. Completes Gates 1–4 + mockup, locks Open Questions &amp; Gate 5 Sign-Off, then runs via <code>/goal</code>.
+            </span>
+          </article>
+
+          <article class="flow-step">
+            <span class="flow-step-num">STEP 4 · HONEST CLOSE-OUT</span>
+            <span class="flow-step-title">phases/_completed/</span>
+            <span class="flow-step-desc">
+              Records plan-vs-built deltas &amp; actual LOC, updates <code>REQ-NNN</code> → <code>Verified</code>, passes owner Human checks, and <code>git mv</code>s in one commit.
+            </span>
+          </article>
+        </div>
+
+        <div class="intake-two-col">
+          <div class="card-box">
+            <div class="panel-header" style="margin-bottom:12px;">
+              <h3 style="margin:0;">Ledger &amp; Traceability Explorer</h3>
+              <div class="segmented" role="tablist" aria-label="Requirements ledger views">
+                <button type="button" role="tab" data-intake-tab="waves" aria-selected="true">Waves (46)</button>
+                <button type="button" role="tab" data-intake-tab="drops" aria-selected="false">10 DROP-*</button>
+                <button type="button" role="tab" data-intake-tab="states" aria-selected="false">States &amp; Loop</button>
+              </div>
+            </div>
+
+            <div id="intake-view-waves">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Wave</th>
+                      <th>Goals</th>
+                      <th>REQs</th>
+                      <th>Scope</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="chip chip-flame">v1.0 MVP</span></td>
+                      <td class="mono">Goals 1–8</td>
+                      <td class="mono"><strong>35</strong></td>
+                      <td>Core workspace, Sans-I/O, Control/Runner, <code>harness-libfx</code>, walls, modes, <code>git-sync</code>, PG 18 KB, CLI/UI, <code>setup.sh</code></td>
+                    </tr>
+                    <tr>
+                      <td><span class="chip chip-working">v1.1 Plugins</span></td>
+                      <td class="mono">Goals 9–10</td>
+                      <td class="mono"><strong>4</strong></td>
+                      <td>External CLI harnesses (<code>REQ-020</code>–<code>021</code>), extra devices/cloud (<code>REQ-026</code>), GitLab/Gitea PRs (<code>REQ-037</code>)</td>
+                    </tr>
+                    <tr>
+                      <td><span class="chip chip-good">v1.2 Plugins</span></td>
+                      <td class="mono">Goals 11–13</td>
+                      <td class="mono"><strong>5</strong></td>
+                      <td><code>web-pairing</code> &amp; PWA (<code>REQ-041</code>), <code>live-publish</code> (<code>REQ-045</code>), <code>distill-jsonl</code> (<code>REQ-038</code>), semantic/ext KB (<code>REQ-029</code>–<code>030</code>)</td>
+                    </tr>
+                    <tr>
+                      <td><span class="chip chip-needs">v1.3 Plugins</span></td>
+                      <td class="mono">Goal 14</td>
+                      <td class="mono"><strong>2</strong></td>
+                      <td><code>thermy</code> copilot &amp; <code>sql-explorer</code> (<code>REQ-042</code>), optional community/notebook packs (<code>REQ-046</code>, <code>Proposed</code>)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="cmd-bar">
+                <code id="req-row-snippet">| `REQ-NNN` | `v1.x` · `Goal N` · `Proposed` | As a **&lt;Persona&gt;**, I want &lt;capability&gt;, so that &lt;outcome&gt;. | **Accept:** &lt;behavior&gt;. **Parity:** `core/api` `&lt;action&gt;`. | `#&lt;issue&gt;` |</code>
+                <button id="copy-req-row" class="btn btn-sm" type="button">Copy REQ row</button>
+              </div>
+            </div>
+
+            <div id="intake-view-drops" hidden>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:92px;">ID</th>
+                      <th>Dropped v0.x Pattern</th>
+                      <th>v1 Replacement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td class="mono"><strong>DROP-01</strong></td><td><code>rig</code> abstraction &amp; per-rig ledgers</td><td>Shared <code>machine › device</code> pool + thin runners</td></tr>
+                    <tr><td class="mono"><strong>DROP-02</strong></td><td>28 hardcoded <code>OWNER_ONLY_KINDS</code></td><td>Composable <code>PolicyGrant</code> (<code>autonomous_delegate</code>)</td></tr>
+                    <tr><td class="mono"><strong>DROP-03</strong></td><td>11.6k-LOC sync SQLite word-index KB</td><td>Async PG 18 FTS + <code>pg_trgm</code> (&le; 1,100 LOC)</td></tr>
+                    <tr><td class="mono"><strong>DROP-04</strong></td><td>Giant tarball exports &amp; manual <code>.patch</code></td><td><code>git-sync</code> (<code>push|pr|tag|none</code>) + <code>thermite pull</code></td></tr>
+                    <tr><td class="mono"><strong>DROP-05</strong></td><td>Multi-agent folder-sync <code>live</code> deploy</td><td>Per-run <code>live</code> toggle on sanitized <code>t.live.&lt;run&gt;.&gt;</code></td></tr>
+                    <tr><td class="mono"><strong>DROP-06</strong></td><td>UI-only / API-only surface splits</td><td>Single <code>core/api</code> <code>ActionDef</code> registry</td></tr>
+                    <tr><td class="mono"><strong>DROP-07</strong></td><td><code>--lower</code> ratchets &amp; regex CSS bans</td><td><code>&lt; 2 min</code> checks + workspace <code>exports</code></td></tr>
+                    <tr><td class="mono"><strong>DROP-08</strong></td><td>Hidden default turn/trial/spend caps</td><td>Zero default caps; explicit user budgets + breakers</td></tr>
+                    <tr><td class="mono"><strong>DROP-09</strong></td><td>Double/triple confirm on routine close</td><td>1-step close/pause w/ audit; typed confirm only on delete</td></tr>
+                    <tr><td class="mono"><strong>DROP-10</strong></td><td>Container-only wall dogma on macOS</td><td>Pluggable <code>WallPlugin</code> + native <code>launchd</code> / <code>device-metal</code></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="intake-view-states" hidden>
+              <div class="table-wrap" style="margin-bottom:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>REQ Status</th>
+                      <th>Trigger in process.md</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><span class="chip chip-idle">Proposed</span></td><td>Created at Gate 1 intake from real GitHub issue/PR or field pain</td></tr>
+                    <tr><td><span class="chip chip-working">Accepted</span></td><td>Slotted into a wave &amp; Goal by owner decision or Gate 5 sign-off</td></tr>
+                    <tr><td><span class="chip chip-good">Verified</span></td><td>Shipped, cross-surface tested, docs updated, owner Human checks passed (Gate 6)</td></tr>
+                    <tr><td><span class="chip chip-wrong">Dropped</span></td><td>Intentionally rejected or replaced by <code>DROP-NN</code>; ID never reused</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="cmd-bar">
+                <code id="goal-cmd-snippet">/goal Complete docs/plan/v1/phases/&lt;slug&gt;.md, reread the doc before wrapping up</code>
+                <button id="copy-goal-cmd" class="btn btn-sm" type="button">Copy /goal command</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-box">
+            <h3 style="margin-bottom:8px;">Phase Lifecycle Tree (<code>docs/plan/v1/</code>)</h3>
+            <p style="font-size:12.5px;margin-bottom:12px;">
+              Every document has one distinct job. Later bug fixes to a completed phase append a dated note under <code>## What the build changed</code> instead of spawning a new file.
+            </p>
+            <pre id="phase-tree-pre" class="tree-pre"><code>docs/plan/v1/
+├── requirements.md       # Living REQ-NNN ledger
+├── decisions.md          # Product-wide locked decisions
+├── roadmap.md            # Waves &amp; Goals 1–14
+├── process.md            # Anti-slop governance doc
+├── design-plan.md        # IA rules &amp; Magnesium look
+├── mockups/index.html    # Offline HTML mockups
+├── site/
+│   ├── index.html        # Architecture explainer
+│   └── process.html      # This process explainer
+└── phases/
+    ├── _template.md      # Copy per Feature / Phase
+    ├── &lt;slug&gt;.md         # Active (Draft → Gate 5)
+    └── _completed/       # Verified + build deltas</code></pre>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+              <a class="btn btn-sm" href="../requirements.md">Open requirements.md</a>
+              <a class="btn btn-sm" href="../decisions.md">Open decisions.md</a>
+              <a class="btn btn-sm" href="../mockups/index.html">Open UI Mockups</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Copyable Canonical Phase Template -->
+        <div class="template-shell">
+          <div class="template-head">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <strong class="mono" style="color:var(--ink);">docs/plan/v1/phases/_template.md</strong>
+                <span class="chip chip-idle">89 lines · canonical template</span>
+              </div>
+              <div style="font-size:12.5px;color:var(--quiet);margin-top:2px;">
+                Copy this single file for every <code>Feature / Plugin</code> or <code>Phase / Architecture</code> item before writing production code.
+              </div>
+            </div>
+            <div class="template-actions">
+              <span id="copy-status" class="copy-status" role="status" aria-live="polite"></span>
+              <button id="copy-template-btn" class="btn btn-primary btn-sm" type="button">Copy _template.md</button>
+              <a class="btn btn-sm" href="../phases/_template.md">Open raw file</a>
+            </div>
+          </div>
+          <pre id="phase-template-code" class="template-pre"><code></code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =======================================================================
+       Compact Footer Colophon
+       ======================================================================= -->
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-inner">
+        <div>
+          <div style="font-weight:600;color:var(--ink);margin-bottom:4px;">Thermite v1 — Anti-Slop Feature Process &amp; Governance</div>
+          <div>Offline-ready single-file visual explainer styled with <code>@iammrduncan/magnesium</code> tokens. Mirrors <code>docs/plan/v1/process.md</code>.</div>
+        </div>
+        <div class="footer-links" aria-label="Plan documents">
+          <a href="./index.html">Architecture Overview</a>
+          <a href="../mockups/index.html">Interactive UI Mockups</a>
+          <a href="../process.md">process.md</a>
+          <a href="../phases/_template.md">Phase Template</a>
+          <a href="../requirements.md">Requirements (46 REQs)</a>
+          <a href="../design-plan.md">Design Plan</a>
+          <a href="../decisions.md">Decisions (16)</a>
+          <a href="../roadmap.md">Roadmap (G1–G14)</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      "use strict";
+
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      /* =====================================================================
+         1. Shared Theme Toggle & Mobile Drawer (same localStorage key as index.html)
+         ===================================================================== */
+      const root = document.documentElement;
+      const themeBtn = document.getElementById("theme-toggle");
+      const themeLabel = document.getElementById("theme-label");
+      const storageKey = "thermite-v1-explainer-theme";
+
+      function readStoredTheme() {
+        try { return localStorage.getItem(storageKey); } catch { return null; }
+      }
+      function writeStoredTheme(val) {
+        try { localStorage.setItem(storageKey, val); } catch { /* ignore file:// storage restrictions */ }
+      }
+      function effectiveTheme() {
+        if (root.dataset.theme === "dark" || root.dataset.theme === "light") return root.dataset.theme;
+        return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      function syncThemeButton() {
+        const isDark = effectiveTheme() === "dark";
+        themeLabel.textContent = isDark ? "Light" : "Dark";
+        themeBtn.setAttribute("aria-pressed", String(isDark));
+        themeBtn.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+      }
+
+      const savedTheme = readStoredTheme();
+      if (savedTheme === "dark" || savedTheme === "light") {
+        root.dataset.theme = savedTheme;
+      }
+      syncThemeButton();
+
+      themeBtn.addEventListener("click", () => {
+        const next = effectiveTheme() === "dark" ? "light" : "dark";
+        root.dataset.theme = next;
+        writeStoredTheme(next);
+        syncThemeButton();
+      });
+
+      const menuBtn = document.getElementById("menu-toggle");
+      const drawer = document.getElementById("mobile-drawer");
+      menuBtn.addEventListener("click", () => {
+        const open = drawer.classList.toggle("open");
+        menuBtn.setAttribute("aria-expanded", String(open));
+      });
+      drawer.querySelectorAll("a").forEach((a) => {
+        a.addEventListener("click", () => {
+          drawer.classList.remove("open");
+          menuBtn.setAttribute("aria-expanded", "false");
+        });
+      });
+
+      /* =====================================================================
+         2. Interactive 4-Track Selector + Automatic Promotion Simulator
+         ===================================================================== */
+      const PROMO_TRIGGERS = [
+        { id: "action", label: "Adds a new ActionDef or PolicyGrant capability" },
+        { id: "hook", label: "Adds a new PluginApi hook or UI plugin slot" },
+        { id: "schema", label: "Adds a new database table or core migration" },
+        { id: "ui", label: "Adds a new top-level view, run tab, card family, or user-facing setting" },
+        { id: "dep", label: "Adds a new runtime npm or system dependency" }
+      ];
+
+      const TRACKS = {
+        fix: {
+          name: "Fix",
+          badge: "No formal stop-line (owner reviews diff)",
+          badgeCls: "chip-good",
+          scope: "Bug, crash, race condition, broken link, or regression (e.g., NATS reconnect leak, wrong HTTP error code, clipped mobile row).",
+          artifacts: "Failing repro test first + root cause in PR/commit message. No phase doc, no mockup.",
+          preGate: "None — owner reviews diff directly. Keep scope strictly to the bug fix.",
+          verify: "Repro test passes + < 2 min checks (typecheck, Biome lint, check:public, fast tests) + browser look if visual.",
+          gates: [
+            { n: 1, name: "Intake", mode: "conditional", status: "Issue / repro" },
+            { n: 2, name: "Research", mode: "skip", status: "Skip" },
+            { n: 3, name: "Core/Plugin", mode: "skip", status: "No new hooks" },
+            { n: 4, name: "IA & Mockup", mode: "skip", status: "Skip" },
+            { n: 5, name: "Owner Gate", mode: "conditional", status: "Diff review" },
+            { n: 6, name: "Build & Verify", mode: "required", status: "Repro + < 2m" }
+          ]
+        },
+        change: {
+          name: "Change",
+          badge: "Owner OK on brief & mockup diff",
+          badgeCls: "chip-working",
+          scope: "Small UX, copy, CLI flag, or behavior tweak to an existing REQ-NNN capability (e.g., adding a sort option to Attempts, clarifying an error sentence).",
+          artifacts: "Short issue/PR brief citing existing REQ-NNN + interactive mockup diff if visible.",
+          preGate: "Owner OK on brief and mockup diff before implementation.",
+          verify: "Updated unit/contract tests + < 2 min checks + real browser look at 1440px/390px (light/dark) if visual.",
+          gates: [
+            { n: 1, name: "Intake", mode: "required", status: "Cite REQ-NNN" },
+            { n: 2, name: "Research", mode: "skip", status: "Brief inspect" },
+            { n: 3, name: "Core/Plugin", mode: "conditional", status: "Keep parity" },
+            { n: 4, name: "IA & Mockup", mode: "conditional", status: "Diff if visual" },
+            { n: 5, name: "Owner Gate", mode: "conditional", status: "Brief + diff OK" },
+            { n: 6, name: "Build & Verify", mode: "required", status: "Tests + < 2m" }
+          ]
+        },
+        feature: {
+          name: "Feature / Plugin",
+          badge: "Gate 5 Hard Stop-Line",
+          badgeCls: "chip-wrong",
+          scope: "Any new capability, plugin, ActionDef, PluginApi hook, DB table, setting, or UI surface (e.g., distill-jsonl, harness-claude, live-publish).",
+          artifacts: "Single phase doc copied from docs/plan/v1/phases/_template.md + interactive offline HTML mockup (if visual).",
+          preGate: "Gate 5 hard stop: explicit owner sign-off on phase doc + interactive mockup + numbered open calls before production code starts.",
+          verify: "Full Gate 6 bar: Sans-I/O / contract / conformance tests, real browser inspection (1440px & 390px, light/dark), same-commit docs & CREDITS.md, honest close-out.",
+          gates: [
+            { n: 1, name: "Intake", mode: "required", status: "Issue + REQ-NNN" },
+            { n: 2, name: "Research", mode: "required", status: "Prior art + LOC" },
+            { n: 3, name: "Core/Plugin", mode: "required", status: "Plugin + Parity" },
+            { n: 4, name: "IA & Mockup", mode: "required", status: "4 Qs + HTML" },
+            { n: 5, name: "Owner Gate", mode: "stop", status: "HARD STOP" },
+            { n: 6, name: "Build & Verify", mode: "required", status: "Full Gate 6" }
+          ]
+        },
+        phase: {
+          name: "Phase / Architecture",
+          badge: "Gate 5 Hard Stop + /grill-me",
+          badgeCls: "chip-wrong",
+          scope: "Multi-goal foundation, core reducer/bus/storage/isolation redesign, or breaking PluginApi change (e.g., Goal 0 spikes, Goal 6 PG 18 KB).",
+          artifacts: "Phase doc + empirical spike(s) & reproducible benchmark(s) + interactive HTML mockup if visual.",
+          preGate: "Gate 5 hard stop: mandatory /grill-me session locking every open call in decisions.md before Goal 1 / M1 code starts.",
+          verify: "Empirical benchmark gates + full Gate 6 bar + CI real PG 18, live NATS JetStream, compose smoke, browser check, and gitleaks.",
+          gates: [
+            { n: 1, name: "Intake", mode: "required", status: "Multi-REQ map" },
+            { n: 2, name: "Research", mode: "required", status: "Spikes + Bench" },
+            { n: 3, name: "Core/Plugin", mode: "required", status: "Core contract" },
+            { n: 4, name: "IA & Mockup", mode: "required", status: "A/B Mockup" },
+            { n: 5, name: "Owner Gate", mode: "stop", status: "/grill-me STOP" },
+            { n: 6, name: "Build & Verify", mode: "required", status: "Gate 6 + CI" }
+          ]
+        }
+      };
+
+      let selectedTrack = "feature";
+      const activePromoTriggers = new Set();
+
+      const trackBtns = Array.from(document.querySelectorAll("[data-track]"));
+      const promoAlertEl = document.getElementById("promo-alert");
+      const promoAlertTextEl = document.getElementById("promo-alert-text");
+      const promoResetBtn = document.getElementById("promo-reset");
+      const trackTitleEl = document.getElementById("track-title");
+      const trackBadgeEl = document.getElementById("track-badge");
+      const trackRailEl = document.getElementById("track-gate-rail");
+      const trackSpecsEl = document.getElementById("track-specs");
+      const promoTriggersEl = document.getElementById("promo-triggers");
+
+      function renderTrackPanel() {
+        const promoted = (selectedTrack === "fix" || selectedTrack === "change") && activePromoTriggers.size > 0;
+        const effectiveKey = promoted ? "feature" : selectedTrack;
+        const t = TRACKS[effectiveKey];
+
+        trackBtns.forEach((b) => {
+          b.setAttribute("aria-selected", String(b.dataset.track === selectedTrack));
+        });
+
+        if (promoted) {
+          const names = PROMO_TRIGGERS.filter((p) => activePromoTriggers.has(p.id)).map((p) => p.label.toLowerCase());
+          promoAlertEl.hidden = false;
+          promoAlertTextEl.textContent = `Because this ${TRACKS[selectedTrack].name} ${names[0]}${names.length > 1 ? ` (+ ${names.length - 1} more trigger${names.length > 2 ? "s" : ""})` : ""}, process.md §2 promotes it immediately to Feature / Plugin with a phase doc and Gate 5 Hard Stop.`;
+        } else {
+          promoAlertEl.hidden = true;
+        }
+
+        trackTitleEl.textContent = promoted
+          ? `${TRACKS[selectedTrack].name} → Feature / Plugin (Auto-Promoted)`
+          : t.name;
+        trackBadgeEl.className = `chip ${t.badgeCls}`;
+        trackBadgeEl.textContent = t.badge;
+
+        trackRailEl.innerHTML = t.gates.map((g) => `
+          <div class="rail-cell" data-mode="${g.mode}">
+            <span class="rail-num">GATE ${g.n}</span>
+            <span class="rail-name">${esc(g.name)}</span>
+            <span class="rail-status">${esc(g.status)}</span>
+          </div>
+        `).join("");
+
+        trackSpecsEl.innerHTML = `
+          <div class="spec-row">
+            <div class="spec-k">SCOPE &amp; EXAMPLES</div>
+            <div class="spec-v">${esc(t.scope)}</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-k">REQUIRED ARTIFACTS</div>
+            <div class="spec-v">${esc(t.artifacts)}</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-k">PRE-CODE GATE</div>
+            <div class="spec-v">${esc(t.preGate)}</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-k">VERIFICATION BAR</div>
+            <div class="spec-v">${esc(t.verify)}</div>
+          </div>
+        `;
+
+        promoTriggersEl.innerHTML = PROMO_TRIGGERS.map((tr) => {
+          const checked = activePromoTriggers.has(tr.id);
+          return `
+            <label class="promo-check ${checked ? "is-active" : ""}">
+              <input type="checkbox" data-promo-id="${tr.id}" ${checked ? "checked" : ""}>
+              <span>${esc(tr.label)}</span>
+            </label>
+          `;
+        }).join("");
+
+        promoTriggersEl.querySelectorAll("[data-promo-id]").forEach((cb) => {
+          cb.addEventListener("change", () => {
+            const id = cb.dataset.promoId;
+            if (cb.checked) activePromoTriggers.add(id);
+            else activePromoTriggers.delete(id);
+            renderTrackPanel();
+          });
+        });
+      }
+
+      trackBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedTrack = btn.dataset.track;
+          renderTrackPanel();
+        });
+      });
+
+      promoResetBtn.addEventListener("click", () => {
+        activePromoTriggers.clear();
+        renderTrackPanel();
+      });
+      renderTrackPanel();
+
+      /* =====================================================================
+         3. Interactive 6-Gate Anti-Slop Firewall Pipeline
+         ===================================================================== */
+      const GATES = {
+        1: {
+          n: 1,
+          kicker: "GATE 1 · process.md §3",
+          title: "Intake & Evidence (REQ-NNN)",
+          chip: "Pre-code gate",
+          chipCls: "chip-idle",
+          isStop: false,
+          edges: ["1-2"],
+          summary: "Every feature begins with observed user friction or a real failing workflow—never speculative invention.",
+          inputs: [
+            "<strong>Public GitHub issue or PR</strong> documenting observed friction, crash, or contributor demand.",
+            "<strong>Durable REQ-NNN row</strong> in <code>docs/plan/v1/requirements.md</code> naming the persona, user story, and measurable outcome."
+          ],
+          checks: [
+            "Verifiable acceptance criteria written up front across REST, MCP, CLI, and UI.",
+            "Confirms the ask is not already covered by an existing <code>REQ-NNN</code> (which routes to the lighter <code>Change</code> track) or blocked by <code>DROP-01</code>–<code>DROP-10</code>."
+          ],
+          rejects: [
+            "Speculative features with no observed user problem or failing workflow stop at intake.",
+            "Never write a phase doc or code 'just in case'—park unvalidated ideas as a GitHub issue."
+          ],
+          exit: "Issue linked, REQ-NNN recorded as Proposed in requirements.md, and copy of phases/_template.md opened."
+        },
+        2: {
+          n: 2,
+          kicker: "GATE 2 · fxbot Research Directive Model",
+          title: "Research, Prior Art & LOC Bound",
+          chip: "Evidence before design",
+          chipCls: "chip-working",
+          isStop: false,
+          edges: ["1-2", "2-3"],
+          summary: "Ground every design decision in current Thermite code, real prior art, and empirical spikes rather than memory or guesses.",
+          inputs: [
+            "<strong>Exact current files</strong>, schemas, and contracts inspected in Thermite (never outdated v0.x assumptions).",
+            "<strong>Prior art survey</strong> across <code>fxbot</code>, <code>libfx</code>, Pi, opencode, Herdr, and relevant RFCs/specs."
+          ],
+          checks: [
+            "Small, reproducible spikes or benchmarks for risky performance, concurrency, isolation, or retrieval unknowns (exact latency, memory, recall, and failure modes).",
+            "Explicitly states what was <strong>not</strong> tested—never hides gaps behind confident prose.",
+            "Declares an upfront <strong>LOC bound</strong>, measurable success criteria, and a <strong>Not in this phase</strong> cut order.",
+            "Every adopted work or runtime dependency is checked for license compatibility (never AGPLv3 in core) and recorded in <code>CREDITS.md</code> in the same commit."
+          ],
+          rejects: [
+            "Copying unlicensed code or adding a dependency without proving Node/Web/Postgres built-ins cannot do the job.",
+            "Unbounded implementation plans with no LOC cap or cut list."
+          ],
+          exit: "Sections 1 & 2 of the phase doc tie concrete takeaways directly to inspected code and measured numbers."
+        },
+        3: {
+          n: 3,
+          kicker: "GATE 3 · process.md §3",
+          title: "Core-or-Plugin & Surface Parity",
+          chip: "Plugin default",
+          chipCls: "chip-working",
+          isStop: false,
+          edges: ["2-3", "3-4"],
+          summary: "Keep core thin and guarantee zero UI-only backdoors by declaring every capability once in core/api under PolicyGrant.",
+          inputs: [
+            "<strong>Core-or-Plugin justification</strong> tested against <code>README.md §1</code> &amp; <code>decisions.md §1</code> (core ONLY if every run needs it, plugins plug into it, or Thermite needs it to run).",
+            "<strong>ActionDef table</strong> declaring Zod input/output schemas, HTTP route, MCP tool, CLI command, and <code>PolicyGrant</code> capability."
+          ],
+          checks: [
+            "<strong>Zero-cost plugin isolation:</strong> core never imports or names an optional plugin; disabled/uninstalled plugin = <code>0</code> processes, <code>0</code> timers, <code>0</code> DB tables, <code>0</code> sockets, <code>0</code> UI bytes; data stays in <code>plugin_&lt;name&gt;</code> schemas.",
+            "<strong>Smallest hook only:</strong> widen <code>PluginApi</code> only for a real consumer; breaking changes update <code>plugin-breaks.json</code> and raise <code>minThermite</code>.",
+            "<strong>Security &amp; proof boundaries:</strong> Door flows through <code>PolicyGrant</code> (preserving full <code>autonomous_delegate</code> parity); internal <code>run_worker</code>/<code>run_advisor</code> stay walled from Door &amp; Judge; new walls pass <code>wall.selfTest()</code>; new judges pass A/A calibration and stamp <code>{ judgePlugin, judgeVersion }</code>."
+          ],
+          rejects: [
+            "UI-only form routes, API/MCP/CLI splits, hardcoded <code>OWNER_ONLY_KINDS</code>, or plugin tables placed inside core migrations."
+          ],
+          exit: "Section 0 & Section 3 (core/api table + agent wall check) complete with zero surface gaps."
+        },
+        4: {
+          n: 4,
+          kicker: "GATE 4 · Anti-\"UI Shoved Into UI\"",
+          title: "UX Discovery, 5-Slot IA & Offline Mockup",
+          chip: "Required if visual",
+          chipCls: "chip-needs",
+          isStop: false,
+          edges: ["3-4", "4-5"],
+          summary: "Skipped only for purely non-visual backend/protocol work. Forces information-architecture subtraction and pixel verification before writing React code.",
+          inputs: [
+            "<strong>Four mandatory IA answers</strong> in the phase doc: Placement, Clutter &amp; Subtraction, One home / one word, and Empty / dense / error states.",
+            "<strong>Self-contained offline HTML mockup</strong> under <code>docs/plan/v1/mockups/</code> (zero external CDNs, realistic open-source data including long names)."
+          ],
+          checks: [
+            "Fits strictly within the <strong>5 locked core nav slots</strong> or <strong>6 bounded plugin slots</strong>—core nav never adds a 6th core slot.",
+            "Explicitly names what gets <strong>removed, merged, or collapsed</strong> (Subtraction Rule); one primary action per screen, no nested cards, no prose walls above data.",
+            "Verified interactively across all four visual combinations: <strong>Light &amp; Dark</strong> (<code>@iammrduncan/magnesium</code> <code>thermite.css</code>) at <strong>Desktop (<code>1440px</code>)</strong> and <strong>Mobile (<code>390px</code>)</strong>.",
+            "Side-by-side A/B mockup directions when layout trade-offs are non-obvious so the owner chooses from pixels rather than prose."
+          ],
+          rejects: [
+            "Adding tabs, cards, banners, or multi-sentence 'How it works' walls without subtraction and mockup review, or inventing bespoke tokens outside Magnesium."
+          ],
+          exit: "Section 3 UX/IA subsection + verified offline HTML mockup ready for Gate 5 owner review."
+        },
+        5: {
+          n: 5,
+          kicker: "GATE 5 · HARD STOP-LINE",
+          title: "Owner Review & /grill-me Sign-Off",
+          chip: "HARD STOP-LINE",
+          chipCls: "chip-wrong",
+          isStop: true,
+          edges: ["4-5", "5-6"],
+          summary: "Zero production code is written before this gate clears. Hands the owner a concise decision package so architecture and UX trade-offs lock before build tokens are spent.",
+          inputs: [
+            "<strong>1. Phase doc</strong> (<code>docs/plan/v1/phases/&lt;slug&gt;.md</code>) with Core-or-plugin decision, <code>core/api</code> actions, LOC bound, and <code>Not in this phase</code>.",
+            "<strong>2. Interactive HTML mockup</strong> (<code>1440px</code> &amp; <code>390px</code>, light &amp; dark) if the change is visual.",
+            "<strong>3. Numbered Open Questions</strong>, each paired with a concrete recommended default and 1-line rationale."
+          ],
+          checks: [
+            "Run <code>/grill-me</code> for every <code>Phase / Architecture</code> change and any <code>Feature / Plugin</code> with open product, UX, or policy calls.",
+            "Record every owner decision and sign-off date in Section 5's <strong>Owner Sign-Off</strong> block—and in <code>docs/plan/v1/decisions.md</code> when product-wide."
+          ],
+          rejects: [
+            "Writing production code, schema migrations, or UI components before the Owner Sign-Off checkbox is explicitly ticked."
+          ],
+          exit: "[x] Approved to build ticked with owner name, date, and locked decisions. Build proceeds via /goal."
+        },
+        6: {
+          n: 6,
+          kicker: "GATE 6 · Build, Verify & Close-Out",
+          title: "Lean Build, < 2m Checks & Honest Close-Out",
+          chip: "Ship & verify",
+          chipCls: "chip-good",
+          isStop: false,
+          edges: ["5-6"],
+          summary: "Execute cleanly from the signed phase doc in plain TypeScript, prove behavior with fast automated checks plus real browser pixels, and archive honestly.",
+          inputs: [
+            "Signed phase doc executed via <code>/goal Complete docs/plan/v1/phases/&lt;slug&gt;.md, reread the doc before wrapping up</code>.",
+            "Minimal plain TypeScript: small single-job files, delete unused code first, stay inside the LOC bound (or explain any delta honestly)."
+          ],
+          checks: [
+            "<strong>&lt; 2 min local loop:</strong> <code>typecheck</code>, Biome <code>lint</code> (<code>noFloatingPromises</code>), <code>public.mjs --untracked</code> (<code>0</code> hits), millisecond Sans-I/O, contract &amp; conformance tests.",
+            "<strong>Real browser pixels (if visual):</strong> inspect every changed screen at <code>1440px</code> &amp; <code>390px</code> in light &amp; dark—zero console/network errors, clipped controls, or horizontal overflow.",
+            "<strong>Same-commit docs &amp; credits:</strong> regenerate REST/MCP/CLI docs from <code>core/api</code>, update <code>docs/_site/</code> and <code>CREDITS.md</code>, separate evidence from untested paths."
+          ],
+          rejects: [
+            "Fake/tautological tests, <code>.skip</code>/<code>.only</code>, swallowed <code>catch</code> blocks, unverified claims, or moving to <code>_completed/</code> before owner Human checks pass."
+          ],
+          exit: "Fill 'What the build changed' (deltas + actual LOC), mark REQ-NNN Verified, pass owner Human checks, and git mv to phases/_completed/<slug>.md."
+        }
+      };
+
+      let currentGate = 5;
+      const gateNodes = Array.from(document.querySelectorAll(".gate-node"));
+      const gateEdges = Array.from(document.querySelectorAll("[data-gate-edge]"));
+      const gatePills = Array.from(document.querySelectorAll("[data-select-gate]"));
+      const gateInspectorEl = document.getElementById("gate-inspector");
+      const gatePrevBtn = document.getElementById("gate-prev");
+      const gateNextBtn = document.getElementById("gate-next");
+
+      function renderGate(n) {
+        currentGate = n;
+        const g = GATES[n];
+        if (!g) return;
+
+        gateNodes.forEach((node) => {
+          node.classList.toggle("is-selected", Number(node.dataset.gate) === n);
+        });
+        gatePills.forEach((pill) => {
+          pill.setAttribute("aria-pressed", String(Number(pill.dataset.selectGate) === n));
+        });
+        gateEdges.forEach((edge) => {
+          const active = g.edges.includes(edge.dataset.gateEdge);
+          edge.classList.toggle("is-active", active);
+          edge.setAttribute("marker-end", active ? "url(#arrow-flame)" : "url(#arrow-muted)");
+        });
+
+        gatePrevBtn.disabled = n <= 1;
+        gateNextBtn.disabled = n >= 6;
+
+        gateInspectorEl.innerHTML = `
+          <div class="inspector-kicker">${esc(g.kicker)}</div>
+          <h3>${esc(g.title)}</h3>
+          <div class="inspector-meta">
+            <span class="chip ${g.chipCls}">${g.isStop ? '<span class="state-dot" aria-hidden="true"></span>' : ""}${esc(g.chip)}</span>
+            <span class="chip chip-idle mono">Gate ${g.n} of 6</span>
+          </div>
+          <p style="font-size:13px;">${esc(g.summary)}</p>
+
+          <div class="inspector-section">
+            <h4>Required Inputs</h4>
+            <ul class="inspector-list">${g.inputs.map((i) => `<li>${i}</li>`).join("")}</ul>
+          </div>
+
+          <div class="inspector-section">
+            <h4>Mandatory Checks &amp; Proofs</h4>
+            <ul class="inspector-list">${g.checks.map((c) => `<li>${c}</li>`).join("")}</ul>
+          </div>
+
+          <div class="inspector-section">
+            <h4>Failure / Reject Triggers</h4>
+            <ul class="inspector-list">${g.rejects.map((r) => `<li>${r}</li>`).join("")}</ul>
+          </div>
+
+          <div class="inspector-callout ${g.isStop ? "is-stop" : ""}">
+            <strong>Exit / Sign-Off Criteria:</strong> ${esc(g.exit)}
+          </div>
+        `;
+      }
+
+      gateNodes.forEach((node) => {
+        node.addEventListener("click", () => renderGate(Number(node.dataset.gate)));
+        node.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            renderGate(Number(node.dataset.gate));
+          }
+        });
+      });
+      gatePills.forEach((pill) => {
+        pill.addEventListener("click", () => renderGate(Number(pill.dataset.selectGate)));
+      });
+      gatePrevBtn.addEventListener("click", () => { if (currentGate > 1) renderGate(currentGate - 1); });
+      gateNextBtn.addEventListener("click", () => { if (currentGate < 6) renderGate(currentGate + 1); });
+      renderGate(5);
+
+      /* =====================================================================
+         4. Interactive IA & Plugin Slot Map
+         ===================================================================== */
+      const IA_SLOTS = {
+        "core-home": {
+          kind: "Core Nav Slot 1 of 5",
+          chipCls: "chip-flame",
+          title: "Home (with live Needs you badge)",
+          location: "Top of persistent sidebar",
+          owns: "Auto-clearing Readiness Strip (hides when setup is complete), active runs overview, and non-blocking Needs you queue with inline Resolve + BesidePanel inspection.",
+          capRule: "Plugins never add custom widgets above active runs; actionable plugin items surface strictly as standard needs.",
+          plugins: ["thermy (via shell.corner launcher, not inside Home feed)"],
+          antiSlop: "Drops v0.3.0's four identical stat tiles and v0.2's 11 duplicate places signalling one decision."
+        },
+        "core-compute": {
+          kind: "Core Nav Slot 2 of 5",
+          chipCls: "chip-flame",
+          title: "Compute (machine › device pool)",
+          location: "Main sidebar under Home",
+          owns: "Shared machine › device pool (Linux CUDA, native macOS Apple Silicon MLX via launchd, local CPU), active wall proof badges, and copyable thermite join enrollment flow.",
+          capRule: "device-* and compute-* plugins populate device rows and enrollment flows inside Compute—never a separate top-level tab.",
+          plugins: ["device-cpu / cuda / metal", "device-vulkan / rocm", "compute-ssh / k8s / runpod"],
+          antiSlop: "Deletes the rig concept completely: zero rig screens, zero rig tables, zero rig terms."
+        },
+        "core-knowledge": {
+          kind: "Core Nav Slot 3 of 5",
+          chipCls: "chip-flame",
+          title: "Knowledge (PG 18 FTS + pg_trgm)",
+          location: "Main sidebar under Compute",
+          owns: "Scoped PG 18 FTS + pg_trgm collections (campaign & shared), Collection → Run → Slot → Item tree, and instant search (< 20 ms scoped, < 1 ms empty-scope, compaction transcripts excluded by default).",
+          capRule: "Extensions attach only via knowledge.toolbar compact toggle/chip without adding new top-level tabs.",
+          plugins: ["knowledge-semantic (knowledge.toolbar)", "knowledge-ingest-pdf (knowledge.toolbar)"],
+          antiSlop: "Replaces v0.2's 11.6k-LOC synchronous SQLite word index while preserving the owner-validated folder/file tree."
+        },
+        "core-campaigns": {
+          kind: "Core Nav Slot 4 of 5",
+          chipCls: "chip-flame",
+          title: "Campaigns & Run Workspace",
+          location: "Main sidebar with inline (+) creator shortcut",
+          owns: "Flat campaign list (+ opens sticky 1-page creator with live thermite.yaml + Dry Run) and Run Workspace (progress, champions, live trace, attempts, steer, git-sync popover).",
+          capRule: "Plugins attach strictly to run.header.action and run.inspector.tab—never adding a second side panel or 9–11 tab sprawl.",
+          plugins: ["git-sync (status popover & attempt.promoted hook)", "live-publish (run.header.action)", "distill-jsonl (run.header.action + run.inspector.tab)", "sql-explorer (run.inspector.tab)"],
+          antiSlop: "Replaces v0.2's 9–11 run tabs and v0.3.0's tab-hopping with one BesidePanel inspector."
+        },
+        "core-setup": {
+          kind: "Core Nav Slot 5 of 5",
+          chipCls: "chip-flame",
+          title: "Setup (SettingsShell)",
+          location: "Pinned to sidebar footer above Owner account",
+          owns: "Providers (catalogue + LAN HTTP + live test), Git credentials, PolicyGrant delegation tokens, Plugins manager, and System Update.",
+          capRule: "Each plugin needing settings registers at most one setup.section tab + pane inside SettingsShell.",
+          plugins: ["git-sync (Setup › Git credentials)", "web-pairing (setup.section)", "live-publish (setup.section)", "distill-jsonl (setup.section)"],
+          antiSlop: "Eliminates v0.2's hidden Settings route and keeps Settings + Sign out reachable on 390px mobile."
+        },
+        "slot-nav-item": {
+          kind: "Bounded Plugin Slot 1 of 6",
+          chipCls: "chip-working",
+          title: "nav.item",
+          location: "Main sidebar directly above Campaigns",
+          owns: "Dedicated full-screen workspace entry for installed operator plugins.",
+          capRule: "At most 1 NavLine per plugin, icon + label only. Renders 0 DOM nodes and 0 KB bundle when uninstalled.",
+          plugins: ["thermy (operator copilot threads)", "sql-explorer (read-only SQL workbench)"],
+          antiSlop: "Prevents plugins from injecting nested menus, badges, or extra top-level sections into core nav."
+        },
+        "slot-shell-corner": {
+          kind: "Bounded Plugin Slot 2 of 6",
+          chipCls: "chip-working",
+          title: "shell.corner",
+          location: "Bottom-right floating launcher over the shell",
+          owns: "Contextual assistant trigger that opens a compact popover over the current screen.",
+          capRule: "Single compact button opening a contextual popover. Zero chrome when uninstalled.",
+          plugins: ["thermy (contextual copilot over active run or screen)"],
+          antiSlop: "Keeps assistant access one click away without permanently shrinking canvas width or stacking floating widgets."
+        },
+        "slot-run-header": {
+          kind: "Bounded Plugin Slot 3 of 6",
+          chipCls: "chip-working",
+          title: "run.header.action",
+          location: "Run Workspace header right cluster (left of primary CTA)",
+          owns: "Per-run plugin toggle or export action bound directly to the open run.",
+          capRule: "Compact switch or single plain action button—never competes with the single flame primary CTA.",
+          plugins: ["live-publish (Live toggle switch)", "distill-jsonl (Export JSONL action)"],
+          antiSlop: "Stops run headers from accumulating multi-row toolbars or duplicate banners."
+        },
+        "slot-run-tab": {
+          kind: "Bounded Plugin Slot 4 of 6",
+          chipCls: "chip-working",
+          title: "run.inspector.tab",
+          location: "Run Workspace BesidePanel tab bar",
+          owns: "Scoped deep-inspection tab sharing the existing resizable BesidePanel.",
+          capRule: "One tab inside the existing inspector; strictly forbidden from adding a second side panel.",
+          plugins: ["sql-explorer (scoped SQL over this run)", "distill-jsonl (trajectory preview)"],
+          antiSlop: "Preserves calm two-pane spatial hierarchy on 1440px desktop and single Sheet behavior on 390px mobile."
+        },
+        "slot-kb-toolbar": {
+          kind: "Bounded Plugin Slot 5 of 6",
+          chipCls: "chip-working",
+          title: "knowledge.toolbar",
+          location: "Knowledge search bar trailing edge",
+          owns: "Compact retrieval-lane switch or ingestion filter right inside the existing search bar.",
+          capRule: "Compact toggle or filter chip only—never creates a new top-level Knowledge tab.",
+          plugins: ["knowledge-semantic (Semantic HNSW toggle)", "knowledge-ingest-pdf (extractor chip)"],
+          antiSlop: "Keeps semantic search 1 click away when installed and completely invisible (0 bytes) when off."
+        },
+        "slot-setup-section": {
+          kind: "Bounded Plugin Slot 6 of 6",
+          chipCls: "chip-working",
+          title: "setup.section",
+          location: "SettingsShell left rail (desktop) / pill strip (mobile)",
+          owns: "Dedicated configuration pane for installed plugins.",
+          capRule: "One tab + dedicated pane inside Setup. Uninstall removes the tab, routes, and plugin_<name> tables cleanly.",
+          plugins: ["web-pairing (QR + 6-digit SAS pairing)", "live-publish (relay & NKey settings)", "distill-jsonl (redaction defaults)"],
+          antiSlop: "Stops plugins from scattering config toggles across Home, Run headers, and ad-hoc modals."
+        }
+      };
+
+      const PLUGIN_LENSES = {
+        "git-sync": {
+          title: "git-sync (Bundled v1.0 Default-On Plugin)",
+          wave: "v1.0 MVP · Goal 5",
+          slots: ["core-campaigns", "core-setup"],
+          summary: "Dogfoods PluginApi day one via onEvent('attempt.promoted') to execute push | pr (GitHub PRs day one) | tag | none. Adds zero extra nav items or side panels.",
+          placement: "Git credentials live in Core Setup › Git; champion sync status & git.sync_now surface inside the Run Workspace popover (Campaigns).",
+          idleCost: "Disabled: 0 pushes, 0 background timers; uses Control's sealed Git credentials."
+        },
+        "live-publish": {
+          title: "live-publish (thermite live)",
+          wave: "v1.2 Plugin · Goal 12",
+          slots: ["slot-run-header", "slot-setup-section"],
+          summary: "Consumes sanitized t.live.<run>.> events using the least-privilege live-reader NKey; serves public SSE/JSON or forwards to live.usethermite.com.",
+          placement: "Mounts strictly in run.header.action (compact Live toggle switch) and setup.section (relay configuration).",
+          idleCost: "Uninstalled: 0 DOM nodes, 0 KB UI bundle, 0 routes, 0 plugin_live_publish tables."
+        },
+        "web-pairing": {
+          title: "web-pairing (web.usethermite.com)",
+          wave: "v1.2 Plugin · Goal 11",
+          slots: ["slot-setup-section"],
+          summary: "Noise + Ed25519 QR + 6-digit SAS phone pairing over encrypted WebRTC P2P bridge + VitePWA, with x-thermite-web-pairing blocking pairing admin routes.",
+          placement: "Mounts strictly in setup.section (one tab + QR/devices pane inside SettingsShell).",
+          idleCost: "Uninstalled: 0 signaling sockets, 0 UI bytes, 0 plugin_web_pairing tables."
+        },
+        "knowledge-semantic": {
+          title: "knowledge-semantic (pgvector HNSW)",
+          wave: "v1.2 Plugin · Goal 13",
+          slots: ["slot-kb-toolbar"],
+          summary: "Optional pgvector partial halfvec HNSW + local/remote embedder on the same PG 18 image; degrades cleanly to Core FTS when off.",
+          placement: "Mounts strictly in knowledge.toolbar (1-click Semantic HNSW toggle chip beside search).",
+          idleCost: "Off/uninstalled: 0 embedder RAM, 0 extra nav tabs, 0 chunk_embeddings rows."
+        },
+        thermy: {
+          title: "thermy (Operator Copilot)",
+          wave: "v1.3 Plugin · Goal 14",
+          slots: ["slot-nav-item", "slot-shell-corner"],
+          summary: "Conversational operator assistant on HarnessPlugin + @iammrduncan/magnesium/chat calling core/api strictly under the user's PolicyGrant.",
+          placement: "Mounts in nav.item (threads workspace above Campaigns) and shell.corner (compact floating popover launcher).",
+          idleCost: "Uninstalled: 0 chat bundle bytes, 0 DOM chrome, 0 core edits."
+        },
+        "sql-explorer": {
+          title: "sql-explorer (Read-Only PG Explorer)",
+          wave: "v1.3 Plugin · Goal 14",
+          slots: ["slot-nav-item", "slot-run-tab"],
+          summary: "Statement-timeout-bounded read-only SQL queries and saved views over EVENTS, attempts, telemetry, and Knowledge tables; blocks all writes.",
+          placement: "Mounts in nav.item (full-screen workbench) and run.inspector.tab (scoped SQL tab inside existing BesidePanel).",
+          idleCost: "Uninstalled: 0 core LOC, 0 UI bytes, 0 extra side panels."
+        },
+        "distill-jsonl": {
+          title: "distill-jsonl (Fine-Tuning Exporter)",
+          wave: "v1.2 Plugin · Goal 12",
+          slots: ["slot-run-header", "slot-run-tab", "slot-setup-section"],
+          summary: "Streams secret-redacted SFT, preference-pair, and trajectory JSONL datasets filterable by campaign, run, outcome, champion lineage, and role.",
+          placement: "Mounts in run.header.action (Export JSONL), run.inspector.tab (trajectory preview), and setup.section (redaction defaults).",
+          idleCost: "Uninstalled: 0 core schema changes, 0 UI bundle bytes."
+        }
+      };
+
+      let activeLens = "none";
+      let selectedSlotId = "slot-run-header";
+
+      const lensBtns = Array.from(document.querySelectorAll("[data-plugin-lens]"));
+      const slotBtns = Array.from(document.querySelectorAll("[data-slot-id]"));
+      const iaInspectorEl = document.getElementById("ia-inspector");
+
+      function renderIaMap() {
+        const lens = activeLens !== "none" ? PLUGIN_LENSES[activeLens] : null;
+
+        lensBtns.forEach((b) => {
+          b.setAttribute("aria-pressed", String(b.dataset.pluginLens === activeLens));
+        });
+
+        slotBtns.forEach((b) => {
+          const id = b.dataset.slotId;
+          const isMatched = lens ? lens.slots.includes(id) : false;
+          const isSelected = !lens && id === selectedSlotId;
+          b.classList.toggle("is-matched", isMatched);
+          b.classList.toggle("is-selected", isSelected);
+          b.setAttribute("aria-pressed", String(isMatched || isSelected));
+        });
+
+        if (lens) {
+          iaInspectorEl.innerHTML = `
+            <div class="inspector-kicker">PLUGIN PLACEMENT LENS</div>
+            <h3>${esc(lens.title)}</h3>
+            <div class="inspector-meta">
+              <span class="chip chip-flame">${esc(lens.wave)}</span>
+              <span class="chip chip-working mono">${lens.slots.length} slot${lens.slots.length > 1 ? "s" : ""} highlighted</span>
+            </div>
+            <p style="font-size:13px;">${esc(lens.summary)}</p>
+            <div class="inspector-section">
+              <h4>Allowed Attachment Points</h4>
+              <p style="font-size:13px;color:var(--ink);">${esc(lens.placement)}</p>
+            </div>
+            <div class="inspector-callout">
+              <strong>Zero-Cost Isolation:</strong> ${esc(lens.idleCost)}
+            </div>
+          `;
+          return;
+        }
+
+        const s = IA_SLOTS[selectedSlotId] || IA_SLOTS["slot-run-header"];
+        iaInspectorEl.innerHTML = `
+          <div class="inspector-kicker">${esc(s.kind)}</div>
+          <h3>${esc(s.title)}</h3>
+          <div class="inspector-meta">
+            <span class="chip ${s.chipCls}">${esc(s.location)}</span>
+          </div>
+          <div class="inspector-section" style="border-top:0;padding-top:0;margin-top:4px;">
+            <h4>Owns</h4>
+            <p style="font-size:13px;">${esc(s.owns)}</p>
+          </div>
+          <div class="inspector-section">
+            <h4>Bounded Cap &amp; Attachment Rule</h4>
+            <p style="font-size:13px;color:var(--ink);">${esc(s.capRule)}</p>
+          </div>
+          <div class="inspector-section">
+            <h4>Reference Plugins Here</h4>
+            <ul class="inspector-list">${s.plugins.map((p) => `<li><code>${esc(p)}</code></li>`).join("")}</ul>
+          </div>
+          <div class="inspector-callout">
+            <strong>Anti-Slop Guard:</strong> ${esc(s.antiSlop)}
+          </div>
+        `;
+      }
+
+      lensBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeLens = btn.dataset.pluginLens;
+          renderIaMap();
+        });
+      });
+      slotBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeLens = "none";
+          selectedSlotId = btn.dataset.slotId;
+          renderIaMap();
+        });
+      });
+      renderIaMap();
+
+      /* =====================================================================
+         5. Interactive 12 Anti-Slop Red Lines Filter
+         ===================================================================== */
+      const RED_LINES = [
+        {
+          n: 1, cat: "ux", catLabel: "UX & IA",
+          title: "6th core top-level nav item or rogue plugin chrome",
+          trigger: "Adding a 6th core nav slot, mounting plugin UI outside the 6 named plugin slots (design-plan.md §3), or rendering chrome for an uninstalled plugin.",
+          fix: "Keep core nav at Home, Compute, Knowledge, Campaigns, Setup; mount plugin UI strictly in the 6 named slots with 0 DOM nodes when uninstalled."
+        },
+        {
+          n: 2, cat: "ux", catLabel: "UX & IA",
+          title: "UI shoved into UI",
+          trigger: "Adding tabs, cards, banners, or multi-sentence 'How it works' prose walls to an existing screen without Gate 4 subtraction and interactive mockup sign-off.",
+          fix: "Answer Gate 4's subtraction question (what gets removed/merged/collapsed) and get owner approval on a 1440px/390px light/dark HTML mockup first."
+        },
+        {
+          n: 3, cat: "ux", catLabel: "UX & IA",
+          title: "Unbacked settings or knobs",
+          trigger: "Adding a setting, env var, or mode without a linked REQ-NNN and real observed user story.",
+          fix: "Use sane host-proportional defaults (e.g., 75% RAM, 5× baseline time); add a setting only with Gate 1 evidence."
+        },
+        {
+          n: 4, cat: "ux", catLabel: "UX & IA",
+          title: "Surface-parity split",
+          trigger: "Shipping a UI form/action without a core/api ActionDef, or an API/MCP/CLI action that bypasses the shared door and PolicyGrant evaluator.",
+          fix: "Declare every read and write once in packages/core/src/api (or PluginApi.registerActions) so REST, MCP, CLI, client, and docs stay 1:1."
+        },
+        {
+          n: 5, cat: "ux", catLabel: "UX & IA",
+          title: "Bespoke styling outside Magnesium",
+          trigger: "Inventing one-off colors, tokens, or duplicated components in packages/ui instead of @iammrduncan/magnesium.",
+          fix: "Compose Magnesium parts and primitives with standard Tailwind layout utilities (flex, grid, gap-*); add shared look changes inside Magnesium."
+        },
+        {
+          n: 6, cat: "arch", catLabel: "Architecture & Security",
+          title: "Hardcoded owner-only locks or broken judge walls",
+          trigger: "Reintroducing OWNER_ONLY_KINDS / hardcoded human-only checks outside PolicyGrant, or letting run_worker / run_advisor reach Door or Judge actions.",
+          fix: "Enforce every Door capability via composable PolicyGrant profiles while keeping internal run workers/advisors structurally tokenless and walled."
+        },
+        {
+          n: 7, cat: "arch", catLabel: "Architecture & Security",
+          title: "Core bloat or plugin coupling",
+          trigger: "Putting an optional feature in core, importing/naming an optional plugin from core, or adding plugin tables to core migrations.",
+          fix: "Default to PluginApi with plugin_<name> schemas and zero-cost isolation; core passes the 3-rule test only."
+        },
+        {
+          n: 8, cat: "arch", catLabel: "Architecture & Security",
+          title: "Resurrected v0.x debt",
+          trigger: "Reintroducing rig concepts, hidden default research turn/trial/time/spend caps, or --lower baseline ratchets / forced line-count file-split traps.",
+          fix: "Use machine › device pools, explicit user budgets + deterministic Sans-I/O circuit breakers, and < 2 min checks with workspace exports."
+        },
+        {
+          n: 9, cat: "arch", catLabel: "Architecture & Security",
+          title: "Unjustified dependencies",
+          trigger: "Adding a runtime package without explaining why Node/Web/Postgres built-ins cannot do it, checking its license (never AGPLv3 in core), and adding a CREDITS.md entry.",
+          fix: "Justify every runtime dependency at Gate 2, verify license compatibility, and attribute it in CREDITS.md in the same commit."
+        },
+        {
+          n: 10, cat: "code", catLabel: "Code, Tests & Prose",
+          title: "Fake tests & hidden failures",
+          trigger: "Committing tautological assertions that cannot fail, .only/.skip/todo tests, empty/swallowed catch blocks, throw new Error('Not implemented') stubs, or unsourced @ts-expect-error / biome-ignore suppressions.",
+          fix: "Write real Sans-I/O & contract tests that prove happy path, refusal, and failure recovery; state an inline reason for any suppression."
+        },
+        {
+          n: 11, cat: "code", catLabel: "Code, Tests & Prose",
+          title: "AI prose walls & unverified claims",
+          trigger: "Shipping vague claims ('robust, scalable, seamless') without measurable referents, or reporting checks as green when they did not run.",
+          fix: "Cite exact files, measured latencies/counts, and separate automated checks, browser observations, and untested paths plainly."
+        },
+        {
+          n: 12, cat: "code", catLabel: "Code, Tests & Prose",
+          title: "Public-repo leakage",
+          trigger: "Any private hostname, IP/MAC address, internal domain, secret/vault name, personal path, or deployment map in tracked files or commit messages (public.mjs or gitleaks hit).",
+          fix: "Run node scripts/checks/public.mjs --untracked before every commit and keep deployment-specific notes strictly in git-ignored .internal/."
+        }
+      ];
+
+      let activeRlCat = "all";
+      let rlQuery = "";
+      const rlGridEl = document.getElementById("redlines-grid");
+      const rlEmptyEl = document.getElementById("redlines-empty");
+      const rlCountEl = document.getElementById("rl-count");
+      const rlSearchEl = document.getElementById("rl-search");
+      const rlResetBtn = document.getElementById("rl-reset");
+      const rlCatBtns = Array.from(document.querySelectorAll("[data-rl-cat]"));
+
+      function catChipCls(cat) {
+        if (cat === "ux") return "chip-flame";
+        if (cat === "arch") return "chip-working";
+        return "chip-needs";
+      }
+
+      function renderRedLines() {
+        const q = rlQuery.trim().toLowerCase();
+        const filtered = RED_LINES.filter((r) => {
+          if (activeRlCat !== "all" && r.cat !== activeRlCat) return false;
+          if (!q) return true;
+          const hay = `#${r.n} ${r.title} ${r.trigger} ${r.fix} ${r.catLabel}`.toLowerCase();
+          return hay.includes(q);
+        });
+
+        rlCountEl.textContent = `${filtered.length} of ${RED_LINES.length} shown`;
+        rlEmptyEl.hidden = filtered.length > 0;
+        rlGridEl.hidden = filtered.length === 0;
+
+        rlGridEl.innerHTML = filtered.map((r) => `
+          <article class="redline-card">
+            <div class="redline-top">
+              <span class="redline-num">RED LINE #${r.n} · AUTO-REJECT</span>
+              <span class="chip ${catChipCls(r.cat)}">${esc(r.catLabel)}</span>
+            </div>
+            <h3 class="redline-title">${esc(r.title)}</h3>
+            <div class="redline-trigger">${esc(r.trigger)}</div>
+            <div class="redline-fix"><strong>Instead:</strong> ${esc(r.fix)}</div>
+          </article>
+        `).join("");
+      }
+
+      rlCatBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeRlCat = btn.dataset.rlCat;
+          rlCatBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.rlCat === activeRlCat)));
+          renderRedLines();
+        });
+      });
+
+      rlSearchEl.addEventListener("input", () => {
+        rlQuery = rlSearchEl.value;
+        renderRedLines();
+      });
+
+      rlResetBtn.addEventListener("click", () => {
+        activeRlCat = "all";
+        rlQuery = "";
+        rlSearchEl.value = "";
+        rlCatBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.rlCat === "all")));
+        renderRedLines();
+      });
+      renderRedLines();
+
+      /* =====================================================================
+         6. Requirements Intake Tabs + Canonical phases/_template.md Copy
+         ===================================================================== */
+      const intakeTabs = Array.from(document.querySelectorAll("[data-intake-tab]"));
+      const intakePanels = {
+        waves: document.getElementById("intake-view-waves"),
+        drops: document.getElementById("intake-view-drops"),
+        states: document.getElementById("intake-view-states")
+      };
+
+      intakeTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const target = tab.dataset.intakeTab;
+          intakeTabs.forEach((t) => t.setAttribute("aria-selected", String(t.dataset.intakeTab === target)));
+          Object.entries(intakePanels).forEach(([key, el]) => {
+            el.hidden = key !== target;
+          });
+        });
+      });
+
+      const PHASE_TEMPLATE = `# <Phase or Feature Title>
+
+**Track:** \`Feature / Plugin\` | \`Phase / Architecture\`  
+**Status:** \`Draft\` | \`In Review (Gate 5)\` | \`Approved\` | \`Building\` | \`Built (YYYY-MM-DD)\`  
+**Intake (Gate 1):** Issue \`#NNN\` · Requirements \`REQ-NNN\` ([\`requirements.md\`](../requirements.md)) · Wave / Goal \`v1.x / Goal N\`  
+**UX Mockup (Gate 4):** [\`mockups/index.html\`](../mockups/index.html) *(or \`N/A — non-visual\`)* · **LOC bound:** \`<= NNN\`
+
+- **<Headline outcome 1>:** one concrete sentence on what the user can do.
+- **<Headline outcome 2>:** one concrete sentence on behavior or safety boundary.
+- **<Headline outcome 3>:** one concrete sentence on idle cost / rollback / defaults.
+
+**What prompted this:** Quote the GitHub issue, user friction, or owner ask verbatim (public-safe only).
+
+---
+
+## 0. Core or plugin (Gate 3)
+
+**Placement:** \`Plugin (<name>)\` *(default)* | \`Core\` — explain why in 2–4 lines against [\`README.md\`](../README.md) §1 & [\`decisions.md\`](../decisions.md) §1.
+- **Smallest \`PluginApi\` hook needed:** \`None\` *(or exact signature + \`minThermite\` / \`plugin-breaks.json\` note)*.
+- **Idle cost when disabled/uninstalled:** \`0\` processes, \`0\` timers, \`0\` tables, \`0\` UI bytes *(state exact overhead if core)*.
+
+## 1. Research & prior art (Gate 2)
+
+- **Thermite today:** exact files, schemas, or contracts inspected (\`packages/...\`).
+- **Prior art:** relevant patterns from \`fxbot\`, \`libfx\`, Pi, opencode, or specs (credit in \`CREDITS.md\` if adopted).
+- **Spikes / measurements:** exact latency, memory, or recall numbers measured (and plainly state what was *not* tested).
+
+## 2. Key takeaways
+
+1. **<Decision 1>:** concrete takeaway tied directly to Section 1 evidence.
+2. **<Decision 2>:** concrete takeaway tied directly to Section 1 evidence.
+3. **<Decision 3>:** concrete takeaway tied directly to Section 1 evidence.
+
+## 3. Contract, UX & implementation
+
+### \`core/api\` actions & \`PolicyGrant\` (Gate 3 — Surface Parity)
+
+| \`ActionDef\` name | HTTP / MCP / CLI | \`PolicyGrant\` capability | Idempotent? |
+| --- | --- | --- | --- |
+| \`<domain>.<verb>\` | \`POST /v1/...\` · \`<domain>_<verb>\` · \`thermite ...\` | \`<core or plugin>:<verb>\` | Yes / No |
+
+- **Agent wall check:** confirm internal \`run_worker\` / \`run_advisor\` agents cannot invoke Door actions or mutate Judge code.
+
+### UX & IA check (Gate 4 — delete subsection only if non-visual)
+
+- **Nav / plugin slot:** one of the 5 core nav slots (\`Home\`, \`Compute\`, \`Knowledge\`, \`Campaigns\`, \`Setup\`) or one of the 6 named plugin slots (\`nav.item\`, \`shell.corner\`, \`run.header.action\`, \`run.inspector.tab\`, \`knowledge.toolbar\`, \`setup.section\`).
+- **Clutter & subtraction:** what this adds to existing screens, and what gets removed, merged, or collapsed.
+- **One home, one word:** single primary home for new facts/actions; terminology matches [\`design-plan.md\`](../design-plan.md).
+- **Mockup verification:** light & dark (\`@iammrduncan/magnesium\` \`thermite.css\`) at \`1440px\` and \`390px\`, covering empty, dense, and error states.
+
+### Files, schema & cut line
+
+| Package / path | Change | Est. LOC |
+| --- | --- | ---: |
+| \`packages/...\` or \`plugins/<name>/...\` | <single-job responsibility> | \`~NN\` |
+
+- **Schema / migrations:** \`plugin_<name>\` migration file(s) *(or core migration + upgrade note)*.
+- **Not in this phase:** explicit out-of-scope list. **Cut order if LOC bound is pressured:** drop \`<X>\` first; keep \`<Y>\`.
+
+## 4. Checklist (Gate 6)
+
+**M1. Core logic / contract**
+- [ ] Pure Sans-I/O reducer / schema / policy tests pass in \`< 1s\` (proving happy path, refusal, and failure recovery).
+- [ ] Unified \`core/api\` parity verified across REST, policy-filtered MCP, typed client, and CLI.
+
+**M2. Integration, UI & docs**
+- [ ] Conformance / proof gates pass (\`wall.selfTest()\`, judge A/A, or \`HarnessPlugin\` suite where applicable).
+- [ ] *(If visual)* Real browser check at \`1440px\` & \`390px\` in light/dark: zero console errors, zero overflow, empty/error states verified.
+- [ ] \`< 2 min\` checks pass: \`npm run typecheck\`, \`npm run lint\`, \`npm test\`, \`npm run build:ui\` (if UI), \`node scripts/checks/public.mjs --untracked\` (\`0\` hits).
+- [ ] Docs (\`docs/_site/\`), generated API reference, and \`CREDITS.md\` updated in the same commit; \`REQ-NNN\` updated in [\`requirements.md\`](../requirements.md).
+
+**Human checks (owner runs before moving to \`phases/_completed/\`)**
+- [ ] <Concrete real-world flow, hardware, or UX judgment check not covered by automated tests.>
+
+## 5. Open questions & Owner Sign-Off (Gate 5 — Hard Stop)
+
+1. **<Open question 1>?** *Recommended default:* <option> — <1-line rationale>.
+2. **<Open question 2>?** *Recommended default:* <option> — <1-line rationale>.
+
+- **Owner Sign-Off:** \`[ ] Approved to build\` — Owner: \`<name>\` · Date: \`YYYY-MM-DD\` · Decisions locked: \`<notes or link to decisions.md>\`.
+
+---
+
+## What the build changed
+
+*Fill during Gate 6 close-out before \`git mv\` to \`docs/plan/v1/phases/_completed/<slug>.md\`.*
+- **Plan vs. built deltas:** <what changed during implementation and why>.
+- **Actual LOC vs. bound:** \`<actual> / <bound> LOC\`.
+- **Not tested / follow-ups:** <anything left to human checks or deferred to \`#NNN\`>.`;
+
+      const templateCodeEl = document.querySelector("#phase-template-code code");
+      templateCodeEl.textContent = PHASE_TEMPLATE;
+
+      async function copyText(text) {
+        if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch {
+            // Fall back below (e.g., restricted file:// origins)
+          }
+        }
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch { ok = false; }
+        document.body.removeChild(ta);
+        return ok;
+      }
+
+      const copyStatusEl = document.getElementById("copy-status");
+      const copyTemplateBtn = document.getElementById("copy-template-btn");
+      let copyTimer = 0;
+
+      copyTemplateBtn.addEventListener("click", async () => {
+        const ok = await copyText(PHASE_TEMPLATE);
+        copyStatusEl.textContent = ok ? "Copied 89-line template" : "Select and copy manually";
+        copyTemplateBtn.textContent = ok ? "Copied" : "Copy _template.md";
+        clearTimeout(copyTimer);
+        copyTimer = setTimeout(() => {
+          copyStatusEl.textContent = "";
+          copyTemplateBtn.textContent = "Copy _template.md";
+        }, 2500);
+      });
+
+      const copyReqBtn = document.getElementById("copy-req-row");
+      copyReqBtn.addEventListener("click", async () => {
+        const ok = await copyText(document.getElementById("req-row-snippet").textContent);
+        copyReqBtn.textContent = ok ? "Copied" : "Copy failed";
+        setTimeout(() => { copyReqBtn.textContent = "Copy REQ row"; }, 2000);
+      });
+
+      const copyGoalBtn = document.getElementById("copy-goal-cmd");
+      copyGoalBtn.addEventListener("click", async () => {
+        const ok = await copyText(document.getElementById("goal-cmd-snippet").textContent);
+        copyGoalBtn.textContent = ok ? "Copied" : "Copy failed";
+        setTimeout(() => { copyGoalBtn.textContent = "Copy /goal command"; }, 2000);
+      });
+    })();
+  </script>
+</body>
+</html>

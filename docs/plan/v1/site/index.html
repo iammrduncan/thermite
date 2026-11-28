@@ -1,0 +1,3673 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171412" media="(prefers-color-scheme: dark)">
+  <title>Thermite v1 — Architecture &amp; Plan Visual Explainer</title>
+  <style>
+    /* =========================================================================
+       Thermite v1 Visual Explainer — @iammrduncan/magnesium Warm-Grey + Flame
+       Zero CDN, offline-ready, matches packages/design-system/src/theme.css
+       ========================================================================= */
+    :root {
+      color-scheme: light;
+      --bg: #ffffff;
+      --bg-paper: #faf9f7;
+      --surface-muted: #f3f1ee;
+      --ink: #1c1917;
+      --soft: #44403c;
+      --quiet: #6f6862;
+      --line: #e7e5e4;
+      --edge: #d6d3d1;
+      --grid: #efedea;
+
+      --primary: #c2410c;
+      --primary-fg: #ffffff;
+      --flame: #c2410c;
+      --flame-tint: #fff3ec;
+      --ember: #f2542d;
+      --ember-light: #ff8a3d;
+      --ring: #c2410c;
+
+      --good: #15803d;
+      --good-tint: #eefaf2;
+      --working: #1d4ed8;
+      --working-tint: #e8effe;
+      --needs: #b45309;
+      --needs-tint: #fdf3e2;
+      --needs-card: #fffaf0;
+      --needs-edge: #f1dcae;
+      --wrong: #b91c1c;
+      --wrong-tint: #fdecec;
+      --wrong-edge: #f3caca;
+      --idle: #57534e;
+      --idle-tint: #f1efec;
+      --idle-bar: #c9c4bf;
+
+      --toast: #1c1917;
+      --toast-fg: #ffffff;
+
+      --shadow-btn: 0 1px 0 rgb(0 0 0 / 0.08);
+      --shadow-lift: 0 8px 24px rgb(28 25 23 / 0.08);
+
+      --r-sm: 4px;
+      --r-ctrl: 8px;
+      --r-card: 16px;
+      --r-chip: 999px;
+
+      --font-sans: "Geist Variable", "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+      --max-w: 1240px;
+      --header-h: 60px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #211d1a;
+        --bg-paper: #171412;
+        --surface-muted: #2e2925;
+        --ink: #fafaf9;
+        --soft: #d6d3d1;
+        --quiet: #a8a29e;
+        --line: #34302c;
+        --edge: #4a4541;
+        --grid: #34302c;
+
+        --primary: #c2410c;
+        --primary-fg: #ffffff;
+        --flame: #fb923c;
+        --flame-tint: #3a1d10;
+        --ring: #fb923c;
+
+        --good: #4ade80;
+        --good-tint: #12281a;
+        --working: #60a5fa;
+        --working-tint: #16223b;
+        --needs: #fbbf24;
+        --needs-tint: #2e2110;
+        --needs-card: #2a1f0e;
+        --needs-edge: #4d3c18;
+        --wrong: #f87171;
+        --wrong-tint: #2f1717;
+        --wrong-edge: #4d2424;
+        --idle: #a8a29e;
+        --idle-tint: #2e2925;
+        --idle-bar: #57534e;
+
+        --toast: #fafaf9;
+        --toast-fg: #1c1917;
+        --shadow-btn: 0 1px 0 rgb(0 0 0 / 0.35);
+        --shadow-lift: 0 12px 32px rgb(0 0 0 / 0.32);
+      }
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #211d1a;
+      --bg-paper: #171412;
+      --surface-muted: #2e2925;
+      --ink: #fafaf9;
+      --soft: #d6d3d1;
+      --quiet: #a8a29e;
+      --line: #34302c;
+      --edge: #4a4541;
+      --grid: #34302c;
+
+      --primary: #c2410c;
+      --primary-fg: #ffffff;
+      --flame: #fb923c;
+      --flame-tint: #3a1d10;
+      --ring: #fb923c;
+
+      --good: #4ade80;
+      --good-tint: #12281a;
+      --working: #60a5fa;
+      --working-tint: #16223b;
+      --needs: #fbbf24;
+      --needs-tint: #2e2110;
+      --needs-card: #2a1f0e;
+      --needs-edge: #4d3c18;
+      --wrong: #f87171;
+      --wrong-tint: #2f1717;
+      --wrong-edge: #4d2424;
+      --idle: #a8a29e;
+      --idle-tint: #2e2925;
+      --idle-bar: #57534e;
+
+      --toast: #fafaf9;
+      --toast-fg: #1c1917;
+      --shadow-btn: 0 1px 0 rgb(0 0 0 / 0.35);
+      --shadow-lift: 0 12px 32px rgb(0 0 0 / 0.32);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--header-h) + 20px);
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      overflow-x: clip;
+    }
+
+    a {
+      color: var(--flame);
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+    :focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+    }
+
+    code, pre, .mono {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    code {
+      font-size: 0.9em;
+      background: var(--surface-muted);
+      color: var(--ink);
+      padding: 1px 5px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--line);
+    }
+    pre {
+      margin: 0;
+      padding: 14px 16px;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      overflow-x: auto;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: var(--ink);
+    }
+    pre code {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      font-size: inherit;
+    }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: 8px;
+      z-index: 200;
+      background: var(--primary);
+      color: var(--primary-fg);
+      padding: 8px 14px;
+      border-radius: var(--r-ctrl);
+      font-weight: 600;
+    }
+    .skip-link:focus { left: 16px; }
+
+    /* =========================================================================
+       Top Sticky Navigation
+       ========================================================================= */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-paper);
+      border-bottom: 1px solid var(--line);
+    }
+    .header-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+      min-height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .brand:hover { text-decoration: none; }
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: linear-gradient(160deg, var(--ember-light), var(--ember));
+      color: #ffffff;
+      flex: none;
+    }
+    .brand-sub {
+      color: var(--quiet);
+      font-weight: 400;
+      font-size: 13px;
+      border-left: 1px solid var(--edge);
+      padding-left: 10px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .nav-links a {
+      color: var(--soft);
+      padding: 6px 10px;
+      border-radius: var(--r-ctrl);
+      font-size: 13.5px;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: var(--ink);
+      background: var(--surface-muted);
+      text-decoration: none;
+    }
+    .nav-links a.active { font-weight: 600; }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Buttons (36px standard Thermite control height) */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 0 13px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--edge);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: var(--shadow-btn);
+    }
+    .btn:hover {
+      background: var(--surface-muted);
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg);
+    }
+    .btn-primary:hover {
+      background: #a9370a;
+      border-color: #a9370a;
+      color: var(--primary-fg);
+    }
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      color: var(--soft);
+      font-weight: 400;
+    }
+    .btn-ghost:hover {
+      background: var(--surface-muted);
+      color: var(--ink);
+    }
+    .btn-sm {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 12.5px;
+    }
+    .menu-toggle {
+      display: none;
+    }
+    .mobile-drawer {
+      display: none;
+      border-top: 1px solid var(--line);
+      background: var(--bg-paper);
+      padding: 12px 20px 16px;
+    }
+    .mobile-drawer.open { display: block; }
+    .mobile-drawer-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .mobile-drawer-grid a {
+      display: flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: var(--r-ctrl);
+      color: var(--ink);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .mobile-drawer-docs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    /* =========================================================================
+       Layout Rhythm & Sections
+       ========================================================================= */
+    .wrap {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .section {
+      padding: 56px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-paper {
+      background: var(--bg-paper);
+    }
+    .section-head {
+      max-width: 760px;
+      margin-bottom: 28px;
+    }
+    .section-head-split {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .section-head-split .section-head { margin-bottom: 0; }
+    .section-kicker {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+      margin: 0 0 6px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 3.6vw, 40px);
+      line-height: 1.15;
+      letter-spacing: -0.025em;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      line-height: 1.35;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    p { margin: 0 0 12px; color: var(--soft); }
+    p:last-child { margin-bottom: 0; }
+    .lead {
+      font-size: 15.5px;
+      line-height: 1.55;
+      color: var(--soft);
+    }
+
+    /* Semantic Chips (only for real state / wave / role labels) */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: var(--r-chip);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .chip.mono,
+    .inspector-meta .chip {
+      white-space: normal;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .chip-good { color: var(--good); background: var(--good-tint); }
+    .chip-working { color: var(--working); background: var(--working-tint); }
+    .chip-needs { color: var(--needs); background: var(--needs-tint); border-color: var(--needs-edge); }
+    .chip-wrong { color: var(--wrong); background: var(--wrong-tint); border-color: var(--wrong-edge); }
+    .chip-idle { color: var(--idle); background: var(--idle-tint); }
+    .chip-flame { color: var(--flame); background: var(--flame-tint); }
+
+    .state-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: currentColor;
+      flex: none;
+    }
+
+    /* =========================================================================
+       Section 1: Hero & v0.2 -> v1 Shift
+       ========================================================================= */
+    .hero-section {
+      padding: 44px 0 48px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      gap: 32px;
+      align-items: start;
+      margin-bottom: 32px;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .hero-summary-box {
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 18px 20px;
+    }
+    .hero-summary-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .hero-summary-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 9px;
+    }
+    .hero-summary-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      padding-top: 9px;
+      border-top: 1px solid var(--line);
+    }
+    .hero-summary-list li:first-child { padding-top: 0; border-top: 0; }
+    .hero-summary-list .k { color: var(--quiet); }
+    .hero-summary-list .v { color: var(--ink); font-weight: 600; text-align: right; }
+
+    /* Before / After Shift Scorecard (2-row asymmetric matrix) */
+    .shift-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .shift-card {
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .shift-card-wide {
+      background: var(--bg);
+    }
+    .shift-label {
+      font-size: 12px;
+      color: var(--quiet);
+      font-weight: 600;
+    }
+    .shift-compare {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .shift-old {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--quiet);
+      text-decoration: line-through;
+      text-decoration-color: var(--edge);
+    }
+    .shift-arrow {
+      color: var(--quiet);
+      font-size: 13px;
+    }
+    .shift-new {
+      font-family: var(--font-mono);
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.015em;
+    }
+    .shift-card[data-featured="true"] .shift-new {
+      color: var(--flame);
+    }
+    .shift-detail {
+      font-size: 12.5px;
+      color: var(--soft);
+      line-height: 1.45;
+    }
+
+    /* =========================================================================
+       Section 2: Interactive System Architecture Explorer
+       ========================================================================= */
+    .arch-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .diagram-frame {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 16px;
+    }
+    .diagram-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .diagram-hint {
+      font-size: 12.5px;
+      color: var(--quiet);
+    }
+    .node-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .node-pill {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+      color: var(--soft);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 400;
+      cursor: pointer;
+    }
+    .node-pill:hover {
+      background: var(--surface-muted);
+      color: var(--ink);
+    }
+    .node-pill[aria-pressed="true"] {
+      background: var(--flame-tint);
+      border-color: var(--flame);
+      color: var(--flame);
+      font-weight: 600;
+    }
+
+    .arch-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .arch-node {
+      cursor: pointer;
+    }
+    .arch-node .node-box {
+      fill: var(--bg-paper);
+      stroke: var(--edge);
+      stroke-width: 1.25;
+    }
+    .arch-node:hover .node-box {
+      stroke: var(--ink);
+    }
+    .arch-node.is-selected .node-box {
+      fill: var(--flame-tint);
+      stroke: var(--flame);
+      stroke-width: 2;
+    }
+    .arch-node text { pointer-events: none; font-family: var(--font-sans); }
+    .arch-node .svg-title { fill: var(--ink); font-size: 13px; font-weight: 600; }
+    .arch-node .svg-sub { fill: var(--soft); font-size: 11px; }
+    .arch-node .svg-mono { fill: var(--quiet); font-family: var(--font-mono); font-size: 10.5px; }
+    .arch-node.is-selected .svg-title { fill: var(--flame); }
+
+    .svg-group-box {
+      fill: transparent;
+      stroke: var(--line);
+      stroke-width: 1.25;
+      stroke-dasharray: 4 3;
+    }
+    .svg-group-label {
+      fill: var(--quiet);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+    .svg-edge {
+      fill: none;
+      stroke: var(--edge);
+      stroke-width: 1.5;
+      transition: stroke 140ms ease, stroke-width 140ms ease;
+    }
+    .svg-edge.is-active {
+      stroke: var(--flame);
+      stroke-width: 2.25;
+    }
+
+    /* Inspector Panel */
+    .inspector {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 20px;
+      position: sticky;
+      top: calc(var(--header-h) + 16px);
+    }
+    .inspector-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .inspector-pkg {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--flame);
+      margin-bottom: 4px;
+    }
+    .inspector-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 12px 0;
+    }
+    .inspector-section {
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .inspector-section h4 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+    }
+    .inspector-list {
+      margin: 0;
+      padding-left: 16px;
+      color: var(--soft);
+      font-size: 13px;
+      display: grid;
+      gap: 5px;
+      overflow-wrap: anywhere;
+    }
+    .inspector-list li strong { color: var(--ink); font-weight: 600; }
+    .inspector-delta {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      font-size: 12.5px;
+      color: var(--soft);
+      overflow-wrap: anywhere;
+    }
+    .inspector-delta strong { color: var(--ink); }
+
+    /* Sub-panels below main Architecture SVG */
+    .subpanel-grid {
+      margin-top: 28px;
+      display: grid;
+      gap: 24px;
+    }
+    .subpanel-grid > *,
+    .arch-layout > *,
+    .lifecycle-detail > *,
+    .breaker-layout > *,
+    .two-col > *,
+    .three-col > *,
+    .plugin-tiers > *,
+    .plugin-detail-bar > *,
+    .goal-body-grid > *,
+    .hero-grid > * {
+      min-width: 0;
+    }
+    .panel-box {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 20px 22px;
+      min-width: 0;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* Segmented Controls */
+    .segmented {
+      display: inline-flex;
+      background: var(--surface-muted);
+      padding: 3px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      gap: 2px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .segmented button {
+      min-height: 30px;
+      padding: 4px 12px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--soft);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .segmented button:hover { color: var(--ink); }
+    .segmented button[aria-selected="true"],
+    .segmented button[aria-pressed="true"] {
+      background: var(--bg);
+      color: var(--ink);
+      box-shadow: var(--shadow-btn);
+    }
+
+    /* Clean Tables */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      max-width: 100%;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+      background: var(--bg);
+    }
+    th {
+      background: var(--bg-paper);
+      color: var(--quiet);
+      font-weight: 600;
+      font-size: 12px;
+      line-height: 1.3;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      color: var(--soft);
+    }
+    td.mono {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    #nats-view-keys td:first-child {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+    tbody tr:last-child td { border-bottom: 0; }
+    td strong { color: var(--ink); font-weight: 600; }
+
+    /* Plugin Ecosystem Tiered Grid */
+    .plugin-tiers {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .plugin-tier {
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .plugin-tier-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .plugin-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .plugin-item {
+      padding: 5px 9px;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--ink);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      text-align: left;
+    }
+    .plugin-item:hover { border-color: var(--ink); }
+    .plugin-item[aria-pressed="true"] {
+      border-color: var(--flame);
+      background: var(--flame-tint);
+      color: var(--flame);
+      font-weight: 600;
+    }
+    .plugin-detail-bar {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* =========================================================================
+       Section 3: Sans-I/O Lifecycle & 7 Reliability Breakers
+       ========================================================================= */
+    .lifecycle-shell {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 20px 22px;
+    }
+    .step-track {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+    .step-btn {
+      padding: 10px 8px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+      color: var(--soft);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 68px;
+    }
+    .step-btn:hover { border-color: var(--edge); color: var(--ink); }
+    .step-btn[aria-current="step"] {
+      background: var(--flame-tint);
+      border-color: var(--flame);
+      color: var(--ink);
+    }
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--quiet);
+      font-weight: 600;
+    }
+    .step-btn[aria-current="step"] .step-num { color: var(--flame); }
+    .step-name {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.25;
+      color: var(--ink);
+    }
+
+    .lifecycle-detail {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .reducer-card {
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      padding: 16px;
+      min-width: 0;
+    }
+    .io-triad {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      min-width: 0;
+    }
+    .io-row {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      padding: 10px 12px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .io-row pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .io-row-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--quiet);
+      margin-bottom: 4px;
+      font-family: var(--font-mono);
+    }
+    .stepper-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    /* Breakers View */
+    .breaker-layout {
+      display: grid;
+      grid-template-columns: minmax(250px, 0.95fr) minmax(0, 1.45fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .breaker-list {
+      display: grid;
+      gap: 6px;
+    }
+    .breaker-btn {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .breaker-btn:hover { background: var(--surface-muted); }
+    .breaker-btn[aria-pressed="true"] {
+      background: var(--needs-card);
+      border-color: var(--needs);
+      font-weight: 600;
+    }
+    .lane-board {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .lane-tile {
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      padding: 10px;
+      background: var(--bg);
+    }
+    .lane-tile.is-running { border-color: var(--good); background: var(--good-tint); }
+    .lane-tile.is-paused { border-color: var(--needs-edge); background: var(--needs-card); }
+    .lane-tile.is-frozen { border-color: var(--wrong-edge); background: var(--wrong-tint); }
+    .lane-tile.is-rejudging { border-color: var(--working); background: var(--working-tint); }
+    .lane-name { font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
+    .lane-state { font-size: 11.5px; font-family: var(--font-mono); color: var(--soft); }
+
+    /* =========================================================================
+       Section 4: Capabilities & User Journeys (Tabbed Panels)
+       ========================================================================= */
+    .tabs-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+      margin-bottom: 22px;
+    }
+    .tab-btn {
+      min-height: 36px;
+      padding: 0 14px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--soft);
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 400;
+      cursor: pointer;
+    }
+    .tab-btn:hover {
+      background: var(--surface-muted);
+      color: var(--ink);
+    }
+    .tab-btn[aria-selected="true"] {
+      background: var(--flame-tint);
+      border-color: var(--flame);
+      color: var(--flame);
+      font-weight: 600;
+    }
+    .tab-panel[hidden] { display: none; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    .journey-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 18px 20px;
+    }
+    .seq-list {
+      list-style: none;
+      margin: 14px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 10px;
+    }
+    .seq-list li {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      font-size: 13px;
+      color: var(--soft);
+    }
+    .seq-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--surface-muted);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .seq-list strong { color: var(--ink); }
+
+    /* Latency Bars (Knowledge tab) */
+    .metric-bars {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .metric-bar-row {
+      display: grid;
+      gap: 4px;
+    }
+    .metric-bar-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12.5px;
+    }
+    .metric-bar-track {
+      height: 10px;
+      background: var(--surface-muted);
+      border-radius: var(--r-sm);
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .metric-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    /* Policy Matrix Highlights */
+    .policy-row-active {
+      background: var(--flame-tint);
+    }
+    .cap-yes { color: var(--good); font-weight: 600; }
+    .cap-no { color: var(--quiet); }
+    .cap-wall { color: var(--wrong); font-weight: 600; }
+
+    /* =========================================================================
+       Section 5: Roadmap & LOC Budget Visualizer (Goals 1–14)
+       ========================================================================= */
+    .loc-overview {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .loc-scale-row {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr) 155px;
+      gap: 12px;
+      align-items: center;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .loc-scale-track {
+      height: 12px;
+      background: var(--surface-muted);
+      border-radius: var(--r-sm);
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+    .loc-scale-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+    .roadmap-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .goal-list {
+      display: grid;
+      gap: 10px;
+    }
+    .goal-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      overflow: hidden;
+    }
+    .goal-toggle {
+      width: 100%;
+      padding: 14px 18px;
+      background: transparent;
+      border: 0;
+      color: var(--ink);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+    }
+    .goal-toggle:hover { background: var(--bg-paper); }
+    .goal-title-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .goal-num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+    }
+    .goal-name {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .goal-deps {
+      font-size: 12px;
+      color: var(--quiet);
+    }
+    .goal-bar-wrap {
+      display: grid;
+      gap: 4px;
+    }
+    .goal-loc-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--soft);
+    }
+    .goal-bar-track {
+      position: relative;
+      height: 8px;
+      background: var(--surface-muted);
+      border-radius: var(--r-sm);
+      overflow: hidden;
+    }
+    .goal-bar-min {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: var(--flame);
+      border-radius: var(--r-sm);
+    }
+    .goal-bar-max {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: var(--flame);
+      opacity: 0.35;
+      border-radius: var(--r-sm);
+    }
+    .goal-card[data-wave="v1.1"] .goal-bar-min,
+    .goal-card[data-wave="v1.1"] .goal-bar-max { background: var(--working); }
+    .goal-card[data-wave="v1.2"] .goal-bar-min,
+    .goal-card[data-wave="v1.2"] .goal-bar-max { background: var(--good); }
+    .goal-card[data-wave="v1.3"] .goal-bar-min,
+    .goal-card[data-wave="v1.3"] .goal-bar-max { background: var(--needs); }
+
+    .goal-chevron {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--quiet);
+      padding: 4px 8px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--line);
+      background: var(--bg-paper);
+    }
+    .goal-body {
+      padding: 0 18px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--bg-paper);
+      overflow-wrap: anywhere;
+    }
+    .goal-body[hidden] { display: none; }
+    .goal-body-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: 18px;
+      padding-top: 14px;
+    }
+    .goal-body h4 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--quiet);
+    }
+    .goal-body ul {
+      margin: 0;
+      padding-left: 16px;
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--soft);
+      overflow-wrap: anywhere;
+    }
+    .done-when-box {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-ctrl);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--soft);
+      overflow-wrap: anywhere;
+    }
+    .inspector, .decision-card, .journey-card {
+      overflow-wrap: anywhere;
+    }
+    .plugin-item {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    /* =========================================================================
+       Section 6: 16 Locked Decisions Matrix
+       ========================================================================= */
+    .decisions-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .search-input {
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: var(--r-ctrl);
+      border: 1px solid var(--edge);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13.5px;
+      min-width: 240px;
+      flex: 0 1 320px;
+    }
+    .search-input::placeholder { color: var(--quiet); }
+    .decisions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .decision-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+      padding: 15px 17px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .decision-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .decision-id {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--flame);
+    }
+    .decision-title {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--ink);
+      margin: 0;
+    }
+    .decision-verdict {
+      font-size: 13px;
+      color: var(--ink);
+      font-weight: 600;
+      line-height: 1.45;
+    }
+    .decision-why {
+      font-size: 12.5px;
+      color: var(--soft);
+      line-height: 1.45;
+    }
+    .decision-foot {
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--quiet);
+    }
+    .empty-state {
+      padding: 28px 20px;
+      text-align: center;
+      background: var(--bg-paper);
+      border: 1px solid var(--line);
+      border-radius: var(--r-card);
+    }
+
+    /* =========================================================================
+       Footer (Compact Colophon — not a 4-column SaaS template)
+       ========================================================================= */
+    .site-footer {
+      background: var(--bg-paper);
+      padding: 32px 0 44px;
+      font-size: 13px;
+      color: var(--quiet);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+    }
+
+    /* =========================================================================
+       Responsive Breakpoints: 1024px / 820px / 390px
+       ========================================================================= */
+    @media (max-width: 1080px) {
+      .nav-links { display: none; }
+      .menu-toggle { display: inline-flex; }
+      .arch-layout { grid-template-columns: 1fr; }
+      .inspector { position: static; }
+      .plugin-tiers { grid-template-columns: 1fr; }
+      .plugin-detail-bar { grid-template-columns: 1fr; }
+      .step-track { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .lifecycle-detail { grid-template-columns: 1fr; }
+      .breaker-layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 860px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 20px; }
+      .shift-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .two-col, .three-col { grid-template-columns: 1fr; }
+      .decisions-grid { grid-template-columns: 1fr; }
+      .goal-toggle { grid-template-columns: 1fr; gap: 10px; }
+      .goal-body-grid { grid-template-columns: 1fr; }
+      .lane-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .loc-scale-row { grid-template-columns: 130px minmax(0, 1fr) 100px; }
+    }
+
+    @media (max-width: 540px) {
+      .wrap, .header-inner { padding-left: 16px; padding-right: 16px; }
+      .section { padding: 38px 0; }
+      .hero-section { padding: 28px 0 36px; }
+      .brand-sub { display: none; }
+      .header-doc-btn { display: none; }
+      .shift-grid { grid-template-columns: 1fr; }
+      .step-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .search-input { width: 100%; min-width: 0; flex-basis: 100%; }
+      .loc-scale-row { grid-template-columns: 1fr; gap: 4px; }
+      .panel-box, .lifecycle-shell, .journey-card { padding: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- =======================================================================
+       Sticky Navigation
+       ======================================================================= -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#overview">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4" />
+          </svg>
+        </span>
+        <span>Thermite v1</span>
+        <span class="brand-sub">Visual Explainer</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#overview">Overview</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#lifecycle">Lifecycle</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#decisions">Decisions</a>
+        <a href="./process.html">Process</a>
+      </nav>
+
+      <div class="header-actions">
+        <a class="btn btn-sm header-doc-btn" href="../mockups/index.html">UI Mockups</a>
+        <button id="theme-toggle" class="btn btn-sm" type="button" aria-label="Switch color theme" aria-pressed="false">
+          <span id="theme-label">Dark</span>
+        </button>
+        <button id="menu-toggle" class="btn btn-sm menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-drawer">Menu</button>
+      </div>
+    </div>
+
+    <div id="mobile-drawer" class="mobile-drawer" aria-label="Mobile navigation">
+      <div class="mobile-drawer-grid">
+        <a href="#overview">Overview</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#lifecycle">Lifecycle</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#decisions">Decisions</a>
+      </div>
+      <div class="mobile-drawer-docs">
+        <a class="btn btn-primary btn-sm" href="../mockups/index.html">Interactive UI Mockups</a>
+        <a class="btn btn-sm" href="./process.html">Feature Process</a>
+        <a class="btn btn-sm" href="../requirements.md">Requirements</a>
+        <a class="btn btn-sm" href="../decisions.md">Decisions</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- =====================================================================
+         SECTION 1: Hero & v0.2 -> v1 Outcome Shift
+         ===================================================================== -->
+    <section id="overview" class="hero-section">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div>
+            <h1>Thermite v1: Cleanroom Autoresearch Architecture</h1>
+            <p class="lead">
+              A thin core on NATS JetStream, pure Sans-I/O TypeScript reducers, PostgreSQL 18, and <code>fxbot</code>-aligned plugins.
+              Agents propose changes; separate code measures, judges, and promotes them; owners configure full delegation by policy while <code>rig</code> is deleted completely.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="../mockups/index.html">Open Interactive UI Mockups</a>
+              <a class="btn" href="./process.html">Feature Process</a>
+              <a class="btn" href="../requirements.md">Requirements</a>
+              <a class="btn" href="../decisions.md">Locked Decisions (16)</a>
+              <a class="btn" href="../roadmap.md">Roadmap</a>
+            </div>
+          </div>
+
+          <aside class="hero-summary-box" aria-label="Goal 0 locked specification">
+            <div class="hero-summary-title">
+              <span>Goal 0 Locked Baseline</span>
+              <span class="chip chip-good"><span class="state-dot"></span>16 / 16 Locked</span>
+            </div>
+            <ul class="hero-summary-list">
+              <li><span class="k">Git Home</span><span class="v mono">v1 branch (main stays v0.2.x)</span></li>
+              <li><span class="k">v1.0 MVP Footprint</span><span class="v mono">~12.0k–16.2k LOC</span></li>
+              <li><span class="k">Core Stack</span><span class="v">NATS JS · PG 18 (postgres.js) · libfx</span></li>
+              <li><span class="k">Design System</span><span class="v mono">@iammrduncan/magnesium</span></li>
+              <li><span class="k">Day-One Hardening</span><span class="v">wall-tools (+vbash), wall-os, libkrun</span></li>
+              <li><span class="k">Day-One Hardware</span><span class="v">CPU, CUDA, Apple Silicon Metal/MLX</span></li>
+            </ul>
+          </aside>
+        </div>
+
+        <div class="shift-grid" aria-label="Before and after architectural shifts from v0.2 to v1">
+          <article class="shift-card" data-featured="true">
+            <div class="shift-label">Total Core Footprint</div>
+            <div class="shift-compare">
+              <span class="shift-old num">~220k LOC</span>
+              <span class="shift-arrow" aria-hidden="true">&rarr;</span>
+              <span class="shift-new num">~12.0k–16.2k LOC</span>
+            </div>
+            <div class="shift-detail">~14&times; smaller MVP including day-one <code>wall-microsandbox</code>, <code>device-metal</code>, virtual bash, and <code>git-sync</code> PRs. Later features ship strictly as plugins.</div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Deployment &amp; Compose</div>
+            <div class="shift-compare">
+              <span class="shift-old num">547-line compose</span>
+              <span class="shift-arrow" aria-hidden="true">&rarr;</span>
+              <span class="shift-new num">~55-line 3-service</span>
+            </div>
+            <div class="shift-detail"><code>control</code>, <code>nats</code>, and <code>db</code> (<code>pgvector/pgvector:0.8.x-pg18-trixie</code>) plus auto-enrolled host <code>thermite-runner.service</code>. Zero 7-file <code>-f</code> chains.</div>
+          </article>
+
+          <article class="shift-card">
+            <div class="shift-label">Pre-Commit Verification</div>
+            <div class="shift-compare">
+              <span class="shift-old num">40–60m checks</span>
+              <span class="shift-arrow" aria-hidden="true">&rarr;</span>
+              <span class="shift-new num">&lt; 2m checks</span>
+            </div>
+            <div class="shift-detail">Millisecond Sans-I/O reducer tests, typecheck, Biome, and <code>public.mjs</code>. Drops <code>--lower</code> baseline ratchets, forced 700-line splits, and CSS-ban tests.</div>
+          </article>
+
+          <article class="shift-card shift-card-wide">
+            <div class="shift-label">Knowledge Engine</div>
+            <div class="shift-compare">
+              <span class="shift-old num">11,580-LOC sync SQLite</span>
+              <span class="shift-arrow" aria-hidden="true">&rarr;</span>
+              <span class="shift-new num">~1k LOC async PG 18</span>
+            </div>
+            <div class="shift-detail">Replaces 67 synchronous SQLite files with dual <code>tsvector</code> + <code>pg_trgm</code>, O(1) <code>&lt; 1ms</code> empty-scope checks, and opt-in <code>knowledge-semantic</code> (<code>pgvector</code> HNSW).</div>
+          </article>
+
+          <article class="shift-card shift-card-wide">
+            <div class="shift-label">Delegation &amp; Authority</div>
+            <div class="shift-compare">
+              <span class="shift-old">28 OWNER_ONLY_KINDS</span>
+              <span class="shift-arrow" aria-hidden="true">&rarr;</span>
+              <span class="shift-new">PolicyGrant Profiles</span>
+            </div>
+            <div class="shift-detail">Configurable tokens enable 100% autonomous end-to-end campaign delegation (<code>autonomous_delegate</code>) while keeping run workers structurally walled from Door and Judge.</div>
+          </article>
+
+          <article class="shift-card shift-card-wide">
+            <div class="shift-label">Compute &amp; Execution Model</div>
+            <div class="shift-compare">
+              <span class="shift-old">Rig-centric relays</span>
+              <span class="shift-arrow" aria-hidden="true">&rarr;</span>
+              <span class="shift-new">Run + Machine Pool</span>
+            </div>
+            <div class="shift-detail">A run owns its agents, models, and compute share; <code>machine &rsaquo; device</code> is a shared pool. Runners hold zero supervisor, zero local ledger, and zero model keys.</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 2: Interactive System Architecture Explorer
+         ===================================================================== -->
+    <section id="architecture" class="section section-paper">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">System Topology &amp; Contracts</p>
+          <h2>Interactive System Architecture Explorer</h2>
+          <p>
+            Select any node in the diagram to inspect its package path, estimated LOC budget, exact contracts, and security boundaries.
+            Every domain rule lives in pure Sans-I/O TypeScript; every side effect crosses thin adapters at the edge.
+          </p>
+        </div>
+
+        <div class="arch-layout">
+          <div class="diagram-frame">
+            <div class="diagram-toolbar">
+              <span class="diagram-hint">Click any component below (or use the quick-select buttons) to inspect contracts.</span>
+              <span class="chip chip-idle">Zero rig subjects or tables</span>
+            </div>
+
+            <svg class="arch-svg" viewBox="0 0 920 570" role="img" aria-label="Thermite v1 interactive system architecture diagram">
+              <defs>
+                <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--edge)"></path>
+                </marker>
+                <marker id="arrow-flame" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--flame)"></path>
+                </marker>
+              </defs>
+
+              <!-- Control Plane Group Box -->
+              <rect class="svg-group-box" x="18" y="106" width="884" height="236" rx="14"></rect>
+              <text class="svg-group-label" x="34" y="125">CONTROL PLANE (packages/control + packages/core — zero container engine required)</text>
+
+              <!-- Data Flow Connectors -->
+              <path class="svg-edge" data-edge="surfaces-door" d="M 460 78 L 460 138" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="door-reducer" d="M 290 176 L 328 176" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="reducer-record" d="M 592 176 L 630 176" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="reducer-agents" d="M 412 220 L 412 248" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="reducer-scheduler" d="M 520 220 L 660 248" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="door-nats" d="M 155 220 L 155 364" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="scheduler-nats" d="M 745 328 L 745 364" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="agents-nats" d="M 380 328 L 380 364" marker-end="url(#arrow-muted)"></path>
+              <path class="svg-edge" data-edge="nats-runners" d="M 460 442 L 460 472" marker-end="url(#arrow-muted)"></path>
+
+              <!-- Node 1: Surfaces -->
+              <g class="arch-node" data-node="surfaces" tabindex="0" role="button" aria-label="Inspect Unified Surfaces">
+                <rect class="node-box" x="90" y="16" width="740" height="62" rx="12"></rect>
+                <text class="svg-title" x="110" y="40">Unified Surfaces (One core/api Registry — Zero Surface Drift)</text>
+                <text class="svg-sub" x="110" y="60">React 19 UI (@iammrduncan/magnesium) · Auto-generated CLI · Policy-filtered MCP · REST · Delegated Agents</text>
+                <text class="svg-mono" x="720" y="40">packages/ui, cli</text>
+              </g>
+
+              <!-- Node 2: Door & PolicyGate -->
+              <g class="arch-node" data-node="door" tabindex="0" role="button" aria-label="Inspect Control Door and PolicyGate">
+                <rect class="node-box" x="34" y="138" width="256" height="82" rx="10"></rect>
+                <text class="svg-title" x="48" y="162">Door &amp; PolicyGate</text>
+                <text class="svg-sub" x="48" y="181">REST / MCP / SSE · PolicyGrant</text>
+                <text class="svg-sub" x="48" y="198">Git-HTTP mirror · wss://.../nats :8800</text>
+                <text class="svg-mono" x="48" y="212">sealed secret.key</text>
+              </g>
+
+              <!-- Node 3: Sans-I/O Reducer -->
+              <g class="arch-node is-selected" data-node="reducer" tabindex="0" role="button" aria-label="Inspect Pure Sans-I/O Core">
+                <rect class="node-box" x="328" y="138" width="264" height="82" rx="10"></rect>
+                <text class="svg-title" x="342" y="162">Pure Sans-I/O Core</text>
+                <text class="svg-mono" x="342" y="180">reduce(state, event, now) =&gt; effects</text>
+                <text class="svg-sub" x="342" y="198">21 DomainEvents · 8 Effects · 7 Breakers</text>
+                <text class="svg-mono" x="342" y="212">packages/core (0 I/O imports)</text>
+              </g>
+
+              <!-- Node 4: Record & PG 18 KB -->
+              <g class="arch-node" data-node="record" tabindex="0" role="button" aria-label="Inspect Record and PostgreSQL 18 Knowledge">
+                <rect class="node-box" x="630" y="138" width="256" height="82" rx="10"></rect>
+                <text class="svg-title" x="644" y="162">Record &amp; PG 18 Knowledge</text>
+                <text class="svg-sub" x="644" y="181">Single writer EVENTS -&gt; postgres.js</text>
+                <text class="svg-sub" x="644" y="198">PG 18 FTS + pg_trgm · pgvector-ready</text>
+                <text class="svg-mono" x="644" y="212">plugin_&lt;name&gt; schemas</text>
+              </g>
+
+              <!-- Node 5: Agents & 3-Tier Walls -->
+              <g class="arch-node" data-node="agents" tabindex="0" role="button" aria-label="Inspect Agent Loop and 3-Tier Control-Plane Walls">
+                <rect class="node-box" x="196" y="248" width="388" height="80" rx="10"></rect>
+                <text class="svg-title" x="210" y="271">Agents (harness-libfx) &amp; 3-Tier WallPlugin</text>
+                <text class="svg-sub" x="210" y="290">createFxEngine({ persistence }) · Anthropic cache shim · LAN HTTP</text>
+                <text class="svg-sub" x="210" y="307">Tier 1 wall-tools (+vbash) · Tier 2 wall-os · Tier 3 wall-microsandbox</text>
+                <text class="svg-mono" x="210" y="321">packages/harness-libfx · workers walled from Door &amp; Judge</text>
+              </g>
+
+              <!-- Node 6: Scheduler & Judge -->
+              <g class="arch-node" data-node="scheduler" tabindex="0" role="button" aria-label="Inspect Scheduler and Statistical Judge">
+                <rect class="node-box" x="606" y="248" width="280" height="80" rx="10"></rect>
+                <text class="svg-title" x="620" y="271">Scheduler &amp; Statistical Judge</text>
+                <text class="svg-sub" x="620" y="290">Shared machine &rsaquo; device pool</text>
+                <text class="svg-sub" x="620" y="307">A/B + B/A · Auto A/A · GPU drain checks</text>
+                <text class="svg-mono" x="620" y="321">immutable judge outside worker zones</text>
+              </g>
+
+              <!-- Node 7: NATS JetStream Backbone -->
+              <g class="arch-node" data-node="nats" tabindex="0" role="button" aria-label="Inspect NATS JetStream Backbone">
+                <rect class="node-box" x="18" y="364" width="884" height="78" rx="12"></rect>
+                <text class="svg-title" x="36" y="388">NATS JetStream Backbone (packages/core/src/bus — TLS :4222 + wss://&lt;control&gt;/nats)</text>
+                <text class="svg-mono" x="36" y="408">Streams: EVENTS (O(runs), s2) · JOBS (workqueue, &lt;1 MiB, 7d dedup) · LIVE (1h/256 MiB, t.live.&lt;run&gt;.&gt;)</text>
+                <text class="svg-sub" x="36" y="427">Core NATS: t.machine.&lt;m&gt;.hb (5s) &amp; .cancel (-pgid) · Accounts: THERMITE + SYS · Ed25519 NKeys</text>
+              </g>
+
+              <!-- Node 8: Thin Machine Runners -->
+              <g class="arch-node" data-node="runners" tabindex="0" role="button" aria-label="Inspect Thin Machine Runners">
+                <rect class="node-box" x="18" y="472" width="884" height="82" rx="12"></rect>
+                <text class="svg-title" x="36" y="496">Thin Machine Runners (packages/runner — hardware-only; no supervisor, ledger, or model keys)</text>
+                <text class="svg-sub" x="36" y="516">Linux systemd: device-cpu, device-cuda, wall-container · macOS launchd: device-metal / Apple Silicon MLX (day one)</text>
+                <text class="svg-mono" x="36" y="535">thermite join -&gt; Git-HTTP commit fetch -&gt; build/measure -&gt; -pgid timeout kills -&gt; wall.selfTest()</text>
+              </g>
+            </svg>
+
+            <div class="node-pills" role="group" aria-label="Architecture component selector">
+              <button class="node-pill" type="button" data-select-node="surfaces" aria-pressed="false">Surfaces</button>
+              <button class="node-pill" type="button" data-select-node="door" aria-pressed="false">Door &amp; Policy</button>
+              <button class="node-pill" type="button" data-select-node="reducer" aria-pressed="true">Sans-I/O Core</button>
+              <button class="node-pill" type="button" data-select-node="record" aria-pressed="false">Record &amp; PG 18</button>
+              <button class="node-pill" type="button" data-select-node="agents" aria-pressed="false">Agents &amp; Walls</button>
+              <button class="node-pill" type="button" data-select-node="scheduler" aria-pressed="false">Scheduler &amp; Judge</button>
+              <button class="node-pill" type="button" data-select-node="nats" aria-pressed="false">NATS Bus</button>
+              <button class="node-pill" type="button" data-select-node="runners" aria-pressed="false">Runners</button>
+            </div>
+          </div>
+
+          <aside id="arch-inspector" class="inspector" aria-live="polite">
+            <!-- Populated by JS on load and on click -->
+          </aside>
+        </div>
+
+        <!-- Sub-panel A: NATS JetStream Streams & NKey Accounts -->
+        <div class="subpanel-grid">
+          <div class="panel-box">
+            <div class="panel-header">
+              <div>
+                <h3>NATS JetStream Backbone &amp; Least-Privilege NKey Principals</h3>
+                <p>Collapsed from v0.2's 6 streams to 3 JetStream streams + 2 Core NATS subjects across 2 accounts (<code>THERMITE</code> and <code>SYS</code>).</p>
+              </div>
+              <div class="segmented" role="tablist" aria-label="NATS contract view">
+                <button type="button" role="tab" id="nats-tab-streams" aria-selected="true" data-nats-view="streams">Streams &amp; Subjects (3 + 2)</button>
+                <button type="button" role="tab" id="nats-tab-keys" aria-selected="false" data-nats-view="keys">Accounts &amp; NKey Principals (5)</button>
+              </div>
+            </div>
+
+            <div id="nats-view-streams" class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Stream / Layer</th>
+                    <th>Retention &amp; Limits</th>
+                    <th>Subject Patterns</th>
+                    <th>Direction</th>
+                    <th>Guarantee &amp; Cardinality Guard</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong><code>EVENTS</code></strong><br><span class="chip chip-flame">JetStream</span></td>
+                    <td class="mono">limits, file, s2<br>discard: new<br>max_age: 0</td>
+                    <td class="mono">t.run.&lt;run&gt;.ev.&lt;kind&gt;<br>t.run.&lt;run&gt;.attempt.&lt;stage&gt;<br>t.run.&lt;run&gt;.need.&lt;state&gt;<br>t.machine.&lt;m&gt;.ev.&lt;kind&gt;</td>
+                    <td><code>control</code> &rarr; <code>record</code>, plugins, backup</td>
+                    <td>Immutable domain record. IDs ride in payload + headers (<code>Thermite-Attempt</code>, <code>Thermite-Job</code>, <code>Thermite-Need</code>) keeping subject cardinality <strong>O(runs)</strong>.</td>
+                  </tr>
+                  <tr>
+                    <td><strong><code>JOBS</code></strong><br><span class="chip chip-working">JetStream</span></td>
+                    <td class="mono">workqueue, file<br>max_age: 7d<br>256 msgs/subj<br>dedup: 7d</td>
+                    <td class="mono">t.machine.&lt;m&gt;.job.dispatch<br>t.machine.&lt;m&gt;.job.result</td>
+                    <td><code>control</code> &harr; <code>runner:&lt;m&gt;</code></td>
+                    <td>Payloads stay <code>&lt; 1 MiB</code> (metadata + commit SHA); runners fetch commits via authenticated Git-HTTP. <code>Nats-Msg-Id</code> namespaces phase: <code>&lt;m&gt;:&lt;jobId&gt;:dispatch|result</code>.</td>
+                  </tr>
+                  <tr>
+                    <td><strong><code>LIVE</code></strong><br><span class="chip chip-good">JetStream</span></td>
+                    <td class="mono">limits, file<br>max_age: 1h<br>256 MiB rolling<br>1000 msgs/subj</td>
+                    <td class="mono">t.run.&lt;run&gt;.live.&lt;source&gt;<br>t.machine.&lt;m&gt;.job.&lt;j&gt;.live<br>t.need.&lt;need&gt;.live<br><strong>t.live.&lt;run&gt;.&lt;channel&gt;</strong></td>
+                    <td><code>control</code> / <code>runner</code> &rarr; Door, <code>live-publish</code></td>
+                    <td>Rolling terminal, trace, and metric stream. Sanitized <code>t.live.&lt;run&gt;.&gt;</code> is populated <strong>only</strong> when <code>run.live === true</code>; private runs never touch it.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Core NATS</strong><br><span class="chip chip-idle">Ephemeral</span></td>
+                    <td class="mono">Zero disk<br>Fire-and-forget</td>
+                    <td class="mono">t.machine.&lt;m&gt;.hb<br>t.machine.&lt;m&gt;.cancel</td>
+                    <td><code>runner:&lt;m&gt;</code> &rarr; <code>control</code> (5s)<br><code>control</code> &rarr; <code>runner:&lt;m&gt;</code></td>
+                    <td>5-second device telemetry &amp; GPU-drain heartbeats, plus immediate <code>-pgid</code> kill signals for timed-out or aborted jobs.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="nats-view-keys" class="table-wrap" hidden>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>NKey Principal</th>
+                    <th>Publish Allow / Deny</th>
+                    <th>Subscribe Allow</th>
+                    <th>Enforced Security Boundary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono"><strong>THERMITE</strong></td>
+                    <td class="mono"><strong>control</strong></td>
+                    <td class="mono">Allow &gt; (deny $JS.API.STREAM.DELETE.EVENTS)</td>
+                    <td class="mono">&gt;</td>
+                    <td>Single writer to <code>EVENTS</code>; cannot delete the durable record stream even if compromised.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono"><strong>THERMITE</strong></td>
+                    <td class="mono"><strong>runner:&lt;m&gt;</strong></td>
+                    <td class="mono">t.machine.&lt;m&gt;.{hb,job.result,job.*.live}<br>$JS.API.CONSUMER.{INFO,MSG.NEXT}.JOBS.runner-&lt;m&gt;<br>$JS.ACK.JOBS.runner-&lt;m&gt;.&gt;</td>
+                    <td class="mono">_INBOX.m.&lt;m&gt;.&gt;<br>t.machine.&lt;m&gt;.cancel</td>
+                    <td>Cryptographically bound to machine <code>&lt;m&gt;</code>. Cannot create consumers, read <code>EVENTS</code>, spoof other machines, or access model keys.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono"><strong>THERMITE</strong></td>
+                    <td class="mono"><strong>live-reader</strong></td>
+                    <td class="mono">None (live-only) or $JS.API.CONSUMER/ACK on LIVE.&lt;c&gt; (never t.live.&gt;)</td>
+                    <td class="mono">t.live.&gt; (or _INBOX.live.&lt;c&gt;.&gt;)</td>
+                    <td>Used by <code>thermite live</code> edge relays; physically unable to read private runs or forge messages into <code>LIVE</code>.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono"><strong>THERMITE</strong></td>
+                    <td class="mono"><strong>backup</strong></td>
+                    <td class="mono">$JS.API.STREAM.{INFO,MSG.GET,SNAPSHOT,RESTORE}.EVENTS<br>$JS.SNAPSHOT.{ACK,RESTORE}.EVENTS.&gt;</td>
+                    <td class="mono">_INBOX.backup.&gt;</td>
+                    <td>Snapshot/restore of <code>EVENTS</code> only; cannot publish domain events or purge streams.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono"><strong>SYS</strong></td>
+                    <td class="mono"><strong>system</strong></td>
+                    <td class="mono">$SYS.REQ.SERVER.*.{RELOAD,VARZ,CONNZ,JSZ}</td>
+                    <td class="mono">_INBOX.&gt;</td>
+                    <td>Live NATS config reloads when enrolling/revoking runners plus server metrics; zero access to <code>THERMITE</code> account.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Sub-panel B: Thin Core vs Plugin Ecosystem -->
+          <div class="panel-box">
+            <div class="panel-header">
+              <div>
+                <h3>Plugin Ecosystem (<code>PluginApi</code>, <code>fxbot</code>-Aligned)</h3>
+                <p>Core never imports or names optional plugins. Unused plugins cost zero processes, tables, timers, or UI bytes. Click any item to inspect its hook contract.</p>
+              </div>
+              <div class="segmented" role="group" aria-label="Filter plugin ecosystem">
+                <button type="button" data-plugin-filter="all" aria-pressed="true">All</button>
+                <button type="button" data-plugin-filter="core" aria-pressed="false">Thin Core</button>
+                <button type="button" data-plugin-filter="v1" aria-pressed="false">Bundled v1.0</button>
+                <button type="button" data-plugin-filter="post" aria-pressed="false">Post-MVP (v1.1–v1.3)</button>
+              </div>
+            </div>
+
+            <div class="plugin-tiers" id="plugin-tiers">
+              <!-- Populated via JS for crisp filtering and interactive inspection -->
+            </div>
+
+            <div id="plugin-detail-bar" class="plugin-detail-bar" aria-live="polite">
+              <!-- Populated on click -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 3: Interactive Sans-I/O Lifecycle & 7 Reliability Breakers
+         ===================================================================== -->
+    <section id="lifecycle" class="section">
+      <div class="wrap">
+        <div class="section-head-split">
+          <div class="section-head">
+            <p class="section-kicker">Pure Deterministic Reducer &amp; Safety Nets</p>
+            <h2>Sans-I/O Trial Lifecycle &amp; 7 Reliability Breakers</h2>
+            <p>
+              Step through a complete trial from <code>run.created</code> to champion promotion, or inject any of the 7 v0.2-hardened failure modes to see how <code>reduce(state, event, now)</code> isolates blast radius in under 1 millisecond.
+            </p>
+          </div>
+          <div class="segmented" role="tablist" aria-label="Lifecycle mode">
+            <button type="button" role="tab" id="mode-tab-happy" aria-selected="true" data-lc-mode="happy">Trial Lifecycle (8 Steps)</button>
+            <button type="button" role="tab" id="mode-tab-breakers" aria-selected="false" data-lc-mode="breakers">7 Reliability Breakers</button>
+          </div>
+        </div>
+
+        <div class="lifecycle-shell">
+          <!-- Mode 1: Happy Path Step-Through -->
+          <div id="lc-happy-view">
+            <div class="step-track" id="lc-step-track" role="tablist" aria-label="Trial lifecycle steps">
+              <!-- Populated by JS -->
+            </div>
+
+            <div class="lifecycle-detail" id="lc-step-detail" aria-live="polite">
+              <!-- Populated by JS -->
+            </div>
+
+            <div class="stepper-nav">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button id="lc-prev" class="btn btn-sm" type="button">Previous step</button>
+                <button id="lc-next" class="btn btn-primary btn-sm" type="button">Next step</button>
+              </div>
+              <span id="lc-counter" class="mono" style="font-size:12.5px;color:var(--quiet);">Step 1 of 8</span>
+            </div>
+          </div>
+
+          <!-- Mode 2: 7 Reliability Circuit Breakers -->
+          <div id="lc-breakers-view" hidden>
+            <div class="breaker-layout">
+              <div>
+                <h3 style="margin-bottom:10px;">Inject Failure Condition</h3>
+                <div class="breaker-list" id="breaker-list" role="group" aria-label="Reliability circuit breakers">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+              <div class="reducer-card" id="breaker-detail" aria-live="polite">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 4: End-to-End Capabilities & User Journeys Showcase
+         ===================================================================== -->
+    <section id="capabilities" class="section section-paper">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Day-One DX &amp; Post-MVP Flows</p>
+          <h2>End-to-End Capabilities &amp; User Journeys</h2>
+          <p>
+            Every pain point audited in v0.2—20-minute installs, burned join tokens, multi-file boilerplate, hardcoded owner walls, synchronous SQLite stalls, and brittle live sync—has a locked architectural answer in v1.
+          </p>
+        </div>
+
+        <div class="tabs-bar" role="tablist" aria-label="Capability journeys">
+          <button class="tab-btn" type="button" role="tab" id="cap-tab-install" aria-selected="true" aria-controls="cap-panel-install" data-cap-tab="install">1-Command Install &amp; Join</button>
+          <button class="tab-btn" type="button" role="tab" id="cap-tab-campaigns" aria-selected="false" aria-controls="cap-panel-campaigns" data-cap-tab="campaigns">Campaign Modes &amp; Git Auto-Sync</button>
+          <button class="tab-btn" type="button" role="tab" id="cap-tab-security" aria-selected="false" aria-controls="cap-panel-security" data-cap-tab="security">Delegation &amp; Security</button>
+          <button class="tab-btn" type="button" role="tab" id="cap-tab-knowledge" aria-selected="false" aria-controls="cap-panel-knowledge" data-cap-tab="knowledge">Knowledge Engine</button>
+          <button class="tab-btn" type="button" role="tab" id="cap-tab-plugins" aria-selected="false" aria-controls="cap-panel-plugins" data-cap-tab="plugins">Live, WebRTC Pairing &amp; Distillation</button>
+        </div>
+
+        <!-- Tab 1: 1-Command Install & Join -->
+        <div id="cap-panel-install" class="tab-panel" role="tabpanel" aria-labelledby="cap-tab-install">
+          <div class="two-col">
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+                <h3>Control Install (<code>setup.sh</code>)</h3>
+                <span class="chip chip-good">&lt; 2 min</span>
+              </div>
+              <p>Mirrors <code>fxbot</code>'s host command &amp; systemd update watcher. Zero manual secret init, zero 7-file Compose override chains, zero cloning the repo.</p>
+              <pre><code>curl -fsSL https://usethermite.com/setup.sh | sudo bash</code></pre>
+              <ol class="seq-list">
+                <li><span class="seq-num">1</span><div><strong>Non-destructive preflight:</strong> checks OS/arch, systemd, ports (<code>8800</code>, <code>4222</code>), disk (<code>&ge; 3 GB</code>), and rejects snap-Docker before writing anything.</div></li>
+                <li><span class="seq-num">2</span><div><strong>3-service Compose (~55 lines) + host runner:</strong> starts <code>control</code> (<code>:8800</code> + <code>/nats</code> WS proxy), <code>nats</code> (JetStream TLS <code>:4222</code>), and <code>db</code> (<code>pgvector/pgvector:0.8.x-pg18-trixie</code>), plus auto-enrolled host <code>thermite-runner.service</code> (never mounts container socket inside Compose).</div></li>
+                <li><span class="seq-num">3</span><div><strong>Atomic rollback updates:</strong> <code>thermite-control.path</code> watches <code>/var/lib/thermite/control/requests/*.json</code> so UI upgrades snapshot PG, wait for health, and auto-rollback on failure.</div></li>
+                <li><span class="seq-num">4</span><div><strong>3-step resumable first-run UI:</strong> (1) Owner username + password cookie (optional <code>THERMITE_NO_AUTH_LOOPBACK=1</code> for dev) &rarr; (2) Provider catalogue (OAuth, API key, or keyless LAN HTTP) with live test &rarr; (3) 1-click bundled 60s <code>matmul-cpu</code> sample or own repo.</div></li>
+              </ol>
+            </article>
+
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+                <h3>Remote Machine Join (<code>herdr</code>/<code>rex</code> style)</h3>
+                <span class="chip chip-working">~30 sec</span>
+              </div>
+              <p>Works identically on Linux bare metal/VMs (<code>systemd</code>) and macOS Apple Silicon (<code>launchd</code> + <code>device-metal</code> / MLX on day one).</p>
+              <pre><code># With CLI installed:
+thermite join https://control.example.com --token thm_join_example
+
+# Or bootstrap thin runner + join in one paste:
+curl -fsSL https://usethermite.com/join.sh | sh -s -- \
+  https://control.example.com --token thm_join_example</code></pre>
+              <ol class="seq-list">
+                <li><span class="seq-num">1</span><div><strong>Preflight before token burn:</strong> verifies hardware and transport first; 15-minute token is not consumed until cryptographic enrollment succeeds.</div></li>
+                <li><span class="seq-num">2</span><div><strong>Auto hardware probe:</strong> loads <code>device-cpu</code>, <code>device-cuda</code> (NVIDIA + CDI), and <code>device-metal</code> (Apple Silicon GPU + unified memory + MLX).</div></li>
+                <li><span class="seq-num">3</span><div><strong>Local Ed25519 NKey &amp; dual transport:</strong> mints <code>runner.nk</code> (<code>0600</code>; private seed never leaves host), calls <code>POST /v1/machines/enroll</code>, receives scoped NATS user <code>runner:&lt;m&gt;</code> over TLS <code>:4222</code> or <code>wss://&lt;control&gt;/nats</code>.</div></li>
+                <li><span class="seq-num">4</span><div><strong>Wall self-test &amp; live appearance:</strong> starts OS service, passes <code>wall.selfTest()</code>, publishes 5s heartbeats, and appears immediately in <strong>Compute</strong> (<code>machine &rsaquo; device</code>).</div></li>
+              </ol>
+            </article>
+          </div>
+        </div>
+
+        <!-- Tab 2: Campaign Modes & Git Auto-Sync -->
+        <div id="cap-panel-campaigns" class="tab-panel" role="tabpanel" aria-labelledby="cap-tab-campaigns" hidden>
+          <div class="two-col">
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                <h3>Minimal 7–12 Line <code>thermite.yaml</code></h3>
+                <div class="segmented" role="group" aria-label="Select campaign mode example">
+                  <button type="button" data-yaml-mode="hill_climb" aria-pressed="true">Hill Climb (12L)</button>
+                  <button type="button" data-yaml-mode="goal" aria-pressed="false">Goal (9L)</button>
+                  <button type="button" data-yaml-mode="research" aria-pressed="false">Research (7L)</button>
+                </div>
+              </div>
+              <p id="yaml-mode-desc">Automatic baseline A/A noise calibration, interleaved A/B + B/A timing blocks, GPU-drain checks, and hidden held-out cases snapshotted outside worker zones.</p>
+              <pre><code id="yaml-mode-code"></code></pre>
+              <div style="margin-top:12px;font-size:12.5px;color:var(--soft);">
+                <strong>Sane defaults:</strong> <code>editable_paths: ["**"]</code>, host-proportional limits (<code>75%</code> runner RAM, <code>5&times;</code> baseline time), <strong>zero default turn/trial/spend caps</strong>, and identical <code>core/api</code> actions across UI, CLI (<code>thermite init</code> / <code>run --dry-run</code>), and MCP.
+              </div>
+            </article>
+
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+                <h3>Bundled <code>git-sync</code> Plugin (All 4 Modes in v1.0)</h3>
+                <span class="chip chip-flame">Decision #9</span>
+              </div>
+              <p>Control holds one bare Git mirror and sealed push credentials (runners never hold push tokens). On every <code>attempt.promoted</code> event, the bundled default-on <code>git-sync</code> plugin executes the campaign policy and emits <code>git.sync_finished</code>.</p>
+              <div class="table-wrap" style="margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th><code>git.onChampion</code></th>
+                      <th>v1.0 Support</th>
+                      <th>Control Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="mono"><strong>push</strong></td>
+                      <td><span class="chip chip-good">Day One</span></td>
+                      <td>Fast-forward pushes real commit <code>Champion #&lt;n&gt;: &lt;summary&gt; (&lt;delta&gt;)</code> to target branch. Never force-pushes.</td>
+                    </tr>
+                    <tr>
+                      <td class="mono"><strong>pr</strong></td>
+                      <td><span class="chip chip-good">Day One (GitHub)</span></td>
+                      <td>Pushes branch and creates/updates one PR with benchmark delta table &amp; attempt summary (GitLab/Gitea adapters in <code>v1.1</code>).</td>
+                    </tr>
+                    <tr>
+                      <td class="mono"><strong>tag</strong></td>
+                      <td><span class="chip chip-good">Day One</span></td>
+                      <td>Pushes champion commit plus annotated tag <code>thermite/&lt;campaign&gt;/champ-&lt;n&gt;</code>.</td>
+                    </tr>
+                    <tr>
+                      <td class="mono"><strong>none</strong></td>
+                      <td><span class="chip chip-good">Day One</span></td>
+                      <td>Keeps commit in Control's bare mirror; fetch anytime via fast incremental <code>thermite pull &lt;run&gt;</code> (no giant tarballs or manual <code>.patch</code> shuffling).</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <!-- Tab 3: Delegation & Security -->
+        <div id="cap-panel-security" class="tab-panel" role="tabpanel" aria-labelledby="cap-tab-security" hidden>
+          <article class="journey-card" style="margin-bottom:18px;">
+            <div class="panel-header">
+              <div>
+                <h3><code>PolicyGrant</code> Capability Matrix vs. Walled Run Workers</h3>
+                <p>Two orthogonal boundaries: configurable Door tokens (replacing 28 hardcoded <code>OWNER_ONLY_KINDS</code>) and a structural, non-configurable wall around internal run workers/advisors. Select a profile to highlight its permitted surface.</p>
+              </div>
+              <div class="segmented" role="group" aria-label="Highlight delegation profile">
+                <button type="button" data-policy-hl="all" aria-pressed="true">All</button>
+                <button type="button" data-policy-hl="viewer" aria-pressed="false">viewer</button>
+                <button type="button" data-policy-hl="operator" aria-pressed="false">operator</button>
+                <button type="button" data-policy-hl="autonomous_delegate" aria-pressed="false">autonomous_delegate</button>
+                <button type="button" data-policy-hl="owner" aria-pressed="false">owner</button>
+                <button type="button" data-policy-hl="run_worker" aria-pressed="false">run_worker</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Profile / Principal</th>
+                    <th>Read State</th>
+                    <th>Start / Steer / Rejudge</th>
+                    <th>Approve Promotions / Close / Invalidate</th>
+                    <th>Compute / Settings / Terminal</th>
+                    <th>Install Plugins &amp; Mint Tokens</th>
+                    <th>Dynamic MCP <code>tools/list</code></th>
+                  </tr>
+                </thead>
+                <tbody id="policy-matrix-body">
+                  <tr data-policy-row="viewer">
+                    <td><strong><code>viewer</code></strong><br><span style="font-size:12px;">Dashboards, CI monitors</span></td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-no">No</td>
+                    <td class="cap-no">No</td>
+                    <td class="cap-no">Read only</td>
+                    <td class="cap-no">No</td>
+                    <td>Read-only tools only</td>
+                  </tr>
+                  <tr data-policy-row="operator">
+                    <td><strong><code>operator</code></strong><br><span style="font-size:12px;">Day-to-day automation</span></td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-no">Escalates</td>
+                    <td class="cap-yes">compute:manage</td>
+                    <td class="cap-no">No</td>
+                    <td>Campaign + compute tools</td>
+                  </tr>
+                  <tr data-policy-row="autonomous_delegate">
+                    <td><strong><code>autonomous_delegate</code></strong><br><span style="font-size:12px;">External orchestrator agent</span></td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">100% Yes</td>
+                    <td class="cap-yes">100% Yes + plugin ops</td>
+                    <td class="cap-no">Excluded by default (custom grantable)</td>
+                    <td>Full end-to-end campaign surface</td>
+                  </tr>
+                  <tr data-policy-row="owner">
+                    <td><strong><code>owner</code></strong><br><span style="font-size:12px;">Browser session / admin CLI</span></td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">Yes</td>
+                    <td class="cap-yes">Yes (<code>*</code>)</td>
+                    <td>All registered actions</td>
+                  </tr>
+                  <tr data-policy-row="run_worker">
+                    <td><strong><code>run_worker</code> / <code>run_advisor</code></strong><br><span class="chip chip-wrong">No Door Token</span></td>
+                    <td class="cap-wall">Scoped RPC only</td>
+                    <td class="cap-wall">submit_change only</td>
+                    <td class="cap-wall">Physically blocked</td>
+                    <td class="cap-wall">Physically blocked</td>
+                    <td class="cap-wall">Physically blocked</td>
+                    <td>No Door access; never reads/loads Judge</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="journey-card">
+            <h3>Control-Plane 3-Tier <code>WallPlugin</code> Stack (All in v1.0, Proof-Gated by <code>wall.selfTest()</code>)</h3>
+            <p>Goal 0's isolation spike ruled <strong>NO-GO</strong> on running full zones inside V8 isolates/WASM (native <code>libfx</code> N-API &amp; JSPI limits, <code>memfs</code> OOM on large C++/Rust repos). Instead, trusted <code>libfx</code> + sealed secrets stay on Control host while untrusted tools and CLIs run behind swappable walls.</p>
+            <div class="three-col" style="margin-top:14px;">
+              <div class="reducer-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong>Tier 1: <code>wall-tools</code></strong>
+                  <span class="chip chip-good">Default</span>
+                </div>
+                <p style="font-size:12.5px;">Path-jailed <code>git worktree</code> (<code>O_NOFOLLOW</code> + <code>realpath</code>), structured file tools, SSRF-blocking <code>fetch</code>, plus in-process <strong>virtual bash</strong> (<code>bashkit-wasm</code> / <code>just-bash</code>) for piped <code>grep|awk|sed|jq</code> with zero OS process spawn.</p>
+              </div>
+              <div class="reducer-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong>Tier 2: <code>wall-os</code></strong>
+                  <span class="chip chip-working">&lt; 10ms</span>
+                </div>
+                <p style="font-size:12.5px;">Linux <code>bubblewrap</code> + Landlock + seccomp + <code>--unshare-net</code> host proxy; macOS <code>Seatbelt</code> + host proxy; <code>wall-container</code> fallback. Enables local <code>python3</code>/<code>rg</code> and external CLIs (<code>claude</code>, <code>agy</code>).</p>
+              </div>
+              <div class="reducer-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong>Tier 3: <code>wall-microsandbox</code></strong>
+                  <span class="chip chip-flame">v1.0 Day One</span>
+                </div>
+                <p style="font-size:12.5px;"><code>libkrun</code> hardware-virtualized microVMs (&lt; 100ms boot, dedicated guest kernel) on KVM Linux &amp; Apple Silicon HVF, falling back cleanly to <code>wall-container</code> where <code>/dev/kvm</code> is absent.</p>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- Tab 4: Knowledge Engine -->
+        <div id="cap-panel-knowledge" class="tab-panel" role="tabpanel" aria-labelledby="cap-tab-knowledge" hidden>
+          <div class="two-col">
+            <article class="journey-card">
+              <h3>Two-Layer PostgreSQL 18 Stack</h3>
+              <p>Replaces v0.2's 11,580-LOC / 67-file synchronous SQLite KB (and deletes rig-side SQLite mirrors completely) on one container image: <code>pgvector/pgvector:0.8.x-pg18-trixie</code> (PG-licensed, zero AGPL).</p>
+              <div class="io-triad">
+                <div class="io-row">
+                  <div class="io-row-label">LAYER 1: CORE KB (~900–1,100 LOC · embedder: off default)</div>
+                  <div style="font-size:13px;color:var(--soft);">
+                    Normalized tables (<code>kb_collections</code> with <code>kind: 'campaign' | 'shared'</code>, <code>kb_items</code>, <code>kb_versions</code>, <code>kb_chunks</code>, <code>kb_blobs</code>, <code>kb_links</code>, <code>kb_grants</code>, <code>kb_run_scopes</code>). Content-addressed blobs (zero 4&times; text copies), async NATS heading-aware parent-child chunker, dual <code>tsvector</code> (<code>english</code> + <code>simple</code>) + <code>pg_trgm</code>, compaction transcripts excluded from default search, pooled async PG (<code>max &ge; 8</code>), pure Sans-I/O query parser + RRF.
+                  </div>
+                </div>
+                <div class="io-row">
+                  <div class="io-row-label">LAYER 2: knowledge-semantic PLUGIN (~450–650 LOC · 1-click toggle)</div>
+                  <div style="font-size:13px;color:var(--soft);">
+                    Owns <code>plugin_knowledge_semantic.chunk_embeddings</code> with lazy partial <code>halfvec</code> HNSW per <code>(model, dims)</code> + <code>hnsw.iterative_scan = 'relaxed_order'</code>, async batch embedder (<code>local</code> ~450 MB <code>llama.cpp</code> <code>EmbeddingGemma 2</code> / <code>Qwen3-Embedding</code> or <code>remote</code>), cosine-gated RRF (<code>k = 60</code>). Seamless fallback to Core FTS when off or down.
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="journey-card">
+              <h3>Latency &amp; Pre-Build 60-Needle Benchmark Gates</h3>
+              <p>Validated at 30k and 150k chunks (1 GB PG container RAM cap, 16 concurrent readers + 100 writes/s) before production KB code is written in Goal 6.</p>
+              <div class="metric-bars">
+                <div class="metric-bar-row">
+                  <div class="metric-bar-head"><span>v0.2 SQLite FTS5 (100k items, blocks event loop)</span><strong class="mono">355 ms p95</strong></div>
+                  <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%;background:var(--wrong);"></div></div>
+                </div>
+                <div class="metric-bar-row">
+                  <div class="metric-bar-head"><span>v1 Hybrid (Core + knowledge-semantic HNSW)</span><strong class="mono">&lt; 50 ms p95</strong></div>
+                  <div class="metric-bar-track"><div class="metric-bar-fill" style="width:14%;background:var(--working);"></div></div>
+                </div>
+                <div class="metric-bar-row">
+                  <div class="metric-bar-head"><span>v1 Core PG 18 FTS + pg_trgm (scoped, 0ms loop stall)</span><strong class="mono">&lt; 20 ms p95</strong></div>
+                  <div class="metric-bar-track"><div class="metric-bar-fill" style="width:6%;background:var(--good);"></div></div>
+                </div>
+                <div class="metric-bar-row">
+                  <div class="metric-bar-head"><span>v1 Empty-Scope / Fresh Run (O(1) short-circuit)</span><strong class="mono">&lt; 1 ms p95</strong></div>
+                  <div class="metric-bar-track"><div class="metric-bar-fill" style="width:1.5%;background:var(--flame);"></div></div>
+                </div>
+              </div>
+              <div class="table-wrap" style="margin-top:14px;">
+                <table>
+                  <thead>
+                    <tr><th>Bucket (15 needles each)</th><th>Gate Requirement</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><strong>B1</strong> Code &amp; exact identifiers</td><td>Core Recall@5 <code>&ge; 95%</code>; 0 regression w/ semantic</td></tr>
+                    <tr><td><strong>B2</strong> Factual research needles</td><td>Core Recall@10 <code>&ge; 85%</code></td></tr>
+                    <tr><td><strong>B3</strong> Conceptual / vocabulary-gap</td><td>Semantic earns default-on if <code>&ge; +25 pp</code> over Core</td></tr>
+                    <tr><td><strong>B4</strong> Noise-resistance vs 50 KB docs</td><td>0 regression; <code>knowledge-bm25</code> deferred unless <code>&ge; +8 pp</code></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <!-- Tab 5: Live, WebRTC Pairing & Distillation -->
+        <div id="cap-panel-plugins" class="tab-panel" role="tabpanel" aria-labelledby="cap-tab-plugins" hidden>
+          <div class="three-col">
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                <h3><code>live-publish</code> (<code>thermite live</code>)</h3>
+                <span class="chip chip-good">Wave 3 · v1.2</span>
+              </div>
+              <p>Replaces v0.2's brittle multi-agent folder-sync deployment with a per-run boolean toggle backed directly by NATS.</p>
+              <ul class="inspector-list" style="margin-top:10px;">
+                <li><strong>Privacy by construction:</strong> reducer emits sanitized projections to <code>t.live.&lt;run&gt;.&gt;</code> only when <code>run.live === true</code>.</li>
+                <li><strong>NKey isolation:</strong> external relays authenticate as <code>live-reader</code>, physically unable to subscribe to private runs or publish into <code>LIVE</code>.</li>
+                <li><strong>Zero core bloat:</strong> registers <code>live.toggle</code>, <code>live.status</code>, public SSE/JSON via <code>route()</code>, or forwards to <code>live.usethermite.com</code>.</li>
+              </ul>
+            </article>
+
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                <h3><code>web-pairing</code> &amp; PWA</h3>
+                <span class="chip chip-good">Wave 3 · v1.2</span>
+              </div>
+              <p>Ported directly from <code>fxbot/plugins/web-pairing</code> for mobile &amp; remote browser control at <code>web.usethermite.com</code> with zero VPN or port forwarding.</p>
+              <ul class="inspector-list" style="margin-top:10px;">
+                <li><strong>Encrypted P2P:</strong> Noise + Ed25519 keys, QR + 6-digit SAS verification, on-demand signaling relay WebSocket only when paired devices/tickets exist.</li>
+                <li><strong>Safe loopback bridge:</strong> proxies HTTP/SSE/WS over WebRTC data channels to <code>t.localUrl</code> tagging <code>x-thermite-web-pairing</code> (rejected by pairing admin routes).</li>
+                <li><strong>Installable mobile app:</strong> enables <code>VitePWA</code> (<code>registerType: "prompt"</code>) atop v1.0's inline splash &amp; safe-area insets.</li>
+              </ul>
+            </article>
+
+            <article class="journey-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                <h3><code>distill-jsonl</code></h3>
+                <span class="chip chip-good">Wave 3 · v1.2</span>
+              </div>
+              <p>First-class fine-tuning dataset distillation pipeline over durable run traces, prompts, diffs, verdicts, tool calls, and learnings.</p>
+              <ul class="inspector-list" style="margin-top:10px;">
+                <li><strong>Export formats:</strong> SFT trajectories, preference pairs (promoted vs. rejected), and full tool-call traces.</li>
+                <li><strong>Filter &amp; redact:</strong> filterable by outcome, champion lineage, and role; secret-redacted streaming downloads via <code>route()</code>.</li>
+                <li><strong>Zero core schema changes:</strong> registers <code>distill.export</code> &amp; <code>distill.preview</code> over read-only SQL views and optional <code>plugin_distill_jsonl</code> presets.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 5: Interactive Roadmap & LOC Budget Visualizer (Goals 1–14)
+         ===================================================================== -->
+    <section id="roadmap" class="section">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Execution Plan (Goals 1–14)</p>
+          <h2>Roadmap &amp; LOC Budget Visualizer</h2>
+          <p>
+            Wave 1 builds the complete cleanroom <code>v1.0</code> MVP in <strong>~12.0k–16.2k LOC</strong> (~14&times; smaller than v0.2's ~220k LOC).
+            Waves 2–4 add external harnesses, remaining devices/cloud compute, WebRTC pairing, live publishing, distillation, semantic KB, and Thermy strictly as optional plugins with zero core LOC growth.
+          </p>
+        </div>
+
+        <div class="loc-overview" aria-label="Codebase LOC budget comparison">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+            <h3>Codebase Footprint Comparison</h3>
+            <span class="mono" style="font-size:12px;color:var(--quiet);">Goal bars below scaled to max single goal (3,200 LOC)</span>
+          </div>
+          <div class="loc-scale-row">
+            <span style="color:var(--quiet);">v0.2 Production Code</span>
+            <div class="loc-scale-track"><div class="loc-scale-fill" style="width:100%;background:var(--idle-bar);"></div></div>
+            <span class="mono" style="text-align:right;color:var(--quiet);">~220,000 LOC</span>
+          </div>
+          <div class="loc-scale-row">
+            <strong style="color:var(--ink);">Wave 1: v1.0 MVP</strong>
+            <div class="loc-scale-track"><div class="loc-scale-fill" style="width:7.4%;background:var(--flame);"></div></div>
+            <strong class="mono" style="text-align:right;color:var(--flame);">~12.0k–16.2k</strong>
+          </div>
+          <div class="loc-scale-row">
+            <span style="color:var(--soft);">Waves 2–4 Optional Plugins</span>
+            <div class="loc-scale-track"><div class="loc-scale-fill" style="width:4.0%;background:var(--working);"></div></div>
+            <span class="mono" style="text-align:right;color:var(--soft);">~5.8k–8.8k (0 core)</span>
+          </div>
+        </div>
+
+        <div class="roadmap-controls">
+          <div class="segmented" role="group" aria-label="Filter roadmap by release wave">
+            <button type="button" data-wave-filter="all" aria-pressed="true">All Waves (14)</button>
+            <button type="button" data-wave-filter="v1.0" aria-pressed="false">v1.0 MVP (G1–G8)</button>
+            <button type="button" data-wave-filter="v1.1" aria-pressed="false">v1.1 Plugins (G9–G10)</button>
+            <button type="button" data-wave-filter="v1.2" aria-pressed="false">v1.2 Plugins (G11–G13)</button>
+            <button type="button" data-wave-filter="v1.3" aria-pressed="false">v1.3 Plugins (G14)</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="roadmap-subtotal" class="mono" style="font-size:12.5px;color:var(--quiet);"></span>
+            <button id="toggle-all-goals" class="btn btn-sm" type="button">Expand all</button>
+          </div>
+        </div>
+
+        <div id="goal-list" class="goal-list">
+          <!-- Populated via JS from exact roadmap.md data -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         SECTION 6: All 16 Locked Owner Decisions Matrix
+         ===================================================================== -->
+    <section id="decisions" class="section section-paper">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Goal 0 Settled Calls (2026-11-28)</p>
+          <h2>All 16 Locked Owner Decisions</h2>
+          <p>
+            Every open technical question across the 6 Goal 0 spikes was deduplicated into 16 owner decisions and locked before Goal 1 begins.
+            Filter by area or search any keyword (e.g. <code>magnesium</code>, <code>libkrun</code>, <code>metal</code>, <code>pgvector</code>, <code>pr</code>).
+          </p>
+        </div>
+
+        <div class="decisions-toolbar">
+          <div class="segmented" role="group" aria-label="Filter decisions by category">
+            <button type="button" data-dec-cat="all" aria-pressed="true">All (16)</button>
+            <button type="button" data-dec-cat="core" aria-pressed="false">Core &amp; Data (#1–4)</button>
+            <button type="button" data-dec-cat="isolation" aria-pressed="false">Isolation &amp; Runners (#5–8)</button>
+            <button type="button" data-dec-cat="policy" aria-pressed="false">Policy &amp; Git (#9–11)</button>
+            <button type="button" data-dec-cat="kb_ui" aria-pressed="false">Knowledge &amp; UI (#12–16)</button>
+          </div>
+          <input id="decision-search" class="search-input" type="search" placeholder="Filter decisions by keyword..." aria-label="Filter 16 locked decisions">
+        </div>
+
+        <div id="decisions-grid" class="decisions-grid" aria-live="polite">
+          <!-- Populated via JS -->
+        </div>
+        <div id="decisions-empty" class="empty-state" hidden>
+          <h3>No matching decisions</h3>
+          <p>No locked decisions matched your current category filter and search query.</p>
+          <button id="decisions-reset" class="btn btn-sm" type="button" style="margin-top:8px;">Clear search &amp; filters</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =======================================================================
+       Compact Footer Colophon
+       ======================================================================= -->
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-inner">
+        <div>
+          <div style="font-weight:600;color:var(--ink);margin-bottom:4px;">Thermite v1 — Cleanroom Architecture &amp; Plan Explainer</div>
+          <div>Offline-ready single-file explainer styled with <code>@iammrduncan/magnesium</code> tokens. Goal 0 locked 2026-11-28.</div>
+        </div>
+        <div class="footer-links" aria-label="Plan documents">
+          <a href="../mockups/index.html">Interactive UI Mockups</a>
+          <a href="../README.md">Direction (README)</a>
+          <a href="../decisions.md">Decisions (16)</a>
+          <a href="../roadmap.md">Roadmap (G1–G14)</a>
+          <a href="../requirements.md">Requirements</a>
+          <a href="./process.html">Feature Process</a>
+          <a href="../goal-0/sansio-nats-contract.md">Sans-I/O &amp; NATS</a>
+          <a href="../goal-0/libfx-audit.md">libfx Audit</a>
+          <a href="../goal-0/wasm-isolation-spike.md">Isolation Spike</a>
+          <a href="../goal-0/knowledge-research.md">Knowledge Research</a>
+          <a href="../goal-0/design-system-sync.md">Design System Sync</a>
+          <a href="../goal-0/onboarding-and-mvp.md">Onboarding &amp; MVP</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      "use strict";
+
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      /* =====================================================================
+         1. Theme Toggle (System default + explicit Light/Dark override)
+         ===================================================================== */
+      const root = document.documentElement;
+      const themeBtn = document.getElementById("theme-toggle");
+      const themeLabel = document.getElementById("theme-label");
+      const storageKey = "thermite-v1-explainer-theme";
+
+      function readStoredTheme() {
+        try { return localStorage.getItem(storageKey); } catch { return null; }
+      }
+      function writeStoredTheme(val) {
+        try { localStorage.setItem(storageKey, val); } catch { /* ignore file:// storage restrictions */ }
+      }
+      function effectiveTheme() {
+        if (root.dataset.theme === "dark" || root.dataset.theme === "light") return root.dataset.theme;
+        return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      function syncThemeButton() {
+        const current = effectiveTheme();
+        const isDark = current === "dark";
+        themeLabel.textContent = isDark ? "Light" : "Dark";
+        themeBtn.setAttribute("aria-pressed", String(isDark));
+        themeBtn.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+      }
+
+      const saved = readStoredTheme();
+      if (saved === "dark" || saved === "light") {
+        root.dataset.theme = saved;
+      }
+      syncThemeButton();
+
+      themeBtn.addEventListener("click", () => {
+        const next = effectiveTheme() === "dark" ? "light" : "dark";
+        root.dataset.theme = next;
+        writeStoredTheme(next);
+        syncThemeButton();
+      });
+
+      /* Mobile Navigation Drawer */
+      const menuBtn = document.getElementById("menu-toggle");
+      const drawer = document.getElementById("mobile-drawer");
+      menuBtn.addEventListener("click", () => {
+        const open = drawer.classList.toggle("open");
+        menuBtn.setAttribute("aria-expanded", String(open));
+      });
+      drawer.querySelectorAll("a").forEach((a) => {
+        a.addEventListener("click", () => {
+          drawer.classList.remove("open");
+          menuBtn.setAttribute("aria-expanded", "false");
+        });
+      });
+
+      /* =====================================================================
+         2. Interactive Architecture Explorer Data & Binding
+         ===================================================================== */
+      const ARCH_NODES = {
+        surfaces: {
+          title: "Unified Surfaces (Zero Surface Drift)",
+          pkg: "packages/core/src/api · packages/cli · packages/ui",
+          loc: "~1,700–2,300 LOC (CLI + UI)",
+          wave: "v1.0 MVP",
+          edges: ["surfaces-door"],
+          summary: "Every Thermite capability—core or plugin—is declared once as an ActionDef tuple in packages/core/src/api. Five surfaces derive directly from that single registry with zero handwritten DTO drift.",
+          bullets: [
+            "<strong>REST &amp; Policy-Filtered MCP:</strong> routes and tools/list schemas compile automatically from Zod input/output definitions.",
+            "<strong>Typed Client (core/client.ts):</strong> browser-safe fetch client shared by both packages/ui and packages/cli.",
+            "<strong>Thin React 19 UI:</strong> built on @iammrduncan/magnesium (warm-grey + flame, 390px mobile, inline splash + safe-area insets; dev-only gallery via npm run design:dev).",
+            "<strong>Core Navigation:</strong> Home / Needs you, Compute, Knowledge, Campaigns, Setup (Thermy & sql-explorer plug in later)."
+          ],
+          delta: "v0.2 maintained duplicated REST routes, separate MCP owner/operator lists, bespoke HTML/UI routes, and manual CLI commands that drifted constantly."
+        },
+        door: {
+          title: "Control Door, PolicyGate & Artifact Edge",
+          pkg: "packages/control/src/door",
+          loc: "Part of Goal 3 (~2,500–3,200 LOC Control + Runner)",
+          wave: "v1.0 MVP",
+          edges: ["surfaces-door", "door-reducer", "door-nats"],
+          summary: "Single authenticated boundary into Control. Enforces PolicyGrant capabilities before any handler runs, hosts the bare Git-HTTP mirror for runners, and proxies wss://<control>/nats on port 8800.",
+          bullets: [
+            "<strong>Owner Session &amp; PolicyGrant Tokens:</strong> Step 1 username + password cookie (optional THERMITE_NO_AUTH_LOOPBACK=1 for dev) plus scoped capability tokens.",
+            "<strong>Zero Hardcoded Owner Walls:</strong> autonomous_delegate grants 100% end-to-end campaign/promotion/compute/settings/terminal:input + installed plugin ops; only plugins:manage and tokens:manage stay owner-default.",
+            "<strong>Authenticated Git-HTTP Mirror:</strong> runners pull candidate commits with short-lived job tokens instead of chunking base64 patches over NATS.",
+            "<strong>Sealed Secrets:</strong> /etc/thermite/secret.key (0400) seals provider keys, Git tokens, and NATS CA seed."
+          ],
+          delta: "Replaces 28 hardcoded OWNER_ONLY_KINDS, scattered issuedBy !== 'owner:operator' guards, manual .dev/secrets/ token files, and v0.2's manual base64 chunking relay."
+        },
+        reducer: {
+          title: "Pure Sans-I/O Core Reducer",
+          pkg: "packages/core/src/machine",
+          loc: "~2,000–2,600 LOC (all of packages/core)",
+          wave: "v1.0 MVP",
+          edges: ["door-reducer", "reducer-record", "reducer-agents", "reducer-scheduler"],
+          summary: "Every run lifecycle transition, scheduler placement, statistical judge state, approval hold, advisor trigger, and reliability breaker is a pure function: reduce(state, event, now) => { state, effects }.",
+          bullets: [
+            "<strong>Zero I/O Imports:</strong> no node:*, pg, @nats-io/*, fetch, Date.now, or Math.random inside packages/core/src/machine.",
+            "<strong>Slim Domain Union:</strong> 21 orthogonal core DomainEvents (down from 141) and 8 deterministic Edge Effects (persist_pg, publish_nats, dispatch_job, cancel_job, invoke_harness_turn, trigger_advisor, notify_live, sync_git).",
+            "<strong>7 Built-in Reliability Breakers:</strong> infra crash loop (3), identical invalid builds (5), first-class rejudge, planner invalid-epoch failover (2), research oscillation freeze (3 rounds), non-blocking narrowed approvals + timeout, event-driven advisors + AVOID carve-outs.",
+            "<strong>Millisecond Replay:</strong> full deterministic tests of verdicts, delegation isolation, and crash recovery execute in under 1 second."
+          ],
+          delta: "Replaces v0.2's 141-event ledger coupled directly to synchronous SQLite transactions and container-heavy integration tests."
+        },
+        record: {
+          title: "Single-Writer Record & PG 18 Knowledge",
+          pkg: "packages/control/src/record · packages/control/src/kb",
+          loc: "~900–1,100 LOC Core KB + Record adapter",
+          wave: "v1.0 MVP",
+          edges: ["reducer-record"],
+          summary: "Single writer projecting immutable NATS EVENTS into PostgreSQL 18 via postgres.js on pgvector/pgvector:0.8.x-pg18-trixie. Hosts both core run projections, plugin_<name> schemas, and the lean async Knowledge Engine.",
+          bullets: [
+            "<strong>Driver &amp; Image Parity (Decision #2):</strong> postgres.js gives verbatim fxbot PluginSql compatibility; pgvector-ready PG 18 image incurs zero cost when vector is off and zero DB swap when enabling knowledge-semantic.",
+            "<strong>Core Knowledge Engine:</strong> normalized kb_collections (kind: 'campaign' | 'shared'), content-addressed kb_blobs, async NATS parent-child kb_chunks, dual tsvector (english + simple) + pg_trgm.",
+            "<strong>Latency &amp; Noise Discipline:</strong> O(1) empty-scope short-circuit (< 1ms), scoped p95 < 20ms, compaction transcripts excluded from default search, 0ms event-loop stall (pooled max >= 8)."
+          ],
+          delta: "Deletes v0.2's 11,580-LOC / 67-file synchronous SQLite KB, O(N^2) substr passage views, 4x text duplication, and rig-side SQLite mirrors."
+        },
+        agents: {
+          title: "Agent Loop (harness-libfx) & 3-Tier Control Walls",
+          pkg: "packages/harness-libfx · packages/control/src/walls",
+          loc: "~2,100–2,800 LOC (Goal 4 total)",
+          wave: "v1.0 MVP",
+          edges: ["reducer-agents", "agents-nats"],
+          summary: "Runs trusted libfx (native N-API, Option C hybrid, evaluating/pinning libfx@0.0.18) on Control host via createFxEngine({ persistence }) and isolates untrusted worker tools and external CLIs behind proof-gated WallPlugin tiers.",
+          bullets: [
+            "<strong>5 Verified libfx Edge Fixes (~500 LOC in fetch + hooks):</strong> synthetic-loopback LAN HTTP rewrite, hooks TTFT + SSE usage scanner (fixes dropped cache/reasoning tokens), ~250 LOC Anthropic Messages caching translator (85%+ savings) + reasoning_effort injection, sync turn/token/wall limits + stallGuard, 60 KiB UTF-8 tool cap.",
+            "<strong>Durable Postgres Sessions:</strong> ~120 LOC Persistence adapter (harness_journal + harness_checkpoints + FxFencedError) avoiding @workflow/world-postgres.",
+            "<strong>All 3 Wall Tiers in v1.0 (Decisions #5 &amp; #6):</strong> Tier 1 wall-tools (path-jailed git worktree + virtual bash bashkit-wasm/just-bash), Tier 2 wall-os (Linux bwrap+Landlock+seccomp / macOS Seatbelt + host proxy), Tier 3 wall-microsandbox (libkrun microVMs; wall-container fallback).",
+            "<strong>Structural Invariant:</strong> run workers & advisors never receive a Door token and cannot read, edit, or load judge code."
+          ],
+          delta: "Replaces v0.2's 5 duplicated session wrappers, in-rig Pi/CLI split (~35 files per harness), and hard container-engine requirement for Control."
+        },
+        scheduler: {
+          title: "Scheduler & Statistical Judge",
+          pkg: "packages/core/src/machine · packages/control/src/judge",
+          loc: "~1,600–2,200 LOC (Goal 5 modes + git-sync)",
+          wave: "v1.0 MVP",
+          edges: ["reducer-scheduler", "scheduler-nats"],
+          summary: "Allocates shared machine > device capacity (whole, in turns, or shared) across active runs and judges candidate commits using immutable judge snapshots completely isolated from agent workspaces.",
+          bullets: [
+            "<strong>All 3 Campaign Modes Day One:</strong> Hill climb (auto A/A calibration, interleaved A/B + B/A timing blocks, GPU-drain checks, hidden held-out cases), Goal (code verifiers + thresholds + review panel), and Research (SSRF-safe seed fetch, verified quotes, oscillation breaker).",
+            "<strong>Proof-Based Judge Trust (Decision #11):</strong> in-process registerJudge for v1.0 gated by owner-only plugins:manage, A/A calibration proof, and { judgePlugin, judgeVersion } recorded on every attempt.judged event.",
+            "<strong>Bundled git-sync Plugin (Decision #9):</strong> consumes attempt.promoted to execute push | pr (GitHub PRs day one) | tag | none."
+          ],
+          delta: "Eliminates v0.2's rig-locked exclusive device ownership, manual A/A parameter guessing, and separate 50-line contract.json + 65-line kit.json boilerplate."
+        },
+        nats: {
+          title: "NATS JetStream Backbone (core/bus)",
+          pkg: "packages/core/src/bus",
+          loc: "Part of Goal 2 + Goal 3 adapters",
+          wave: "v1.0 MVP",
+          edges: ["door-nats", "agents-nats", "scheduler-nats", "nats-runners"],
+          summary: "Single durable event and job bus connecting Control, Record, plugins, live edge relays, and hardware machine runners over TLS :4222 or wss://<control>/nats (proxied on :8800).",
+          bullets: [
+            "<strong>3 JetStream Streams:</strong> EVENTS (immutable domain record, O(runs) subjects), JOBS (workqueue, < 1 MiB payloads, 7d dedup), LIVE (1h / 256 MiB rolling; sanitized t.live.<run>.> only when run.live === true).",
+            "<strong>2 Ephemeral Core NATS Subjects:</strong> t.machine.<m>.hb (5s runner heartbeats) and t.machine.<m>.cancel (immediate -pgid process-group kills).",
+            "<strong>Two Accounts &amp; 5 Ed25519 NKeys:</strong> THERMITE (control, runner:<m>, live-reader, backup) and SYS (system for live $SYS reloads)."
+          ],
+          delta: "Collapses v0.2's 6 JetStream streams (COMMANDS, CONFIG, EVENTS, LIVE, REPORTS, KB_FILES) and eliminates pushing sealed model keys or MCP configs to remote machines."
+        },
+        runners: {
+          title: "Thin Machine Runners (Hardware-Only)",
+          pkg: "packages/runner",
+          loc: "Part of Goal 3 (~2,500–3,200 LOC Control + Runner)",
+          wave: "v1.0 MVP",
+          edges: ["nats-runners"],
+          summary: "Minimal single-job worker installed in ~30 seconds via thermite join. Executes only hardware-bound builds, benchmarks, and device experiments—with zero supervisor, zero local ledger, and zero model credentials.",
+          bullets: [
+            "<strong>Linux &amp; Native macOS Day One (Decision #8):</strong> systemd on Linux (device-cpu, device-cuda, wall-container) and native launchd on macOS Apple Silicon (device-metal / MLX) from v1.0 launch.",
+            "<strong>Cryptographic Enrollment:</strong> local Ed25519 NKey (runner.nk, 0600; private seed never leaves host), preflight runs before consuming join token, connects via TLS :4222 or wss://<control>/nats.",
+            "<strong>Clean Execution Guards:</strong> Git-HTTP commit fetch, wall.selfTest() before accepting jobs, host-proportional RAM/time limits, and -pgid kills on timeout (never killing worker sessions)."
+          ],
+          delta: "Deletes v0.2's entire rig architecture (harness container + supervisor container + local SQLite ledger + sealed credentials + SSH-sudo/CDI join scripts)."
+        }
+      };
+
+      const inspectorEl = document.getElementById("arch-inspector");
+      const svgNodes = Array.from(document.querySelectorAll(".arch-node"));
+      const svgEdges = Array.from(document.querySelectorAll(".svg-edge"));
+      const nodePills = Array.from(document.querySelectorAll("[data-select-node]"));
+
+      function selectArchNode(id) {
+        const data = ARCH_NODES[id];
+        if (!data) return;
+
+        svgNodes.forEach((n) => {
+          n.classList.toggle("is-selected", n.dataset.node === id);
+        });
+        nodePills.forEach((btn) => {
+          btn.setAttribute("aria-pressed", String(btn.dataset.selectNode === id));
+        });
+        svgEdges.forEach((e) => {
+          const active = data.edges.includes(e.dataset.edge);
+          e.classList.toggle("is-active", active);
+          e.setAttribute("marker-end", active ? "url(#arrow-flame)" : "url(#arrow-muted)");
+        });
+
+        inspectorEl.innerHTML = `
+          <div class="inspector-pkg">${esc(data.pkg)}</div>
+          <div class="inspector-head">
+            <h3>${esc(data.title)}</h3>
+          </div>
+          <div class="inspector-meta">
+            <span class="chip chip-flame">${esc(data.wave)}</span>
+            <span class="chip chip-idle mono">${esc(data.loc)}</span>
+          </div>
+          <p style="font-size:13px;">${esc(data.summary)}</p>
+          <div class="inspector-section">
+            <h4>Responsibilities &amp; Contracts</h4>
+            <ul class="inspector-list">
+              ${data.bullets.map((b) => {
+                const m = b.match(/^<strong>(.*?)<\/strong>\s*(.*)$/);
+                return m ? `<li><strong>${m[1]}</strong> ${esc(m[2])}</li>` : `<li>${esc(b)}</li>`;
+              }).join("")}
+            </ul>
+          </div>
+          <div class="inspector-delta">
+            <strong>Shift from v0.2:</strong> ${esc(data.delta)}
+          </div>
+        `;
+      }
+
+      svgNodes.forEach((n) => {
+        n.addEventListener("click", () => selectArchNode(n.dataset.node));
+        n.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            selectArchNode(n.dataset.node);
+          }
+        });
+      });
+      nodePills.forEach((btn) => {
+        btn.addEventListener("click", () => selectArchNode(btn.dataset.selectNode));
+      });
+      selectArchNode("reducer");
+
+      /* NATS Streams vs NKey Principals toggle */
+      const natsTabs = Array.from(document.querySelectorAll("[data-nats-view]"));
+      const natsStreamsEl = document.getElementById("nats-view-streams");
+      const natsKeysEl = document.getElementById("nats-view-keys");
+      natsTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const view = tab.dataset.natsView;
+          natsTabs.forEach((t) => t.setAttribute("aria-selected", String(t.dataset.natsView === view)));
+          natsStreamsEl.hidden = view !== "streams";
+          natsKeysEl.hidden = view !== "keys";
+        });
+      });
+
+      /* =====================================================================
+         3. Plugin Ecosystem Interactive Tier Map
+         ===================================================================== */
+      const PLUGIN_ITEMS = [
+        // Thin Core
+        { id: "core-machine", tier: "core", name: "core/machine", wave: "Thin Core", hook: "reduce(state, event, now)", schema: "Pure TS (0 I/O)", desc: "21 core DomainEvents, 8 Effects, run/scheduler/judge lifecycles, and all 7 reliability breakers." },
+        { id: "core-bus", tier: "core", name: "core/bus", wave: "Thin Core", hook: "EVENTS / JOBS / LIVE + NKeys", schema: "NATS JetStream", desc: "Short t. subject builders, O(runs) cardinality guard, phase-namespaced dedup IDs, and 2-account NKey templates." },
+        { id: "core-api", tier: "core", name: "core/api", wave: "Thin Core", hook: "ActionDef + PolicyGrant", schema: "REST / MCP / CLI / UI", desc: "Single typed action registry auto-generating REST routes, policy-filtered MCP tools, typed fetch client, CLI, and docs." },
+        { id: "core-plugin", tier: "core", name: "core/plugin", wave: "Thin Core", hook: "PluginApi (com.usethermite)", schema: "plugin_<name> schemas", desc: "fxbot-aligned manifest, provide/need composition, plugin-breaks.json unfit() checks, and proof-gated registries." },
+        { id: "core-kb", tier: "core", name: "core/kb + PG 18", wave: "Thin Core", hook: "KbPluginHooks (searchLane)", schema: "kb_* tables (~1k LOC)", desc: "Async PG 18 dual tsvector + pg_trgm, content-addressed blobs, O(1) empty-scope < 1ms short-circuit, shared + campaign collections." },
+        // Bundled v1.0 Plugins
+        { id: "p-libfx", tier: "v1", name: "harness-libfx", wave: "Bundled v1.0", hook: "registerHarness", schema: "harness_journal/checkpoints", desc: "Built-in default agent loop via createFxEngine({ persistence }) + 5 edge fixes (LAN HTTP, SSE usage scanner, ~250 LOC Anthropic cache shim, limits/stallGuard, 60 KiB tool cap)." },
+        { id: "p-gitsync", tier: "v1", name: "git-sync", wave: "Bundled v1.0", hook: "onEvent('attempt.promoted')", schema: "Sealed git token", desc: "Dogfoods PluginApi day one. Supports all 4 modes in v1.0: push, pr (GitHub PRs day one; GitLab/Gitea in v1.1), tag, and none (+ thermite pull)." },
+        { id: "p-devices", tier: "v1", name: "device-cpu / cuda / metal", wave: "Bundled v1.0", hook: "registerDevice", schema: "Runner hardware probe", desc: "Probes & allocates CPU, NVIDIA CUDA (CDI), and Apple Silicon Metal/MLX (native macOS launchd pulled into v1.0 day one, Decision #8)." },
+        { id: "p-walls", tier: "v1", name: "wall-tools / os / microsandbox / container", wave: "Bundled v1.0", hook: "registerWall + selfTest()", schema: "Proof-gated zones", desc: "Full 3-tier Control-plane isolation + runner wall-container on day one: virtual bash in wall-tools, bwrap/Seatbelt in wall-os, and libkrun microVMs in wall-microsandbox." },
+        { id: "p-judge", tier: "v1", name: "judge-statistical", wave: "Bundled v1.0", hook: "registerJudge + calibrateAA", schema: "In-process (Decision #11)", desc: "Interleaved A/B + B/A timing blocks, automatic baseline A/A calibration, GPU-drain checks, and { judgePlugin, judgeVersion } attribution on every verdict." },
+        // Post-MVP Plugins
+        { id: "p-cli-harnesses", tier: "post", name: "harness-claude / agy / codex / pi", wave: "v1.1 (Goal 9)", hook: "registerHarness (toolBridge)", schema: "0 core LOC", desc: "External coding agent CLIs running inside Control's wall-os/wall-microsandbox via loopback MCP/CLI toolBridge, PTY attachTerminal(), and isolated subscription auth." },
+        { id: "p-compute", tier: "post", name: "device-vulkan / rocm + compute-ssh / k8s / runpod", wave: "v1.1 (Goal 10)", hook: "registerDevice / registerCompute", schema: "0 core LOC", desc: "Additional GPU runtimes plus SSH, Kubernetes, and RunPod cloud drivers (with optional NATS leaf/blob transport for firewalled pods)." },
+        { id: "p-pairing", tier: "post", name: "web-pairing (web.usethermite.com)", wave: "v1.2 (Goal 11)", hook: "route / socket / localUrl / page", schema: "plugin_web_pairing", desc: "Ported from fxbot: Noise + Ed25519 keys, QR + 6-digit SAS pairing, encrypted WebRTC P2P bridge + VitePWA installable mobile app." },
+        { id: "p-live", tier: "post", name: "live-publish (thermite live)", wave: "v1.2 (Goal 12)", hook: "registerActions / route / LIVE", schema: "plugin_live_publish", desc: "Consumes sanitized t.live.<run>.> using least-privilege live-reader NKey; serves public SSE/JSON or forwards to live.usethermite.com." },
+        { id: "p-distill", tier: "post", name: "distill-jsonl", wave: "v1.2 (Goal 12)", hook: "registerActions / route", schema: "plugin_distill_jsonl", desc: "Streams secret-redacted SFT, preference-pair, and trajectory JSONL datasets filterable by outcome, champion, and role." },
+        { id: "p-kb-sem", tier: "post", name: "knowledge-semantic (+ bm25 / pdf)", wave: "v1.2 (Goal 13)", hook: "KbPluginHooks.registerSearchLane", schema: "plugin_knowledge_semantic", desc: "pgvector 0.8+ partial halfvec HNSW with iterative_scan='relaxed_order', local llama.cpp or remote embedder, cosine-gated RRF (k=60)." },
+        { id: "p-thermy", tier: "post", name: "thermy & sql-explorer", wave: "v1.3 (Goal 14)", hook: "callAction / @iammrduncan/magnesium", schema: "0 core LOC", desc: "Conversational operator copilot strictly capped by user's PolicyGrant, read-only PostgreSQL explorer with statement timeouts, and Cmd+K search." }
+      ];
+
+      const tiersMeta = [
+        { key: "core", title: "Thin Core", badge: "Non-negotiable spine", chip: "chip-idle" },
+        { key: "v1", title: "Bundled v1.0 Plugins", badge: "Default-on · Dogfoods PluginApi", chip: "chip-flame" },
+        { key: "post", title: "Post-MVP Plugins (v1.1–v1.3)", badge: "0 core LOC · 0 unused overhead", chip: "chip-working" }
+      ];
+
+      let activePluginFilter = "all";
+      let selectedPluginId = "p-gitsync";
+      const pluginTiersEl = document.getElementById("plugin-tiers");
+      const pluginDetailEl = document.getElementById("plugin-detail-bar");
+
+      function renderPluginDetail() {
+        const item = PLUGIN_ITEMS.find((p) => p.id === selectedPluginId) || PLUGIN_ITEMS[0];
+        pluginDetailEl.innerHTML = `
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+              <strong class="mono" style="font-size:14px;color:var(--ink);">${esc(item.name)}</strong>
+              <span class="chip ${item.tier === "v1" ? "chip-flame" : item.tier === "post" ? "chip-working" : "chip-idle"}">${esc(item.wave)}</span>
+            </div>
+            <p style="font-size:13px;margin:0;">${esc(item.desc)}</p>
+          </div>
+          <div style="display:grid;gap:6px;font-size:12.5px;">
+            <div><span style="color:var(--quiet);">Plugin Hook / Contract:</span> <code class="mono">${esc(item.hook)}</code></div>
+            <div><span style="color:var(--quiet);">Data / Ownership:</span> <code class="mono">${esc(item.schema)}</code></div>
+            <div><span style="color:var(--quiet);">Manifest Namespace:</span> <code>"com.usethermite"</code> (<code>fxbot</code>-aligned <code>provide</code>/<code>need</code> + <code>plugin-breaks.json</code>)</div>
+          </div>
+        `;
+      }
+
+      function renderPluginTiers() {
+        const visibleTiers = activePluginFilter === "all"
+          ? tiersMeta
+          : tiersMeta.filter((t) => t.key === activePluginFilter);
+
+        pluginTiersEl.style.gridTemplateColumns = visibleTiers.length === 1
+          ? "1fr"
+          : visibleTiers.length === 2 ? "repeat(2, minmax(0, 1fr))" : "";
+
+        pluginTiersEl.innerHTML = visibleTiers.map((tier) => {
+          const items = PLUGIN_ITEMS.filter((p) => p.tier === tier.key);
+          return `
+            <div class="plugin-tier">
+              <div class="plugin-tier-head">
+                <strong>${tier.title}</strong>
+                <span class="chip ${tier.chip}">${tier.badge}</span>
+              </div>
+              <div class="plugin-list">
+                ${items.map((p) => `
+                  <button class="plugin-item" type="button" data-plugin-id="${p.id}" aria-pressed="${String(p.id === selectedPluginId)}">${p.name}</button>
+                `).join("")}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        pluginTiersEl.querySelectorAll("[data-plugin-id]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            selectedPluginId = btn.dataset.pluginId;
+            renderPluginTiers();
+            renderPluginDetail();
+          });
+        });
+      }
+
+      document.querySelectorAll("[data-plugin-filter]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activePluginFilter = btn.dataset.pluginFilter;
+          document.querySelectorAll("[data-plugin-filter]").forEach((b) => {
+            b.setAttribute("aria-pressed", String(b.dataset.pluginFilter === activePluginFilter));
+          });
+          if (activePluginFilter !== "all") {
+            const firstMatch = PLUGIN_ITEMS.find((p) => p.tier === activePluginFilter);
+            if (firstMatch && PLUGIN_ITEMS.find((p) => p.id === selectedPluginId)?.tier !== activePluginFilter) {
+              selectedPluginId = firstMatch.id;
+            }
+          }
+          renderPluginTiers();
+          renderPluginDetail();
+        });
+      });
+      renderPluginTiers();
+      renderPluginDetail();
+
+      /* =====================================================================
+         4. Interactive Sans-I/O Trial Lifecycle & 7 Reliability Breakers
+         ===================================================================== */
+      const LIFECYCLE_STEPS = [
+        {
+          n: 1, short: "run.created", title: "Run Start & Judge Snapshot",
+          event: `{ type: "run.status_changed", runId, status: "running", actor }`,
+          state: "Run enters running state; scheduler checks machine pool wall proofs (machine.wall_checked === true) and schedules baseline A/A calibration.",
+          effects: `["persist_pg", "publish_nats(t.run.<r>.ev.run_status_changed)", "dispatch_job(baseline_aa)", "invoke_harness_turn"]`,
+          bus: "EVENTS: t.run.<run>.ev.run_status_changed · Bare Git mirror + immutable judge snapshot locked outside worker zones."
+        },
+        {
+          n: 2, short: "attempt.submitted", title: "Worker Proposes Change",
+          event: `{ type: "attempt.submitted", runId, laneId, attemptId, commitRef, summary }`,
+          state: "Worker inside harness-libfx + WallPlugin (wall-tools w/ virtual bash, wall-os, or wall-microsandbox) edits its git worktree. Control validates editable_paths and commits to bare mirror.",
+          effects: `["persist_pg", "publish_nats(t.run.<r>.attempt.submitted)", "dispatch_job(measure)"]`,
+          bus: "EVENTS: t.run.<run>.attempt.submitted · Worker holds zero Door token and zero access to judge scripts or hidden cases."
+        },
+        {
+          n: 3, short: "job.dispatched", title: "JOBS Dispatch Over NATS",
+          event: `{ type: "job.dispatched", jobId, runId, attemptId, machineId, deviceIds, kind: "measure", deadlineAt }`,
+          state: "Scheduler assigns an idle machine > device slot (dedicated judge device if configured) and emits a workqueue job payload under 1 MiB with a short-lived Git-HTTP token.",
+          effects: `["publish_nats(t.machine.<m>.job.dispatch, msgId: <m>:<job>:dispatch)", "notify_live"]`,
+          bus: "JOBS stream (workqueue, 7d dedup) -> runner:<m> over TLS :4222 or wss://<control>/nats."
+        },
+        {
+          n: 4, short: "Runner Measure", title: "Hardware Execution & Live Stream",
+          event: `Runner fetches commitRef via Git-HTTP -> verifies GPU drain -> runs interleaved A/B + B/A timing blocks`,
+          state: "Thin machine runner builds & measures inside wall-container (Linux systemd) or native launchd (macOS Metal/MLX). Timeout kills only child -pgid; 5s heartbeats continue.",
+          effects: `["stream LIVE(t.machine.<m>.job.<j>.live)", "publish JOBS(t.machine.<m>.job.result)"]`,
+          bus: "LIVE stream (1h / 256 MiB rolling) + Core NATS t.machine.<m>.hb / .cancel."
+        },
+        {
+          n: 5, short: "job.finished", title: "Terminal Outcome & Streak Check",
+          event: `{ type: "job.finished", jobId, machineId, outcome: "ok", metrics, artifactsDigest }`,
+          state: "Reducer verifies job.machineId === msg.machine, resets infraCrashStreak & identicalInvalidStreak to 0 on ok, and hands raw samples to the registered JudgePlugin.",
+          effects: `["persist_pg", "publish_nats(t.run.<r>.ev.job_finished)"]`,
+          bus: "JOBS workqueue deletes acked message; Nats-Msg-Id <m>:<job>:result prevents duplicate processing across restarts."
+        },
+        {
+          n: 6, short: "attempt.judged", title: "Verdict & Optional Non-Blocking Audit",
+          event: `{ type: "attempt.judged", runId, attemptId, verdict, judgePlugin: "statistical", judgeVersion: "1.0.0" }`,
+          state: "Verdict is stored with plugin + version attribution. If configured, an auditor runs with a hard deadlineAt; all other lanes continue proposing without stalling.",
+          effects: `["persist_pg", "publish_nats(t.run.<r>.attempt.judged)", "trigger_advisor(auditor, deadlineAt)"]`,
+          bus: "EVENTS: t.run.<run>.attempt.judged · Held-out cases verified outside worker visibility."
+        },
+        {
+          n: 7, short: "attempt.promoted", title: "Champion Promotion",
+          event: `{ type: "attempt.promoted", runId, attemptId, commitRef, metricDelta, actor }`,
+          state: "Champion pointer advances cleanly (automatically under policy or after autonomous_delegate/owner approval). Event-driven advisor triggers on transition (cooldown-gated).",
+          effects: `["persist_pg", "publish_nats(t.run.<r>.attempt.promoted)", "sync_git", "notify_live(publishPublic: run.live)", "trigger_advisor"]`,
+          bus: "EVENTS: t.run.<run>.attempt.promoted · Triggers downstream plugins with zero core coupling."
+        },
+        {
+          n: 8, short: "Sync & Project", title: "git-sync, LIVE Projection & Distillation",
+          event: `{ type: "git.sync_finished", runId, attemptId, ok: true, ref, prUrl }`,
+          state: "Bundled git-sync pushes branch/tag or opens GitHub PR; LIVE projects sanitized t.live.<run>.> if run.live === true; PG 18 KB indexes chunk async via NATS; traces ready for distill-jsonl.",
+          effects: `["persist_pg", "publish_nats(t.run.<r>.ev.git_sync_finished)", "async kb_chunks index"]`,
+          bus: "t.live.<run>.> (readable by live-reader NKey) · Control bare mirror ready for thermite pull <run>."
+        }
+      ];
+
+      const BREAKERS = [
+        {
+          id: "infra",
+          title: "1. Infra Crash Loop (3x crash_infra)",
+          badge: "Auto-Pause",
+          chip: "chip-wrong",
+          tracked: "run.infraCrashStreak, machine.infraCrashStreak",
+          trigger: "3 consecutive job.finished events with outcome: 'crash_infra' (configurable; resets to 0 on any non-infra finish).",
+          effects: "Pauses affected lane/run AND pauses advisors; marks machine degraded if host-specific; emits need.opened('infra_paused').",
+          why: "Stops burning model tokens and flooding logs when a GPU driver hangs, disk fills, or runner host loses power.",
+          lanes: [
+            { name: "Lane A", state: "PAUSED (infra)", cls: "is-paused" },
+            { name: "Lane B", state: "PAUSED (infra)", cls: "is-paused" },
+            { name: "Advisors", state: "PAUSED", cls: "is-paused" },
+            { name: "Machine M1", state: "DEGRADED", cls: "is-frozen" }
+          ]
+        },
+        {
+          id: "build",
+          title: "2. Identical Build Failure Loop (5x invalid)",
+          badge: "Single-Lane Pause",
+          chip: "chip-needs",
+          tracked: "lane.lastInvalidHash, lane.identicalInvalidStreak",
+          trigger: "5 consecutive outcome: 'invalid' results with the identical normalized errorHash on one lane.",
+          effects: "Pauses ONLY that lane; emits need.opened('build_loop', { laneId }) + optional trigger_advisor('teacher'). Other lanes keep running.",
+          why: "Breaks repetitive compiler/linker loops on one worker without halting healthy sibling lanes.",
+          lanes: [
+            { name: "Lane A", state: "PAUSED (5x same hash)", cls: "is-paused" },
+            { name: "Lane B", state: "RUNNING normally", cls: "is-running" },
+            { name: "Lane C", state: "RUNNING normally", cls: "is-running" },
+            { name: "Teacher Advisor", state: "TRIGGERED", cls: "is-rejudging" }
+          ]
+        },
+        {
+          id: "rejudge",
+          title: "3. First-Class Rejudge (Recorded Attempt)",
+          badge: "Non-Destructive",
+          chip: "chip-working",
+          tracked: "attempt.rejudges[], immutable commitRef",
+          trigger: "attempt.rejudge_requested issued on any recorded attempt via UI, CLI, or MCP (operator / autonomous_delegate / owner).",
+          effects: "Enqueues fresh measure job referencing immutable commitRef with rejudgeOf: attemptId; preserves prior trial history and supersedes active verdict on completion.",
+          why: "Recovers cleanly from transient measurement noise or fixed benchmark bugs without throwing away the winning commit.",
+          lanes: [
+            { name: "Attempt #14", state: "REJUDGING (commitRef)", cls: "is-rejudging" },
+            { name: "Lane A", state: "RUNNING normally", cls: "is-running" },
+            { name: "Lane B", state: "RUNNING normally", cls: "is-running" },
+            { name: "Prior Samples", state: "PRESERVED in EVENTS", cls: "is-running" }
+          ]
+        },
+        {
+          id: "planner",
+          title: "4. Planner Invalid-Epoch Failover (2x invalid)",
+          badge: "No Blind FIFO",
+          chip: "chip-wrong",
+          tracked: "run.planner.invalidEpochStreak",
+          trigger: "2 consecutive planner.epoch_completed events with valid: false.",
+          effects: "Switches to run.config.plannerFallbackModel if configured; otherwise pauses planning and emits need.opened('planner_failed'). NEVER silently degrades to blind FIFO.",
+          why: "Prevents silent quality decay when a planner model returns malformed JSON or invalid lane assignments.",
+          lanes: [
+            { name: "Primary Planner", state: "2x INVALID -> TRIPPED", cls: "is-frozen" },
+            { name: "Fallback Model", state: "ACTIVE (if set) / NEED", cls: "is-rejudging" },
+            { name: "Active Measures", state: "FINISHING in-flight", cls: "is-running" },
+            { name: "Blind FIFO", state: "FORBIDDEN", cls: "is-frozen" }
+          ]
+        },
+        {
+          id: "oscillation",
+          title: "5. Research Oscillation Freeze (3 Rounds)",
+          badge: "Hypothesis Freeze",
+          chip: "chip-needs",
+          tracked: "hypothesis.history: Array<[decision, certainty]>",
+          trigger: "Cycle or flip-flop across 3 consecutive research rounds without net certainty gain.",
+          effects: "Freezes ONLY that hypothesis (status: 'stalled') and emits need.opened('research_oscillation', { hypothesisId }) with full cycle trace.",
+          why: "Stops research agents from ping-ponging between contradictory conclusions while sibling hypotheses continue investigating.",
+          lanes: [
+            { name: "Hypothesis H1", state: "FROZEN (3-round cycle)", cls: "is-frozen" },
+            { name: "Hypothesis H2", state: "RUNNING normally", cls: "is-running" },
+            { name: "Hypothesis H3", state: "RUNNING normally", cls: "is-running" },
+            { name: "Need Opened", state: "research_oscillation", cls: "is-paused" }
+          ]
+        },
+        {
+          id: "audit",
+          title: "6. Non-Blocking Approvals & Auditor Timeout",
+          badge: "Zero Global Freeze",
+          chip: "chip-working",
+          tracked: "attempt.pendingNeedId, audit.deadlineAt",
+          trigger: "Auditor flags concrete finding.kind in {'defect', 'gaming'}, OR clock.tick passes audit.deadlineAt.",
+          effects: "Holds ONLY that candidate's promotion while all other lanes continue proposing & judging. On timeout, applies onAuditTimeout ('proceed' or 'need_owner') so lanes never wedge.",
+          why: "Eliminates v0.2's whole-run stall where one slow auditor or pending review idled every GPU.",
+          lanes: [
+            { name: "Attempt #19", state: "HELD (need_owner)", cls: "is-paused" },
+            { name: "Lane A", state: "RUNNING normally", cls: "is-running" },
+            { name: "Lane B", state: "RUNNING normally", cls: "is-running" },
+            { name: "Auditor Clock", state: "BOUNDED deadlineAt", cls: "is-rejudging" }
+          ]
+        },
+        {
+          id: "advisor",
+          title: "7. Event-Driven Advisors & Scoped AVOID Rules",
+          badge: "Active Injection",
+          chip: "chip-good",
+          tracked: "run.advisorLastAt[role], run.activeDirectives[]",
+          trigger: "Real state transition (attempt.promoted, regression, breaker trip, or round end), gated by cooldown — never blind hourly ticks.",
+          effects: "Emits trigger_advisor; returned ScopedDirective[] (including path/condition AVOID carve-outs) are injected into every subsequent invoke_harness_turn.",
+          why: "Turns advisor learnings into concrete lane guardrails instead of unread reports written on an idle timer.",
+          lanes: [
+            { name: "Trigger", state: "STATE TRANSITION", cls: "is-rejudging" },
+            { name: "Advisor", state: "EMITS ScopedDirective", cls: "is-running" },
+            { name: "Lane A Prompt", state: "INJECTED AVOID rules", cls: "is-running" },
+            { name: "Hourly Cron", state: "REMOVED", cls: "is-paused" }
+          ]
+        }
+      ];
+
+      let currentStepIdx = 0;
+      let currentBreakerId = "infra";
+
+      const lcModeTabs = Array.from(document.querySelectorAll("[data-lc-mode]"));
+      const lcHappyEl = document.getElementById("lc-happy-view");
+      const lcBreakersEl = document.getElementById("lc-breakers-view");
+
+      lcModeTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const mode = tab.dataset.lcMode;
+          lcModeTabs.forEach((t) => t.setAttribute("aria-selected", String(t.dataset.lcMode === mode)));
+          lcHappyEl.hidden = mode !== "happy";
+          lcBreakersEl.hidden = mode !== "breakers";
+        });
+      });
+
+      const stepTrackEl = document.getElementById("lc-step-track");
+      const stepDetailEl = document.getElementById("lc-step-detail");
+      const lcPrevBtn = document.getElementById("lc-prev");
+      const lcNextBtn = document.getElementById("lc-next");
+      const lcCounterEl = document.getElementById("lc-counter");
+
+      function renderLifecycleStep() {
+        const step = LIFECYCLE_STEPS[currentStepIdx];
+        stepTrackEl.innerHTML = LIFECYCLE_STEPS.map((s, idx) => `
+          <button class="step-btn" type="button" role="tab" data-step-idx="${idx}" aria-selected="${String(idx === currentStepIdx)}" ${idx === currentStepIdx ? 'aria-current="step"' : ""}>
+            <span class="step-num">0${s.n}</span>
+            <span class="step-name">${s.short}</span>
+          </button>
+        `).join("");
+
+        stepTrackEl.querySelectorAll("[data-step-idx]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            currentStepIdx = Number(btn.dataset.stepIdx);
+            renderLifecycleStep();
+          });
+        });
+
+        stepDetailEl.innerHTML = `
+          <div class="reducer-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+              <h3>0${step.n}. ${esc(step.title)}</h3>
+              <span class="chip chip-flame mono">${esc(step.short)}</span>
+            </div>
+            <p style="font-size:13.5px;margin-bottom:12px;">${esc(step.state)}</p>
+            <div class="io-row">
+              <div class="io-row-label">NATS SUBJECT / STORAGE BOUNDARY</div>
+              <div style="font-size:12.5px;color:var(--ink);">${esc(step.bus)}</div>
+            </div>
+          </div>
+          <div class="io-triad" style="margin-top:0;">
+            <div class="io-row">
+              <div class="io-row-label">INPUT DOMAIN EVENT</div>
+              <pre style="margin-top:4px;"><code>${esc(step.event)}</code></pre>
+            </div>
+            <div class="io-row">
+              <div class="io-row-label">EMITTED PURE EFFECTS</div>
+              <pre style="margin-top:4px;"><code>${esc(step.effects)}</code></pre>
+            </div>
+          </div>
+        `;
+
+        lcCounterEl.textContent = `Step ${step.n} of ${LIFECYCLE_STEPS.length}`;
+        lcPrevBtn.disabled = currentStepIdx === 0;
+        lcNextBtn.disabled = currentStepIdx === LIFECYCLE_STEPS.length - 1;
+      }
+
+      lcPrevBtn.addEventListener("click", () => {
+        if (currentStepIdx > 0) { currentStepIdx -= 1; renderLifecycleStep(); }
+      });
+      lcNextBtn.addEventListener("click", () => {
+        if (currentStepIdx < LIFECYCLE_STEPS.length - 1) { currentStepIdx += 1; renderLifecycleStep(); }
+      });
+      renderLifecycleStep();
+
+      const breakerListEl = document.getElementById("breaker-list");
+      const breakerDetailEl = document.getElementById("breaker-detail");
+
+      function renderBreakers() {
+        const active = BREAKERS.find((b) => b.id === currentBreakerId) || BREAKERS[0];
+        breakerListEl.innerHTML = BREAKERS.map((b) => `
+          <button class="breaker-btn" type="button" data-breaker-id="${b.id}" aria-pressed="${String(b.id === active.id)}">
+            <span>${b.title}</span>
+            <span class="chip ${b.chip}">${b.badge}</span>
+          </button>
+        `).join("");
+
+        breakerListEl.querySelectorAll("[data-breaker-id]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            currentBreakerId = btn.dataset.breakerId;
+            renderBreakers();
+          });
+        });
+
+        breakerDetailEl.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <h3>${esc(active.title)}</h3>
+            <span class="chip ${active.chip}">${esc(active.badge)}</span>
+          </div>
+          <p style="font-size:13px;">${esc(active.why)}</p>
+          <div class="lane-board" aria-label="Blast radius isolation state">
+            ${active.lanes.map((l) => `
+              <div class="lane-tile ${l.cls}">
+                <div class="lane-name">${esc(l.name)}</div>
+                <div class="lane-state">${esc(l.state)}</div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="io-triad">
+            <div class="io-row">
+              <div class="io-row-label">REDUCER STATE TRACKED</div>
+              <div class="mono" style="font-size:12.5px;color:var(--ink);">${esc(active.tracked)}</div>
+            </div>
+            <div class="io-row">
+              <div class="io-row-label">TRIGGER CONDITION</div>
+              <div style="font-size:13px;color:var(--soft);">${esc(active.trigger)}</div>
+            </div>
+            <div class="io-row">
+              <div class="io-row-label">DETERMINISTIC EFFECTS EMITTED</div>
+              <div style="font-size:13px;color:var(--ink);">${esc(active.effects)}</div>
+            </div>
+          </div>
+        `;
+      }
+      renderBreakers();
+
+      /* =====================================================================
+         5. Capabilities Tabbed Panels + YAML Switcher + Policy Highlighter
+         ===================================================================== */
+      const capTabs = Array.from(document.querySelectorAll("[data-cap-tab]"));
+      const capPanels = Array.from(document.querySelectorAll(".tab-panel"));
+
+      function activateCapTab(name) {
+        capTabs.forEach((t) => {
+          const active = t.dataset.capTab === name;
+          t.setAttribute("aria-selected", String(active));
+          t.setAttribute("tabindex", active ? "0" : "-1");
+        });
+        capPanels.forEach((p) => {
+          p.hidden = p.id !== `cap-panel-${name}`;
+        });
+      }
+      capTabs.forEach((tab, idx) => {
+        tab.addEventListener("click", () => activateCapTab(tab.dataset.capTab));
+        tab.addEventListener("keydown", (ev) => {
+          if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+            ev.preventDefault();
+            const dir = ev.key === "ArrowRight" ? 1 : -1;
+            const next = capTabs[(idx + dir + capTabs.length) % capTabs.length];
+            activateCapTab(next.dataset.capTab);
+            next.focus();
+          }
+        });
+      });
+
+      /* Campaign YAML Switcher */
+      const YAML_MODES = {
+        hill_climb: {
+          desc: "Automatic baseline A/A noise calibration, interleaved A/B + B/A timing blocks, GPU-drain checks, and hidden held-out cases snapshotted outside worker zones.",
+          code: `name: matmul-speed
+mode: hill_climb
+repo: https://github.com/org/matmul.git
+build: cc -O2 -o bench bench.c src/kernel.c
+run: ./bench --size {size} --out {out}/res.txt
+check: ./check.sh {out}/res.txt
+cases:
+  small: { size: 128 }
+  large: { size: 512 }
+  held:  { size: 384, hidden: true }
+score: { metric: time_s, direction: min }
+git: { onChampion: pr, branch: thermite/matmul-speed } # push | pr | tag | none
+live: false`
+        },
+        goal: {
+          desc: "Code verifiers, concrete metric thresholds, and optional review panel. Zero multi-file contract/kit boilerplate.",
+          code: `name: add-fp16
+mode: goal
+repo: https://github.com/org/engine.git
+build: cmake --build build
+goals:
+  - { id: tests, run: ctest --output-on-failure }
+  - { id: speed, run: ./bench --fp16, metric: tok_s, op: ">=", value: 120 }
+git: { onChampion: pr, branch: thermite/add-fp16 }
+live: false`
+        },
+        research: {
+          desc: "SSRF-safe seed fetch and archive, verified quote lookup via Core PG 18 KB, 3-round oscillation breaker, and report synthesis.",
+          code: `name: allocator-tail-latency
+mode: research
+topic: How modern allocators keep p99 latency low under high contention
+questions:
+  - Which thread-local caching designs avoid lock contention?
+  - What do published benchmarks show for jemalloc vs mimalloc vs snmalloc?
+seeds: [https://example.com/allocators-overview]
+live: true`
+        }
+      };
+
+      const yamlDescEl = document.getElementById("yaml-mode-desc");
+      const yamlCodeEl = document.getElementById("yaml-mode-code");
+      const yamlBtns = Array.from(document.querySelectorAll("[data-yaml-mode]"));
+      function setYamlMode(key) {
+        const entry = YAML_MODES[key];
+        if (!entry) return;
+        yamlDescEl.textContent = entry.desc;
+        yamlCodeEl.textContent = entry.code;
+        yamlBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.yamlMode === key)));
+      }
+      yamlBtns.forEach((b) => b.addEventListener("click", () => setYamlMode(b.dataset.yamlMode)));
+      setYamlMode("hill_climb");
+
+      /* Policy Matrix Highlighter */
+      const policyBtns = Array.from(document.querySelectorAll("[data-policy-hl]"));
+      const policyRows = Array.from(document.querySelectorAll("[data-policy-row]"));
+      policyBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const val = btn.dataset.policyHl;
+          policyBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.policyHl === val)));
+          policyRows.forEach((row) => {
+            row.classList.toggle("policy-row-active", val !== "all" && row.dataset.policyRow === val);
+          });
+        });
+      });
+
+      /* =====================================================================
+         6. Interactive Roadmap & LOC Budget Visualizer (Goals 1–14)
+         ===================================================================== */
+      const GOALS = [
+        {
+          id: 1, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 600, locMax: 900, locText: "~600–900 LOC",
+          title: "Cleanroom v1 Workspace, Lean Checks & @iammrduncan/magnesium Sync",
+          deps: ["Goal 0 locked"],
+          scope: [
+            "Branch v1 from main; remove v0.2 src/, web/, tests/, kits/, containers/, and ratchet baselines; scaffold root npm workspaces packages/{core,control,runner,cli,ui,design-system} + packages/harness-libfx (Option C, evaluating/pinning libfx@0.0.18) + deploy/compose.dev.yaml (NATS + pgvector/pgvector:0.8.x-pg18-trixie).",
+            "Wire < 2 min pre-commit checks (typecheck, Biome + noFloatingPromises, check:public, fast Node tests, conditional build:ui); delete link.mjs, web/package-lock.json, and CSS-ban tests.",
+            "Complete @iammrduncan/magnesium sync: theme/base.css + presets/{thermite,fxbot}.css (per-preset weights & control heights), de-brand 8 part files, sync 17 fxbot radix-nova primitives + ResizeGutter/BesidePanel/SettingsShell/ResponsiveDialog/ModelCombobox/TraceSteps + lazy ./provider-logos (183 SVGs), dev-only gallery (npm run design:dev), lucideIcons() Vite plugin."
+          ],
+          doneWhen: "npm run check passes in < 60s on v1; npm run design:dev renders both thermite.css and fxbot.css presets in light/dark at 1440px and 390px; public.mjs reports 0 hits."
+        },
+        {
+          id: 2, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 2000, locMax: 2600, locText: "~2,000–2,600 LOC",
+          title: "Sans-I/O Core, NATS Bus Contract, Unified core/api & Policy",
+          deps: ["G1"],
+          scope: [
+            "Pure Sans-I/O reducer (packages/core/src/machine/, zero node:*/DB/NATS/clock imports): 21 core DomainEvents, 8 Effects, run/scheduler/judge/research lifecycles, and all 7 reliability breakers.",
+            "NATS JetStream contract (packages/core/src/bus/): EVENTS, JOBS, LIVE, ephemeral t.machine.<m>.{hb,cancel}, and least-privilege NKey templates across THERMITE and SYS accounts.",
+            "Single typed core/api ActionDef registry + browser-safe core/client.ts + PolicyGrant evaluator (viewer, operator, autonomous_delegate, owner — zero hardcoded OWNER_ONLY_KINDS).",
+            "fxbot-aligned plugin contract (plugin.json 'com.usethermite', provide/need, plugin-breaks.json unfit(), PluginApi, HarnessPlugin, WallPlugin, KbPluginHooks)."
+          ],
+          doneWhen: "Pure reducer tests prove all 7 reliability breakers, deterministic replay, and delegation boundaries (incl. worker/advisor Door isolation) in < 1s; every ActionDef compiles to JSON Schema and round-trips through the shared door executor."
+        },
+        {
+          id: 3, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 2500, locMax: 3200, locText: "~2,500–3,200 LOC",
+          title: "Control Plane Backbone (PG 18 Record, Door) & Thin Runner (thermite join)",
+          deps: ["G2"],
+          scope: [
+            "Control Record & NATS adapters: single-writer EVENTS -> PostgreSQL 18 (postgres.js + plugin_<name> schemas), JetStream stream/NKey provisioning + $SYS reload, authenticated Git-HTTP mirror, and wss://<control>/nats proxy on :8800.",
+            "Control Door: REST + policy-filtered MCP (tools/list scoped to PolicyGrant), owner account session auth + PolicyGrant token CRUD, sealed secrets (secret.key).",
+            "Hardware-only packages/runner + thermite join <url> --token <tok> (Linux systemd + native macOS launchd): non-destructive preflight before token burn, Ed25519 NKey enrollment, TLS :4222 + WSS fallback, device-cpu, device-cuda, and device-metal (Apple Silicon / MLX), wall-container + selfTest(), -pgid timeout kills, and 5s heartbeats."
+          ],
+          doneWhen: "One thermite join enrolls a Linux or macOS runner (device-cpu/cuda/metal), passes wall.selfTest(), runs a JOBS build/measure job via Git-HTTP fetch, streams LIVE output, cleanly kills timed-out process groups (-pgid), and survives restarts without duplicate execution."
+        },
+        {
+          id: 4, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 2100, locMax: 2800, locText: "~2,100–2,800 LOC",
+          title: "harness-libfx Loop, Provider Catalog & Control-Plane Walls",
+          deps: ["G2", "G3"],
+          scope: [
+            "packages/harness-libfx (~750–900 LOC, pinned to libfx@0.0.18 if conformance passes): createFxEngine({ persistence }) on Postgres journal/checkpoint tables (FxFencedError fencing) + NATS LIVE stream; options.fetch + hooks middleware closing all 5 edge gaps (LAN HTTP rewrite, TTFT + SSE usage scanner, ~250 LOC Anthropic caching translator + reasoning_effort, sync limits + stallGuard, 60 KiB UTF-8 tool cap).",
+            "Provider catalog & sign-ins: providers-registry.json schema + ~271 LOC pure RFC-8628/PKCE OAuth helpers + API key & keyless LAN HTTP local-LM support.",
+            "Control-plane WallPlugin stack over bare-Git mirror + per-trial git worktree: Tier 1 wall-tools (jailed file tools + virtual bash bashkit-wasm/just-bash + SSRF-filtered fetch), Tier 2 wall-os (Linux bwrap+Landlock+seccomp / macOS Seatbelt + host egress proxy, wall-container fallback), and Tier 3 wall-microsandbox (libkrun microVMs), all gated by wall.selfTest()."
+          ],
+          doneWhen: "harness-libfx passes the ~150 LOC scripted HTTP/SSE conformance suite (tools, live steer, cancel, cache/reasoning/TTFT telemetry, LAN HTTP, 429/401/stall, crash-resume), and wall-tools, wall-os, and wall-microsandbox pass all secret/FS/network/orphan-kill selfTest() probes."
+        },
+        {
+          id: 5, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 1600, locMax: 2200, locText: "~1,600–2,200 LOC",
+          title: "End-to-End Campaign Modes (Hill Climb, Goal, Research) & Bundled git-sync",
+          deps: ["G3", "G4"],
+          scope: [
+            "Minimal 7–12 line thermite.yaml parser & one-surface actions (campaigns.validate, campaigns.dry_run, campaigns.create, runs.start) with sane defaults (editable_paths: ['**'], 75% runner RAM / 5x baseline time, immutable judge snapshot outside worker zones).",
+            "All 3 campaign modes on the Sans-I/O scheduler + default statistical registerJudge: Hill climb (auto A/A calibration, interleaved A/B + B/A, GPU-drain, held-out cases), Goal (code verifiers, metric thresholds, review panel), and Research (SSRF-safe seeds, verified quotes, oscillation breaker, report synthesis), plus event-driven advisors & non-blocking needs.",
+            "Bundled default-on git-sync plugin on PluginApi (onEvent('attempt.promoted') -> push | pr | tag | none with GitHub PR support day one), fast incremental thermite pull <run>, and bundled 60s matmul-cpu sample."
+          ],
+          doneWhen: "Scripted-model end-to-end tests execute hill-climb (matmul-cpu), goal, and research runs in < 30s, verifying A/A calibration, judge isolation, champion promotion + git-sync push/PR, rejudge, and circuit-breaker pauses."
+        },
+        {
+          id: 6, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 900, locMax: 1100, locText: "~900–1,100 LOC",
+          title: "Lean Core Knowledge Engine (PG 18 FTS + pg_trgm)",
+          deps: ["G3", "1-day benchmark"],
+          scope: [
+            "Execute the 1-day 60-needle / 30k & 150k-chunk benchmark script against PG 18 FTS + pg_trgm, pgvector HNSW, and pg_textsearch before writing production KB code.",
+            "Implement normalized core tables (kb_collections with kind: 'campaign' | 'shared', kb_items, kb_versions, kb_chunks, kb_blobs, kb_links, kb_grants, kb_run_scopes), content-addressed blobs, async NATS heading-aware parent-child chunker, dual tsvector (english + simple) + pg_trgm, O(1) empty-scope < 1ms short-circuit, compaction transcripts excluded from default search, pooled async PG (max >= 8), pure Sans-I/O query parser + RRF, core/api KB actions, and KbPluginHooks."
+          ],
+          doneWhen: "Benchmark gates pass (B1 Recall@5 >= 95%, B2 Recall@10 >= 85%, scoped p95 < 20ms, empty-scope < 1ms, 0ms event-loop stall under 16 concurrent readers + 100 writes/s); core KB stays <= 1,100 LOC."
+        },
+        {
+          id: 7, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 1700, locMax: 2300, locText: "~1,700–2,300 LOC",
+          title: "Unified CLI (packages/cli) & Core Web UI (packages/ui)",
+          deps: ["G1", "G5", "G6"],
+          scope: [
+            "packages/cli auto-generated from core/api (init, run [--dry-run], status, pull, machine token, join, leave, up/down/logs/update/backup/restore) with --json output.",
+            "Thin packages/ui app on @iammrduncan/magnesium (consuming only core/client.ts + SSE/WS LIVE, with inline splash + safe-area insets + interactive-widget=resizes-content): 3-step resumable Onboarding, Home / Needs you (with auto-clearing readiness strip), Compute (machine > device + copyable thermite join), Knowledge, Campaigns + Run (1-page sticky creator + dry-run; Summary / Live trace / Attempts / Results), and Setup (Providers, Git, Policy tokens, Plugins, System Update), plus plugin UI runtime bridge."
+          ],
+          doneWhen: "Browser checks verify light/dark + 390px mobile across all screens, 3-click onboarding to a running matmul-cpu run, 100% job completion from CLI/MCP alone (zero UI-only backdoors), and build:ui passes cleanly."
+        },
+        {
+          id: 8, wave: "v1.0", waveLabel: "v1.0 MVP", locMin: 500, locMax: 700, locText: "~500–700 LOC",
+          title: "One-Command Install (setup.sh), Docs & v1.0.0 Cutover",
+          deps: ["G7"],
+          scope: [
+            "Ship setup.sh, join.sh, agent-setup.txt, ~55-line 3-service deploy/compose.yaml (control, nats, db on pgvector/pgvector:0.8.x-pg18-trixie), host thermite-runner.service, thermite.service, and thermite-control.path atomic backup/update/rollback flow.",
+            "Auto-generate REST/MCP/CLI docs from core/api; update public guides and CREDITS.md.",
+            "Execute cleanroom cutover: preserve release/v0.2 from main, merge main into v1 with -s ours, fast-forward main, and tag v1.0.0."
+          ],
+          doneWhen: "Clean Linux VM runs curl | sudo bash -> 3-step UI -> first matmul-cpu champion push in < 3 min; second machine joins via thermite join in < 30s; full CI (real PG 18 + NATS + compose smoke + browser + gitleaks + public.mjs) is green; total v1.0 footprint lands in ~12–16.5k LOC."
+        },
+        {
+          id: 9, wave: "v1.1", waveLabel: "v1.1 Plugin", locMin: 900, locMax: 1400, locText: "~900–1,400 LOC (0 core)",
+          title: "External CLI Harnesses (harness-claude, harness-agy, codex/pi)",
+          deps: ["G4"],
+          scope: [
+            "harness-claude (Claude Code CLI via loopback toolBridge MCP/CLI + PTY attachTerminal() + isolated claude_subscription auth) and harness-agy (Agy CLI via toolBridge + normalized HarnessEvent stream), running inside Control's wall-os / wall-microsandbox / wall-container.",
+            "Optional harness-codex and harness-pi plugins on the identical registerHarness seam."
+          ],
+          doneWhen: "Each plugin passes the shared HarnessPlugin conformance suite, completes a real hill-climb trial with zero packages/core edits, and keeps subscription credentials strictly isolated per harness."
+        },
+        {
+          id: 10, wave: "v1.1", waveLabel: "v1.1 Plugin", locMin: 1100, locMax: 1700, locText: "~1,100–1,700 LOC (0 core)",
+          title: "Additional Hardware Devices, Cloud/Cluster Compute & Multi-Forge PRs",
+          deps: ["G3", "G5"],
+          scope: [
+            "Device plugins (registerDevice): device-vulkan (/dev/dri) and device-rocm.",
+            "Compute plugins (registerCompute): compute-ssh, compute-k8s, and compute-runpod (with optional NATS leaf/blob transport for firewalled cloud pods).",
+            "Additional git-sync PR forge adapters (GitLab, Gitea) alongside v1.0's GitHub PR support."
+          ],
+          doneWhen: "Each device-* and compute-* plugin enrolls via NKey, passes wall.selfTest(), runs a benchmark, and tears down cleanly; GitLab/Gitea PR creation passes integration tests."
+        },
+        {
+          id: 11, wave: "v1.2", waveLabel: "v1.2 Plugin", locMin: 800, locMax: 1200, locText: "~800–1,200 LOC (0 core)",
+          title: "Remote WebRTC Pairing (web-pairing / web.usethermite.com) & PWA",
+          deps: ["G7"],
+          scope: [
+            "web-pairing plugin owning plugin_web_pairing (devices, passkeys), Noise + Ed25519 keys, QR + 6-digit SAS pairing tab, on-demand signaling relay WebSocket, and encrypted WebRTC data-channel HTTP/SSE/WS bridge to t.localUrl (x-thermite-web-pairing blocks pairing admin routes).",
+            "Enable VitePWA (registerType: 'prompt') in packages/ui for installable mobile access via web.usethermite.com with zero VPN or port forwarding."
+          ],
+          doneWhen: "A mobile browser pairs via QR + SAS over web.usethermite.com, monitors a live run, and resolves a need; pairing admin routes reject proxied requests; uninstalling leaves zero core tables or routes."
+        },
+        {
+          id: 12, wave: "v1.2", waveLabel: "v1.2 Plugin", locMin: 900, locMax: 1300, locText: "~900–1,300 LOC (0 core)",
+          title: "Built-in Live Publishing (live-publish) & JSONL Distillation (distill-jsonl)",
+          deps: ["G5", "G7"],
+          scope: [
+            "live-publish (thermite live): consumes sanitized t.live.<run>.> projections (emitted only when run.live === true), registers live.toggle / live.status, and serves public SSE/JSON via route() or forwards to live.usethermite.com using the least-privilege live-reader NKey principal.",
+            "distill-jsonl: registers distill.export / distill.preview + streaming download route(), distilling run traces, prompts, diffs, verdicts, tool calls, and learnings into redacted SFT, preference-pair, and trajectory JSONL datasets."
+          ],
+          doneWhen: "Toggling run.live serves a live public view while private runs remain physically unreadable to live-reader; distill.export streams validated, secret-redacted JSONL over a multi-attempt run with zero core schema changes."
+        },
+        {
+          id: 13, wave: "v1.2", waveLabel: "v1.2 Plugin", locMin: 850, locMax: 1350, locText: "~450–650 + ~400–700 opt.",
+          title: "Semantic & Extended Knowledge Plugins (knowledge-semantic, bm25/ingest-pdf)",
+          deps: ["G6"],
+          scope: [
+            "knowledge-semantic: plugin-owned plugin_knowledge_semantic.chunk_embeddings, lazy partial halfvec HNSW per (model, dims) with hnsw.iterative_scan = 'relaxed_order', async batch embedder (off | local llama.cpp EmbeddingGemma 2 / Qwen3-Embedding | remote), and cosine-gated RRF (k = 60) lane.",
+            "Optional plugins gated by benchmark proof: knowledge-bm25 (PG-licensed pg_textsearch only if >= +8 pp on B2/B4), knowledge-ingest-pdf (isolated child-process PDF/HTML/DOCX extractor), plus later knowledge-contextual & knowledge-graph."
+          ],
+          doneWhen: "knowledge-semantic clears the Goal 0 benchmark gate (>= +25 pp Recall@10 on B3 conceptual queries, zero regression on B1/B4, scoped p95 < 50ms, seamless fallback to Core FTS when embedder is off/down)."
+        },
+        {
+          id: 14, wave: "v1.3", waveLabel: "v1.3 Plugin", locMin: 1200, locMax: 1800, locText: "~1,200–1,800 LOC (0 core)",
+          title: "Operator Copilot (thermy), Read-Only sql-explorer & Power Navigation",
+          deps: ["G4", "G7", "opt. G13"],
+          scope: [
+            "thermy: conversational operator copilot plugin using harness-libfx (or any installed harness) + @iammrduncan/magnesium/chat (TraceSteps, Markdown, optional ./editor) invoking core/api actions strictly under the user's PolicyGrant.",
+            "sql-explorer: read-only PostgreSQL explorer & saved-queries plugin (Explorer / DataGrid) over EVENTS, attempts, telemetry, and Knowledge tables with statement timeouts.",
+            "Optional Cmd+K global search command palette and custom advisor/judge packs (advisors-*, registerJudge)."
+          ],
+          doneWhen: "thermy diagnoses run state and runs permitted core/api actions respecting PolicyGrant caps; sql-explorer executes bounded read-only queries and blocks writes; uninstalling either leaves core UI intact."
+        }
+      ];
+
+      const MAX_GOAL_LOC = 3200;
+      let activeWave = "all";
+      const expandedGoals = new Set([1]);
+      const goalListEl = document.getElementById("goal-list");
+      const subtotalEl = document.getElementById("roadmap-subtotal");
+      const toggleAllBtn = document.getElementById("toggle-all-goals");
+
+      function waveChipClass(wave) {
+        if (wave === "v1.0") return "chip-flame";
+        if (wave === "v1.1") return "chip-working";
+        if (wave === "v1.2") return "chip-good";
+        return "chip-needs";
+      }
+
+      const WAVE_TOTALS = {
+        all: "14 goals · ~12.0k–16.2k core + ~5.8k–8.8k plugins",
+        "v1.0": "8 goals · ~12.0k–16.2k LOC",
+        "v1.1": "2 goals · ~2.0k–3.1k LOC (plugins, 0 core)",
+        "v1.2": "3 goals · ~2.6k–3.9k LOC (plugins, 0 core)",
+        "v1.3": "1 goal · ~1.2k–1.8k LOC (plugins, 0 core)"
+      };
+
+      function renderGoals() {
+        const list = activeWave === "all" ? GOALS : GOALS.filter((g) => g.wave === activeWave);
+        subtotalEl.textContent = WAVE_TOTALS[activeWave] || "";
+
+        const allExpanded = list.every((g) => expandedGoals.has(g.id));
+        toggleAllBtn.textContent = allExpanded ? "Collapse all" : "Expand all";
+
+        goalListEl.innerHTML = list.map((g) => {
+          const isOpen = expandedGoals.has(g.id);
+          const minPct = Math.min(100, (g.locMin / MAX_GOAL_LOC) * 100).toFixed(1);
+          const maxPct = Math.min(100, (g.locMax / MAX_GOAL_LOC) * 100).toFixed(1);
+          return `
+            <article class="goal-card" data-wave="${g.wave}">
+              <button class="goal-toggle" type="button" data-goal-toggle="${g.id}" aria-expanded="${String(isOpen)}" aria-controls="goal-body-${g.id}">
+                <div>
+                  <div class="goal-title-line">
+                    <span class="goal-num">Goal ${g.id}</span>
+                    <span class="chip ${waveChipClass(g.wave)}">${esc(g.waveLabel)}</span>
+                    <span class="goal-name">${esc(g.title)}</span>
+                  </div>
+                  <div class="goal-deps">Depends on: ${esc(g.deps.join(", "))}</div>
+                </div>
+                <div class="goal-bar-wrap">
+                  <div class="goal-loc-label">
+                    <span>Est. LOC</span>
+                    <span>${esc(g.locText)}</span>
+                  </div>
+                  <div class="goal-bar-track" aria-hidden="true">
+                    <div class="goal-bar-max" style="width:${maxPct}%;"></div>
+                    <div class="goal-bar-min" style="width:${minPct}%;"></div>
+                  </div>
+                </div>
+                <span class="goal-chevron" aria-hidden="true">${isOpen ? "Hide" : "Details"}</span>
+              </button>
+              <div id="goal-body-${g.id}" class="goal-body" ${isOpen ? "" : "hidden"}>
+                <div class="goal-body-grid">
+                  <div>
+                    <h4>Scope</h4>
+                    <ul>${g.scope.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+                  </div>
+                  <div>
+                    <h4>Done When</h4>
+                    <div class="done-when-box">${esc(g.doneWhen)}</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join("");
+
+        goalListEl.querySelectorAll("[data-goal-toggle]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = Number(btn.dataset.goalToggle);
+            if (expandedGoals.has(id)) expandedGoals.delete(id);
+            else expandedGoals.add(id);
+            renderGoals();
+          });
+        });
+      }
+
+      document.querySelectorAll("[data-wave-filter]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeWave = btn.dataset.waveFilter;
+          document.querySelectorAll("[data-wave-filter]").forEach((b) => {
+            b.setAttribute("aria-pressed", String(b.dataset.waveFilter === activeWave));
+          });
+          renderGoals();
+        });
+      });
+
+      toggleAllBtn.addEventListener("click", () => {
+        const list = activeWave === "all" ? GOALS : GOALS.filter((g) => g.wave === activeWave);
+        const allOpen = list.every((g) => expandedGoals.has(g.id));
+        if (allOpen) list.forEach((g) => expandedGoals.delete(g.id));
+        else list.forEach((g) => expandedGoals.add(g.id));
+        renderGoals();
+      });
+      renderGoals();
+
+      /* =====================================================================
+         7. All 16 Locked Owner Decisions Matrix
+         ===================================================================== */
+      const DECISIONS = [
+        { id: 1, cat: "core", catLabel: "Core & Data", title: "Cleanroom git home", verdict: "Dedicated v1 branch in this repo", why: "Preserves packages/design-system/, docs/plan/v1/, LICENSE, SECURITY.md, CREDITS.md, .gitleaks.toml, and scripts/checks/public.mjs; main stays v0.2.x until v1.0.0 -s ours cutover.", spike: "onboarding-and-mvp.md", spikeLabel: "Onboarding & MVP" },
+        { id: 2, cat: "core", catLabel: "Core & Data", title: "PostgreSQL driver & default PG 18 image", verdict: "postgres.js + pgvector/pgvector:0.8.x-pg18-trixie", why: "Verbatim fxbot plugin-API parity, zero runtime overhead when vector is off, and zero DB image swap when enabling knowledge-semantic.", spike: "sansio-nats-contract.md", spikeLabel: "Sans-I/O & Knowledge" },
+        { id: 3, cat: "core", catLabel: "Core & Data", title: "libfx pin version & Option C hybrid packaging", verdict: "Option C Hybrid + evaluate/pin libfx@0.0.18 in Goal 1", why: "Wrap libfx directly in packages/harness-libfx, sync fxbot's providers-registry.json + ~271 LOC pure OAuth helpers, and do not block Goal 1 on extracting @fxbot/agent-core.", spike: "libfx-audit.md", spikeLabel: "libfx Audit" },
+        { id: 4, cat: "core", catLabel: "Core & Data", title: "Direct Anthropic caching shim & compaction scope", verdict: "Ship ~250 LOC Anthropic Messages caching/thinking translator in v1.0", why: "Recovers 85%+ token savings on direct API keys + libfx auto-compaction (metered via hooks) & 60 KiB tool cap; defer custom compactAt rollover until needed.", spike: "libfx-audit.md", spikeLabel: "libfx Audit" },
+        { id: 5, cat: "isolation", catLabel: "Isolation & Runners", title: "Control-plane default wall & virtual bash", verdict: "Ship wall-tools WITH virtual bash (bashkit-wasm/just-bash) + wall-os in v1.0", why: "Zero-dep shell-free default still gives workers piped grep/awk/sed locally, while opt-in wall-os supports local native shells and external CLI harnesses.", spike: "wasm-isolation-spike.md", spikeLabel: "Isolation Spike" },
+        { id: 6, cat: "isolation", catLabel: "Isolation & Runners", title: "wall-os OS coverage & wall-microsandbox timing", verdict: "Include wall-microsandbox (libkrun microVM) in v1.0 day one", why: "Hardware-virtualized isolation from launch alongside wall-os (Linux bwrap+Landlock+seccomp / macOS Seatbelt) and wall-container fallback when /dev/kvm is absent.", spike: "wasm-isolation-spike.md", spikeLabel: "Isolation Spike" },
+        { id: 7, cat: "isolation", catLabel: "Isolation & Runners", title: "Runner networking & Git artifact delivery", verdict: "Ship wss://<control>/nats (proxied on :8800) + TLS :4222 + Git-HTTP commit fetch in v1.0", why: "Eliminates port-forwarding friction behind single-port HTTPS proxies and keeps JOBS payloads tiny (< 1 MiB); optional NATS leaf/blobs live in compute-* plugins.", spike: "onboarding-and-mvp.md", spikeLabel: "Onboarding & NATS" },
+        { id: 8, cat: "isolation", catLabel: "Isolation & Runners", title: "Native macOS runner (launchd + device-metal) timing", verdict: "Pull launchd + device-metal (Apple Silicon / MLX) into v1.0 day one", why: "Runs Apple Silicon MLX campaigns natively from launch without waiting for v1.1 or fighting container-blocks-Metal workarounds.", spike: "onboarding-and-mvp.md", spikeLabel: "Onboarding & MVP" },
+        { id: 9, cat: "policy", catLabel: "Policy & Git", title: "git-sync placement & git.onChampion: pr timing", verdict: "Bundled default-on git-sync supporting push | pr | tag | none (GitHub PRs day one)", why: "Dogfoods PluginApi on day one and delivers automated champion PRs at launch (GitLab and Gitea adapters follow in v1.1).", spike: "sansio-nats-contract.md", spikeLabel: "Sans-I/O & MVP" },
+        { id: 10, cat: "policy", catLabel: "Policy & Git", title: "First-run loopback auth & autonomous_delegate ceiling", verdict: "Step 1 owner account cookie (+ THERMITE_NO_AUTH_LOOPBACK=1 dev) + full campaign autonomy", why: "autonomous_delegate grants 100% campaign/promotion/compute/settings/terminal:input + installed campaign plugin actions, excluding only plugins:manage & tokens:manage by default (still custom grantable).", spike: "sansio-nats-contract.md", spikeLabel: "Policy & Onboarding" },
+        { id: 11, cat: "policy", catLabel: "Policy & Git", title: "Third-party registerJudge execution model", verdict: "In-process for v1.0 (proof-gated & attributed)", why: "Gated by owner-only plugins:manage, A/A calibration proof, and { judgePlugin, judgeVersion } on every verdict; add optional subprocess isolation later if needed.", spike: "sansio-nats-contract.md", spikeLabel: "Sans-I/O Contract" },
+        { id: 12, cat: "kb_ui", catLabel: "Knowledge & UI", title: "Knowledge default embedder profile", verdict: "Core PG 18 FTS + pg_trgm default (embedder: off on minimal install)", why: "Keeps base install ultra-light at 3 services; 1-click UI toggle or --with-semantic enables knowledge-semantic (local ~450 MB or remote).", spike: "knowledge-research.md", spikeLabel: "Knowledge Research" },
+        { id: 13, cat: "kb_ui", catLabel: "Knowledge & UI", title: "Knowledge transcripts & shared collections", verdict: "Exclude compaction transcripts from default search + support campaign | shared collections day one", why: "Prevents verbose compaction logs from outranking findings (still browsable by kind / include_transcripts: true) and adds shared collections for ~15 LOC.", spike: "knowledge-research.md", spikeLabel: "Knowledge Research" },
+        { id: 14, cat: "kb_ui", catLabel: "Knowledge & UI", title: "Shared UI package name & per-preset scale", verdict: "Workspace package @iammrduncan/magnesium (Magnesium) + per-preset CSS variables", why: "To be adopted later by fxbot in place of its own UI library; thermite.css keeps --font-weight-medium: 600 & 36px/h-9 while fxbot.css keeps 500 & 32px/h-8.", spike: "design-system-sync.md", spikeLabel: "Design System Sync" },
+        { id: 15, cat: "kb_ui", catLabel: "Knowledge & UI", title: "Provider logos bundle (./provider-logos)", verdict: "Include lazy-loaded ./provider-logos (183 SVGs / 274 KB) in @iammrduncan/magnesium", why: "Zero cost until Add Provider opens, with full CREDITS.md and licenses-styles.md attribution.", spike: "design-system-sync.md", spikeLabel: "Design System Sync" },
+        { id: 16, cat: "kb_ui", catLabel: "Knowledge & UI", title: "PWA (VitePWA) timing & gallery deployment", verdict: "Inline splash + safe-area insets in v1.0; VitePWA in v1.2; dev-only gallery", why: "Ships crisp mobile viewport ergonomics day one, pairs VitePWA with web-pairing in v1.2, and serves Magnesium gallery only via npm run design:dev (never production Control).", spike: "design-system-sync.md", spikeLabel: "Design System Sync" }
+      ];
+
+      let activeDecCat = "all";
+      let decQuery = "";
+      const decGridEl = document.getElementById("decisions-grid");
+      const decEmptyEl = document.getElementById("decisions-empty");
+      const decSearchEl = document.getElementById("decision-search");
+      const decResetBtn = document.getElementById("decisions-reset");
+
+      function renderDecisions() {
+        const q = decQuery.trim().toLowerCase();
+        const filtered = DECISIONS.filter((d) => {
+          if (activeDecCat !== "all" && d.cat !== activeDecCat) return false;
+          if (!q) return true;
+          const hay = `#${d.id} ${d.title} ${d.verdict} ${d.why} ${d.catLabel} ${d.spikeLabel}`.toLowerCase();
+          return hay.includes(q);
+        });
+
+        decEmptyEl.hidden = filtered.length > 0;
+        decGridEl.hidden = filtered.length === 0;
+
+        decGridEl.innerHTML = filtered.map((d) => `
+          <article class="decision-card">
+            <div class="decision-top">
+              <span class="decision-id">Decision #${d.id}</span>
+              <span class="chip chip-idle">${esc(d.catLabel)}</span>
+            </div>
+            <h3 class="decision-title">${esc(d.title)}</h3>
+            <div class="decision-verdict">${esc(d.verdict)}</div>
+            <div class="decision-why">${esc(d.why)}</div>
+            <div class="decision-foot">
+              <span>Locked 2026-11-28</span>
+              <div style="display:flex;gap:12px;">
+                <a href="../goal-0/${esc(d.spike)}">${esc(d.spikeLabel)}</a>
+                <a href="../decisions.md">decisions.md</a>
+              </div>
+            </div>
+          </article>
+        `).join("");
+      }
+
+      document.querySelectorAll("[data-dec-cat]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeDecCat = btn.dataset.decCat;
+          document.querySelectorAll("[data-dec-cat]").forEach((b) => {
+            b.setAttribute("aria-pressed", String(b.dataset.decCat === activeDecCat));
+          });
+          renderDecisions();
+        });
+      });
+
+      decSearchEl.addEventListener("input", () => {
+        decQuery = decSearchEl.value;
+        renderDecisions();
+      });
+
+      decResetBtn.addEventListener("click", () => {
+        activeDecCat = "all";
+        decQuery = "";
+        decSearchEl.value = "";
+        document.querySelectorAll("[data-dec-cat]").forEach((b) => {
+          b.setAttribute("aria-pressed", String(b.dataset.decCat === "all"));
+        });
+        renderDecisions();
+      });
+      renderDecisions();
+
+      /* =====================================================================
+         8. Active Section Nav Highlighting (Click + Scroll Spy + Bottom Guard)
+         ===================================================================== */
+      const navLinks = Array.from(document.querySelectorAll(".nav-links a"))
+        .filter((a) => (a.getAttribute("href") || "").startsWith("#"));
+      const sections = navLinks
+        .map((a) => document.querySelector(a.getAttribute("href")))
+        .filter(Boolean);
+
+      function setActiveNav(id) {
+        navLinks.forEach((a) => {
+          a.classList.toggle("active", a.getAttribute("href") === `#${id}`);
+        });
+      }
+
+      let lockedTargetId = null;
+      let lockTimer = 0;
+      function lockNav(id) {
+        lockedTargetId = id;
+        setActiveNav(id);
+        clearTimeout(lockTimer);
+        lockTimer = setTimeout(() => { lockedTargetId = null; updateNavFromScroll(); }, 1500);
+      }
+      function releaseNavLock() {
+        if (!lockedTargetId) return;
+        lockedTargetId = null;
+        clearTimeout(lockTimer);
+      }
+
+      navLinks.forEach((a) => {
+        a.addEventListener("click", () => {
+          const href = a.getAttribute("href") || "";
+          if (href.startsWith("#")) lockNav(href.slice(1));
+        });
+      });
+      window.addEventListener("wheel", releaseNavLock, { passive: true });
+      window.addEventListener("touchstart", releaseNavLock, { passive: true });
+      window.addEventListener("scrollend", () => {
+        if (lockedTargetId) {
+          const target = document.getElementById(lockedTargetId);
+          const id = lockedTargetId;
+          releaseNavLock();
+          if (target && Math.abs(target.getBoundingClientRect().top) <= 160) {
+            setActiveNav(id);
+            return;
+          }
+        }
+        updateNavFromScroll();
+      }, { passive: true });
+
+      function updateNavFromScroll() {
+        if (sections.length === 0) return;
+        if (lockedTargetId) {
+          const target = document.getElementById(lockedTargetId);
+          if (target && target.getBoundingClientRect().top <= 130) {
+            setActiveNav(lockedTargetId);
+          }
+          return;
+        }
+        const nearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24;
+        if (nearBottom) {
+          setActiveNav(sections[sections.length - 1].id);
+          return;
+        }
+        const offset = 130;
+        let currentId = sections[0].id;
+        for (const s of sections) {
+          if (s.getBoundingClientRect().top <= offset) {
+            currentId = s.id;
+          }
+        }
+        setActiveNav(currentId);
+      }
+
+      window.addEventListener("scroll", updateNavFromScroll, { passive: true });
+      window.addEventListener("hashchange", () => {
+        const hash = window.location.hash.replace(/^#/, "");
+        if (hash && sections.some((s) => s.id === hash)) {
+          lockNav(hash);
+        }
+      });
+      updateNavFromScroll();
+    })();
+  </script>
+</body>
+</html>
