@@ -1,6 +1,6 @@
 # Thermite v1 — UI/UX Design Plan & Magnesium Direction
 
-**Status:** Goal 0 design specification (2026-11-28), paired with the interactive prototype at [`mockups/index.html`](mockups/index.html) and the component sync audit at [`goal-0/design-system-sync.md`](goal-0/design-system-sync.md).  
+**Status:** Gate 5 baseline approved by owner (2026-11-28) to start `v1` implementation, paired with the interactive prototype at [`mockups/index.html`](mockups/index.html) and the component sync audit at [`goal-0/design-system-sync.md`](goal-0/design-system-sync.md). Screen 7 (Observability Explorer) is approved as a starting point and flagged for iterative revisions once live run data flows.  
 **Package:** `@iammrduncan/magnesium` (`packages/design-system/`, shared with `fxbot`).
 
 ---
@@ -182,14 +182,19 @@ Because the **Run Workspace** is where operators spend 80% of their daily loop�
 
 ## 5. Owner Design Review Checklist (Sign-Off Gate Before Goal 1 / Goal 7 UI)
 
-Open [`mockups/index.html`](mockups/index.html) (works directly via `file://` or local HTTP) and walk through these decisions:
+**Owner Sign-Off (2026-11-28):** Baseline mockups in [`mockups/index.html`](mockups/index.html) approved to start `v1` implementation (Goal 1). Two items stay explicitly open for Goal 7 UI implementation:
 
-- [ ] **Run Workspace Direction:** Toggle **Direction A (Split Workbench)** vs. **Direction B (Focused Stream)** at `1440px` and `820px`. Pick A, B, or a hybrid (e.g., A with inspector collapsible via gutter).
-- [ ] **Magnesium Palette & Contrast:** Toggle **Light / Dark** across all 7 screens. Confirm warm-stone surfaces, flame accent restraint, and semantic state readability meet expectations.
-- [ ] **Onboarding Flow (Screen 1):** Click through Steps 1 → 2 (test a Local/LAN HTTP provider) → 3 (`matmul-cpu` 1-click launch). Confirm zero friction and clear "what do I do next?" guidance.
-- [ ] **Home & Non-Blocking `Needs You` (Screen 2):** Inspect a hold in the `BesidePanel`, approve/reject it with Undo toast, and verify the Readiness Strip + Active Runs feel calm without 4-stat-card clutter.
-- [ ] **New Campaign DX (Screen 4):** Switch `Hill climb` / `Goal` / `Research`, toggle `git.onChampion` (`push`/`pr`/`tag`/`none`), and run **Dry Run Preflight**. Confirm the 10-line `thermite.yaml` hits the right simplicity bar.
-- [ ] **Compute & `thermite join` (Screen 5):** Confirm `machine › device` clarity (zero "rigs"), wall badges (`wall-microsandbox`, `wall-os`, `wall-tools`), and the `+ Add Machine` 1-command modal.
-- [ ] **Knowledge, `PolicyGrant` & Plugin Slots (Screen 6):** Test PG 18 FTS search + `knowledge-semantic` toggle, inspect `autonomous_delegate` vs. walled `run_worker`, and confirm plugin slots keep core UI clean.
-- [ ] **Observability Explorer (Screen 7):** Filter by facets and `key:value` chips, click a histogram bar to slice time, toggle **Visual Filter ↔ SQL** across all 5 Saved Views, test **Live Tail** and **Export JSONL**, inspect `Fields` (`+`/`-`), `Metrics & Diff`, `Raw JSON`, and `Context (±5)` in the resizable `BesidePanel`, and confirm `Open in Explorer` from Run Workspace.
-- [ ] **Responsive Breakpoints:** Switch the top review bar across **`1440px` → `820px` → `390px`** on every screen and verify zero horizontal overflow, clean drawer/sheet behavior, and comfortable touch targets.
+- **Observability Explorer (Screen 7):** Approved as the starting direction; expected to go through multiple revisions once live NATS/PostgreSQL run data is flowing.
+- **Run Workspace Direction (A vs. B):** Final pick between Direction A (Split Workbench), Direction B (Focused Stream), or collapsible hybrid will be locked before Goal 7 builds the Run Workspace screen.
+
+Open [`mockups/index.html`](mockups/index.html) (works directly via `file://` or local HTTP) to re-verify these checks during Goal 7 UI reviews:
+
+- [ ] **Run Workspace Direction:** Lock **Direction A (Split Workbench)** vs. **Direction B (Focused Stream)** (or collapsible A hybrid) before Goal 7 builds the Run Workspace.
+- [x] **Magnesium Palette & Contrast:** Baseline approved (2026-11-28) — warm-stone surfaces, restrained flame accent, and semantic state readability across Light / Dark.
+- [x] **Onboarding Flow (Screen 1):** Baseline approved (2026-11-28) — 3-step resumable flow with Local/LAN HTTP provider test and `matmul-cpu` launch.
+- [x] **Home & Non-Blocking `Needs You` (Screen 2):** Baseline approved (2026-11-28) — Readiness Strip, non-blocking `Needs You` with `BesidePanel` + Undo toast, and Active Runs.
+- [x] **New Campaign DX (Screen 4):** Baseline approved (2026-11-28) — mode selector, `git.onChampion` modes, 10-line live `thermite.yaml`, and Dry Run Preflight.
+- [x] **Compute & `thermite join` (Screen 5):** Baseline approved (2026-11-28) — `machine › device` pool (zero "rigs"), wall proofs, and `+ Add Machine` modal.
+- [x] **Knowledge, `PolicyGrant` & Plugin Slots (Screen 6):** Baseline approved (2026-11-28) — Knowledge tree + PG 18 FTS / `knowledge-semantic`, `PolicyGrant` matrix, and bounded plugin slots.
+- [ ] **Observability Explorer (Screen 7 — Iterative):** Starting baseline approved (2026-11-28); plan hands-on revision passes on facets, histogram, Visual Filter ↔ SQL, Live Tail, `BesidePanel`, and JSONL export once live run data is available.
+- [x] **Responsive Breakpoints:** Baseline verified at `1440px` / `820px` / `390px` (zero overflow, drawer/sheet collapse, touch targets); re-check on real screens in Goal 7.
