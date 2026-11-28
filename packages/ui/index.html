@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#171412" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Thermite</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --splash-bg: #ffffff;
+        --splash-fg: #1c1917;
+        --splash-muted: #6f6862;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --splash-bg: #211d1a;
+          --splash-fg: #fafaf9;
+          --splash-muted: #a8a29e;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: var(--splash-bg);
+        color: var(--splash-fg);
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      .thermite-splash {
+        display: flex;
+        min-height: 100dvh;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
+      }
+      .thermite-splash-mark {
+        display: inline-flex;
+        width: 36px;
+        height: 36px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: linear-gradient(160deg, #ff8a3d, #f2542d);
+        color: #ffffff;
+      }
+      .thermite-splash-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--splash-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="thermite-splash" role="status" aria-label="Loading Thermite">
+        <span class="thermite-splash-mark" aria-hidden="true">
+          <svg
+            aria-hidden="true"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"
+            />
+          </svg>
+        </span>
+        <span class="thermite-splash-label">Thermite</span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

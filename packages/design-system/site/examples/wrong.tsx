@@ -1,4 +1,4 @@
-import { Act, Failure, Wrong } from "@ds";
+import { Act, Failure, Wrong } from "@iammrduncan/magnesium/parts";
 
 export default function SomethingIsWrongNow() {
   return (

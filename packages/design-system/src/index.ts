@@ -1,29 +1,41 @@
 /**
- * The design system: one theme (theme.css), the stock shadcn/ui components it is built on (ui/),
- * and the brand's parts. An app takes its look from here and from nowhere else, so a change made
- * here shows on every screen. The site in ../site shows each part with its states, its rule and
- * its code; control serves it at /design.
+ * `@iammrduncan/magnesium` convenience entry point: core composed parts, utilities, hooks, and
+ * non-colliding stock primitives.
  *
- * It imports nothing of Thermite: what a part shows comes in as its properties.
+ * For explicit subpath isolation or optional peer modules (`./chat`, `./providers`, `./editor`),
+ * import directly from `@iammrduncan/magnesium/primitives`, `@iammrduncan/magnesium/parts`, etc.
  */
 
-export * from "./brand/mark.tsx";
-export * from "./brand/thermy.tsx";
+export * from "./hooks/use-mobile.ts";
 export * from "./lib/nonce.ts";
-export * from "./parts/act.tsx";
-export * from "./parts/change.tsx";
-export * from "./parts/chip.tsx";
-export * from "./parts/copy-id.tsx";
-export * from "./parts/explorer.tsx";
-export * from "./parts/field.tsx";
-export * from "./parts/frame.tsx";
-export * from "./parts/lists.tsx";
-export * from "./parts/lone.tsx";
-export * from "./parts/need-card.tsx";
-export * from "./parts/opens.tsx";
-export * from "./parts/screen.tsx";
-export * from "./parts/stat.tsx";
-export * from "./parts/states.tsx";
-export * from "./parts/tabs.tsx";
-export * from "./parts/tone.ts";
-export * from "./parts/tree.tsx";
+export * from "./lib/utils.ts";
+export * from "./parts/index.ts";
+
+// Re-export non-colliding core primitives (`Empty` and `Tabs` live on `./primitives` and `./parts`).
+export * from "./primitives/avatar.tsx";
+export * from "./primitives/badge.tsx";
+export * from "./primitives/button.tsx";
+export * from "./primitives/checkbox.tsx";
+export * from "./primitives/collapsible.tsx";
+export * from "./primitives/context-menu.tsx";
+export * from "./primitives/dialog.tsx";
+export * from "./primitives/dropdown-menu.tsx";
+export {
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "./primitives/empty.tsx";
+export * from "./primitives/input.tsx";
+export * from "./primitives/input-group.tsx";
+export * from "./primitives/native-select.tsx";
+export * from "./primitives/popover.tsx";
+export * from "./primitives/separator.tsx";
+export * from "./primitives/sheet.tsx";
+export * from "./primitives/sidebar.tsx";
+export * from "./primitives/skeleton.tsx";
+export * from "./primitives/switch.tsx";
+export { TabsContent, TabsList, TabsTrigger, tabsListVariants } from "./primitives/tabs.tsx";
+export * from "./primitives/textarea.tsx";
+export * from "./primitives/tooltip.tsx";

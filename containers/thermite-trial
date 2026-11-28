@@ -1,2 +1,0 @@
-#!/bin/sh
-exec node /opt/thermite/dist/harness/agents/trial-cli.js "$@"

@@ -1,4 +1,4 @@
-import { Act, Chip, Nothing, Screen, Section, Tabs } from "@ds";
+import { Act, Chip, Nothing, Screen, Section, Tabs } from "@iammrduncan/magnesium/parts";
 import { PlusIcon } from "lucide-react";
 
 export default function TheTopOfAScreen() {
@@ -8,8 +8,8 @@ export default function TheTopOfAScreen() {
         kind="detail"
         title="pn-prefill-2"
         crumbs={[
-          { label: "Knowledge", href: "#" },
-          { label: "pn-prefill", href: "#" },
+          { label: "Knowledge", href: "#knowledge" },
+          { label: "pn-prefill", href: "#pn-prefill" },
         ]}
         state={<Chip state={{ word: "At work", tone: "working" }} />}
         actions={

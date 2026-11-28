@@ -1,4 +1,4 @@
-import { Nothing, Split, Tree, type TreeItem } from "@ds";
+import { Nothing, Split, Tree, type TreeItem } from "@iammrduncan/magnesium/parts";
 import { useState } from "react";
 
 const ITEMS: TreeItem[] = [

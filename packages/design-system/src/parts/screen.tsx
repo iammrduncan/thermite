@@ -16,7 +16,7 @@ interface Crumb {
 }
 
 /**
- * A screen: where it is, its name, its state, its buttons with the flame one last, its tabs,
+ * A screen: where it is, its name, its state, its buttons with the primary one last, its tabs,
  * then its one sentence, the largest text on it. Under that, its blocks in one column.
  *
  * The top is frame: the budget counts only what is under it.
@@ -51,7 +51,7 @@ export function Screen({
         <header className="flex flex-col gap-4">
           <div className="flex min-h-9 flex-wrap items-center gap-2">
             {crumbs.map((c) => (
-              <span key={c.href} className="contents text-quiet">
+              <span key={`${c.href}-${c.label}`} className="contents text-quiet">
                 <a
                   href={c.href}
                   title={c.title}

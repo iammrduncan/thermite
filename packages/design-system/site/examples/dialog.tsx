@@ -1,4 +1,4 @@
-import { Act, Confirm } from "@ds";
+import { Act, Confirm } from "@iammrduncan/magnesium/parts";
 import { useState } from "react";
 
 export default function TheOneDialog() {

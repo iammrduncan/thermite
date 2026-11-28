@@ -1,4 +1,4 @@
-import { Act, IconAct, TextLink } from "@ds";
+import { Act, IconAct, TextLink } from "@iammrduncan/magnesium/parts";
 import { EllipsisIcon, EyeIcon, PlayIcon } from "lucide-react";
 
 export default function Buttons() {

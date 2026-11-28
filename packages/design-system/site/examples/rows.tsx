@@ -1,4 +1,4 @@
-import { Change, Chip, Sparkline, TextLink, Thing, Things } from "@ds";
+import { Change, Chip, Sparkline, TextLink, Thing, Things } from "@iammrduncan/magnesium/parts";
 
 export default function Rows() {
   return (

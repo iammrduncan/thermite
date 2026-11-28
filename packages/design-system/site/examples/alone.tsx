@@ -1,4 +1,4 @@
-import { Alone, Failure } from "@ds";
+import { Alone, Failure } from "@iammrduncan/magnesium/parts";
 
 /** One message alone, before an app has its frame: here, a read that failed. */
 export default function AMessageAlone() {

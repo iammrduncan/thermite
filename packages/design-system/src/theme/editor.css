@@ -1,0 +1,85 @@
+/* Optional ProseMirror Input Markdown editor rules (`@iammrduncan/magnesium/editor`). */
+.fx-editor {
+  width: 100%;
+  padding-inline: 0.625rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  overflow-y: auto;
+  outline: none;
+}
+@media (min-width: 48rem) {
+  .fx-editor {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+.fx-editor[contenteditable="false"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.fx-formatted p {
+  margin: 0;
+}
+.fx-formatted blockquote {
+  margin: 0.125rem 0;
+  padding-left: 0.625rem;
+  border-left: 3px solid color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  color: var(--muted-foreground);
+}
+.fx-formatted code {
+  padding: 0.0625rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  font-family: var(--mono-font, ui-monospace, monospace);
+  font-size: 0.875em;
+}
+.fx-formatted pre {
+  margin: 0.25rem 0;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  white-space: pre-wrap;
+}
+.fx-formatted pre code {
+  padding: 0;
+  background: none;
+}
+.fx-formatted ul,
+.fx-formatted ol {
+  margin: 0.125rem 0;
+  padding-left: 1.5rem;
+}
+.fx-formatted ul {
+  list-style: disc;
+}
+.fx-formatted ol {
+  list-style: decimal;
+}
+.fx-formatted a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: break-spaces;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+}
+.ProseMirror pre {
+  white-space: pre-wrap;
+}
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+.ProseMirror-hideselection {
+  caret-color: transparent;
+}
+.ProseMirror [draggable][contenteditable="false"] {
+  user-select: text;
+}
+img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+}

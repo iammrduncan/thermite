@@ -1,4 +1,4 @@
-import { Act, Undo } from "@ds";
+import { Act, Undo } from "@iammrduncan/magnesium/parts";
 import { useState } from "react";
 
 export default function DoItAndOfferUndo() {

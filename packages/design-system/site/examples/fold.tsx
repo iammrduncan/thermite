@@ -1,4 +1,4 @@
-import { Fold, Group } from "@ds";
+import { Fold, Group } from "@iammrduncan/magnesium/parts";
 
 export default function Advanced() {
   return (

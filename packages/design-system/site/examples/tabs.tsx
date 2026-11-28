@@ -1,4 +1,4 @@
-import { Tabs } from "@ds";
+import { Tabs } from "@iammrduncan/magnesium/parts";
 import { useState } from "react";
 
 const TABS = ["Summary", "Explore", "Usage", "Results", "Setup"].map((label) => ({

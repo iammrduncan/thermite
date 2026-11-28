@@ -1,0 +1,45 @@
+# Local v1 development backing services: NATS JetStream + PostgreSQL 18 (pgvector).
+# Start with: docker compose -f deploy/compose.dev.yaml up -d
+# (or `podman compose -f deploy/compose.dev.yaml up -d`).
+name: thermite-dev
+
+services:
+  nats:
+    image: docker.io/library/nats:2.15.1-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "127.0.0.1:${THERMITE_DEV_NATS_PORT:-4222}:4222"
+      - "127.0.0.1:${THERMITE_DEV_NATS_HTTP_PORT:-8222}:8222"
+      # Optional WebSocket listener for testing wss://<control>/nats fallback:
+      # mount a dev config with `websocket { port: 9222 no_tls: true }` and expose:
+      # - "127.0.0.1:${THERMITE_DEV_NATS_WS_PORT:-9222}:9222"
+    volumes:
+      - thermite_nats_dev:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  db:
+    image: docker.io/pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
+    environment:
+      POSTGRES_DB: thermite
+      POSTGRES_USER: thermite
+      POSTGRES_PASSWORD: ${THERMITE_DEV_PG_PASSWORD:-thermite-dev}
+    ports:
+      - "127.0.0.1:${THERMITE_DEV_PG_PORT:-5432}:5432"
+    volumes:
+      - thermite_pg_dev:/var/lib/postgresql
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "thermite", "-d", "thermite"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  thermite_nats_dev:
+  thermite_pg_dev:

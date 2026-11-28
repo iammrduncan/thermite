@@ -1,4 +1,4 @@
-import { Chip, Facts, Mono } from "@ds";
+import { Chip, Facts, Mono } from "@iammrduncan/magnesium/parts";
 
 export default function FactsOfAThing() {
   return (

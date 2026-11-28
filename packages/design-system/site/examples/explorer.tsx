@@ -12,7 +12,7 @@ import {
   type QueryHow,
   Split,
   Views,
-} from "@ds";
+} from "@iammrduncan/magnesium/parts";
 import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 

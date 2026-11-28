@@ -2,23 +2,20 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
     "includes": [
-      "src/**",
-      "tests/**",
-      "scripts/**",
-      "web/**",
-      "!web/dist",
-      "!web/node_modules",
-      "!web/package-lock.json",
       "packages/**",
-      "!packages/design-system/dist",
-      "!packages/design-system/node_modules",
-      "!packages/design-system/src/ui",
-      "!packages/**/*.md",
+      "scripts/**",
       "*.json",
       "!package-lock.json",
       "!dist",
       "!node_modules",
-      "!!.claude"
+      "!packages/*/dist",
+      "!packages/*/node_modules",
+      "!packages/design-system/src/primitives",
+      "!packages/**/*.md",
+      "!!.claude",
+      "!!.agents",
+      "!!.internal",
+      "!!.dev"
     ]
   },
   "formatter": {

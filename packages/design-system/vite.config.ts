@@ -1,31 +1,36 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { styleLicenses } from "./build/licenses.ts";
+import { lucideIcons } from "./src/vite/lucide-icons.ts";
 
 const at = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+const rootModules = at("../../node_modules/");
+const localModules = at("./node_modules/");
+const packagesDir = existsSync(`${localModules}@fontsource-variable/geist`)
+  ? localModules
+  : rootModules;
 
 /**
- * The design system's site (site/): every part with its states, its rule and its code. Control
- * serves the built files at /design, with a fresh nonce in place of the placeholder in
- * index.html and in its Content Security Policy at each answer (src/control/api/web.ts).
- *
- * The packages are the app's (web/node_modules), through the link that `npm run web:install`
- * makes (scripts/design-system/link.mjs).
+ * Dev-only Magnesium design-system gallery (`npm run design:dev`).
+ * Serves at `/` with a live Thermite / fxbot preset switcher and `?preset=` query support.
  */
 export default defineConfig({
   root: at("./site"),
-  base: "/design/",
-  plugins: [react(), tailwindcss(), styleLicenses(at("./node_modules/"))],
-  html: { cspNonce: "__CSP_NONCE__" },
-  resolve: {
-    alias: {
-      // The design system's own door, as an app imports it.
-      "@ds": at("./src"),
-    },
+  base: "/",
+  plugins: [lucideIcons(), react(), tailwindcss(), styleLicenses(packagesDir)],
+  optimizeDeps: {
+    exclude: ["lucide-react"],
   },
-  server: { port: 5174, fs: { allow: [at(".")] } },
-  // The licences of every package in the built script go out with it, as their terms ask.
-  build: { outDir: at("./dist"), emptyOutDir: true, license: { fileName: "licenses.md" } },
+  server: {
+    port: 5174,
+    fs: { allow: [at("."), at("../..")] },
+  },
+  build: {
+    outDir: at("./dist"),
+    emptyOutDir: true,
+    license: { fileName: "licenses.md" },
+  },
 });

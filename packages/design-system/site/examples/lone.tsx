@@ -1,14 +1,20 @@
-import { Act, Acts, Field, Form, FormError, Lone, TextInput, Thermy } from "@ds";
+import { Act, Acts, Field, Form, FormError, Lone, TextInput } from "@iammrduncan/magnesium/parts";
+import { GalleryArt, GalleryMark } from "../demo-brand.tsx";
 
-/** A page with one thing on it: the sign-in. On its own page it fills the window. */
+/** Standalone sign-in shell with host-supplied `brand` and `art` props. */
 export default function ALonePage() {
   return (
-    <Lone art={<Thermy size="large" />} name="Thermite" sentence="Sign in to Thermite.">
+    <Lone
+      art={<GalleryArt size="large" />}
+      brand={<GalleryMark />}
+      name="Magnesium"
+      sentence="Sign in to continue."
+    >
       <Form onSubmit={(event) => event.preventDefault()}>
-        <Field label="User name" htmlFor="ex-user" help="The name of your user.">
+        <Field label="User name" htmlFor="ex-user" help="The name of your account.">
           <TextInput id="ex-user" defaultValue="ada" />
         </Field>
-        <FormError>That is not a user of this app.</FormError>
+        <FormError>That account does not exist on this server.</FormError>
         <Acts>
           <Act look="main" type="submit">
             Sign in

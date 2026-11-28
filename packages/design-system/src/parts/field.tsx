@@ -1,7 +1,10 @@
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/utils.ts";
+import { Input } from "../primitives/input.tsx";
+import { NativeSelect } from "../primitives/native-select.tsx";
+import { Textarea } from "../primitives/textarea.tsx";
 
-/** The help behind a label: an "i" whose words show under a pointer and to a screen reader. */
+/** Help behind a label: an "i" badge whose explanation shows on hover and to screen readers. */
 export function Info({ children }: { children: string }) {
   return (
     <span
@@ -15,10 +18,7 @@ export function Info({ children }: { children: string }) {
   );
 }
 
-/**
- * One thing a form asks: a label with its "i", and one control with an example in it. No hint
- * sits under a field.
- */
+/** A form field: a label with its "i" help icon and one control. */
 export function Field({
   label,
   help,
@@ -44,32 +44,40 @@ export function Field({
   );
 }
 
-/** What every control of a form looks like: 36 px high, the edge around it. */
-const CONTROL =
-  "box-border w-full max-w-[480px] rounded-md border border-edge bg-background px-2 text-sm text-foreground outline-none placeholder:text-quiet focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50 aria-invalid:border-wrong";
+/** Shared form control overrides layered on top of stock primitives. */
+const FIELD_CONTROL =
+  "max-w-[480px] rounded-md border-edge bg-background px-2 text-sm text-foreground placeholder:text-quiet focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-wrong dark:bg-background";
 
-export function TextInput({ className, ...rest }: ComponentProps<"input">) {
-  return <input className={cn(CONTROL, "h-9", className)} {...rest} />;
+export function TextInput({ className, ...rest }: ComponentProps<typeof Input>) {
+  return <Input className={cn(FIELD_CONTROL, "h-(--control-h)", className)} {...rest} />;
 }
 
-export function TextArea({ className, rows = 3, ...rest }: ComponentProps<"textarea">) {
+export function TextArea({ className, rows = 3, ...rest }: ComponentProps<typeof Textarea>) {
   return (
-    <textarea
+    <Textarea
       rows={rows}
-      className={cn(CONTROL, "max-w-[720px] resize-y py-2", className)}
+      className={cn(FIELD_CONTROL, "min-h-0 max-w-[720px] resize-y py-2", className)}
       {...rest}
     />
   );
 }
 
-/** A choice of many: the browser's own list. */
-export function Select({ className, ...rest }: ComponentProps<"select">) {
-  return <select className={cn(CONTROL, "h-9", className)} {...rest} />;
+/** A native select wrapped on the stock NativeSelect primitive. */
+export function Select({ className, ...rest }: ComponentProps<typeof NativeSelect>) {
+  return (
+    <NativeSelect
+      className={cn(
+        "w-full max-w-[480px] [&_select]:h-(--control-h) [&_select]:rounded-md [&_select]:border-edge [&_select]:bg-background [&_select]:px-2 [&_select]:pr-8 [&_select]:aria-invalid:border-wrong dark:[&_select]:bg-background",
+        className,
+      )}
+      {...rest}
+    />
+  );
 }
 
 /**
- * A choice of a few, all in sight: one of them is chosen. The small one is for a tool's switch,
- * such as how a query is written.
+ * A choice of a few options, all visible: one of them is chosen. The `small` variant is for
+ * compact toolbars such as switching between Filters and SQL.
  */
 export function Segmented<T extends string>({
   label,
@@ -100,7 +108,7 @@ export function Segmented<T extends string>({
           onClick={() => onChoose(o.value)}
           className={cn(
             "inline-flex items-center outline-none focus-visible:bg-chosen",
-            small ? "h-7 px-2 text-xs" : "h-9 px-4 text-sm",
+            small ? "h-7 px-2 text-xs" : "h-(--control-h) px-4 text-sm",
             i > 0 && "border-l border-edge",
             o.value === chosen
               ? "bg-chosen font-semibold text-foreground"
@@ -114,11 +122,11 @@ export function Segmented<T extends string>({
   );
 }
 
-/** What a form leaves out of its first part: closed when you arrive, its defaults said in words. */
+/** A collapsible section closed by default, e.g. Advanced form options or example code. */
 export function Fold({ title = "Advanced", children }: { title?: string; children: ReactNode }) {
   return (
     <details className="border-y">
-      <summary className="flex min-h-14 cursor-pointer list-none items-center font-semibold outline-none focus-visible:text-flame [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center font-semibold outline-none focus-visible:text-brand-accent [&::-webkit-details-marker]:hidden">
         {title}
       </summary>
       <div className="flex flex-col gap-4 pb-6 text-soft">{children}</div>

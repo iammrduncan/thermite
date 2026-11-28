@@ -1,4 +1,4 @@
-import { Field, Info, Segmented, Select, TextArea, TextInput } from "@ds";
+import { Field, Info, Segmented, Select, TextArea, TextInput } from "@iammrduncan/magnesium/parts";
 import { useState } from "react";
 
 const MODES = [

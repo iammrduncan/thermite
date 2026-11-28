@@ -1,5 +1,0 @@
-/*
- * The app's look is the design system's (packages/design-system): its theme, with every colour by
- * its use in light and in dark, and the classes its parts use. The app sets no look of its own.
- */
-@import "../../packages/design-system/src/theme.css";

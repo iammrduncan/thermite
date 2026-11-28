@@ -1,4 +1,4 @@
-import { Act, NeedCard } from "@ds";
+import { Act, NeedCard } from "@iammrduncan/magnesium/parts";
 
 export default function ANeed() {
   return (

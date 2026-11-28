@@ -1,4 +1,4 @@
-import { Count, NavAccount, NavItem, NavLine, NavList } from "@ds";
+import { Count, NavAccount, NavItem, NavLine, NavList } from "@iammrduncan/magnesium/parts";
 import { CpuIcon, FlaskConicalIcon, HouseIcon, PlusIcon, SettingsIcon } from "lucide-react";
 
 export default function SidebarLines() {

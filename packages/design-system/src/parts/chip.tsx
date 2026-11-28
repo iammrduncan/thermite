@@ -2,18 +2,24 @@ import type { ReactNode } from "react";
 import { cn } from "../lib/utils.ts";
 import { type State, type Tone, toneChip, toneChipDot, toneMark } from "./tone.ts";
 
-/** A state as a chip: a dot and control's word for it, in the state's colour on its tint. */
-export function Chip({ state, className }: { state: State; className?: string }) {
+export type ChipProps =
+  | { state: State; className?: string; tone?: never; children?: never }
+  | { tone: Tone; children: ReactNode; className?: string; state?: never };
+
+/** A state chip: a status dot and label in the tone's foreground and subtle tint. */
+export function Chip(props: ChipProps) {
+  const tone = "state" in props && props.state ? props.state.tone : props.tone;
+  const label = "state" in props && props.state ? props.state.word : props.children;
   return (
     <span
       className={cn(
         "inline-flex h-6 flex-none items-center gap-1.5 rounded-full px-2 text-xs font-semibold whitespace-nowrap",
-        toneChip[state.tone],
-        className,
+        toneChip[tone],
+        props.className,
       )}
     >
-      <span className={cn("size-1.5 rounded-full", toneChipDot[state.tone])} />
-      {state.word}
+      <span className={cn("size-1.5 rounded-full", toneChipDot[tone])} />
+      {label}
     </span>
   );
 }
@@ -36,7 +42,7 @@ export function Dot({
   );
 }
 
-/** A count that waits for the owner. */
+/** A count badge for pending owner actions. */
 export function Count({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex h-5 min-w-5 flex-none items-center justify-center rounded-full bg-needs-tint px-1 text-xs font-semibold text-needs tabular-nums">
@@ -45,7 +51,7 @@ export function Count({ children }: { children: ReactNode }) {
   );
 }
 
-/** A picture's legend: a dot, its word, and how many. */
+/** A picture's legend: a dot, its word, and an optional count. */
 export function Legend({ items }: { items: { tone: Tone; word: string; count?: number }[] }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-soft">

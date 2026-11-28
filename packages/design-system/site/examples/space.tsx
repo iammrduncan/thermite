@@ -12,20 +12,24 @@ export default function SpaceAndCorners() {
       <ul className="flex flex-col gap-2">
         {GAPS.map((g) => (
           <li key={g.px} className="flex items-center gap-4 text-xs">
-            <span className={`h-4 flex-none rounded-sm bg-flame-tint ${g.bar}`} />
+            <span
+              className={`h-4 flex-none rounded-sm bg-brand-accent-tint border border-brand-accent/30 ${g.bar}`}
+            />
             <span className="font-mono">{g.cls}</span>
             <span className="text-quiet">{g.px} px</span>
           </li>
         ))}
       </ul>
       <div className="flex flex-wrap items-end gap-4 text-xs text-quiet">
-        <span className="flex h-9 items-center rounded-md border border-edge px-4">
-          8 px: a control, a row
+        <span className="flex h-(--control-h) items-center rounded-md border border-edge px-4">
+          rounded-md: control / row
         </span>
         <span className="flex h-16 items-center rounded-xl border px-4">
-          16 px: a card, a dialog
+          rounded-xl: card / dialog
         </span>
-        <span className="flex h-6 items-center rounded-full bg-chosen px-2">round: a chip</span>
+        <span className="flex h-6 items-center rounded-full bg-chosen px-2">
+          rounded-full: chip
+        </span>
       </div>
     </div>
   );

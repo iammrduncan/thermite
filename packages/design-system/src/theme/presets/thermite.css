@@ -1,0 +1,163 @@
+@import "@fontsource-variable/geist-mono";
+
+/*
+ * Thermite preset for Magnesium: warm stone greys, flame accent, 2 font weights (400 & 600),
+ * 3-step radii, 36 px controls, Geist Mono, warm shadows, and 1.75 Lucide stroke width.
+ */
+:root {
+  --mono-font: "Geist Mono Variable", ui-monospace, monospace;
+  --weight-medium: 600;
+  --font-weight-medium: 600;
+  --body-size: 0.875rem;
+  --control-h: 2.25rem;
+  --icon-stroke: 1.75;
+
+  --background: #ffffff;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f1ee;
+  --secondary-foreground: #1c1917;
+  --muted: #f3f1ee;
+  --muted-foreground: #6f6862;
+  --accent: #f3f1ee;
+  --accent-foreground: #1c1917;
+  --destructive: #b91c1c;
+  --border: #e7e5e4;
+  --input: #d6d3d1;
+  --ring: #c2410c;
+  --sidebar: #faf9f7;
+  --sidebar-foreground: #1c1917;
+  --sidebar-primary: #c2410c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f3f1ee;
+  --sidebar-accent-foreground: #1c1917;
+  --sidebar-border: #e7e5e4;
+  --sidebar-ring: #c2410c;
+
+  --soft: #44403c;
+  --brand-accent: #c2410c;
+  --brand-accent-tint: #fff3ec;
+  --brand-mark: #f2542d;
+
+  --good: #15803d;
+  --good-tint: #eefaf2;
+  --working: #1d4ed8;
+  --working-tint: #e8effe;
+  --needs: #b45309;
+  --needs-tint: #fdf3e2;
+  --needs-card: #fffaf0;
+  --needs-edge: #f1dcae;
+  --wrong: #b91c1c;
+  --wrong-tint: #fdecec;
+  --wrong-edge: #f3caca;
+  --idle: #57534e;
+  --idle-tint: #f1efec;
+  --idle-dot: #57534e;
+  --idle-mark: #a8a29e;
+  --idle-bar: #c9c4bf;
+  --grid: #efedea;
+  --toast: #1c1917;
+  --toast-foreground: #ffffff;
+
+  --radius: 0.5rem;
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 8px;
+  --r-xl: 16px;
+  --r-2xl: 16px;
+  --r-3xl: 16px;
+  --r-4xl: 999px;
+
+  --elev-button: 0 1px 0 rgb(0 0 0 / 0.08);
+  --elev-md: 0 8px 24px rgb(0 0 0 / 0.1);
+  --elev-dialog: 0 16px 40px rgb(0 0 0 / 0.14);
+  --elev-lg: 0 16px 48px rgb(28 25 23 / 0.18);
+  --elev-page: 0 16px 48px rgb(28 25 23 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mono-font: "Geist Mono Variable", ui-monospace, monospace;
+    --weight-medium: 600;
+    --font-weight-medium: 600;
+    --body-size: 0.875rem;
+    --control-h: 2.25rem;
+    --icon-stroke: 1.75;
+
+    --background: #211d1a;
+    --foreground: #fafaf9;
+    --card: #211d1a;
+    --card-foreground: #fafaf9;
+    --popover: #211d1a;
+    --popover-foreground: #fafaf9;
+    --primary: #c2410c;
+    --primary-foreground: #ffffff;
+    --secondary: #2e2925;
+    --secondary-foreground: #fafaf9;
+    --muted: #2e2925;
+    --muted-foreground: #a8a29e;
+    --accent: #2e2925;
+    --accent-foreground: #fafaf9;
+    --destructive: #f87171;
+    --border: #34302c;
+    --input: #4a4541;
+    --ring: #fb923c;
+    --sidebar: #171412;
+    --sidebar-foreground: #fafaf9;
+    --sidebar-primary: #c2410c;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #2e2925;
+    --sidebar-accent-foreground: #fafaf9;
+    --sidebar-border: #34302c;
+    --sidebar-ring: #fb923c;
+
+    --soft: #d6d3d1;
+    --brand-accent: #fb923c;
+    --brand-accent-tint: #3a1d10;
+    --brand-mark: #f2542d;
+
+    --good: #4ade80;
+    --good-tint: #12281a;
+    --working: #60a5fa;
+    --working-tint: #16223b;
+    --needs: #fbbf24;
+    --needs-tint: #2e2110;
+    --needs-card: #2a1f0e;
+    --needs-edge: #4d3c18;
+    --wrong: #f87171;
+    --wrong-tint: #2f1717;
+    --wrong-edge: #4d2424;
+    --idle: #a8a29e;
+    --idle-tint: #2e2925;
+    --idle-dot: #a8a29e;
+    --idle-mark: #78716c;
+    --idle-bar: #57534e;
+    --grid: #34302c;
+    --toast: #fafaf9;
+    --toast-foreground: #1c1917;
+
+    --radius: 0.5rem;
+    --r-sm: 4px;
+    --r-md: 8px;
+    --r-lg: 8px;
+    --r-xl: 16px;
+    --r-2xl: 16px;
+    --r-3xl: 16px;
+    --r-4xl: 999px;
+
+    --elev-button: 0 1px 0 rgb(0 0 0 / 0.24);
+    --elev-md: 0 8px 24px rgb(0 0 0 / 0.34);
+    --elev-dialog: 0 16px 40px rgb(0 0 0 / 0.45);
+    --elev-lg: 0 16px 48px rgb(12 10 9 / 0.5);
+    --elev-page: 0 16px 48px rgb(12 10 9 / 0.36);
+  }
+}
+
+.lucide {
+  stroke-width: 1.75;
+}

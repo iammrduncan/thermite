@@ -1,4 +1,4 @@
-import { Grid, Named } from "@ds";
+import { Grid, Named } from "@iammrduncan/magnesium/parts";
 import { FolderIcon } from "lucide-react";
 
 const ITEMS = [
@@ -50,7 +50,7 @@ export default function Table() {
         cells: [
           <Named key="name" name={item} sub={kind} />,
           <span key="in" className="inline-flex items-center gap-2 text-soft">
-            <FolderIcon className="size-3.5 text-ember" /> {where}
+            <FolderIcon className="size-3.5 text-brand-mark" /> {where}
           </span>,
           <span key="by" className="text-soft">
             {who}

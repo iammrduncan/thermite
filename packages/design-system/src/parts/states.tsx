@@ -1,9 +1,8 @@
 import { CircleAlertIcon, LoaderCircleIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Thermy } from "../brand/thermy.tsx";
 import { Act } from "./act.tsx";
 
-/** Loading, as one line: nothing jumps into place around it. */
+/** Single-line loading indicator that prevents layout shift. */
 export function Loading({ what }: { what: string }) {
   return (
     <p className="flex items-center gap-2 text-quiet">
@@ -12,10 +11,7 @@ export function Loading({ what }: { what: string }) {
   );
 }
 
-/**
- * Something is wrong now, in control's own words, with one way out: a button that leads to the
- * thing, or tries again.
- */
+/** Error banner with optional recovery action. */
 export function Wrong({ said, children }: { said: string; children?: ReactNode }) {
   return (
     <div
@@ -29,23 +25,32 @@ export function Wrong({ said, children }: { said: string; children?: ReactNode }
   );
 }
 
-/** A read that failed: what control said, and Try again. */
+/** Failed read banner with an optional Try again button. */
 export function Failure({ said, again }: { said: string; again?: () => void }) {
   return <Wrong said={said}>{again && <Act onClick={again}>Try again</Act>}</Wrong>;
 }
 
-/** An empty list: Thermy, one line, and the one button that makes the first thing. */
-export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+/** An empty state box: optional artwork, a message, and an optional primary action. */
+export function Empty({
+  art,
+  children,
+  action,
+}: {
+  /** Optional illustration or icon above the message. */
+  art?: ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-edge px-6 py-10">
-      <Thermy />
+      {art}
       <p className="text-center text-soft">{children}</p>
       {action}
     </div>
   );
 }
 
-/** "Nothing here", as one quiet sentence, where an empty list needs no button. */
+/** Quiet single-line empty notice where no call-to-action is needed. */
 export function Nothing({ children }: { children: ReactNode }) {
   return <p className="text-quiet">{children}</p>;
 }

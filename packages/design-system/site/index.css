@@ -1,3 +1,5 @@
-/* The site wears the theme it shows, and reads its own files for the classes they use. */
-@import "../src/theme.css";
+/* Base tokens, chat overrides, and editor rules; active brand preset is injected live by preset.ts. */
+@import "../src/theme/base.css";
+@import "../src/theme/chat.css";
+@import "../src/theme/editor.css";
 @source "./";

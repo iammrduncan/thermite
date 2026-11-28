@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 
-/** The packages whose fonts and styles are in a build that uses the theme (src/theme.css). */
+/** The packages whose fonts and styles are in a build that uses the theme (`src/theme/`). */
 const STYLED = [
   "@fontsource-variable/geist",
   "@fontsource-variable/geist-mono",
@@ -13,30 +13,34 @@ const STYLED = [
 const at = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /**
- * The licences of what is in a build and in no package of its script, as licenses-styles.md: the
- * fonts and styles (the fonts' licence asks to go with every copy of them), and shadcn/ui's
- * components and style file, which are kept in src/ui/ as its tool writes them. Vite's own list
- * (licenses.md) has those of the script's packages alone.
+ * Emits `licenses-styles.md` for fonts, stylesheets, vendored shadcn/ui primitives, and optional
+ * MIT provider logo sources that Vite's JS bundle license emitter does not cover.
  *
- * `packages` is the folder the build's packages are in (its node_modules, with a slash).
+ * `packages` is the folder the build's packages are in (its `node_modules/`, with trailing slash).
  */
 export const styleLicenses = (packages: string): Plugin => ({
-  name: "thermite:style-licenses",
+  name: "magnesium:style-licenses",
   apply: "build",
   generateBundle() {
-    const parts = STYLED.map((name) => {
+    const parts = STYLED.flatMap((name) => {
       const dir = `${packages}${name}/`;
+      if (!existsSync(`${dir}package.json`)) return [];
       const pkg = JSON.parse(readFileSync(`${dir}package.json`, "utf8")) as {
         version: string;
         license: string;
       };
       const file = ["LICENSE", "LICENSE.md"].map((f) => dir + f).find((f) => existsSync(f));
       if (!file) throw new Error(`${name} has no licence file to ship with the build`);
-      return `## ${name} - ${pkg.version} (${pkg.license})\n\n${readFileSync(file, "utf8").trim()}\n`;
+      return [
+        `## ${name} - ${pkg.version} (${pkg.license})\n\n${readFileSync(file, "utf8").trim()}\n`,
+      ];
     });
-    const stock = readFileSync(at("../src/ui/LICENSE.md"), "utf8").trim();
+    const stock = readFileSync(at("../src/primitives/LICENSE.md"), "utf8").trim();
+    parts.push(`## shadcn/ui: stock radix-nova primitives and tailwind.css (MIT)\n\n${stock}\n`);
     parts.push(
-      `## shadcn/ui: the design system's stock components and style file (MIT)\n\n${stock}\n`,
+      "## Provider logos bundle (`@iammrduncan/magnesium/provider-logos`)\n\n" +
+        "Bundled SVGs are sourced from LobeHub Icons (MIT), models.dev (MIT), and llama.cpp (MIT). " +
+        "Each logo remains its owner's trademark and is used nominatively to identify the provider.\n",
     );
     this.emitFile({
       type: "asset",

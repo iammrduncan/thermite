@@ -1,22 +1,34 @@
-/** Every colour of the theme, by its use. The class is what a part writes. */
+/** Semantic tokens mapped in `src/theme/base.css` and customized per preset. */
 const USES: { name: string; use: string; swatch: string }[] = [
-  { name: "bg-background", use: "The page, a card", swatch: "bg-background" },
-  { name: "bg-sidebar", use: "The sidebar's paper", swatch: "bg-sidebar" },
-  { name: "bg-chosen", use: "Chosen, or under the pointer", swatch: "bg-chosen" },
-  { name: "border-line", use: "Between rows, around cards", swatch: "bg-line" },
-  { name: "border-edge", use: "A control's edge", swatch: "bg-edge" },
-  { name: "text-quiet", use: "Labels, times; text is never lighter", swatch: "bg-quiet" },
-  { name: "text-soft", use: "Text beside a name", swatch: "bg-soft" },
-  { name: "text-foreground", use: "Names, numbers, text", swatch: "bg-foreground" },
-  { name: "bg-primary", use: "The one main button", swatch: "bg-primary" },
-  { name: "text-flame", use: "Links, what is chosen", swatch: "bg-flame" },
-  { name: "bg-flame-tint", use: "Behind what is chosen", swatch: "bg-flame-tint" },
-  { name: "text-ember", use: "The mark, a folder: never text", swatch: "bg-ember" },
-  { name: "text-good on bg-good-tint", use: "Kept, complete, a gain", swatch: "bg-good" },
-  { name: "text-working on bg-working-tint", use: "At work, judging", swatch: "bg-working" },
-  { name: "text-needs on bg-needs-tint", use: "It waits for your word", swatch: "bg-needs" },
-  { name: "text-wrong on bg-wrong-tint", use: "Failed, broken, a loss", swatch: "bg-wrong" },
-  { name: "text-idle on bg-idle-tint", use: "Paused, stopped, no verdict", swatch: "bg-idle" },
+  { name: "bg-background", use: "Page canvas and default surface", swatch: "bg-background" },
+  { name: "bg-sidebar", use: "Sidebar paper and recessed container", swatch: "bg-sidebar" },
+  { name: "bg-chosen", use: "Selected or hovered neutral row", swatch: "bg-chosen" },
+  { name: "border-line", use: "Row dividers and card borders", swatch: "bg-line" },
+  { name: "border-edge", use: "Control borders", swatch: "bg-edge" },
+  { name: "text-quiet", use: "Secondary labels and timestamps", swatch: "bg-quiet" },
+  { name: "text-soft", use: "Body copy beside headings", swatch: "bg-soft" },
+  { name: "text-foreground", use: "Primary text and numbers", swatch: "bg-foreground" },
+  { name: "bg-primary", use: "Primary call-to-action button", swatch: "bg-primary" },
+  {
+    name: "text-brand-accent",
+    use: "Links, active tab rule, active nav",
+    swatch: "bg-brand-accent",
+  },
+  {
+    name: "bg-brand-accent-tint",
+    use: "Active nav and tree highlight tint",
+    swatch: "bg-brand-accent-tint",
+  },
+  {
+    name: "text-brand-mark",
+    use: "Folder and emblem accent (never text)",
+    swatch: "bg-brand-mark",
+  },
+  { name: "text-good on bg-good-tint", use: "Kept, complete, improvement", swatch: "bg-good" },
+  { name: "text-working on bg-working-tint", use: "In progress, judging", swatch: "bg-working" },
+  { name: "text-needs on bg-needs-tint", use: "Waiting for owner decision", swatch: "bg-needs" },
+  { name: "text-wrong on bg-wrong-tint", use: "Failed, invalid, regression", swatch: "bg-wrong" },
+  { name: "text-idle on bg-idle-tint", use: "Paused, stopped, neutral", swatch: "bg-idle" },
 ];
 
 export default function Colours() {

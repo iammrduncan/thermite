@@ -1,39 +1,36 @@
 import {
   BellIcon,
+  BlocksIcon,
   CircleDotIcon,
-  FlameIcon,
   FolderTreeIcon,
   GaugeIcon,
+  KeyRoundIcon,
+  LayoutPanelLeftIcon,
   ListIcon,
   type LucideIcon,
+  MessageSquareTextIcon,
   MousePointerClickIcon,
   PaletteIcon,
   PanelLeftIcon,
   PanelTopIcon,
   SearchIcon,
+  SparklesIcon,
   SquareMenuIcon,
   TextCursorInputIcon,
 } from "lucide-react";
 
-/**
- * The site's pages: one for each group of parts, in the brand guide's order. A page has the
- * group's rule as its one sentence, and its examples, each shown as it draws and as its code
- * (examples/<file>.tsx).
- */
 export interface Example {
-  /** The example's file in examples/, without its ending. */
+  /** Example file basename under `site/examples/`. */
   file: string;
   title: string;
-  /** When to use the part, or what to keep to, in one or two sentences. */
+  /** Usage guidance in one or two sentences. */
   rule: string;
 }
 
 export interface Page {
   id: string;
-  /** The page's icon on its line of the sidebar. */
   icon: LucideIcon;
   title: string;
-  /** The group's rule, as the page's one sentence. */
   sentence: string;
   examples: Example[];
 }
@@ -43,27 +40,80 @@ export const PAGES: Page[] = [
     id: "foundations",
     icon: PaletteIcon,
     title: "Foundations",
-    sentence: "Warm greys, one flame, and a colour for every state.",
+    sentence: "Semantic surfaces, one brand accent, and five accessible status tones.",
     examples: [
       {
         file: "colours",
         title: "Colours, by their use",
-        rule: "A colour is named for its use and changes by its use between light and dark. A screen sets no colour of its own: it writes the class of the use.",
+        rule: "Every colour is named for its semantic role and switches automatically between light, dark, and active preset (Thermite or fxbot).",
       },
       {
         file: "type",
         title: "Type",
-        rule: "Geist, in four sizes and two weights. Geist Mono for what a person may copy.",
+        rule: "Geist Variable for UI text; monospace for copyable IDs, queries, and code. Weight scale and body size adapt per preset.",
       },
       {
         file: "space",
         title: "Space and corners",
-        rule: "Five gaps and three corners. Text and forms sit in a column of at most 720 px; a field is at most 480 px wide.",
+        rule: "Consistent spacing rhythm and preset-driven corner radii (3-step on Thermite, proportional 0.625 rem scale on fxbot).",
       },
       {
         file: "icons",
         title: "Icons",
-        rule: "Lucide, 16 px, in the colour of their text. Every line of a sidebar and of a tree has one; a button may lead with one.",
+        rule: "Lucide icons inherit text colour, with stroke width set by preset (1.75 on Thermite, 2 on fxbot).",
+      },
+    ],
+  },
+  {
+    id: "primitives",
+    icon: BlocksIcon,
+    title: "Primitives",
+    sentence: "26 stock shadcn/ui radix-nova primitives synced across Thermite and fxbot.",
+    examples: [
+      {
+        file: "primitives",
+        title: "Synced core primitives",
+        rule: "Import directly from `@iammrduncan/magnesium/primitives` or individual subpaths (`./primitives/button`) and compose with standard Tailwind layout classes.",
+      },
+    ],
+  },
+  {
+    id: "layout-panes",
+    icon: LayoutPanelLeftIcon,
+    title: "Layout & Panes",
+    sentence:
+      "Resizable panes, side inspection panels, responsive settings rails, and adaptive dialogs.",
+    examples: [
+      {
+        file: "layout-panes",
+        title: "BesidePanel, ResizeGutter, SettingsShell, ResponsiveDialog, FoldPill",
+        rule: "Drag the pane gutter (or use keyboard arrows), switch responsive settings sections, open an adaptive dialog, or expand a fold pill.",
+      },
+    ],
+  },
+  {
+    id: "providers",
+    icon: KeyRoundIcon,
+    title: "Providers",
+    sentence: "API-agnostic provider catalog, lazy logos, model combobox, and device-code sign-in.",
+    examples: [
+      {
+        file: "providers",
+        title: "ProviderCatalog, ModelCombobox, DeviceCodePanel, lazy ProviderMark",
+        rule: "Imported from `@iammrduncan/magnesium/providers`. Supports HTTPS, localhost, and LAN HTTP endpoints; the 183-SVG logo bundle loads lazily on demand.",
+      },
+    ],
+  },
+  {
+    id: "chat-trace",
+    icon: MessageSquareTextIcon,
+    title: "Chat & Trace",
+    sentence: "Collapsible agent traces, streaming Markdown, and chat message primitives.",
+    examples: [
+      {
+        file: "chat-trace",
+        title: "TraceSteps, Markdown, Message & Bubble",
+        rule: "Isolated under `@iammrduncan/magnesium/chat` with optional peer dependencies so apps without chat or live transcripts pay zero bundle bytes.",
       },
     ],
   },
@@ -71,12 +121,12 @@ export const PAGES: Page[] = [
     id: "buttons",
     icon: MousePointerClickIcon,
     title: "Buttons",
-    sentence: "The flame is for the one thing most people came to do. Everything else is plain.",
+    sentence: "One primary action per view; everything else stays quiet and plain.",
     examples: [
       {
         file: "buttons",
-        title: "Main, plain, red, text, an icon alone, a link",
-        rule: "One main button on a screen, last in its row. Red is for an act that loses work. At most three buttons at the top of a screen, each of at most three words.",
+        title: "Main, plain, red, text, icon-only, link",
+        rule: "One main button on a screen, last in its row. Red marks actions that discard work. Control height follows `--control-h` per preset.",
       },
     ],
   },
@@ -84,17 +134,17 @@ export const PAGES: Page[] = [
     id: "states",
     icon: CircleDotIcon,
     title: "States and changes",
-    sentence: "A state always wears its colour, with a word or a shape beside it.",
+    sentence: "A state always pairs its colour with a word or shape.",
     examples: [
       {
         file: "chips",
-        title: "A chip, a dot alone, a count, a legend",
-        rule: "A chip is a state: the server picks its word and its kind. A dot alone is for where a word has no room. The count is for what waits for you.",
+        title: "Chip, Dot, Count, Legend",
+        rule: "A chip carries a status dot and label on a subtle tint. Dots stand alone in tight spaces; counts call out pending owner decisions.",
       },
       {
         file: "changes",
-        title: "A change of a number",
-        rule: "An arrow is a change: green when it is better and red when it is worse, whatever its direction. A number has its unit and what it is compared with.",
+        title: "Change direction",
+        rule: "Green means better and red means worse regardless of arrow direction.",
       },
     ],
   },
@@ -106,8 +156,8 @@ export const PAGES: Page[] = [
     examples: [
       {
         file: "numbers",
-        title: "Tiles, with a sparkline or a share bar",
-        rule: "The sparkline is green for the number that is the score and grey for one that must only hold. A share bar shows a whole as its parts.",
+        title: "Stat tiles, Sparkline, ShareBar",
+        rule: "Use green sparklines for objective metrics and neutral idle lines for guard metrics; use share bars to break down a total.",
       },
     ],
   },
@@ -115,22 +165,22 @@ export const PAGES: Page[] = [
     id: "lists",
     icon: ListIcon,
     title: "Rows, facts and tables",
-    sentence: "Up to four things are rows. A table needs five, and has at most five columns.",
+    sentence: "Up to four items use rows; five or more use a compact grid table.",
     examples: [
       {
         file: "rows",
-        title: "A few things, as rows",
-        rule: "A name with one line under it, its history and its state in the middle, its one number at the end. No table and no search for up to four things.",
+        title: "Things and Thing rows",
+        rule: "Name and subtitle on the left, sparkline and chip in the middle, primary metric on the right.",
       },
       {
         file: "facts",
         title: "Facts",
-        rule: "What a thing is, as at most six facts: a label and its value.",
+        rule: "Key-value summary pairs for an entity's essential metadata.",
       },
       {
         file: "table",
-        title: "A table",
-        rule: "The first cell is a name with one short line under it, then at most four more columns with one line in a cell. Search from ten rows, with at most two filters.",
+        title: "Grid table",
+        rule: "First column carries title and subtitle; remaining columns stay single-line and scroll horizontally on narrow viewports.",
       },
     ],
   },
@@ -138,22 +188,22 @@ export const PAGES: Page[] = [
     id: "asks",
     icon: BellIcon,
     title: "What asks, and what is empty",
-    sentence: "A need is a card in amber, so the eye finds it first.",
+    sentence: "Owner decisions surface in an amber card so the eye finds them first.",
     examples: [
       {
         file: "need-card",
-        title: "A need",
-        rule: "Who asks, the question, one quiet line, and the choices with the main one last. Each choice says what it does in at most twelve words.",
+        title: "NeedCard",
+        rule: "Who is asking, the question, one concise note, and the available actions with the primary choice last.",
       },
       {
         file: "empty",
-        title: "An empty list, nothing, and loading",
-        rule: "An empty list is Thermy, one line and the one button that makes the first thing. Loading is one line: nothing jumps into place around it.",
+        title: "Empty, Nothing, Loading",
+        rule: "Empty states accept an optional `art` prop supplied by the host app; loading stays single-line to avoid layout shift.",
       },
       {
         file: "wrong",
-        title: "Something is wrong now",
-        rule: "What is wrong, in the server's own words, with one way out.",
+        title: "Wrong and Failure",
+        rule: "State what failed plainly alongside a direct recovery action.",
       },
     ],
   },
@@ -161,12 +211,12 @@ export const PAGES: Page[] = [
     id: "tree",
     icon: FolderTreeIcon,
     title: "The tree, and a tool's split",
-    sentence: "Folders and files, with what is picked beside them. Only a tool has two columns.",
+    sentence: "Hierarchical folders and files beside detail content.",
     examples: [
       {
         file: "tree",
-        title: "A tree beside what is picked",
-        rule: "Every line has an icon; what is chosen is in the flame's tint. On a narrow screen what is picked goes under the tree.",
+        title: "Tree and Split",
+        rule: "Selected rows highlight in the preset brand-accent tint; on narrow viewports detail content stacks cleanly below.",
       },
     ],
   },
@@ -174,13 +224,12 @@ export const PAGES: Page[] = [
     id: "explorer",
     icon: SearchIcon,
     title: "The explorer",
-    sentence:
-      "Fields with counts, the records over time, dense rows. Only an explorer is this dense.",
+    sentence: "Facet fields with counts, a selectable timeline histogram, and dense rows.",
     examples: [
       {
         file: "explorer",
-        title: "Views, fields, the band and dense rows",
-        rule: "Saved views are quieter than tabs. The fields shown as columns come first; one field may be open with its most common values. The band shows the records over time, stacked by outcome: a drag across it picks the time to look at, the arrow keys move it, and Escape looks at all of it again.",
+        title: "Views, Fields, Band, and dense Grid",
+        rule: "Drag across the Band histogram or use Arrow/Shift+Arrow/Escape keys to narrow and reset the active time window.",
       },
     ],
   },
@@ -188,17 +237,17 @@ export const PAGES: Page[] = [
     id: "forms",
     icon: TextCursorInputIcon,
     title: "Forms",
-    sentence: 'A label with its "i", one control, an example in the field. No hint under it.',
+    sentence: 'A label with its "i" help badge, a stock-backed control, and clear defaults.',
     examples: [
       {
         file: "fields",
         title: "Fields",
-        rule: 'A form asks at most seven things before its button. Help is behind the label\'s "i". A choice of a few is in sight; a choice of many is a list.',
+        rule: "TextInput, TextArea, and Select wrap stock Input, Textarea, and NativeSelect primitives scaled by `--control-h`.",
       },
       {
         file: "fold",
-        title: "Advanced, and groups of settings",
-        rule: "Everything else is one section, closed when you arrive, with each default said in words. Settings that belong together are a group: a title, one line, its settings.",
+        title: "Fold and Group",
+        rule: "Tuck optional defaults inside Fold and cluster related settings inside Group.",
       },
     ],
   },
@@ -206,23 +255,22 @@ export const PAGES: Page[] = [
     id: "opens",
     icon: SquareMenuIcon,
     title: "What opens",
-    sentence:
-      "A menu for rare acts. A dialog only where work is lost. Undo where it can be undone.",
+    sentence: "Menus for rare acts, Confirm dialogs when work is lost, Undo when reversible.",
     examples: [
       {
         file: "menu",
-        title: "A menu",
-        rule: "At most seven lines, the red one last.",
+        title: "Menu",
+        rule: "At most seven items, with destructive actions placed last.",
       },
       {
         file: "dialog",
-        title: "The one dialog",
-        rule: "Only for work that is lost and cannot come back: a title, at most two sentences, and two buttons, the one that keeps things first.",
+        title: "Confirm dialog",
+        rule: "Reserve destructive confirmation for irreversible actions; keep the safe option first.",
       },
       {
         file: "undo",
-        title: "One line, and Undo",
-        rule: "An act that can be undone is done at once, and says so in one line with Undo.",
+        title: "Undo toast",
+        rule: "Prefer immediate execution with a single-line Undo banner over modal prompts.",
       },
     ],
   },
@@ -230,17 +278,17 @@ export const PAGES: Page[] = [
     id: "screen",
     icon: PanelTopIcon,
     title: "A screen",
-    sentence: "Where it is, its name, its state, its buttons, then its one sentence.",
+    sentence: "Breadcrumbs, title, state chip, actions, tabs, and one headline sentence.",
     examples: [
       {
         file: "screen-top",
-        title: "The top of a screen, and a block",
-        rule: "The sentence says the thing's state in at most 20 words, and is the largest text on the screen. A screen names its kind, which sets the budget of its first view.",
+        title: "Screen and Section",
+        rule: "Lead every screen with one concise status sentence followed by stacked sections.",
       },
       {
         file: "tabs",
         title: "Tabs",
-        rule: "The parts of one thing are tabs, the chosen one with a flame line.",
+        rule: "Active tabs take a crisp bottom rule in the preset's brand accent.",
       },
     ],
   },
@@ -248,35 +296,36 @@ export const PAGES: Page[] = [
     id: "frame",
     icon: PanelLeftIcon,
     title: "The frame",
-    sentence: "Every line has an icon. What grows goes last.",
+    sentence: "App shell with brand slot, navigation lines, and standalone pages.",
     examples: [
       {
         file: "frame",
-        title: "The sidebar's lines",
-        rule: "Places that are fixed come first and the list that grows comes last, with set-up and the person at the foot. What is chosen is in the flame's tint, with its icon in the flame. On a phone the sidebar is a menu under a top bar: this site's own frame is the same part.",
+        title: "Sidebar navigation parts",
+        rule: "Frame accepts a `brand` slot from the host app and collapses into a mobile drawer under a top bar.",
       },
       {
         file: "lone",
-        title: "A page with one thing on it",
-        rule: "A page with nothing around it, such as the sign-in: one card on the sidebar's paper, with its one sentence and what it asks.",
+        title: "Lone page",
+        rule: "Centered card shell for sign-in or onboarding, taking host-supplied `brand` and `art` props.",
       },
       {
         file: "alone",
-        title: "One message alone",
-        rule: "Before an app has its frame, a fault or a wait is one message in the middle of the page, with its way out.",
+        title: "Alone message",
+        rule: "Minimal centered layout for fatal faults or pre-shell loading.",
       },
     ],
   },
   {
     id: "brand",
-    icon: FlameIcon,
-    title: "The mark and Thermy",
-    sentence: "The mark, Thermy's face, and an ID a person may copy.",
+    icon: SparklesIcon,
+    title: "Brand slots, icons & IDs",
+    sentence:
+      "Product marks stay in each app; Magnesium provides procedural plugin icons and HTTP-safe copy.",
     examples: [
       {
         file: "brand",
-        title: "The mark, Thermy, and an ID to copy",
-        rule: "The ember and Thermy's clay are never text. Thermy keeps its own colours in light and in dark.",
+        title: "Brand slot, procedural PluginIcon, and CopyId",
+        rule: "Pass host marks via props, draw deterministic plugin emblems with PluginIcon, and copy IDs cleanly even over plain HTTP.",
       },
     ],
   },

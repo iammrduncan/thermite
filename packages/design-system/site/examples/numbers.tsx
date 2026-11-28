@@ -1,4 +1,4 @@
-import { Change, Chip, ShareBar, Sparkline, Stat, Stats } from "@ds";
+import { Change, Chip, ShareBar, Sparkline, Stat, Stats } from "@iammrduncan/magnesium/parts";
 
 const RISING = [120, 121, 124, 131, 138, 139, 146, 151, 158, 163, 170, 176, 181, 185, 188, 189];
 const HOLDS = [30.2, 30.0, 30.3, 29.9, 30.1, 30.4, 30.0, 29.8, 30.2, 30.1, 30.3, 29.9, 30.0, 30.1];

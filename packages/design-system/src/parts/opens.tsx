@@ -7,13 +7,13 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTitle,
-} from "../ui/dialog.tsx";
+} from "../primitives/dialog.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu.tsx";
+} from "../primitives/dropdown-menu.tsx";
 import { Act } from "./act.tsx";
 
 /** One line of a menu. The red one loses work, and is last. */

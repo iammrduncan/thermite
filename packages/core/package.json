@@ -1,0 +1,17 @@
+{
+  "name": "@thermite/core",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "description": "Thermite Sans-I/O core reducers, bus contracts, API registry, policy, and plugin interfaces.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

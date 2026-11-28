@@ -1,1 +1,0 @@
-The model's context was full, so the harness compacted the conversation. Continue where you left off.

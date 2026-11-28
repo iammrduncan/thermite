@@ -229,30 +229,36 @@ Thermite grew out of long hill-climbing campaigns on inference kernels. They tun
 | [node-postgres](https://github.com/brianc/node-postgres): `pg` 8.23.1, with its own packages (`pg-pool`, `pg-protocol`, `pg-types`, `pg-connection-string`, `pgpass` and others) | Brian Carlson and the node-postgres contributors | MIT; `pg-int8` and `split2` are ISC | Reaches a PostgreSQL server for control's store on PostgreSQL (`src/common/postgres.ts`; goal 268), which is for trial until control moves to it. The store works with [PostgreSQL](https://www.postgresql.org/) 16 or newer (the PostgreSQL Global Development Group, the PostgreSQL License) |
 | [marked](https://github.com/markedjs/marked) 18.0.11, through pi-tui | Christopher Jeffrey and the MarkedJS authors | MIT | pi-tui's Markdown parser: the agent's replies in the Pi view |
 | [marked-cjk-friendly](https://github.com/tats-u/markdown-cjk-friendly) 0.1.2, through pi-tui | Tatsunori Uchino | MIT | pi-tui's extension to marked that reads Markdown's emphasis next to Chinese, Japanese and Korean text as CommonMark means it |
+| [libfx](https://github.com/vercel-labs/fx) (`libfx`) | Vercel Labs | Apache-2.0 | Core agent loop engine (`createFxEngine`) driving worker and advisor runs behind Thermite v1's `packages/harness-libfx` harness adapter |
 | [get-east-asian-width](https://github.com/sindresorhus/get-east-asian-width) 1.6.0, through pi-tui | Sindre Sorhus | MIT | pi-tui's measure of how many columns a character takes in a terminal |
 
 Every package Thermite runs, with those packages' own dependencies, is under a permissive licence: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD or the Unlicense. None is copyleft. `package-lock.json` lists each one, with its version.
 
 ### What the dashboard's app is built from
 
-The dashboard's app (`web/`, goal 243), which control serves to the owner's browser. Its packages are apart from Thermite's own.
+The dashboard's app (`packages/ui/`) and shared design system `@iammrduncan/magnesium` (`packages/design-system/`), built with root npm workspaces.
 
 | Library | By | Licence | What it does in the app |
 | --- | --- | --- | --- |
+| [fxbot](https://github.com/iammrduncan/fxbot) (`0.12.0`+) | The maintainers | Apache-2.0 | Shared UI design system sync (`@iammrduncan/magnesium`): OKLCH preset (`fxbot.css`), resizable panes (`ResizeGutter`, `BesidePanel`, `ScreenHeader`), responsive `SettingsShell` and `ResponsiveDialog`, provider catalog and model combobox UX, procedural `PluginIcon`, Input Markdown formatting, and the Vite `lucideIcons()` dev transform |
 | [React](https://github.com/facebook/react): `react` and `react-dom` 19.3.1 | Meta and the React team | MIT | The app's components, and how they are drawn |
-| [shadcn/ui](https://github.com/shadcn-ui/ui): its components and its style file, kept in `web/src/components/ui/` as its tool writes them, with its licence | shadcn | MIT | The stock components: buttons, inputs, the dialog, the sheet, menus, tabs, tooltips, tables and the sidebar. Its neutral theme, as fxbot uses it, is the app's theme |
+| [shadcn/ui](https://github.com/shadcn-ui/ui): 26 stock `radix-nova` primitives and `tailwind.css`, kept in `packages/design-system/src/primitives/` with its licence, plus `@shadcn/react` 0.3.1 | shadcn | MIT | Stock UI primitives (buttons, inputs, dialogs, sheets, popovers, switches, tabs, menus, tooltips, sidebar, trace, message, bubble, attachment) and `@shadcn/react/message-scroller` for streaming transcripts |
 | [Radix UI](https://github.com/radix-ui/primitives): `radix-ui` 1.8.1 | The Radix UI team (WorkOS) | MIT | What the stock components stand on: focus, the keyboard and screen readers. With it come [Floating UI](https://github.com/floating-ui/floating-ui) (MIT), [react-remove-scroll](https://github.com/theKashey/react-remove-scroll) and its helpers (Anton Korzunov; MIT), aria-hidden (MIT) and tslib (Microsoft; 0BSD) |
 | [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) 4.3.3, with `@tailwindcss/vite` | Tailwind Labs | MIT | The styles |
 | [tw-animate-css](https://github.com/Wombosvideo/tw-animate-css) 1.4.0 | Luca Bosin | MIT | How the stock components open and close |
 | [class-variance-authority](https://github.com/joe-bell/cva) 0.7.1 | Joe Bell | Apache-2.0 | A component's variants |
 | [cn](https://github.com/shadcn-ui/cn) 0.5.1, with [clsx](https://github.com/lukeed/clsx) | shadcn; Luke Edwards | MIT | Joins a component's class names |
 | [Lucide](https://github.com/lucide-icons/lucide): `lucide-react` 1.66.0 | The Lucide contributors | ISC, as its package states | The icons |
+| [Streamdown](https://github.com/vercel/streamdown): `streamdown` 2.7.1 | Vercel | Apache-2.0 | Optional streaming Markdown renderer (`@iammrduncan/magnesium/chat`) |
+| [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 2.0.4 | Kazuhiko Arase | MIT | Optional client-side SVG QR code generation for device-code sign-in and pairing (`@iammrduncan/magnesium/providers`) |
+| [ProseMirror](https://prosemirror.net/): `prosemirror-commands`, `prosemirror-history`, `prosemirror-inputrules`, `prosemirror-keymap`, `prosemirror-model`, `prosemirror-schema-list`, `prosemirror-state`, `prosemirror-transform`, `prosemirror-view` | Marijn Haverbeke and contributors | MIT | Optional Input Markdown rich text composer (`@iammrduncan/magnesium/editor`) |
+| Provider logos bundle (`@iammrduncan/magnesium/provider-logos`, 183 lazy-loaded SVGs): [LobeHub Icons](https://github.com/lobehub/lobe-icons), [models.dev](https://github.com/anomalyco/models.dev), and [llama.cpp](https://github.com/ggml-org/llama.cpp) | LobeHub; the models.dev authors; Georgi Gerganov and contributors | MIT each | Lazy-loaded provider emblems in `ProviderMark` and `ProviderCatalog`. Each logo remains its owner's trademark and is used nominatively to identify the provider |
 | [get-nonce](https://github.com/theKashey/get-nonce) 1.0.1 | Anton Korzunov | MIT | Gives the page's nonce to a style a component adds while it runs, so the page's Content Security Policy needs no inline style |
-| [Geist and Geist Mono](https://github.com/vercel/geist-font), packaged by [Fontsource](https://github.com/fontsource/fontsource) (`@fontsource-variable/geist`, `@fontsource-variable/geist-mono` 5.3.0) | Vercel; the Fontsource project | The fonts OFL-1.1 | The app's fonts, served by control |
+| [Geist and Geist Mono](https://github.com/vercel/geist-font), packaged by [Fontsource](https://github.com/fontsource/fontsource) (`@fontsource-variable/geist`, `@fontsource-variable/geist-mono` 5.3.0) | Vercel; the Fontsource project | The fonts OFL-1.1 | The app's fonts |
 | Zod, above | Colin McDonnell | MIT | Reads each answer of control with its contract's schema |
 | [Vite](https://github.com/vitejs/vite) 8.3.5, with [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react) and [Rolldown](https://github.com/rolldown/rolldown) | Evan You and the Vite contributors; the Rolldown project | MIT | Builds the app. [Lightning CSS](https://github.com/parcel-bundler/lightningcss) (the Parcel project; MPL-2.0) is used only to build it |
 
-The built app carries the licences of everything in it: `licenses.md` for its script's packages and `licenses-styles.md` for its fonts, styles and stock components, which control serves beside it. `web/package-lock.json` lists every package, with its version.
+The built app carries the licences of everything in it: `licenses.md` for its script's packages and `licenses-styles.md` for its fonts, styles, stock primitives, and provider logo sources. `package-lock.json` lists every workspace package with its version.
 
 ### What builds and checks Thermite
 
@@ -275,7 +281,7 @@ The built app carries the licences of everything in it: `licenses.md` for its sc
 ## Design
 
 - **The dashboard's look** follows [Magnesium](https://github.com/iammrduncan/magnesium) (MIT), the maintainers' agent dashboard, which is a fork of [T3 Code](https://github.com/pingdotgg/t3code) (MIT, © 2026 T3 Tools Inc.): its design tokens, its status words, its tiles and its session board. The colour values are those of [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss)'s palette (MIT).
-- **The dashboard's app's look** (`web/`, goal 243) is that of the maintainers' [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0): shadcn/ui's neutral theme as its tool makes it, Geist, one centred column and small type. The four state colours, the chart colours and Geist Mono for IDs are Thermite's additions.
+- **The shared design system (`@iammrduncan/magnesium`, `packages/design-system/`)** unifies Thermite's warm-stone palette and operator parts with the maintainers' [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0): stock shadcn/ui `radix-nova` primitives, Geist, semantic status tokens, and thin brand presets (`thermite.css` and `fxbot.css`).
 - **The site's own pages** (the home page and the overviews of the use cases and studies) follow the home pages of the maintainers' [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh): a frame of their own beside the docs, a command to copy, numbered steps, and a picture drawn from real data. The replay of a real climb and the ledger are Thermite's own.
 - **The icons and the flame** are Thermite's own.
 

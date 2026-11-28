@@ -1,0 +1,370 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../primitives/tailwind.css";
+@import "@fontsource-variable/geist";
+
+/* Scan Magnesium's own components wherever a consumer app lives. */
+@source "../";
+
+/* Light and dark follow the operating system. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/*
+ * Magnesium base theme: semantic design tokens, accessible neutral light/dark defaults,
+ * and shared structural rules (.gutter, [data-beside], .plugin-icon).
+ *
+ * Consumer apps import this file first, then optionally a thin brand preset
+ * (`theme/thermite.css` or `theme/fxbot.css`).
+ */
+@theme inline {
+  --font-heading: var(--sans-font);
+  --font-sans: var(--sans-font);
+  --font-mono: var(--mono-font);
+  --font-weight-medium: var(--weight-medium);
+
+  /* Display sentence scale used by Screen, Lone, and Stat tiles. */
+  --text-sentence: 1.375rem;
+  --text-sentence--line-height: 1.3;
+  --text-sentence--letter-spacing: -0.01em;
+  --text-sentence--font-weight: 600;
+  --text-base--line-height: 1.45;
+  --text-sm--line-height: 1.45;
+  --text-xs--line-height: 1.45;
+
+  /* Core shadcn/ui tokens. */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  /* Semantic neutral roles. */
+  --color-soft: var(--soft);
+  --color-quiet: var(--muted-foreground);
+  --color-edge: var(--input);
+  --color-line: var(--border);
+  --color-chosen: var(--muted);
+
+  /* Brand accent & mark roles (overridden per preset). */
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-tint: var(--brand-accent-tint);
+  --color-brand-mark: var(--brand-mark);
+
+  /* Semantic state tokens: each pairs a foreground colour with a subtle tint. */
+  --color-good: var(--good);
+  --color-good-tint: var(--good-tint);
+  --color-working: var(--working);
+  --color-working-tint: var(--working-tint);
+  --color-needs: var(--needs);
+  --color-needs-tint: var(--needs-tint);
+  --color-needs-card: var(--needs-card);
+  --color-needs-edge: var(--needs-edge);
+  --color-wrong: var(--wrong);
+  --color-wrong-tint: var(--wrong-tint);
+  --color-wrong-edge: var(--wrong-edge);
+  --color-idle: var(--idle);
+  --color-idle-tint: var(--idle-tint);
+  --color-idle-dot: var(--idle-dot);
+  --color-idle-mark: var(--idle-mark);
+  --color-idle-bar: var(--idle-bar);
+  --color-grid: var(--grid);
+  --color-toast: var(--toast);
+  --color-toast-foreground: var(--toast-foreground);
+
+  /* Proportional radius scale (presets can collapse to fixed steps). */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-2xl: var(--r-2xl);
+  --radius-3xl: var(--r-3xl);
+  --radius-4xl: var(--r-4xl);
+
+  /* Elevation shadows. */
+  --shadow-button: var(--elev-button);
+  --shadow-md: var(--elev-md);
+  --shadow-dialog: var(--elev-dialog);
+  --shadow-lg: var(--elev-lg);
+  --shadow-page: var(--elev-page);
+}
+
+:root {
+  --sans-font: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --weight-medium: 500;
+  --body-size: 1rem;
+  --control-h: 2rem;
+  --icon-stroke: 2;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  --soft: oklch(0.371 0 0);
+  --brand-accent: var(--foreground);
+  --brand-accent-tint: var(--accent);
+  --brand-mark: oklch(0.269 0 0);
+
+  --good: #15803d;
+  --good-tint: #eefaf2;
+  --working: #1d4ed8;
+  --working-tint: #e8effe;
+  --needs: #b45309;
+  --needs-tint: #fdf3e2;
+  --needs-card: #fffaf0;
+  --needs-edge: #f1dcae;
+  --wrong: #b91c1c;
+  --wrong-tint: #fdecec;
+  --wrong-edge: #f3caca;
+  --idle: #525252;
+  --idle-tint: #f5f5f5;
+  --idle-dot: #525252;
+  --idle-mark: #a3a3a3;
+  --idle-bar: #d4d4d4;
+  --grid: #f0f0f0;
+  --toast: oklch(0.145 0 0);
+  --toast-foreground: oklch(0.985 0 0);
+
+  --radius: 0.625rem;
+  --r-sm: calc(var(--radius) * 0.6);
+  --r-md: calc(var(--radius) * 0.8);
+  --r-lg: var(--radius);
+  --r-xl: calc(var(--radius) * 1.4);
+  --r-2xl: calc(var(--radius) * 1.8);
+  --r-3xl: calc(var(--radius) * 2.2);
+  --r-4xl: calc(var(--radius) * 2.6);
+
+  --elev-button: 0 1px 0 rgb(0 0 0 / 0.06);
+  --elev-md: 0 8px 24px rgb(0 0 0 / 0.08);
+  --elev-dialog: 0 16px 40px rgb(0 0 0 / 0.12);
+  --elev-lg: 0 16px 48px rgb(0 0 0 / 0.14);
+  --elev-page: 0 16px 48px rgb(0 0 0 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sans-font: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+    --mono-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --weight-medium: 500;
+    --body-size: 1rem;
+    --control-h: 2rem;
+    --icon-stroke: 2;
+
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+
+    --soft: oklch(0.82 0 0);
+    --brand-accent: var(--foreground);
+    --brand-accent-tint: var(--accent);
+    --brand-mark: oklch(0.87 0 0);
+
+    --good: #4ade80;
+    --good-tint: #12281a;
+    --working: #60a5fa;
+    --working-tint: #16223b;
+    --needs: #fbbf24;
+    --needs-tint: #2e2110;
+    --needs-card: #2a1f0e;
+    --needs-edge: #4d3c18;
+    --wrong: #f87171;
+    --wrong-tint: #2f1717;
+    --wrong-edge: #4d2424;
+    --idle: #a3a3a3;
+    --idle-tint: #262626;
+    --idle-dot: #a3a3a3;
+    --idle-mark: #737373;
+    --idle-bar: #525252;
+    --grid: #2e2e2e;
+    --toast: oklch(0.985 0 0);
+    --toast-foreground: oklch(0.145 0 0);
+
+    --radius: 0.625rem;
+    --r-sm: calc(var(--radius) * 0.6);
+    --r-md: calc(var(--radius) * 0.8);
+    --r-lg: var(--radius);
+    --r-xl: calc(var(--radius) * 1.4);
+    --r-2xl: calc(var(--radius) * 1.8);
+    --r-3xl: calc(var(--radius) * 2.2);
+    --r-4xl: calc(var(--radius) * 2.6);
+
+    --elev-button: 0 1px 0 rgb(0 0 0 / 0.24);
+    --elev-md: 0 8px 24px rgb(0 0 0 / 0.32);
+    --elev-dialog: 0 16px 40px rgb(0 0 0 / 0.44);
+    --elev-lg: 0 16px 48px rgb(0 0 0 / 0.48);
+    --elev-page: 0 16px 48px rgb(0 0 0 / 0.36);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply bg-background;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-size: var(--body-size);
+  }
+  .lucide {
+    stroke-width: var(--icon-stroke);
+  }
+}
+
+/* Procedural plugin icon: light and dark CSS variables selected by media query (plugin-icon.tsx). */
+.plugin-icon {
+  --c0: var(--l0);
+  --c1: var(--l1);
+  --c2: var(--l2);
+  --c3: var(--l3);
+}
+@media (prefers-color-scheme: dark) {
+  .plugin-icon {
+    --c0: var(--d0);
+    --c1: var(--d1);
+    --c2: var(--d2);
+    --c3: var(--d3);
+  }
+}
+
+/* A panel open beside the main view prints alone. */
+@media print {
+  body:has([data-beside]) [data-chat] {
+    display: none !important;
+  }
+}
+
+/*
+ * A resize gutter between panes (resize.tsx): 9 px to grab, 17 px on touch screens, centered on
+ * the pane's border. Its line shows after a brief hover so passing over it does not flash, and
+ * immediately while dragged or keyboard-focused.
+ */
+.gutter {
+  position: absolute;
+  inset-block: 0;
+  z-index: 30;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+.gutter[data-edge="left"] {
+  left: -4px;
+}
+.gutter[data-edge="right"] {
+  right: -5px;
+}
+.gutter::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 3px;
+  width: 3px;
+  background: transparent;
+  transition: background-color 150ms;
+}
+.gutter:hover::after {
+  background: var(--ring);
+  transition-delay: 250ms;
+}
+.gutter[data-dragging]::after,
+.gutter:focus-visible::after {
+  background: var(--primary);
+  transition-delay: 0ms;
+}
+@media (pointer: coarse) {
+  .gutter {
+    width: 17px;
+  }
+  .gutter[data-edge="left"] {
+    left: -8px;
+  }
+  .gutter[data-edge="right"] {
+    right: -9px;
+  }
+  .gutter::after {
+    left: 7px;
+  }
+}
+html[data-resizing],
+html[data-resizing] * {
+  cursor: var(--resize-cursor) !important;
+  user-select: none !important;
+  transition: none !important;
+}
+html[data-resizing] iframe {
+  pointer-events: none;
+}
+@media print {
+  .gutter {
+    display: none;
+  }
+}

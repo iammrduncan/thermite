@@ -1,0 +1,20 @@
+{
+  "name": "@thermite/runner",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "description": "Thermite thin hardware runner: NATS JOBS worker, device probes, and execution wall.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@thermite/core": "*"
+  }
+}

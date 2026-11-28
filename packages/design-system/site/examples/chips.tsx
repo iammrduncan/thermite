@@ -1,4 +1,4 @@
-import { Chip, Count, Dot, Legend } from "@ds";
+import { Chip, Count, Dot, Legend } from "@iammrduncan/magnesium/parts";
 
 export default function Chips() {
   return (

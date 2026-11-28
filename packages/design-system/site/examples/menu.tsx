@@ -1,4 +1,4 @@
-import { IconAct, Menu } from "@ds";
+import { IconAct, Menu } from "@iammrduncan/magnesium/parts";
 import { CircleXIcon, CopyIcon, DownloadIcon, EllipsisIcon, PencilIcon } from "lucide-react";
 
 export default function MenuOfRareActs() {

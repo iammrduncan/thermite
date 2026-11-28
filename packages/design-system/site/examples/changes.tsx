@@ -1,4 +1,4 @@
-import { Change } from "@ds";
+import { Change } from "@iammrduncan/magnesium/parts";
 
 export default function Changes() {
   return (

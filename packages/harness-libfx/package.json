@@ -1,0 +1,20 @@
+{
+  "name": "@thermite/harness-libfx",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "description": "Built-in Thermite agent loop wrapping libfx (fx.sh) behind the harness plugin boundary.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "libfx": "0.0.18"
+  }
+}

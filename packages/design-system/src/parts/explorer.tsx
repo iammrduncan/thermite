@@ -65,7 +65,9 @@ export function Fields({
               onClick={() => onOpen(f.name)}
               className="flex h-7 items-center gap-2 rounded-md px-2 text-left text-xs outline-none hover:bg-chosen focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon className={cn("size-3.5 flex-none", column ? "text-flame" : "text-quiet")} />
+              <Icon
+                className={cn("size-3.5 flex-none", column ? "text-brand-accent" : "text-quiet")}
+              />
               <span className="min-w-0 flex-1 truncate font-mono">{f.name}</span>
               <span className="text-quiet tabular-nums">{f.count}</span>
             </button>

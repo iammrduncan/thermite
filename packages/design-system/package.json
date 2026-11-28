@@ -1,16 +1,34 @@
 {
-  "name": "@thermite/design-system",
-  "version": "0.0.0",
+  "name": "@iammrduncan/magnesium",
+  "version": "0.1.0",
   "private": true,
-  "description": "Thermite's design system: the theme, the stock shadcn/ui components and the brand's parts, with a site that shows them.",
+  "description": "Magnesium: shared design system, stock radix-nova primitives, composed UI parts, and brand presets for Thermite and fxbot.",
   "license": "Apache-2.0",
   "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "engines": {
     "node": ">=22.19"
   },
   "exports": {
     ".": "./src/index.ts",
-    "./theme.css": "./src/theme.css"
+    "./primitives": "./src/primitives/index.ts",
+    "./primitives/*": "./src/primitives/*.tsx",
+    "./parts": "./src/parts/index.ts",
+    "./chat": "./src/chat/index.ts",
+    "./providers": "./src/providers/index.ts",
+    "./provider-logos": "./src/providers/logos.ts",
+    "./editor": "./src/editor/index.ts",
+    "./lib/utils": "./src/lib/utils.ts",
+    "./lib/nonce": "./src/lib/nonce.ts",
+    "./hooks/use-mobile": "./src/hooks/use-mobile.ts",
+    "./vite/lucide-icons": "./src/vite/lucide-icons.ts",
+    "./theme/base.css": "./src/theme/base.css",
+    "./theme/thermite.css": "./src/theme/presets/thermite.css",
+    "./theme/fxbot.css": "./src/theme/presets/fxbot.css",
+    "./theme/chat.css": "./src/theme/chat.css",
+    "./theme/editor.css": "./src/theme/editor.css"
   },
   "scripts": {
     "dev": "vite",
@@ -18,16 +36,102 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "radix-ui": "^1.8.0",
+    "lucide-react": "^1.66.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.5.1",
+    "tailwindcss": "^4.3.0",
+    "tw-animate-css": "^1.4.0",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@shadcn/react": "^0.3.1",
+    "streamdown": "^2.7.0",
+    "qrcode-generator": "^2.0.4",
+    "get-nonce": "^1.0.1",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-history": "^1.5.2",
+    "prosemirror-inputrules": "^1.7.0",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.13",
+    "prosemirror-schema-list": "^1.6.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-transform": "^1.12.7",
+    "prosemirror-view": "^1.44.0"
+  },
+  "peerDependenciesMeta": {
+    "@fontsource-variable/geist-mono": {
+      "optional": true
+    },
+    "@shadcn/react": {
+      "optional": true
+    },
+    "streamdown": {
+      "optional": true
+    },
+    "qrcode-generator": {
+      "optional": true
+    },
+    "get-nonce": {
+      "optional": true
+    },
+    "prosemirror-commands": {
+      "optional": true
+    },
+    "prosemirror-history": {
+      "optional": true
+    },
+    "prosemirror-inputrules": {
+      "optional": true
+    },
+    "prosemirror-keymap": {
+      "optional": true
+    },
+    "prosemirror-model": {
+      "optional": true
+    },
+    "prosemirror-schema-list": {
+      "optional": true
+    },
+    "prosemirror-state": {
+      "optional": true
+    },
+    "prosemirror-transform": {
+      "optional": true
+    },
+    "prosemirror-view": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@shadcn/react": "^0.3.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.1",
     "get-nonce": "^1.0.1",
     "lucide-react": "^1.66.0",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-history": "^1.5.2",
+    "prosemirror-inputrules": "^1.7.0",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.13",
+    "prosemirror-schema-list": "^1.6.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-transform": "^1.12.7",
+    "prosemirror-view": "^1.44.0",
+    "qrcode-generator": "^2.0.4",
     "radix-ui": "^1.8.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "streamdown": "^2.7.1",
     "tailwindcss": "^4.3.3",
-    "tw-animate-css": "^1.4.0"
+    "tw-animate-css": "^1.4.0",
+    "vite": "^8.3.5"
   }
 }

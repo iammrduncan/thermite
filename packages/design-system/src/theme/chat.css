@@ -1,0 +1,37 @@
+/* Optional chat stylesheet for Streamdown bubbles (`@iammrduncan/magnesium/chat`). */
+@source "../../../../node_modules/streamdown/dist/*.js";
+
+.said-md [data-streamdown="unordered-list"],
+.said-md [data-streamdown="ordered-list"],
+.said-md [data-streamdown="blockquote"],
+.said-md [data-streamdown="code-block"] {
+  margin-block: 0.25rem;
+}
+.said-md[data-color] a,
+.said-md[data-color] [data-streamdown="link"] {
+  color: inherit;
+  text-decoration: underline;
+}
+.said-md[data-color] [data-streamdown="inline-code"] {
+  background: rgb(255 255 255 / 0.2);
+  color: inherit;
+}
+.said-md[data-color] [data-streamdown="blockquote"] {
+  border-color: rgb(255 255 255 / 0.75);
+  color: inherit;
+}
+.said-md[data-color] [data-streamdown="code-block"],
+.said-md[data-color] [data-streamdown="code-block-body"] {
+  border-color: rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.14);
+  color: inherit;
+}
+.said-md[data-color] [data-streamdown="code-block-header"] {
+  color: rgb(255 255 255 / 0.85);
+}
+.said-md[data-color] [data-streamdown="code-block-body"] pre {
+  background: transparent !important;
+}
+.said-md[data-color] [data-streamdown="code-block-body"] span {
+  color: inherit !important;
+}

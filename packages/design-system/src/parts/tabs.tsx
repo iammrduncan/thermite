@@ -1,16 +1,15 @@
 import type { MouseEvent } from "react";
 import { cn } from "../lib/utils.ts";
 
-/** One tab: a part of one thing. It leads to an address, or is chosen in place. */
+/** One tab: a part of one view, either linking to a URL or selected in place. */
 export interface Tab {
   id: string;
   label: string;
   href?: string;
-  /** What a pointer's rest says, such as where a tab still opens. */
   title?: string;
 }
 
-/** The parts of one thing, as tabs: the chosen one in 600 with a flame line under it. */
+/** Underline tabs highlighted with the brand accent. */
 export function Tabs({
   label,
   tabs,
@@ -27,9 +26,9 @@ export function Tabs({
       {tabs.map((t) => {
         const picked = t.id === chosen;
         const looks = cn(
-          "inline-flex h-9 items-center border-b-2 text-sm outline-none focus-visible:text-flame",
+          "inline-flex h-(--control-h) items-center border-b-2 text-sm outline-none focus-visible:text-brand-accent",
           picked
-            ? "border-flame font-semibold text-foreground"
+            ? "border-brand-accent font-semibold text-foreground"
             : "border-transparent text-quiet hover:text-foreground",
         );
         return t.href !== undefined ? (

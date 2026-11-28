@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 /**
  * Something that waits for the owner, as a card in amber, so the eye finds it first: who asks,
- * the question, one quiet line, and its buttons with the flame one last.
+ * the question, one quiet line, and its buttons with the primary one last.
  */
 export function NeedCard({
   who,
