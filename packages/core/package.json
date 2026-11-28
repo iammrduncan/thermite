@@ -9,7 +9,17 @@
     "node": ">=22.19"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./policy": "./src/policy/index.ts",
+    "./machine": "./src/machine/index.ts",
+    "./bus": "./src/bus/index.ts",
+    "./api": "./src/api/index.ts",
+    "./client": "./src/client.ts",
+    "./plugin": "./src/plugin/index.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
